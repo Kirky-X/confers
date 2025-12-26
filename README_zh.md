@@ -114,11 +114,29 @@ graph LR
 对于分布式微服务，Confers 支持从 Etcd 或 Consul 动态获取配置，并支持热重载，确保服务在不停机的情况下更新配置。
 
 ```rust
-#[derive(Config)]
-#[config(remote = "etcd://localhost:2379/services/user-api")]
-struct ServiceConfig {
-    port: u16,
-    log_level: String,
+use confers::{Config, ConfigLoader};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct ServiceConfig {
+    pub port: u16,
+    pub log_level: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config: ServiceConfig = ConfigLoader::new()
+        .with_etcd(
+            confers::providers::EtcdConfigProvider::new(
+                vec!["localhost:2379".to_string()],
+                "/services/user-api"
+            )
+        )
+        .with_file("config/local.toml")
+        .load_async()
+        .await?;
+
+    println!("Service running on port {}", config.port);
+    Ok(())
 }
 ```
 
@@ -156,7 +174,7 @@ Confers 能够自动将配置字段映射到命令行参数，非常适合开发
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -167,8 +185,8 @@ serde = { version = "1.0", features = ["derive"] }
 
 ```toml
 [dependencies]
-confers = { version = "0.1", 
-  features = ["watch", "remote", "cli"] }
+confers = { version = "0.1.0", 
+  features = ["watch", "remote", "audit", "schema", "parallel"] }
 ```
 
 </td>
@@ -177,10 +195,11 @@ confers = { version = "0.1",
 
 **特性标志说明**:
 
-- `watch`: 启用配置热重载
-- `remote`: 启用远程配置中心支持
-- `audit`: 启用审计日志（默认开启）
-- `cli`: 包含 CLI 工具支持
+- `watch`: 启用配置热重载（基于 notify）
+- `remote`: 启用远程配置中心支持（Etcd / HTTP）
+- `audit`: 启用审计日志与敏感字段脱敏
+- `schema`: 启用 JSON Schema 生成支持
+- `parallel`: 启用并行配置验证（基于 rayon）
 
 ### 基础用法
 
@@ -191,16 +210,16 @@ confers = { version = "0.1",
 **第 1 步：定义配置结构体**
 
 ```rust
-use confers::prelude::*;
+use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "MYAPP_")]
 struct AppConfig {
-    #[cfg_attr(default = "\"localhost\".to_string()")]
+    #[config(default = "\"localhost\".to_string()")]
     host: String,
     
-    #[cfg_attr(default = "8080")]
+    #[config(default = "8080")]
     port: u16,
     
     debug: Option<bool>,
@@ -343,12 +362,22 @@ Confers 按以下优先级自动合并配置（从低到高）：
 #[derive(Config)]
 #[config(
     env_prefix = "MYAPP_",              // 环境变量前缀
-    strict = false,                      // 严格模式
-    watch = true,                        // 启用热重载
-    format_detection = "ByContent",      // 格式检测方式
-    audit_log = true,                    // 启用审计日志
-    audit_log_path = "./config.log",     // 审计日志路径
-    remote = "etcd://localhost:2379/app" // 远程配置地址
+    strict = false,                     // 严格模式（验证失败时报错）
+    watch = true,                       // 启用热重载（需开启 watch 特性）
+    format_detection = "ByContent",     // 格式检测方式 ("ByExtension" | "ByContent")
+    audit_log = true,                   // 启用审计日志（需开启 audit 特性）
+    audit_log_path = "./config.log",    // 审计日志路径
+    
+    // 远程配置（需开启 remote 特性）
+    remote = "etcd://localhost:2379/app", // 远程配置地址
+    remote_timeout = "5s",               // 远程请求超时
+    remote_fallback = true,              // 远程加载失败时是否回退到本地配置
+    remote_username = "user",            // 认证用户名
+    remote_password = "pass",            // 认证密码
+    remote_token = "token",              // 认证 Token（如用于 Consul/HTTP）
+    remote_ca_cert = "ca.pem",           // TLS CA 证书路径
+    remote_client_cert = "cert.pem",     // TLS 客户端证书路径
+    remote_client_key = "key.pem"        // TLS 客户端私钥路径
 )]
 struct AppConfig { }
 ```
@@ -361,29 +390,32 @@ struct AppConfig { }
 <br>
 
 ```rust
-#[cfg_attr(
-    // 基础属性
-    description = "字段描述",           // 用于生成文档和模板
-    default = "默认值表达式",            // 默认值（Rust 表达式）
-    
-    // 命名配置
-    name_config = "配置文件中的键名",    // 覆盖默认键名
-    name_env = "环境变量名",            // 覆盖默认环境变量名
-    name_clap_long = "长选项",          // CLI 长选项名
-    name_clap_short = 'c',             // CLI 短选项
-    
-    // 验证规则
-    validate = "range(min = 1, max = 65535)", // validator 语法
-    custom_validate = "my_validator",         // 自定义验证函数
-    
-    // 安全配置
-    sensitive = true,                   // 敏感字段（审计日志脱敏）
-    encrypted = true,                   // 加密存储
-    
-    // 特殊标记
-    flatten,                            // 展平嵌套结构
-    skip                                // 跳过此字段
-)]
+#[derive(Config)]
+struct AppConfig {
+    #[config(
+        // 基础属性
+        description = "字段描述",           // 用于生成文档和模板
+        default = "8080",                  // 默认值（Rust 表达式）
+        
+        // 命名配置
+        name_config = "server_port",       // 覆盖配置文件中的键名
+        name_env = "SERVER_PORT",          // 覆盖默认环境变量名
+        name_clap_long = "port",           // CLI 长选项名 (--port)
+        name_clap_short = 'p',             // CLI 短选项 (-p)
+        
+        // 验证规则（内置支持，详见下方“配置验证”）
+        validate = "range(min = 1, max = 65535)", 
+        custom_validate = "my_validator",         // 自定义验证函数路径
+        
+        // 安全配置
+        sensitive = true,                   // 敏感字段（审计日志脱敏，需开启 audit 特性）
+        
+        // 特殊标记
+        flatten,                            // 展平嵌套结构
+        skip                                // 跳过此字段（不从任何源加载）
+    )]
+    port: u16,
+}
 ```
 
 </details>
@@ -407,10 +439,7 @@ struct AppConfig { }
 ```rust
 #[derive(Config, Serialize, Deserialize)]
 struct Config {
-    #[cfg_attr(
-        validate = "range(min = 1, max = 65535)",
-        error_msg = "端口必须在 1-65535 之间"
-    )]
+    #[config(validate = "range(min = 1, max = 65535)")]
     port: u16,
 }
 ```
@@ -421,14 +450,20 @@ struct Config {
 #### 🔥 热重载 (Watch)
 
 ```rust
+use confers::{Config, ConfigWatcher};
+
 #[derive(Config, Serialize, Deserialize, Clone)]
-#[config(watch = true)]
 struct Config {
     port: u16,
 }
 
-// 自动监听并处理更新
-let watcher = Config::watch()?;
+// 使用 ConfigWatcher 实现热重载
+let watcher = ConfigWatcher::new()?;
+let config = watcher.load()?;
+
+if watcher.is_enabled() {
+    println!("热重载已启用，配置文件修改后将自动更新");
+}
 ```
 
 </td>
@@ -439,10 +474,27 @@ let watcher = Config::watch()?;
 #### ☁️ 远程配置 (Etcd)
 
 ```rust
+use confers::{Config, ConfigLoader};
+
 #[derive(Config, Serialize, Deserialize)]
-#[config(remote = "etcd://localhost:2379/app")]
-struct Config {
-    database_url: String,
+pub struct Config {
+    pub database_url: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config: Config = ConfigLoader::new()
+        .with_etcd(
+            confers::providers::EtcdConfigProvider::new(
+                vec!["localhost:2379".to_string()],
+                "/myapp/config"
+            )
+        )
+        .load_async()
+        .await?;
+
+    println!("Database URL: {}", config.database_url);
+    Ok(())
 }
 ```
 
@@ -454,10 +506,10 @@ struct Config {
 ```rust
 #[derive(Config, Serialize, Deserialize)]
 struct Config {
-    #[cfg_attr(sensitive = true)]
+    #[config(sensitive = true)]
     api_key: String,
 }
-// 审计日志中自动显示为 "******"
+// 开启 audit 特性后，审计日志中自动显示为 "******"
 ```
 
 </td>
@@ -469,6 +521,25 @@ struct Config {
 **[📂 查看所有详细示例 →](examples/)**
 
 </div>
+
+### ⌨️ 命令行集成 (CLI Integration)
+
+Confers 为配置结构体自动生成配套的 Clap 结构体（名称为 `[结构体名]ClapShadow`），这使得你可以轻松地将配置项暴露为命令行参数。
+
+```rust
+#[derive(Config)]
+struct AppConfig {
+    #[config(name_clap_long = "port", name_clap_short = 'p')]
+    port: u16,
+}
+
+// 在你的 CLI 处理逻辑中
+#[derive(Parser)]
+struct Cli {
+    #[command(flatten)]
+    config_overrides: AppConfigClapShadow,
+}
+```
 
 ---
 

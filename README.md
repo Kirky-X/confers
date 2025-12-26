@@ -35,11 +35,11 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
 
 # Optional features
-confers = { version = "0.1", features = ["watch", "remote", "cli"] }
+confers = { version = "0.1.0", features = ["watch", "remote", "cli"] }
 ```
 
 **Feature Flags**:
@@ -57,19 +57,18 @@ confers = { version = "0.1", features = ["watch", "remote", "cli"] }
 ### Basic Usage
 
 ```rust
-use confers::prelude::*;
+use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "MYAPP_")]
 struct AppConfig {
-    #[cfg_attr(description = "Server host address", default = "\"localhost\".to_string()")]
+    #[config(default = "\"localhost\".to_string()")]
     host: String,
     
-    #[cfg_attr(description = "Server port", default = "8080")]
+    #[config(default = "8080")]
     port: u16,
     
-    #[cfg_attr(description = "Enable debug mode")]
     debug: Option<bool>,
 }
 
@@ -219,7 +218,6 @@ struct AppConfig { }
     
     // Security configuration
     sensitive = true,                   // Sensitive field (masked in audit logs)
-    encrypted = true,                   // Encrypted storage (v0.4.0+)
     
     // Special markers
     flatten,                            // Flatten nested structure
@@ -234,16 +232,16 @@ struct AppConfig { }
 ### 1. Basic Configuration
 
 ```rust
-use confers::prelude::*;
+use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize)]
 #[config(env_prefix = "APP_")]
 struct Config {
-    #[cfg_attr(default = "\"localhost\".to_string()")]
+    #[config(default = "\"localhost\".to_string()")]
     host: String,
     
-    #[cfg_attr(default = "8080")]
+    #[config(default = "8080")]
     port: u16,
 }
 
@@ -258,22 +256,13 @@ fn main() {
 ```rust
 #[derive(Config, Serialize, Deserialize)]
 struct Config {
-    #[cfg_attr(
-        validate = "range(min = 1, max = 65535)",
-        error_msg = "Port must be between 1-65535"
-    )]
+    #[config(validate = "range(min = 1, max = 65535)")]
     port: u16,
     
-    #[cfg_attr(
-        validate = "email",
-        error_msg = "Invalid email address"
-    )]
+    #[config(validate = "email")]
     email: String,
     
-    #[cfg_attr(
-        validate = "url",
-        error_msg = "Invalid URL"
-    )]
+    #[config(validate = "url")]
     website: String,
 }
 
@@ -288,11 +277,10 @@ fn main() {
 ### 3. Hot Reload
 
 ```rust
-use confers::prelude::*;
-use tokio;
+use confers::{Config, ConfigWatcher};
+use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Clone)]
-#[config(watch = true)]
 struct Config {
     port: u16,
     debug: bool,
@@ -300,51 +288,56 @@ struct Config {
 
 #[tokio::main]
 async fn main() {
-    // Start configuration monitoring
-    let watcher = Config::watch().unwrap();
-    
+    let watcher = ConfigWatcher::new()?;
+    let config = watcher.load()?;
+
+    if watcher.is_enabled() {
+        println!("Hot reload enabled - configuration changes will be applied automatically");
+    }
+
     // Method 1: Channel mode (recommended)
     let mut rx = watcher.subscribe();
     tokio::spawn(async move {
         while rx.changed().await.is_ok() {
             let new_config = rx.borrow().clone();
             println!("Configuration updated: {:?}", new_config);
-            // Reload resources, update status, etc.
         }
     });
-    
+
     // Method 2: Callback mode
     watcher.on_change(|config| {
         println!("Configuration changed: {:?}", config);
     });
-    
-    // Main application logic
-    loop {
-        let config = watcher.current();
-        println!("Current port: {}", config.port);
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    }
 }
 ```
 
 ### 4. Remote Configuration
 
 ```rust
+use confers::{Config, ConfigLoader};
+use serde::{Deserialize, Serialize};
+
 #[derive(Config, Serialize, Deserialize)]
-#[config(
-    remote = "etcd://localhost:2379/myapp/config",
-    remote_fallback = true  // Fallback to local config when remote fails
-)]
-struct Config {
-    port: u16,
-    database_url: String,
+pub struct Config {
+    pub port: u16,
+    pub database_url: String,
 }
 
 #[tokio::main]
-async fn main() {
-    // Automatically load configuration from Etcd
-    let config = Config::load().await.unwrap();
-    println!("{:?}", config);
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config: Config = ConfigLoader::new()
+        .with_etcd(
+            confers::providers::EtcdConfigProvider::new(
+                vec!["localhost:2379".to_string()],
+                "/myapp/config"
+            )
+        )
+        .with_file("config/local.toml")  // Local fallback
+        .load_async()
+        .await?;
+
+    println!("Configuration loaded: port={}, database={}", config.port, config.database_url);
+    Ok(())
 }
 ```
 
@@ -357,19 +350,14 @@ Supported remote configuration centers:
 ### 5. Sensitive Field Handling
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Config, Serialize, Deserialize)]
 struct Config {
-    #[cfg_attr(
-        sensitive = true,
-        description = "Database password"
-    )]
+    #[config(sensitive = true, description = "Database password")]
     db_password: String,
     
-    #[cfg_attr(
-        sensitive = true,
-        encrypted = true,  // v0.4.0+
-        description = "API key"
-    )]
+    #[config(sensitive = true, description = "API key")]
     api_key: String,
 }
 
@@ -388,6 +376,7 @@ fn main() {
 
 ```rust
 use validator::ValidationError;
+use serde::{Deserialize, Serialize};
 
 fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     if password.len() < 8 {
@@ -401,10 +390,7 @@ fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
 
 #[derive(Config, Serialize, Deserialize)]
 struct Config {
-    #[cfg_attr(
-        custom_validate = "validate_password_strength",
-        error_msg = "Password strength insufficient"
-    )]
+    #[config(custom_validate = "validate_password_strength")]
     password: String,
 }
 ```
@@ -412,13 +398,15 @@ struct Config {
 ### 7. Generate Configuration Template
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Config, Serialize, Deserialize)]
 #[config(env_prefix = "MYAPP_")]
 struct Config {
-    #[cfg_attr(description = "Server port", default = "8080")]
+    #[config(description = "Server port", default = "8080")]
     port: u16,
     
-    #[cfg_attr(description = "Enable debug mode", default = "false")]
+    #[config(description = "Enable debug mode", default = "false")]
     debug: bool,
 }
 
@@ -515,7 +503,7 @@ confers keygen --output ~/.confers/encryption.key
 
 # Encrypt single value
 confers encrypt --value "my_secret_password"
-# Output: enc:AES256:Zm9vYmFyLi4u
+# Output: enc:AES256GCM:Zm9vYmFyLi4u
 
 # Batch encrypt configuration file
 confers encrypt-file --input config.plain.toml --output config.encrypted.toml
@@ -757,7 +745,7 @@ Confers automatically protects against path traversal attacks:
 ```rust
 #[derive(Config)]
 struct Config {
-    #[cfg_attr(encrypted = true, sensitive = true)]
+    #[cfg_attr(sensitive = true, description = "Database password")]
     db_password: String,
 }
 ```
@@ -766,7 +754,7 @@ struct Config {
 
 ```toml
 # Use confers encrypt command to encrypt
-db_password = "enc:AES256:Zm9vYmFyLi4u"
+db_password = "enc:AES256GCM:Zm9vYmFyLi4u"
 ```
 
 **Key Management**:

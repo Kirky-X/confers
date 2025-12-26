@@ -1,12 +1,10 @@
 [default]
-out = ["Html", "Xml", "Lcov"]
-target-dir = "target"
-run-types = ["Tests"]
-timeout = "300"
-no-fail-fast = true
-fail-under = 75
-ignore-tests = true
-exclude-files = ["*/tests/*", "*/examples/*", "*/benches/*"]
+all-features = true
 output-dir = "target/tarpaulin"
-forward = true
-features = ["watch", "audit", "schema", "parallel", "remote"]
+out = ["Html", "Xml", "Lcov"]
+fail-under = 75
+timeout = 300
+no-fail-fast = true
+ignore-tests = false
+exclude-files = ["*/tests/*", "*/examples/*", "*/benches/*", "*/macros/*"]
+generate-link = true

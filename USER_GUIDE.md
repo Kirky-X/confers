@@ -1,7 +1,7 @@
 # Confers 用户指南
 
-**版本**: v1.0.0
- **最后更新**: 2025-12-12
+**版本**: v0.1.0
+ **最后更新**: 2025-12-26
 
 ------
 
@@ -69,38 +69,28 @@ Confers 是一个现代化的 Rust 配置管理库，旨在简化应用程序的
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
-
-# 可选特性
-[dependencies.confers]
-version = "0.1"
-features = [
-    "watch",    # 配置热重载
-    "remote",   # 远程配置支持
-    "schema",   # Schema 导出
-    "audit",    # 审计日志（默认启用）
-]
 ```
 
 ### 2.2 特性标志详解
 
-| 特性     | 用途             | 额外依赖                     |
-| -------- | ---------------- | ---------------------------- |
-| `watch`  | 配置文件变更监听 | notify, tokio                |
-| `remote` | 远程配置中心支持 | etcd-client, consul, reqwest |
-| `schema` | JSON Schema 生成 | schemars                     |
-| `audit`  | 审计日志（默认） | -                            |
-| `cli`    | CLI 工具功能     | clap                         |
+| 特性 | 用途 | 额外依赖 |
+|------|------|----------|
+| `watch` | 配置热重载 | notify, notify-debouncer-full, tokio |
+| `remote` | 远程配置中心支持 | etcd-client, reqwest, failsafe, rustls, tokio-rustls |
+| `schema` | JSON Schema 生成 | jsonschema, schemars |
+| `parallel` | 并行验证 | rayon |
+| `failsafe` | 熔断器支持 | failsafe |
+| `rustls-pki-types` | TLS 证书管理 | rustls-pki-types |
+| `tokio-rustls` | Tokio TLS 支持 | tokio-rustls |
 
-### 2.3 安装 CLI 工具（可选）
+**注意**: `audit` 功能已内置在核心库中，无需单独启用。
 
-```bash
-cargo install confers-cli
+### 2.3 最低 Rust 版本
 
-# 验证安装
-confers --version
-```
+- **Rust 版本**: 1.75+
+- **Edition**: 2021
 
 ------
 
@@ -112,11 +102,11 @@ confers --version
 
 ```rust
 // src/config.rs
-use confers::prelude::*;
+use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Debug)]
-#[config(env_prefix = "MYAPP_")]
+#[config(env_prefix = "MYAPP_", validate)]
 pub struct AppConfig {
     #[cfg_attr(
         description = "服务器主机地址",
@@ -447,116 +437,59 @@ fn main() {
 
 ### 4.3 配置热重载
 
-#### Channel 模式（推荐）
+#### 轮询模式（当前实现）
 
-适用于多订阅者场景：
-
-```rust
-use confers::prelude::*;
-use tokio;
-
-#[derive(Config, Serialize, Deserialize, Debug, Clone)]
-#[config(watch = true)]
-pub struct AppConfig {
-    pub port: u16,
-    pub workers: usize,
-    pub debug: bool,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 启动配置监听
-    let watcher = AppConfig::watch()?;
-    
-    // 订阅者 1: HTTP 服务器
-    let mut rx1 = watcher.subscribe();
-    tokio::spawn(async move {
-        while rx1.changed().await.is_ok() {
-            let config = rx1.borrow().clone();
-            println!("[HTTP Server] 端口已更新为: {}", config.port);
-            // 重新绑定端口...
-        }
-    });
-    
-    // 订阅者 2: Worker 池
-    let mut rx2 = watcher.subscribe();
-    tokio::spawn(async move {
-        while rx2.changed().await.is_ok() {
-            let config = rx2.borrow().clone();
-            println!("[Worker Pool] Worker 数量已更新为: {}", config.workers);
-            // 调整 worker 数量...
-        }
-    });
-    
-    // 主循环
-    loop {
-        let config = watcher.current();
-        println!("当前配置: {:?}", config);
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-    }
-}
-```
-
-#### Callback 模式
-
-适用于单订阅者、简单场景：
+实际实现采用简单的轮询方式，通过重复加载配置来检测变化：
 
 ```rust
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let watcher = AppConfig::watch()?;
-    
-    // 注册回调函数
-    watcher.on_change(|new_config| {
-        println!("配置已更新: {:?}", new_config);
-        // 执行重载逻辑...
-    });
-    
-    // 保持应用运行
-    loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+use confers::Config;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(format_detection = "Auto")]
+pub struct WatchConfig {
+    pub message: String,
+    pub interval: u64,
 }
-```
 
-#### 防止重载失败影响服务
+fn main() -> anyhow::Result<()> {
+    // 初始配置
+    let path = "examples/watch.toml";
+    std::fs::write(path, "message = 'Hello, initial!'\ninterval = 1000")?;
 
-```rust
-use std::sync::Arc;
-use tokio::sync::RwLock;
+    // 初始加载
+    let config = WatchConfig::load()?;
+    println!("Initial message: {}", config.message);
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let watcher = AppConfig::watch()?;
-    let config = Arc::new(RwLock::new(watcher.current()));
-    
-    // 配置变更处理
-    let config_clone = config.clone();
-    let mut rx = watcher.subscribe();
-    tokio::spawn(async move {
-        while rx.changed().await.is_ok() {
-            let new_config = rx.borrow().clone();
-            
-            // 验证新配置
-            if let Err(e) = new_config.validate() {
-                eprintln!("新配置验证失败，保留旧配置: {}", e);
-                continue;
-            }
-            
-            // 更新配置
-            *config_clone.write().await = new_config;
-            println!("配置已成功更新");
+    // 监控变化
+    let mut last_message = config.message.clone();
+
+    for i in 1..=5 {
+        println!("\n[Iteration {}] Change {} and wait...", i, path);
+
+        // 模拟外部配置变更
+        let new_message = format!("Hello, change {}!", i);
+        std::fs::write(
+            path,
+            format!("message = '{}'\ninterval = 1000", new_message),
+        )?;
+
+        // 等待防抖和文件系统
+        std::thread::sleep(Duration::from_millis(500));
+
+        // 检查配置是否变化
+        let current_config = WatchConfig::load()?;
+        if current_config.message != last_message {
+            println!(">>> Config changed! New message: {}", current_config.message);
+            last_message = current_config.message.clone();
+        } else {
+            println!("No change detected yet...");
         }
-    });
-    
-    // 使用配置
-    loop {
-        let current_config = config.read().await;
-        println!("当前端口: {}", current_config.port);
-        drop(current_config);
-        
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
+
+    Ok(())
 }
 ```
 
@@ -565,12 +498,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #### Etcd 配置
 
 ```rust
-#[derive(Config, Serialize, Deserialize, Debug)]
-#[config(
-    remote = "etcd://localhost:2379/myapp/config",
-    remote_timeout = "5s",
-    remote_fallback = true  // 连接失败时降级到本地配置
-)]
+use confers::{Config, ConfigLoader};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
 pub struct AppConfig {
     pub port: u16,
     pub database_url: String,
@@ -578,84 +509,117 @@ pub struct AppConfig {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 自动从 Etcd 加载配置
-    let config = AppConfig::load().await?;
+    // 使用 ConfigLoader 配置 Etcd 远程源
+    let config: AppConfig = ConfigLoader::new()
+        .with_etcd(
+            confers::providers::EtcdConfigProvider::new(
+                vec!["localhost:2379".to_string()],
+                "/myapp/config"
+            )
+        )
+        .with_file("config/local.toml")  // 本地回退配置
+        .load_async()
+        .await?;
+
     println!("{:?}", config);
     Ok(())
 }
 ```
 
-#### 向 Etcd 写入配置
-
-```bash
-# 安装 etcdctl
-brew install etcd  # macOS
-# 或
-apt install etcd-client  # Ubuntu
-
-# 写入配置
-etcdctl put /myapp/config '{"port": 8080, "database_url": "postgresql://localhost/db"}'
-
-# 查看配置
-etcdctl get /myapp/config
-```
-
 #### Consul 配置
 
 ```rust
-#[derive(Config, Serialize, Deserialize, Debug)]
-#[config(
-    remote = "consul://localhost:8500/myapp/config",
-    remote_fallback = true
-)]
+use confers::{Config, ConfigLoader};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
 pub struct AppConfig {
     pub port: u16,
     pub api_key: String,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 使用 ConfigLoader 配置 Consul 远程源
+    let config: AppConfig = ConfigLoader::new()
+        .with_consul(
+            confers::providers::ConsulConfigProvider::new(
+                "http://localhost:8500",
+                "myapp/config"
+            )
+            .with_token("your-consul-token")
+        )
+        .with_file("config/local.toml")  // 本地回退配置
+        .load_sync()?;
+
+    println!("{:?}", config);
+    Ok(())
 }
 ```
 
 #### HTTP 配置源
 
 ```rust
-#[derive(Config, Serialize, Deserialize, Debug)]
-#[config(
-    remote = "https://api.example.com/config/myapp",
-    remote_auth = "bearer:your_token_here"
-)]
-pub struct AppConfig {
-    pub port: u16,
-    pub features: Vec<String>,
+use confers::{Config, ConfigLoader};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+pub struct RemoteConfig {
+    pub api_key: String,
+    pub endpoint: String,
+    #[serde(default = "default_timeout")]
+    pub timeout: u32,
+}
+
+fn default_timeout() -> u32 {
+    30
+}
+
+fn main() -> anyhow::Result<()> {
+    // 使用 ConfigLoader 加载远程配置
+    let config: RemoteConfig = ConfigLoader::new()
+        .with_remote_config("http://localhost:8080/config")?
+        .with_file("config/local.toml")
+        .load_sync()?;
+    println!("Loaded config: {:#?}", config);
+    Ok(())
 }
 ```
 
 #### 远程配置监听（自动更新）
 
 ```rust
-#[derive(Config, Serialize, Deserialize, Debug, Clone)]
-#[config(
-    remote = "etcd://localhost:2379/myapp/config",
-    watch = true  // 同时启用热重载
-)]
+use confers::{Config, ConfigLoader};
+use tokio;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(watch = true)]  // 启用配置热重载
 pub struct AppConfig {
     pub port: u16,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let watcher = AppConfig::watch().await?;
-    
-    let mut rx = watcher.subscribe();
-    tokio::spawn(async move {
-        while rx.changed().await.is_ok() {
-            let new_config = rx.borrow().clone();
-            println!("远程配置已更新: {:?}", new_config);
-        }
-    });
-    
+    let (config, watcher) = AppConfig::load_with_watcher()?;
+
+    if let Some(watcher) = watcher {
+        tokio::spawn(async move {
+            let mut rx = watcher.subscribe();
+            while rx.changed().await.is_ok() {
+                let new_config = rx.borrow().clone();
+                println!("配置已更新: {:?}", new_config);
+            }
+        });
+    }
+
     // 主逻辑...
+    println!("Initial config: {:?}", config);
     Ok(())
 }
 ```
+
+> **注意**: 远程配置（Etcd/Consul/HTTP）的热重载需要额外的实现。当前实现主要支持本地文件的热重载。远程配置变更检测可通过轮询机制或配置特定的通知系统实现。
 
 ### 4.5 敏感信息处理
 
@@ -705,7 +669,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-#### 配置加密（v0.4.0+）
+#### 配置加密
+
+**加密原理**: Confers 使用 AES-256-GCM 算法进行配置加密。加密字段通过特定格式标识，配置加载时会自动识别并解密。
 
 **生成加密密钥**:
 
@@ -717,28 +683,39 @@ confers keygen --output ~/.confers/encryption.key
 
 ```bash
 confers encrypt --value "my_secret_password"
-# 输出: enc:AES256:Zm9vYmFyLi4u...
+# 输出: enc:AES256GCM:Zm9vYmFyLi4u...
 ```
 
-**使用加密字段**:
+**标记敏感字段**:
+
+敏感字段会在审计日志中自动脱敏，但不自动加密：
 
 ```rust
 #[derive(Config, Serialize, Deserialize, Debug)]
 pub struct AppConfig {
+    pub host: String,
+    pub port: u16,
+    
     #[cfg_attr(
-        encrypted = true,
         sensitive = true,
-        description = "数据库密码"
+        description = "数据库密码（建议使用加密配置值）"
     )]
     pub db_password: String,
+    
+    #[cfg_attr(
+        sensitive = true,
+        description = "API 密钥（建议使用加密配置值）"
+    )]
+    pub api_key: String,
 }
 ```
 
 **配置文件**:
 
 ```toml
-# 使用加密后的值
-db_password = "enc:AES256:Zm9vYmFyLi4u..."
+# 使用加密后的值（加载时自动解密）
+db_password = "enc:AES256GCM:Zm9vYmFyLi4u..."
+api_key = "enc:AES256GCM:aW5pdGlhbC4uLg=="
 ```
 
 **设置解密密钥**:
@@ -1044,9 +1021,15 @@ git add config/production.toml  // ❌
 | `format_detection` | String | `"ByContent"`           | 格式检测方式（`ByContent` / `ByExtension`） |
 | `audit_log`        | bool   | `true`                  | 启用审计日志                                |
 | `audit_log_path`   | String | -                       | 审计日志输出路径                            |
-| `remote`           | String | -                       | 远程配置地址                                |
+| `remote`           | String | -                       | 远程配置地址（http/https/etcd/consul）      |
 | `remote_timeout`   | String | `"5s"`                  | 远程连接超时时间                            |
 | `remote_fallback`  | bool   | `false`                 | 远程失败时是否降级到本地配置                |
+| `remote_username`  | String | -                       | 远程配置认证用户名                          |
+| `remote_password`  | String | -                       | 远程配置认证密码                            |
+| `remote_token`     | String | -                       | Bearer Token（优先级高于用户名/密码）       |
+| `remote_ca_cert`   | String | -                       | CA 证书路径                                 |
+| `remote_client_cert`| String | -                      | 客户端证书路径                              |
+| `remote_client_key`| String | -                      | 客户端密钥路径                              |
 
 #### 字段级别 `#[cfg_attr(...)]`
 
