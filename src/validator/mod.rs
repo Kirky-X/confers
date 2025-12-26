@@ -6,9 +6,6 @@
 use serde::Serialize;
 pub use validator::{Validate, ValidationErrors};
 
-#[cfg(feature = "schema")]
-use schemars::JsonSchema;
-
 /// Configuration validator trait
 pub trait ConfigValidator {
     fn validate(&self) -> Result<(), crate::error::ConfigError>;

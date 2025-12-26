@@ -6,6 +6,7 @@
 use clap::Parser;
 use confers::Config;
 use std::fs;
+use std::net::SocketAddr;
 use tempfile::TempDir;
 use validator::Validate;
 
