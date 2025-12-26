@@ -2,12 +2,49 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+fn get_allowed_patterns() -> &'static Vec<Regex> {
+    static ALLOWED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
+    ALLOWED_PATTERNS.get_or_init(|| {
+        vec![
+            Regex::new(r"^[A-Z][A-Z0-9_]*$").unwrap(),
+            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
+            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
+        ]
+    })
+}
+
+fn get_blocked_patterns() -> &'static Vec<Regex> {
+    static BLOCKED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
+    BLOCKED_PATTERNS.get_or_init(|| {
+        vec![
+            Regex::new(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$").unwrap(),
+            Regex::new(r"(?i)^(SHELL|HOME|USER|LOGNAME)$").unwrap(),
+            Regex::new(r"(?i)^(PWD|OLDPWD)$").unwrap(),
+            Regex::new(r"(?i)^(MAIL|MAILCHECK)$").unwrap(),
+            Regex::new(r"(?i)^(TERM|TERMCAP)$").unwrap(),
+            Regex::new(r"(?i)^(DISPLAY|XAUTHORITY)$").unwrap(),
+            Regex::new(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$").unwrap(),
+            Regex::new(r"(?i)^(DOCKER_HOST|KUBECONFIG)$").unwrap(),
+            Regex::new(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$").unwrap(),
+            Regex::new(r".*[;<>&|`$].*").unwrap(),
+            Regex::new(r"^BASH_FUNC_.*").unwrap(),
+        ]
+    })
+}
+
+fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
+    static ALLOWED_PATTERNS_STR: OnceLock<Vec<&'static str>> = OnceLock::new();
+    ALLOWED_PATTERNS_STR.get_or_init(|| {
+        vec![
+            r"^[A-Z][A-Z0-9_]*$",
+            r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$",
+            r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$",
+        ]
+    })
+}
+
 /// Security validation for environment variable mapping
 pub struct EnvSecurityValidator {
-    /// Whitelist of allowed environment variable patterns
-    allowed_patterns: Vec<Regex>,
-    /// Blacklist of dangerous environment variable patterns
-    blocked_patterns: Vec<Regex>,
     /// Maximum length for environment variable names
     max_name_length: usize,
     /// Maximum length for environment variable values
@@ -24,29 +61,6 @@ impl EnvSecurityValidator {
     /// Create a new security validator with default rules
     pub fn new() -> Self {
         Self {
-            allowed_patterns: vec![
-                // Allow common application patterns
-                Regex::new(r"^[A-Z][A-Z0-9_]*$").unwrap(), // Standard env vars like APP_PORT
-                Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(), // Nested like APP_DB_HOST
-                Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(), // Deep nested like TEST_DETAILS_COUNT
-            ],
-            blocked_patterns: vec![
-                // Block dangerous system environment variables
-                Regex::new(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$").unwrap(),
-                Regex::new(r"(?i)^(SHELL|HOME|USER|LOGNAME)$").unwrap(),
-                Regex::new(r"(?i)^(PWD|OLDPWD)$").unwrap(),
-                Regex::new(r"(?i)^(MAIL|MAILCHECK)$").unwrap(),
-                Regex::new(r"(?i)^(TERM|TERMCAP)$").unwrap(),
-                Regex::new(r"(?i)^(DISPLAY|XAUTHORITY)$").unwrap(),
-                Regex::new(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$").unwrap(),
-                Regex::new(r"(?i)^(DOCKER_HOST|KUBECONFIG)$").unwrap(),
-                // Block variables that could contain secrets
-                Regex::new(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$").unwrap(),
-                // Block variables with special characters that could cause injection
-                Regex::new(r".*[;<>&|`$].*").unwrap(),
-                // Block variables that look like shell functions
-                Regex::new(r"^BASH_FUNC_.*").unwrap(),
-            ],
             max_name_length: 256,
             max_value_length: 4096,
         }
@@ -59,7 +73,9 @@ impl EnvSecurityValidator {
         name: &str,
         value: Option<&str>,
     ) -> Result<(), EnvSecurityError> {
-        // Check length
+        let blocked_patterns = get_blocked_patterns();
+        let allowed_patterns = get_allowed_patterns();
+
         if name.len() > self.max_name_length {
             return Err(EnvSecurityError::NameTooLong {
                 name: name.to_string(),
@@ -68,13 +84,10 @@ impl EnvSecurityValidator {
             });
         }
 
-        // Check if name matches any blocked pattern
-        for pattern in &self.blocked_patterns {
+        for pattern in blocked_patterns {
             if pattern.is_match(name) {
-                // Allow secret-related names if value is encrypted
                 if let Some(val) = value {
                     if val.starts_with("enc:") {
-                        // Encrypted values are safe to use even in secret-named vars
                         continue;
                     }
                 }
@@ -85,9 +98,8 @@ impl EnvSecurityValidator {
             }
         }
 
-        // Check if name matches any allowed pattern
         let mut matched = false;
-        for pattern in &self.allowed_patterns {
+        for pattern in allowed_patterns {
             if pattern.is_match(name) {
                 matched = true;
                 break;
@@ -97,10 +109,9 @@ impl EnvSecurityValidator {
         if !matched {
             return Err(EnvSecurityError::InvalidNameFormat {
                 name: name.to_string(),
-                expected_patterns: self
-                    .allowed_patterns
+                expected_patterns: get_allowed_pattern_strings()
                     .iter()
-                    .map(|p| p.as_str().to_string())
+                    .map(|s| s.to_string())
                     .collect(),
             });
         }
@@ -185,28 +196,6 @@ impl EnvSecurityValidator {
     /// Check if an environment variable should be allowed
     pub fn should_allow_env_var(&self, name: &str) -> bool {
         self.validate_env_name_simple(name).is_ok()
-    }
-
-    /// Create a validator with strict security rules
-    pub fn strict() -> Self {
-        let mut validator = Self::new();
-        // Add more restrictive patterns
-        validator.allowed_patterns = vec![
-            Regex::new(r"^[A-Z][A-Z0-9_]{2,30}$").unwrap(), // More restrictive length
-        ];
-        validator.max_name_length = 30;
-        validator.max_value_length = 1024;
-        validator
-    }
-
-    /// Create a validator with relaxed rules for development
-    pub fn development() -> Self {
-        let mut validator = Self::new();
-        // Allow more patterns in development
-        validator.allowed_patterns.push(
-            Regex::new(r"^[a-zA-Z][a-zA-Z0-9_]*$").unwrap(), // Allow lowercase
-        );
-        validator
     }
 }
 

@@ -78,26 +78,32 @@ impl WatchableProviderWrapper {
     }
 
     pub fn start_watching_safe(&self) -> Result<(), ConfigError> {
-        self.inner
-            .write()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire write lock".to_string()))?
-            .start_watching()
+        match self.inner.try_write() {
+            Ok(mut guard) => guard.start_watching(),
+            Err(_) => Err(ConfigError::RuntimeError(
+                "Failed to acquire write lock for start_watching".to_string(),
+            )),
+        }
     }
 
     pub fn stop_watching_safe(&self) -> Result<(), ConfigError> {
-        self.inner
-            .write()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire write lock".to_string()))?
-            .stop_watching()
+        match self.inner.try_write() {
+            Ok(mut guard) => guard.stop_watching(),
+            Err(_) => Err(ConfigError::RuntimeError(
+                "Failed to acquire write lock for stop_watching".to_string(),
+            )),
+        }
     }
 }
 
 impl ConfigProvider for WatchableProviderWrapper {
     fn load(&self) -> Result<Figment, ConfigError> {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))?
-            .load()
+        match self.inner.try_read() {
+            Ok(guard) => guard.load(),
+            Err(_) => Err(ConfigError::RuntimeError(
+                "Failed to acquire read lock for load".to_string(),
+            )),
+        }
     }
 
     fn name(&self) -> &str {
@@ -105,33 +111,31 @@ impl ConfigProvider for WatchableProviderWrapper {
     }
 
     fn is_available(&self) -> bool {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))
-            .is_ok_and(|guard| guard.is_available())
+        match self.inner.try_read() {
+            Ok(guard) => guard.is_available(),
+            Err(_) => false,
+        }
     }
 
     fn priority(&self) -> u8 {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))
-            .map(|guard| guard.priority())
-            .unwrap_or(0)
+        match self.inner.try_read() {
+            Ok(guard) => guard.priority(),
+            Err(_) => 0,
+        }
     }
 
     fn metadata(&self) -> ProviderMetadata {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))
-            .map(|guard| guard.metadata())
-            .unwrap_or_else(|_| ProviderMetadata {
+        match self.inner.try_read() {
+            Ok(guard) => guard.metadata(),
+            Err(_) => ProviderMetadata {
                 name: self.name.clone(),
                 description: "Unknown provider".to_string(),
                 source_type: ProviderType::Default,
                 requires_network: false,
                 supports_watch: false,
                 priority: 255,
-            })
+            },
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -141,32 +145,35 @@ impl ConfigProvider for WatchableProviderWrapper {
 
 impl WatchableProvider for WatchableProviderWrapper {
     fn start_watching(&mut self) -> Result<(), ConfigError> {
-        self.inner
-            .write()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire write lock".to_string()))?
-            .start_watching()
+        match self.inner.try_write() {
+            Ok(mut guard) => guard.start_watching(),
+            Err(_) => Err(ConfigError::RuntimeError(
+                "Failed to acquire write lock for start_watching".to_string(),
+            )),
+        }
     }
 
     fn stop_watching(&mut self) -> Result<(), ConfigError> {
-        self.inner
-            .write()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire write lock".to_string()))?
-            .stop_watching()
+        match self.inner.try_write() {
+            Ok(mut guard) => guard.stop_watching(),
+            Err(_) => Err(ConfigError::RuntimeError(
+                "Failed to acquire write lock for stop_watching".to_string(),
+            )),
+        }
     }
 
     fn is_watching(&self) -> bool {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))
-            .is_ok_and(|guard| guard.is_watching())
+        match self.inner.try_read() {
+            Ok(guard) => guard.is_watching(),
+            Err(_) => false,
+        }
     }
 
     fn poll_interval(&self) -> Option<Duration> {
-        self.inner
-            .read()
-            .map_err(|_| ConfigError::RuntimeError("Failed to acquire read lock".to_string()))
-            .ok()?
-            .poll_interval()
+        match self.inner.try_read() {
+            Ok(guard) => guard.poll_interval(),
+            Err(_) => None,
+        }
     }
 }
 

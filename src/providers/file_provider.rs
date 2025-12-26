@@ -4,12 +4,13 @@ use figment::providers::{Format, Json, Toml, Yaml};
 use figment::Figment;
 use std::path::{Path, PathBuf};
 
-/// File-based configuration provider
+/// File-based configuration provider with security features
 pub struct FileConfigProvider {
     paths: Vec<PathBuf>,
     name: String,
     priority: u8,
-    format_detection: String, // "ByContent", "ByExtension", or "Auto"
+    format_detection: String,
+    allowed_dirs: Vec<PathBuf>,
 }
 
 impl FileConfigProvider {
@@ -19,6 +20,7 @@ impl FileConfigProvider {
             name: "file".to_string(),
             priority: 20,
             format_detection: "Auto".to_string(),
+            allowed_dirs: Vec::new(),
         }
     }
 
@@ -37,8 +39,31 @@ impl FileConfigProvider {
         self
     }
 
+    pub fn with_allowed_dirs(mut self, dirs: Vec<PathBuf>) -> Self {
+        self.allowed_dirs = dirs;
+        self
+    }
+
     pub fn single_file(path: impl AsRef<Path>) -> Self {
         Self::new(vec![path.as_ref().to_path_buf()])
+    }
+
+    fn is_path_safe(&self, path: &Path) -> bool {
+        if self.allowed_dirs.is_empty() {
+            return true;
+        }
+
+        let canonical_path = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+
+        self.allowed_dirs
+            .iter()
+            .all(|dir| match dir.canonicalize() {
+                Ok(canonical_dir) => canonical_path.starts_with(&canonical_dir),
+                Err(_) => false,
+            })
     }
 
     pub fn detect_format(&self, path: &Path) -> Option<String> {
@@ -99,6 +124,10 @@ impl FileConfigProvider {
     fn load_file(&self, path: &Path) -> Result<Figment, ConfigError> {
         if !path.exists() {
             return Ok(Figment::new());
+        }
+
+        if !self.is_path_safe(path) {
+            return Err(ConfigError::UnsafePath(path.to_path_buf()));
         }
 
         // Skip editor temporary files
