@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 use crate::core::loader::is_editor_temp_file;
 use crate::error::ConfigError;
 use notify::{RecursiveMode, Watcher};
