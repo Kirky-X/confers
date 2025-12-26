@@ -1,0 +1,1626 @@
+use crate::parse::{ConfigOpts, FieldOpts};
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{Attribute, Meta, Type};
+
+pub fn has_serde_flatten(attrs: &[Attribute]) -> bool {
+    for attr in attrs {
+        if attr.path().is_ident("serde") {
+            if let Meta::List(list) = &attr.meta {
+                let s = list.tokens.to_string();
+                // Simple check for "flatten" in the token stream
+                // This covers basic cases like #[serde(flatten)] or #[serde(default, flatten)]
+                if s.contains("flatten") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn get_shadow_type(ty: &Type) -> Option<TokenStream> {
+    if let Type::Path(type_path) = ty {
+        let mut new_path = type_path.clone();
+        if let Some(last_segment) = new_path.path.segments.last_mut() {
+            let ident = &last_segment.ident;
+            let new_ident = quote::format_ident!("{}ClapShadow", ident);
+            last_segment.ident = new_ident;
+            return Some(quote! { #new_path });
+        }
+    }
+    None
+}
+
+fn is_option_type(ty: &Type) -> Option<&Type> {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if segment.ident == "Option" {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                        return Some(inner_ty);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Check if a type is a primitive type that can be handled by Clap
+fn is_primitive_type(ty: &Type) -> bool {
+    let type_string = quote!(#ty).to_string();
+    matches!(
+        type_string.as_str(),
+        "u8" | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "f32"
+            | "f64"
+            | "bool"
+            | "String"
+            | "char"
+    ) || type_string.starts_with("Option <")
+        || type_string.starts_with("Vec <")
+}
+
+/// Generate Clap fields for a list of fields, handling flatten attributes
+fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
+    let mut clap_fields = Vec::new();
+
+    for field in fields {
+        if field.skip {
+            continue;
+        }
+
+        if field.flatten {
+            // Handle flattened fields by using the shadow type
+            let name = &field.ident;
+            let ty = &field.ty;
+
+            if let Some(shadow_ty) = get_shadow_type(ty) {
+                clap_fields.push(quote! {
+                    #[command(flatten)]
+                    pub #name: #shadow_ty,
+                });
+            }
+            continue;
+        }
+
+        // Handle nested struct types that are not primitives
+        // Check if it's a custom struct type (not a primitive)
+        let name = &field.ident;
+        let ty = &field.ty;
+
+        let is_custom_struct = {
+            let type_string = quote!(#ty).to_string();
+            !matches!(
+                type_string.as_str(),
+                "u8" | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "String"
+                    | "char"
+                    | "Vec < u8 >"
+                    | "Vec < u16 >"
+                    | "Vec < u32 >"
+                    | "Vec < u64 >"
+                    | "Vec < u128 >"
+                    | "Vec < usize >"
+                    | "Vec < i8 >"
+                    | "Vec < i16 >"
+                    | "Vec < i32 >"
+                    | "Vec < i64 >"
+                    | "Vec < i128 >"
+                    | "Vec < isize >"
+                    | "Vec < f32 >"
+                    | "Vec < f64 >"
+                    | "Vec < bool >"
+                    | "Vec < String >"
+                    | "Vec < char >"
+            ) && !type_string.starts_with("Option <")
+        };
+
+        if is_custom_struct {
+            // For custom struct types, automatically flatten them
+            if let Some(shadow_ty) = get_shadow_type(ty) {
+                clap_fields.push(quote! {
+                    #[command(flatten)]
+                    pub #name: #shadow_ty,
+                });
+            }
+            continue;
+        }
+
+        let name = &field.ident;
+        let ty = &field.ty;
+        let description = &field.description;
+        let long_name = &field.name_clap_long;
+        let short_name = &field.name_clap_short;
+
+        // Check if it's an Option<T>
+        let inner_ty = is_option_type(ty).unwrap_or(ty);
+
+        // Only generate clap fields for primitive types that can be parsed from strings
+        let type_string = quote!(#inner_ty).to_string();
+        let is_primitive = matches!(
+            type_string.as_str(),
+            "u8" | "u16"
+                | "u32"
+                | "u64"
+                | "u128"
+                | "usize"
+                | "i8"
+                | "i16"
+                | "i32"
+                | "i64"
+                | "i128"
+                | "isize"
+                | "f32"
+                | "f64"
+                | "bool"
+                | "String"
+                | "char"
+        );
+
+        if !is_primitive {
+            continue;
+        }
+
+        let long_attr = if let Some(long) = long_name {
+            quote! { long = #long }
+        } else {
+            let field_name = name.as_ref().unwrap().to_string();
+            quote! { long = #field_name }
+        };
+
+        let short_attr = if let Some(short) = short_name {
+            quote! { short = #short }
+        } else {
+            quote! {}
+        };
+
+        let help_attr = if let Some(desc) = description {
+            quote! { help = #desc }
+        } else {
+            quote! {}
+        };
+
+        // Build the arg attributes, filtering out empty ones
+        let mut arg_attrs = Vec::new();
+        arg_attrs.push(long_attr);
+        if !short_attr.is_empty() {
+            arg_attrs.push(short_attr);
+        }
+        if !help_attr.is_empty() {
+            arg_attrs.push(help_attr);
+        }
+
+        // Use Option<T> in ClapShadow to allow optional arguments
+        // If original type is already Option<T>, use it directly
+        // If original type is T, wrap it in Option<T> for CLI args (since CLI args are typically optional overrides)
+        let clap_ty = if is_option_type(ty).is_some() {
+            quote! { #ty }
+        } else {
+            quote! { Option<#ty> }
+        };
+
+        clap_fields.push(quote! {
+            #[arg(#(#arg_attrs),*)]
+            pub #name: #clap_ty,
+        });
+    }
+
+    clap_fields
+}
+
+fn get_custom_validator(field: &FieldOpts) -> Option<String> {
+    if let Some(v) = &field.custom_validate {
+        return Some(v.clone());
+    }
+
+    // Search in forwarded validate attributes
+    for attr in &field.attrs {
+        if attr.path().is_ident("validate") {
+            if let Meta::List(list) = &attr.meta {
+                // Try to find custom = "..."
+                let s = list.tokens.to_string();
+                if let Some(start) = s.find("custom =") {
+                    let rest = &s[start + 8..];
+                    if let Some(quote_start) = rest.find('"') {
+                        let after_quote = &rest[quote_start + 1..];
+                        if let Some(quote_end) = after_quote.find('"') {
+                            return Some(after_quote[..quote_end].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_range_validation(validate_str: &str) -> Option<(i64, i64)> {
+    eprintln!(
+        "DEBUG: parse_range_validation called with: {}",
+        validate_str
+    );
+    // Parse range(min = 1, max = 65535) format
+    if validate_str.starts_with("range(") && validate_str.ends_with(')') {
+        let inner = &validate_str[6..validate_str.len() - 1]; // Remove "range(" and ")"
+        eprintln!("DEBUG: Parsed inner: {}", inner);
+
+        let mut min_val: Option<i64> = None;
+        let mut max_val: Option<i64> = None;
+
+        // Parse min = value
+        if let Some(min_start) = inner.find("min =") {
+            let min_part = &inner[min_start + 5..];
+            if let Some(min_end) = min_part.find([',', ')']) {
+                if let Ok(val) = min_part[..min_end].trim().parse::<i64>() {
+                    min_val = Some(val);
+                    eprintln!("DEBUG: Parsed min value: {}", val);
+                }
+            } else if min_part.trim().parse::<i64>().is_ok() {
+                // Handle case where min is at the end with no trailing delimiter
+                if let Ok(val) = min_part.trim().parse::<i64>() {
+                    min_val = Some(val);
+                    eprintln!("DEBUG: Parsed min value (end of string): {}", val);
+                }
+            }
+        }
+
+        // Parse max = value
+        if let Some(max_start) = inner.find("max =") {
+            let max_part = &inner[max_start + 5..];
+            eprintln!("DEBUG: Max part after 'max =': '{}'", max_part);
+            if let Some(max_end) = max_part.find([',', ')']) {
+                eprintln!("DEBUG: Found max end at position: {}", max_end);
+                eprintln!("DEBUG: Max value substring: '{}'", &max_part[..max_end]);
+                if let Ok(val) = max_part[..max_end].trim().parse::<i64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value: {}", val);
+                } else {
+                    eprintln!("DEBUG: Failed to parse max value as i64");
+                }
+            } else if max_part.trim().parse::<i64>().is_ok() {
+                // Handle case where max is at the end with no trailing delimiter
+                if let Ok(val) = max_part.trim().parse::<i64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
+                }
+            } else {
+                // Handle case where max is at the end with no trailing delimiter
+                eprintln!(
+                    "DEBUG: No max end delimiter found, trying to parse entire remaining string"
+                );
+                if let Ok(val) = max_part.trim().parse::<i64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
+                } else {
+                    eprintln!("DEBUG: Failed to parse max value from end of string");
+                }
+            }
+        } else {
+            eprintln!("DEBUG: No 'max =' found in inner: '{}'", inner);
+        }
+
+        // Return range validation if we have either min, max, or both
+        if min_val.is_some() || max_val.is_some() {
+            let min = min_val.unwrap_or(i64::MIN);
+            let max = max_val.unwrap_or(i64::MAX);
+            eprintln!("DEBUG: Returning range validation: ({}, {})", min, max);
+            return Some((min, max));
+        }
+    }
+    eprintln!("DEBUG: No range validation parsed");
+    None
+}
+
+fn parse_length_validation(validate_str: &str) -> Option<(u64, u64)> {
+    eprintln!(
+        "DEBUG: parse_length_validation called with: {}",
+        validate_str
+    );
+    // Parse length(min = 1, max = 50) format
+    if validate_str.starts_with("length(") && validate_str.ends_with(')') {
+        let inner = &validate_str[7..validate_str.len() - 1]; // Remove "length(" and ")"
+        eprintln!("DEBUG: Parsed inner: {}", inner);
+
+        let mut min_val: Option<u64> = None;
+        let mut max_val: Option<u64> = None;
+
+        // Parse min = value
+        if let Some(min_start) = inner.find("min =") {
+            let min_part = &inner[min_start + 5..];
+            if let Some(min_end) = min_part.find([',', ')']) {
+                if let Ok(val) = min_part[..min_end].trim().parse::<u64>() {
+                    min_val = Some(val);
+                    eprintln!("DEBUG: Parsed min value: {}", val);
+                }
+            } else if min_part.trim().parse::<u64>().is_ok() {
+                if let Ok(val) = min_part.trim().parse::<u64>() {
+                    min_val = Some(val);
+                    eprintln!("DEBUG: Parsed min value (end of string): {}", val);
+                }
+            }
+        }
+
+        // Parse max = value
+        if let Some(max_start) = inner.find("max =") {
+            let max_part = &inner[max_start + 5..];
+            eprintln!("DEBUG: Max part after 'max =': '{}'", max_part);
+            if let Some(max_end) = max_part.find([',', ')']) {
+                eprintln!("DEBUG: Found max end at position: {}", max_end);
+                eprintln!("DEBUG: Max value substring: '{}'", &max_part[..max_end]);
+                if let Ok(val) = max_part[..max_end].trim().parse::<u64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value: {}", val);
+                } else {
+                    eprintln!("DEBUG: Failed to parse max value as u64");
+                }
+            } else if max_part.trim().parse::<u64>().is_ok() {
+                if let Ok(val) = max_part.trim().parse::<u64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
+                }
+            } else {
+                eprintln!(
+                    "DEBUG: No max end delimiter found, trying to parse entire remaining string"
+                );
+                if let Ok(val) = max_part.trim().parse::<u64>() {
+                    max_val = Some(val);
+                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
+                } else {
+                    eprintln!("DEBUG: Failed to parse max value from end of string");
+                }
+            }
+        } else {
+            eprintln!("DEBUG: No 'max =' found in inner: '{}'", inner);
+        }
+
+        // Return length validation if we have either min, max, or both
+        if min_val.is_some() || max_val.is_some() {
+            let min = min_val.unwrap_or(0);
+            let max = max_val.unwrap_or(u64::MAX);
+            eprintln!("DEBUG: Returning length validation: ({}, {})", min, max);
+            return Some((min, max));
+        }
+    }
+    eprintln!("DEBUG: No length validation parsed");
+    None
+}
+
+pub fn generate_impl(
+    opts: &ConfigOpts,
+    fields: &[FieldOpts],
+    has_validate_derive: bool,
+) -> TokenStream {
+    let struct_name = &opts.ident;
+    let env_prefix = opts.env_prefix.as_deref().unwrap_or("");
+    let strict = opts
+        .strict
+        .or_else(|| opts.validate.as_ref().map(|v| v.0))
+        .unwrap_or(false);
+
+    eprintln!("DEBUG: generate_impl called for struct: {}", struct_name);
+    eprintln!("DEBUG: opts.validate = {:?}", opts.validate);
+    eprintln!("DEBUG: has_validate_derive = {}", has_validate_derive);
+
+    // Conditional code generation for features
+
+    let apply_format_detection = if let Some(val) = &opts.format_detection {
+        quote! { loader = loader.with_format_detection(#val); }
+    } else {
+        quote! {}
+    };
+
+    let apply_remote = if let Some(val) = &opts.remote {
+        quote! {
+            #[cfg(feature = "remote")]
+            { loader = loader.with_remote_config(#val); }
+        }
+    } else {
+        quote! {}
+    };
+
+    let apply_remote_timeout = if let Some(val) = &opts.remote_timeout {
+        quote! {
+            #[cfg(feature = "remote")]
+            { loader = loader.with_remote_timeout(#val); }
+        }
+    } else {
+        quote! {}
+    };
+
+    let apply_remote_fallback = if let Some(val) = opts.remote_fallback {
+        quote! {
+            #[cfg(feature = "remote")]
+            { loader = loader.with_remote_fallback(#val); }
+        }
+    } else {
+        quote! {}
+    };
+
+    let apply_remote_auth = {
+        let mut tokens = TokenStream::new();
+        if let Some(val) = &opts.remote_username {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_username(#val); }
+            });
+        }
+        if let Some(val) = &opts.remote_password {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_password(#val); }
+            });
+        }
+        if let Some(val) = &opts.remote_token {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_token(#val); }
+            });
+        }
+        if tokens.is_empty() {
+            quote! {}
+        } else {
+            tokens
+        }
+    };
+
+    let apply_remote_tls = {
+        let mut tokens = TokenStream::new();
+        if let Some(val) = &opts.remote_ca_cert {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_ca_cert(#val); }
+            });
+        }
+        if let Some(val) = &opts.remote_client_cert {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_client_cert(#val); }
+            });
+        }
+        if let Some(val) = &opts.remote_client_key {
+            tokens.extend(quote! {
+                #[cfg(feature = "remote")]
+                { loader = loader.with_remote_client_key(#val); }
+            });
+        }
+        if tokens.is_empty() {
+            quote! {}
+        } else {
+            tokens
+        }
+    };
+
+    // Generate field-level remote configuration
+    let field_remote_configs: Vec<TokenStream> = fields
+        .iter()
+        .filter(|f| {
+            f.remote.is_some()
+                || f.remote_timeout.is_some()
+                || f.remote_auth.is_some()
+                || f.remote_tls.is_some()
+                || f.remote_ca_cert.is_some()
+                || f.remote_client_cert.is_some()
+                || f.remote_client_key.is_some()
+        })
+        .map(|f| {
+            let field_name = f.ident.as_ref().unwrap();
+            let _field_name_str = field_name.to_string();
+
+            let remote_url = &f.remote;
+            let remote_timeout = &f.remote_timeout;
+            let remote_auth = f.remote_auth;
+            let remote_username = &f.remote_username;
+            let remote_password = &f.remote_password;
+            let remote_token = &f.remote_token;
+            let remote_tls = f.remote_tls;
+            let remote_ca_cert = &f.remote_ca_cert;
+            let remote_client_cert = &f.remote_client_cert;
+            let remote_client_key = &f.remote_client_key;
+
+            let mut config_tokens = TokenStream::new();
+
+            if let Some(url) = remote_url {
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    {
+                        loader = loader.with_remote_config(#url);
+                        loader = loader.with_field_name(stringify!(#field_name).to_string());
+                    }
+                });
+            }
+
+            if let Some(timeout) = remote_timeout {
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_timeout(#timeout); }
+                });
+            }
+
+            if remote_auth == Some(true) {
+                if let Some(username) = remote_username {
+                    let password = remote_password
+                        .as_ref()
+                        .map(|p| quote! { #p })
+                        .unwrap_or(quote! { "" });
+                    config_tokens.extend(quote! {
+                        #[cfg(feature = "remote")]
+                        { loader = loader.with_remote_auth(#username, #password); }
+                    });
+                }
+            }
+
+            if remote_token.is_some() {
+                if let Some(token) = remote_token {
+                    config_tokens.extend(quote! {
+                        #[cfg(feature = "remote")]
+                        { loader = loader.with_remote_token(#token); }
+                    });
+                }
+            }
+
+            if remote_tls == Some(true) {
+                let ca_cert = remote_ca_cert
+                    .as_ref()
+                    .map(|c| quote! { #c })
+                    .unwrap_or(quote! { "" });
+                let client_cert = remote_client_cert
+                    .as_ref()
+                    .map(|c| quote! { Some(#c.to_string()) })
+                    .unwrap_or(quote! { None });
+                let client_key = remote_client_key
+                    .as_ref()
+                    .map(|c| quote! { Some(#c.to_string()) })
+                    .unwrap_or(quote! { None });
+
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                });
+            } else if let Some(ca_cert) = remote_ca_cert {
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_ca_cert(#ca_cert); }
+                });
+            }
+
+            if let Some(cert) = remote_client_cert {
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_client_cert(#cert); }
+                });
+            }
+
+            if let Some(key) = remote_client_key {
+                config_tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_client_key(#key); }
+                });
+            }
+
+            config_tokens
+        })
+        .collect();
+
+    let apply_audit = {
+        let mut tokens = TokenStream::new();
+        if let Some(val) = opts.audit_log {
+            tokens.extend(quote! {
+                #[cfg(feature = "audit")]
+                { loader = loader.with_audit_log(#val); }
+            });
+        }
+        if let Some(val) = &opts.audit_log_path {
+            tokens.extend(quote! {
+                #[cfg(feature = "audit")]
+                { loader = loader.with_audit_log_path(#val); }
+            });
+        }
+        if tokens.is_empty() {
+            quote! {}
+        } else {
+            tokens
+        }
+    };
+
+    let apply_watch = if let Some(watch) = opts.watch {
+        if watch {
+            quote! {
+                #[cfg(feature = "watch")]
+                { loader = loader.with_watch(true); }
+            }
+        } else {
+            quote! {
+                #[cfg(feature = "watch")]
+                { loader = loader.with_watch(false); }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    // Generate Clap arguments for each field
+    let clap_fields = generate_clap_fields(fields);
+
+    // Generate field name strings for mapping (only primitive, non-flattened, non-skipped fields)
+    let _field_names: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            let ty = &f.ty;
+            let type_string = quote!(#ty).to_string();
+            let is_primitive = matches!(
+                type_string.as_str(),
+                "u8" | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "String"
+                    | "char"
+            ) || type_string.starts_with("Option <")
+                || type_string.starts_with("Vec <");
+            is_primitive
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            name.to_string()
+        })
+        .collect();
+
+    // Generate field access for mapping (only primitive, non-flattened, non-skipped fields)
+    let _field_access: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            let ty = &f.ty;
+            let type_string = quote!(#ty).to_string();
+            let is_primitive = matches!(
+                type_string.as_str(),
+                "u8" | "u16"
+                    | "u32"
+                    | "u64"
+                    | "u128"
+                    | "usize"
+                    | "i8"
+                    | "i16"
+                    | "i32"
+                    | "i64"
+                    | "i128"
+                    | "isize"
+                    | "f32"
+                    | "f64"
+                    | "bool"
+                    | "String"
+                    | "char"
+            ) || type_string.starts_with("Option <")
+                || type_string.starts_with("Vec <");
+            is_primitive
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            quote! { self.#name }
+        })
+        .collect();
+
+    // Separate Option and non-Option fields for to_cli_args
+    let option_field_names: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            if let Some(inner_ty) = is_option_type(&f.ty) {
+                is_primitive_type(inner_ty)
+            } else {
+                false
+            }
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            name.to_string()
+        })
+        .collect();
+
+    let option_field_access: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            if let Some(inner_ty) = is_option_type(&f.ty) {
+                is_primitive_type(inner_ty)
+            } else {
+                false
+            }
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            quote! { self.#name }
+        })
+        .collect();
+
+    let non_option_field_names: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            is_option_type(&f.ty).is_none() && is_primitive_type(&f.ty)
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            name.to_string()
+        })
+        .collect();
+
+    let non_option_field_access: Vec<_> = fields
+        .iter()
+        .filter(|f| {
+            if f.flatten || f.skip {
+                return false;
+            }
+            // Only include primitive types that can be handled by Clap
+            is_option_type(&f.ty).is_none() && is_primitive_type(&f.ty)
+        })
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            quote! { self.#name }
+        })
+        .collect();
+
+    // Collect flattened fields for to_cli_args
+    let flattened_fields_info: Vec<_> = fields
+        .iter()
+        .filter(|f| f.flatten && !f.skip)
+        .map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            let name_str = name.to_string();
+            let is_serde_flattened = has_serde_flatten(&f.attrs);
+
+            if is_serde_flattened {
+                quote! { (self.#name.to_cli_args(), None::<&str>) }
+            } else {
+                quote! { (self.#name.to_cli_args(), Some(#name_str)) }
+            }
+        })
+        .collect();
+
+    // Collect custom validation functions for fields
+    let custom_validations: Vec<_> = fields
+        .iter()
+        .filter(|f| !f.skip)
+        .filter_map(|f| {
+            let field_name = f.ident.as_ref().unwrap();
+            let field_name_str = field_name.to_string();
+            eprintln!("DEBUG: Processing field '{}' for validation", field_name_str);
+
+            // Handle flattened fields - validate the flattened struct
+            if f.flatten {
+                return Some(quote!{
+                    confers::validator::Validate::validate(&config.#field_name)
+                        .map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
+                });
+            }
+
+            // Check for range validation first
+            if let Some(validate_str) = &f.validate {
+                eprintln!("DEBUG: Found validate_str: '{}' for field '{}'", validate_str, field_name_str);
+                if let Some((min, max)) = parse_range_validation(validate_str) {
+                    eprintln!("DEBUG: Generated range validation for field '{}' with range ({}, {})", field_name_str, min, max);
+                    let min_lit = syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
+                    let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
+
+                    return Some(quote!{
+                        eprintln!("DEBUG: Checking range validation for field '{}'", #field_name_str);
+                        if !(#min_lit as _..=#max_lit as _).contains(&config.#field_name) {
+                            eprintln!("DEBUG: Range validation FAILED for field '{}'", #field_name_str);
+                            let mut errors = validator::ValidationErrors::new();
+                             let mut error = validator::ValidationError::new("range");
+                             error.message = Some(std::borrow::Cow::Owned(
+                                 format!("value must be between {} and {}", #min_lit, #max_lit)
+                             ));
+                             error.add_param(std::borrow::Cow::Borrowed("min"), &#min_lit);
+                             error.add_param(std::borrow::Cow::Borrowed("max"), &#max_lit);
+                             error.add_param(std::borrow::Cow::Borrowed("value"), &config.#field_name);
+                             errors.add(#field_name_str, error);
+                             let error_msg = format!("验证失败: {:?}", errors);
+                             return Err(confers::prelude::ConfigError::ValidationError(error_msg));
+                        }
+                        eprintln!("DEBUG: Range validation PASSED for field '{}'", #field_name_str);
+                    });
+                }
+            }
+
+            // Check for length validation (for string fields)
+            if let Some(validate_str) = &f.validate {
+                if let Some((min, max)) = parse_length_validation(validate_str) {
+                    let min_lit = syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
+                    let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
+
+                    return Some(quote!{
+                        eprintln!("DEBUG: Checking length validation for field '{}'", #field_name_str);
+                        let field_len = config.#field_name.chars().count() as u64;
+                        if !(#min_lit..=#max_lit).contains(&field_len) {
+                            eprintln!("DEBUG: Length validation FAILED for field '{}'", #field_name_str);
+                            let mut errors = validator::ValidationErrors::new();
+                            let mut error = validator::ValidationError::new("length");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                format!("length must be between {} and {}", #min_lit, #max_lit)
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("min"), &#min_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("max"), &#max_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &field_len);
+                            errors.add(#field_name_str, error);
+                            let error_msg = format!("验证失败: {:?}", errors);
+                            return Err(confers::prelude::ConfigError::ValidationError(error_msg));
+                        }
+                        eprintln!("DEBUG: Length validation PASSED for field '{}'", #field_name_str);
+                    });
+                }
+            }
+
+            // Check for custom validation
+            let validation_fn = get_custom_validator(f)?;
+            let validation_fn_path: syn::Path = syn::parse_str(&validation_fn).ok()?;
+
+            Some(quote!{
+                #validation_fn_path(&config.#field_name)
+                    .map_err(|e| {
+                        let mut errors = validator::ValidationErrors::new();
+                        let mut error = validator::ValidationError::new("custom");
+                        error.message = Some(std::borrow::Cow::Owned(format!("{}", e)));
+                        error.add_param(std::borrow::Cow::Borrowed("value"), &config.#field_name);
+                        errors.add(#field_name_str, error);
+                        confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", errors))
+                    })?;
+            })
+        })
+        .collect();
+
+    // Check if any fields have validation attributes (including flattened fields)
+    // Also consider struct-level validate attribute and has_validate_derive
+    let has_field_validations = fields.iter().any(|f| {
+        !f.skip
+            && (f.validate.is_some()
+                || f.custom_validate.is_some()
+                || !f.attrs.is_empty()
+                || f.flatten)
+    });
+    eprintln!(
+        "DEBUG: opts.validate value: {:?}",
+        opts.validate.as_ref().map(|v| v.0)
+    );
+    eprintln!("DEBUG: has_validate_derive: {}", has_validate_derive);
+    eprintln!("DEBUG: has_field_validations: {}", has_field_validations);
+
+    let has_validations = opts.validate.as_ref().map(|v| v.0).unwrap_or(false)
+        || has_validate_derive
+        || has_field_validations;
+
+    eprintln!("DEBUG: Final has_validations: {}", has_validations);
+
+    // Generate schemars implementation if the crate is available
+    let schema_impl = {
+        let schema_fields = fields.iter().filter(|f| !f.skip).map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            let name_str = name.to_string();
+            let ty = &f.ty;
+            let description = &f.description;
+            let default_expr = &f.default;
+
+            let desc_str = if let Some(desc) = description {
+                 if let Some(d) = default_expr {
+                     let d_str = quote!(#d).to_string();
+                     format!("{} (Default: {})", desc, d_str)
+                 } else {
+                     desc.clone()
+                 }
+            } else if let Some(d) = default_expr {
+                 let d_str = quote!(#d).to_string();
+                 format!("(Default: {})", d_str)
+            } else {
+                 String::new()
+            };
+
+            let default_quote = if let Some(d) = default_expr {
+                let d_str = quote!(#d).to_string();
+                let json_value = if d_str.starts_with('"') && d_str.ends_with('"') {
+                    let trimmed = &d_str[1..d_str.len()-1];
+                    quote! {
+                        serde_json::Value::String(#trimmed.to_string())
+                    }
+                } else if d_str.parse::<u64>().is_ok() {
+                    let n = d_str.parse::<u64>().unwrap();
+                    quote! { serde_json::Value::Number(#n.into()) }
+                } else if d_str.parse::<i64>().is_ok() {
+                    let n = d_str.parse::<i64>().unwrap();
+                    quote! { serde_json::Value::Number(#n.into()) }
+                } else if d_str == "true" {
+                    quote! { serde_json::Value::Bool(true) }
+                } else if d_str == "false" {
+                    quote! { serde_json::Value::Bool(false) }
+                } else {
+                    quote! { serde_json::Value::String(#d_str.to_string()) }
+                };
+                quote!{
+                    let default_val = #json_value;
+                    if let Some(metadata) = field_schema_obj.metadata.as_mut() {
+                        metadata.default = Some(default_val);
+                    } else {
+                        let mut new_metadata = schemars::schema::Metadata::default();
+                        new_metadata.default = Some(default_val);
+                        field_schema_obj.metadata = Some(Box::new(new_metadata));
+                    }
+                }
+            } else {
+                quote! {}
+            };
+
+            let desc_quote = if !desc_str.is_empty() {
+                quote!{
+                    if let Some(metadata) = field_schema_obj.metadata.as_mut() {
+                        metadata.description = Some(#desc_str.to_string());
+                    } else {
+                        let mut new_metadata = schemars::schema::Metadata::default();
+                        new_metadata.description = Some(#desc_str.to_string());
+                        field_schema_obj.metadata = Some(Box::new(new_metadata));
+                    }
+                }
+            } else {
+                quote! {}
+            };
+
+            if f.flatten {
+                 quote!{
+                     let sub_schema = <#ty as schemars::JsonSchema>::json_schema(gen);
+                     if let schemars::schema::Schema::Object(mut obj) = sub_schema {
+                         if let Some(object_validation) = &mut obj.object {
+                             let obj_props = std::mem::take(&mut object_validation.properties);
+                             let obj_required = std::mem::take(&mut object_validation.required);
+                             for (k, v) in obj_props {
+                                properties.insert(k, v);
+                            }
+                            for k in obj_required {
+                                required.insert(k);
+                            }
+                         }
+                     }
+                 }
+            } else {
+                let is_optional = is_option_type(ty).is_some() || f.default.is_some();
+                let required_quote = if !is_optional {
+                    quote! { required.insert(#name_str.to_string()); }
+                } else {
+                    quote! {}
+                };
+
+                quote!{
+                    let mut field_schema_obj = gen.subschema_for::<#ty>().into_object();
+                    #desc_quote
+                    #default_quote
+                    properties.insert(#name_str.to_string(), schemars::schema::Schema::Object(field_schema_obj));
+                    #required_quote
+                }
+            }
+        });
+
+        quote! {
+            #[cfg(feature = "schema")]
+            impl schemars::JsonSchema for #struct_name {
+                fn schema_name() -> String {
+                    stringify!(#struct_name).to_string()
+                }
+
+                fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+                    use schemars::JsonSchema;
+
+                    let mut schema_obj = schemars::schema::SchemaObject {
+                        instance_type: Some(schemars::schema::InstanceType::Object.into()),
+                        ..Default::default()
+                    };
+
+                    let mut properties = std::collections::BTreeMap::new();
+                    let mut required = std::collections::BTreeSet::new();
+
+                    #(#schema_fields)*
+
+                    schema_obj.object = Some(Box::new(schemars::schema::ObjectValidation {
+                        properties,
+                        required,
+                        additional_properties: None,
+                        pattern_properties: std::collections::BTreeMap::new(),
+                        max_properties: None,
+                        min_properties: None,
+                        property_names: None,
+                    }));
+
+                    schemars::schema::Schema::Object(schema_obj)
+                }
+            }
+        }
+    };
+
+    let default_impl_body = fields.iter().map(|f| {
+        let name = &f.ident;
+        if let Some(d) = &f.default {
+            quote! { #name: #d }
+        } else {
+            quote! { #name: Default::default() }
+        }
+    });
+
+    let impl_default = quote! {
+        impl Default for #struct_name {
+            fn default() -> Self {
+                Self {
+                    #(#default_impl_body),*,
+                }
+            }
+        }
+    };
+
+    let sanitize_body = fields.iter().map(|f| {
+        let name = &f.ident;
+        let name_str = name.as_ref().unwrap().to_string();
+        let sensitive = f.sensitive.unwrap_or(false);
+
+        if sensitive {
+            quote!{
+                let value = confers::serde_json::to_value(&self.#name).unwrap_or(confers::serde_json::Value::Null);
+                let sanitized = confers::audit::sanitize_value(&value, &confers::audit::SanitizeConfig::default());
+                map.insert(#name_str.to_string(), sanitized);
+            }
+        } else {
+            quote!{
+                if let Ok(val) = confers::serde_json::to_value(&self.#name) {
+                    map.insert(#name_str.to_string(), val);
+                }
+            }
+        }
+    });
+
+    let impl_sanitize = quote! {
+        impl confers::audit::Sanitize for #struct_name {
+            fn sanitize(&self) -> confers::serde_json::Value {
+                let mut map = confers::serde_json::Map::new();
+                #(#sanitize_body)*
+                confers::serde_json::Value::Object(map)
+            }
+        }
+    };
+
+    // Generate Validate trait implementation that integrates field validation logic
+    // Always generate Validate implementation for Config derive to satisfy OptionalValidate bound
+    let mut validation_fields = Vec::new();
+
+    for field in fields {
+        if let Some(field_ident) = &field.ident {
+            let field_name_str = field_ident.to_string();
+
+            if field.flatten {
+                validation_fields.push(quote! {
+                    confers::validator::Validate::validate(&self.#field_ident)?;
+                });
+            }
+
+            if let Some(validate_str) = &field.validate {
+                if let Some((min, max)) = parse_range_validation(validate_str) {
+                    let min_lit =
+                        syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
+                    let max_lit =
+                        syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
+                    validation_fields.push(quote!{
+                        if !(#min_lit as _..=#max_lit as _).contains(&self.#field_ident) {
+                            let mut error = validator::ValidationError::new("range");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                format!("value must be between {} and {}", #min_lit, #max_lit)
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("min"), &#min_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("max"), &#max_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &self.#field_ident);
+                            errors.add(#field_name_str, error);
+                        }
+                    });
+                }
+
+                if let Some((min, max)) = parse_length_validation(validate_str) {
+                    let min_lit =
+                        syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
+                    let max_lit =
+                        syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
+                    validation_fields.push(quote! {
+                        let field_len = self.#field_ident.chars().count() as u64;
+                        if !(#min_lit..=#max_lit).contains(&field_len) {
+                            let mut error = validator::ValidationError::new("length");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                format!("length must be between {} and {}", #min_lit, #max_lit)
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("min"), &#min_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("max"), &#max_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &field_len);
+                            errors.add(#field_name_str, error);
+                        }
+                    });
+                }
+            }
+
+            if field.custom_validate.is_some() {
+                validation_fields.push(quote! {
+                    if let Err(e) = self.#field_ident.validate() {
+                        errors.add(#field_name_str, e);
+                    }
+                });
+            }
+        }
+    }
+
+    let impl_validate = quote! {
+        impl validator::Validate for #struct_name {
+            fn validate(&self) -> Result<(), validator::ValidationErrors> {
+                let mut errors = validator::ValidationErrors::new();
+
+                #(#validation_fields)*
+
+                if errors.is_empty() {
+                    Ok(())
+                } else {
+                    Err(errors)
+                }
+            }
+        }
+    };
+
+    // Generate ClapShadow struct name
+    let clap_shadow_name = quote::format_ident!("{}ClapShadow", struct_name);
+
+    // Generate field mapping for to_map method
+    let to_map_fields = fields.iter().filter_map(|f| {
+        // Skip flattened fields - they'll be handled separately
+        if f.flatten || f.skip {
+            return None;
+        }
+
+        let field_name = if let Some(name) = &f.name_config {
+            name.clone()
+        } else {
+            f.ident.as_ref()?.to_string()
+        };
+        let field_ident = f.ident.as_ref()?;
+        Some(quote! {
+            if let Ok(value) = figment::value::Value::serialize(&self.#field_ident) {
+                map.insert(#field_name.to_string(), value);
+            }
+        })
+    });
+
+    // Handle flattened fields separately
+    let flattened_map_fields = fields.iter().filter(|f| f.flatten).map(|f| {
+        let name = f.ident.as_ref().unwrap();
+        let is_serde_flatten = has_serde_flatten(&f.attrs);
+
+        if is_serde_flatten {
+            // For serde(flatten) fields, create both nested and flat keys
+            quote! {
+                let field_name = stringify!(#name);
+                let flattened_map = self.#name.to_map();
+                for (k, v) in flattened_map {
+                    // Add nested key (e.g., details.count)
+                    map.insert(format!("{}.{}", field_name, k), v.clone());
+                    // Add flat key for Figment double underscore (e.g., details_count)
+                    map.insert(format!("{}_{}", field_name, k), v.clone());
+                    // Add flat key for serde(flatten) (e.g., count)
+                    map.insert(k, v);
+                }
+            }
+        } else {
+            // For regular flattened fields, only create nested and double underscore keys
+            quote! {
+                let field_name = stringify!(#name);
+                let flattened_map = self.#name.to_map();
+                for (k, v) in flattened_map {
+                    map.insert(format!("{}.{}", field_name, k), v.clone());
+                    map.insert(format!("{}_{}", field_name, k), v);
+                }
+            }
+        }
+    });
+
+    // Generate env mapping
+    let env_mapping_entries = fields.iter().filter_map(|f| {
+        if f.flatten || f.skip {
+            return None;
+        }
+
+        if let Some(env_name) = &f.name_env {
+            let field_ident = f.ident.as_ref()?;
+            let field_name = field_ident.to_string();
+            Some(quote! {
+                map.insert(#field_name.to_string(), #env_name.to_string());
+            })
+        } else {
+            None
+        }
+    });
+
+    let generated_code = quote! {
+        #impl_default
+        #impl_sanitize
+        #impl_validate
+        #schema_impl
+
+        /// Clap-compatible argument structure for command line parsing
+        #[derive(clap::Parser, Debug, serde::Serialize, serde::Deserialize)]
+        #[command(name = stringify!(#struct_name))]
+        struct #clap_shadow_name {
+            #(#clap_fields)*
+        }
+
+        impl #struct_name {
+            /// Create a new ConfigLoader for this struct
+            pub fn new_loader() -> confers::core::ConfigLoader<Self> {
+                let mut loader = confers::core::ConfigLoader::<Self>::new();
+                loader = loader.with_app_name(env!("CARGO_PKG_NAME"));
+                if !#env_prefix.is_empty() {
+                    loader = loader.with_env_prefix(#env_prefix);
+                }
+                if #strict {
+                    loader = loader.with_strict(true);
+                }
+                #apply_watch
+                #apply_format_detection
+                #apply_remote
+                #apply_remote_timeout
+                #apply_remote_fallback
+                #apply_remote_auth
+                #apply_remote_tls
+                #(#field_remote_configs)*
+                #apply_audit
+                loader.with_defaults(Self::default())
+            }
+
+            /// Load configuration from multiple sources including command line arguments
+            pub fn load() -> Result<Self, confers::prelude::ConfigError> {
+                let mut loader = Self::new_loader();
+
+                // Parse command line arguments and add them as overrides
+                #[cfg(not(test))]
+                match <#clap_shadow_name as confers::clap::Parser>::try_parse() {
+                    Ok(clap_args) => {
+                        // Convert Clap arguments to CLI format and add them
+                        let cli_args = clap_args.to_cli_args();
+                        loader = loader.with_cli_provider(confers::providers::cli_provider::CliConfigProvider::from_args(cli_args));
+                    }
+                    Err(e) => {
+                        match e.kind() {
+                            confers::clap::error::ErrorKind::DisplayHelp | confers::clap::error::ErrorKind::DisplayVersion => {
+                                e.print().ok();
+                                std::process::exit(0);
+                            },
+                            _ => {
+                                if #strict {
+                                    return Err(confers::prelude::ConfigError::from(format!("{}", e)));
+                                } else {
+                                }
+                            }
+                        }
+                    }
+                }
+                #[cfg(test)]
+                {
+                    let clap_args = <#clap_shadow_name as confers::clap::Parser>::try_parse_from(std::iter::empty::<&str>()).ok();
+                    if let Some(clap_args) = clap_args {
+                        let cli_args = clap_args.to_cli_args();
+                        loader = loader.with_cli_provider(confers::providers::cli_provider::CliConfigProvider::from_args(cli_args));
+                    }
+                }
+
+                // Validate the config
+                #[cfg(feature = "audit")]
+                let config = loader.load_sync()?;
+                #[cfg(not(feature = "audit"))]
+                let config = loader.load_sync()?;
+
+                // Apply validation only if there are validations to apply
+                if #has_validations {
+                    confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
+                }
+
+                // Apply custom field validations
+                #(#custom_validations)*
+
+                Ok(config)
+            }
+
+            /// Load configuration with custom command line arguments
+            pub fn load_from_args(args: Vec<String>) -> Result<Self, confers::prelude::ConfigError> {
+                let mut loader = Self::new_loader();
+
+                // Parse provided command line arguments
+                match <#clap_shadow_name as confers::clap::Parser>::try_parse_from(args) {
+                    Ok(clap_args) => {
+                        // Convert Clap arguments to CLI format and add them
+                        let cli_args = clap_args.to_cli_args();
+                        loader = loader.with_cli_provider(confers::providers::cli_provider::CliConfigProvider::from_args(cli_args));
+                    }
+                    Err(e) => {
+                        match e.kind() {
+                            confers::clap::error::ErrorKind::DisplayHelp | confers::clap::error::ErrorKind::DisplayVersion => {
+                                e.print().ok();
+                                std::process::exit(0);
+                            },
+                            _ => {
+                                if #strict {
+                                    return Err(confers::prelude::ConfigError::from(format!("{}", e)));
+                                } else {
+                                    // Ignore CLI parsing errors for optional args in relaxed mode
+                                    // eprintln!("Warning: Failed to parse CLI arguments: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Validate the config
+                #[cfg(feature = "audit")]
+                let config = loader.load_sync_with_audit()?;
+                #[cfg(not(feature = "audit"))]
+                let config = loader.load_sync()?;
+
+                // Apply validation only if there are validations to apply
+                if #has_validations {
+                    confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
+                }
+
+                // Apply custom field validations
+                #(#custom_validations)*
+
+                Ok(config)
+            }
+
+            /// Load configuration and return it along with an optional watcher
+            #[cfg(feature = "watch")]
+            pub fn load_with_watcher() -> Result<(Self, Option<confers::watcher::ConfigWatcher>), confers::prelude::ConfigError> {
+                Self::new_loader().load_sync_with_watcher()
+            }
+
+            /// Load configuration with strict mode enabled/disabled
+            pub fn load_with_strict(strict: bool) -> confers::core::ConfigLoader<Self> {
+                let mut loader = Self::new_loader();
+                if strict {
+                    loader = loader.with_strict(true);
+                }
+                loader
+            }
+
+            /// Create a loader for this configuration
+            pub fn load_file(path: impl Into<std::path::PathBuf>) -> confers::core::ConfigLoader::<Self> {
+                let mut loader = Self::new_loader();
+
+                // Add the explicit file
+                let path_buf = path.into();
+                loader = loader.with_file(path_buf.as_path());
+
+                loader
+            }
+
+            /// Load configuration synchronously
+            pub fn load_sync() -> Result<Self, confers::prelude::ConfigError>
+            where
+                Self: Sized + confers::Sanitize + for<'de> serde::Deserialize<'de> + serde::Serialize + std::default::Default + Clone + confers::ConfigMap,
+            {
+                let mut loader = Self::new_loader();
+                let config = loader.load_sync()?;
+
+                // Apply validation only if there are validations to apply
+                if #has_validations {
+                    confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
+                }
+
+                // Apply custom field validations
+                #(#custom_validations)*
+
+                Ok(config)
+            }
+
+            /// Convert this configuration to a map of key-value pairs for Figment serialization
+            pub fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
+                let mut map = std::collections::HashMap::new();
+
+                // Add regular fields
+                #(#to_map_fields)*
+
+                // Add flattened fields
+                #(#flattened_map_fields)*
+
+                map
+            }
+
+            /// Generate JSON Schema for this configuration type
+            #[cfg(feature = "schema")]
+            pub fn json_schema() -> serde_json::Value {
+                let schema = schemars::schema_for!(#struct_name);
+                serde_json::to_value(schema).expect("Failed to convert schema to JSON")
+            }
+
+            /// Generate TypeScript schema definition for this configuration type
+            #[cfg(feature = "schema")]
+            pub fn typescript_schema() -> String {
+                confers::schema::typescript::TypeScriptGenerator::generate::<#struct_name>()
+            }
+
+            /// Export JSON schema to a file
+            #[cfg(feature = "schema")]
+            pub fn export_schema(path: impl AsRef<std::path::Path>) -> Result<(), confers::prelude::ConfigError> {
+                let schema = Self::json_schema();
+                let schema_json = serde_json::to_string_pretty(&schema)
+                    .map_err(|e| confers::prelude::ConfigError::SerializationError(e.to_string()))?;
+
+                std::fs::write(path, schema_json)
+                    .map_err(|e| confers::prelude::ConfigError::IoError(e.to_string()))?;
+
+                Ok(())
+            }
+        }
+
+        impl confers::ConfigMap for #struct_name {
+            fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
+                use figment::value::{Value, Dict, Tag, Num};
+
+                let json_value = confers::serde_json::to_value(self)
+                    .expect("Failed to serialize config to JSON");
+
+                fn json_to_figment_value(json: confers::serde_json::Value) -> figment::value::Value {
+                    use figment::value::{Value, Dict, Tag, Num};
+
+                    match json {
+                        confers::serde_json::Value::Null => Value::String(Tag::Default, String::new()),
+                        confers::serde_json::Value::Bool(b) => Value::Bool(Tag::Default, b),
+                        confers::serde_json::Value::Number(n) => {
+                            if let Some(i) = n.as_i64() {
+                                Value::Num(Tag::Default, Num::from(i))
+                            } else if let Some(f) = n.as_f64() {
+                                Value::Num(Tag::Default, Num::from(f))
+                            } else {
+                                Value::String(Tag::Default, String::new())
+                            }
+                        },
+                        confers::serde_json::Value::String(s) => Value::String(Tag::Default, s),
+                        confers::serde_json::Value::Array(arr) => {
+                            let figment_arr: Vec<figment::value::Value> = arr.into_iter()
+                                .map(json_to_figment_value)
+                                .collect();
+                            Value::Array(Tag::Default, figment_arr)
+                        },
+                        confers::serde_json::Value::Object(obj) => {
+                            let mut dict = Dict::new();
+                            for (key, value) in obj {
+                                dict.insert(key.into(), json_to_figment_value(value));
+                            }
+                            Value::Dict(Tag::Default, dict)
+                        },
+                    }
+                }
+
+                let mut map = std::collections::HashMap::new();
+
+                if let confers::serde_json::Value::Object(obj) = json_value {
+                    for (key, value) in obj {
+                        let figment_value = json_to_figment_value(value);
+                        map.insert(key, figment_value);
+                    }
+                }
+
+                map
+            }
+
+            fn env_mapping() -> std::collections::HashMap<String, String> {
+                let mut map = std::collections::HashMap::new();
+                #(#env_mapping_entries)*
+                map
+            }
+        }
+
+        /// Convert ClapShadow to CLI arguments in key=value format
+        impl #clap_shadow_name {
+            pub fn to_cli_args(&self) -> Vec<String> {
+                let mut args = Vec::new();
+                #(
+                    // Convert flattened fields
+                    let (sub_args, prefix) = #flattened_fields_info;
+                    for arg in sub_args {
+                         if let Some(p) = prefix {
+                             args.push(format!("{}.{}", p, arg));
+                         } else {
+                             args.push(arg);
+                         }
+                    }
+                )*
+
+                #(
+                    // Process Option<T> fields - only include if Some(value)
+                    let field_name = #option_field_names;
+                    let field_value = &#option_field_access;
+
+                    // For Option<T> fields, only include if it's Some(value)
+                    if let Some(value) = field_value {
+                        if let Ok(value_str) = confers::serde_json::to_string(value) {
+                            // Remove quotes from string values
+                            let clean_value = if value_str.starts_with('"') && value_str.ends_with('"') {
+                                value_str[1..value_str.len()-1].to_string()
+                            } else {
+                                value_str
+                            };
+                            args.push(format!("{}={}", field_name, clean_value));
+                        }
+                    }
+                )*
+
+                #(
+                    // Process non-Option fields - but they're wrapped in Option<T> by ClapShadow
+                    let field_name = #non_option_field_names;
+                    let field_value = &#non_option_field_access;
+
+                    // Since ClapShadow wraps non-Option fields in Option<T>, we need to check if it's Some
+                    if let Some(value) = field_value {
+                        if let Ok(value_str) = confers::serde_json::to_string(value) {
+                            // Remove quotes from string values
+                            let clean_value = if value_str.starts_with('"') && value_str.ends_with('"') {
+                                value_str[1..value_str.len()-1].to_string()
+                            } else {
+                                value_str
+                            };
+                            args.push(format!("{}={}", field_name, clean_value));
+                        }
+                    }
+                    // If it's None, skip this field entirely - don't generate "field=null"
+                )*
+                args
+            }
+        }
+    }; // Close the quote! block
+
+    generated_code
+}

@@ -1,0 +1,11 @@
+# Documentation files
+docs/prd.md
+docs/task.md
+docs/tdd.md
+docs/test.md
+docs/uat.md
+docs/文档校验报告.md
+
+# IDE and build
+.trae/
+target/
