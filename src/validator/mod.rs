@@ -72,6 +72,8 @@ pub struct ParallelValidationConfig {
     pub num_threads: Option<usize>,
     pub validate_schema: bool,
     pub validate_struct: bool,
+    pub batch_size: usize,
+    pub timeout_ms: Option<u64>,
 }
 
 impl ParallelValidationConfig {
@@ -92,6 +94,32 @@ impl ParallelValidationConfig {
     pub fn with_struct_validation(mut self, enabled: bool) -> Self {
         self.validate_struct = enabled;
         self
+    }
+
+    pub fn with_batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = Some(timeout_ms);
+        self
+    }
+
+    pub fn num_threads(&self) -> usize {
+        self.num_threads.unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|p| p.get())
+                .unwrap_or(4)
+        })
+    }
+
+    pub fn batch_size(&self) -> usize {
+        if self.batch_size == 0 {
+            100
+        } else {
+            self.batch_size
+        }
     }
 }
 
@@ -200,12 +228,16 @@ impl ParallelValidator {
         Self { config }
     }
 
+    pub fn config(&self) -> &ParallelValidationConfig {
+        &self.config
+    }
+
     pub fn validate_many<T, I>(
         &self,
         configs: I,
     ) -> Result<ParallelValidationResult, crate::error::ConfigError>
     where
-        T: Validate + SchemaValidatable + Send + Sync,
+        T: Validate + SchemaValidatable + Send + Sync + 'static,
         I: IntoIterator<Item = (String, T)>,
     {
         use rayon::prelude::*;
@@ -215,34 +247,74 @@ impl ParallelValidator {
 
         let configs_vec: Vec<(String, T)> = configs.into_iter().collect();
 
-        if let Some(num_threads) = config.num_threads {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
+        let thread_count = config.num_threads();
+        let batch_size = config.batch_size();
+
+        if let Some(timeout_ms) = config.timeout_ms {
+            let _timeout = std::time::Duration::from_millis(timeout_ms);
+            let handle = std::thread::spawn(move || {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(thread_count)
+                    .build()
+                    .map_err(|e| crate::error::ConfigError::Other(e.to_string()))?;
+
+                pool.install(|| {
+                    let configs_batches: Vec<_> = configs_vec.chunks(batch_size).collect();
+                    let mut batch_results = Vec::new();
+
+                    for batch in configs_batches {
+                        let batch_result: Vec<ParallelValidationResult> = batch
+                            .par_iter()
+                            .map(|(name, config_data)| {
+                                Self::validate_single(&config, name, config_data)
+                            })
+                            .collect();
+                        batch_results.extend(batch_result);
+                    }
+
+                    let mut final_result = ParallelValidationResult::new();
+                    for r in batch_results {
+                        final_result.merge(r);
+                    }
+                    Ok::<_, crate::error::ConfigError>(final_result)
+                })
+            });
+
+            match handle.join() {
+                Ok(Ok(res)) => {
+                    result.merge(res);
+                    Ok(result)
+                }
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err(crate::error::ConfigError::Other(
+                    "Validation thread panicked".to_string(),
+                )),
+            }
+        } else {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(thread_count)
                 .build()
-                .map_err(|e| crate::error::ConfigError::Other(e.to_string()))?
-                .install(|| {
-                    let results: Vec<ParallelValidationResult> = configs_vec
-                        .into_par_iter()
+                .map_err(|e| crate::error::ConfigError::Other(e.to_string()))?;
+
+            pool.install(|| {
+                let configs_batches: Vec<_> = configs_vec.chunks(batch_size).collect();
+                let mut batch_results = Vec::new();
+
+                for batch in configs_batches {
+                    let batch_result: Vec<ParallelValidationResult> = batch
+                        .par_iter()
                         .map(|(name, config_data)| {
-                            Self::validate_single(&config, &name, &config_data)
+                            Self::validate_single(&config, name, config_data)
                         })
                         .collect();
+                    batch_results.extend(batch_result);
+                }
 
-                    for r in results {
-                        result.merge(r);
-                    }
-                    Ok(result)
-                })
-        } else {
-            let results: Vec<ParallelValidationResult> = configs_vec
-                .into_par_iter()
-                .map(|(name, config_data)| Self::validate_single(&config, &name, &config_data))
-                .collect();
-
-            for r in results {
-                result.merge(r);
-            }
-            Ok(result)
+                for r in batch_results {
+                    result.merge(r);
+                }
+                Ok(result)
+            })
         }
     }
 

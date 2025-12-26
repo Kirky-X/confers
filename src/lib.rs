@@ -27,6 +27,8 @@ pub use validator::{
     ValidationErrors,
 };
 
+pub use security::{EnvSecurityValidator, EnvSecurityError, EnvironmentValidationConfig};
+
 // Re-export dependencies that macros need
 pub use clap;
 pub use figment;

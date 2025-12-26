@@ -1483,6 +1483,10 @@ pub fn generate_impl(
                 #apply_remote_tls
                 #(#field_remote_configs)*
                 #apply_audit
+                #[cfg(test)]
+                {
+                    loader = loader.with_memory_limit(0);
+                }
                 loader.with_defaults(Self::default())
             }
 

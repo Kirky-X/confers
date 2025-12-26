@@ -190,7 +190,7 @@ impl<T> Default for ConfigLoader<T> {
             consul_provider: None,
             #[cfg(feature = "audit")]
             audit: AuditConfig::default(),
-            memory_limit_mb: 0,
+            memory_limit_mb: 10,
         }
     }
 }

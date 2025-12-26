@@ -3,15 +3,19 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+use crate::{
+    error::ConfigError,
+    providers::{ConfigProvider, ProviderMetadata, ProviderType},
+};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use failsafe::{
     backoff, failure_policy, CircuitBreaker, Config as CircuitBreakerConfig, Error as FailsafeError,
 };
 use figment::{
     value::{Dict, Map},
-    Error, Profile, Provider,
+    Error, Figment, Profile, Provider,
 };
-use std::time::Duration;
+use std::{sync::RwLock, time::Duration};
 use url::Url;
 
 pub struct ConsulProvider {
@@ -194,5 +198,45 @@ impl Provider for ConsulProvider {
                 "Circuit breaker open: Consul requests rejected",
             )),
         }
+    }
+}
+
+impl ConfigProvider for ConsulProvider {
+    fn load(&self) -> Result<Figment, ConfigError> {
+        Provider::data(self)?
+            .try_into()
+            .map_err(|e| ConfigError::ParseError(e.to_string()))
+    }
+
+    fn name(&self) -> &str {
+        "Consul"
+    }
+
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    fn priority(&self) -> u8 {
+        20
+    }
+
+    fn metadata(&self) -> ProviderMetadata {
+        let has_tls = self.ca_path.is_some() || self.cert_path.is_some();
+        ProviderMetadata {
+            name: "Consul".to_string(),
+            description: format!(
+                "Consul KV store at {} with key {}",
+                self.address,
+                self.key
+            ),
+            source_type: ProviderType::Remote,
+            requires_network: true,
+            supports_watch: false,
+            priority: 20,
+        }
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
