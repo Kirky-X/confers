@@ -9,10 +9,14 @@ use failsafe::CircuitBreaker;
 use figment::{Figment, Provider as FigmentProvider};
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct ConsulConfigProvider {
     address: String,
     key: String,
     token: Option<String>,
+    ca_path: Option<String>,
+    cert_path: Option<String>,
+    key_path: Option<String>,
     priority: u8,
 }
 
@@ -22,7 +26,10 @@ impl ConsulConfigProvider {
             address: address.into(),
             key: key.into(),
             token: None,
-            priority: 30, // 远程配置优先级较低
+            ca_path: None,
+            cert_path: None,
+            key_path: None,
+            priority: 30,
         }
     }
 
@@ -32,9 +39,18 @@ impl ConsulConfigProvider {
     }
 
     pub fn with_auth(self, _username: impl Into<String>, _password: impl Into<String>) -> Self {
-        // Consul primarily uses tokens. Basic auth is rarely used or configured differently.
-        // We implement this no-op to satisfy the common remote interface.
-        // The username/password could be used for basic auth if the Consul server is configured for it.
+        self
+    }
+
+    pub fn with_tls(
+        mut self,
+        ca_path: Option<String>,
+        cert_path: Option<String>,
+        key_path: Option<String>,
+    ) -> Self {
+        self.ca_path = ca_path;
+        self.cert_path = cert_path;
+        self.key_path = key_path;
         self
     }
 
@@ -43,7 +59,7 @@ impl ConsulConfigProvider {
         self
     }
 
-    fn create_consul_provider(&self) -> crate::providers::remote::consul::ConsulProvider {
+    pub fn create_consul_provider(&self) -> crate::providers::remote::consul::ConsulProvider {
         let mut provider = crate::providers::remote::consul::ConsulProvider::new(
             self.address.clone(),
             self.key.clone(),
@@ -52,6 +68,12 @@ impl ConsulConfigProvider {
         if let Some(token) = &self.token {
             provider = provider.with_token(token.clone());
         }
+
+        provider = provider.with_tls(
+            self.ca_path.clone(),
+            self.cert_path.clone(),
+            self.key_path.clone(),
+        );
 
         provider
     }

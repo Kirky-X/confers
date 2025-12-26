@@ -96,7 +96,7 @@ jobs:
         run: cargo build --all-features --release
 
   test:
-    name: Test (Ubuntu)
+    name: Test (Ubuntu) - Coverage
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -121,28 +121,73 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-test-
 
-      - name: Run tests
-        run: cargo test --all-features --all-targets -- --test-threads=4
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./target/debug/lcov.info
-          fail_ci_if_error: false
-
       - name: Install grcov
         run: cargo install grcov
 
-      - name: Generate Code Coverage
-        run: grcov . --binary-path ./target/debug/ --source-dir . --output-type cobertura-xml --output-path cobertura.xml
+      - name: Run tests with coverage
+        run: cargo tarpaulin --all-features --all-targets --out lcov --output-dir coverage/
 
-      - name: Upload to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: cobertura.xml
+          files: coverage/lcov.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
+
+      - name: Generate Cobertura XML for GitHub
+        run: grcov . --binary-path ./target/debug/ --source-dir . --output-type cobertura-xml --output-path cobertura.xml
+
+      - name: Check coverage threshold
+        run: |
+          total=$(grep -oP '(?<=line-rate=")[0-9.]+' cobertura.xml | head -1)
+          threshold=0.80
+          echo "Coverage: $total"
+          echo "Threshold: $threshold"
+          if (( $(echo "$total >= $threshold" | bc -l) )); then
+            echo "Coverage requirement met (>= 80%)"
+          else
+            echo "Coverage requirement NOT met (>= 80%)"
+            exit 1
+          fi
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            cobertura.xml
+          retention-days: 7
+
+  test-fast:
+    name: Test (Ubuntu) - Fast
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-test-fast-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-test-fast-
+
+      - name: Run tests
+        run: cargo test --all-features --all-targets -- --test-threads=4
 
   test-cross-platform:
     name: Test (${{ matrix.os }})
@@ -335,7 +380,7 @@ jobs:
     name: Benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
+    needs: [test, test-fast]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -387,7 +432,7 @@ jobs:
   notify:
     name: Notify
     runs-on: ubuntu-latest
-    needs: [check, build, test, test-windows, doc, audit, minimal-versions]
+    needs: [check, build, test, test-fast, test-windows, doc, audit, minimal-versions]
     if: always()
     steps:
       - name: Check job status
@@ -395,6 +440,7 @@ jobs:
           if [[ "${{ needs.check.result }}" == "failure" ]] || \
              [[ "${{ needs.build.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-fast.result }}" == "failure" ]] || \
              [[ "${{ needs.test-windows.result }}" == "failure" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
           else

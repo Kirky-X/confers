@@ -38,13 +38,36 @@ impl<T: Validate> OptionalValidate for T {
 }
 
 #[cfg(feature = "remote")]
+use crate::providers::consul_provider::ConsulConfigProvider;
+#[cfg(feature = "remote")]
 use crate::providers::etcd_provider::EtcdConfigProvider;
 #[cfg(feature = "remote")]
 use crate::providers::http_provider::HttpConfigProvider;
 
 /// Get current memory usage in MB using sysinfo crate
+/// Cross-platform support: Linux, macOS, Windows
 #[allow(dead_code)]
 fn get_memory_usage_mb() -> Option<f64> {
+    use std::process;
+    use sysinfo::{Pid, System};
+
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let current_pid = Pid::from_u32(process::id());
+
+    if let Some(process) = sys.process(current_pid) {
+        let memory_bytes = process.memory();
+        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
+        Some(memory_mb)
+    } else {
+        None
+    }
+}
+
+/// Get peak memory usage in MB (cross-platform)
+#[allow(dead_code)]
+fn get_peak_memory_usage_mb() -> Option<f64> {
     use std::process;
     use sysinfo::{Pid, System};
 
@@ -94,6 +117,9 @@ pub struct ConfigLoader<T> {
     /// Etcd configuration provider
     #[cfg(feature = "remote")]
     etcd_provider: Option<EtcdConfigProvider>,
+    /// Consul configuration provider
+    #[cfg(feature = "remote")]
+    consul_provider: Option<ConsulConfigProvider>,
     /// Audit configuration
     #[cfg(feature = "audit")]
     audit: AuditConfig,
@@ -160,6 +186,8 @@ impl<T> Default for ConfigLoader<T> {
             remote_config: RemoteConfig::default(),
             #[cfg(feature = "remote")]
             etcd_provider: None,
+            #[cfg(feature = "remote")]
+            consul_provider: None,
             #[cfg(feature = "audit")]
             audit: AuditConfig::default(),
             memory_limit_mb: 0,
@@ -303,6 +331,13 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(feature = "remote")]
     pub fn with_etcd(mut self, provider: EtcdConfigProvider) -> Self {
         self.etcd_provider = Some(provider);
+        self
+    }
+
+    /// Set consul configuration provider
+    #[cfg(feature = "remote")]
+    pub fn with_consul(mut self, provider: ConsulConfigProvider) -> Self {
+        self.consul_provider = Some(provider);
         self
     }
 
@@ -683,11 +718,61 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 6. Load etcd config if provided
         #[cfg(feature = "remote")]
         if let Some(etcd_provider) = &self.etcd_provider {
-            // EtcdConfigProvider already has its own configuration
-            manager.add_provider((*etcd_provider).clone());
+            let mut provider = etcd_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply auth if provided in remote_config
+            if let (Some(username), Some(password)) =
+                (&self.remote_config.username, &self.remote_config.password)
+            {
+                provider = provider.with_auth(username.clone(), password.clone());
+            }
+
+            manager.add_provider(provider);
         }
 
-        // 7. Extract and validate configuration using ProviderManager
+        // 7. Load consul config if provided
+        #[cfg(feature = "remote")]
+        if let Some(consul_provider) = &self.consul_provider {
+            let mut provider = consul_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply token if provided in remote_config
+            if let Some(token) = &self.remote_config.token {
+                provider = provider.with_token(token.clone());
+            }
+
+            let consul_p = provider.create_consul_provider();
+            manager.add_provider(consul_p);
+        }
+
+        // 8. Extract and validate configuration using ProviderManager
         figment = manager.load_all()?;
 
         // Merge with initial figment to preserve profiles/metadata if any
@@ -813,11 +898,61 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 6. Load etcd config if provided
         #[cfg(feature = "remote")]
         if let Some(etcd_provider) = &self.etcd_provider {
-            // EtcdConfigProvider already has its own configuration
-            manager.add_provider((*etcd_provider).clone());
+            let mut provider = etcd_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply auth if provided in remote_config
+            if let (Some(username), Some(password)) =
+                (&self.remote_config.username, &self.remote_config.password)
+            {
+                provider = provider.with_auth(username.clone(), password.clone());
+            }
+
+            manager.add_provider(provider);
         }
 
-        // 7. Extract and validate configuration using ProviderManager
+        // 7. Load consul config if provided
+        #[cfg(feature = "remote")]
+        if let Some(consul_provider) = &self.consul_provider {
+            let mut provider = consul_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply token if provided in remote_config
+            if let Some(token) = &self.remote_config.token {
+                provider = provider.with_token(token.clone());
+            }
+
+            let consul_p = provider.create_consul_provider();
+            manager.add_provider(consul_p);
+        }
+
+        // 8. Extract and validate configuration using ProviderManager
         figment = manager.load_all()?;
 
         // Merge with initial figment to preserve profiles/metadata if any

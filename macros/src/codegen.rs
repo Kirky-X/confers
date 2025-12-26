@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::parse::{ConfigOpts, FieldOpts};
+use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Attribute, Meta, Type};
@@ -75,6 +75,33 @@ fn is_primitive_type(ty: &Type) -> bool {
             | "char"
     ) || type_string.starts_with("Option <")
         || type_string.starts_with("Vec <")
+}
+
+/// Detect remote protocol from URL or explicit setting
+fn detect_protocol(
+    url: &Option<String>,
+    explicit_protocol: &Option<RemoteProtocol>,
+) -> RemoteProtocol {
+    if let Some(protocol) = explicit_protocol {
+        if *protocol != RemoteProtocol::Auto {
+            return *protocol;
+        }
+    }
+
+    if let Some(url_str) = url {
+        let url_lower = url_str.to_lowercase();
+        if url_lower.starts_with("http://") || url_lower.starts_with("https://") {
+            return RemoteProtocol::Http;
+        }
+        if url_lower.starts_with("etcd://") || url_lower.starts_with("etcds://") {
+            return RemoteProtocol::Etcd;
+        }
+        if url_lower.starts_with("consul://") {
+            return RemoteProtocol::Consul;
+        }
+    }
+
+    RemoteProtocol::Http // default to http
 }
 
 /// Generate Clap fields for a list of fields, handling flatten attributes
@@ -520,7 +547,7 @@ pub fn generate_impl(
         }
     };
 
-    // Generate field-level remote configuration
+    // Generate field-level remote configuration with protocol-specific attribute injection
     let field_remote_configs: Vec<TokenStream> = fields
         .iter()
         .filter(|f| {
@@ -534,7 +561,6 @@ pub fn generate_impl(
         })
         .map(|f| {
             let field_name = f.ident.as_ref().unwrap();
-            let _field_name_str = field_name.to_string();
 
             let remote_url = &f.remote;
             let remote_timeout = &f.remote_timeout;
@@ -547,84 +573,218 @@ pub fn generate_impl(
             let remote_client_cert = &f.remote_client_cert;
             let remote_client_key = &f.remote_client_key;
 
+            // Detect protocol for this field
+            let protocol = detect_protocol(remote_url, &opts.remote_protocol);
+
             let mut config_tokens = TokenStream::new();
 
-            if let Some(url) = remote_url {
+            // Common field name setting
+            if remote_url.is_some() {
                 config_tokens.extend(quote! {
                     #[cfg(feature = "remote")]
                     {
-                        loader = loader.with_remote_config(#url);
                         loader = loader.with_field_name(stringify!(#field_name).to_string());
                     }
                 });
             }
 
-            if let Some(timeout) = remote_timeout {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_timeout(#timeout); }
-                });
-            }
+            // Protocol-specific configuration
+            match protocol {
+                RemoteProtocol::Http => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
 
-            if remote_auth == Some(true) {
-                if let Some(username) = remote_username {
-                    let password = remote_password
-                        .as_ref()
-                        .map(|p| quote! { #p })
-                        .unwrap_or(quote! { "" });
-                    config_tokens.extend(quote! {
-                        #[cfg(feature = "remote")]
-                        { loader = loader.with_remote_auth(#username, #password); }
-                    });
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_auth == Some(true) {
+                        if let (Some(username), Some(password)) = (remote_username, remote_password) {
+                            config_tokens.extend(quote! {
+                                #[cfg(feature = "remote")]
+                                { loader = loader.with_remote_auth(#username, #password); }
+                            });
+                        }
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
                 }
-            }
 
-            if remote_token.is_some() {
-                if let Some(token) = remote_token {
-                    config_tokens.extend(quote! {
-                        #[cfg(feature = "remote")]
-                        { loader = loader.with_remote_token(#token); }
-                    });
+                RemoteProtocol::Etcd => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
+
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
                 }
-            }
 
-            if remote_tls == Some(true) {
-                let ca_cert = remote_ca_cert
-                    .as_ref()
-                    .map(|c| quote! { #c })
-                    .unwrap_or(quote! { "" });
-                let client_cert = remote_client_cert
-                    .as_ref()
-                    .map(|c| quote! { Some(#c.to_string()) })
-                    .unwrap_or(quote! { None });
-                let client_key = remote_client_key
-                    .as_ref()
-                    .map(|c| quote! { Some(#c.to_string()) })
-                    .unwrap_or(quote! { None });
+                RemoteProtocol::Consul => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
 
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
-                });
-            } else if let Some(ca_cert) = remote_ca_cert {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_ca_cert(#ca_cert); }
-                });
-            }
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
 
-            if let Some(cert) = remote_client_cert {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_client_cert(#cert); }
-                });
-            }
+                    if let Some(token) = remote_token {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_token(#token); }
+                        });
+                    }
 
-            if let Some(key) = remote_client_key {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_client_key(#key); }
-                });
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
+                }
+
+                RemoteProtocol::Auto => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
+
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_auth == Some(true) {
+                        if let (Some(username), Some(password)) = (remote_username, remote_password) {
+                            config_tokens.extend(quote! {
+                                #[cfg(feature = "remote")]
+                                { loader = loader.with_remote_auth(#username, #password); }
+                            });
+                        }
+                    }
+
+                    if let Some(token) = remote_token {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_token(#token); }
+                        });
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
+                }
             }
 
             config_tokens

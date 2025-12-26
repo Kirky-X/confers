@@ -18,6 +18,9 @@ pub struct ConsulProvider {
     address: String,
     key: String,
     token: Option<String>,
+    ca_path: Option<String>,
+    cert_path: Option<String>,
+    key_path: Option<String>,
 }
 
 impl ConsulProvider {
@@ -26,6 +29,9 @@ impl ConsulProvider {
             address: address.into(),
             key: key.into(),
             token: None,
+            ca_path: None,
+            cert_path: None,
+            key_path: None,
         }
     }
 
@@ -35,9 +41,18 @@ impl ConsulProvider {
     }
 
     pub fn with_auth(self, _username: impl Into<String>, _password: impl Into<String>) -> Self {
-        // Consul primarily uses tokens. Basic auth is rarely used or configured differently.
-        // We implement this no-op or partial support to satisfy the common remote interface.
-        // If needed, we can store these and use them for basic auth header.
+        self
+    }
+
+    pub fn with_tls(
+        mut self,
+        ca_path: Option<String>,
+        cert_path: Option<String>,
+        key_path: Option<String>,
+    ) -> Self {
+        self.ca_path = ca_path;
+        self.cert_path = cert_path;
+        self.key_path = key_path;
         self
     }
 }
@@ -69,24 +84,61 @@ impl Provider for ConsulProvider {
             let mut url = Url::parse(&address)
                 .map_err(|e| Error::from(format!("Invalid Consul URL: {}", e)))?;
 
-            // Normalize path logic to match standard Consul API /v1/kv/{key}
-            // If user provides "http://localhost:8500", we want "http://localhost:8500/v1/kv/{key}"
             let path = url.path();
             if path == "/" || path.is_empty() {
                 url.set_path(&format!("/v1/kv/{}", key));
             } else if path.ends_with("/v1/kv/") {
                 url.set_path(&format!("{}{}", path, key));
             } else if path.contains("/v1/kv") {
-                // Assume path ends with something that needs key appended
                 let new_path = format!("{}/{}", path.trim_end_matches('/'), key);
                 url.set_path(&new_path);
             } else {
-                // No v1/kv in path, assume it's base URL
                 let new_path = format!("{}/v1/kv/{}", path.trim_end_matches('/'), key);
                 url.set_path(&new_path);
             }
 
-            let client = reqwest::blocking::Client::new();
+            let mut client_builder = reqwest::blocking::Client::builder();
+
+            let client = if let (Some(ca_path), Some(cert_path), Some(_key_path)) =
+                (&self.ca_path, &self.cert_path, &self.key_path)
+            {
+                client_builder = client_builder.add_root_certificate(
+                    reqwest::Certificate::from_pem(
+                        &std::fs::read(ca_path)
+                            .map_err(|e| Error::from(format!("Failed to read CA cert: {}", e)))?,
+                    )
+                    .map_err(|e| Error::from(format!("Failed to parse CA cert: {}", e)))?,
+                );
+
+                client_builder =
+                    client_builder.identity(
+                        reqwest::Identity::from_pem(&std::fs::read(cert_path).map_err(|e| {
+                            Error::from(format!("Failed to read client cert: {}", e))
+                        })?)
+                        .map_err(|e| Error::from(format!("Failed to parse client cert: {}", e)))?,
+                    );
+
+                client_builder
+                    .build()
+                    .map_err(|e| Error::from(format!("Failed to build TLS client: {}", e)))?
+            } else if let Some(ca_path) = &self.ca_path {
+                client_builder = client_builder.add_root_certificate(
+                    reqwest::Certificate::from_pem(
+                        &std::fs::read(ca_path)
+                            .map_err(|e| Error::from(format!("Failed to read CA cert: {}", e)))?,
+                    )
+                    .map_err(|e| Error::from(format!("Failed to parse CA cert: {}", e)))?,
+                );
+
+                client_builder
+                    .build()
+                    .map_err(|e| Error::from(format!("Failed to build TLS client: {}", e)))?
+            } else {
+                client_builder
+                    .build()
+                    .map_err(|e| Error::from(format!("Failed to build client: {}", e)))?
+            };
+
             let mut req = client.get(url.clone());
 
             if let Some(t) = &token {
