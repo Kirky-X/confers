@@ -20,6 +20,10 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check
@@ -55,6 +59,9 @@ jobs:
 
       - name: Check for unused dependencies
         run: cargo udeps --all-features --all-targets
+
+      - name: Cargo Audit
+        run: cargo audit --deny warnings
 
   build:
     name: Build
@@ -122,6 +129,20 @@ jobs:
         with:
           files: ./target/debug/lcov.info
           fail_ci_if_error: false
+
+      - name: Install grcov
+        run: cargo install grcov
+
+      - name: Generate Code Coverage
+        run: grcov . --binary-path ./target/debug/ --source-dir . --output-type cobertura-xml --output-path cobertura.xml
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: cobertura.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
   test-cross-platform:
     name: Test (${{ matrix.os }})
