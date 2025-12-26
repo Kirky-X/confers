@@ -64,9 +64,9 @@ mod tests {
         fs::write(&config_path, config_content).unwrap();
 
         let loader = create_test_loader().with_file(&config_path);
-        let config: ArchitectureConfig = loader.load().await.unwrap();
+        let _config: ArchitectureConfig = loader.load().await.unwrap();
 
-        assert_eq!(config.pointer_width, expected_width);
+        assert_eq!(_config.pointer_width, expected_width);
     }
 
     #[tokio::test]
@@ -706,7 +706,7 @@ mod memory_layout_tests {
         fs::write(&config_path, config_content).unwrap();
 
         let loader = create_test_loader().with_file(&config_path);
-        let config: ArchitectureConfig = loader.load().await.unwrap();
+        let _config: ArchitectureConfig = loader.load().await.unwrap();
 
         let config_size = mem::size_of::<ArchitectureConfig>();
         assert!(
