@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 use confers::commands::validate::{ValidateCommand, ValidateLevel};
 use confers::Config;
 use serde::{Deserialize, Serialize};
