@@ -1141,8 +1141,16 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     where
         F: std::future::Future<Output = Result<R, ConfigError>>,
     {
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.block_on(f)
+        if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        ConfigError::RuntimeError(format!("Failed to create runtime: {}", e))
+                    })?;
+                rt.block_on(f)
+            })
         } else {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -1604,9 +1612,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
     /// Expand template variables in a string
     fn expand_templates(&self, s: &str) -> Option<String> {
-        println!("DEBUG: expand_templates called with: {}", s);
         if !s.contains("${") {
-            println!("DEBUG: No template variables found, returning original");
             return Some(s.to_string());
         }
 
@@ -1619,8 +1625,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let var_end = var_start + var_end;
                 let var_name = &result[var_start + 2..var_end];
 
-                println!("DEBUG: Found template variable: {}", var_name);
-
                 // Try with env prefix first, then without prefix
                 let env_value = if let Some(prefix) = &self.env_prefix {
                     let prefixed_name = format!("{}_{}", prefix, var_name);
@@ -1630,11 +1634,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 };
 
                 if let Ok(env_value) = env_value {
-                    println!("DEBUG: Replacing with env value: {}", env_value);
                     result.replace_range(var_start..=var_end, &env_value);
                     start = var_start + env_value.len();
                 } else {
-                    println!("DEBUG: Environment variable not found: {}", var_name);
                     start = var_end + 1;
                 }
             } else {
@@ -1642,7 +1644,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             }
         }
 
-        println!("DEBUG: Final result: {}", result);
         Some(result)
     }
 
@@ -1724,38 +1725,27 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         U: Serialize + for<'de> Deserialize<'de> + Clone,
     {
         // Check if encryption key is available
-        println!("DEBUG: apply_decryption called");
         if let Ok(encryptor) = ConfigEncryption::from_env() {
-            println!("DEBUG: Encryption key found, proceeding with decryption");
             // Serialize the config to a Value
             let mut value = Value::serialize(config.clone()).map_err(|e| {
                 ConfigError::ParseError(format!("Failed to serialize config: {}", e))
             })?;
 
-            println!("DEBUG: Serialized config to Value: {:?}", value);
             // Decrypt values recursively
             self.decrypt_value_recursive(&mut value, &encryptor);
 
-            println!("DEBUG: Decryption completed");
             // Deserialize back to the config type
-            println!("DEBUG: About to deserialize value back to config");
             match value.deserialize::<U>() {
                 Ok(deserialized) => {
-                    println!("DEBUG: Deserialization successful");
                     *config = deserialized;
                 }
                 Err(e) => {
-                    println!("DEBUG: Deserialization failed: {}", e);
                     return Err(ConfigError::ParseError(format!(
                         "Failed to deserialize config: {}",
                         e
                     )));
                 }
             }
-
-            println!("DEBUG: Deserialized back to config");
-        } else {
-            println!("DEBUG: No encryption key found");
         }
 
         Ok(())
@@ -1765,7 +1755,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     fn decrypt_figment(&self, figment: Figment) -> Result<Figment, ConfigError> {
         // Try to get encryption key from environment
         if let Ok(encryptor) = ConfigEncryption::from_env() {
-            println!("DEBUG decrypt_figment: Encryption key found");
             // Extract the figment as a Value first
             // We use extract_inner to get the merged value without validation
             // If extraction fails, we fallback to an empty dict
@@ -1773,14 +1762,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 Ok(v) => v,
                 Err(_) => Value::Dict(Tag::Default, std::collections::BTreeMap::new()),
             };
-            println!("DEBUG decrypt_figment: Extracted value: {:?}", value);
 
             // Apply decryption recursively
-            let changed = self.decrypt_value_recursive(&mut value, &encryptor);
-            println!(
-                "DEBUG decrypt_figment: Decryption changed: {}, value after: {:?}",
-                changed, value
-            );
+            self.decrypt_value_recursive(&mut value, &encryptor);
 
             // Create a new figment with the decrypted value
             // We merge the decrypted value ON TOP of the original figment

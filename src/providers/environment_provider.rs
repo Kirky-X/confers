@@ -99,22 +99,16 @@ impl ConfigProvider for EnvironmentProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
         let mut figment = Figment::new();
 
-        eprintln!(
-            "DEBUG EnvironmentProvider.load: prefix='{}', separator='{}'",
-            self.prefix, self.separator
-        );
-
         let validator = get_global_validator();
 
         let env_vars = self.get_env_vars();
         eprintln!(
-            "DEBUG EnvironmentProvider.load: Found {} env vars with prefix '{}'",
+            "Found {} env vars with prefix '{}'",
             env_vars.len(),
             self.prefix
         );
 
         if !env_vars.is_empty() {
-            eprintln!("DEBUG EnvironmentProvider.load: env_vars = {:?}", env_vars);
             let mut nested_env_map = figment::value::Dict::new();
             let mut validation_warnings = Vec::new();
 
@@ -126,7 +120,6 @@ impl ConfigProvider for EnvironmentProvider {
                 }
 
                 if value.is_empty() {
-                    eprintln!("DEBUG: Skipping empty env var: key={}", key);
                     continue;
                 }
 
@@ -152,20 +145,9 @@ impl ConfigProvider for EnvironmentProvider {
                     figment::value::Value::from(value.clone())
                 };
 
-                eprintln!(
-                    "DEBUG: key={} -> field_key={}, value={}",
-                    key, field_key, value
-                );
-
                 let keys: Vec<&str> = field_key.split('.').collect();
                 insert_nested_value(&mut nested_env_map, &keys, parsed_value);
             }
-
-            eprintln!(
-                "DEBUG EnvironmentProvider.load: nested_env_map size = {}, contents = {:?}",
-                nested_env_map.len(),
-                nested_env_map
-            );
 
             if !validation_warnings.is_empty() {
                 tracing::warn!(
@@ -221,10 +203,6 @@ impl ConfigProvider for EnvironmentProvider {
             }
         }
 
-        eprintln!(
-            "DEBUG EnvironmentProvider.load: Returning figment = {:?}",
-            figment
-        );
         Ok(figment)
     }
 

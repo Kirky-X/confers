@@ -26,37 +26,16 @@ fn has_serde_flatten(attrs: &Vec<syn::Attribute>) -> bool {
 }
 
 fn has_validate_derive(input: &syn::DeriveInput) -> bool {
-    eprintln!(
-        "DEBUG: has_validate_derive called for struct: {}",
-        input.ident
-    );
-    eprintln!("DEBUG: All attributes: {:?}", input.attrs);
-
     for attr in &input.attrs {
-        eprintln!("DEBUG: Checking attribute: {:?}", attr.path());
         if attr.path().is_ident("derive") {
-            eprintln!("DEBUG: Found derive attribute");
-            eprintln!("DEBUG: Full attribute: {:?}", attr);
             if let syn::Meta::List(list) = &attr.meta {
-                // Convert tokens to string and check for Validate
                 let tokens_str = list.tokens.to_string();
-                eprintln!("DEBUG: Derive tokens string: {}", tokens_str);
-
-                // Simple string check for Validate in the tokens
                 if tokens_str.contains("Validate") {
-                    eprintln!("DEBUG: Found Validate in derive list!");
                     return true;
                 }
             }
-        } else if attr.path().is_ident("config") {
-            // Skip config attributes - they are not derive attributes
-            continue;
-        } else {
-            // For other attributes, check if they might contain derive information
-            eprintln!("DEBUG: Other attribute: {:?}", attr);
         }
     }
-    eprintln!("DEBUG: Validate not found in derive list");
     false
 }
 

@@ -14,6 +14,7 @@ pub mod schema;
 pub mod security;
 pub mod utils;
 pub mod validator;
+pub mod validators;
 pub mod watcher;
 
 // Re-export commonly used items

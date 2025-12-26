@@ -12,6 +12,7 @@ use failsafe::{
     backoff, failure_policy, CircuitBreaker, Config as CircuitBreakerConfig, Error as FailsafeError,
 };
 use figment::{
+    providers::Serialized,
     value::{Dict, Map},
     Error, Figment, Profile, Provider,
 };
@@ -203,9 +204,8 @@ impl Provider for ConsulProvider {
 
 impl ConfigProvider for ConsulProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
-        Provider::data(self)?
-            .try_into()
-            .map_err(|e| ConfigError::ParseError(e.to_string()))
+        let data: Map<Profile, Dict> = Provider::data(self)?;
+        Ok(Figment::from(data))
     }
 
     fn name(&self) -> &str {
@@ -221,7 +221,7 @@ impl ConfigProvider for ConsulProvider {
     }
 
     fn metadata(&self) -> ProviderMetadata {
-        let has_tls = self.ca_path.is_some() || self.cert_path.is_some();
+        let _has_tls = self.ca_path.is_some() || self.cert_path.is_some();
         ProviderMetadata {
             name: "Consul".to_string(),
             description: format!(
