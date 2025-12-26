@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 use crate::error::ConfigError;
 use crate::key::KeyStorage;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
