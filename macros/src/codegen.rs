@@ -745,7 +745,7 @@ pub fn generate_impl(
             if f.flatten || f.skip {
                 return false;
             }
-        // 仅包含可由 Clap 处理的原始类型
+            // 仅包含可由 Clap 处理的原始类型
             let ty = &f.ty;
             let type_string = quote!(#ty).to_string();
             let is_primitive = matches!(
