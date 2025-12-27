@@ -34,7 +34,7 @@ fn insert_nested_value(
     }
 }
 
-/// Environment variable configuration provider
+#[derive(Clone)]
 pub struct EnvironmentProvider {
     prefix: String,
     separator: String,
@@ -54,6 +54,22 @@ impl EnvironmentProvider {
             },
             separator: "__".to_string(),
             name: "environment".to_string(),
+            priority: 30,
+            custom_mappings: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn from_prefix(prefix: impl Into<String>) -> Self {
+        let prefix = prefix.into();
+        let figment_prefix = if prefix.ends_with('_') {
+            prefix.clone()
+        } else {
+            format!("{}_", prefix)
+        };
+        Self {
+            prefix: figment_prefix,
+            separator: "__".to_string(),
+            name: "env".to_string(),
             priority: 30,
             custom_mappings: std::collections::HashMap::new(),
         }
@@ -237,6 +253,9 @@ impl ConfigProvider for EnvironmentProvider {
         self
     }
 }
+
+#[deprecated(since = "0.4.0", note = "Use EnvironmentProvider instead")]
+pub type EnvProvider = EnvironmentProvider;
 
 /// Standard environment provider with common conventions
 pub struct StandardEnvironmentProvider {

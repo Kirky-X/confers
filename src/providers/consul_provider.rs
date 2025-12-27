@@ -5,9 +5,17 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
-use failsafe::CircuitBreaker;
-use figment::{Figment, Provider as FigmentProvider};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use failsafe::{
+    backoff, failure_policy, CircuitBreaker, Config as CircuitBreakerConfig, Error as FailsafeError,
+};
+use figment::{
+    providers::Serialized,
+    value::{Dict, Map},
+    Figment, Profile, Provider as FigmentProvider,
+};
 use std::time::Duration;
+use url::Url;
 
 #[derive(Clone)]
 pub struct ConsulConfigProvider {
@@ -18,6 +26,12 @@ pub struct ConsulConfigProvider {
     cert_path: Option<String>,
     key_path: Option<String>,
     priority: u8,
+}
+
+#[derive(serde::Deserialize)]
+#[allow(non_snake_case)]
+struct ConsulKvPair {
+    Value: String,
 }
 
 impl ConsulConfigProvider {
@@ -31,6 +45,10 @@ impl ConsulConfigProvider {
             key_path: None,
             priority: 30,
         }
+    }
+
+    pub fn from_address(address: impl Into<String>, key: impl Into<String>) -> Self {
+        Self::new(address, key)
     }
 
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
@@ -59,54 +77,136 @@ impl ConsulConfigProvider {
         self
     }
 
-    pub fn create_consul_provider(&self) -> crate::providers::remote::consul::ConsulProvider {
-        let mut provider = crate::providers::remote::consul::ConsulProvider::new(
-            self.address.clone(),
-            self.key.clone(),
-        );
+    fn build_url(&self) -> Result<Url, ConfigError> {
+        let mut url = Url::parse(&self.address)
+            .map_err(|e| ConfigError::RemoteError(format!("Invalid Consul URL: {}", e)))?;
 
-        if let Some(token) = &self.token {
-            provider = provider.with_token(token.clone());
+        let path = url.path();
+        let key = &self.key;
+
+        if path == "/" || path.is_empty() {
+            url.set_path(&format!("/v1/kv/{}", key));
+        } else if path.ends_with("/v1/kv/") {
+            url.set_path(&format!("{}{}", path, key));
+        } else if path.contains("/v1/kv") {
+            let new_path = format!("{}/{}", path.trim_end_matches('/'), key);
+            url.set_path(&new_path);
+        } else {
+            let new_path = format!("{}/v1/kv/{}", path.trim_end_matches('/'), key);
+            url.set_path(&new_path);
         }
 
-        provider = provider.with_tls(
-            self.ca_path.clone(),
-            self.cert_path.clone(),
-            self.key_path.clone(),
-        );
+        Ok(url)
+    }
 
-        provider
+    fn build_client(&self) -> Result<reqwest::blocking::Client, ConfigError> {
+        let mut client_builder = reqwest::blocking::Client::builder();
+
+        if let (Some(ca_path), Some(cert_path), Some(_key_path)) =
+            (&self.ca_path, &self.cert_path, &self.key_path)
+        {
+            client_builder = client_builder.add_root_certificate(
+                reqwest::Certificate::from_pem(&std::fs::read(ca_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
+                })?)
+                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e)))?,
+            );
+
+            client_builder = client_builder.identity(
+                reqwest::Identity::from_pem(&std::fs::read(cert_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
+                })?)
+                .map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse client cert: {}", e))
+                })?,
+            );
+        } else if let Some(ca_path) = &self.ca_path {
+            client_builder = client_builder.add_root_certificate(
+                reqwest::Certificate::from_pem(&std::fs::read(ca_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
+                })?)
+                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e)))?,
+            );
+        }
+
+        client_builder
+            .build()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to build client: {}", e)))
+    }
+
+    fn fetch_data(&self) -> Result<Map<Profile, Dict>, ConfigError> {
+        let url = self.build_url()?;
+        let client = self.build_client()?;
+
+        let mut req = client.get(url);
+
+        if let Some(token) = &self.token {
+            req = req.header("X-Consul-Token", token);
+        }
+
+        let resp = req
+            .send()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to connect to Consul: {}", e)))?;
+
+        if resp.status().is_success() {
+            let kvs: Vec<ConsulKvPair> = resp.json().map_err(|e| {
+                ConfigError::RemoteError(format!("Failed to parse Consul response: {}", e))
+            })?;
+
+            if let Some(kv) = kvs.first() {
+                let val_str = &kv.Value;
+                let decoded = BASE64.decode(val_str).map_err(|e| {
+                    ConfigError::RemoteError(format!("Base64 decode failed: {}", e))
+                })?;
+
+                let json_str = String::from_utf8(decoded)
+                    .map_err(|e| ConfigError::RemoteError(format!("UTF-8 error: {}", e)))?;
+
+                let map: Dict = serde_json::from_str(&json_str).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse JSON: {}", e))
+                })?;
+
+                let mut profiles = Map::new();
+                profiles.insert(Profile::Default, map);
+                Ok(profiles)
+            } else {
+                Err(ConfigError::RemoteError(format!(
+                    "Key {} not found in Consul (empty response)",
+                    self.key
+                )))
+            }
+        } else if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            Err(ConfigError::RemoteError(format!(
+                "Key {} not found in Consul",
+                self.key
+            )))
+        } else {
+            Err(ConfigError::RemoteError(format!(
+                "Consul returned error: {}",
+                resp.status()
+            )))
+        }
     }
 }
 
 impl ConfigProvider for ConsulConfigProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
-        let consul_provider = self.create_consul_provider();
-
-        // 使用熔断器模式
-        let circuit_breaker = failsafe::Config::new()
-            .failure_policy(failsafe::failure_policy::consecutive_failures(
+        let circuit_breaker = CircuitBreakerConfig::new()
+            .failure_policy(failure_policy::consecutive_failures(
                 3,
-                failsafe::backoff::constant(Duration::from_secs(10)),
+                backoff::constant(Duration::from_secs(10)),
             ))
             .build();
 
-        let result = circuit_breaker.call(|| {
-            consul_provider
-                .data()
-                .map_err(|e| ConfigError::RemoteError(format!("Consul operation failed: {}", e)))
-        });
+        let result = circuit_breaker.call(|| self.fetch_data());
 
         match result {
             Ok(data) => {
-                let figment = Figment::new().merge(figment::providers::Serialized::from(
-                    data,
-                    figment::Profile::Default,
-                ));
+                let figment = Figment::new().merge(Serialized::from(data, Profile::Default));
                 Ok(figment)
             }
-            Err(failsafe::Error::Inner(e)) => Err(e),
-            Err(failsafe::Error::Rejected) => Err(ConfigError::RemoteError(
+            Err(FailsafeError::Inner(e)) => Err(e),
+            Err(FailsafeError::Rejected) => Err(ConfigError::RemoteError(
                 "Circuit breaker open: Consul requests rejected".to_string(),
             )),
         }
@@ -117,7 +217,6 @@ impl ConfigProvider for ConsulConfigProvider {
     }
 
     fn is_available(&self) -> bool {
-        // 检查地址是否有效
         !self.address.is_empty() && self.address.starts_with("http")
     }
 
@@ -131,7 +230,7 @@ impl ConfigProvider for ConsulConfigProvider {
             description: format!("Consul provider for key: {}", self.key),
             source_type: ProviderType::Remote,
             requires_network: true,
-            supports_watch: false, // Consul支持watch，但这里简化处理
+            supports_watch: false,
             priority: self.priority,
         }
     }
@@ -140,3 +239,6 @@ impl ConfigProvider for ConsulConfigProvider {
         self
     }
 }
+
+#[deprecated(since = "0.4.0", note = "Use ConsulConfigProvider instead")]
+pub type ConsulProvider = ConsulConfigProvider;

@@ -543,7 +543,11 @@ mod alignment_tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("config.toml");
 
-        let pointer_bytes = if cfg!(target_pointer_width = "64") { 8 } else { 4 };
+        let pointer_bytes = if cfg!(target_pointer_width = "64") {
+            8
+        } else {
+            4
+        };
         let alignment = pointer_bytes * 8;
 
         let config_content = format!(
@@ -719,31 +723,28 @@ mod memory_layout_tests {
     async fn test_architecture_info_complete() {
         let config = ArchitectureConfig::default();
 
-        assert!(config.pointer_width >= 32, "Pointer width should be at least 32 bits");
-        assert!(config.pointer_width <= 128, "Pointer width should be at most 128 bits");
-
         assert!(
-            config.page_size >= 4096,
-            "Page size should be at least 4KB"
+            config.pointer_width >= 32,
+            "Pointer width should be at least 32 bits"
         );
+        assert!(
+            config.pointer_width <= 128,
+            "Pointer width should be at most 128 bits"
+        );
+
+        assert!(config.page_size >= 4096, "Page size should be at least 4KB");
         assert!(
             config.page_size.is_power_of_two(),
             "Page size must be power of two"
         );
 
-        assert!(
-            config.alignment >= 1,
-            "Alignment must be at least 1"
-        );
+        assert!(config.alignment >= 1, "Alignment must be at least 1");
         assert!(
             config.alignment.is_power_of_two() || config.alignment == 0,
             "Alignment should be power of two or zero"
         );
 
-        assert!(
-            config.buffer_size >= 1,
-            "Buffer size must be at least 1"
-        );
+        assert!(config.buffer_size >= 1, "Buffer size must be at least 1");
 
         assert!(
             config.endianness == "little" || config.endianness == "big",

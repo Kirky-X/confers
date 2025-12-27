@@ -171,8 +171,7 @@ app_name = "test_app"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
         assert!(
@@ -192,8 +191,7 @@ app_name = "test_app"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
         assert!(result.is_ok(), "Zero limit should disable memory check");
@@ -262,8 +260,7 @@ app_name = "test_app"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
         if let Err(e) = &result {
@@ -286,8 +283,7 @@ app_name = "test_app_with_longer_name"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
         if let Err(e) = &result {
@@ -326,8 +322,7 @@ app_name = "test_app"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         for i in 0..5 {
             let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
@@ -357,8 +352,7 @@ app_name = "{}"
 
         fs::write(&config_path, config_content).unwrap();
 
-        let loader: ConfigLoader<SimpleConfig> = create_test_loader()
-            .with_file(&config_path);
+        let loader: ConfigLoader<SimpleConfig> = create_test_loader().with_file(&config_path);
 
         let result: Result<SimpleConfig, confers::ConfigError> = loader.load().await;
         assert!(

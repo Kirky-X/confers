@@ -44,45 +44,39 @@ use crate::providers::etcd_provider::EtcdConfigProvider;
 #[cfg(feature = "remote")]
 use crate::providers::http_provider::HttpConfigProvider;
 
+use std::sync::OnceLock;
+
 /// Get current memory usage in MB using sysinfo crate
 /// Cross-platform support: Linux, macOS, Windows
+/// Uses caching to avoid repeated system calls
 #[allow(dead_code)]
 fn get_memory_usage_mb() -> Option<f64> {
-    use std::process;
-    use sysinfo::{Pid, System};
+    static LAST_MEMORY: OnceLock<(f64, std::time::Instant)> = OnceLock::new();
+    let now = std::time::Instant::now();
 
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    if let Some((memory, time)) = LAST_MEMORY.get() {
+        if now.duration_since(*time) < std::time::Duration::from_secs(1) {
+            return Some(*memory);
+        }
+    }
+
+    use std::process;
+    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+
+    let sys = System::new_with_specifics(
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+    );
 
     let current_pid = Pid::from_u32(process::id());
+    let memory = sys
+        .process(current_pid)
+        .map(|process| process.memory() as f64 / 1024.0 / 1024.0);
 
-    if let Some(process) = sys.process(current_pid) {
-        let memory_bytes = process.memory();
-        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
-        Some(memory_mb)
-    } else {
-        None
+    if let Some(mem_value) = memory {
+        let _ = LAST_MEMORY.set((mem_value, now));
     }
-}
 
-/// Get peak memory usage in MB (cross-platform)
-#[allow(dead_code)]
-fn get_peak_memory_usage_mb() -> Option<f64> {
-    use std::process;
-    use sysinfo::{Pid, System};
-
-    let mut sys = System::new_all();
-    sys.refresh_all();
-
-    let current_pid = Pid::from_u32(process::id());
-
-    if let Some(process) = sys.process(current_pid) {
-        let memory_bytes = process.memory();
-        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
-        Some(memory_mb)
-    } else {
-        None
-    }
+    memory
 }
 
 #[cfg(feature = "audit")]
@@ -768,8 +762,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 provider = provider.with_token(token.clone());
             }
 
-            let consul_p = provider.create_consul_provider();
-            manager.add_provider(consul_p);
+            manager.add_provider(provider);
         }
 
         // 8. Extract and validate configuration using ProviderManager
@@ -948,8 +941,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 provider = provider.with_token(token.clone());
             }
 
-            let consul_p = provider.create_consul_provider();
-            manager.add_provider(consul_p);
+            manager.add_provider(provider);
         }
 
         // 8. Extract and validate configuration using ProviderManager

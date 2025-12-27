@@ -7,13 +7,17 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+fn compile_pattern(pattern: &str) -> Regex {
+    Regex::new(pattern).unwrap_or_else(|_| panic!("Failed to compile regex pattern: {}", pattern))
+}
+
 fn get_allowed_patterns() -> &'static Vec<Regex> {
     static ALLOWED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
     ALLOWED_PATTERNS.get_or_init(|| {
         vec![
-            Regex::new(r"^[A-Z][A-Z0-9_]*$").unwrap(),
-            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
-            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
         ]
     })
 }
@@ -22,17 +26,17 @@ fn get_blocked_patterns() -> &'static Vec<Regex> {
     static BLOCKED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
     BLOCKED_PATTERNS.get_or_init(|| {
         vec![
-            Regex::new(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$").unwrap(),
-            Regex::new(r"(?i)^(SHELL|HOME|USER|LOGNAME)$").unwrap(),
-            Regex::new(r"(?i)^(PWD|OLDPWD)$").unwrap(),
-            Regex::new(r"(?i)^(MAIL|MAILCHECK)$").unwrap(),
-            Regex::new(r"(?i)^(TERM|TERMCAP)$").unwrap(),
-            Regex::new(r"(?i)^(DISPLAY|XAUTHORITY)$").unwrap(),
-            Regex::new(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$").unwrap(),
-            Regex::new(r"(?i)^(DOCKER_HOST|KUBECONFIG)$").unwrap(),
-            Regex::new(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$").unwrap(),
-            Regex::new(r".*[;<>&|`$].*").unwrap(),
-            Regex::new(r"^BASH_FUNC_.*").unwrap(),
+            compile_pattern(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$"),
+            compile_pattern(r"(?i)^(SHELL|HOME|USER|LOGNAME)$"),
+            compile_pattern(r"(?i)^(PWD|OLDPWD)$"),
+            compile_pattern(r"(?i)^(MAIL|MAILCHECK)$"),
+            compile_pattern(r"(?i)^(TERM|TERMCAP)$"),
+            compile_pattern(r"(?i)^(DISPLAY|XAUTHORITY)$"),
+            compile_pattern(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$"),
+            compile_pattern(r"(?i)^(DOCKER_HOST|KUBECONFIG)$"),
+            compile_pattern(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$"),
+            compile_pattern(r".*[;<>&|`$].*"),
+            compile_pattern(r"^BASH_FUNC_.*"),
         ]
     })
 }
@@ -248,16 +252,13 @@ impl EnvSecurityValidator {
             }
 
             if value.contains("${") && value.contains('}') {
-                return Err(EnvSecurityError::ShellExpansion {
-                    value: value.to_string(),
-                });
+                return Err(EnvSecurityError::ShellExpansion);
             }
 
             let dangerous_patterns = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r"];
             for pattern in &dangerous_patterns {
                 if value.contains(pattern) {
                     return Err(EnvSecurityError::CommandInjection {
-                        value: value.to_string(),
                         pattern: pattern.to_string(),
                     });
                 }
@@ -354,9 +355,9 @@ pub enum EnvSecurityError {
     /// Environment variable value contains null bytes
     NullByte,
     /// Environment variable value contains shell expansion
-    ShellExpansion { value: String },
+    ShellExpansion,
     /// Environment variable value contains command injection patterns
-    CommandInjection { value: String, pattern: String },
+    CommandInjection { pattern: String },
     /// Invalid field name in mapping
     InvalidFieldName { field_name: String },
 }
@@ -405,18 +406,14 @@ impl std::fmt::Display for EnvSecurityError {
             EnvSecurityError::NullByte => {
                 write!(f, "Environment variable value contains null bytes")
             }
-            EnvSecurityError::ShellExpansion { value } => {
-                write!(
-                    f,
-                    "Environment variable value contains shell expansion: '{}'",
-                    value
-                )
+            EnvSecurityError::ShellExpansion => {
+                write!(f, "Environment variable value contains shell expansion")
             }
-            EnvSecurityError::CommandInjection { value, pattern } => {
+            EnvSecurityError::CommandInjection { pattern } => {
                 write!(
                     f,
-                    "Environment variable value '{}' contains dangerous pattern: '{}'",
-                    value, pattern
+                    "Environment variable value contains dangerous pattern: '{}'",
+                    pattern
                 )
             }
             EnvSecurityError::InvalidFieldName { field_name } => {
@@ -589,7 +586,9 @@ mod tests {
         assert!(validator.validate_env_value(encrypted_value).is_ok());
 
         let secret_with_encrypted = "MY_SECRET";
-        assert!(validator.validate_env_name(&secret_with_encrypted, Some(encrypted_value)).is_ok());
+        assert!(validator
+            .validate_env_name(&secret_with_encrypted, Some(encrypted_value))
+            .is_ok());
     }
 
     #[test]

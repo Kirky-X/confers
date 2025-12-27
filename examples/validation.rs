@@ -9,13 +9,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP_", format_detection = "Auto")]
 pub struct ValidationConfig {
-    #[config(validate = "length(min = 3, max = 20)", description = "用户名，长度3-20字符")]
+    #[config(
+        validate = "length(min = 3, max = 20)",
+        description = "用户名，长度3-20字符"
+    )]
     pub username: String,
 
     #[config(validate = "email", description = "有效的邮箱地址")]
     pub email: String,
 
-    #[config(validate = "range(min = 18, max = 120)", description = "年龄，范围18-120")]
+    #[config(
+        validate = "range(min = 18, max = 120)",
+        description = "年龄，范围18-120"
+    )]
     pub age: u32,
 
     #[config(validate = "url", description = "有效的URL地址")]

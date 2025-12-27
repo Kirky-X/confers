@@ -6,6 +6,7 @@
 use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::{Attribute, Meta, Type};
 
 pub fn has_serde_flatten(attrs: &[Attribute]) -> bool {
@@ -291,44 +292,42 @@ fn get_custom_validator(field: &FieldOpts) -> Option<String> {
     None
 }
 
+fn extract_min_max<T>(inner: &str, min_key: &str, max_key: &str) -> (Option<T>, Option<T>)
+where
+    T: FromStr + Copy,
+{
+    let mut min_val: Option<T> = None;
+    let mut max_val: Option<T> = None;
+
+    if let Some(min_start) = inner.find(min_key) {
+        let min_part = &inner[min_start + min_key.len()..];
+        if let Some(min_end) = min_part.find([',', ')']) {
+            if let Ok(val) = min_part[..min_end].trim().parse::<T>() {
+                min_val = Some(val);
+            }
+        } else if let Ok(val) = min_part.trim().parse::<T>() {
+            min_val = Some(val);
+        }
+    }
+
+    if let Some(max_start) = inner.find(max_key) {
+        let max_part = &inner[max_start + max_key.len()..];
+        if let Some(max_end) = max_part.find([',', ')']) {
+            if let Ok(val) = max_part[..max_end].trim().parse::<T>() {
+                max_val = Some(val);
+            }
+        } else if let Ok(val) = max_part.trim().parse::<T>() {
+            max_val = Some(val);
+        }
+    }
+
+    (min_val, max_val)
+}
+
 fn parse_range_validation(validate_str: &str) -> Option<(i64, i64)> {
-    // Parse range(min = 1, max = 65535) format
     if validate_str.starts_with("range(") && validate_str.ends_with(')') {
         let inner = &validate_str[6..validate_str.len() - 1];
-        let mut min_val: Option<i64> = None;
-        let mut max_val: Option<i64> = None;
-
-        // Parse min = value
-        if let Some(min_start) = inner.find("min =") {
-            let min_part = &inner[min_start + 5..];
-            if let Some(min_end) = min_part.find([',', ')']) {
-                if let Ok(val) = min_part[..min_end].trim().parse::<i64>() {
-                    min_val = Some(val);
-                }
-            } else if min_part.trim().parse::<i64>().is_ok() {
-                if let Ok(val) = min_part.trim().parse::<i64>() {
-                    min_val = Some(val);
-                }
-            }
-        }
-
-        // Parse max = value
-        if let Some(max_start) = inner.find("max =") {
-            let max_part = &inner[max_start + 5..];
-            if let Some(max_end) = max_part.find([',', ')']) {
-                if let Ok(val) = max_part[..max_end].trim().parse::<i64>() {
-                    max_val = Some(val);
-                }
-            } else if max_part.trim().parse::<i64>().is_ok() {
-                if let Ok(val) = max_part.trim().parse::<i64>() {
-                    max_val = Some(val);
-                }
-            } else {
-                if let Ok(val) = max_part.trim().parse::<i64>() {
-                    max_val = Some(val);
-                }
-            }
-        }
+        let (min_val, max_val) = extract_min_max::<i64>(inner, "min =", "max =");
 
         if min_val.is_some() || max_val.is_some() {
             let min = min_val.unwrap_or(i64::MIN);
@@ -342,38 +341,7 @@ fn parse_range_validation(validate_str: &str) -> Option<(i64, i64)> {
 fn parse_length_validation(validate_str: &str) -> Option<(u64, u64)> {
     if validate_str.starts_with("length(") && validate_str.ends_with(')') {
         let inner = &validate_str[7..validate_str.len() - 1];
-        let mut min_val: Option<u64> = None;
-        let mut max_val: Option<u64> = None;
-
-        if let Some(min_start) = inner.find("min =") {
-            let min_part = &inner[min_start + 5..];
-            if let Some(min_end) = min_part.find([',', ')']) {
-                if let Ok(val) = min_part[..min_end].trim().parse::<u64>() {
-                    min_val = Some(val);
-                }
-            } else if min_part.trim().parse::<u64>().is_ok() {
-                if let Ok(val) = min_part.trim().parse::<u64>() {
-                    min_val = Some(val);
-                }
-            }
-        }
-
-        if let Some(max_start) = inner.find("max =") {
-            let max_part = &inner[max_start + 5..];
-            if let Some(max_end) = max_part.find([',', ')']) {
-                if let Ok(val) = max_part[..max_end].trim().parse::<u64>() {
-                    max_val = Some(val);
-                }
-            } else if max_part.trim().parse::<u64>().is_ok() {
-                if let Ok(val) = max_part.trim().parse::<u64>() {
-                    max_val = Some(val);
-                }
-            } else {
-                if let Ok(val) = max_part.trim().parse::<u64>() {
-                    max_val = Some(val);
-                }
-            }
-        }
+        let (min_val, max_val) = extract_min_max::<u64>(inner, "min =", "max =");
 
         if min_val.is_some() || max_val.is_some() {
             let min = min_val.unwrap_or(0);
@@ -1441,7 +1409,7 @@ pub fn generate_impl(
                 #[cfg(not(test))]
                 {
                     // Check if memory limit check should be disabled via environment variable
-                    if std::env::var("CONFFERS_DISABLE_MEMORY_LIMIT").is_ok() || 
+                    if std::env::var("CONFFERS_DISABLE_MEMORY_LIMIT").is_ok() ||
                        std::env::var("CONFFERS_MEMORY_LIMIT").map_or(false, |v| v == "0") {
                         loader = loader.with_memory_limit(0);
                     }

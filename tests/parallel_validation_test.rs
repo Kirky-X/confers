@@ -286,11 +286,7 @@ mod test_parallel_validation {
 
         let configs: Vec<(String, TestConfig)> = (0..20)
             .map(|i| {
-                let value = if i % 3 == 0 {
-                    999
-                } else {
-                    (i % 100) as i32
-                };
+                let value = if i % 3 == 0 { 999 } else { (i % 100) as i32 };
                 let name = if i % 5 == 0 {
                     String::new()
                 } else {
@@ -303,10 +299,7 @@ mod test_parallel_validation {
         let result = validator.validate_many(configs);
         assert!(result.is_ok());
         let result = result.unwrap();
-        assert!(
-            !result.is_success(),
-            "Should have validation errors"
-        );
+        assert!(!result.is_success(), "Should have validation errors");
         assert!(
             result.struct_errors.len() > 0,
             "Should have at least one error"
@@ -331,17 +324,13 @@ mod test_parallel_validation {
 
     #[test]
     fn test_parallel_validator_default_num_threads() {
-        let config = ParallelValidationConfig::new()
-            .with_struct_validation(true);
+        let config = ParallelValidationConfig::new().with_struct_validation(true);
 
         let validator = ParallelValidator::new(config);
         let retrieved_config = validator.config();
 
         let threads = retrieved_config.num_threads();
-        assert!(
-            threads >= 1,
-            "Should have at least 1 thread available"
-        );
+        assert!(threads >= 1, "Should have at least 1 thread available");
     }
 
     #[test]

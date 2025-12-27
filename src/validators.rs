@@ -33,28 +33,32 @@ pub fn is_email(value: &str) -> bool {
         return false;
     }
 
-    if domain_parts.last().map_or(false, |p| p.len() < 2) {
+    if domain_parts.last().is_some_and(|p| p.len() < 2) {
         return false;
     }
-    
-    let valid_local_chars: std::collections::HashSet<char> = 
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-+".chars().collect();
-    
+
+    let valid_local_chars: std::collections::HashSet<char> =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-+"
+            .chars()
+            .collect();
+
     if !local_part.chars().all(|c| valid_local_chars.contains(&c)) {
         return false;
     }
-    
-    let valid_domain_chars: std::collections::HashSet<char> = 
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.".chars().collect();
-    
+
+    let valid_domain_chars: std::collections::HashSet<char> =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-."
+            .chars()
+            .collect();
+
     if !domain_part.chars().all(|c| valid_domain_chars.contains(&c)) {
         return false;
     }
-    
+
     if domain_part.starts_with('-') || domain_part.ends_with('-') {
         return false;
     }
-    
+
     true
 }
 
@@ -62,9 +66,9 @@ pub fn is_url(value: &str) -> bool {
     if value.is_empty() {
         return false;
     }
-    
+
     let valid_schemes = ["http://", "https://"];
-    
+
     let mut has_valid_scheme = false;
     for scheme in &valid_schemes {
         if value.to_lowercase().starts_with(scheme) {
@@ -72,71 +76,73 @@ pub fn is_url(value: &str) -> bool {
             break;
         }
     }
-    
+
     if !has_valid_scheme {
         return false;
     }
-    
+
     if let Some(path_start) = value.find("://") {
         let authority = &value[path_start + 3..];
         let authority_end = authority.find('/').unwrap_or(authority.len());
         let authority = &authority[..authority_end];
-        
+
         if authority.is_empty() {
             return false;
         }
-        
+
         let user_info_end = authority.find('@').unwrap_or(authority.len());
         let host_port = if user_info_end < authority.len() {
             &authority[user_info_end + 1..]
         } else {
             authority
         };
-        
+
         let host = if let Some(port_start) = host_port.find(':') {
             &host_port[..port_start]
         } else {
             host_port
         };
-        
+
         if host.is_empty() {
             return false;
         }
-        
-        let valid_host_chars: std::collections::HashSet<char> = 
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.".chars().collect();
-        
+
+        let valid_host_chars: std::collections::HashSet<char> =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-."
+                .chars()
+                .collect();
+
         if !host.chars().all(|c| valid_host_chars.contains(&c)) {
             return false;
         }
-        
+
         if host.starts_with('-') || host.ends_with('-') {
             return false;
         }
-        
+
         if host.starts_with("xn--") {
             return true;
         }
-        
+
         let labels: Vec<&str> = host.split('.').collect();
         if labels.len() < 2 {
             return false;
         }
-        
+
         for label in &labels {
             if label.is_empty() || label.len() > 63 {
                 return false;
             }
         }
     }
-    
+
     true
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_valid_emails() {
         assert!(is_email("user@example.com"));
@@ -144,7 +150,7 @@ mod tests {
         assert!(is_email("user+tag@example.com"));
         assert!(is_email("user@sub.example.com"));
     }
-    
+
     #[test]
     fn test_invalid_emails() {
         assert!(!is_email(""));
@@ -153,7 +159,7 @@ mod tests {
         assert!(!is_email("user@"));
         assert!(!is_email("user@example"));
     }
-    
+
     #[test]
     fn test_valid_urls() {
         assert!(is_url("https://example.com"));
@@ -161,7 +167,7 @@ mod tests {
         assert!(is_url("https://sub.example.com/path/to/resource"));
         assert!(is_url("https://example.com:8080/path"));
     }
-    
+
     #[test]
     fn test_invalid_urls() {
         assert!(!is_url(""));

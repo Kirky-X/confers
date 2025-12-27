@@ -100,13 +100,13 @@ impl KeyManager {
 
         let key_ring = KeyRing::new(master_key, key_id.clone(), created_by)?;
 
+        self.key_rings.insert(key_id.clone(), key_ring);
+
         if let Some(desc) = description {
             if let Some(key) = self.key_rings.get_mut(&key_id) {
                 key.primary_key.metadata.description = Some(desc);
             }
         }
-
-        self.key_rings.insert(key_id.clone(), key_ring);
 
         let schedule = KeyRotationSchedule::new(key_id.clone(), 90, now_timestamp(), 5);
         self.schedules.insert(key_id.clone(), schedule);

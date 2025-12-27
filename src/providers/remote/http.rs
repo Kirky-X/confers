@@ -23,6 +23,7 @@ pub struct TlsConfig {
     pub ca_cert: Option<std::path::PathBuf>,
     pub client_cert: Option<std::path::PathBuf>,
     pub client_key: Option<std::path::PathBuf>,
+    pub skip_verify: bool,
 }
 
 #[derive(Clone)]
@@ -47,11 +48,13 @@ impl HttpProvider {
         ca_cert: impl Into<std::path::PathBuf>,
         client_cert: Option<impl Into<std::path::PathBuf>>,
         client_key: Option<impl Into<std::path::PathBuf>>,
+        skip_verify: bool,
     ) -> Self {
         self.tls_config = Some(TlsConfig {
             ca_cert: Some(ca_cert.into()),
             client_cert: client_cert.map(|p| p.into()),
             client_key: client_key.map(|p| p.into()),
+            skip_verify,
         });
         self
     }
@@ -105,6 +108,10 @@ impl HttpProvider {
                     ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
                 })?;
                 builder = builder.identity(identity);
+            }
+
+            if tls.skip_verify {
+                builder = builder.danger_accept_invalid_certs(true);
             }
         }
 
@@ -192,6 +199,35 @@ impl HttpProvider {
             }
         } else {
             builder = builder.timeout(std::time::Duration::from_secs(30));
+        }
+
+        if let Some(tls) = &self.tls_config {
+            if let Some(ca_path) = &tls.ca_cert {
+                let cert_data = std::fs::read(ca_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
+                })?;
+                let cert = reqwest::Certificate::from_pem(&cert_data).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e))
+                })?;
+                builder = builder.add_root_certificate(cert);
+            }
+
+            if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
+                let cert_data = std::fs::read(cert_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
+                })?;
+                let _key_data = std::fs::read(key_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read client key: {}", e))
+                })?;
+                let identity = reqwest::Identity::from_pem(&cert_data).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
+                })?;
+                builder = builder.identity(identity);
+            }
+
+            if tls.skip_verify {
+                builder = builder.danger_accept_invalid_certs(true);
+            }
         }
 
         let client = builder.build().map_err(|e| {

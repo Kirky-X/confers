@@ -9,7 +9,7 @@ use figment::providers::{Format, Json, Toml, Yaml};
 use figment::Figment;
 use std::path::{Path, PathBuf};
 
-/// File-based configuration provider with security features
+#[derive(Clone)]
 pub struct FileConfigProvider {
     paths: Vec<PathBuf>,
     name: String,
@@ -27,6 +27,23 @@ impl FileConfigProvider {
             format_detection: "Auto".to_string(),
             allowed_dirs: Vec::new(),
         }
+    }
+
+    pub fn from_search_paths(search_paths: Vec<PathBuf>) -> Self {
+        let mut paths = Vec::new();
+        for search_path in &search_paths {
+            if search_path.is_dir() {
+                let base_name = search_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("config");
+                let base_path = search_path.join(base_name);
+                paths.push(base_path);
+            } else {
+                paths.push(search_path.clone());
+            }
+        }
+        Self::new(paths)
     }
 
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
@@ -216,6 +233,9 @@ impl ConfigProvider for FileConfigProvider {
         self
     }
 }
+
+#[deprecated(since = "0.4.0", note = "Use FileConfigProvider instead")]
+pub type FileProvider = FileConfigProvider;
 
 /// Standard file configuration provider that follows common conventions
 pub struct StandardFileProvider {
