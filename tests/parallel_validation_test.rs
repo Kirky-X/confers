@@ -203,7 +203,8 @@ mod test_parallel_validation {
                 (
                     format!("config_{}", i),
                     TestConfig {
-                        value: i as i32 % 101,
+                        #[allow(clippy::unnecessary_cast)]
+                        value: (i % 101) as i32,
                         name: format!("test_{}", i),
                     },
                 )
@@ -262,6 +263,7 @@ mod test_parallel_validation {
                 (
                     format!("config_{}", i),
                     TestConfig {
+                        #[allow(clippy::unnecessary_cast)]
                         value: (i % 101) as i32,
                         name: format!("test_{}", i),
                     },
@@ -286,7 +288,7 @@ mod test_parallel_validation {
 
         let configs: Vec<(String, TestConfig)> = (0..20)
             .map(|i| {
-                let value = if i % 3 == 0 { 999 } else { (i % 100) as i32 };
+                let value = if i % 3 == 0 { 999 } else { i % 100 };
                 let name = if i % 5 == 0 {
                     String::new()
                 } else {
@@ -301,7 +303,7 @@ mod test_parallel_validation {
         let result = result.unwrap();
         assert!(!result.is_success(), "Should have validation errors");
         assert!(
-            result.struct_errors.len() > 0,
+            !result.struct_errors.is_empty(),
             "Should have at least one error"
         );
     }
