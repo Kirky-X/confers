@@ -5,8 +5,8 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
-use figment::value::{Dict, Map, Value as FigmentValue};
-use figment::{providers::Serialized, Error, Figment, Profile, Provider};
+use figment::value::{Dict, Value as FigmentValue};
+use figment::{providers::Serialized, Figment, Profile};
 use serde_json::Value as JsonValue;
 use std::path::PathBuf;
 

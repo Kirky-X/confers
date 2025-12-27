@@ -399,7 +399,7 @@ impl DiffCommand {
 
                     match (m1.get(k), m2.get(k)) {
                         (None, Some(v2_val)) => {
-                            let left = format!("{}{}{}", RED, "".pad_to_width(width), RESET);
+                            let left = format!("{}{}{}", RED, " ".repeat(width), RESET);
                             let right = Self::truncate(&format!("{}", v2_val), width);
                             let right = format!("{}{}{}", GREEN, right, RESET);
                             diffs.push(format!("{} {} {}", left, separator, right));
@@ -407,7 +407,7 @@ impl DiffCommand {
                         (Some(v1_val), None) => {
                             let left = Self::truncate(&format!("{}", v1_val), width);
                             let left = format!("{}{}{}", RED, left, RESET);
-                            let right = format!("{}{}{}", GREEN, "".pad_to_width(width), RESET);
+                            let right = format!("{}{}{}", GREEN, " ".repeat(width), RESET);
                             diffs.push(format!("{} {} {}", left, separator, right));
                         }
                         (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
@@ -560,7 +560,7 @@ impl DiffCommand {
         v1: &Value,
         v2: &Value,
         path: &str,
-        options: &DiffOptions,
+        _options: &DiffOptions,
     ) -> Vec<String> {
         let mut diffs = Vec::new();
 
@@ -592,12 +592,12 @@ impl DiffCommand {
                                 diffs.push(format!("-{}", line));
                             }
                         }
-                        (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
+                        (Some(_v1_val), Some(_v2_val)) if _v1_val != _v2_val => {
                             diffs.extend(Self::generate_standard_unified_diff(
-                                v1_val, v2_val, &new_path, options,
+                                _v1_val, _v2_val, &new_path, _options,
                             ));
                         }
-                        (Some(v1_val), Some(v2_val)) => {
+                        (Some(_v1_val), Some(_v2_val)) => {
                             diffs.push(format!(" [{}]", new_path));
                         }
                         _ => {}
@@ -626,7 +626,7 @@ impl DiffCommand {
                             }
                             (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
                                 diffs.extend(Self::generate_standard_unified_diff(
-                                    v1_val, v2_val, &item_path, options,
+                                    v1_val, v2_val, &item_path, _options,
                                 ));
                             }
                             _ => {}
@@ -650,6 +650,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[allow(dead_code)]
     fn create_test_config() -> (Value, Value) {
         let config1 = json!({
             "name": "test_app",
@@ -685,13 +686,23 @@ mod tests {
 
     #[test]
     fn test_execute_with_identical_configs() {
-        let config = json!({"name": "test", "value": "same"});
+        let config_content = r#"{"name": "test", "value": "same"}"#;
+
+        let temp_dir = std::env::temp_dir();
+        let file1_path = temp_dir.join("test_config_1.json");
+        let file2_path = temp_dir.join("test_config_2.json");
+
+        std::fs::write(&file1_path, config_content).unwrap();
+        std::fs::write(&file2_path, config_content).unwrap();
 
         let result = DiffCommand::execute(
-            "test1.json",
-            "test2.json",
+            file1_path.to_str().unwrap(),
+            file2_path.to_str().unwrap(),
             DiffOptions::default(),
         );
+
+        let _ = std::fs::remove_file(&file1_path);
+        let _ = std::fs::remove_file(&file2_path);
 
         assert!(result.is_ok());
     }

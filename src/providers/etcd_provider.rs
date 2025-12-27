@@ -10,7 +10,6 @@ use crate::providers::provider::{
 use etcd_client::{Client, ConnectOptions, Identity, TlsOptions};
 use failsafe::futures::CircuitBreaker;
 use figment::{
-    providers::Serialized,
     value::{Dict, Map},
     Figment, Profile,
 };

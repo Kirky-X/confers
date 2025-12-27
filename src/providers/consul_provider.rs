@@ -12,7 +12,7 @@ use failsafe::{
 use figment::{
     providers::Serialized,
     value::{Dict, Map},
-    Figment, Profile, Provider as FigmentProvider,
+    Figment, Profile,
 };
 use std::time::Duration;
 use url::Url;

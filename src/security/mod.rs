@@ -587,7 +587,7 @@ mod tests {
 
         let secret_with_encrypted = "MY_SECRET";
         assert!(validator
-            .validate_env_name(&secret_with_encrypted, Some(encrypted_value))
+            .validate_env_name(secret_with_encrypted, Some(encrypted_value))
             .is_ok());
     }
 

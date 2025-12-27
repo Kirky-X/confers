@@ -515,7 +515,7 @@ impl ValidateCommand {
             if let Some(end) = err_str[start..].find(',') {
                 let line_str = &err_str[start + 4..start + end];
                 if let Ok(line) = line_str.parse::<u32>() {
-                        let col_start = start + end + 8; // ", column " 之后的开始位置
+                    let col_start = start + end + 8; // ", column " 之后的开始位置
                     if let Some(col_end) = err_str[col_start..].find(')') {
                         let col_str = &err_str[col_start..col_start + col_end];
                         if let Ok(col) = col_str.parse::<u32>() {

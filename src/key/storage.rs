@@ -385,4 +385,4 @@ fn now_timestamp() -> u64 {
         .as_secs()
 }
 
-pub const _: () = ();
+const _: () = ();

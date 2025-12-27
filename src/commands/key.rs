@@ -532,12 +532,12 @@ impl KeyCommand {
         let storage = KeyStorage::new(storage_path.to_path_buf())?;
         let key_id = key_id.unwrap_or_else(|| storage.get_key_manager().get_default_key_id());
 
-        println!("密钥 '{}' 从 v{} 到 v{} 的迁移计划:", key_id, from_version, to_version);
-        println!("{}", "=".repeat(60));
         println!(
-            "  此操作将使用 v{} 重新加密所有数据",
-            from_version
+            "密钥 '{}' 从 v{} 到 v{} 的迁移计划:",
+            key_id, from_version, to_version
         );
+        println!("{}", "=".repeat(60));
+        println!("  此操作将使用 v{} 重新加密所有数据", from_version);
         println!("  使用新的密钥版本 v{}。", to_version);
         println!();
         println!("  步骤:");
