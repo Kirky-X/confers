@@ -9,7 +9,7 @@ documentation = "https://docs.rs/confers-macros"
 homepage = "https://github.com/Kirky-X/confers"
 repository = "https://github.com/Kirky-X/confers"
 keywords = ["configuration", "proc-macro", "derive"]
-categories = ["development-tools", "procedural-macro"]
+categories = ["development-tools"]
 
 [lib]
 proc-macro = true
