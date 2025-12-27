@@ -13,9 +13,16 @@ name = "confers"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
-authors = ["Confers Contributors"]
+authors = ["Kirky.X <kirkyx@outlook.com>"]
 license = "MIT OR Apache-2.0"
-description = "A modern, type-safe configuration management library for Rust"
+description = "A modern, type-safe configuration management library with validation, diff, and hot-reload support"
+documentation = "https://docs.rs/confers"
+homepage = "https://github.com/Kirky-X/confers"
+repository = "https://github.com/Kirky-X/confers"
+readme = "README.md"
+keywords = ["configuration", "config", "type-safe", "serde", "validation"]
+categories = ["config", "development-tools", "parser-implementations"]
+include = ["src/**", "tests/**", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
 [dependencies]
 confers-macros = { path = "macros", version = "0.1.0" }
