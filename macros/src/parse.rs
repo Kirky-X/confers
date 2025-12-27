@@ -5,6 +5,62 @@
 
 use darling::{FromDeriveInput, FromField};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RemoteProtocol {
+    Http,
+    Etcd,
+    Consul,
+    #[default]
+    Auto,
+}
+
+impl std::str::FromStr for RemoteProtocol {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "http" | "https" => Ok(RemoteProtocol::Http),
+            "etcd" => Ok(RemoteProtocol::Etcd),
+            "consul" => Ok(RemoteProtocol::Consul),
+            _ => Ok(RemoteProtocol::Auto),
+        }
+    }
+}
+
+impl quote::ToTokens for RemoteProtocol {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let s = match self {
+            RemoteProtocol::Http => "http",
+            RemoteProtocol::Etcd => "etcd",
+            RemoteProtocol::Consul => "consul",
+            RemoteProtocol::Auto => "auto",
+        };
+        tokens.extend(quote::quote! { #s });
+    }
+}
+
+impl darling::FromMeta for RemoteProtocol {
+    fn from_meta(meta: &syn::Meta) -> Result<Self, darling::Error> {
+        match meta {
+            syn::Meta::Path(_) => Ok(RemoteProtocol::Auto),
+            syn::Meta::List(list) => {
+                let s = list.tokens.to_string();
+                let s = s.trim_matches('"');
+                Ok(s.parse().unwrap_or(RemoteProtocol::Auto))
+            }
+            syn::Meta::NameValue(name_value) => {
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(s),
+                    ..
+                }) = &name_value.value
+                {
+                    return Ok(s.value().parse().unwrap_or(RemoteProtocol::Auto));
+                }
+                Ok(RemoteProtocol::Auto)
+            }
+        }
+    }
+}
+
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(config))]
 pub struct ConfigOpts {
@@ -25,6 +81,8 @@ pub struct ConfigOpts {
     pub validate: Option<ValidateOpt>,
     #[darling(default)]
     pub remote: Option<String>,
+    #[darling(default)]
+    pub remote_protocol: Option<RemoteProtocol>,
     #[darling(default)]
     pub remote_timeout: Option<String>,
     #[darling(default)]

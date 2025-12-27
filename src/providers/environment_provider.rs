@@ -34,7 +34,7 @@ fn insert_nested_value(
     }
 }
 
-/// Environment variable configuration provider
+#[derive(Clone)]
 pub struct EnvironmentProvider {
     prefix: String,
     separator: String,
@@ -54,6 +54,22 @@ impl EnvironmentProvider {
             },
             separator: "__".to_string(),
             name: "environment".to_string(),
+            priority: 30,
+            custom_mappings: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn from_prefix(prefix: impl Into<String>) -> Self {
+        let prefix = prefix.into();
+        let figment_prefix = if prefix.ends_with('_') {
+            prefix.clone()
+        } else {
+            format!("{}_", prefix)
+        };
+        Self {
+            prefix: figment_prefix,
+            separator: "__".to_string(),
+            name: "env".to_string(),
             priority: 30,
             custom_mappings: std::collections::HashMap::new(),
         }
@@ -99,22 +115,16 @@ impl ConfigProvider for EnvironmentProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
         let mut figment = Figment::new();
 
-        eprintln!(
-            "DEBUG EnvironmentProvider.load: prefix='{}', separator='{}'",
-            self.prefix, self.separator
-        );
-
         let validator = get_global_validator();
 
         let env_vars = self.get_env_vars();
         eprintln!(
-            "DEBUG EnvironmentProvider.load: Found {} env vars with prefix '{}'",
+            "Found {} env vars with prefix '{}'",
             env_vars.len(),
             self.prefix
         );
 
         if !env_vars.is_empty() {
-            eprintln!("DEBUG EnvironmentProvider.load: env_vars = {:?}", env_vars);
             let mut nested_env_map = figment::value::Dict::new();
             let mut validation_warnings = Vec::new();
 
@@ -126,7 +136,6 @@ impl ConfigProvider for EnvironmentProvider {
                 }
 
                 if value.is_empty() {
-                    eprintln!("DEBUG: Skipping empty env var: key={}", key);
                     continue;
                 }
 
@@ -152,20 +161,9 @@ impl ConfigProvider for EnvironmentProvider {
                     figment::value::Value::from(value.clone())
                 };
 
-                eprintln!(
-                    "DEBUG: key={} -> field_key={}, value={}",
-                    key, field_key, value
-                );
-
                 let keys: Vec<&str> = field_key.split('.').collect();
                 insert_nested_value(&mut nested_env_map, &keys, parsed_value);
             }
-
-            eprintln!(
-                "DEBUG EnvironmentProvider.load: nested_env_map size = {}, contents = {:?}",
-                nested_env_map.len(),
-                nested_env_map
-            );
 
             if !validation_warnings.is_empty() {
                 tracing::warn!(
@@ -221,10 +219,6 @@ impl ConfigProvider for EnvironmentProvider {
             }
         }
 
-        eprintln!(
-            "DEBUG EnvironmentProvider.load: Returning figment = {:?}",
-            figment
-        );
         Ok(figment)
     }
 
@@ -259,6 +253,9 @@ impl ConfigProvider for EnvironmentProvider {
         self
     }
 }
+
+#[deprecated(since = "0.4.0", note = "Use EnvironmentProvider instead")]
+pub type EnvProvider = EnvironmentProvider;
 
 /// Standard environment provider with common conventions
 pub struct StandardEnvironmentProvider {

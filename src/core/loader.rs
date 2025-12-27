@@ -38,28 +38,45 @@ impl<T: Validate> OptionalValidate for T {
 }
 
 #[cfg(feature = "remote")]
+use crate::providers::consul_provider::ConsulConfigProvider;
+#[cfg(feature = "remote")]
 use crate::providers::etcd_provider::EtcdConfigProvider;
 #[cfg(feature = "remote")]
 use crate::providers::http_provider::HttpConfigProvider;
 
+use std::sync::OnceLock;
+
 /// Get current memory usage in MB using sysinfo crate
+/// Cross-platform support: Linux, macOS, Windows
+/// Uses caching to avoid repeated system calls
 #[allow(dead_code)]
 fn get_memory_usage_mb() -> Option<f64> {
-    use std::process;
-    use sysinfo::{Pid, System};
+    static LAST_MEMORY: OnceLock<(f64, std::time::Instant)> = OnceLock::new();
+    let now = std::time::Instant::now();
 
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    if let Some((memory, time)) = LAST_MEMORY.get() {
+        if now.duration_since(*time) < std::time::Duration::from_secs(1) {
+            return Some(*memory);
+        }
+    }
+
+    use std::process;
+    use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
+
+    let sys = System::new_with_specifics(
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+    );
 
     let current_pid = Pid::from_u32(process::id());
+    let memory = sys
+        .process(current_pid)
+        .map(|process| process.memory() as f64 / 1024.0 / 1024.0);
 
-    if let Some(process) = sys.process(current_pid) {
-        let memory_bytes = process.memory();
-        let memory_mb = memory_bytes as f64 / 1024.0 / 1024.0;
-        Some(memory_mb)
-    } else {
-        None
+    if let Some(mem_value) = memory {
+        let _ = LAST_MEMORY.set((mem_value, now));
     }
+
+    memory
 }
 
 #[cfg(feature = "audit")]
@@ -94,6 +111,9 @@ pub struct ConfigLoader<T> {
     /// Etcd configuration provider
     #[cfg(feature = "remote")]
     etcd_provider: Option<EtcdConfigProvider>,
+    /// Consul configuration provider
+    #[cfg(feature = "remote")]
+    consul_provider: Option<ConsulConfigProvider>,
     /// Audit configuration
     #[cfg(feature = "audit")]
     audit: AuditConfig,
@@ -160,9 +180,11 @@ impl<T> Default for ConfigLoader<T> {
             remote_config: RemoteConfig::default(),
             #[cfg(feature = "remote")]
             etcd_provider: None,
+            #[cfg(feature = "remote")]
+            consul_provider: None,
             #[cfg(feature = "audit")]
             audit: AuditConfig::default(),
-            memory_limit_mb: 0,
+            memory_limit_mb: 10,
         }
     }
 }
@@ -303,6 +325,13 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(feature = "remote")]
     pub fn with_etcd(mut self, provider: EtcdConfigProvider) -> Self {
         self.etcd_provider = Some(provider);
+        self
+    }
+
+    /// Set consul configuration provider
+    #[cfg(feature = "remote")]
+    pub fn with_consul(mut self, provider: ConsulConfigProvider) -> Self {
+        self.consul_provider = Some(provider);
         self
     }
 
@@ -536,11 +565,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     async fn load_remote_config(
         &self,
     ) -> Result<figment::value::Map<String, figment::value::Value>, ConfigError> {
-        use crate::providers::remote::http::HttpProvider;
+        use crate::providers::http_provider::HttpConfigProvider;
+        use crate::providers::provider::ConfigProvider;
         use figment::value::Map;
 
         if let Some(url) = &self.remote_config.url {
-            let mut provider = HttpProvider::new(url.clone());
+            let mut provider = HttpConfigProvider::new(url.clone());
 
             if let Some(token) = &self.remote_config.token {
                 provider = provider.with_bearer_token(token);
@@ -561,7 +591,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 );
             }
 
-            let figment = provider.load().await?;
+            let figment: Figment = provider.load()?;
             let map: figment::value::Map<String, figment::value::Value> = figment.extract()?;
             Ok(map)
         } else {
@@ -683,11 +713,60 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 6. Load etcd config if provided
         #[cfg(feature = "remote")]
         if let Some(etcd_provider) = &self.etcd_provider {
-            // EtcdConfigProvider already has its own configuration
-            manager.add_provider((*etcd_provider).clone());
+            let mut provider = etcd_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply auth if provided in remote_config
+            if let (Some(username), Some(password)) =
+                (&self.remote_config.username, &self.remote_config.password)
+            {
+                provider = provider.with_auth(username.clone(), password.clone());
+            }
+
+            manager.add_provider(provider);
         }
 
-        // 7. Extract and validate configuration using ProviderManager
+        // 7. Load consul config if provided
+        #[cfg(feature = "remote")]
+        if let Some(consul_provider) = &self.consul_provider {
+            let mut provider = consul_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply token if provided in remote_config
+            if let Some(token) = &self.remote_config.token {
+                provider = provider.with_token(token.clone());
+            }
+
+            manager.add_provider(provider);
+        }
+
+        // 8. Extract and validate configuration using ProviderManager
         figment = manager.load_all()?;
 
         // Merge with initial figment to preserve profiles/metadata if any
@@ -813,11 +892,60 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 6. Load etcd config if provided
         #[cfg(feature = "remote")]
         if let Some(etcd_provider) = &self.etcd_provider {
-            // EtcdConfigProvider already has its own configuration
-            manager.add_provider((*etcd_provider).clone());
+            let mut provider = etcd_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply auth if provided in remote_config
+            if let (Some(username), Some(password)) =
+                (&self.remote_config.username, &self.remote_config.password)
+            {
+                provider = provider.with_auth(username.clone(), password.clone());
+            }
+
+            manager.add_provider(provider);
         }
 
-        // 7. Extract and validate configuration using ProviderManager
+        // 7. Load consul config if provided
+        #[cfg(feature = "remote")]
+        if let Some(consul_provider) = &self.consul_provider {
+            let mut provider = consul_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply token if provided in remote_config
+            if let Some(token) = &self.remote_config.token {
+                provider = provider.with_token(token.clone());
+            }
+
+            manager.add_provider(provider);
+        }
+
+        // 8. Extract and validate configuration using ProviderManager
         figment = manager.load_all()?;
 
         // Merge with initial figment to preserve profiles/metadata if any
@@ -1006,8 +1134,16 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     where
         F: std::future::Future<Output = Result<R, ConfigError>>,
     {
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.block_on(f)
+        if let Ok(_handle) = tokio::runtime::Handle::try_current() {
+            tokio::task::block_in_place(|| {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        ConfigError::RuntimeError(format!("Failed to create runtime: {}", e))
+                    })?;
+                rt.block_on(f)
+            })
         } else {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -1469,9 +1605,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
     /// Expand template variables in a string
     fn expand_templates(&self, s: &str) -> Option<String> {
-        println!("DEBUG: expand_templates called with: {}", s);
         if !s.contains("${") {
-            println!("DEBUG: No template variables found, returning original");
             return Some(s.to_string());
         }
 
@@ -1484,8 +1618,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let var_end = var_start + var_end;
                 let var_name = &result[var_start + 2..var_end];
 
-                println!("DEBUG: Found template variable: {}", var_name);
-
                 // Try with env prefix first, then without prefix
                 let env_value = if let Some(prefix) = &self.env_prefix {
                     let prefixed_name = format!("{}_{}", prefix, var_name);
@@ -1495,11 +1627,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 };
 
                 if let Ok(env_value) = env_value {
-                    println!("DEBUG: Replacing with env value: {}", env_value);
                     result.replace_range(var_start..=var_end, &env_value);
                     start = var_start + env_value.len();
                 } else {
-                    println!("DEBUG: Environment variable not found: {}", var_name);
                     start = var_end + 1;
                 }
             } else {
@@ -1507,7 +1637,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             }
         }
 
-        println!("DEBUG: Final result: {}", result);
         Some(result)
     }
 
@@ -1589,38 +1718,27 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         U: Serialize + for<'de> Deserialize<'de> + Clone,
     {
         // Check if encryption key is available
-        println!("DEBUG: apply_decryption called");
         if let Ok(encryptor) = ConfigEncryption::from_env() {
-            println!("DEBUG: Encryption key found, proceeding with decryption");
             // Serialize the config to a Value
             let mut value = Value::serialize(config.clone()).map_err(|e| {
                 ConfigError::ParseError(format!("Failed to serialize config: {}", e))
             })?;
 
-            println!("DEBUG: Serialized config to Value: {:?}", value);
             // Decrypt values recursively
             self.decrypt_value_recursive(&mut value, &encryptor);
 
-            println!("DEBUG: Decryption completed");
             // Deserialize back to the config type
-            println!("DEBUG: About to deserialize value back to config");
             match value.deserialize::<U>() {
                 Ok(deserialized) => {
-                    println!("DEBUG: Deserialization successful");
                     *config = deserialized;
                 }
                 Err(e) => {
-                    println!("DEBUG: Deserialization failed: {}", e);
                     return Err(ConfigError::ParseError(format!(
                         "Failed to deserialize config: {}",
                         e
                     )));
                 }
             }
-
-            println!("DEBUG: Deserialized back to config");
-        } else {
-            println!("DEBUG: No encryption key found");
         }
 
         Ok(())
@@ -1630,7 +1748,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     fn decrypt_figment(&self, figment: Figment) -> Result<Figment, ConfigError> {
         // Try to get encryption key from environment
         if let Ok(encryptor) = ConfigEncryption::from_env() {
-            println!("DEBUG decrypt_figment: Encryption key found");
             // Extract the figment as a Value first
             // We use extract_inner to get the merged value without validation
             // If extraction fails, we fallback to an empty dict
@@ -1638,14 +1755,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 Ok(v) => v,
                 Err(_) => Value::Dict(Tag::Default, std::collections::BTreeMap::new()),
             };
-            println!("DEBUG decrypt_figment: Extracted value: {:?}", value);
 
             // Apply decryption recursively
-            let changed = self.decrypt_value_recursive(&mut value, &encryptor);
-            println!(
-                "DEBUG decrypt_figment: Decryption changed: {}, value after: {:?}",
-                changed, value
-            );
+            self.decrypt_value_recursive(&mut value, &encryptor);
 
             // Create a new figment with the decrypted value
             // We merge the decrypted value ON TOP of the original figment

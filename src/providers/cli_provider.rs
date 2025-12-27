@@ -5,18 +5,19 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
-use figment::Figment;
+use figment::{
+    value::{Dict, Value},
+    Figment,
+};
 use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct CliConfigProvider {
-    overrides: HashMap<String, String>, // Store raw key-value pairs
+    overrides: HashMap<String, String>,
     priority: u8,
 }
 
 impl CliConfigProvider {
-    /// Create provider from arguments iterator.
-    /// Parses strings in "key=value" format.
     pub fn from_args<I, S>(args: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -37,8 +38,6 @@ impl CliConfigProvider {
         }
     }
 
-    /// Create provider from environment variable.
-    /// Parses environment variable in "key1=value1,key2=value2" format.
     pub fn from_env_var(env_var: &str) -> Self {
         let mut overrides = HashMap::new();
 
@@ -61,36 +60,34 @@ impl CliConfigProvider {
         self
     }
 
-    fn parse_value(v: &str) -> figment::value::Value {
+    fn parse_value(v: &str) -> Option<Value> {
         if v == "null" || v == "None" {
-            return figment::value::Empty::Unit.into();
+            return None;
         }
         if let Ok(b) = v.parse::<bool>() {
-            return figment::value::Value::from(b);
+            return Some(Value::from(b));
         }
         if let Ok(i) = v.parse::<i64>() {
-            return figment::value::Value::from(i);
+            return Some(Value::from(i));
         }
         if let Ok(f) = v.parse::<f64>() {
-            return figment::value::Value::from(f);
+            return Some(Value::from(f));
         }
-        figment::value::Value::from(v)
+        Some(Value::from(v))
     }
 
-    fn insert_nested(map: &mut figment::value::Dict, key: &str, value: figment::value::Value) {
+    fn insert_nested(map: &mut Dict, key: &str, value: Value) {
         if let Some((head, tail)) = key.split_once('.') {
             let entry = map
                 .entry(head.to_string())
-                .or_insert_with(|| figment::value::Value::from(figment::value::Dict::new()));
+                .or_insert_with(|| Value::from(Dict::new()));
 
-            // Handle Value::Dict(Tag, Dict)
-            if let figment::value::Value::Dict(_, ref mut inner_map) = entry {
+            if let Value::Dict(_, ref mut inner_map) = entry {
                 Self::insert_nested(inner_map, tail, value);
             } else {
-                // Conflict: overwrite with new dict
-                let mut inner_map = figment::value::Dict::new();
+                let mut inner_map = Dict::new();
                 Self::insert_nested(&mut inner_map, tail, value);
-                *entry = figment::value::Value::from(inner_map);
+                *entry = Value::from(inner_map);
             }
         } else {
             map.insert(key.to_string(), value);
@@ -100,11 +97,12 @@ impl CliConfigProvider {
 
 impl ConfigProvider for CliConfigProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
-        let mut data = figment::value::Dict::new();
+        let mut data = Dict::new();
 
         for (key, value) in &self.overrides {
-            let val = Self::parse_value(value);
-            Self::insert_nested(&mut data, key, val);
+            if let Some(val) = Self::parse_value(value) {
+                Self::insert_nested(&mut data, key, val);
+            }
         }
 
         let figment = Figment::new().merge(figment::providers::Serialized::from(
@@ -120,7 +118,6 @@ impl ConfigProvider for CliConfigProvider {
     }
 
     fn is_available(&self) -> bool {
-        // CLI参数总是可用，只要有参数传入
         !self.overrides.is_empty()
     }
 
@@ -134,7 +131,7 @@ impl ConfigProvider for CliConfigProvider {
             description: format!("CLI provider with {} overrides", self.overrides.len()),
             source_type: ProviderType::Cli,
             requires_network: false,
-            supports_watch: false, // CLI参数不支持watch
+            supports_watch: false,
             priority: self.priority,
         }
     }
@@ -143,3 +140,6 @@ impl ConfigProvider for CliConfigProvider {
         self
     }
 }
+
+#[deprecated(since = "0.4.0", note = "Use CliConfigProvider instead")]
+pub type CliProvider = CliConfigProvider;

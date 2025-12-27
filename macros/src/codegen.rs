@@ -3,9 +3,10 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::parse::{ConfigOpts, FieldOpts};
+use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::{Attribute, Meta, Type};
 
 pub fn has_serde_flatten(attrs: &[Attribute]) -> bool {
@@ -75,6 +76,33 @@ fn is_primitive_type(ty: &Type) -> bool {
             | "char"
     ) || type_string.starts_with("Option <")
         || type_string.starts_with("Vec <")
+}
+
+/// Detect remote protocol from URL or explicit setting
+fn detect_protocol(
+    url: &Option<String>,
+    explicit_protocol: &Option<RemoteProtocol>,
+) -> RemoteProtocol {
+    if let Some(protocol) = explicit_protocol {
+        if *protocol != RemoteProtocol::Auto {
+            return *protocol;
+        }
+    }
+
+    if let Some(url_str) = url {
+        let url_lower = url_str.to_lowercase();
+        if url_lower.starts_with("http://") || url_lower.starts_with("https://") {
+            return RemoteProtocol::Http;
+        }
+        if url_lower.starts_with("etcd://") || url_lower.starts_with("etcds://") {
+            return RemoteProtocol::Etcd;
+        }
+        if url_lower.starts_with("consul://") {
+            return RemoteProtocol::Consul;
+        }
+    }
+
+    RemoteProtocol::Http // default to http
 }
 
 /// Generate Clap fields for a list of fields, handling flatten attributes
@@ -264,154 +292,63 @@ fn get_custom_validator(field: &FieldOpts) -> Option<String> {
     None
 }
 
+fn extract_min_max<T>(inner: &str, min_key: &str, max_key: &str) -> (Option<T>, Option<T>)
+where
+    T: FromStr + Copy,
+{
+    let mut min_val: Option<T> = None;
+    let mut max_val: Option<T> = None;
+
+    if let Some(min_start) = inner.find(min_key) {
+        let min_part = &inner[min_start + min_key.len()..];
+        if let Some(min_end) = min_part.find([',', ')']) {
+            if let Ok(val) = min_part[..min_end].trim().parse::<T>() {
+                min_val = Some(val);
+            }
+        } else if let Ok(val) = min_part.trim().parse::<T>() {
+            min_val = Some(val);
+        }
+    }
+
+    if let Some(max_start) = inner.find(max_key) {
+        let max_part = &inner[max_start + max_key.len()..];
+        if let Some(max_end) = max_part.find([',', ')']) {
+            if let Ok(val) = max_part[..max_end].trim().parse::<T>() {
+                max_val = Some(val);
+            }
+        } else if let Ok(val) = max_part.trim().parse::<T>() {
+            max_val = Some(val);
+        }
+    }
+
+    (min_val, max_val)
+}
+
 fn parse_range_validation(validate_str: &str) -> Option<(i64, i64)> {
-    eprintln!(
-        "DEBUG: parse_range_validation called with: {}",
-        validate_str
-    );
-    // Parse range(min = 1, max = 65535) format
     if validate_str.starts_with("range(") && validate_str.ends_with(')') {
-        let inner = &validate_str[6..validate_str.len() - 1]; // Remove "range(" and ")"
-        eprintln!("DEBUG: Parsed inner: {}", inner);
+        let inner = &validate_str[6..validate_str.len() - 1];
+        let (min_val, max_val) = extract_min_max::<i64>(inner, "min =", "max =");
 
-        let mut min_val: Option<i64> = None;
-        let mut max_val: Option<i64> = None;
-
-        // Parse min = value
-        if let Some(min_start) = inner.find("min =") {
-            let min_part = &inner[min_start + 5..];
-            if let Some(min_end) = min_part.find([',', ')']) {
-                if let Ok(val) = min_part[..min_end].trim().parse::<i64>() {
-                    min_val = Some(val);
-                    eprintln!("DEBUG: Parsed min value: {}", val);
-                }
-            } else if min_part.trim().parse::<i64>().is_ok() {
-                // Handle case where min is at the end with no trailing delimiter
-                if let Ok(val) = min_part.trim().parse::<i64>() {
-                    min_val = Some(val);
-                    eprintln!("DEBUG: Parsed min value (end of string): {}", val);
-                }
-            }
-        }
-
-        // Parse max = value
-        if let Some(max_start) = inner.find("max =") {
-            let max_part = &inner[max_start + 5..];
-            eprintln!("DEBUG: Max part after 'max =': '{}'", max_part);
-            if let Some(max_end) = max_part.find([',', ')']) {
-                eprintln!("DEBUG: Found max end at position: {}", max_end);
-                eprintln!("DEBUG: Max value substring: '{}'", &max_part[..max_end]);
-                if let Ok(val) = max_part[..max_end].trim().parse::<i64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value: {}", val);
-                } else {
-                    eprintln!("DEBUG: Failed to parse max value as i64");
-                }
-            } else if max_part.trim().parse::<i64>().is_ok() {
-                // Handle case where max is at the end with no trailing delimiter
-                if let Ok(val) = max_part.trim().parse::<i64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
-                }
-            } else {
-                // Handle case where max is at the end with no trailing delimiter
-                eprintln!(
-                    "DEBUG: No max end delimiter found, trying to parse entire remaining string"
-                );
-                if let Ok(val) = max_part.trim().parse::<i64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
-                } else {
-                    eprintln!("DEBUG: Failed to parse max value from end of string");
-                }
-            }
-        } else {
-            eprintln!("DEBUG: No 'max =' found in inner: '{}'", inner);
-        }
-
-        // Return range validation if we have either min, max, or both
         if min_val.is_some() || max_val.is_some() {
             let min = min_val.unwrap_or(i64::MIN);
             let max = max_val.unwrap_or(i64::MAX);
-            eprintln!("DEBUG: Returning range validation: ({}, {})", min, max);
             return Some((min, max));
         }
     }
-    eprintln!("DEBUG: No range validation parsed");
     None
 }
 
 fn parse_length_validation(validate_str: &str) -> Option<(u64, u64)> {
-    eprintln!(
-        "DEBUG: parse_length_validation called with: {}",
-        validate_str
-    );
-    // Parse length(min = 1, max = 50) format
     if validate_str.starts_with("length(") && validate_str.ends_with(')') {
-        let inner = &validate_str[7..validate_str.len() - 1]; // Remove "length(" and ")"
-        eprintln!("DEBUG: Parsed inner: {}", inner);
+        let inner = &validate_str[7..validate_str.len() - 1];
+        let (min_val, max_val) = extract_min_max::<u64>(inner, "min =", "max =");
 
-        let mut min_val: Option<u64> = None;
-        let mut max_val: Option<u64> = None;
-
-        // Parse min = value
-        if let Some(min_start) = inner.find("min =") {
-            let min_part = &inner[min_start + 5..];
-            if let Some(min_end) = min_part.find([',', ')']) {
-                if let Ok(val) = min_part[..min_end].trim().parse::<u64>() {
-                    min_val = Some(val);
-                    eprintln!("DEBUG: Parsed min value: {}", val);
-                }
-            } else if min_part.trim().parse::<u64>().is_ok() {
-                if let Ok(val) = min_part.trim().parse::<u64>() {
-                    min_val = Some(val);
-                    eprintln!("DEBUG: Parsed min value (end of string): {}", val);
-                }
-            }
-        }
-
-        // Parse max = value
-        if let Some(max_start) = inner.find("max =") {
-            let max_part = &inner[max_start + 5..];
-            eprintln!("DEBUG: Max part after 'max =': '{}'", max_part);
-            if let Some(max_end) = max_part.find([',', ')']) {
-                eprintln!("DEBUG: Found max end at position: {}", max_end);
-                eprintln!("DEBUG: Max value substring: '{}'", &max_part[..max_end]);
-                if let Ok(val) = max_part[..max_end].trim().parse::<u64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value: {}", val);
-                } else {
-                    eprintln!("DEBUG: Failed to parse max value as u64");
-                }
-            } else if max_part.trim().parse::<u64>().is_ok() {
-                if let Ok(val) = max_part.trim().parse::<u64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
-                }
-            } else {
-                eprintln!(
-                    "DEBUG: No max end delimiter found, trying to parse entire remaining string"
-                );
-                if let Ok(val) = max_part.trim().parse::<u64>() {
-                    max_val = Some(val);
-                    eprintln!("DEBUG: Parsed max value (end of string): {}", val);
-                } else {
-                    eprintln!("DEBUG: Failed to parse max value from end of string");
-                }
-            }
-        } else {
-            eprintln!("DEBUG: No 'max =' found in inner: '{}'", inner);
-        }
-
-        // Return length validation if we have either min, max, or both
         if min_val.is_some() || max_val.is_some() {
             let min = min_val.unwrap_or(0);
             let max = max_val.unwrap_or(u64::MAX);
-            eprintln!("DEBUG: Returning length validation: ({}, {})", min, max);
             return Some((min, max));
         }
     }
-    eprintln!("DEBUG: No length validation parsed");
     None
 }
 
@@ -426,10 +363,6 @@ pub fn generate_impl(
         .strict
         .or_else(|| opts.validate.as_ref().map(|v| v.0))
         .unwrap_or(false);
-
-    eprintln!("DEBUG: generate_impl called for struct: {}", struct_name);
-    eprintln!("DEBUG: opts.validate = {:?}", opts.validate);
-    eprintln!("DEBUG: has_validate_derive = {}", has_validate_derive);
 
     // Conditional code generation for features
 
@@ -520,7 +453,7 @@ pub fn generate_impl(
         }
     };
 
-    // Generate field-level remote configuration
+    // Generate field-level remote configuration with protocol-specific attribute injection
     let field_remote_configs: Vec<TokenStream> = fields
         .iter()
         .filter(|f| {
@@ -534,7 +467,6 @@ pub fn generate_impl(
         })
         .map(|f| {
             let field_name = f.ident.as_ref().unwrap();
-            let _field_name_str = field_name.to_string();
 
             let remote_url = &f.remote;
             let remote_timeout = &f.remote_timeout;
@@ -547,84 +479,218 @@ pub fn generate_impl(
             let remote_client_cert = &f.remote_client_cert;
             let remote_client_key = &f.remote_client_key;
 
+            // Detect protocol for this field
+            let protocol = detect_protocol(remote_url, &opts.remote_protocol);
+
             let mut config_tokens = TokenStream::new();
 
-            if let Some(url) = remote_url {
+            // Common field name setting
+            if remote_url.is_some() {
                 config_tokens.extend(quote! {
                     #[cfg(feature = "remote")]
                     {
-                        loader = loader.with_remote_config(#url);
                         loader = loader.with_field_name(stringify!(#field_name).to_string());
                     }
                 });
             }
 
-            if let Some(timeout) = remote_timeout {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_timeout(#timeout); }
-                });
-            }
+            // Protocol-specific configuration
+            match protocol {
+                RemoteProtocol::Http => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
 
-            if remote_auth == Some(true) {
-                if let Some(username) = remote_username {
-                    let password = remote_password
-                        .as_ref()
-                        .map(|p| quote! { #p })
-                        .unwrap_or(quote! { "" });
-                    config_tokens.extend(quote! {
-                        #[cfg(feature = "remote")]
-                        { loader = loader.with_remote_auth(#username, #password); }
-                    });
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_auth == Some(true) {
+                        if let (Some(username), Some(password)) = (remote_username, remote_password) {
+                            config_tokens.extend(quote! {
+                                #[cfg(feature = "remote")]
+                                { loader = loader.with_remote_auth(#username, #password); }
+                            });
+                        }
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
                 }
-            }
 
-            if remote_token.is_some() {
-                if let Some(token) = remote_token {
-                    config_tokens.extend(quote! {
-                        #[cfg(feature = "remote")]
-                        { loader = loader.with_remote_token(#token); }
-                    });
+                RemoteProtocol::Etcd => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
+
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
                 }
-            }
 
-            if remote_tls == Some(true) {
-                let ca_cert = remote_ca_cert
-                    .as_ref()
-                    .map(|c| quote! { #c })
-                    .unwrap_or(quote! { "" });
-                let client_cert = remote_client_cert
-                    .as_ref()
-                    .map(|c| quote! { Some(#c.to_string()) })
-                    .unwrap_or(quote! { None });
-                let client_key = remote_client_key
-                    .as_ref()
-                    .map(|c| quote! { Some(#c.to_string()) })
-                    .unwrap_or(quote! { None });
+                RemoteProtocol::Consul => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
 
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
-                });
-            } else if let Some(ca_cert) = remote_ca_cert {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_ca_cert(#ca_cert); }
-                });
-            }
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
 
-            if let Some(cert) = remote_client_cert {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_client_cert(#cert); }
-                });
-            }
+                    if let Some(token) = remote_token {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_token(#token); }
+                        });
+                    }
 
-            if let Some(key) = remote_client_key {
-                config_tokens.extend(quote! {
-                    #[cfg(feature = "remote")]
-                    { loader = loader.with_remote_client_key(#key); }
-                });
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
+                }
+
+                RemoteProtocol::Auto => {
+                    if let Some(url) = remote_url {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_config(#url); }
+                        });
+                    }
+
+                    if let Some(timeout) = remote_timeout {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_timeout(#timeout); }
+                        });
+                    }
+
+                    if remote_auth == Some(true) {
+                        if let (Some(username), Some(password)) = (remote_username, remote_password) {
+                            config_tokens.extend(quote! {
+                                #[cfg(feature = "remote")]
+                                { loader = loader.with_remote_auth(#username, #password); }
+                            });
+                        }
+                    }
+
+                    if let Some(token) = remote_token {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_token(#token); }
+                        });
+                    }
+
+                    if remote_tls == Some(true) {
+                        let ca_cert = remote_ca_cert
+                            .as_ref()
+                            .map(|c| quote! { #c })
+                            .unwrap_or(quote! { "" });
+                        let client_cert = remote_client_cert
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+                        let client_key = remote_client_key
+                            .as_ref()
+                            .map(|c| quote! { Some(#c.to_string()) })
+                            .unwrap_or(quote! { None });
+
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_tls(#ca_cert, #client_cert, #client_key); }
+                        });
+                    } else if let Some(ca_cert) = remote_ca_cert {
+                        config_tokens.extend(quote! {
+                            #[cfg(feature = "remote")]
+                            { loader = loader.with_remote_ca_cert(#ca_cert); }
+                        });
+                    }
+                }
             }
 
             config_tokens
@@ -840,9 +906,7 @@ pub fn generate_impl(
         .filter_map(|f| {
             let field_name = f.ident.as_ref().unwrap();
             let field_name_str = field_name.to_string();
-            eprintln!("DEBUG: Processing field '{}' for validation", field_name_str);
 
-            // Handle flattened fields - validate the flattened struct
             if f.flatten {
                 return Some(quote!{
                     confers::validator::Validate::validate(&config.#field_name)
@@ -850,18 +914,13 @@ pub fn generate_impl(
                 });
             }
 
-            // Check for range validation first
             if let Some(validate_str) = &f.validate {
-                eprintln!("DEBUG: Found validate_str: '{}' for field '{}'", validate_str, field_name_str);
                 if let Some((min, max)) = parse_range_validation(validate_str) {
-                    eprintln!("DEBUG: Generated range validation for field '{}' with range ({}, {})", field_name_str, min, max);
                     let min_lit = syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
                     let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
 
                     return Some(quote!{
-                        eprintln!("DEBUG: Checking range validation for field '{}'", #field_name_str);
                         if !(#min_lit as _..=#max_lit as _).contains(&config.#field_name) {
-                            eprintln!("DEBUG: Range validation FAILED for field '{}'", #field_name_str);
                             let mut errors = validator::ValidationErrors::new();
                              let mut error = validator::ValidationError::new("range");
                              error.message = Some(std::borrow::Cow::Owned(
@@ -874,22 +933,18 @@ pub fn generate_impl(
                              let error_msg = format!("验证失败: {:?}", errors);
                              return Err(confers::prelude::ConfigError::ValidationError(error_msg));
                         }
-                        eprintln!("DEBUG: Range validation PASSED for field '{}'", #field_name_str);
                     });
                 }
             }
 
-            // Check for length validation (for string fields)
             if let Some(validate_str) = &f.validate {
                 if let Some((min, max)) = parse_length_validation(validate_str) {
                     let min_lit = syn::LitInt::new(&min.to_string(), proc_macro2::Span::call_site());
                     let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
 
                     return Some(quote!{
-                        eprintln!("DEBUG: Checking length validation for field '{}'", #field_name_str);
                         let field_len = config.#field_name.chars().count() as u64;
                         if !(#min_lit..=#max_lit).contains(&field_len) {
-                            eprintln!("DEBUG: Length validation FAILED for field '{}'", #field_name_str);
                             let mut errors = validator::ValidationErrors::new();
                             let mut error = validator::ValidationError::new("length");
                             error.message = Some(std::borrow::Cow::Owned(
@@ -902,12 +957,46 @@ pub fn generate_impl(
                             let error_msg = format!("验证失败: {:?}", errors);
                             return Err(confers::prelude::ConfigError::ValidationError(error_msg));
                         }
-                        eprintln!("DEBUG: Length validation PASSED for field '{}'", #field_name_str);
                     });
                 }
             }
 
-            // Check for custom validation
+            if let Some(validate_str) = &f.validate {
+                if validate_str == "email" {
+                    return Some(quote!{
+                        if !confers::validators::is_email(&config.#field_name) {
+                            let mut errors = validator::ValidationErrors::new();
+                            let mut error = validator::ValidationError::new("email");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                "must be a valid email address".to_string()
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &config.#field_name);
+                            errors.add(#field_name_str, error);
+                            let error_msg = format!("验证失败: {:?}", errors);
+                            return Err(confers::prelude::ConfigError::ValidationError(error_msg));
+                        }
+                    });
+                }
+            }
+
+            if let Some(validate_str) = &f.validate {
+                if validate_str == "url" {
+                    return Some(quote!{
+                        if !confers::validators::is_url(&config.#field_name) {
+                            let mut errors = validator::ValidationErrors::new();
+                            let mut error = validator::ValidationError::new("url");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                "must be a valid URL".to_string()
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &config.#field_name);
+                            errors.add(#field_name_str, error);
+                            let error_msg = format!("验证失败: {:?}", errors);
+                            return Err(confers::prelude::ConfigError::ValidationError(error_msg));
+                        }
+                    });
+                }
+            }
+
             let validation_fn = get_custom_validator(f)?;
             let validation_fn_path: syn::Path = syn::parse_str(&validation_fn).ok()?;
 
@@ -925,8 +1014,6 @@ pub fn generate_impl(
         })
         .collect();
 
-    // Check if any fields have validation attributes (including flattened fields)
-    // Also consider struct-level validate attribute and has_validate_derive
     let has_field_validations = fields.iter().any(|f| {
         !f.skip
             && (f.validate.is_some()
@@ -934,18 +1021,10 @@ pub fn generate_impl(
                 || !f.attrs.is_empty()
                 || f.flatten)
     });
-    eprintln!(
-        "DEBUG: opts.validate value: {:?}",
-        opts.validate.as_ref().map(|v| v.0)
-    );
-    eprintln!("DEBUG: has_validate_derive: {}", has_validate_derive);
-    eprintln!("DEBUG: has_field_validations: {}", has_field_validations);
 
     let has_validations = opts.validate.as_ref().map(|v| v.0).unwrap_or(false)
         || has_validate_derive
         || has_field_validations;
-
-    eprintln!("DEBUG: Final has_validations: {}", has_validations);
 
     // Generate schemars implementation if the crate is available
     let schema_impl = {
@@ -1323,6 +1402,18 @@ pub fn generate_impl(
                 #apply_remote_tls
                 #(#field_remote_configs)*
                 #apply_audit
+                #[cfg(test)]
+                {
+                    loader = loader.with_memory_limit(0);
+                }
+                #[cfg(not(test))]
+                {
+                    // Check if memory limit check should be disabled via environment variable
+                    if std::env::var("CONFFERS_DISABLE_MEMORY_LIMIT").is_ok() ||
+                       std::env::var("CONFFERS_MEMORY_LIMIT").map_or(false, |v| v == "0") {
+                        loader = loader.with_memory_limit(0);
+                    }
+                }
                 loader.with_defaults(Self::default())
             }
 

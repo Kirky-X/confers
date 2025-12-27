@@ -7,13 +7,17 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+fn compile_pattern(pattern: &str) -> Regex {
+    Regex::new(pattern).unwrap_or_else(|_| panic!("Failed to compile regex pattern: {}", pattern))
+}
+
 fn get_allowed_patterns() -> &'static Vec<Regex> {
     static ALLOWED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
     ALLOWED_PATTERNS.get_or_init(|| {
         vec![
-            Regex::new(r"^[A-Z][A-Z0-9_]*$").unwrap(),
-            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
-            Regex::new(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$").unwrap(),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
         ]
     })
 }
@@ -22,17 +26,17 @@ fn get_blocked_patterns() -> &'static Vec<Regex> {
     static BLOCKED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
     BLOCKED_PATTERNS.get_or_init(|| {
         vec![
-            Regex::new(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$").unwrap(),
-            Regex::new(r"(?i)^(SHELL|HOME|USER|LOGNAME)$").unwrap(),
-            Regex::new(r"(?i)^(PWD|OLDPWD)$").unwrap(),
-            Regex::new(r"(?i)^(MAIL|MAILCHECK)$").unwrap(),
-            Regex::new(r"(?i)^(TERM|TERMCAP)$").unwrap(),
-            Regex::new(r"(?i)^(DISPLAY|XAUTHORITY)$").unwrap(),
-            Regex::new(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$").unwrap(),
-            Regex::new(r"(?i)^(DOCKER_HOST|KUBECONFIG)$").unwrap(),
-            Regex::new(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$").unwrap(),
-            Regex::new(r".*[;<>&|`$].*").unwrap(),
-            Regex::new(r"^BASH_FUNC_.*").unwrap(),
+            compile_pattern(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$"),
+            compile_pattern(r"(?i)^(SHELL|HOME|USER|LOGNAME)$"),
+            compile_pattern(r"(?i)^(PWD|OLDPWD)$"),
+            compile_pattern(r"(?i)^(MAIL|MAILCHECK)$"),
+            compile_pattern(r"(?i)^(TERM|TERMCAP)$"),
+            compile_pattern(r"(?i)^(DISPLAY|XAUTHORITY)$"),
+            compile_pattern(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$"),
+            compile_pattern(r"(?i)^(DOCKER_HOST|KUBECONFIG)$"),
+            compile_pattern(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$"),
+            compile_pattern(r".*[;<>&|`$].*"),
+            compile_pattern(r"^BASH_FUNC_.*"),
         ]
     })
 }
@@ -48,12 +52,84 @@ fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
     })
 }
 
+/// Configuration for environment variable validation
+#[derive(Debug, Clone)]
+pub struct EnvironmentValidationConfig {
+    pub max_name_length: usize,
+    pub max_value_length: usize,
+    pub enable_blocked_patterns: bool,
+    pub enable_length_validation: bool,
+    pub allow_encrypted_values: bool,
+    pub blocked_patterns: Vec<String>,
+    pub allowed_patterns: Vec<String>,
+}
+
+impl Default for EnvironmentValidationConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EnvironmentValidationConfig {
+    pub fn new() -> Self {
+        Self {
+            max_name_length: 256,
+            max_value_length: 4096,
+            enable_blocked_patterns: true,
+            enable_length_validation: true,
+            allow_encrypted_values: true,
+            blocked_patterns: Vec::new(),
+            allowed_patterns: Vec::new(),
+        }
+    }
+
+    pub fn with_max_name_length(mut self, length: usize) -> Self {
+        self.max_name_length = length;
+        self
+    }
+
+    pub fn with_max_value_length(mut self, length: usize) -> Self {
+        self.max_value_length = length;
+        self
+    }
+
+    pub fn with_blocked_patterns_disabled(mut self) -> Self {
+        self.enable_blocked_patterns = false;
+        self
+    }
+
+    pub fn with_length_validation_disabled(mut self) -> Self {
+        self.enable_length_validation = false;
+        self
+    }
+
+    pub fn with_custom_blocked_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.blocked_patterns = patterns;
+        self
+    }
+
+    pub fn with_custom_allowed_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.allowed_patterns = patterns;
+        self
+    }
+
+    pub fn max_name_length(&self) -> usize {
+        self.max_name_length
+    }
+
+    pub fn max_value_length(&self) -> usize {
+        self.max_value_length
+    }
+}
+
 /// Security validation for environment variable mapping
 pub struct EnvSecurityValidator {
     /// Maximum length for environment variable names
     max_name_length: usize,
     /// Maximum length for environment variable values
     max_value_length: usize,
+    /// Configuration for validation behavior
+    config: EnvironmentValidationConfig,
 }
 
 impl Default for EnvSecurityValidator {
@@ -65,10 +141,36 @@ impl Default for EnvSecurityValidator {
 impl EnvSecurityValidator {
     /// Create a new security validator with default rules
     pub fn new() -> Self {
+        Self::with_config(EnvironmentValidationConfig::new())
+    }
+
+    /// Create a security validator with custom configuration
+    pub fn with_config(config: EnvironmentValidationConfig) -> Self {
         Self {
-            max_name_length: 256,
-            max_value_length: 4096,
+            max_name_length: config.max_name_length,
+            max_value_length: config.max_value_length,
+            config,
         }
+    }
+
+    /// Create a strict validator for production environments
+    pub fn strict() -> Self {
+        Self::with_config(
+            EnvironmentValidationConfig::new()
+                .with_max_name_length(128)
+                .with_max_value_length(2048),
+        )
+    }
+
+    /// Create a lenient validator for testing
+    pub fn lenient() -> Self {
+        Self::with_config(
+            EnvironmentValidationConfig::new()
+                .with_max_name_length(1024)
+                .with_max_value_length(8192)
+                .with_blocked_patterns_disabled()
+                .with_length_validation_disabled(),
+        )
     }
 
     /// Validate an environment variable name
@@ -81,7 +183,7 @@ impl EnvSecurityValidator {
         let blocked_patterns = get_blocked_patterns();
         let allowed_patterns = get_allowed_patterns();
 
-        if name.len() > self.max_name_length {
+        if self.config.enable_length_validation && name.len() > self.max_name_length {
             return Err(EnvSecurityError::NameTooLong {
                 name: name.to_string(),
                 max_length: self.max_name_length,
@@ -89,17 +191,19 @@ impl EnvSecurityValidator {
             });
         }
 
-        for pattern in blocked_patterns {
-            if pattern.is_match(name) {
-                if let Some(val) = value {
-                    if val.starts_with("enc:") {
-                        continue;
+        if self.config.enable_blocked_patterns {
+            for pattern in blocked_patterns {
+                if pattern.is_match(name) {
+                    if let Some(val) = value {
+                        if self.config.allow_encrypted_values && val.starts_with("enc:") {
+                            continue;
+                        }
                     }
+                    return Err(EnvSecurityError::BlockedName {
+                        name: name.to_string(),
+                        pattern: pattern.as_str().to_string(),
+                    });
                 }
-                return Err(EnvSecurityError::BlockedName {
-                    name: name.to_string(),
-                    pattern: pattern.as_str().to_string(),
-                });
             }
         }
 
@@ -131,40 +235,33 @@ impl EnvSecurityValidator {
 
     /// Validate an environment variable value
     pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
-        // Skip validation for encrypted values - they contain random base64 characters
-        // that may trigger false positives in security checks
-        if value.starts_with("enc:") {
+        if self.config.allow_encrypted_values && value.starts_with("enc:") {
             return Ok(());
         }
 
-        // Check length
-        if value.len() > self.max_value_length {
+        if self.config.enable_length_validation && value.len() > self.max_value_length {
             return Err(EnvSecurityError::ValueTooLong {
                 value_length: value.len(),
                 max_length: self.max_value_length,
             });
         }
 
-        // Check for dangerous content
-        if value.contains('\0') {
-            return Err(EnvSecurityError::NullByte);
-        }
+        if self.config.enable_blocked_patterns {
+            if value.contains('\0') {
+                return Err(EnvSecurityError::NullByte);
+            }
 
-        // Check for potential injection patterns
-        if value.contains("${") && value.contains('}') {
-            return Err(EnvSecurityError::ShellExpansion {
-                value: value.to_string(),
-            });
-        }
+            if value.contains("${") && value.contains('}') {
+                return Err(EnvSecurityError::ShellExpansion);
+            }
 
-        // Check for command injection patterns
-        let dangerous_patterns = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r"];
-        for pattern in &dangerous_patterns {
-            if value.contains(pattern) {
-                return Err(EnvSecurityError::CommandInjection {
-                    value: value.to_string(),
-                    pattern: pattern.to_string(),
-                });
+            let dangerous_patterns = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r"];
+            for pattern in &dangerous_patterns {
+                if value.contains(pattern) {
+                    return Err(EnvSecurityError::CommandInjection {
+                        pattern: pattern.to_string(),
+                    });
+                }
             }
         }
 
@@ -206,15 +303,32 @@ impl EnvSecurityValidator {
 
 /// Global security validator instance
 static GLOBAL_VALIDATOR: OnceLock<EnvSecurityValidator> = OnceLock::new();
+static GLOBAL_VALIDATOR_CONFIG: OnceLock<EnvironmentValidationConfig> = OnceLock::new();
 
 /// Get the global security validator
 pub fn get_global_validator() -> &'static EnvSecurityValidator {
     GLOBAL_VALIDATOR.get_or_init(EnvSecurityValidator::new)
 }
 
+/// Get the global validation configuration
+pub fn get_global_config() -> &'static EnvironmentValidationConfig {
+    GLOBAL_VALIDATOR_CONFIG.get_or_init(EnvironmentValidationConfig::new)
+}
+
 /// Set a custom global security validator
 pub fn set_global_validator(validator: EnvSecurityValidator) {
     let _ = GLOBAL_VALIDATOR.set(validator);
+}
+
+/// Set the global validation configuration
+pub fn set_global_config(config: EnvironmentValidationConfig) {
+    let _ = GLOBAL_VALIDATOR_CONFIG.set(config.clone());
+    let _ = GLOBAL_VALIDATOR.set(EnvSecurityValidator::with_config(config));
+}
+
+/// Initialize the global validator with configuration
+pub fn init_global_validator(config: EnvironmentValidationConfig) {
+    set_global_config(config);
 }
 
 /// Security validation errors
@@ -241,9 +355,9 @@ pub enum EnvSecurityError {
     /// Environment variable value contains null bytes
     NullByte,
     /// Environment variable value contains shell expansion
-    ShellExpansion { value: String },
+    ShellExpansion,
     /// Environment variable value contains command injection patterns
-    CommandInjection { value: String, pattern: String },
+    CommandInjection { pattern: String },
     /// Invalid field name in mapping
     InvalidFieldName { field_name: String },
 }
@@ -292,18 +406,14 @@ impl std::fmt::Display for EnvSecurityError {
             EnvSecurityError::NullByte => {
                 write!(f, "Environment variable value contains null bytes")
             }
-            EnvSecurityError::ShellExpansion { value } => {
-                write!(
-                    f,
-                    "Environment variable value contains shell expansion: '{}'",
-                    value
-                )
+            EnvSecurityError::ShellExpansion => {
+                write!(f, "Environment variable value contains shell expansion")
             }
-            EnvSecurityError::CommandInjection { value, pattern } => {
+            EnvSecurityError::CommandInjection { pattern } => {
                 write!(
                     f,
-                    "Environment variable value '{}' contains dangerous pattern: '{}'",
-                    value, pattern
+                    "Environment variable value contains dangerous pattern: '{}'",
+                    pattern
                 )
             }
             EnvSecurityError::InvalidFieldName { field_name } => {
@@ -395,5 +505,124 @@ mod tests {
         let mut bad_env_mapping = HashMap::new();
         bad_env_mapping.insert("port".to_string(), "PATH".to_string());
         assert!(validator.validate_env_mapping(&bad_env_mapping).is_err());
+    }
+
+    #[test]
+    fn test_custom_length_limits() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(100)
+            .with_max_value_length(500);
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let valid_100 = "A".repeat(100);
+        assert!(validator.validate_env_name_simple(&valid_100).is_ok());
+
+        let invalid_101 = "A".repeat(101);
+        assert!(validator.validate_env_name_simple(&invalid_101).is_err());
+
+        assert!(validator.validate_env_value(&"x".repeat(500)).is_ok());
+        assert!(validator.validate_env_value(&"x".repeat(501)).is_err());
+    }
+
+    #[test]
+    fn test_strict_validator() {
+        let validator = EnvSecurityValidator::strict();
+
+        let valid_128 = "A".repeat(128);
+        assert!(validator.validate_env_name_simple(&valid_128).is_ok());
+
+        let invalid_129 = "A".repeat(129);
+        assert!(validator.validate_env_name_simple(&invalid_129).is_err());
+
+        assert!(validator.validate_env_value(&"x".repeat(2048)).is_ok());
+        assert!(validator.validate_env_value(&"x".repeat(2049)).is_err());
+    }
+
+    #[test]
+    fn test_lenient_validator() {
+        let validator = EnvSecurityValidator::lenient();
+
+        let long_name = "A".repeat(500);
+        assert!(validator.validate_env_name_simple(&long_name).is_ok());
+
+        let long_value = "x".repeat(5000);
+        assert!(validator.validate_env_value(&long_value).is_ok());
+
+        assert!(validator.validate_env_name_simple("PATH").is_ok());
+        assert!(validator.validate_env_value("hello;world").is_ok());
+    }
+
+    #[test]
+    fn test_disabled_blocked_patterns() {
+        let config = EnvironmentValidationConfig::new().with_blocked_patterns_disabled();
+        let validator = EnvSecurityValidator::with_config(config);
+
+        assert!(validator.validate_env_name_simple("PATH").is_ok());
+        assert!(validator.validate_env_name_simple("HOME").is_ok());
+        assert!(validator.validate_env_name_simple("SECRET_KEY").is_ok());
+    }
+
+    #[test]
+    fn test_disabled_length_validation() {
+        let config = EnvironmentValidationConfig::new().with_length_validation_disabled();
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let very_long_name = "A".repeat(1000);
+        assert!(validator.validate_env_name_simple(&very_long_name).is_ok());
+
+        let very_long_value = "x".repeat(10000);
+        assert!(validator.validate_env_value(&very_long_value).is_ok());
+    }
+
+    #[test]
+    fn test_disabled_encrypted_value_skip() {
+        let config = EnvironmentValidationConfig::new()
+            .with_length_validation_disabled()
+            .with_blocked_patterns_disabled()
+            .with_custom_blocked_patterns(vec![r".*SECRET.*".to_string()]);
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let encrypted_value = "enc:ABC123XYZ789";
+        assert!(validator.validate_env_value(encrypted_value).is_ok());
+
+        let secret_with_encrypted = "MY_SECRET";
+        assert!(validator
+            .validate_env_name(&secret_with_encrypted, Some(encrypted_value))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_global_config_functions() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(512)
+            .with_max_value_length(8192);
+
+        init_global_validator(config);
+
+        let validator = get_global_validator();
+        let global_config = get_global_config();
+
+        assert_eq!(global_config.max_name_length(), 512);
+        assert_eq!(global_config.max_value_length(), 8192);
+
+        let long_name = "A".repeat(512);
+        assert!(validator.validate_env_name_simple(&long_name).is_ok());
+
+        let invalid_513 = "A".repeat(513);
+        assert!(validator.validate_env_name_simple(&invalid_513).is_err());
+    }
+
+    #[test]
+    fn test_config_builder_pattern() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(64)
+            .with_max_value_length(1024)
+            .with_blocked_patterns_disabled()
+            .with_length_validation_disabled();
+
+        assert_eq!(config.max_name_length, 64);
+        assert_eq!(config.max_value_length, 1024);
+        assert!(!config.enable_blocked_patterns);
+        assert!(!config.enable_length_validation);
     }
 }

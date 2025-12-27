@@ -10,3 +10,17 @@ docs/文档校验报告.md
 .trae/
 target/
 temp/
+
+# Logs and audit files
+*.log
+logs/
+*.audit
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local env files
+.env
+.env.local
+.env.*.local

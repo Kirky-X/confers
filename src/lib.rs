@@ -14,6 +14,7 @@ pub mod schema;
 pub mod security;
 pub mod utils;
 pub mod validator;
+pub mod validators;
 pub mod watcher;
 
 // Re-export commonly used items
@@ -26,6 +27,8 @@ pub use validator::{
     ParallelValidationConfig, ParallelValidationResult, ParallelValidator, Validate,
     ValidationErrors,
 };
+
+pub use security::{EnvSecurityError, EnvSecurityValidator, EnvironmentValidationConfig};
 
 // Re-export dependencies that macros need
 pub use clap;
