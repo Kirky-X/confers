@@ -8,6 +8,7 @@ docs/文档校验报告.md
 
 # IDE and build
 .trae/
+.idea/
 target/
 temp/
 
