@@ -16,18 +16,18 @@ use confers::audit::Sanitize;
 
 #[test]
 fn test_path_utils() {
-    // Test normalize
+    // 测试规范化
     env::set_var("TEST_HOME", "/tmp/test");
-    // shellexpand might resolve ~ to home dir.
-    // $TEST_HOME should work.
+    // shellexpand 可能会将 ~ 解析为主目录
+    // $TEST_HOME 应该可以正常工作
     let path_str = "$TEST_HOME/config.toml";
-    // We need to ensure we are running on a system where this expansion works (Linux env)
+    // 我们需要确保在能够正确展开环境变量的系统上运行（Linux 环境）
 
     let normalized = PathUtils::normalize(path_str).expect("Failed to normalize");
-    // absolutize might prepend CWD if path is relative, but here it is absolute after expansion
+    // 如果路径是相对路径，absolutize 可能会添加当前工作目录，但在此处展开后它是绝对路径
     assert_eq!(normalized.to_str().unwrap(), "/tmp/test/config.toml");
 
-    // Test security
+    // 测试安全性
     let unsafe_path = "/etc/passwd";
     assert!(PathUtils::validate_security(std::path::Path::new(unsafe_path)).is_err());
 

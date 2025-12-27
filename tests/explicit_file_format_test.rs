@@ -52,7 +52,7 @@ async fn test_explicit_file_format_distribution() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
 
-    // Create test files with different formats
+    // 创建不同格式的测试文件
     let toml_file = temp_path.join("test.toml");
     fs::write(
         &toml_file,
@@ -85,10 +85,10 @@ value: 999
     )
     .unwrap();
 
-    // Create audit log file
+    // 创建审计日志文件
     let audit_log = temp_path.join("audit.log");
 
-    // Build config loader with explicit files
+    // 使用显式文件构建配置加载器
     let loader: ConfigLoader<TestConfig> = ConfigLoader::new()
         .with_files(vec![
             toml_file.clone(),
@@ -108,10 +108,10 @@ value: 999
     let audit_content = fs::read_to_string(&audit_log).unwrap();
     println!("Audit log content:\n{}", audit_content);
 
-    // Verify format distribution is tracked
+    // 验证格式分布是否被跟踪
     assert!(audit_content.contains("format_distribution"));
 
-    // Parse JSON to check format distribution
+    // 解析 JSON 以检查格式分布
     if let Ok(audit_json) = serde_json::from_str::<serde_json::Value>(&audit_content) {
         if let Some(metadata) = audit_json.get("metadata") {
             if let Some(format_dist) = metadata.get("format_distribution") {

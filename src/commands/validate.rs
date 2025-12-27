@@ -20,19 +20,19 @@ const YELLOW: &str = "\x1b[33m";
 const RESET: &str = "\x1b[0m";
 const BOLD: &str = "\x1b[1m";
 
-/// Output level for validation results
+/// 验证结果输出级别
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValidateLevel {
-    /// Minimal output - just pass/fail
+    /// 最小输出 - 仅显示通过/失败
     Minimal,
-    /// Full output - detailed validation steps
+    /// 完整输出 - 详细的验证步骤
     Full,
-    /// Documentation mode - detailed report with statistics
+    /// 文档模式 - 带统计信息的详细报告
     Documentation,
 }
 
 impl ValidateLevel {
-    /// Parse validate level from string
+    /// 从字符串解析验证级别
     pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "minimal" | "min" => ValidateLevel::Minimal,
@@ -188,7 +188,7 @@ impl ValidateCommand {
             }
         }
 
-        // Execute schema validation
+        // 执行模式验证
         match Self::validate_schema::<T>(config_path, &mut report) {
             Ok(_) => {}
             Err(e) => {
@@ -411,7 +411,7 @@ impl ValidateCommand {
         }
     }
 
-    /// Validate syntax and add results to report
+    /// 验证语法并将结果添加到报告
     fn validate_generic_with_report(
         config_path: &str,
         report: &mut ValidationReport,
@@ -507,15 +507,15 @@ impl ValidateCommand {
         Ok(())
     }
 
-    /// Parse TOML error to get location info
+    /// 解析 TOML 错误以获取位置信息
     fn parse_toml_error_location(error: &toml::de::Error) -> Option<(u32, u32)> {
         let err_str = error.to_string();
-        // TOML errors often contain line/column info like "line 5, column 10"
+        // TOML 错误通常包含类似 "line 5, column 10" 的行/列信息
         if let Some(start) = err_str.find("line ") {
             if let Some(end) = err_str[start..].find(',') {
                 let line_str = &err_str[start + 4..start + end];
                 if let Ok(line) = line_str.parse::<u32>() {
-                    let col_start = start + end + 8; // ", column "
+                        let col_start = start + end + 8; // ", column " 之后的开始位置
                     if let Some(col_end) = err_str[col_start..].find(')') {
                         let col_str = &err_str[col_start..col_start + col_end];
                         if let Ok(col) = col_str.parse::<u32>() {

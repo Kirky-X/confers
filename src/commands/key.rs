@@ -274,6 +274,7 @@ impl KeyCommand {
         Ok(())
     }
 
+    /// 列出存储中的所有密钥
     fn list_keys(storage_path: &Path, json_output: bool) -> Result<(), ConfigError> {
         let storage = KeyStorage::new(storage_path.to_path_buf())?;
         let keys = storage.get_key_manager().list_keys();
@@ -307,6 +308,7 @@ impl KeyCommand {
         Ok(())
     }
 
+    /// 获取特定密钥的信息
     fn key_info(key_id: &str, storage_path: &Path, json_output: bool) -> Result<(), ConfigError> {
         let storage = KeyStorage::new(storage_path.to_path_buf())?;
         let info = storage.get_key_manager().get_key_info(key_id)?;
@@ -428,6 +430,7 @@ impl KeyCommand {
         Ok(())
     }
 
+    /// 从文件导入密钥
     fn import_keys(
         input: &str,
         storage_path: &PathBuf,
@@ -437,22 +440,24 @@ impl KeyCommand {
         let input_path = PathBuf::from(input);
         storage.import_keys(&input_path, new_master_key)?;
 
-        println!("Keys imported successfully");
-        println!("Storage path: {:?}", storage_path);
+        println!("密钥导入成功");
+        println!("存储路径: {:?}", storage_path);
 
         Ok(())
     }
 
+    /// 创建密钥备份
     fn backup_keys(output: &str, storage_path: &Path) -> Result<(), ConfigError> {
         let storage = KeyStorage::new(storage_path.to_path_buf())?;
         let output_path = PathBuf::from(output);
         storage.backup(&output_path)?;
 
-        println!("Backup created: {:?}", output_path);
+        println!("备份已创建: {:?}", output_path);
 
         Ok(())
     }
 
+    /// 从备份恢复密钥
     fn restore_keys(
         backup: &str,
         storage_path: &PathBuf,
@@ -465,8 +470,8 @@ impl KeyCommand {
         storage.set_master_key(master_key);
         storage.load()?;
 
-        println!("Keys restored successfully from: {:?}", backup_path);
-        println!("Storage path: {:?}", storage_path);
+        println!("密钥已成功从备份恢复: {:?}", backup_path);
+        println!("存储路径: {:?}", storage_path);
 
         Ok(())
     }
@@ -517,6 +522,7 @@ impl KeyCommand {
         Ok(())
     }
 
+    /// 规划密钥迁移
     fn migrate_keys(
         from_version: u32,
         to_version: u32,
@@ -526,25 +532,22 @@ impl KeyCommand {
         let storage = KeyStorage::new(storage_path.to_path_buf())?;
         let key_id = key_id.unwrap_or_else(|| storage.get_key_manager().get_default_key_id());
 
-        println!(
-            "Migration Plan from v{} to v{} for '{}':",
-            from_version, to_version, key_id
-        );
+        println!("密钥 '{}' 从 v{} 到 v{} 的迁移计划:", key_id, from_version, to_version);
         println!("{}", "=".repeat(60));
         println!(
-            "  This operation will re-encrypt all data encrypted with v{}",
+            "  此操作将使用 v{} 重新加密所有数据",
             from_version
         );
-        println!("  using the new key version v{}.", to_version);
+        println!("  使用新的密钥版本 v{}。", to_version);
         println!();
-        println!("  Steps:");
-        println!("    1. Retrieve the old key (v{})", from_version);
-        println!("    2. Retrieve the new key (v{})", to_version);
-        println!("    3. Decrypt all data with the old key");
-        println!("    4. Re-encrypt all data with the new key");
-        println!("    5. Update the metadata to reflect the migration");
+        println!("  步骤:");
+        println!("    1. 获取旧密钥 (v{})", from_version);
+        println!("    2. 获取新密钥 (v{})", to_version);
+        println!("    3. 使用旧密钥解密所有数据");
+        println!("    4. 使用新密钥重新加密所有数据");
+        println!("    5. 更新元数据以反映迁移情况");
         println!();
-        println!("  Note: This is a planned migration. Execute carefully in maintenance window.");
+        println!("  注意: 这是一个计划中的迁移，请在维护窗口期间谨慎执行。");
 
         Ok(())
     }

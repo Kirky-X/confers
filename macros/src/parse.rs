@@ -157,7 +157,7 @@ impl darling::FromMeta for ValidateOpt {
 
 impl quote::ToTokens for ConfigOpts {
     fn to_tokens(&self, _tokens: &mut proc_macro2::TokenStream) {
-        // No longer used in quote! macro in codegen.rs
+        // 不再在 codegen.rs 中的 quote! 宏中使用
     }
 }
 

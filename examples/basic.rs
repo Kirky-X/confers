@@ -20,10 +20,10 @@ pub struct BasicConfig {
 // === Main ===
 
 fn main() -> anyhow::Result<()> {
-    // 1. Initialize logging
+    // 1. 初始化日志
     tracing_subscriber::fmt::init();
 
-    // 2. Create example config file if not exists
+    // 2. 创建示例配置文件（如果不存在）
     let config_content = r#"
 name = "basic-example"
 port = 8080
@@ -32,17 +32,17 @@ tags = ["rust", "config", "example"]
 "#;
     std::fs::write("examples/config.toml", config_content)?;
 
-    // 3. Load configuration
+    // 3. 加载配置
     println!("Loading configuration...");
     let config = BasicConfig::load()?;
 
-    // 4. Print configuration
+    // 4. 打印配置
     println!("Loaded configuration: {:#?}", config);
 
-    // 5. Configuration is validated during load when validate = true
+    // 5. 当 validate = true 时，配置在加载过程中会被验证
     println!("Configuration loaded successfully!");
 
-    // 6. Demonstrate environment variable override
+    // 6. 演示环境变量覆盖
     println!("\nDemonstrating environment variable override...");
     std::env::set_var("APP_PORT", "9090");
 

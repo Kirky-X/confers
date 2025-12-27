@@ -142,13 +142,13 @@ async fn test_audit_logger_comprehensive_metadata() {
     assert_eq!(config.value, 500);
     assert!(!config.enabled);
 
-    // Verify audit log was created
+    // 验证审计日志已创建
     assert!(audit_log_path.exists(), "Audit log file was not created");
 
     let audit_content = fs::read_to_string(&audit_log_path).unwrap();
     println!("Audit log content:\n{}", audit_content);
 
-    // Parse audit log to understand what happened
+    // 解析审计日志以了解发生了什么
     let audit_json: serde_json::Value = serde_json::from_str(&audit_content).unwrap();
     println!("Config source: {}", audit_json["metadata"]["config_source"]);
     println!("Files loaded: {:?}", audit_json["metadata"]["files_loaded"]);
@@ -199,13 +199,13 @@ async fn test_audit_logger_comprehensive_metadata() {
     );
     assert!(audit_content.contains("Success"), "Missing success status");
 
-    // Clean up environment variables
+    // 清理环境变量
     std::env::remove_var("RUN_ENV");
     std::env::remove_var("TEST_NAME");
     std::env::remove_var("TEST_VALUE");
     std::env::remove_var("TEST_ENABLED");
 
-    // Force a small delay to ensure environment changes propagate
+    // 强制一个小延迟以确保环境变化传播
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 }
 
@@ -216,22 +216,22 @@ async fn test_audit_logger_with_validation_error() {
     use std::fs;
     use tempfile::TempDir;
 
-    // Wait a bit to ensure previous test cleanup completes
+    // 等待一下以确保前一个测试清理完成
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    // Unset environment variables to ensure proper isolation
+    // 取消设置环境变量以确保隔离
     std::env::remove_var("TEST_NAME");
     std::env::remove_var("TEST_VALUE");
     std::env::remove_var("TEST_ENABLED");
     std::env::remove_var("RUN_ENV");
 
-    // Force garbage collection to ensure clean state
+    // 强制垃圾回收以确保干净状态
     std::env::remove_var("TEST_NAME");
     std::env::remove_var("TEST_VALUE");
     std::env::remove_var("TEST_ENABLED");
     std::env::remove_var("RUN_ENV");
 
-    // Debug: Check environment variables before config loading
+    // 调试：检查配置加载前的环境变量
     println!("TEST_NAME env var: {:?}", std::env::var("TEST_NAME"));
     println!("TEST_VALUE env var: {:?}", std::env::var("TEST_VALUE"));
     println!("TEST_ENABLED env var: {:?}", std::env::var("TEST_ENABLED"));
@@ -259,13 +259,13 @@ async fn test_audit_logger_with_validation_error() {
         "Config loading should succeed even with validation warnings"
     );
 
-    // Verify audit log was created even with validation issues
+    // 验证即使存在验证问题也创建了审计日志
     assert!(audit_log_path.exists(), "Audit log file was not created");
 
     let audit_content = fs::read_to_string(&audit_log_path).unwrap();
     println!("Audit log with validation issues:\n{}", audit_content);
 
-    // Verify the config was loaded (empty name is allowed in our simple validation)
+    // 验证配置已加载（在我们的简单验证中允许空名称）
     let config = result.unwrap();
     assert_eq!(config.name, ""); // Empty name from config
     assert_eq!(config.value, -1); // Negative value from config

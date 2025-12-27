@@ -26,7 +26,7 @@ mod test_nested_validation {
 
     #[test]
     fn test_nested_validation_direct() {
-        // Test with valid nested values
+        // 测试有效嵌套值
         let config = NestedConfig {
             name: "test".to_string(),
             details: Details { count: 50 },
@@ -36,7 +36,7 @@ mod test_nested_validation {
             Err(e) => println!("Valid nested config: Error: {:?}", e),
         }
 
-        // Test with invalid nested values
+        // 测试无效嵌套值
         let config = NestedConfig {
             name: "test".to_string(),
             details: Details { count: 200 },

@@ -33,7 +33,7 @@ pub struct AppConfig {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    // 1. Create nested JSON config
+    // 1. 创建嵌套 JSON 配置
     let json_content = r#"{
   "server": {
     "host": "localhost",
@@ -48,13 +48,13 @@ async fn main() -> anyhow::Result<()> {
 }"#;
     std::fs::write("examples/configs/database.json", json_content)?;
 
-    // 2. Load configuration
+    // 2. 加载配置
     println!("Loading nested configuration...");
     let config = AppConfig::load_file("examples/configs/database.json")
         .load()
         .await?;
 
-    // 3. Print nested structure
+    // 3. 打印嵌套结构
     println!("Host: {}", config.server.host);
     println!("Database URL: {}", config.database.url);
 

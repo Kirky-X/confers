@@ -26,58 +26,58 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Generate configuration template
+    /// 生成配置模板
     Generate {
-        /// Output file path
+        /// 输出文件路径
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Template level (minimal, full)
+        /// 模板级别 (minimal, full)
         #[arg(short, long, default_value = "full")]
         level: String,
     },
-    /// Validate configuration file
+    /// 验证配置文件
     Validate {
-        /// Configuration file path
+        /// 配置文件路径
         #[arg(short, long)]
         config: String,
 
-        /// Output level (minimal, full, documentation)
+        /// 输出级别 (minimal, full, documentation)
         #[arg(short, long, default_value = "full")]
         level: String,
     },
-    /// Diff two configuration files
+    /// 对比两个配置文件
     Diff {
-        /// First file
+        /// 第一个文件
         file1: String,
-        /// Second file
+        /// 第二个文件
         file2: String,
 
-        /// Output style (unified, context, normal, side-by-side, strict)
+        /// 输出样式 (unified, context, normal, side-by-side, strict)
         #[arg(short, long)]
         style: Option<String>,
     },
-    /// Generate shell completions
+    /// 生成 Shell 补全脚本
     Completions {
-        /// Shell to generate completions for
+        /// 要生成补全的 Shell 类型
         shell: String,
     },
-    /// Encrypt a value
+    /// 加密一个值
     Encrypt {
-        /// Value to encrypt
+        /// 要加密的值
         value: String,
 
-        /// Encryption key (Base64, 32 bytes). If not provided, uses CONFERS_ENCRYPTION_KEY env var.
+        /// 加密密钥（Base64 编码，32 字节）。如未提供，则使用 CONFERS_ENCRYPTION_KEY 环境变量。
         #[arg(short, long)]
         key: Option<String>,
     },
-    /// Interactive configuration wizard
+    /// 交互式配置向导
     Wizard {
-        /// Skip interactive prompts and use default values
+        /// 跳过交互式提示，使用默认值
         #[arg(long)]
         non_interactive: bool,
     },
-    /// Key management operations
+    /// 密钥管理操作
     #[command(subcommand)]
     Key(#[command(subcommand)] confers::commands::key::KeySubcommand),
 }
@@ -115,7 +115,7 @@ fn main() -> Result<(), ConfigError> {
         Commands::Wizard { non_interactive } => {
             let wizard = ConfigWizard::new();
             if *non_interactive {
-                // Use default values in non-interactive mode
+                // 在非交互模式下使用默认值
                 let values = &["", "", "", "", "", "", ""];
                 let config = wizard.run_with_values(values)?;
                 config.save()?;

@@ -37,22 +37,22 @@ website = "https://github.com/example/confers"
     std::fs::create_dir_all("confers").ok();
     std::fs::write("confers/config.toml", config_content).unwrap();
 
-    println!("--- Loading valid configuration ---");
+    println!("--- 加载有效配置 ---");
 
     match ValidationConfig::load() {
         Ok(config) => {
-            println!("Configuration loaded successfully:");
+            println!("配置加载成功:");
             println!("  Username: {}", config.username);
             println!("  Email:    {}", config.email);
             println!("  Age:      {}", config.age);
             println!("  Website:  {}", config.website);
         }
         Err(e) => {
-            eprintln!("Failed to load configuration: {}", e);
+            eprintln!("加载配置失败: {}", e);
         }
     }
 
-    println!("\n--- Testing username validation (too short) ---");
+    println!("\n--- 测试用户名验证（太短） ---");
     let invalid_content = r#"username = "ru"
 email = "user@example.com"
 age = 25
@@ -62,11 +62,11 @@ website = "https://example.com"
     std::fs::write("confers/config.toml", invalid_content).unwrap();
 
     match ValidationConfig::load() {
-        Ok(_) => println!("Error: Should have failed validation"),
-        Err(e) => println!("Caught error: {}", e),
+        Ok(_) => println!("错误: 应该验证失败"),
+        Err(e) => println!("捕获到错误: {}", e),
     }
 
-    println!("\n--- Testing email validation (invalid email) ---");
+    println!("\n--- 测试邮箱验证（无效邮箱） ---");
     let invalid_content = r#"username = "rust_user"
 email = "not-an-email"
 age = 25

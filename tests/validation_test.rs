@@ -40,7 +40,7 @@ mod test_validation {
 
     #[test]
     fn test_details_validation() {
-        // Test with valid value (within range 1-100)
+        // 测试有效值（在 1-100 范围内）
         temp_env::with_vars(
             [("DETAILS_COUNT", Some("50"))],
             || match Details::load_sync() {
@@ -49,8 +49,8 @@ mod test_validation {
             },
         );
 
-        // Test with invalid value (exceeds max=100)
-        // This should trigger validation error during load
+        // 测试无效值（超过 max=100）
+        // 加载时应触发验证错误
         temp_env::with_vars(
             [("DETAILS_COUNT", Some("200"))],
             || match Details::load_sync() {

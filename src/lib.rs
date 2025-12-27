@@ -17,7 +17,7 @@ pub mod validator;
 pub mod validators;
 pub mod watcher;
 
-// Re-export commonly used items
+// 重新导出常用项
 pub use audit::Sanitize;
 pub use confers_macros::Config;
 pub use core::ConfigLoader;
@@ -30,13 +30,13 @@ pub use validator::{
 
 pub use security::{EnvSecurityError, EnvSecurityValidator, EnvironmentValidationConfig};
 
-// Re-export dependencies that macros need
+// 重新导出宏需要的依赖项
 pub use clap;
 pub use figment;
 pub use serde;
 pub use serde_json;
 
-// Create a prelude module for the macro
+// 创建一个 prelude 模块供宏使用
 pub mod prelude {
     pub use crate::ConfigError;
 }

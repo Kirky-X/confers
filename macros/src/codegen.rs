@@ -9,13 +9,14 @@ use quote::quote;
 use std::str::FromStr;
 use syn::{Attribute, Meta, Type};
 
-pub fn has_serde_flatten(attrs: &[Attribute]) -> bool {
+/// 检查字段是否有 serde(flatten) 属性
+fn has_serde_flatten(attrs: &[Attribute]) -> bool {
     for attr in attrs {
         if attr.path().is_ident("serde") {
             if let Meta::List(list) = &attr.meta {
                 let s = list.tokens.to_string();
-                // Simple check for "flatten" in the token stream
-                // This covers basic cases like #[serde(flatten)] or #[serde(default, flatten)]
+                // 在 token 流中简单检查是否包含 "flatten"
+                // 覆盖基本用例如 #[serde(flatten)] 或 #[serde(default, flatten)]
                 if s.contains("flatten") {
                     return true;
                 }
@@ -53,7 +54,7 @@ fn is_option_type(ty: &Type) -> Option<&Type> {
     None
 }
 
-/// Check if a type is a primitive type that can be handled by Clap
+/// 检查类型是否为 Clap 可以处理的原始类型
 fn is_primitive_type(ty: &Type) -> bool {
     let type_string = quote!(#ty).to_string();
     matches!(
@@ -78,7 +79,7 @@ fn is_primitive_type(ty: &Type) -> bool {
         || type_string.starts_with("Vec <")
 }
 
-/// Detect remote protocol from URL or explicit setting
+/// 从 URL 或显式设置中检测远程协议
 fn detect_protocol(
     url: &Option<String>,
     explicit_protocol: &Option<RemoteProtocol>,
@@ -102,10 +103,10 @@ fn detect_protocol(
         }
     }
 
-    RemoteProtocol::Http // default to http
+    RemoteProtocol::Http // 默认为 http
 }
 
-/// Generate Clap fields for a list of fields, handling flatten attributes
+/// 为字段列表生成 Clap 字段，处理 flatten 属性
 fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
     let mut clap_fields = Vec::new();
 
@@ -115,7 +116,7 @@ fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
         }
 
         if field.flatten {
-            // Handle flattened fields by using the shadow type
+            // 使用影子类型处理展平的字段
             let name = &field.ident;
             let ty = &field.ty;
 
@@ -128,8 +129,8 @@ fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
             continue;
         }
 
-        // Handle nested struct types that are not primitives
-        // Check if it's a custom struct type (not a primitive)
+        // 处理不是原始类型的嵌套结构体类型
+        // 检查是否为自定义结构体类型（不是原始类型）
         let name = &field.ident;
         let ty = &field.ty;
 
@@ -190,7 +191,7 @@ fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
         let long_name = &field.name_clap_long;
         let short_name = &field.name_clap_short;
 
-        // Check if it's an Option<T>
+        // 检查是否为 Option<T>
         let inner_ty = is_option_type(ty).unwrap_or(ty);
 
         // Only generate clap fields for primitive types that can be parsed from strings
@@ -238,7 +239,7 @@ fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
             quote! {}
         };
 
-        // Build the arg attributes, filtering out empty ones
+        // 构建参数属性，过滤掉空的属性
         let mut arg_attrs = Vec::new();
         arg_attrs.push(long_attr);
         if !short_attr.is_empty() {
@@ -248,9 +249,9 @@ fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
             arg_attrs.push(help_attr);
         }
 
-        // Use Option<T> in ClapShadow to allow optional arguments
-        // If original type is already Option<T>, use it directly
-        // If original type is T, wrap it in Option<T> for CLI args (since CLI args are typically optional overrides)
+        // 在 ClapShadow 中使用 Option<T> 以允许可选参数
+        // 如果原始类型已经是 Option<T>，直接使用它
+        // 如果原始类型是 T，将其包装在 Option<T> 中用于 CLI 参数（因为 CLI 参数通常是可选的覆盖）
         let clap_ty = if is_option_type(ty).is_some() {
             quote! { #ty }
         } else {
@@ -271,11 +272,11 @@ fn get_custom_validator(field: &FieldOpts) -> Option<String> {
         return Some(v.clone());
     }
 
-    // Search in forwarded validate attributes
+    // 在转发的验证属性中搜索
     for attr in &field.attrs {
         if attr.path().is_ident("validate") {
             if let Meta::List(list) = &attr.meta {
-                // Try to find custom = "..."
+                // 尝试找到 custom = "..."
                 let s = list.tokens.to_string();
                 if let Some(start) = s.find("custom =") {
                     let rest = &s[start + 8..];
@@ -479,7 +480,7 @@ pub fn generate_impl(
             let remote_client_cert = &f.remote_client_cert;
             let remote_client_key = &f.remote_client_key;
 
-            // Detect protocol for this field
+    // 检测此字段的协议
             let protocol = detect_protocol(remote_url, &opts.remote_protocol);
 
             let mut config_tokens = TokenStream::new();
@@ -494,7 +495,7 @@ pub fn generate_impl(
                 });
             }
 
-            // Protocol-specific configuration
+            // 协议特定配置
             match protocol {
                 RemoteProtocol::Http => {
                     if let Some(url) = remote_url {
@@ -734,17 +735,17 @@ pub fn generate_impl(
         quote! {}
     };
 
-    // Generate Clap arguments for each field
+    // 为每个字段生成 Clap 参数
     let clap_fields = generate_clap_fields(fields);
 
-    // Generate field name strings for mapping (only primitive, non-flattened, non-skipped fields)
+    // 生成字段名称字符串映射（仅包含原始类型、非展平、非跳过的字段）
     let _field_names: Vec<_> = fields
         .iter()
         .filter(|f| {
             if f.flatten || f.skip {
                 return false;
             }
-            // Only include primitive types that can be handled by Clap
+        // 仅包含可由 Clap 处理的原始类型
             let ty = &f.ty;
             let type_string = quote!(#ty).to_string();
             let is_primitive = matches!(
@@ -813,7 +814,7 @@ pub fn generate_impl(
         })
         .collect();
 
-    // Separate Option and non-Option fields for to_cli_args
+    // 分离 Option 和非 Option 字段用于 to_cli_args
     let option_field_names: Vec<_> = fields
         .iter()
         .filter(|f| {
@@ -882,7 +883,7 @@ pub fn generate_impl(
         })
         .collect();
 
-    // Collect flattened fields for to_cli_args
+    // 收集展平的字段信息用于 to_cli_args
     let flattened_fields_info: Vec<_> = fields
         .iter()
         .filter(|f| f.flatten && !f.skip)
@@ -899,7 +900,7 @@ pub fn generate_impl(
         })
         .collect();
 
-    // Collect custom validation functions for fields
+    // 收集字段的自定义验证函数
     let custom_validations: Vec<_> = fields
         .iter()
         .filter(|f| !f.skip)

@@ -454,9 +454,37 @@ impl DiffCommand {
         if s.len() <= width {
             s.to_string()
         } else {
-            let mut truncated = s.chars().take(width - 3).collect::<String>();
-            truncated.push_str("...");
-            truncated
+            s.chars().take(width.saturating_sub(3)).collect::<String>() + "..."
+        }
+    }
+
+    fn load_config(file: &str) -> Result<Value, ConfigError> {
+        let path = Path::new(file);
+        if !path.exists() {
+            return Err(ConfigError::FileNotFound {
+                path: path.to_path_buf(),
+            });
+        }
+
+        let content = fs::read_to_string(path)
+            .map_err(|e| ConfigError::IoError(format!("Failed to read config file: {}", e)))?;
+
+        let ext = path.extension().and_then(|e| e.to_str());
+
+        match ext {
+            Some("json") | Some("jsonc") => {
+                serde_json::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
+            }
+            Some("yaml") | Some("yml") => {
+                serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
+            }
+            Some("toml") => {
+                toml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
+            }
+            _ => Err(ConfigError::ParseError(format!(
+                "Unsupported config format: {:?}",
+                ext
+            ))),
         }
     }
 
@@ -464,188 +492,68 @@ impl DiffCommand {
         v1: &Value,
         v2: &Value,
         path: &str,
-        options: &DiffOptions,
+        _options: &DiffOptions,
     ) -> Vec<String> {
         let mut diffs = Vec::new();
 
         match (v1, v2) {
             (Value::Object(m1), Value::Object(m2)) => {
-                let prefix = if path.is_empty() {
-                    "".to_string()
-                } else {
-                    format!("{}.", path)
-                };
+                for k in m1
+                    .keys()
+                    .chain(m2.keys())
+                    .collect::<std::collections::HashSet<_>>()
+                {
+                    let new_path = if path.is_empty() {
+                        k.clone()
+                    } else {
+                        format!("{}.{}", path, k)
+                    };
 
-                for (k, v) in m1 {
-                    if !m2.contains_key(k) {
-                        diffs.push(Self::colorize(&format!("{}< {}", prefix, k), RED, options));
-                        diffs.extend(
-                            Self::indent_value(v, 1)
-                                .into_iter()
-                                .map(|l| Self::colorize(&format!("< {}", l), RED, options))
-                                .collect::<Vec<_>>(),
-                        );
-                    }
-                }
-                for (k, v) in m2 {
-                    if !m1.contains_key(k) {
-                        diffs.push(Self::colorize(
-                            &format!("{}> {}", prefix, k),
-                            GREEN,
-                            options,
-                        ));
-                        diffs.extend(
-                            Self::indent_value(v, 1)
-                                .into_iter()
-                                .map(|l| Self::colorize(&format!("> {}", l), GREEN, options))
-                                .collect::<Vec<_>>(),
-                        );
-                    }
-                }
-                for (k, v1_val) in m1 {
-                    if let Some(v2_val) = m2.get(k) {
-                        if v1_val != v2_val {
-                            let new_path = if path.is_empty() {
-                                k.clone()
-                            } else {
-                                format!("{}.{}", path, k)
-                            };
-                            let sub_diffs =
-                                Self::generate_normal_diff(v1_val, v2_val, &new_path, options);
-                            if sub_diffs.is_empty() {
-                                diffs.push(Self::colorize(
-                                    &format!("{}< {}", prefix, new_path),
-                                    RED,
-                                    options,
-                                ));
-                                diffs.extend(
-                                    Self::indent_value(v1_val, 1)
-                                        .into_iter()
-                                        .map(|l| Self::colorize(&format!("< {}", l), RED, options))
-                                        .collect::<Vec<_>>(),
-                                );
-                                diffs.push(Self::colorize(
-                                    &format!("{}> {}", prefix, new_path),
-                                    GREEN,
-                                    options,
-                                ));
-                                diffs.extend(
-                                    Self::indent_value(v2_val, 1)
-                                        .into_iter()
-                                        .map(|l| {
-                                            Self::colorize(&format!("> {}", l), GREEN, options)
-                                        })
-                                        .collect::<Vec<_>>(),
-                                );
-                            } else {
-                                diffs.extend(sub_diffs);
-                            }
+                    match (m1.get(k), m2.get(k)) {
+                        (None, Some(v2_val)) => {
+                            diffs.push(format!("{}: {}", new_path, v2_val));
                         }
+                        (Some(v1_val), None) => {
+                            diffs.push(format!("{}: {}", new_path, v1_val));
+                        }
+                        (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
+                            diffs.extend(Self::generate_normal_diff(
+                                v1_val, v2_val, &new_path, _options,
+                            ));
+                        }
+                        _ => {}
                     }
                 }
             }
             (Value::Array(a1), Value::Array(a2)) => {
                 if a1 != a2 {
-                    let prefix = if path.is_empty() { "" } else { path };
-                    let mut i = 0;
-                    let min_len = std::cmp::min(a1.len(), a2.len());
-
-                    while i < min_len {
-                        if a1[i] != a2[i] {
-                            let item_path = format!("{}[{}]", prefix, i);
-                            let sub_diffs =
-                                Self::generate_normal_diff(&a1[i], &a2[i], &item_path, options);
-                            if sub_diffs.is_empty() {
-                                diffs.push(Self::colorize(
-                                    &format!("{}< {}", prefix, item_path),
-                                    RED,
-                                    options,
-                                ));
-                                diffs.extend(
-                                    Self::indent_value(&a1[i], 1)
-                                        .into_iter()
-                                        .map(|l| Self::colorize(&format!("< {}", l), RED, options))
-                                        .collect::<Vec<_>>(),
-                                );
-                                diffs.push(Self::colorize(
-                                    &format!("{}> {}", prefix, item_path),
-                                    GREEN,
-                                    options,
-                                ));
-                                diffs.extend(
-                                    Self::indent_value(&a2[i], 1)
-                                        .into_iter()
-                                        .map(|l| {
-                                            Self::colorize(&format!("> {}", l), GREEN, options)
-                                        })
-                                        .collect::<Vec<_>>(),
-                                );
-                            } else {
-                                diffs.extend(sub_diffs);
+                    let max_len = std::cmp::max(a1.len(), a2.len());
+                    for i in 0..max_len {
+                        let item_path = format!("{}[{}]", path, i);
+                        match (a1.get(i), a2.get(i)) {
+                            (None, Some(v2_val)) => {
+                                diffs.push(format!("{}: {}", item_path, v2_val));
                             }
+                            (Some(v1_val), None) => {
+                                diffs.push(format!("{}: {}", item_path, v1_val));
+                            }
+                            (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
+                                diffs.extend(Self::generate_normal_diff(
+                                    v1_val, v2_val, &item_path, _options,
+                                ));
+                            }
+                            _ => {}
                         }
-                        i += 1;
-                    }
-
-                    while i < a2.len() {
-                        let item_path = format!("{}[{}]", prefix, i);
-                        diffs.push(Self::colorize(
-                            &format!("{}> {}", prefix, item_path),
-                            GREEN,
-                            options,
-                        ));
-                        diffs.extend(
-                            Self::indent_value(&a2[i], 1)
-                                .into_iter()
-                                .map(|l| Self::colorize(&format!("> {}", l), GREEN, options))
-                                .collect::<Vec<_>>(),
-                        );
-                        i += 1;
-                    }
-
-                    while i < a1.len() {
-                        let item_path = format!("{}[{}]", prefix, i);
-                        diffs.push(Self::colorize(
-                            &format!("{}< {}", prefix, item_path),
-                            RED,
-                            options,
-                        ));
-                        diffs.extend(
-                            Self::indent_value(&a1[i], 1)
-                                .into_iter()
-                                .map(|l| Self::colorize(&format!("< {}", l), RED, options))
-                                .collect::<Vec<_>>(),
-                        );
-                        i += 1;
                     }
                 }
             }
             _ if v1 != v2 => {
-                diffs.push(Self::colorize(
-                    &format!("{}< {}", path, Self::format_value(v1)),
-                    RED,
-                    options,
-                ));
-                diffs.push(Self::colorize(
-                    &format!("{}> {}", path, Self::format_value(v2)),
-                    GREEN,
-                    options,
-                ));
+                diffs.push(format!("{}: {} => {}", path, v1, v2));
             }
             _ => {}
         }
 
         diffs
-    }
-
-    fn format_value(v: &Value) -> String {
-        match v {
-            Value::String(s) => s.clone(),
-            Value::Null => "null".to_string(),
-            Value::Bool(b) => b.to_string(),
-            Value::Number(n) => n.to_string(),
-            _ => v.to_string(),
-        }
     }
 
     fn generate_standard_unified_diff(
@@ -655,22 +563,7 @@ impl DiffCommand {
         options: &DiffOptions,
     ) -> Vec<String> {
         let mut diffs = Vec::new();
-        let context = options.context_lines;
 
-        Self::generate_unified_diff_recursive(v1, v2, path, context, &mut diffs, &mut 1, &mut 1);
-
-        diffs
-    }
-
-    fn generate_unified_diff_recursive(
-        v1: &Value,
-        v2: &Value,
-        path: &str,
-        _context: usize,
-        diffs: &mut Vec<String>,
-        src_line: &mut usize,
-        dst_line: &mut usize,
-    ) {
         match (v1, v2) {
             (Value::Object(m1), Value::Object(m2)) => {
                 let all_keys: std::collections::HashSet<_> = m1.keys().chain(m2.keys()).collect();
@@ -686,52 +579,26 @@ impl DiffCommand {
 
                     match (m1.get(k.as_str()), m2.get(k.as_str())) {
                         (None, Some(v2_val)) => {
-                            let old_start = *src_line;
-                            let old_count = 0;
-                            let new_start = *dst_line;
-                            let new_count = Self::count_value_lines_with_prefix(v2_val, "") + 1;
-
-                            diffs.push(format!(
-                                "@@ -{},{} +{},{} @@",
-                                old_start, old_count, new_start, new_count
-                            ));
-
-                            diffs.push(format!("+{}", k));
+                            diffs.push(format!("+[{}]", new_path));
                             let indented = Self::indent_value(v2_val, 1);
-                            for line in &indented {
+                            for line in indented {
                                 diffs.push(format!("+{}", line));
-                                *dst_line += 1;
                             }
-                            *dst_line += 1;
                         }
                         (Some(v1_val), None) => {
-                            let old_start = *src_line;
-                            let old_count = Self::count_value_lines_with_prefix(v1_val, "") + 1;
-                            let new_start = *dst_line;
-                            let new_count = 0;
-
-                            diffs.push(format!(
-                                "@@ -{},{} +{},{} @@",
-                                old_start, old_count, new_start, new_count
-                            ));
-
-                            diffs.push(format!("-{}", k));
+                            diffs.push(format!("-[{}]", new_path));
                             let indented = Self::indent_value(v1_val, 1);
-                            for line in &indented {
+                            for line in indented {
                                 diffs.push(format!("-{}", line));
-                                *src_line += 1;
                             }
-                            *src_line += 1;
                         }
                         (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
-                            Self::generate_unified_diff_recursive(
-                                v1_val, v2_val, &new_path, _context, diffs, src_line, dst_line,
-                            );
+                            diffs.extend(Self::generate_standard_unified_diff(
+                                v1_val, v2_val, &new_path, options,
+                            ));
                         }
-                        (Some(_v1_val), Some(_v2_val)) => {
-                            diffs.push(format!("  {}", new_path));
-                            *src_line += 1;
-                            *dst_line += 1;
+                        (Some(v1_val), Some(v2_val)) => {
+                            diffs.push(format!(" [{}]", new_path));
                         }
                         _ => {}
                     }
@@ -744,184 +611,138 @@ impl DiffCommand {
                         let item_path = format!("{}[{}]", path, i);
                         match (a1.get(i), a2.get(i)) {
                             (None, Some(v2_val)) => {
-                                let old_start = *src_line;
-                                let old_count = 0;
-                                let new_start = *dst_line;
-                                let new_count = Self::count_value_lines_with_prefix(v2_val, "") + 1;
-
-                                diffs.push(format!(
-                                    "@@ -{},{} +{},{} @@",
-                                    old_start, old_count, new_start, new_count
-                                ));
-
                                 diffs.push(format!("+{}", item_path));
                                 let indented = Self::indent_value(v2_val, 1);
-                                for line in &indented {
+                                for line in indented {
                                     diffs.push(format!("+{}", line));
-                                    *dst_line += 1;
                                 }
-                                *dst_line += 1;
                             }
                             (Some(v1_val), None) => {
-                                let old_start = *src_line;
-                                let old_count = Self::count_value_lines_with_prefix(v1_val, "") + 1;
-                                let new_start = *dst_line;
-                                let new_count = 0;
-
-                                diffs.push(format!(
-                                    "@@ -{},{} +{},{} @@",
-                                    old_start, old_count, new_start, new_count
-                                ));
-
                                 diffs.push(format!("-{}", item_path));
                                 let indented = Self::indent_value(v1_val, 1);
-                                for line in &indented {
+                                for line in indented {
                                     diffs.push(format!("-{}", line));
-                                    *src_line += 1;
                                 }
-                                *src_line += 1;
                             }
                             (Some(v1_val), Some(v2_val)) if v1_val != v2_val => {
-                                Self::generate_unified_diff_recursive(
-                                    v1_val, v2_val, &item_path, _context, diffs, src_line, dst_line,
-                                );
-                            }
-                            (Some(_v1_val), Some(_v2_val)) => {
-                                diffs.push(format!("  {}", item_path));
-                                *src_line += 1;
-                                *dst_line += 1;
+                                diffs.extend(Self::generate_standard_unified_diff(
+                                    v1_val, v2_val, &item_path, options,
+                                ));
                             }
                             _ => {}
                         }
                     }
                 }
             }
-            (Value::String(s1), Value::String(s2)) if s1 != s2 => {
-                let old_start = *src_line;
-                let old_count = 1;
-                let new_start = *dst_line;
-                let new_count = 1;
-
-                diffs.push(format!(
-                    "@@ -{},{} +{},{} @@",
-                    old_start, old_count, new_start, new_count
-                ));
-                diffs.push(format!("-{}", s1));
-                diffs.push(format!("+{}", s2));
-                *src_line += 1;
-                *dst_line += 1;
-            }
-            (Value::Number(n1), Value::Number(n2)) if n1 != n2 => {
-                let old_start = *src_line;
-                let old_count = 1;
-                let new_start = *dst_line;
-                let new_count = 1;
-
-                diffs.push(format!(
-                    "@@ -{},{} +{},{} @@",
-                    old_start, old_count, new_start, new_count
-                ));
-                diffs.push(format!("-{}", n1));
-                diffs.push(format!("+{}", n2));
-                *src_line += 1;
-                *dst_line += 1;
-            }
-            (Value::Bool(b1), Value::Bool(b2)) if b1 != b2 => {
-                let old_start = *src_line;
-                let old_count = 1;
-                let new_start = *dst_line;
-                let new_count = 1;
-
-                diffs.push(format!(
-                    "@@ -{},{} +{},{} @@",
-                    old_start, old_count, new_start, new_count
-                ));
-                diffs.push(format!("-{}", b1));
-                diffs.push(format!("+{}", b2));
-                *src_line += 1;
-                *dst_line += 1;
-            }
             _ if v1 != v2 => {
-                let old_start = *src_line;
-                let old_count = 1;
-                let new_start = *dst_line;
-                let new_count = 1;
-
-                diffs.push(format!(
-                    "@@ -{},{} +{},{} @@",
-                    old_start, old_count, new_start, new_count
-                ));
                 diffs.push(format!("-{}", v1));
                 diffs.push(format!("+{}", v2));
-                *src_line += 1;
-                *dst_line += 1;
             }
-            _ => {
-                diffs.push(format!("  {}", path));
-                *src_line += 1;
-                *dst_line += 1;
-            }
+            _ => {}
         }
-    }
 
-    fn count_value_lines_with_prefix(v: &Value, prefix: &str) -> usize {
-        let s = format!("{}{}", prefix, v);
-        s.lines().count()
-    }
-
-    fn load_config(path: &str) -> Result<Value, ConfigError> {
-        let content = fs::read_to_string(path).map_err(|e| {
-            ConfigError::FormatDetectionFailed(format!("Failed to read {}: {}", path, e))
-        })?;
-
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
-
-        match ext {
-            "json" => {
-                serde_json::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
-            }
-            "toml" => toml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string())),
-            "yaml" | "yml" => {
-                serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
-            }
-            "ini" => {
-                serde_ini::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
-            }
-            _ => {
-                if let Ok(v) = serde_json::from_str(&content) {
-                    Ok(v)
-                } else if let Ok(v) = toml::from_str(&content) {
-                    Ok(v)
-                } else if let Ok(v) = serde_yaml::from_str(&content) {
-                    Ok(v)
-                } else if let Ok(v) = serde_ini::from_str(&content) {
-                    Ok(v)
-                } else {
-                    Err(ConfigError::FormatDetectionFailed(format!(
-                        "Unknown format for file: {}",
-                        path
-                    )))
-                }
-            }
-        }
+        diffs
     }
 }
 
-trait PadToWidth {
-    fn pad_to_width(&self, width: usize) -> String;
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
 
-impl PadToWidth for str {
-    fn pad_to_width(&self, width: usize) -> String {
-        if self.len() >= width {
-            self.chars().take(width).collect()
-        } else {
-            let mut s = self.to_string();
-            s.push_str(&" ".repeat(width - self.len()));
-            s
-        }
+    fn create_test_config() -> (Value, Value) {
+        let config1 = json!({
+            "name": "test_app",
+            "version": "1.0.0",
+            "server": {
+                "host": "localhost",
+                "port": 8080
+            },
+            "database": {
+                "url": "postgres://localhost/db",
+                "pool_size": 5
+            }
+        });
+
+        let config2 = json!({
+            "name": "test_app",
+            "version": "1.1.0",
+            "server": {
+                "host": "0.0.0.0",
+                "port": 8080
+            },
+            "database": {
+                "url": "postgres://localhost/db",
+                "pool_size": 10
+            },
+            "new_feature": {
+                "enabled": true
+            }
+        });
+
+        (config1, config2)
+    }
+
+    #[test]
+    fn test_execute_with_identical_configs() {
+        let config = json!({"name": "test", "value": "same"});
+
+        let result = DiffCommand::execute(
+            "test1.json",
+            "test2.json",
+            DiffOptions::default(),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_diff_format_parsing() {
+        assert_eq!(
+            "unified".parse::<DiffFormat>().unwrap(),
+            DiffFormat::Unified
+        );
+        assert_eq!(
+            "side-by-side".parse::<DiffFormat>().unwrap(),
+            DiffFormat::SideBySide
+        );
+        assert_eq!("strict".parse::<DiffFormat>().unwrap(), DiffFormat::Strict);
+        assert!("invalid".parse::<DiffFormat>().is_err());
+    }
+
+    #[test]
+    fn test_diff_options_default() {
+        let options = DiffOptions::default();
+
+        assert_eq!(options.format, DiffFormat::Unified);
+        assert_eq!(options.context_lines, 3);
+        assert!(!options.show_line_numbers);
+        assert!(!options.ignore_whitespace);
+        assert!(!options.case_insensitive);
+        assert!(!options.strict);
+    }
+
+    #[test]
+    fn test_colorize_strict_mode() {
+        let options = DiffOptions {
+            strict: true,
+            ..Default::default()
+        };
+
+        let result = DiffCommand::colorize("test", GREEN, &options);
+        assert_eq!(result, "test");
+    }
+
+    #[test]
+    fn test_colorize_non_strict_mode() {
+        let options = DiffOptions {
+            strict: false,
+            ..Default::default()
+        };
+
+        let result = DiffCommand::colorize("test", GREEN, &options);
+        assert!(result.contains("test"));
+        assert!(result.contains(GREEN));
+        assert!(result.contains(RESET));
     }
 }

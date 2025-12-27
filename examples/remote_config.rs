@@ -39,16 +39,16 @@ fn main() -> anyhow::Result<()> {
     println!("This example requires a running HTTP server at http://localhost:8080/config");
     println!("Example JSON response: {{\"api_key\": \"secret\", \"endpoint\": \"https://api.example.com\"}}");
 
-    // Demonstrate loading with fallback enabled
+    // 演示启用回退时的加载
     println!("\nAttempting to load from remote (will fallback if server is down)...");
 
-    // Create a local fallback file
+    // 创建本地回退文件
     std::fs::write(
         "examples/configs/remote.toml",
         "api_key = 'local-fallback'\nendpoint = 'http://localhost'\ntimeout = 60",
     )?;
 
-    // Load using ConfigLoader
+    // 使用 ConfigLoader 加载
     let config: RemoteConfig = ConfigLoader::new()
         .with_file("examples/configs/remote.toml")
         .load_sync()?;

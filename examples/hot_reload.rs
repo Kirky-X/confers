@@ -18,36 +18,36 @@ pub struct WatchConfig {
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    // 1. Initial config
+    // 1. 初始配置
     let path = "examples/watch.toml";
     std::fs::write(path, "message = 'Hello, initial!'\ninterval = 1000")?;
 
-    // 2. Load with watcher
+    // 2. 加载并监控
     println!("Starting config watcher... (Ctrl+C to stop)");
 
-    // Initial load
+    // 初始加载
     let config = WatchConfig::load()?;
     println!("Initial message: {}", config.message);
 
-    // 3. Monitor changes
+    // 3. 监控变化
     let mut last_message = config.message.clone();
 
-    // In a real app, you might use a channel or a callback
-    // Here we just poll for demonstration
+    // 在实际应用中，您可能使用通道或回调
+    // 这里我们只是轮询演示
     for i in 1..=5 {
         println!("\n[Iteration {}] Change {} and wait...", i, path);
 
-        // Simulate external change
+        // 模拟外部变化
         let new_message = format!("Hello, change {}!", i);
         std::fs::write(
             path,
             format!("message = '{}'\ninterval = 1000", new_message),
         )?;
 
-        // Wait for debounce and file system
+        // 等待防抖和文件系统
         std::thread::sleep(Duration::from_millis(500));
 
-        // Check if changed
+        // 检查是否变化
         let current_config = WatchConfig::load()?;
         if current_config.message != last_message {
             println!(

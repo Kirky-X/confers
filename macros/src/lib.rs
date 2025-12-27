@@ -15,7 +15,7 @@ fn has_serde_flatten(attrs: &Vec<syn::Attribute>) -> bool {
         if attr.path().is_ident("serde") {
             if let syn::Meta::List(list) = &attr.meta {
                 let s = list.tokens.to_string();
-                // Simple check for "flatten" in the token stream
+                // 在 token 流中简单检查是否包含 "flatten"
                 if s.contains("flatten") {
                     return true;
                 }
