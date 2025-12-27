@@ -76,6 +76,7 @@
 <td width="50%">
 
 **✅ 推荐行为**
+
 - 保持尊重和体谅
 - 欢迎新手
 - 接受建设性批评
@@ -86,6 +87,7 @@
 <td width="50%">
 
 **❌ 禁止行为**
+
 - 使用攻击性语言
 - 骚扰或侮辱他人
 - 公布私人信息
@@ -113,11 +115,13 @@
 <summary><b>🔧 环境搭建步骤</b></summary>
 
 **1. 安装 Rust:**
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 **2. 安装辅助工具:**
+
 ```bash
 # 代码格式化工具
 rustup component add rustfmt
@@ -130,6 +134,7 @@ cargo install cargo-tarpaulin
 ```
 
 **3. 验证安装:**
+
 ```bash
 rustc --version
 cargo --version
@@ -247,6 +252,7 @@ git checkout -b bugfix/TICKET-ID-description
 ```
 
 **分支命名规范:**
+
 - `feature/*` - 新功能开发
 - `bugfix/*` - 缺陷修复
 - `hotfix/*` - 紧急修复
@@ -281,6 +287,7 @@ cargo test --all-features
 `<type>(<scope>): <subject>`
 
 **常见类型:**
+
 - `feat`: 新功能
 - `fix`: 修复 Bug
 - `docs`: 文档变更
@@ -291,6 +298,7 @@ cargo test --all-features
 - `chore`: 构建工具、依赖更新等
 
 **示例:**
+
 ```bash
 git commit -m "feat(auth): add JWT token refresh mechanism"
 ```
@@ -316,12 +324,14 @@ git push origin feature/TICKET-ID-description
 ### Rust 最佳实践
 
 #### 所有权与借用
+
 - 优先使用借用而非所有权转移
 - 使用 `&` 进行不可变借用，`&mut` 进行可变借用
 - 避免不必要的 `.clone()`；优先使用引用
 - 保持生命周期标注尽可能简单，让编译器推断
 
 #### 类型系统
+
 - 利用类型系统表达业务约束 (NewType 模式)
 - 优先使用 `Option<T>` 而非空值
 - 使用 `Result<T, E>` 进行错误处理；库代码中严禁使用 `panic!`
@@ -329,12 +339,14 @@ git push origin feature/TICKET-ID-description
 - 库代码使用 `thiserror` 简化错误定义
 
 #### 并发与异步
+
 - 使用 `Arc<T>` 共享不可变数据，使用 `Arc<Mutex<T>>` 或 `Arc<RwLock<T>>` 共享可变数据
 - 优先使用通道 (Channel) 进行线程间通信
 - 异步代码使用 `async/await`，避免阻塞运行时
 - 使用 `tokio::spawn` 执行独立任务
 
 #### 性能优化
+
 - 使用 `Vec::with_capacity()` 预分配内存
 - 优先使用迭代器链而非显式循环
 - 函数参数优先使用 `&str` 而非 `String`
@@ -342,11 +354,13 @@ git push origin feature/TICKET-ID-description
 - 对小型且性能关键函数使用 `#[inline]` 标注
 
 ### 命名规范
+
 - 模块、函数、变量: `snake_case`
 - 类型、Trait: `PascalCase`
 - 常量、静态变量: `SCREAMING_SNAKE_CASE`
 
 ### 代码质量要求
+
 - **零警告状态**: 严禁忽略编译器警告。所有警告必须在提交前修复。
 - **Clippy**: 必须通过 `cargo clippy -- -D warnings` 检查，不引入新的 lint 警告。
 - **代码格式**: 使用 `cargo fmt` 确保代码格式统一。
@@ -357,16 +371,19 @@ git push origin feature/TICKET-ID-description
 ## 测试指南
 
 ### 测试原则
+
 - **TDD**: 鼓励遵循 "红-绿-重构" 循环。
 - **严禁禁用测试**: 测试失败时应修复代码或测试，严禁直接禁用。
 - **真实性**: 除非涉及外部硬件或无法控制的服务，否则严禁使用 Mock/Stub，优先使用真实实现。
 
 ### 测试金字塔
+
 1. **单元测试**: 快速、独立，验证核心逻辑。位于 `src/` 目录下，使用 `#[cfg(test)]` 标注。
 2. **集成测试**: 验证模块间交互。位于 `tests/` 目录。
 3. **E2E 测试**: 验证关键业务流程。
 
 ### 覆盖率要求
+
 - **新代码覆盖率**: ≥ 80%。
 - **核心业务逻辑**: 100% 覆盖。
 
@@ -379,6 +396,7 @@ cargo tarpaulin --out Html
 ```
 
 ### 注意事项
+
 - 测试代码应与实现代码位于同一文件，使用 `#[cfg(test)]` 条件编译
 - 使用 `assert!`、`assert_eq!`、`assert_ne!` 进行断言
 - 测试私有函数时，在同一模块的 `tests` 子模块中进行测试
@@ -396,6 +414,7 @@ cargo tarpaulin --out Html
 ## 提交变更
 
 ### PR 提交标准
+
 - **原子性**: 每个 commit/PR 应只包含一个逻辑变更。
 - **规模限制**: PR 变更行数建议控制在 400 行以内。
 - **关联 Issue**: 必须在 PR 描述中关联相关 Issue。
@@ -433,12 +452,14 @@ Closes #123
 ## 评审流程
 
 ### 评审要点
+
 - **功能性**: 满足需求，逻辑正确。
 - **代码质量**: 遵循 SOLID 原则，可读性好，无重复代码。
 - **安全性**: 无硬编码敏感信息，有输入验证。
 - **性能**: 无明显的性能隐患。
 
 ### 响应评审反馈
+
 - 及时回复评审者的评论。
 - 根据反馈修改代码并推送，PR 会自动更新。
 

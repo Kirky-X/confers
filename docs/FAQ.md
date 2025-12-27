@@ -1,172 +1,175 @@
 <div align="center">
 
-# ❓ Frequently Asked Questions (FAQ)
+# ❓ 常见问题解答 (FAQ)
 
-### Quick Answers to Common Questions
+### 常见问题的快速解答
 
-[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md) • [🐛 Troubleshooting](TROUBLESHOOTING.md)
+[🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md) • [🔧 故障排除](TROUBLESHOOTING.md)
 
 ---
 
 </div>
 
-## 📋 Table of Contents
+## 📋 目录
 
-- [General Questions](#general-questions)
-- [Installation & Setup](#installation--setup)
-- [Usage & Features](#usage--features)
-- [Performance](#performance)
-- [Security](#security)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [Licensing](#licensing)
+- [一般问题](#一般问题)
+- [安装与配置](#安装与配置)
+- [使用与功能](#使用与功能)
+- [性能](#性能)
+- [安全](#安全)
+- [故障排除](#故障排除)
+- [贡献](#贡献)
+- [许可](#许可)
 
 ---
 
-## General Questions
+## 一般问题
 
 <div align="center">
 
-### 🤔 About the Project
+### 🤔 关于项目
 
 </div>
 
 <details>
-<summary><b>❓ What is Confers?</b></summary>
+<summary><b>❓ 什么是 Confers？</b></summary>
 
 <br>
 
-**Confers** is a modern, type-safe configuration management library for Rust. It provides:
+**Confers** 是一个现代化、类型安全的 Rust 配置管理库。它提供：
 
-- ✅ **Zero Boilerplate** - Define configurations with a single `#[derive(Config)]`
-- ✅ **Type Safety** - Compile-time type checking for configuration structures
-- ✅ **Multi-source Support** - Automatically merge files, env vars, and remote sources
+- ✅ **零样板代码** - 只需一个 `#[derive(Config)]` 即可定义配置
+- ✅ **类型安全** - 配置结构的编译时类型检查
+- ✅ **多源支持** - 自动合并文件、环境变量和远程源
 
-It's designed for **Rust developers** who need a robust, production-ready way to manage application configuration.
+它专为需要稳健、生产级配置管理方式的 **Rust 开发者** 设计。
 
-**Learn more:** [User Guide](USER_GUIDE.md)
+**了解更多：** [用户指南](USER_GUIDE.md)
 
 </details>
 
 <details>
-<summary><b>❓ Why should I use this instead of alternatives?</b></summary>
+<summary><b>❓ 为什么应该使用这个而不是其他替代品？</b></summary>
 
 <br>
 
 <table>
 <tr>
-<th>Feature</th>
+<th>功能</th>
 <th>Confers</th>
 <th>Figment</th>
 <th>Config-rs</th>
 </tr>
 <tr>
-<td>Type Safety</td>
-<td>✅ Strong</td>
-<td>✅ Good</td>
-<td>⚠️ Manual</td>
+<td>类型安全</td>
+<td>✅ 强</td>
+<td>✅ 良好</td>
+<td>⚠️ 手动</td>
 </tr>
 <tr>
-<td>Hot Reload</td>
-<td>✅ Built-in</td>
-<td>⚠️ Manual</td>
-<td>⚠️ Manual</td>
+<td>热重载</td>
+<td>✅ 内置</td>
+<td>⚠️ 手动</td>
+<td>⚠️ 手动</td>
 </tr>
 <tr>
-<td>Validation</td>
-<td>✅ Integrated</td>
-<td>⚠️ Manual</td>
-<td>⚠️ Manual</td>
+<td>验证</td>
+<td>✅ 集成</td>
+<td>⚠️ 手动</td>
+<td>⚠️ 手动</td>
 </tr>
 <tr>
-<td>Audit Log</td>
-<td>✅ Included</td>
-<td>❌ No</td>
-<td>❌ No</td>
+<td>审计日志</td>
+<td>✅ 包含</td>
+<td>❌ 否</td>
+<td>❌ 否</td>
 </tr>
 </table>
 
-**Key Advantages:**
-- 🚀 **Zero Boilerplate**: Minimal code to load complex configurations
-- 🔄 **Smart Merging**: Handles priorities between multiple sources automatically
-- 🛡️ **Security**: Built-in support for sensitive field encryption and masking
-- 📊 **Observability**: Detailed audit logs of where each config value came from
+**主要优势：**
+
+- 🚀 **零样板代码**：用最少的代码加载复杂配置
+- 🔄 **智能合并**：自动处理多个来源之间的优先级
+- 🛡️ **安全性**：内置敏感字段加密和屏蔽支持
+- 📊 **可观测性**：详细的审计日志，记录每个配置值的来源
 
 </details>
 
 <details>
-<summary><b>❓ Is this production-ready?</b></summary>
+<summary><b>❓ 这个产品已经可以用于生产环境了吗？</b></summary>
 
 <br>
 
-**Current Status:** ✅ **Production-ready!**
+**当前状态：** ✅ **生产就绪！**
 
 <table>
 <tr>
 <td width="50%">
 
-**What's Ready:**
-- ✅ Core loading logic stable
-- ✅ Support for major formats (TOML, JSON, YAML)
-- ✅ Environment variable overrides
-- ✅ Validation framework
-- ✅ Remote sources (Etcd, Consul)
+**已就绪功能：**
+
+- ✅ 核心加载逻辑稳定
+- ✅ 支持主要格式（TOML、JSON、YAML）
+- ✅ 环境变量覆盖
+- ✅ 验证框架
+- ✅ 远程源（Etcd、Consul）
 
 </td>
 <td width="50%">
 
-**Maturity Indicators:**
-- 📊 Extensive test suite
-- 🔄 Regular maintenance
-- 🛡️ Security-focused design
-- 📖 Growing documentation
+**成熟度指标：**
+
+- 📊 广泛的测试套件
+- 🔄 定期维护
+- 🛡️ 安全导向设计
+- 📖 不断增长的文档
 
 </td>
 </tr>
 </table>
 
-> **Note:** Always review the [CHANGELOG](../CHANGELOG.md) before upgrading versions.
+> **注意：** 在升级版本之前，请务必查看 [CHANGELOG](../CHANGELOG.md)。
 
 </details>
 
 <details>
-<summary><b>❓ What platforms are supported?</b></summary>
+<summary><b>❓ 支持哪些平台？</b></summary>
 
 <br>
 
 <table>
 <tr>
-<th>Platform</th>
-<th>Architecture</th>
-<th>Status</th>
-<th>Notes</th>
+<th>平台</th>
+<th>架构</th>
+<th>状态</th>
+<th>备注</th>
 </tr>
 <tr>
 <td rowspan="2"><b>Linux</b></td>
 <td>x86_64</td>
-<td>✅ Fully Supported</td>
-<td>Primary platform</td>
+<td>✅ 完全支持</td>
+<td>主要平台</td>
 </tr>
 <tr>
 <td>ARM64</td>
-<td>✅ Fully Supported</td>
-<td>Tested on ARM servers</td>
+<td>✅ 完全支持</td>
+<td>在 ARM 服务器上测试</td>
 </tr>
 <tr>
 <td rowspan="2"><b>macOS</b></td>
 <td>x86_64</td>
-<td>✅ Fully Supported</td>
-<td>Intel Macs</td>
+<td>✅ 完全支持</td>
+<td>Intel Mac</td>
 </tr>
 <tr>
 <td>ARM64</td>
-<td>✅ Fully Supported</td>
+<td>✅ 完全支持</td>
 <td>Apple Silicon (M1/M2/M3)</td>
 </tr>
 <tr>
 <td><b>Windows</b></td>
 <td>x86_64</td>
-<td>✅ Fully Supported</td>
+<td>✅ 完全支持</td>
 <td>Windows 10+</td>
 </tr>
 </table>
@@ -174,35 +177,35 @@ It's designed for **Rust developers** who need a robust, production-ready way to
 </details>
 
 <details>
-<summary><b>❓ What programming languages are supported?</b></summary>
+<summary><b>❓ 支持哪些编程语言？</b></summary>
 
 <br>
 
-**Confers** is a native **Rust** library. While it doesn't currently provide official bindings for other languages, its design focuses on providing the best experience for the Rust ecosystem.
+**Confers** 是一个原生 **Rust** 库。虽然目前没有为其他语言提供官方绑定，但其设计专注于为 Rust 生态系统提供最佳体验。
 
-**Documentation:**
-- [Rust API Docs](https://docs.rs/confers)
+**文档：**
+
+- [Rust API 文档](https://docs.rs/confers)
 
 </details>
 
 ---
 
-## Installation & Setup
+## 安装与配置
 
 <div align="center">
 
-### 🚀 Getting Started
-
+### 🚀 快速开始
 </div>
 
 <details>
-<summary><b>❓ How do I install this?</b></summary>
+<summary><b>❓ 如何安装？</b></summary>
 
 <br>
 
-**For Rust Projects:**
+**对于 Rust 项目：**
 
-Add the following to your `Cargo.toml`:
+在 `Cargo.toml` 中添加以下内容：
 
 ```toml
 [dependencies]
@@ -210,19 +213,19 @@ confers = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-Or using cargo:
+或使用 cargo：
 
 ```bash
 cargo add confers serde --features serde/derive
 ```
 
-**Optional Features:**
+**可选功能：**
 
 ```toml
 confers = { version = "0.1", features = ["watch", "remote", "cli"] }
 ```
 
-**Verification:**
+**验证：**
 
 ```rust
 use confers::Config;
@@ -235,86 +238,88 @@ struct TestConfig {
 
 fn main() {
     let _ = TestConfig::load();
-    println!("✅ Installation successful!");
+    println!("✅ 安装成功！");
 }
 ```
 
-**See also:** [Installation Guide](USER_GUIDE.md#installation)
+**另请参阅：** [安装指南](USER_GUIDE.md#安装)
 
 </details>
 
 <details>
-<summary><b>❓ What are the system requirements?</b></summary>
+<summary><b>❓ 系统要求是什么？</b></summary>
 
 <br>
 
-**Minimum Requirements:**
+**最低要求：**
 
 <table>
 <tr>
-<th>Component</th>
-<th>Requirement</th>
-<th>Recommended</th>
+<th>组件</th>
+<th>要求</th>
+<th>推荐</th>
 </tr>
 <tr>
-<td>Rust Version</td>
+<td>Rust 版本</td>
 <td>1.75+</td>
-<td>Latest stable</td>
+<td>最新稳定版</td>
 </tr>
 <tr>
-<td>Memory</td>
-<td>Minimal</td>
+<td>内存</td>
+<td>最小</td>
 <td>-</td>
 </tr>
 <tr>
-<td>Disk Space</td>
-<td>Minimal</td>
+<td>磁盘空间</td>
+<td>最小</td>
 <td>-</td>
 </tr>
 </table>
 
-**Optional:**
-- 🔧 `watch` feature requires OS-level file notification support (via `notify` crate)
-- ☁️ `remote` feature requires network access to configuration centers (Etcd, Consul)
+**可选：**
+
+- 🔧 `watch` 功能需要操作系统级别的文件通知支持（通过 `notify` crate）
+- ☁️ `remote` 功能需要访问配置中心（Etcd、Consul）的网络访问
 
 </details>
 
 <details>
-<summary><b>❓ I'm getting compilation errors, what should I do?</b></summary>
+<summary><b>❓ 我遇到编译错误，应该怎么办？</b></summary>
 
 <br>
 
-**Common Solutions:**
+**常见解决方案：**
 
-1. **Check Rust version:**
+1. **检查 Rust 版本：**
    ```bash
    rustc --version
-   # Should be 1.75.0 or higher
+   # 应为 1.75.0 或更高版本
    ```
 
-2. **Ensure `serde` derive is enabled:**
-   Make sure you have `features = ["derive"]` for `serde` in your `Cargo.toml`.
+2. **确保启用了 `serde` 派生：**
+   确保在 `Cargo.toml` 中为 `serde` 配置了 `features = ["derive"]`。
 
-3. **Clean build artifacts:**
+3. **清理构建产物：**
    ```bash
    cargo clean
    cargo build
    ```
 
-**Still having issues?**
-- 📝 Check [Troubleshooting Guide](TROUBLESHOOTING.md)
-- 🐛 [Open an issue](../../issues) with error details
+**仍然有问题？**
+
+- 📝 查看 [故障排除指南](TROUBLESHOOTING.md)
+- 🐛 [创建 issue](../../issues) 并附上错误详情
 
 </details>
 
 <details>
-<summary><b>❓ Can I use this with Docker?</b></summary>
+<summary><b>❓ 可以在 Docker 中使用吗？</b></summary>
 
 <br>
 
-**Yes!** Confers works perfectly in containerized environments. It can load configurations from environment variables which is the standard for Docker.
+**可以！** Confers 在容器化环境中完美工作。它可以从环境变量加载配置，这是 Docker 的标准方式。
 
-**Sample Dockerfile (Multi-stage):**
+**多阶段 Dockerfile 示例：**
 
 ```dockerfile
 FROM rust:1.75 as builder
@@ -327,7 +332,7 @@ COPY --from=builder /app/target/release/my_app /usr/local/bin/
 CMD ["my_app"]
 ```
 
-**Environment Variables in Docker Compose:**
+**Docker Compose 中的环境变量：**
 
 ```yaml
 services:
@@ -342,26 +347,26 @@ services:
 
 ---
 
-## Usage & Features
+## 使用与功能
 
 <div align="center">
 
-### 💡 Working with the API
+### 💡 使用 API
 
 </div>
 
 <details>
-<summary><b>❓ How do I get started with basic usage?</b></summary>
+<summary><b>❓ 如何开始基本使用？</b></summary>
 
 <br>
 
-**5-Minute Quick Start:**
+**5 分钟快速入门：**
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
-// 1. Define your configuration structure
+// 1. 定义配置结构
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "APP_")]
 struct AppConfig {
@@ -371,47 +376,50 @@ struct AppConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    // 2. Load configuration from default sources
-    // (config.toml, .env, environment variables)
+    // 2. 从默认来源加载配置
+    // (config.toml, .env, 环境变量)
     let config = AppConfig::load()?;
     
-    println!("Host: {}, Port: {}", config.host, config.port);
+    println!("主机: {}, 端口: {}", config.host, config.port);
     Ok(())
 }
 ```
 
-**Next Steps:**
-- 📖 [User Guide](USER_GUIDE.md)
-- 💻 [More Examples](../examples/)
+**下一步：**
+
+- 📖 [用户指南](USER_GUIDE.md)
+- 💻 [更多示例](../examples/)
 
 </details>
 
 <details>
-<summary><b>❓ What formats and sources are supported?</b></summary>
+<summary><b>❓ 支持哪些格式和来源？</b></summary>
 
 <br>
 
-**Supported Formats:**
+**支持的格式：**
+
 - ✅ TOML
 - ✅ JSON
 - ✅ YAML
 - ✅ INI
 
-**Supported Sources:**
-- ✅ **Files**: Automatically detects `config.{toml,json,yaml,ini}`
-- ✅ **Environment Variables**: With customizable prefix
-- ✅ **CLI Arguments**: Integrated with `clap`
-- ✅ **Remote**: Etcd, Consul, HTTP (via `remote` feature)
-- ✅ **Default Values**: Specified in the struct definition
+**支持的来源：**
+
+- ✅ **文件**：自动检测 `config.{toml,json,yaml,ini}`
+- ✅ **环境变量**：支持自定义前缀
+- ✅ **CLI 参数**：与 `clap` 集成
+- ✅ **远程**：Etcd、Consul、HTTP（通过 `remote` 功能）
+- ✅ **默认值**：在结构体定义中指定
 
 </details>
 
 <details>
-<summary><b>❓ Can I validate my configuration?</b></summary>
+<summary><b>❓ 可以验证配置吗？</b></summary>
 
 <br>
 
-**Yes!** Confers integrates with the `validator` crate.
+**可以！** Confers 与 `validator` crate 集成。
 
 ```rust
 use confers::Config;
@@ -427,19 +435,20 @@ struct AppConfig {
 }
 ```
 
-**Benefits:**
-- 🛡️ Catch configuration errors at startup
-- 🎯 Precise error messages
-- ✅ Support for nested validation
+**好处：**
+
+- 🛡️ 在启动时捕获配置错误
+- 🎯 精确的错误消息
+- ✅ 支持嵌套验证
 
 </details>
 
 <details>
-<summary><b>❓ How do I handle errors properly?</b></summary>
+<summary><b>❓ 如何正确处理错误？</b></summary>
 
 <br>
 
-**Recommended Pattern:**
+**推荐模式：**
 
 ```rust
 use confers::ConfigError;
@@ -448,12 +457,12 @@ fn main() {
     if let Err(e) = run() {
         match e {
             ConfigError::FileNotFound { path } => {
-                eprintln!("Config file not found: {:?}", path);
+                eprintln!("未找到配置文件: {:?}", path);
             }
             ConfigError::ValidationError(msg) => {
-                eprintln!("Validation failed: {}", msg);
+                eprintln!("验证失败: {}", msg);
             }
-            _ => eprintln!("Error loading config: {}", e),
+            _ => eprintln!("加载配置时出错: {}", e),
         }
     }
 }
@@ -462,11 +471,11 @@ fn main() {
 </details>
 
 <details>
-<summary><b>❓ Is there async/await support?</b></summary>
+<summary><b>❓ 支持异步/await 吗？</b></summary>
 
 <br>
 
-**Yes!** Confers supports async loading via `ConfigLoader`, especially useful for remote configuration sources.
+**支持！** Confers 通过 `ConfigLoader` 支持异步加载，这对远程配置源特别有用。
 
 ```rust
 #[tokio::main]
@@ -483,47 +492,47 @@ async fn main() -> anyhow::Result<()> {
 
 ---
 
-## Performance
+## 性能
 
 <div align="center">
 
-### ⚡ Speed and Optimization
+### ⚡ 速度和优化
 
 </div>
 
 <details>
-<summary><b>❓ How fast is it?</b></summary>
+<summary><b>❓ 有多快？</b></summary>
 
 <br>
 
-Confers is designed to be highly efficient, with minimal overhead during application startup.
+Confers 设计高效，在应用程序启动时开销极小。
 
-**Benchmark Results (Loading 100+ keys):**
+**基准测试结果（加载 100+ 个键）：**
 
 <table>
 <tr>
-<th>Source</th>
-<th>Format</th>
-<th>Latency (avg)</th>
+<th>来源</th>
+<th>格式</th>
+<th>延迟（平均）</th>
 </tr>
 <tr>
-<td>Local File</td>
+<td>本地文件</td>
 <td>TOML</td>
-<td>~0.5 ms</td>
+<td>~0.5 毫秒</td>
 </tr>
 <tr>
-<td>Environment Variables</td>
+<td>环境变量</td>
 <td>-</td>
-<td>~0.1 ms</td>
+<td>~0.1 毫秒</td>
 </tr>
 <tr>
-<td>Remote (Etcd)</td>
+<td>远程（Etcd）</td>
 <td>JSON</td>
-<td>~5-20 ms</td>
+<td>~5-20 毫秒</td>
 </tr>
 </table>
 
-**Run benchmarks yourself:**
+**自行运行基准测试：**
 
 ```bash
 cargo bench
@@ -532,129 +541,134 @@ cargo bench
 </details>
 
 <details>
-<summary><b>❓ How can I improve performance?</b></summary>
+<summary><b>❓ 如何提高性能？</b></summary>
 
 <br>
 
-**Optimization Tips:**
+**优化技巧：**
 
-1. **Enable Release Mode:**
+1. **启用发布模式：**
    ```bash
    cargo build --release
    ```
 
-2. **Pre-allocate with `parallel` feature:**
-   If you have very large configuration files, enable the `parallel` feature to speed up validation.
+2. **使用 `parallel` 特性预分配：**
+   如果配置文件非常大，启用 `parallel` 功能以加快验证速度。
 
-3. **Use the `prelude` for macros:**
-   Ensure you're using the recommended patterns in `src/lib.rs` for the fastest compilation times.
+3. **使用 `prelude` 以获得宏的最佳编译时间：**
+   确保在 `src/lib.rs` 中使用推荐的模式以获得最快的编译时间。
 
 </details>
 
 <details>
-<summary><b>❓ What's the memory usage like?</b></summary>
+<summary><b>❓ 内存使用情况如何？</b></summary>
 
 <br>
 
-**Typical Memory Usage:**
+**典型内存使用：**
 
-Confers uses minimal memory, typically **less than 1MB** for standard application configurations. It uses `serde` for zero-copy deserialization where possible.
+Confers 使用极少的内存，标准应用程序配置通常 **小于 1MB**。它在可能的情况下使用 `serde` 进行零拷贝反序列化。
 
-**Memory Safety:**
-- ✅ No memory leaks (verified with continuous testing)
-- ✅ Sensitive data can be zeroized after use
-- ✅ Leverages Rust's ownership model for safety
+**内存安全：**
+
+- ✅ 无内存泄漏（通过持续测试验证）
+- ✅ 敏感数据使用后可清零
+- ✅ 利用 Rust 的所有权模型保证安全
 
 </details>
 
 ---
 
-## Security
+## 安全
 
 <div align="center">
 
-### 🔒 Security Features
+### 🔒 安全功能
 
 </div>
 
 <details>
-<summary><b>❓ Is this secure?</b></summary>
+<summary><b>❓ 这是安全的吗？</b></summary>
 
 <br>
 
-**Yes!** Security is a core focus of Confers.
+**是的！** 安全是 Confers 的核心关注点。
 
-**Security Features:**
+**安全功能：**
 
 <table>
 <tr>
 <td width="50%">
 
-**Implementation**
-- ✅ Memory-safe (Rust)
-- ✅ Sensitive field masking
-- ✅ Constant-time encryption
-- ✅ Secure path validation
+**实现**
+
+- ✅ 内存安全（Rust）
+- ✅ 敏感字段屏蔽
+- ✅ 恒定时间加密
+- ✅ 安全路径验证
 
 </td>
 <td width="50%">
 
-**Protections**
-- ✅ Buffer overflow protection
-- ✅ Side-channel resistance
-- ✅ Memory wiping (zeroize)
-- ✅ Encryption at rest (v0.4.0+)
+**保护**
+
+- ✅ 缓冲区溢出保护
+- ✅ 抗侧信道攻击
+- ✅ 内存擦除（zeroize）
+- ✅ 静态加密（v0.4.0+）
 
 </td>
 </tr>
 </table>
 
-**Compliance:**
-- 🏅 Follows industry best practices for configuration management
-- 🏅 Support for Chinese standards (SM4-GCM via encryption modules)
+**合规性：**
 
-**More details:** [Security Guide](SECURITY.md)
+- 🏅 遵循配置管理行业最佳实践
+- 🏅 支持中国标准（通过加密模块支持 SM4-GCM）
 
-</details>
-
-<details>
-<summary><b>❓ How do I report security vulnerabilities?</b></summary>
-
-<br>
-
-**Please report security issues responsibly:**
-
-1. **DO NOT** create public GitHub issues
-2. **Email:** security@confers.io
-3. **Include:**
-   - Description of the vulnerability
-   - Steps to reproduce
-   - Potential impact
-
-**Response Timeline:**
-- 📧 Initial response: 24 hours
-- 🔍 Assessment: 72 hours
-- 📢 Public disclosure: After fix is released
+**更多详情：** [安全指南](SECURITY.md)
 
 </details>
 
 <details>
-<summary><b>❓ What about sensitive data?</b></summary>
+<summary><b>❓ 如何报告安全漏洞？</b></summary>
 
 <br>
 
-Confers provides several ways to handle sensitive data:
+**请负责任地报告安全问题：**
 
-1. **Masking in Logs**: Fields can be marked for masking so they don't appear in audit logs.
-2. **Encryption**: Built-in support for AES-256-GCM encryption of configuration values.
-3. **Environment Variables**: Recommended for secrets in production.
+1. **请勿** 创建公开的 GitHub issue
+2. **邮件：** security@confers.io
+3. **包括：**
+    - 漏洞描述
+    - 重现步骤
+    - 潜在影响
 
-**Best Practices:**
+**响应时间表：**
+
+- 📧 初始响应：24 小时
+- 🔍 评估：72 小时
+- 📢 公开披露：修复发布后
+
+</details>
+
+<details>
+<summary><b>❓ 敏感数据怎么办？</b></summary>
+
+<br>
+
+Confers 提供了几种处理敏感数据的方法：
+
+1. **日志中的屏蔽**：可以标记字段以便在审计日志中屏蔽。
+2. **加密**：内置支持配置值的 AES-256-GCM 加密。
+3. **环境变量**：推荐在生产环境中用于密钥。
+
+**最佳实践：**
 
 ```rust
 #[derive(Config, Serialize, Deserialize)]
 struct Secrets {
-    #[config(sensitive = true)] // Marks value in logs as masked
+    #[config(sensitive = true)] // 在日志中将值标记为已屏蔽
     api_key: String,
 }
 ```
@@ -663,174 +677,180 @@ struct Secrets {
 
 ---
 
-## Troubleshooting
+## 故障排除
 
 <div align="center">
 
-### 🔧 Common Issues
+### 🔧 常见问题
 
 </div>
 
 <details>
-<summary><b>❓ I'm getting "FileNotFound" error</b></summary>
+<summary><b>❓ 我遇到 "FileNotFound" 错误</b></summary>
 
 <br>
 
-**Problem:**
+**问题：**
+
 ```
 Error: 配置文件未找到: config.toml
 ```
 
-**Cause:** Confers could not find the configuration file in the expected locations.
+**原因：** Confers 在预期位置找不到配置文件。
 
-**Solution:**
-1. Ensure the file exists in the root directory or `config/` directory.
-2. Check the file name (supported: `config.toml`, `config.json`, `config.yaml`, `config.ini`).
-3. If using a custom path, ensure it's correct.
+**解决方案：**
+
+1. 确保文件位于根目录或 `config/` 目录中。
+2. 检查文件名（支持：`config.toml`、`config.json`、`config.yaml`、`config.ini`）。
+3. 如果使用自定义路径，请确保路径正确。
 
 </details>
 
 <details>
-<summary><b>❓ I'm getting "ValidationError"</b></summary>
+<summary><b>❓ 我遇到 "ValidationError"</b></summary>
 
 <br>
 
-**Problem:**
+**问题：**
+
 ```
 Error: 验证失败: ...
 ```
 
-**Cause:** The loaded configuration does not satisfy the validation rules defined in your struct.
+**原因：** 加载的配置不满足结构体中定义的验证规则。
 
-**Solution:**
-1. Check the error message for which field failed and why.
-2. Ensure your configuration file or environment variables match the expected format and constraints.
+**解决方案：**
+
+1. 查看错误消息，了解哪个字段失败以及失败原因。
+2. 确保配置文件或环境变量符合预期格式和约束。
 
 </details>
 
 <details>
-<summary><b>❓ How do I debug configuration loading?</b></summary>
+<summary><b>❓ 如何调试配置加载？</b></summary>
 
 <br>
 
-**Solution:**
-Enable audit logging to see exactly where each value is coming from.
+**解决方案：**
+启用审计日志以查看每个值的具体来源。
 
 ```rust
 fn main() {
     tracing_subscriber::fmt::init();
-    // Confers uses tracing to log the loading process
+    // Confers 使用 tracing 记录加载过程
     let config = AppConfig::load().unwrap();
 }
 ```
 
-Set `RUST_LOG=confers=debug` to see detailed logs.
+设置 `RUST_LOG=confers=debug` 以查看详细日志。
 
 </details>
 
-**More issues?** Check [Troubleshooting Guide](TROUBLESHOOTING.md)
+**更多问题？** 查看 [故障排除指南](TROUBLESHOOTING.md)
 
 ---
 
-## Contributing
+## 贡献
 
 <div align="center">
 
-### 🤝 Join the Community
+### 🤝 加入社区
 
 </div>
 
 <details>
-<summary><b>❓ How can I contribute?</b></summary>
+<summary><b>❓ 如何贡献？</b></summary>
 
 <br>
 
-**Ways to Contribute:**
+**贡献方式：**
 
 <table>
 <tr>
 <td width="50%">
 
-**Code Contributions**
-- 🐛 Fix bugs
-- ✨ Add features
-- 📝 Improve documentation
-- ✅ Write tests
+**代码贡献**
+
+- 🐛 修复 bug
+- ✨ 添加功能
+- 📝 改进文档
+- ✅ 编写测试
 
 </td>
 <td width="50%">
 
-**Non-Code Contributions**
-- 📖 Write tutorials
-- 🎨 Design assets
-- 🌍 Translate docs
-- 💬 Answer questions
+**非代码贡献**
+
+- 📖 编写教程
+- 🎨 设计资源
+- 🌍 翻译文档
+- 💬 回答问题
 
 </td>
 </tr>
 </table>
 
-**Getting Started:**
+**入门指南：**
 
-1. 🍴 Fork the repository
-2. 🌱 Create a branch
-3. ✏️ Make changes
-4. ✅ Add tests
-5. 📤 Submit PR
+1. 🍴 Fork 仓库
+2. 🌱 创建分支
+3. ✏️ 进行更改
+4. ✅ 添加测试
+5. 📤 提交 PR
 
-**Guidelines:** [CONTRIBUTING.md](../CONTRIBUTING.md)
+**指南：** [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 </details>
 
 <details>
-<summary><b>❓ I found a bug, what should I do?</b></summary>
+<summary><b>❓ 发现 bug 应该怎么办？</b></summary>
 
 <br>
 
-**Before Reporting:**
+**报告前：**
 
-1. ✅ Check [existing issues](../../issues)
-2. ✅ Try the latest version
-3. ✅ Check [troubleshooting guide](TROUBLESHOOTING.md)
+1. ✅ 查看 [现有 issue](../../issues)
+2. ✅ 尝试最新版本
+3. ✅ 查看 [故障排除指南](TROUBLESHOOTING.md)
 
-**Creating a Good Bug Report:**
+**创建良好的 Bug 报告：**
 
 ```markdown
-### Description
-Clear description of the bug
+### 描述
+清晰的 bug 描述
 
-### Steps to Reproduce
-1. Step one
-2. Step two
-3. See error
+### 重现步骤
+1. 第一步
+2. 第二步
+3. 查看错误
 
-### Expected Behavior
-What should happen
+### 预期行为
+应该发生什么
 
-### Actual Behavior
-What actually happens
+### 实际行为
+实际发生了什么
 
-### Environment
-- OS: Ubuntu 22.04
-- Rust version: 1.75.0
-- Project version: 1.0.0
+### 环境
+- 操作系统: Ubuntu 22.04
+- Rust 版本: 1.75.0
+- 项目版本: 1.0.0
 
-### Additional Context
-Any other relevant information
+### 其他上下文
+任何其他相关信息
 ```
 
-**Submit:** [Create Issue](../../issues/new)
+**提交：** [创建 Issue](../../issues/new)
 
 </details>
 
 <details>
-<summary><b>❓ Where can I get help?</b></summary>
+<summary><b>❓ 在哪里可以获得帮助？</b></summary>
 
 <br>
 
 <div align="center">
 
-### 💬 Support Channels
+### 💬 支持渠道
 
 </div>
 
@@ -842,7 +862,7 @@ Any other relevant information
 
 [GitHub Issues](../../issues)
 
-Bug reports & features
+Bug 报告和功能请求
 
 </td>
 <td width="33%" align="center">
@@ -851,98 +871,103 @@ Bug reports & features
 
 [GitHub Discussions](../../discussions)
 
-Q&A and ideas
+问答和想法
 
 </td>
 <td width="33%" align="center">
 
 **💡 Discord**
 
-[Join Server](https://discord.gg/project)
+[加入服务器](https://discord.gg/project)
 
-Live chat
+实时聊天
 
 </td>
 </tr>
 </table>
 
-**Response Times:**
-- 🐛 Critical bugs: 24 hours
-- 🔧 Feature requests: 1 week
-- 💬 Questions: 2-3 days
+**响应时间：**
+
+- 🐛 关键 bug：24 小时
+- 🔧 功能请求：1 周
+- 💬 问题：2-3 天
 
 </details>
 
 ---
 
-## Licensing
+## 许可
 
 <div align="center">
 
-### 📄 License Information
+### 📄 许可信息
 
 </div>
 
 <details>
-<summary><b>❓ What license is this under?</b></summary>
+<summary><b>❓这是什么许可证？</b></summary>
 
 <br>
 
-**Dual License:**
+**双重许可：**
 
 <table>
 <tr>
 <td width="50%" align="center">
 
-**MIT License**
+**MIT 许可证**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE-MIT)
 
-**Permissions:**
-- ✅ Commercial use
-- ✅ Modification
-- ✅ Distribution
-- ✅ Private use
+**权限：**
+
+- ✅ 商业使用
+- ✅ 修改
+- ✅ 分发
+- ✅ 私人使用
 
 </td>
 <td width="50%" align="center">
 
-**Apache License 2.0**
+**Apache 许可证 2.0**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../LICENSE-APACHE)
 
-**Permissions:**
-- ✅ Commercial use
-- ✅ Modification
-- ✅ Distribution
-- ✅ Patent grant
+**权限：**
+
+- ✅ 商业使用
+- ✅ 修改
+- ✅ 分发
+- ✅ 专利授权
 
 </td>
 </tr>
 </table>
 
-**You can choose either license for your use.**
+**您可以选择任一许可证使用。**
 
 </details>
 
 <details>
-<summary><b>❓ Can I use this in commercial projects?</b></summary>
+<summary><b>❓ 可以在商业项目中使用吗？</b></summary>
 
 <br>
 
-**Yes!** Both MIT and Apache 2.0 licenses allow commercial use.
+**可以！** MIT 和 Apache 2.0 许可证都允许商业使用。
 
-**What you need to do:**
-1. ✅ Include the license text
-2. ✅ Include copyright notice
-3. ✅ State any modifications
+**您需要做的：**
 
-**What you DON'T need to do:**
-- ❌ Share your source code
-- ❌ Open source your project
-- ❌ Pay royalties
+1. ✅ 包含许可证文本
+2. ✅ 包含版权声明
+3. ✅ 说明任何修改
 
-**Questions?** Contact: legal@example.com
+**您不需要做的：**
+
+- ❌ 分享您的源代码
+- ❌ 开源您的项目
+- ❌ 支付版税
+
+**问题？** 联系：legal@example.com
 
 </details>
 
@@ -950,26 +975,26 @@ Live chat
 
 <div align="center">
 
-### 🎯 Still Have Questions?
+### 🎯 仍然有问题？
 
 <table>
 <tr>
 <td width="33%" align="center">
 <a href="../../issues">
 <img src="https://img.icons8.com/fluency/96/000000/bug.png" width="48"><br>
-<b>Open an Issue</b>
+<b>创建 Issue</b>
 </a>
 </td>
 <td width="33%" align="center">
 <a href="../../discussions">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48"><br>
-<b>Start a Discussion</b>
+<b>开始讨论</b>
 </a>
 </td>
 <td width="33%" align="center">
 <a href="mailto:support@example.com">
 <img src="https://img.icons8.com/fluency/96/000000/email.png" width="48"><br>
-<b>Email Us</b>
+<b>发送邮件</b>
 </a>
 </td>
 </tr>
@@ -977,10 +1002,8 @@ Live chat
 
 ---
 
-**[📖 User Guide](USER_GUIDE.md)** • **[🔧 API Docs](https://docs.rs/confers)** • **[🏠 Home](../README.md)**
+**[📖 用户指南](USER_GUIDE.md)** • **[🔧 API 文档](https://docs.rs/confers)** • **[🏠 首页](../README.md)**
 
-Made with ❤️ by the Documentation Team
+由文档团队用 ❤️ 制作
 
-[⬆ Back to Top](#-frequently-asked-questions-faq)
-
-</div>
+[⬆ 返回顶部](#-常见问题解答-faq)
