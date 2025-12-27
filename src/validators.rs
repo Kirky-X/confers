@@ -3,6 +3,21 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+use std::collections::HashMap;
+use std::sync::RwLock;
+
+type CustomValidatorFn = Box<dyn Fn(&str) -> bool + Send + Sync>;
+
+lazy_static::lazy_static! {
+    static ref CUSTOM_VALIDATORS: RwLock<HashMap<String, CustomValidatorFn>> =
+        RwLock::new(HashMap::new());
+}
+
+pub trait CustomValidator: Send + Sync + 'static {
+    fn name(&self) -> &'static str;
+    fn validate(&self, value: &str) -> bool;
+}
+
 pub fn is_email(value: &str) -> bool {
     if value.is_empty() {
         return false;
@@ -137,6 +152,33 @@ pub fn is_url(value: &str) -> bool {
     }
 
     true
+}
+
+pub fn register_custom_validator(
+    name: &str,
+    validator: impl Fn(&str) -> bool + Send + Sync + 'static,
+) {
+    let mut validators = CUSTOM_VALIDATORS.write().unwrap();
+    validators.insert(name.to_string(), Box::new(validator));
+}
+
+pub fn unregister_custom_validator(name: &str) {
+    let mut validators = CUSTOM_VALIDATORS.write().unwrap();
+    validators.remove(name);
+}
+
+pub fn validate_with_custom(name: &str, value: &str) -> bool {
+    let validators = CUSTOM_VALIDATORS.read().unwrap();
+    if let Some(validator) = validators.get(name) {
+        validator(value)
+    } else {
+        false
+    }
+}
+
+pub fn list_custom_validators() -> Vec<String> {
+    let validators = CUSTOM_VALIDATORS.read().unwrap();
+    validators.keys().cloned().collect()
 }
 
 #[cfg(test)]

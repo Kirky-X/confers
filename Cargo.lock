@@ -567,6 +567,7 @@ dependencies = [
  "hmac",
  "humantime",
  "jsonschema",
+ "lazy_static",
  "mockall",
  "notify",
  "notify-debouncer-full",

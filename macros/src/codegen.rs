@@ -1270,6 +1270,34 @@ pub fn generate_impl(
                         }
                     });
                 }
+
+                if validate_str == "email" {
+                    validation_fields.push(quote! {
+                        if !confers::validators::is_email(&self.#field_ident) {
+                            let mut error = validator::ValidationError::new("email");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                "must be a valid email address".to_string()
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &self.#field_ident);
+                            errors.add(#field_name_str, error);
+                        }
+                    });
+                }
+
+                if let Some(validator_name) = validate_str.strip_prefix("custom:") {
+                    let validator_name_lit = syn::LitStr::new(validator_name, proc_macro2::Span::call_site());
+                    validation_fields.push(quote! {
+                        if !confers::validators::validate_with_custom(#validator_name_lit, &self.#field_ident) {
+                            let mut error = validator::ValidationError::new("custom");
+                            error.message = Some(std::borrow::Cow::Owned(
+                                format!("failed custom validation: {}", #validator_name_lit)
+                            ));
+                            error.add_param(std::borrow::Cow::Borrowed("validator"), &#validator_name_lit);
+                            error.add_param(std::borrow::Cow::Borrowed("value"), &self.#field_ident);
+                            errors.add(#field_name_str, error);
+                        }
+                    });
+                }
             }
 
             if field.custom_validate.is_some() {

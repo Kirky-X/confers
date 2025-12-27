@@ -28,6 +28,11 @@ pub use validator::{
     ValidationErrors,
 };
 
+pub use validators::{
+    register_custom_validator, unregister_custom_validator, validate_with_custom,
+    list_custom_validators, CustomValidator,
+};
+
 pub use security::{EnvSecurityError, EnvSecurityValidator, EnvironmentValidationConfig};
 
 // 重新导出宏需要的依赖项
