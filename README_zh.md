@@ -253,14 +253,7 @@ debug = true
 </a><br>
 完整 API 文档
 </td>
-<td align="center" width="25%">
-<a href="docs/CONTRIBUTING.md">
-<img src="https://img.icons8.com/fluency/96/000000/blueprint.png" width="64" height="64"><br>
-<b>架构设计</b>
-</a><br>
-系统设计文档
-</td>
-<td align="center" width="25%">
+<td align="center" width="33%">
 <a href="examples/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
 <b>示例代码</b>

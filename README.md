@@ -253,14 +253,7 @@ Complete usage guide
 </a><br>
 Complete API documentation
 </td>
-<td align="center" width="25%">
-<a href="docs/CONTRIBUTING.md">
-<img src="https://img.icons8.com/fluency/96/000000/blueprint.png" width="64" height="64"><br>
-<b>Architecture Design</b>
-</a><br>
-System design documentation
-</td>
-<td align="center" width="25%">
+<td align="center" width="33%">
 <a href="examples/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
 <b>Example Code</b>
