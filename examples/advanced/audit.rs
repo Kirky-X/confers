@@ -35,9 +35,15 @@ impl Sanitize for AppConfig {
 impl confers::ConfigMap for AppConfig {
     fn to_map(&self) -> HashMap<String, figment::value::Value> {
         let mut map = HashMap::new();
-        map.insert("name".to_string(), figment::value::Value::from(self.name.clone()));
+        map.insert(
+            "name".to_string(),
+            figment::value::Value::from(self.name.clone()),
+        );
         map.insert("port".to_string(), figment::value::Value::from(self.port));
-        map.insert("enabled".to_string(), figment::value::Value::from(self.enabled));
+        map.insert(
+            "enabled".to_string(),
+            figment::value::Value::from(self.enabled),
+        );
         map
     }
 

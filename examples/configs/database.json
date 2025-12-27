@@ -8,5 +8,9 @@
     "connections": 20,
     "timeout": 30
   },
-  "features": ["auth", "logging", "metrics"]
+  "features": [
+    "auth",
+    "logging",
+    "metrics"
+  ]
 }
