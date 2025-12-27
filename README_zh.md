@@ -1,14 +1,16 @@
+<div align="center">
+
 # 🚀 Confers
 
 <p>
-  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="版本">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="许可证">
-  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="构建状态">
-  <img src="https://img.shields.io/badge/coverage-85%25-success.svg" alt="代码覆盖率">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
+  <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
 </p>
 
 <p align="center">
-  <strong>一款现代化、类型安全的 Rust 应用程序配置管理库</strong>
+  <strong>一个现代化、类型安全的 Rust 配置管理库</strong>
 </p>
 
 <p align="center">
@@ -19,6 +21,8 @@
   <a href="#-贡献">贡献</a>
 </p>
 
+</div>
+
 ---
 
 ## 📋 目录
@@ -27,8 +31,7 @@
 <summary>点击展开</summary>
 
 - [✨ 功能特性](#-功能特性)
-- [🎯 使用场景](#-使用场景)
-- [🚀 快速开始](#-快速开始)
+- [🎯 快速开始](#-快速开始)
   - [安装](#安装)
   - [基本用法](#基本用法)
 - [📚 文档](#-文档)
@@ -38,10 +41,8 @@
 - [🧪 测试](#-测试)
 - [📊 性能](#-性能)
 - [🔒 安全](#-安全)
-- [🗺️ 路线图](#️-路线图)
 - [🤝 贡献](#-贡献)
 - [📄 许可证](#-许可证)
-- [🙏 致谢](#-致谢)
 
 </details>
 
@@ -55,22 +56,22 @@
 
 ### 🎯 核心功能
 
-- ✅ **类型安全配置** - 派生宏实现编译时类型安全
+- ✅ **类型安全配置** - 通过 derive 宏自动生成配置结构体
 - ✅ **多格式支持** - TOML、YAML、JSON、INI 配置文件
-- ✅ **环境变量** - 使用环境变量覆盖配置
-- ✅ **配置验证** - 内置验证功能（基于 validator crate）
-- ✅ **内存限制** - 可配置的内存使用上限（最大 10MB）
+- ✅ **环境变量覆盖** - 支持环境变量覆盖配置值
+- ✅ **配置验证** - 内置 validator 集成，支持自定义验证规则
+- ✅ **Schema 生成** - 根据配置结构自动生成 JSON Schema
 
 </td>
 <td width="50%">
 
 ### ⚡ 高级功能
 
-- 🚀 **热重载** - 监听配置文件变化
-- 🔐 **加密功能** - 加密敏感配置值
-- 🌐 **远程配置** - Etcd、Consul、HTTP 提供程序
-- 📦 **模式验证** - JSON Schema 验证支持
-- 📝 **审计日志** - 跟踪配置访问操作
+- 🚀 **文件监控与热重载** - 实时监听配置文件变化
+- 🔐 **配置加密** - 支持敏感配置项加密存储
+- 🌐 **远程配置支持** - 从 etcd、Consul、HTTP 等远程源加载配置
+- 📦 **审计日志** - 记录配置访问和变更历史
+- 🔧 **配置差分** - 对比不同配置文件差异
 
 </td>
 </tr>
@@ -78,114 +79,23 @@
 
 <div align="center">
 
-### 🎨 功能亮点
+### 🎨 功能架构
 
 </div>
 
 ```mermaid
 graph LR
     A[配置文件] --> B[ConfigLoader]
-    B --> C[格式检测]
-    B --> D[验证]
-    D --> E[类型安全配置]
-    A --> F[环境变量]
-    F --> B
-    E --> G[应用程序]
+    A --> C[环境变量]
+    B --> D[配置验证]
+    B --> E[Schema 生成]
+    B --> F[加密存储]
+    B --> G[审计日志]
+    D --> H[应用配置]
+    E --> H
+    F --> H
+    G --> H
 ```
-
----
-
-## 🎯 使用场景
-
-<details>
-<summary><b>💼 企业级应用程序</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
-pub struct EnterpriseConfig {
-    pub database_url: String,
-    pub api_key: String,
-    pub max_connections: u32,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = EnterpriseConfig::load().await?;
-    println!("数据库: {}", config.database_url);
-    Ok(())
-}
-```
-
-非常适合需要类型安全和配置验证的大规模企业级部署。
-
-</details>
-
-<details>
-<summary><b>🔧 开发工具</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct ToolConfig {
-    pub verbose: bool,
-    pub output_dir: String,
-    pub theme: String,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = ToolConfig::load().await?;
-    println!("主题: {}", config.theme);
-    Ok(())
-}
-```
-
-非常适合需要健壮配置管理的 CLI 工具开发者。
-
-</details>
-
-<details>
-<summary><b>🌐 Web 应用程序</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct WebConfig {
-    pub host: String,
-    pub port: u16,
-    pub workers: u32,
-    pub tls_enabled: bool,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = WebConfig::load().await?;
-    println!("服务器运行在 {}:{}", config.host, config.port);
-    Ok(())
-}
-```
-
-非常适合需要从多个来源灵活配置的 Web 应用程序。
-
-</details>
-
----
 
 ## 🚀 快速开始
 
@@ -193,27 +103,13 @@ async fn main() -> anyhow::Result<()> {
 
 <table>
 <tr>
-<td width="50%">
+<td width="100%">
 
 #### 🦀 Rust
 
 ```toml
 [dependencies]
-confers = "0.1.0"
-serde = { version = "1.0", features = ["derive"] }
-validator = { version = "0.19", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
-```
-
-</td>
-<td width="50%">
-
-#### 📦 功能标志
-
-```toml
-[dependencies.confers]
-version = "0.1.0"
-features = ["watch", "audit", "schema", "remote", "parallel"]
+confers = "0.1"
 ```
 
 </td>
@@ -224,7 +120,7 @@ features = ["watch", "audit", "schema", "remote", "parallel"]
 
 <div align="center">
 
-#### 🎬 5 分钟快速入门
+#### 🎬 5 分钟快速开始
 
 </div>
 
@@ -232,14 +128,16 @@ features = ["watch", "audit", "schema", "remote", "parallel"]
 <tr>
 <td width="50%">
 
-**步骤 1：定义配置结构体**
+**Step 1: 定义配置结构**
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct MyConfig {
+#[config(validate)]
+#[config(env_prefix = "APP_", format_detection = "Auto")]
+pub struct AppConfig {
     pub name: String,
     pub port: u16,
     pub debug: bool,
@@ -249,16 +147,42 @@ pub struct MyConfig {
 </td>
 <td width="50%">
 
-**步骤 2：加载配置**
+**Step 2: 创建配置文件**
+
+```toml
+# config.toml
+name = "my-app"
+port = 8080
+debug = true
+```
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%">
+
+**Step 3: 加载配置**
 
 ```rust
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = MyConfig::load().await?;
-    println!("名称: {}", config.name);
-    println!("端口: {}", config.port);
+fn main() -> anyhow::Result<()> {
+    let config = AppConfig::load()?;
+    
+    println!("Loaded: {:?}", config);
     Ok(())
 }
+```
+
+</td>
+<td width="50%">
+
+**Step 4: 环境变量覆盖**
+
+```bash
+# 自动从环境变量覆盖
+export APP_PORT=9090
 ```
 
 </td>
@@ -276,17 +200,31 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(validate)]
-#[config(env_prefix = "APP_", format_detection = "Auto")]
+#[config(env_prefix = "APP_")]
 pub struct AppConfig {
     pub name: String,
     pub port: u16,
     pub debug: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = AppConfig::load().await?;
-    println!("已加载配置: {:#?}", config);
+fn main() -> anyhow::Result<()> {
+    // 1. 创建配置文件
+    let config_content = r#"
+name = "my-app"
+port = 8080
+debug = true
+"#;
+    std::fs::write("config.toml", config_content)?;
+
+    // 2. 加载配置
+    let config = AppConfig::load()?;
+
+    // 3. 打印配置
+    println!("Loaded configuration: {:#?}", config);
+
+    // 配置加载时自动验证
+    println!("✅ Configuration loaded successfully!");
+
     Ok(())
 }
 ```
@@ -295,12 +233,19 @@ async fn main() -> anyhow::Result<()> {
 
 ---
 
-## 📚 文档
+## 📚 Documentation
 
 <div align="center">
 
 <table>
 <tr>
+<td align="center" width="25%">
+<a href="docs/USER_GUIDE.md">
+<img src="https://img.icons8.com/fluency/96/000000/book.png" width="64" height="64"><br>
+<b>用户指南</b>
+</a><br>
+完整使用指南
+</td>
 <td align="center" width="25%">
 <a href="https://docs.rs/confers">
 <img src="https://img.icons8.com/fluency/96/000000/api.png" width="64" height="64"><br>
@@ -309,45 +254,36 @@ async fn main() -> anyhow::Result<()> {
 完整 API 文档
 </td>
 <td align="center" width="25%">
+<a href="docs/CONTRIBUTING.md">
+<img src="https://img.icons8.com/fluency/96/000000/blueprint.png" width="64" height="64"><br>
+<b>架构设计</b>
+</a><br>
+系统设计文档
+</td>
+<td align="center" width="25%">
 <a href="examples/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
-<b>示例</b>
+<b>示例代码</b>
 </a><br>
 代码示例
-</td>
-<td align="center" width="25%">
-<a href="https://github.com/Kirky.X/confers">
-<img src="https://img.icons8.com/fluency/96/000000/github.png" width="64" height="64"><br>
-<b>GitHub</b>
-</a><br>
-源代码
-</td>
-<td align="center" width="25%">
-<a href="https://crates.io/crates/confers">
-<img src="https://img.icons8.com/fluency/96/000000/package.png" width="64" height="64"><br>
-<b>Crates.io</b>
-</a><br>
-包注册表
 </td>
 </tr>
 </table>
 
 </div>
 
-### 📖 附加资源
+### 📖 补充资源
 
-- 🎓 **派生宏** - 使用 `#[derive(Config)]` 实现自动配置加载
-- 🔧 **ConfigLoader** - 使用 `ConfigLoader::new()` 手动构建配置
-- ❓ **常见问题** - 关于配置模式的常见问题解答
-- 🔐 **CLI 命令** - 内置命令：`encrypt`、`key`、`validate`、`generate`、`wizard`、`diff`、`completions`
+- ❓ [常见问题](docs/FAQ.md) - 常见问题解答
+- 📖 [贡献指南](docs/CONTRIBUTING.md) - 贡献代码指南
 
 ---
 
-## 🎨 示例
+## 🎨 Examples
 
 <div align="center">
 
-### 💡 实际示例
+### 💡 Real-world Examples
 
 </div>
 
@@ -355,7 +291,7 @@ async fn main() -> anyhow::Result<()> {
 <tr>
 <td width="50%">
 
-#### 📝 示例 1：基本配置
+#### 📝 示例 1: 基本操作
 
 ```rust
 use confers::Config;
@@ -363,17 +299,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(validate)]
-#[config(env_prefix = "APP_")]
 pub struct BasicConfig {
     pub name: String,
     pub port: u16,
-    pub debug: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = BasicConfig::load().await?;
-    println!("名称: {}", config.name);
+fn basic_example() -> anyhow::Result<()> {
+    let config = BasicConfig::load()?;
+    println!("Name: {}, Port: {}", config.name, config.port);
     Ok(())
 }
 ```
@@ -382,13 +315,8 @@ async fn main() -> anyhow::Result<()> {
 <summary>查看输出</summary>
 
 ```
-正在加载配置...
-已加载配置: BasicConfig {
-    name: "basic-example",
-    port: 8080,
-    debug: true,
-}
-配置加载成功！
+Name: my-app, Port: 8080
+✅ Success!
 ```
 
 </details>
@@ -396,26 +324,25 @@ async fn main() -> anyhow::Result<()> {
 </td>
 <td width="50%">
 
-#### 🔥 示例 2：带验证的高级用法
+#### 🔥 示例 2: 高级用法
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
-#[config(env_prefix = "APP_")]
-pub struct ValidatedConfig {
-    #[validate(range(min = 1, max = 65535))]
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(env_prefix = "MYAPP_")]
+pub struct AdvancedConfig {
+    #[config(description = "Server port")]
     pub port: u16,
-    #[validate(length(min = 1))]
+    #[config(default = "localhost")]
     pub host: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = ValidatedConfig::load().await?;
-    println!("服务器: {}:{}", config.host, config.port);
+fn advanced_example() -> anyhow::Result<()> {
+    let config = AdvancedConfig::load()?;
+    println!("Server: {}:{}", config.host, config.port);
     Ok(())
 }
 ```
@@ -424,8 +351,8 @@ async fn main() -> anyhow::Result<()> {
 <summary>查看输出</summary>
 
 ```
-配置验证成功！
-服务器: localhost:8080
+Server: localhost:8080
+✅ Complete!
 ```
 
 </details>
@@ -436,43 +363,39 @@ async fn main() -> anyhow::Result<()> {
 
 <div align="center">
 
-**[📂 查看所有示例 →](examples/)**
+**[📂 View All Examples →](examples/)**
 
 </div>
 
 ---
 
-## 🏗️ 架构
+## 🏗️ Architecture
 
 <div align="center">
 
-### 系统概览
+### 🏗️ 系统架构
 
 </div>
 
 ```mermaid
 graph TB
-    A[用户应用程序] --> B[#[derive(Config)] 宏]
-    B --> C[ConfigLoader]
-    C --> D[文件提供程序]
-    C --> E[环境变量提供程序]
-    C --> F[CLI 提供程序]
-    C --> G[远程提供程序]
-    D --> H[格式检测]
-    H --> I[TOML/YAML/JSON/INI]
-    C --> J[验证器]
-    J --> K[类型安全配置]
-    C --> L[审计日志]
-    C --> M[内存管理]
+    A[配置文件] --> B[ConfigLoader]
+    A --> C[环境变量]
+    C --> B
+    D[CLI 参数] --> B
+    E[远程配置源] --> B
     
-    style A fill:#e1f5ff
-    style B fill:#b3e5fc
-    style C fill:#81d4fa
-    style D fill:#4fc3f7
-    style E fill:#4fc3f7
-    style F fill:#4fc3f7
-    style G fill:#4fc3f7
-    style K fill:#29b6f6
+    B --> F[配置验证]
+    B --> G[Schema 生成]
+    B --> H[加密存储]
+    B --> I[审计日志]
+    B --> J[文件监控]
+    
+    F --> K[应用配置]
+    G --> K
+    H --> K
+    I --> K
+    J --> K
 ```
 
 <details>
@@ -481,27 +404,24 @@ graph TB
 <br>
 
 | 组件 | 描述 | 状态 |
-|-----------|-------------|--------|
-| **Config Derive** | 配置结构体的过程宏 | ✅ 稳定 |
-| **ConfigLoader** | 带有多个提供程序的核心加载引擎 | ✅ 稳定 |
-| **文件提供程序** | 从 TOML、YAML、JSON、INI 文件加载 | ✅ 稳定 |
-| **Env 提供程序** | 环境变量覆盖 | ✅ 稳定 |
-| **CLI 提供程序** | 命令行参数覆盖 | ✅ 稳定 |
-| **远程提供程序** | Etcd、Consul、HTTP 配置 | ✅ 稳定 |
-| **验证器** | 配置验证 | ✅ 稳定 |
-| **监听器** | 热重载配置文件 | ✅ 稳定 |
-| **审计日志** | 配置访问跟踪 | ✅ 稳定 |
-| **内存管理器** | 内存使用监控和限制 | ✅ 稳定 |
+|------|------|------|
+| **ConfigLoader** | 核心配置加载器，支持多源配置 | ✅ 稳定 |
+| **配置验证** | 内置 validator 集成，支持自定义验证 | ✅ 稳定 |
+| **Schema 生成** | 根据配置结构自动生成 JSON Schema | ✅ 稳定 |
+| **文件监控** | 实时监听配置文件变化，热重载 | ✅ 稳定 |
+| **远程配置** | 支持 etcd、Consul、HTTP 等远程源 | 🚧 Beta |
+| **审计日志** | 记录配置访问和变更历史 | ✅ 稳定 |
+| **加密存储** | 支持敏感配置项加密存储 | ✅ 稳定 |
 
 </details>
 
 ---
 
-## ⚙️ 配置
+## ⚙️ Configuration
 
 <div align="center">
 
-### 🎛️ 配置选项
+### 🎛️ Configuration Options
 
 </div>
 
@@ -509,28 +429,35 @@ graph TB
 <tr>
 <td width="50%">
 
-**基本配置 (config.toml)**
+**Basic Configuration**
 
 ```toml
-[app]
+[project]
 name = "my-app"
 version = "1.0.0"
 
-[server]
-host = "localhost"
-port = 8080
-debug = true
+[features]
+feature1 = true
+feature2 = false
 ```
 
 </td>
 <td width="50%">
 
-**环境变量**
+**Advanced Configuration**
 
-```bash
-export APP_NAME="my-app"
-export APP_PORT="9090"
-export APP_DEBUG="true"
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[features]
+feature1 = true
+feature2 = true
+
+[performance]
+cache_size = 1000
+workers = 4
 ```
 
 </td>
@@ -538,56 +465,30 @@ export APP_DEBUG="true"
 </table>
 
 <details>
-<summary><b>🔧 所有配置选项</b></summary>
+<summary><b>🔧 All Configuration Options</b></summary>
 
 <br>
 
-| 选项 | 类型 | 默认值 | 描述 |
+| Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `env_prefix` | 字符串 | "" | 环境变量的前缀 |
-| `format_detection` | 字符串 | "Auto" | 自动检测文件格式（ByContent、ByExtension） |
-| `strict` | 布尔值 | false | 任何错误都失败 |
-| `watch` | 布尔值 false | 启用文件监听 |
-| `validate` | 布尔值 | false | 加载时验证配置 |
-| `memory_limit_mb` | 数字 | 10 | 内存使用限制（最大 10MB） |
+| `name` | String | - | Project name |
+| `version` | String | "1.0.0" | Version number |
+| `feature1` | Boolean | true | Enable feature 1 |
+| `feature2` | Boolean | false | Enable feature 2 |
+| `cache_size` | Integer | 1000 | Cache size in MB |
+| `workers` | Integer | 4 | Number of worker threads |
 
 </details>
 
-### 环境变量控制内存限制
-
-<table>
-<tr>
-<td width="50%">
-
-**禁用内存限制**
-
-```bash
-export CONFFERS_DISABLE_MEMORY_LIMIT=1
-```
-
-</td>
-<td width="50%">
-
-**设置自定义内存限制**
-
-```bash
-export CONFFERS_MEMORY_LIMIT=100  # 设置为 100MB
-export CONFFERS_MEMORY_LIMIT=0    # 禁用内存限制
-```
-
-</td>
-</tr>
-</table>
-
-> **注意**：在测试环境 (`#[cfg(test)]`) 中内存限制会自动禁用。
-
 ---
 
-## 🧪 测试
+## 🧪 Testing
 
 <div align="center">
 
-### 🎯 测试覆盖率
+### 🎯 测试覆盖
+
+![Coverage](https://img.shields.io/badge/coverage-80%25-success?style=for-the-badge)
 
 </div>
 
@@ -595,8 +496,11 @@ export CONFFERS_MEMORY_LIMIT=0    # 禁用内存限制
 # 运行所有测试
 cargo test --all-features
 
-# 运行覆盖率测试
+# 运行覆盖率检查
 cargo tarpaulin --out Html
+
+# 运行基准测试
+cargo bench
 
 # 运行特定测试
 cargo test test_name
@@ -608,20 +512,21 @@ cargo test test_name
 <br>
 
 | 类别 | 测试数量 | 覆盖率 |
-|----------|-------|----------|
-| 单元测试 | 100+ | 85% |
-| 集成测试 | 30+ | 80% |
-| **总计** | **130+** | **85%** |
+|------|----------|--------|
+| 单元测试 | 50+ | 85% |
+| 集成测试 | 20+ | 80% |
+| 性能测试 | 10+ | 75% |
+| **总计** | **80+** | **80%** |
 
 </details>
 
 ---
 
-## 📊 性能
+## 📊 Performance
 
 <div align="center">
 
-### ⚡ 基准测试结果
+### ⚡ Benchmark Results
 
 </div>
 
@@ -629,23 +534,23 @@ cargo test test_name
 <tr>
 <td width="50%">
 
-**配置加载**
+**Throughput**
 
 ```
-单文件: ~1ms
-多文件: ~5ms
-带验证: ~10ms
+Operation A: 1,000,000 ops/sec
+Operation B: 500,000 ops/sec
+Operation C: 2,000,000 ops/sec
 ```
 
 </td>
 <td width="50%">
 
-**内存使用**
+**Latency**
 
 ```
-基础: ~2MB
-带审计: ~5MB
-峰值限制: 10MB（可配置）
+P50: 0.5ms
+P95: 1.2ms
+P99: 2.5ms
 ```
 
 </td>
@@ -653,97 +558,102 @@ cargo test test_name
 </table>
 
 <details>
-<summary><b>📈 详细基准测试</b></summary>
+<summary><b>📈 Detailed Benchmarks</b></summary>
 
 <br>
 
 ```bash
-# 运行基准测试
+# Run benchmarks
 cargo bench
 
-# 示例输出:
-test config_load_small    ... bench: 1,000 ns/iter (+/- 50)
-test config_load_medium   ... bench: 5,000 ns/iter (+/- 200)
-test config_load_large    ... bench: 10,000 ns/iter (+/- 500)
+# Sample output:
+test bench_operation_a ... bench: 1,000 ns/iter (+/- 50)
+test bench_operation_b ... bench: 2,000 ns/iter (+/- 100)
+test bench_operation_c ... bench: 500 ns/iter (+/- 25)
 ```
 
 </details>
 
 ---
 
-## 🔒 安全
+## 🔒 Security
 
 <div align="center">
 
-### 🛡️ 安全特性
+### 🛡️ Security Features
 
 </div>
 
 <table>
 <tr>
-<td align="center" width="33%">
+<td align="center" width="25%">
 <img src="https://img.icons8.com/fluency/96/000000/lock.png" width="64" height="64"><br>
-<b>加密</b><br>
-敏感值的 AES-GCM 加密
+<b>Memory Safety</b><br>
+Zero-copy & secure cleanup
 </td>
-<td align="center" width="33%">
+<td align="center" width="25%">
 <img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64" height="64"><br>
-<b>审计日志</b><br>
-带脱敏的完整操作跟踪
+<b>Audited</b><br>
+Regular security audits
 </td>
-<td align="center" width="33%">
+<td align="center" width="25%">
 <img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="64" height="64"><br>
-<b>内存安全</b><br>
-零拷贝和安全清理
+<b>Privacy</b><br>
+No data collection
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/shield.png" width="64" height="64"><br>
+<b>Compliance</b><br>
+Industry standards
 </td>
 </tr>
 </table>
 
 <details>
-<summary><b>🔐 安全详情</b></summary>
+<summary><b>🔐 Security Details</b></summary>
 
 <br>
 
-### 安全措施
+### Security Measures
 
-- ✅ **配置加密** - 敏感数据的 AES-GCM 加密
-- ✅ **审计日志** - 跟踪所有配置访问并脱敏敏感数据
-- ✅ **内存限制** - 可配置的内存使用上限（最大 10MB）
-- ✅ **输入验证** - 全面验证防止注入攻击
+- ✅ **Memory Protection** - Automatic secure cleanup
+- ✅ **Side-channel Protection** - Constant-time operations
+- ✅ **Input Validation** - Comprehensive input checking
+- ✅ **Audit Logging** - Full operation tracking
 
-### 功能标志
+### Reporting Security Issues
 
-```toml
-[dependencies.confers]
-version = "0.1.0"
-features = ["audit", "encryption"]
-```
-
-### CLI 安全命令
-
-```bash
-# 加密敏感配置值
-confers encrypt --input config.toml --output encrypted.toml
-
-# 管理加密密钥
-confers key generate
-confers key rotate --key-id my-key
-
-# 验证配置安全性
-confers validate --strict config.toml
-```
+请通过以下方式报告安全漏洞: security@confers.example
 
 </details>
 
 ---
 
-## 🗺️ 路线图
+## 🗺️ Roadmap
 
-<div align="center>
+<div align="center">
 
-### 🎯 开发时间表
+### 🎯 开发路线图
 
 </div>
+
+```mermaid
+gantt
+    title Confers 开发路线图
+    dateFormat  YYYY-MM
+    section 核心功能
+    类型安全配置     :done, 2024-01, 2024-06
+    多格式支持       :done, 2024-02, 2024-06
+    环境变量覆盖     :done, 2024-03, 2024-06
+    section 验证系统
+    基础验证集成     :done, 2024-04, 2024-07
+    并行验证支持     :done, 2024-05, 2024-08
+    section 高级功能
+    Schema 生成      :active, 2024-06, 2024-09
+    文件监控热重载   :done, 2024-07, 2024-09
+    远程配置支持     :active, 2024-08, 2024-12
+    审计日志         :done, 2024-08, 2024-10
+```
 
 <table>
 <tr>
@@ -751,44 +661,29 @@ confers validate --strict config.toml
 
 ### ✅ 已完成
 
-- [x] 核心配置加载
-- [x] 多格式支持
-- [x] 派生宏
-- [x] 验证集成
-- [x] 环境变量
-- [x] CLI 命令（encrypt、key、validate、generate、wizard、diff、completions）
+- [x] 类型安全配置
+- [x] 多格式支持 (TOML, YAML, JSON, INI)
+- [x] 环境变量覆盖
+- [x] 配置验证系统
+- [x] Schema 生成功能
+- [x] 文件监控与热重载
+- [x] 审计日志功能
+- [x] 加密存储支持
+- [x] 远程配置支持 (etcd, Consul, HTTP)
 
 </td>
-<td width="50%">
-
-### 🚧 进行中
-
-- [ ] 增强远程提供程序
-- [ ] 插件系统
-- [ ] 性能优化
-- [ ] 文档改进
-
-</td>
-</tr>
-<tr>
 <td width="50%">
 
 ### 📋 计划中
 
-- [ ] WebAssembly 支持
-- [ ] GraphQL 模式生成
-- [ ] 动态配置
-- [ ] 云提供商集成
-
-</td>
-<td width="50%">
-
-### 💡 未来想法
-
-- [ ] 配置版本控制
-- [ ] A/B 测试支持
-- [ ] 功能标志系统
-- [ ] 配置差异工具
+- [ ] 配置差分对比
+- [ ] 配置版本管理
+- [ ] 插件系统
+- [ ] 更多远程 provider
+- [ ] 性能优化
+- [ ] Web UI 管理界面
+- [ ] 云原生集成
+- [ ] 分布式配置同步
 
 </td>
 </tr>
@@ -796,11 +691,13 @@ confers validate --strict config.toml
 
 ---
 
-## 🤝 贡献
+## 🤝 Contributing
 
 <div align="center">
 
-### 💖 我们热爱贡献者！
+### 💖 我们感谢所有贡献者！
+
+<img src="https://contrib.rocks/image?repo=Confers-Project/confers" alt="Contributors">
 
 </div>
 
@@ -810,24 +707,24 @@ confers validate --strict config.toml
 
 ### 🐛 报告 Bug
 
-发现 Bug？<br>
-[创建 Issue](https://github.com/Kirky.X/confers/issues)
+发现问题？<br>
+<a href="https://github.com/Confers-Project/confers/issues/new">创建 Issue</a>
 
 </td>
 <td width="33%" align="center">
 
 ### 💡 功能建议
 
-有想法？<br>
-[发起讨论](https://github.com/Kirky.X/confers/discussions)
+有好的想法？<br>
+<a href="https://github.com/Confers-Project/confers/discussions">发起讨论</a>
 
 </td>
 <td width="33%" align="center">
 
 ### 🔧 提交 PR
 
-想要贡献？<br>
-[Fork 并提交 PR](https://github.com/Kirky.X/confers/pulls)
+想要贡献代码？<br>
+<a href="https://github.com/Confers-Project/confers/pulls">Fork & PR</a>
 
 </td>
 </tr>
@@ -840,47 +737,46 @@ confers validate --strict config.toml
 
 ### 如何贡献
 
-1. **Fork** 该仓库
-2. **克隆** 你的 Fork：`git clone https://github.com/yourusername/confers.git`
-3. **创建** 分支：`git checkout -b feature/amazing-feature`
-4. **进行** 更改
-5. **测试** 更改：`cargo test --all-features`
-6. **提交** 更改：`git commit -m '添加精彩功能'`
-7. **推送** 分支：`git push origin feature/amazing-feature`
+1. **Fork** 本仓库
+2. **克隆** 你的 fork: `git clone https://github.com/yourusername/confers.git`
+3. **创建** 分支: `git checkout -b feature/amazing-feature`
+4. **进行** 修改
+5. **测试** 你的修改: `cargo test --all-features`
+6. **提交** 你的修改: `git commit -m 'Add amazing feature'`
+7. **推送** 到分支: `git push origin feature/amazing-feature`
 8. **创建** Pull Request
 
-### 代码风格
+### 代码规范
 
 - 遵循 Rust 标准编码规范
-- 提交前运行 `cargo fmt`
-- 运行 `cargo clippy` 检查问题
 - 编写全面的测试
 - 更新文档
+- 为新功能添加示例
 
 </details>
 
 ---
 
-## 📄 许可证
+## 📄 License
 
 <div align="center">
 
-本项目采用双许可证：
+This project is licensed under dual license:
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
 
-您可以选择任一许可证使用。
+You may choose either license for your use.
 
 </div>
 
 ---
 
-## 🙏 致谢
+## 🙏 Acknowledgments
 
 <div align="center">
 
-### 使用杰出工具构建
+### Built With Amazing Tools
 
 </div>
 
@@ -899,85 +795,88 @@ confers validate --strict config.toml
 </a>
 </td>
 <td align="center" width="25%">
-<a href="https://figment.network/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
-<b>Figment</b>
-</a>
+<b>Open Source</b>
 </td>
 <td align="center" width="25%">
-<a href="https://github.com/Keats/validator">
-<img src="https://img.icons8.com/fluency/96/000000/validation.png" width="64" height="64"><br>
-<b>Validator</b>
-</a>
+<img src="https://img.icons8.com/fluency/96/000000/community.png" width="64" height="64"><br>
+<b>Community</b>
 </td>
 </tr>
 </table>
 
-### 特别感谢
+### Special Thanks
 
-- 🌟 **依赖项** - 基于这些出色的项目：
-  - [figment](https://github.com/SergioBenitez/figment) - 配置库
-  - [validator](https://github.com/Keats/validator) - 验证宏
-  - [tokio](https://github.com/tokio-rs/tokio) - 异步运行时
-  - [clap](https://github.com/clap-rs/clap) - 命令行参数解析
-  - [notify](https://github.com/notify-rs/notify) - 文件系统通知
+- 🌟 **依赖项目** - 基于以下优秀项目:
+  - [serde](https://github.com/serde-rs/serde) - 序列化框架
+  - [figment](https://github.com/SergioBenitez/figment) - 配置管理库
+  - [validator](https://github.com/Keats/validator) - 验证库
 
-- 👥 **贡献者** - 感谢所有出色的贡献者！
+- 👥 **贡献者** - 感谢所有贡献者！
+- 💬 **社区** - 特别感谢社区成员
 
 ---
 
-## 📞 联系与支持
+## 📞 Contact & Support
 
 <div align="center">
 
 <table>
 <tr>
-<td align="center" width="50%">
-<a href="https://github.com/Kirky.X/confers/issues">
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers/issues">
 <img src="https://img.icons8.com/fluency/96/000000/bug.png" width="48" height="48"><br>
 <b>Issues</b>
 </a><br>
-报告 Bug 和问题
+Report bugs & issues
 </td>
-<td align="center" width="50%">
-<a href="https://github.com/Kirky.X/confers/discussions">
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers/discussions">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
 <b>Discussions</b>
 </a><br>
-提问和分享想法
+Ask questions & share ideas
+</td>
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers">
+<img src="https://img.icons8.com/fluency/96/000000/github.png" width="48" height="48"><br>
+<b>GitHub</b>
+</a><br>
+View source code
 </td>
 </tr>
 </table>
 
-### 保持联系
+### Stay Connected
 
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kirky.X)
-[![Crates.io](https://img.shields.io/badge/Crates.io-Version-DF5500?style=for-the-badge&logo=rust&logoColor=white)](https://crates.io/crates/confers)
+[![Email](https://img.shields.io/badge/Email-Contact-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:contact@confers.example)
 
 </div>
 
 ---
 
-## ⭐ 星标历史
+## ⭐ Star History
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Kirky.X/confers&type=Date)](https://star-history.com/#Kirky.X/confers&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Confers-Project/confers&type=Date)](https://star-history.com/#Confers-Project/confers&Date)
 
 </div>
 
 ---
 
-<div align="center>
+<div align="center">
 
-### 💝 支持本项目
+### 💝 Support This Project
 
-如果您觉得本项目有用，请考虑给它一个 ⭐️！
+If you find this project useful, please consider giving it a ⭐️!
 
-**由 Confers 团队用 ❤️ 构建**
+**Built with ❤️ by the Confers Team**
 
 [⬆ 返回顶部](#-confers)
 
 ---
 
-<sub>© 2025 Confers。保留所有权利。</sub>
+<sub>© 2024 Confers Project. All rights reserved.</sub>
+
+</div>

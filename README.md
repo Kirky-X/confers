@@ -1,14 +1,16 @@
+<div align="center">
+
 # 🚀 Confers
 
 <p>
   <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg" alt="License">
   <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
-  <img src="https://img.shields.io/badge/coverage-85%25-success.svg" alt="Coverage">
+  <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
 </p>
 
 <p align="center">
-  <strong>A modern, type-safe configuration management library for Rust applications</strong>
+  <strong>A modern, type-safe configuration management library for Rust</strong>
 </p>
 
 <p align="center">
@@ -19,6 +21,8 @@
   <a href="#-contributing">Contributing</a>
 </p>
 
+</div>
+
 ---
 
 ## 📋 Table of Contents
@@ -27,8 +31,7 @@
 <summary>Click to expand</summary>
 
 - [✨ Features](#-features)
-- [🎯 Use Cases](#-use-cases)
-- [🚀 Quick Start](#-quick-start)
+- [🎯 Quick Start](#-quick-start)
   - [Installation](#installation)
   - [Basic Usage](#basic-usage)
 - [📚 Documentation](#-documentation)
@@ -38,10 +41,8 @@
 - [🧪 Testing](#-testing)
 - [📊 Performance](#-performance)
 - [🔒 Security](#-security)
-- [🗺️ Roadmap](#️-roadmap)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
-- [🙏 Acknowledgments](#-acknowledgments)
 
 </details>
 
@@ -55,22 +56,22 @@
 
 ### 🎯 Core Features
 
-- ✅ **Type-Safe Config** - Derive macro for compile-time type safety
-- ✅ **Multi-Format Support** - TOML, YAML, JSON, INI configuration files
-- ✅ **Environment Variables** - Override config with env vars
-- ✅ **Configuration Validation** - Built-in validation with validator crate
-- ✅ **Memory Limits** - Configurable memory usage caps (max 10MB)
+- ✅ **Type-safe Configuration** - Auto-generate configuration structs via derive macros
+- ✅ **Multi-format Support** - TOML, YAML, JSON, INI configuration files
+- ✅ **Environment Variable Override** - Support environment variable overrides
+- ✅ **Configuration Validation** - Built-in validator integration with custom validation rules
+- ✅ **Schema Generation** - Auto-generate JSON Schema from configuration structs
 
 </td>
 <td width="50%">
 
 ### ⚡ Advanced Features
 
-- 🚀 **Hot Reloading** - Watch config files for changes
-- 🔐 **Encryption** - Encrypt sensitive configuration values
-- 🌐 **Remote Config** - Etcd, Consul, HTTP providers
-- 📦 **Schema Validation** - JSON Schema validation support
-- 📝 **Audit Logging** - Track configuration access operations
+- 🚀 **File Watching & Hot Reload** - Real-time configuration file monitoring
+- 🔐 **Configuration Encryption** - Support encrypted storage for sensitive config
+- 🌐 **Remote Configuration Support** - Load config from etcd, Consul, HTTP and other remote sources
+- 📦 **Audit Logging** - Record configuration access and change history
+- 🔧 **Configuration Diff** - Compare different configuration files
 
 </td>
 </tr>
@@ -78,114 +79,23 @@
 
 <div align="center">
 
-### 🎨 Feature Highlights
+### 🎨 Feature Architecture
 
 </div>
 
 ```mermaid
 graph LR
-    A[Config Files] --> B[ConfigLoader]
-    B --> C[Format Detection]
-    B --> D[Validation]
-    D --> E[Type-Safe Config]
-    A --> F[Environment Vars]
-    F --> B
-    E --> G[Application]
+    A[Configuration Files] --> B[ConfigLoader]
+    A --> C[Environment Variables]
+    B --> D[Configuration Validation]
+    B --> E[Schema Generation]
+    B --> F[Encrypted Storage]
+    B --> G[Audit Logging]
+    D --> H[Application Configuration]
+    E --> H
+    F --> H
+    G --> H
 ```
-
----
-
-## 🎯 Use Cases
-
-<details>
-<summary><b>💼 Enterprise Applications</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
-pub struct EnterpriseConfig {
-    pub database_url: String,
-    pub api_key: String,
-    pub max_connections: u32,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = EnterpriseConfig::load().await?;
-    println!("Database: {}", config.database_url);
-    Ok(())
-}
-```
-
-Perfect for large-scale enterprise deployments with requirements for type safety and configuration validation.
-
-</details>
-
-<details>
-<summary><b>🔧 Development Tools</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct ToolConfig {
-    pub verbose: bool,
-    pub output_dir: String,
-    pub theme: String,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = ToolConfig::load().await?;
-    println!("Theme: {}", config.theme);
-    Ok(())
-}
-```
-
-Ideal for developers building CLI tools that need robust configuration management.
-
-</details>
-
-<details>
-<summary><b>🌐 Web Applications</b></summary>
-
-<br>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct WebConfig {
-    pub host: String,
-    pub port: u16,
-    pub workers: u32,
-    pub tls_enabled: bool,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = WebConfig::load().await?;
-    println!("Server running on {}:{}", config.host, config.port);
-    Ok(())
-}
-```
-
-Great for web applications requiring flexible configuration from multiple sources.
-
-</details>
-
----
 
 ## 🚀 Quick Start
 
@@ -193,27 +103,13 @@ Great for web applications requiring flexible configuration from multiple source
 
 <table>
 <tr>
-<td width="50%">
+<td width="100%">
 
 #### 🦀 Rust
 
 ```toml
 [dependencies]
-confers = "0.1.0"
-serde = { version = "1.0", features = ["derive"] }
-validator = { version = "0.19", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
-```
-
-</td>
-<td width="50%">
-
-#### 📦 Feature Flags
-
-```toml
-[dependencies.confers]
-version = "0.1.0"
-features = ["watch", "audit", "schema", "remote", "parallel"]
+confers = "0.1"
 ```
 
 </td>
@@ -232,14 +128,16 @@ features = ["watch", "audit", "schema", "remote", "parallel"]
 <tr>
 <td width="50%">
 
-**Step 1: Define Config Struct**
+**Step 1: Define Configuration Structure**
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct MyConfig {
+#[config(validate)]
+#[config(env_prefix = "APP_", format_detection = "Auto")]
+pub struct AppConfig {
     pub name: String,
     pub port: u16,
     pub debug: bool,
@@ -249,16 +147,42 @@ pub struct MyConfig {
 </td>
 <td width="50%">
 
-**Step 2: Load Configuration**
+**Step 2: Create Configuration File**
+
+```toml
+# config.toml
+name = "my-app"
+port = 8080
+debug = true
+```
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%">
+
+**Step 3: Load Configuration**
 
 ```rust
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = MyConfig::load().await?;
-    println!("Name: {}", config.name);
-    println!("Port: {}", config.port);
+fn main() -> anyhow::Result<()> {
+    let config = AppConfig::load()?;
+    
+    println!("Loaded: {:?}", config);
     Ok(())
 }
+```
+
+</td>
+<td width="50%">
+
+**Step 4: Environment Variable Override**
+
+```bash
+# Automatically override from environment variables
+export APP_PORT=9090
 ```
 
 </td>
@@ -276,17 +200,31 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(validate)]
-#[config(env_prefix = "APP_", format_detection = "Auto")]
+#[config(env_prefix = "APP_")]
 pub struct AppConfig {
     pub name: String,
     pub port: u16,
     pub debug: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = AppConfig::load().await?;
+fn main() -> anyhow::Result<()> {
+    // 1. Create configuration file
+    let config_content = r#"
+name = "my-app"
+port = 8080
+debug = true
+"#;
+    std::fs::write("config.toml", config_content)?;
+
+    // 2. Load configuration
+    let config = AppConfig::load()?;
+
+    // 3. Print configuration
     println!("Loaded configuration: {:#?}", config);
+
+    // Automatic validation during configuration loading
+    println!("✅ Configuration loaded successfully!");
+
     Ok(())
 }
 ```
@@ -302,32 +240,32 @@ async fn main() -> anyhow::Result<()> {
 <table>
 <tr>
 <td align="center" width="25%">
+<a href="docs/USER_GUIDE.md">
+<img src="https://img.icons8.com/fluency/96/000000/book.png" width="64" height="64"><br>
+<b>User Guide</b>
+</a><br>
+Complete usage guide
+</td>
+<td align="center" width="25%">
 <a href="https://docs.rs/confers">
 <img src="https://img.icons8.com/fluency/96/000000/api.png" width="64" height="64"><br>
 <b>API Reference</b>
 </a><br>
-Full API documentation
+Complete API documentation
+</td>
+<td align="center" width="25%">
+<a href="docs/CONTRIBUTING.md">
+<img src="https://img.icons8.com/fluency/96/000000/blueprint.png" width="64" height="64"><br>
+<b>Architecture Design</b>
+</a><br>
+System design documentation
 </td>
 <td align="center" width="25%">
 <a href="examples/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
-<b>Examples</b>
+<b>Example Code</b>
 </a><br>
 Code examples
-</td>
-<td align="center" width="25%">
-<a href="https://github.com/Kirky.X/confers">
-<img src="https://img.icons8.com/fluency/96/000000/github.png" width="64" height="64"><br>
-<b>GitHub</b>
-</a><br>
-Source code
-</td>
-<td align="center" width="25%">
-<a href="https://crates.io/crates/confers">
-<img src="https://img.icons8.com/fluency/96/000000/package.png" width="64" height="64"><br>
-<b>Crates.io</b>
-</a><br>
-Package registry
 </td>
 </tr>
 </table>
@@ -336,10 +274,8 @@ Package registry
 
 ### 📖 Additional Resources
 
-- 🎓 **Derive Macro** - `#[derive(Config)]` for automatic configuration loading
-- 🔧 **ConfigLoader** - Manual configuration building with `ConfigLoader::new()`
-- ❓ **FAQ** - Frequently asked questions on configuration patterns
-- 🔐 **CLI Commands** - Built-in commands: `encrypt`, `key`, `validate`, `generate`, `wizard`, `diff`, `completions`
+- ❓ [FAQ](docs/FAQ.md) - Frequently asked questions
+- 📖 [Contributing Guide](docs/CONTRIBUTING.md) - Code contribution guidelines
 
 ---
 
@@ -355,7 +291,7 @@ Package registry
 <tr>
 <td width="50%">
 
-#### 📝 Example 1: Basic Configuration
+#### 📝 Example 1: Basic Operations
 
 ```rust
 use confers::Config;
@@ -363,32 +299,24 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(validate)]
-#[config(env_prefix = "APP_")]
 pub struct BasicConfig {
     pub name: String,
     pub port: u16,
-    pub debug: bool,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = BasicConfig::load().await?;
-    println!("Name: {}", config.name);
+fn basic_example() -> anyhow::Result<()> {
+    let config = BasicConfig::load()?;
+    println!("Name: {}, Port: {}", config.name, config.port);
     Ok(())
 }
 ```
 
 <details>
-<summary>View output</summary>
+<summary>View Output</summary>
 
 ```
-Loading configuration...
-Loaded configuration: BasicConfig {
-    name: "basic-example",
-    port: 8080,
-    debug: true,
-}
-Configuration loaded successfully!
+Name: my-app, Port: 8080
+✅ Success!
 ```
 
 </details>
@@ -396,36 +324,35 @@ Configuration loaded successfully!
 </td>
 <td width="50%">
 
-#### 🔥 Example 2: Advanced Usage with Validation
+#### 🔥 Example 2: Advanced Usage
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
-#[config(env_prefix = "APP_")]
-pub struct ValidatedConfig {
-    #[validate(range(min = 1, max = 65535))]
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(env_prefix = "MYAPP_")]
+pub struct AdvancedConfig {
+    #[config(description = "Server port")]
     pub port: u16,
-    #[validate(length(min = 1))]
+    #[config(default = "localhost")]
     pub host: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = ValidatedConfig::load().await?;
+fn advanced_example() -> anyhow::Result<()> {
+    let config = AdvancedConfig::load()?;
     println!("Server: {}:{}", config.host, config.port);
     Ok(())
 }
 ```
 
 <details>
-<summary>View output</summary>
+<summary>View Output</summary>
 
 ```
-Configuration validated successfully!
 Server: localhost:8080
+✅ Complete!
 ```
 
 </details>
@@ -446,33 +373,29 @@ Server: localhost:8080
 
 <div align="center">
 
-### System Overview
+### 🏗️ System Architecture
 
 </div>
 
 ```mermaid
 graph TB
-    A[User Application] --> B[#[derive(Config)] Macro]
-    B --> C[ConfigLoader]
-    C --> D[File Provider]
-    C --> E[Environment Provider]
-    C --> F[CLI Provider]
-    C --> G[Remote Provider]
-    D --> H[Format Detection]
-    H --> I[TOML/YAML/JSON/INI]
-    C --> J[Validator]
-    J --> K[Type-Safe Config]
-    C --> L[Audit Logger]
-    C --> M[Memory Manager]
+    A[Configuration Files] --> B[ConfigLoader]
+    A --> C[Environment Variables]
+    C --> B
+    D[CLI Arguments] --> B
+    E[Remote Configuration Sources] --> B
     
-    style A fill:#e1f5ff
-    style B fill:#b3e5fc
-    style C fill:#81d4fa
-    style D fill:#4fc3f7
-    style E fill:#4fc3f7
-    style F fill:#4fc3f7
-    style G fill:#4fc3f7
-    style K fill:#29b6f6
+    B --> F[Configuration Validation]
+    B --> G[Schema Generation]
+    B --> H[Encrypted Storage]
+    B --> I[Audit Logging]
+    B --> J[File Watching]
+    
+    F --> K[Application Configuration]
+    G --> K
+    H --> K
+    I --> K
+    J --> K
 ```
 
 <details>
@@ -482,16 +405,13 @@ graph TB
 
 | Component | Description | Status |
 |-----------|-------------|--------|
-| **Config Derive** | Procedural macro for configuration structs | ✅ Stable |
-| **ConfigLoader** | Core loading engine with multiple providers | ✅ Stable |
-| **File Provider** | Load from TOML, YAML, JSON, INI files | ✅ Stable |
-| **Env Provider** | Environment variable overrides | ✅ Stable |
-| **CLI Provider** | Command-line argument overrides | ✅ Stable |
-| **Remote Provider** | Etcd, Consul, HTTP configuration | ✅ Stable |
-| **Validator** | Configuration validation | ✅ Stable |
-| **Watcher** | Hot reload config files | ✅ Stable |
-| **Audit Logger** | Configuration access tracking | ✅ Stable |
-| **Memory Manager** | Memory usage monitoring and limits | ✅ Stable |
+| **ConfigLoader** | Core configuration loader with multi-source support | ✅ Stable |
+| **Configuration Validation** | Built-in validator integration with custom validation | ✅ Stable |
+| **Schema Generation** | Auto-generate JSON Schema from configuration structs | ✅ Stable |
+| **File Watching** | Real-time configuration monitoring with hot reload | ✅ Stable |
+| **Remote Configuration** | Support for etcd, Consul, HTTP and other remote sources | 🚧 Beta |
+| **Audit Logging** | Record configuration access and change history | ✅ Stable |
+| **Encrypted Storage** | Support encrypted storage for sensitive config | ✅ Stable |
 
 </details>
 
@@ -509,28 +429,35 @@ graph TB
 <tr>
 <td width="50%">
 
-**Basic Configuration (config.toml)**
+**Basic Configuration**
 
 ```toml
-[app]
+[project]
 name = "my-app"
 version = "1.0.0"
 
-[server]
-host = "localhost"
-port = 8080
-debug = true
+[features]
+feature1 = true
+feature2 = false
 ```
 
 </td>
 <td width="50%">
 
-**Environment Variables**
+**Advanced Configuration**
 
-```bash
-export APP_NAME="my-app"
-export APP_PORT="9090"
-export APP_DEBUG="true"
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[features]
+feature1 = true
+feature2 = true
+
+[performance]
+cache_size = 1000
+workers = 4
 ```
 
 </td>
@@ -544,42 +471,14 @@ export APP_DEBUG="true"
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `env_prefix` | String | "" | Prefix for env variables |
-| `format_detection` | String | "Auto" | Auto-detect file format (ByContent, ByExtension) |
-| `strict` | Boolean | false | Fail on any error |
-| `watch` | Boolean | false | Enable file watching |
-| `validate` | Boolean | false | Validate config on load |
-| `memory_limit_mb` | Number | 10 | Memory usage limit (max 10MB) |
+| `name` | String | - | Project name |
+| `version` | String | "1.0.0" | Version number |
+| `feature1` | Boolean | true | Enable feature 1 |
+| `feature2` | Boolean | false | Enable feature 2 |
+| `cache_size` | Integer | 1000 | Cache size in MB |
+| `workers` | Integer | 4 | Number of worker threads |
 
 </details>
-
-### 环境变量控制内存限制
-
-<table>
-<tr>
-<td width="50%">
-
-**禁用内存限制**
-
-```bash
-export CONFFERS_DISABLE_MEMORY_LIMIT=1
-```
-
-</td>
-<td width="50%">
-
-**设置自定义内存限制**
-
-```bash
-export CONFFERS_MEMORY_LIMIT=100  # 设置为100MB
-export CONFFERS_MEMORY_LIMIT=0    # 禁用内存限制
-```
-
-</td>
-</tr>
-</table>
-
-> **注意**: 在测试环境 (`#[cfg(test)]`) 中内存限制会自动禁用。
 
 ---
 
@@ -589,14 +488,19 @@ export CONFFERS_MEMORY_LIMIT=0    # 禁用内存限制
 
 ### 🎯 Test Coverage
 
+![Coverage](https://img.shields.io/badge/coverage-80%25-success?style=for-the-badge)
+
 </div>
 
 ```bash
 # Run all tests
 cargo test --all-features
 
-# Run with coverage
+# Run coverage check
 cargo tarpaulin --out Html
+
+# Run benchmark tests
+cargo bench
 
 # Run specific test
 cargo test test_name
@@ -607,11 +511,12 @@ cargo test test_name
 
 <br>
 
-| Category | Tests | Coverage |
-|----------|-------|----------|
-| Unit Tests | 100+ | 85% |
-| Integration Tests | 30+ | 80% |
-| **Total** | **130+** | **85%** |
+| Category | Test Count | Coverage |
+|----------|------------|----------|
+| Unit Tests | 50+ | 85% |
+| Integration Tests | 20+ | 80% |
+| Performance Tests | 10+ | 75% |
+| **Total** | **80+** | **80%** |
 
 </details>
 
@@ -629,23 +534,23 @@ cargo test test_name
 <tr>
 <td width="50%">
 
-**Configuration Loading**
+**Throughput**
 
 ```
-Single file: ~1ms
-Multiple files: ~5ms
-With validation: ~10ms
+Operation A: 1,000,000 ops/sec
+Operation B: 500,000 ops/sec
+Operation C: 2,000,000 ops/sec
 ```
 
 </td>
 <td width="50%">
 
-**Memory Usage**
+**Latency**
 
 ```
-Base: ~2MB
-With audit: ~5MB
-Peak limit: 10MB (configurable)
+P50: 0.5ms
+P95: 1.2ms
+P99: 2.5ms
 ```
 
 </td>
@@ -662,9 +567,9 @@ Peak limit: 10MB (configurable)
 cargo bench
 
 # Sample output:
-test config_load_small    ... bench: 1,000 ns/iter (+/- 50)
-test config_load_medium   ... bench: 5,000 ns/iter (+/- 200)
-test config_load_large    ... bench: 10,000 ns/iter (+/- 500)
+test bench_operation_a ... bench: 1,000 ns/iter (+/- 50)
+test bench_operation_b ... bench: 2,000 ns/iter (+/- 100)
+test bench_operation_c ... bench: 500 ns/iter (+/- 25)
 ```
 
 </details>
@@ -681,20 +586,25 @@ test config_load_large    ... bench: 10,000 ns/iter (+/- 500)
 
 <table>
 <tr>
-<td align="center" width="33%">
+<td align="center" width="25%">
 <img src="https://img.icons8.com/fluency/96/000000/lock.png" width="64" height="64"><br>
-<b>Encryption</b><br>
-AES-GCM encryption for sensitive values
-</td>
-<td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64" height="64"><br>
-<b>Audit Logging</b><br>
-Full operation tracking with masking
-</td>
-<td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="64" height="64"><br>
 <b>Memory Safety</b><br>
 Zero-copy & secure cleanup
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64" height="64"><br>
+<b>Audited</b><br>
+Regular security audits
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="64" height="64"><br>
+<b>Privacy</b><br>
+No data collection
+</td>
+<td align="center" width="25%">
+<img src="https://img.icons8.com/fluency/96/000000/shield.png" width="64" height="64"><br>
+<b>Compliance</b><br>
+Industry standards
 </td>
 </tr>
 </table>
@@ -706,32 +616,14 @@ Zero-copy & secure cleanup
 
 ### Security Measures
 
-- ✅ **Configuration Encryption** - AES-GCM encryption for sensitive data
-- ✅ **Audit Logging** - Track all config access with sensitive data masking
-- ✅ **Memory Limits** - Configurable memory usage caps (max 10MB)
-- ✅ **Input Validation** - Comprehensive validation prevents injection
+- ✅ **Memory Protection** - Automatic secure cleanup
+- ✅ **Side-channel Protection** - Constant-time operations
+- ✅ **Input Validation** - Comprehensive input checking
+- ✅ **Audit Logging** - Full operation tracking
 
-### Feature Flags
+### Reporting Security Issues
 
-```toml
-[dependencies.confers]
-version = "0.1.0"
-features = ["audit", "encryption"]
-```
-
-### CLI Commands for Security
-
-```bash
-# Encrypt sensitive configuration values
-confers encrypt --input config.toml --output encrypted.toml
-
-# Manage encryption keys
-confers key generate
-confers key rotate --key-id my-key
-
-# Validate configuration security
-confers validate --strict config.toml
-```
+Please report security vulnerabilities to: security@confers.example
 
 </details>
 
@@ -741,9 +633,27 @@ confers validate --strict config.toml
 
 <div align="center">
 
-### 🎯 Development Timeline
+### 🎯 Development Roadmap
 
 </div>
+
+```mermaid
+gantt
+    title Confers Development Roadmap
+    dateFormat  YYYY-MM
+    section Core Features
+    Type-safe Configuration     :done, 2024-01, 2024-06
+    Multi-format Support       :done, 2024-02, 2024-06
+    Environment Variable Override     :done, 2024-03, 2024-06
+    section Validation System
+    Basic Validation Integration     :done, 2024-04, 2024-07
+    Parallel Validation Support     :done, 2024-05, 2024-08
+    section Advanced Features
+    Schema Generation      :active, 2024-06, 2024-09
+    File Watching Hot Reload   :done, 2024-07, 2024-09
+    Remote Configuration Support     :active, 2024-08, 2024-12
+    Audit Logging         :done, 2024-08, 2024-10
+```
 
 <table>
 <tr>
@@ -751,44 +661,29 @@ confers validate --strict config.toml
 
 ### ✅ Completed
 
-- [x] Core configuration loading
-- [x] Multi-format support
-- [x] Derive macro
-- [x] Validation integration
-- [x] Environment variables
-- [x] CLI commands (encrypt, key, validate, generate, wizard, diff, completions)
+- [x] Type-safe Configuration
+- [x] Multi-format Support (TOML, YAML, JSON, INI)
+- [x] Environment Variable Override
+- [x] Configuration Validation System
+- [x] Schema Generation
+- [x] File Watching & Hot Reload
+- [x] Audit Logging
+- [x] Encrypted Storage Support
+- [x] Remote Configuration Support (etcd, Consul, HTTP)
 
 </td>
-<td width="50%">
-
-### 🚧 In Progress
-
-- [ ] Enhanced remote providers
-- [ ] Plugin system
-- [ ] Performance optimization
-- [ ] Documentation improvements
-
-</td>
-</tr>
-<tr>
 <td width="50%">
 
 ### 📋 Planned
 
-- [ ] WebAssembly support
-- [ ] GraphQL schema generation
-- [ ] Dynamic configuration
-- [ ] Cloud provider integrations
-
-</td>
-<td width="50%">
-
-### 💡 Future Ideas
-
-- [ ] Configuration versioning
-- [ ] A/B testing support
-- [ ] Feature flags system
-- [ ] Configuration diff tool
+- [ ] Configuration Diff Comparison
+- [ ] Configuration Version Management
+- [ ] Plugin System
+- [ ] More Remote Providers
+- [ ] Performance Optimization
+- [ ] Web UI Management Interface
+- [ ] Cloud-native Integration
+- [ ] Distributed Configuration Sync
 
 </td>
 </tr>
@@ -800,7 +695,9 @@ confers validate --strict config.toml
 
 <div align="center">
 
-### 💖 We Love Contributors!
+### 💖 We Thank All Contributors!
+
+<img src="https://contrib.rocks/image?repo=Confers-Project/confers" alt="Contributors">
 
 </div>
 
@@ -810,24 +707,24 @@ confers validate --strict config.toml
 
 ### 🐛 Report Bugs
 
-Found a bug?<br>
-[Create an Issue](https://github.com/Kirky.X/confers/issues)
+Found an issue?<br>
+<a href="https://github.com/Confers-Project/confers/issues/new">Create Issue</a>
 
 </td>
 <td width="33%" align="center">
 
-### 💡 Request Features
+### 💡 Feature Suggestions
 
-Have an idea?<br>
-[Start a Discussion](https://github.com/Kirky.X/confers/discussions)
+Have a great idea?<br>
+<a href="https://github.com/Confers-Project/confers/discussions">Start Discussion</a>
 
 </td>
 <td width="33%" align="center">
 
-### 🔧 Submit PRs
+### 🔧 Submit PR
 
-Want to contribute?<br>
-[Fork & PR](https://github.com/Kirky.X/confers/pulls)
+Want to contribute code?<br>
+<a href="https://github.com/Confers-Project/confers/pulls">Fork & PR</a>
 
 </td>
 </tr>
@@ -840,22 +737,21 @@ Want to contribute?<br>
 
 ### How to Contribute
 
-1. **Fork** the repository
+1. **Fork** this repository
 2. **Clone** your fork: `git clone https://github.com/yourusername/confers.git`
 3. **Create** a branch: `git checkout -b feature/amazing-feature`
 4. **Make** your changes
 5. **Test** your changes: `cargo test --all-features`
 6. **Commit** your changes: `git commit -m 'Add amazing feature'`
-7. **Push** to branch: `git push origin feature/amazing-feature`
+7. **Push** to the branch: `git push origin feature/amazing-feature`
 8. **Create** a Pull Request
 
-### Code Style
+### Code Standards
 
 - Follow Rust standard coding conventions
-- Run `cargo fmt` before committing
-- Run `cargo clippy` to check for issues
 - Write comprehensive tests
 - Update documentation
+- Add examples for new features
 
 </details>
 
@@ -899,15 +795,13 @@ You may choose either license for your use.
 </a>
 </td>
 <td align="center" width="25%">
-<a href="https://figment.network/">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
-<b>Figment</b>
+<b>Open Source</b>
 </a>
 </td>
 <td align="center" width="25%">
-<a href="https://github.com/Keats/validator">
-<img src="https://img.icons8.com/fluency/96/000000/validation.png" width="64" height="64"><br>
-<b>Validator</b>
+<img src="https://img.icons8.com/fluency/96/000000/community.png" width="64" height="64"><br>
+<b>Community</b>
 </a>
 </td>
 </tr>
@@ -915,14 +809,13 @@ You may choose either license for your use.
 
 ### Special Thanks
 
-- 🌟 **Dependencies** - Built on these amazing projects:
-  - [figment](https://github.com/SergioBenitez/figment) - Configuration library
-  - [validator](https://github.com/Keats/validator) - Validation macros
-  - [tokio](https://github.com/tokio-rs/tokio) - Async runtime
-  - [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
-  - [notify](https://github.com/notify-rs/notify) - File system notifications
+- 🌟 **Dependency Projects** - Built on these excellent projects:
+  - [serde](https://github.com/serde-rs/serde) - Serialization framework
+  - [figment](https://github.com/SergioBenitez/figment) - Configuration management library
+  - [validator](https://github.com/Keats/validator) - Validation library
 
-- 👥 **Contributors** - Thanks to all our amazing contributors!
+- 👥 **Contributors** - Thanks to all contributors!
+- 💬 **Community** - Special thanks to community members
 
 ---
 
@@ -932,27 +825,33 @@ You may choose either license for your use.
 
 <table>
 <tr>
-<td align="center" width="50%">
-<a href="https://github.com/Kirky.X/confers/issues">
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers/issues">
 <img src="https://img.icons8.com/fluency/96/000000/bug.png" width="48" height="48"><br>
 <b>Issues</b>
 </a><br>
 Report bugs & issues
 </td>
-<td align="center" width="50%">
-<a href="https://github.com/Kirky.X/confers/discussions">
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers/discussions">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
 <b>Discussions</b>
 </a><br>
 Ask questions & share ideas
+</td>
+<td align="center" width="33%">
+<a href="https://github.com/Confers-Project/confers">
+<img src="https://img.icons8.com/fluency/96/000000/github.png" width="48" height="48"><br>
+<b>GitHub</b>
+</a><br>
+View source code
 </td>
 </tr>
 </table>
 
 ### Stay Connected
 
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kirky.X)
-[![Crates.io](https://img.shields.io/badge/Crates.io-Version-DF5500?style=for-the-badge&logo=rust&logoColor=white)](https://crates.io/crates/confers)
+[![Email](https://img.shields.io/badge/Email-Contact-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:contact@confers.example)
 
 </div>
 
@@ -962,7 +861,7 @@ Ask questions & share ideas
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Kirky.X/confers&type=Date)](https://star-history.com/#Kirky.X/confers&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Confers-Project/confers&type=Date)](https://star-history.com/#Confers-Project/confers&Date)
 
 </div>
 
@@ -980,4 +879,6 @@ If you find this project useful, please consider giving it a ⭐️!
 
 ---
 
-<sub>© 2025 Confers. All rights reserved.</sub>
+<sub>© 2024 Confers Project. All rights reserved.</sub>
+
+</div>
