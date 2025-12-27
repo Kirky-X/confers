@@ -2,6 +2,14 @@
 name = "confers-macros"
 version = "0.1.0"
 edition = "2021"
+authors = ["Kirky.X <kirkyx@outlook.com>"]
+license = "MIT OR Apache-2.0"
+description = "Procedural macros for the Confers configuration management library"
+documentation = "https://docs.rs/confers-macros"
+homepage = "https://github.com/Kirky-X/confers"
+repository = "https://github.com/Kirky-X/confers"
+keywords = ["configuration", "proc-macro", "derive"]
+categories = ["development-tools", "procedural-macro"]
 
 [lib]
 proc-macro = true
