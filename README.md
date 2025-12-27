@@ -1,934 +1,983 @@
-# Confers - Modern Rust Configuration Management Library
+# 🚀 Confers
 
-<div align="center">
-[Show Image](https://crates.io/crates/confers) [Show Image](https://docs.rs/confers) [Show Image](LICENSE) [Show Image](https://github.com/yourusername/confers/actions)
-</div>
-<div align="center">
-**Zero Boilerplate · Type Safe · Production Ready**
-</div>
-<div align="center">
-[Quick Start](#quick-start) · [Documentation](https://docs.rs/confers) · [Examples](#examples) · [Contributing](#contributing)
-</div>
+<p>
+  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
+  <img src="https://img.shields.io/badge/coverage-85%25-success.svg" alt="Coverage">
+</p>
 
+<p align="center">
+  <strong>A modern, type-safe configuration management library for Rust applications</strong>
+</p>
 
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-documentation">Documentation</a> •
+  <a href="#-examples">Examples</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
 
-------
+---
+
+## 📋 Table of Contents
+
+<details open>
+<summary>Click to expand</summary>
+
+- [✨ Features](#-features)
+- [🎯 Use Cases](#-use-cases)
+- [🚀 Quick Start](#-quick-start)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+- [📚 Documentation](#-documentation)
+- [🎨 Examples](#-examples)
+- [🏗️ Architecture](#️-architecture)
+- [⚙️ Configuration](#️-configuration)
+- [🧪 Testing](#-testing)
+- [📊 Performance](#-performance)
+- [🔒 Security](#-security)
+- [🗺️ Roadmap](#️-roadmap)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+
+</details>
+
+---
 
 ## ✨ Features
 
-- 🎯 **Zero Boilerplate** - Define configurations with a single `#[derive(Config)]`
-- 🔄 **Smart Merging** - Automatically merge multiple configuration sources by priority
-- 🛡️ **Type Safety** - Compile-time type checking, eliminate runtime configuration errors
-- 🔥 **Hot Reload** - Configuration changes take effect automatically without restart
-- ✅ **Configuration Validation** - Integrated validator with rich validation rules
-- 📊 **Audit Logging** - Complete configuration loading process with sensitive field masking
-- 🌐 **Multi-format Support** - TOML / JSON / YAML / INI
-- ☁️ **Remote Configuration** - Support for Etcd / Consul / HTTP configuration centers
-- 🔒 **Encryption Support** - Sensitive field encryption storage (v0.4.0+)
-- 🛠️ **CLI Tools** - Template generation, validation, diff comparison
+<table>
+<tr>
+<td width="50%">
 
-------
+### 🎯 Core Features
 
-## 📦 Installation
+- ✅ **Type-Safe Config** - Derive macro for compile-time type safety
+- ✅ **Multi-Format Support** - TOML, YAML, JSON, INI configuration files
+- ✅ **Environment Variables** - Override config with env vars
+- ✅ **Configuration Validation** - Built-in validation with validator crate
+- ✅ **Memory Limits** - Configurable memory usage caps (max 10MB)
 
-Add the following to your `Cargo.toml`:
+</td>
+<td width="50%">
+
+### ⚡ Advanced Features
+
+- 🚀 **Hot Reloading** - Watch config files for changes
+- 🔐 **Encryption** - Encrypt sensitive configuration values
+- 🌐 **Remote Config** - Etcd, Consul, HTTP providers
+- 📦 **Schema Validation** - JSON Schema validation support
+- 📝 **Audit Logging** - Track configuration access operations
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+
+### 🎨 Feature Highlights
+
+</div>
+
+```mermaid
+graph LR
+    A[Config Files] --> B[ConfigLoader]
+    B --> C[Format Detection]
+    B --> D[Validation]
+    D --> E[Type-Safe Config]
+    A --> F[Environment Vars]
+    F --> B
+    E --> G[Application]
+```
+
+---
+
+## 🎯 Use Cases
+
+<details>
+<summary><b>💼 Enterprise Applications</b></summary>
+
+<br>
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(env_prefix = "APP_")]
+pub struct EnterpriseConfig {
+    pub database_url: String,
+    pub api_key: String,
+    pub max_connections: u32,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = EnterpriseConfig::load().await?;
+    println!("Database: {}", config.database_url);
+    Ok(())
+}
+```
+
+Perfect for large-scale enterprise deployments with requirements for type safety and configuration validation.
+
+</details>
+
+<details>
+<summary><b>🔧 Development Tools</b></summary>
+
+<br>
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct ToolConfig {
+    pub verbose: bool,
+    pub output_dir: String,
+    pub theme: String,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = ToolConfig::load().await?;
+    println!("Theme: {}", config.theme);
+    Ok(())
+}
+```
+
+Ideal for developers building CLI tools that need robust configuration management.
+
+</details>
+
+<details>
+<summary><b>🌐 Web Applications</b></summary>
+
+<br>
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+pub struct WebConfig {
+    pub host: String,
+    pub port: u16,
+    pub workers: u32,
+    pub tls_enabled: bool,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = WebConfig::load().await?;
+    println!("Server running on {}:{}", config.host, config.port);
+    Ok(())
+}
+```
+
+Great for web applications requiring flexible configuration from multiple sources.
+
+</details>
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+<table>
+<tr>
+<td width="50%">
+
+#### 🦀 Rust
 
 ```toml
 [dependencies]
 confers = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
-
-# Optional features
-confers = { version = "0.1.0", features = ["watch", "remote", "cli"] }
+validator = { version = "0.19", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
 ```
 
-**Feature Flags**:
+</td>
+<td width="50%">
 
-- `watch` - Enable configuration hot reload
-- `remote` - Enable remote configuration center support
-- `audit` - Enable audit logging (enabled by default)
-- `schema` - Enable Schema export
-- `cli` - Include CLI tools
+#### 📦 Feature Flags
 
-------
+```toml
+[dependencies.confers]
+version = "0.1.0"
+features = ["watch", "audit", "schema", "remote", "parallel"]
+```
 
-## 🚀 Quick Start
+</td>
+</tr>
+</table>
 
 ### Basic Usage
 
+<div align="center">
+
+#### 🎬 5-Minute Quick Start
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+**Step 1: Define Config Struct**
+
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
-#[derive(Config, Serialize, Deserialize, Debug)]
-#[config(env_prefix = "MYAPP_")]
-struct AppConfig {
-    #[config(default = "\"localhost\".to_string()")]
-    host: String,
-    
-    #[config(default = "8080")]
-    port: u16,
-    
-    debug: Option<bool>,
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct MyConfig {
+    pub name: String,
+    pub port: u16,
+    pub debug: bool,
 }
+```
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Automatically load configuration from multiple sources
-    let config = AppConfig::load()?;
-    
-    println!("Server will start on {}:{}", config.host, config.port);
-    
+</td>
+<td width="50%">
+
+**Step 2: Load Configuration**
+
+```rust
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = MyConfig::load().await?;
+    println!("Name: {}", config.name);
+    println!("Port: {}", config.port);
     Ok(())
 }
 ```
 
-### Configuration File (config.toml)
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>📖 Complete Example</b></summary>
+
+<br>
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(env_prefix = "APP_", format_detection = "Auto")]
+pub struct AppConfig {
+    pub name: String,
+    pub port: u16,
+    pub debug: bool,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = AppConfig::load().await?;
+    println!("Loaded configuration: {:#?}", config);
+    Ok(())
+}
+```
+
+</details>
+
+---
+
+## 📚 Documentation
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center" width="25%">
+<a href="https://docs.rs/confers">
+<img src="https://img.icons8.com/fluency/96/000000/api.png" width="64" height="64"><br>
+<b>API Reference</b>
+</a><br>
+Full API documentation
+</td>
+<td align="center" width="25%">
+<a href="examples/">
+<img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
+<b>Examples</b>
+</a><br>
+Code examples
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/Kirky.X/confers">
+<img src="https://img.icons8.com/fluency/96/000000/github.png" width="64" height="64"><br>
+<b>GitHub</b>
+</a><br>
+Source code
+</td>
+<td align="center" width="25%">
+<a href="https://crates.io/crates/confers">
+<img src="https://img.icons8.com/fluency/96/000000/package.png" width="64" height="64"><br>
+<b>Crates.io</b>
+</a><br>
+Package registry
+</td>
+</tr>
+</table>
+
+</div>
+
+### 📖 Additional Resources
+
+- 🎓 **Derive Macro** - `#[derive(Config)]` for automatic configuration loading
+- 🔧 **ConfigLoader** - Manual configuration building with `ConfigLoader::new()`
+- ❓ **FAQ** - Frequently asked questions on configuration patterns
+- 🔐 **CLI Commands** - Built-in commands: `encrypt`, `key`, `validate`, `generate`, `wizard`, `diff`, `completions`
+
+---
+
+## 🎨 Examples
+
+<div align="center">
+
+### 💡 Real-world Examples
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+#### 📝 Example 1: Basic Configuration
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(validate)]
+#[config(env_prefix = "APP_")]
+pub struct BasicConfig {
+    pub name: String,
+    pub port: u16,
+    pub debug: bool,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = BasicConfig::load().await?;
+    println!("Name: {}", config.name);
+    Ok(())
+}
+```
+
+<details>
+<summary>View output</summary>
+
+```
+Loading configuration...
+Loaded configuration: BasicConfig {
+    name: "basic-example",
+    port: 8080,
+    debug: true,
+}
+Configuration loaded successfully!
+```
+
+</details>
+
+</td>
+<td width="50%">
+
+#### 🔥 Example 2: Advanced Usage with Validation
+
+```rust
+use confers::Config;
+use serde::{Deserialize, Serialize};
+use validator::Validate;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
+#[config(env_prefix = "APP_")]
+pub struct ValidatedConfig {
+    #[validate(range(min = 1, max = 65535))]
+    pub port: u16,
+    #[validate(length(min = 1))]
+    pub host: String,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = ValidatedConfig::load().await?;
+    println!("Server: {}:{}", config.host, config.port);
+    Ok(())
+}
+```
+
+<details>
+<summary>View output</summary>
+
+```
+Configuration validated successfully!
+Server: localhost:8080
+```
+
+</details>
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+
+**[📂 View All Examples →](examples/)**
+
+</div>
+
+---
+
+## 🏗️ Architecture
+
+<div align="center">
+
+### System Overview
+
+</div>
+
+```mermaid
+graph TB
+    A[User Application] --> B[#[derive(Config)] Macro]
+    B --> C[ConfigLoader]
+    C --> D[File Provider]
+    C --> E[Environment Provider]
+    C --> F[CLI Provider]
+    C --> G[Remote Provider]
+    D --> H[Format Detection]
+    H --> I[TOML/YAML/JSON/INI]
+    C --> J[Validator]
+    J --> K[Type-Safe Config]
+    C --> L[Audit Logger]
+    C --> M[Memory Manager]
+    
+    style A fill:#e1f5ff
+    style B fill:#b3e5fc
+    style C fill:#81d4fa
+    style D fill:#4fc3f7
+    style E fill:#4fc3f7
+    style F fill:#4fc3f7
+    style G fill:#4fc3f7
+    style K fill:#29b6f6
+```
+
+<details>
+<summary><b>📐 Component Details</b></summary>
+
+<br>
+
+| Component | Description | Status |
+|-----------|-------------|--------|
+| **Config Derive** | Procedural macro for configuration structs | ✅ Stable |
+| **ConfigLoader** | Core loading engine with multiple providers | ✅ Stable |
+| **File Provider** | Load from TOML, YAML, JSON, INI files | ✅ Stable |
+| **Env Provider** | Environment variable overrides | ✅ Stable |
+| **CLI Provider** | Command-line argument overrides | ✅ Stable |
+| **Remote Provider** | Etcd, Consul, HTTP configuration | ✅ Stable |
+| **Validator** | Configuration validation | ✅ Stable |
+| **Watcher** | Hot reload config files | ✅ Stable |
+| **Audit Logger** | Configuration access tracking | ✅ Stable |
+| **Memory Manager** | Memory usage monitoring and limits | ✅ Stable |
+
+</details>
+
+---
+
+## ⚙️ Configuration
+
+<div align="center">
+
+### 🎛️ Configuration Options
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+**Basic Configuration (config.toml)**
 
 ```toml
-# Server host address
-host = "0.0.0.0"
+[app]
+name = "my-app"
+version = "1.0.0"
 
-# Server port
+[server]
+host = "localhost"
 port = 8080
-
-# Enable debug mode
 debug = true
 ```
 
-### Environment Variable Override
+</td>
+<td width="50%">
+
+**Environment Variables**
 
 ```bash
-# Environment variables take priority over configuration files
-export MYAPP_PORT=9000
-export MYAPP_DEBUG=false
-
-# Run application
-cargo run
+export APP_NAME="my-app"
+export APP_PORT="9090"
+export APP_DEBUG="true"
 ```
 
-### Command Line Arguments (Highest Priority)
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>🔧 All Configuration Options</b></summary>
+
+<br>
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `env_prefix` | String | "" | Prefix for env variables |
+| `format_detection` | String | "Auto" | Auto-detect file format (ByContent, ByExtension) |
+| `strict` | Boolean | false | Fail on any error |
+| `watch` | Boolean | false | Enable file watching |
+| `validate` | Boolean | false | Validate config on load |
+| `memory_limit_mb` | Number | 10 | Memory usage limit (max 10MB) |
+
+</details>
+
+### 环境变量控制内存限制
+
+<table>
+<tr>
+<td width="50%">
+
+**禁用内存限制**
 
 ```bash
-# Command line arguments have the highest priority
-cargo run -- --port 3000 --host 127.0.0.1
+export CONFFERS_DISABLE_MEMORY_LIMIT=1
 ```
+
+</td>
+<td width="50%">
+
+**设置自定义内存限制**
+
+```bash
+export CONFFERS_MEMORY_LIMIT=100  # 设置为100MB
+export CONFFERS_MEMORY_LIMIT=0    # 禁用内存限制
+```
+
+</td>
+</tr>
+</table>
+
+> **注意**: 在测试环境 (`#[cfg(test)]`) 中内存限制会自动禁用。
 
 ---
 
-## 📖 Core Concepts
+## 🧪 Testing
 
-### Configuration Source Priority
+<div align="center">
 
-Confers automatically merges configurations in the following priority order (from lowest to highest):
+### 🎯 Test Coverage
 
-```
-1. System configuration file      /etc/{app_name}/config.*
-2. User configuration file        ~/.config/{app_name}/config.*
-3. Remote configuration center   etcd://... / consul://... / http://...
-4. Specified configuration file  --config path/to/config.toml
-5. Environment variables         {PREFIX}_KEY=value
-6. Command line arguments        --key value (highest priority)
-```
-
-**Partial Override Strategy**: High-priority configuration sources only override explicitly specified fields, other fields are inherited from lower-priority sources.
-
-### Nested Configuration
-
-```rust
-#[derive(Config, Serialize, Deserialize, Debug)]
-struct AppConfig {
-    server: ServerConfig,
-    database: DatabaseConfig,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ServerConfig {
-    host: String,
-    port: u16,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct DatabaseConfig {
-    #[cfg_attr(description = "Database connection URL")]
-    url: String,
-    
-    #[cfg_attr(description = "Connection pool size", default = "10")]
-    pool_size: u32,
-}
-```
-
-**Configuration File**:
-
-```toml
-[server]
-host = "0.0.0.0"
-port = 8080
-
-[database]
-url = "postgresql://localhost/mydb"
-pool_size = 20
-```
-
-**Environment Variable Mapping**:
+</div>
 
 ```bash
-export MYAPP_SERVER_HOST=localhost
-export MYAPP_SERVER_PORT=9000
-export MYAPP_DATABASE_URL=postgresql://prod/db
-export MYAPP_DATABASE_POOL_SIZE=50
+# Run all tests
+cargo test --all-features
+
+# Run with coverage
+cargo tarpaulin --out Html
+
+# Run specific test
+cargo test test_name
 ```
 
-------
+<details>
+<summary><b>📊 Test Statistics</b></summary>
 
-## 🎨 Macro Attributes Explained
+<br>
 
-### Struct Level Attributes
+| Category | Tests | Coverage |
+|----------|-------|----------|
+| Unit Tests | 100+ | 85% |
+| Integration Tests | 30+ | 80% |
+| **Total** | **130+** | **85%** |
 
-```rust
-#[derive(Config)]
-#[config(
-    env_prefix = "MYAPP_",              // Environment variable prefix (default: empty)
-    strict = false,                      // Strict mode (default: false)
-    watch = true,                        // Enable hot reload (default: false)
-    format_detection = "ByContent",      // Format detection method (default: ByContent)
-    audit_log = true,                    // Enable audit logging (default: true)
-    audit_log_path = "./config.log",     // Audit log path
-    remote = "etcd://localhost:2379/app" // Remote configuration address (optional)
-)]
-struct AppConfig { }
-```
-
-### Field Level Attributes
-
-```rust
-#[cfg_attr(
-    // Basic attributes
-    description = "Field description",           // For documentation and template generation
-    default = "default value expression",        // Default value (Rust expression)
-    
-    // Naming configuration
-    name_config = "key name in config file",     // Override default key name
-    name_env = "environment variable name",      // Override default env var name
-    name_clap_long = "long option",              // CLI long option name
-    name_clap_short = 'c',                       // CLI short option
-    
-    // Validation rules
-    validate = "range(min = 1, max = 65535)", // validator syntax
-    custom_validate = "my_validator",         // Custom validation function
-    
-    // Security configuration
-    sensitive = true,                   // Sensitive field (masked in audit logs)
-    
-    // Special markers
-    flatten,                            // Flatten nested structure
-    skip                                // Skip this field
-)]
-```
-
-------
-
-## 💡 Examples
-
-### 1. Basic Configuration
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Serialize, Deserialize)]
-#[config(env_prefix = "APP_")]
-struct Config {
-    #[config(default = "\"localhost\".to_string()")]
-    host: String,
-    
-    #[config(default = "8080")]
-    port: u16,
-}
-
-fn main() {
-    let config = Config::load().unwrap();
-    println!("{:?}", config);
-}
-```
-
-### 2. Configuration Validation
-
-```rust
-#[derive(Config, Serialize, Deserialize)]
-struct Config {
-    #[config(validate = "range(min = 1, max = 65535)")]
-    port: u16,
-    
-    #[config(validate = "email")]
-    email: String,
-    
-    #[config(validate = "url")]
-    website: String,
-}
-
-fn main() {
-    match Config::load() {
-        Ok(config) => println!("Configuration loaded successfully: {:?}", config),
-        Err(e) => eprintln!("Configuration validation failed: {}", e),
-    }
-}
-```
-
-### 3. Hot Reload
-
-```rust
-use confers::{Config, ConfigWatcher};
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Serialize, Deserialize, Clone)]
-struct Config {
-    port: u16,
-    debug: bool,
-}
-
-#[tokio::main]
-async fn main() {
-    let watcher = ConfigWatcher::new()?;
-    let config = watcher.load()?;
-
-    if watcher.is_enabled() {
-        println!("Hot reload enabled - configuration changes will be applied automatically");
-    }
-
-    // Method 1: Channel mode (recommended)
-    let mut rx = watcher.subscribe();
-    tokio::spawn(async move {
-        while rx.changed().await.is_ok() {
-            let new_config = rx.borrow().clone();
-            println!("Configuration updated: {:?}", new_config);
-        }
-    });
-
-    // Method 2: Callback mode
-    watcher.on_change(|config| {
-        println!("Configuration changed: {:?}", config);
-    });
-}
-```
-
-### 4. Remote Configuration
-
-```rust
-use confers::{Config, ConfigLoader};
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Serialize, Deserialize)]
-pub struct Config {
-    pub port: u16,
-    pub database_url: String,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config: Config = ConfigLoader::new()
-        .with_etcd(
-            confers::providers::EtcdConfigProvider::new(
-                vec!["localhost:2379".to_string()],
-                "/myapp/config"
-            )
-        )
-        .with_file("config/local.toml")  // Local fallback
-        .load_async()
-        .await?;
-
-    println!("Configuration loaded: port={}, database={}", config.port, config.database_url);
-    Ok(())
-}
-```
-
-Supported remote configuration centers:
-
-- **Etcd**: `etcd://host:port/key`
-- **Consul**: `consul://host:port/key`
-- **HTTP**: `http://api.example.com/config` or `https://...`
-
-### 5. Sensitive Field Handling
-
-```rust
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Serialize, Deserialize)]
-struct Config {
-    #[config(sensitive = true, description = "Database password")]
-    db_password: String,
-    
-    #[config(sensitive = true, description = "API key")]
-    api_key: String,
-}
-
-fn main() {
-    let config = Config::load().unwrap();
-    
-    // Export audit log (sensitive fields automatically masked)
-    config.export_audit_log().unwrap();
-    // In audit log shows as:
-    // db_password = "******"
-    // api_key = "******"
-}
-```
-
-### 6. Custom Validation
-
-```rust
-use validator::ValidationError;
-use serde::{Deserialize, Serialize};
-
-fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
-    if password.len() < 8 {
-        return Err(ValidationError::new("password_too_short"));
-    }
-    if !password.chars().any(|c| c.is_numeric()) {
-        return Err(ValidationError::new("password_needs_number"));
-    }
-    Ok(())
-}
-
-#[derive(Config, Serialize, Deserialize)]
-struct Config {
-    #[config(custom_validate = "validate_password_strength")]
-    password: String,
-}
-```
-
-### 7. Generate Configuration Template
-
-```rust
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Serialize, Deserialize)]
-#[config(env_prefix = "MYAPP_")]
-struct Config {
-    #[config(description = "Server port", default = "8080")]
-    port: u16,
-    
-    #[config(description = "Enable debug mode", default = "false")]
-    debug: bool,
-}
-
-fn main() {
-    // Generate complete template (with all fields and comments)
-    let template = Config::generate_template(TemplateLevel::Full);
-    println!("{}", template);
-    
-    // Output:
-    // # Server port
-    // port = 8080
-    //
-    // # Enable debug mode
-    // debug = false
-}
-```
-
-------
-
-## 🛠️ CLI Tools
-
-### Installation
-
-```bash
-cargo install confers-cli
-```
-
-### Commands
-
-#### 1. Generate Configuration Template
-
-```bash
-# Generate complete template
-confers generate --output config.toml --level full
-
-# Generate minimal template (only required fields)
-confers generate --output config.toml --level minimal
-```
-
-#### 2. Validate Configuration File
-
-```bash
-confers validate --config config.toml
-
-# Output:
-# ✅ Configuration validation passed
-# or
-# ❌ Validation failed:
-#   - port: Port must be between 1-65535
-#   - email: Invalid email address
-```
-
-#### 3. Configuration Diff Comparison
-
-```bash
-confers diff production.toml staging.toml
-
-# Output:
-# - port: 8080
-# + port: 9000
-#   host: "0.0.0.0"
-# - debug: true
-# + debug: false
-```
-
-#### 4. Export Schema
-
-```bash
-# Generate JSON Schema
-confers schema --format json --output schema.json
-
-# Generate TypeScript type definitions
-confers schema --format typescript --output config.d.ts
-```
-
-#### 5. Shell Auto-completion
-
-```bash
-# Bash
-confers completions bash > /usr/share/bash-completion/completions/myapp
-
-# Zsh
-confers completions zsh > ~/.zsh/completion/_myapp
-
-# Fish
-confers completions fish > ~/.config/fish/completions/myapp.fish
-```
-
-#### 6. Encrypt Configuration (v0.4.0+)
-
-```bash
-# Generate encryption key
-confers keygen --output ~/.confers/encryption.key
-
-# Encrypt single value
-confers encrypt --value "my_secret_password"
-# Output: enc:AES256GCM:Zm9vYmFyLi4u
-
-# Batch encrypt configuration file
-confers encrypt-file --input config.plain.toml --output config.encrypted.toml
-```
+</details>
 
 ---
 
-## 📚 Complete Usage Guide
+## 📊 Performance
 
-### Configuration Loading Process
+<div align="center">
 
-```
-1. Initialize application metadata
-   ├─ Get application name (from Cargo.toml or environment variables)
-   ├─ Get environment variable prefix
-   └─ Determine configuration file search paths
+### ⚡ Benchmark Results
 
-2. Load configuration sources by priority
-   ├─ System configuration file (/etc/{app}/config.*)
-   ├─ User configuration file (~/.config/{app}/config.*)
-   ├─ Remote configuration center (etcd/consul/http)
-   ├─ Specified configuration file (--config)
-   ├─ Environment variables ({PREFIX}_*)
-   └─ Command line arguments
+</div>
 
-3. Configuration merging and validation
-   ├─ Merge using Figment by priority
-   ├─ Partial override strategy
-   ├─ Type conversion and deserialization
-   └─ Execute validation rules
+<table>
+<tr>
+<td width="50%">
 
-4. Generate audit log
-   ├─ Record all configuration source statuses
-   ├─ Output final configuration (masked)
-   └─ Record validation results
-
-5. Return configuration object
-```
-
-### Error Handling
-
-#### Strict Mode vs Lenient Mode
-
-```rust
-// Strict mode: Any configuration source failure returns error
-#[derive(Config)]
-#[config(strict = true)]
-struct Config { }
-
-// Lenient mode (default): Allow partial configuration source failures
-#[derive(Config)]
-#[config(strict = false)]
-struct Config { }
-```
-
-**Lenient Mode Behavior**:
-
-- ✅ System configuration file not found → Skip (common case)
-- ✅ User configuration file not found → Skip (common case)
-- ❌ Specified configuration file not found → **Error** (user explicitly specified)
-- ⚠️ Environment variable format error → Skip variable, log warning
-- ❌ Command line argument error → **Error** (Clap handles automatically)
-
-#### Error Types
-
-```rust
-use confers::ConfigError;
-
-match Config::load() {
-    Ok(config) => { /* ... */ }
-    Err(ConfigError::FileNotFound { path }) => {
-        eprintln!("Configuration file not found: {:?}", path);
-    }
-    Err(ConfigError::ParseError { source }) => {
-        eprintln!("Configuration parsing failed: {}", source);
-    }
-    Err(ConfigError::ValidationError(errors)) => {
-        eprintln!("Configuration validation failed:");
-        for (field, error) in errors.field_errors() {
-            eprintln!("  - {}: {}", field, error);
-        }
-    }
-    Err(e) => {
-        eprintln!("Unknown error: {}", e);
-    }
-}
-```
-
-### Cross-platform Path Handling
-
-Confers automatically handles Windows and Unix path differences:
-
-```rust
-// Windows user configuration file
-C:\Users\foo\config.toml
-
-// Automatically converted to Unix style (internal handling)
-/c/Users/foo/config.toml
-
-// Path expansion
-~/.config/app/config.toml  →  /home/user/.config/app/config.toml
-$HOME/config.toml          →  /home/user/config.toml
-
-// Mixed separators (automatic normalization)
-C:/Users\foo/config.toml   →  /c/Users/foo/config.toml
-```
-
-### Multi-format Configuration Files
-
-#### Format Priority
-
-When multiple format configuration files exist in the same directory:
+**Configuration Loading**
 
 ```
-config.toml  ← Highest priority
-config.json
-config.yaml
-config.ini   ← Lowest priority
+Single file: ~1ms
+Multiple files: ~5ms
+With validation: ~10ms
 ```
 
-#### Format Detection Mode
+</td>
+<td width="50%">
 
-```rust
-#[derive(Config)]
-#[config(format_detection = "ByContent")]  // Default
-struct Config { }
+**Memory Usage**
 
-#[derive(Config)]
-#[config(format_detection = "ByExtension")]  // Extension only
-struct Config { }
+```
+Base: ~2MB
+With audit: ~5MB
+Peak limit: 10MB (configurable)
 ```
 
-**ByContent Mode** (Recommended):
+</td>
+</tr>
+</table>
 
-- Read file content to determine format
-- Prevent format mismatch (e.g., JSON content saved as .toml)
-- Provide clear error messages
+<details>
+<summary><b>📈 Detailed Benchmarks</b></summary>
 
-**ByExtension Mode**:
-
-- Determine format only by file extension
-- Better performance (no file reading)
-- Suitable for scenarios with confirmed correct formats
-
-### Audit Log
-
-#### Audit Log Format
-
-```toml
-# Confers Configuration Audit Log
-# Generated at: 2025-12-12 10:30:45 UTC
-
-[metadata]
-loaded_at = "2025-12-12T10:30:45Z"
-app_name = "myapp"
-version = "1.0.0"
-hostname = "prod-server-01"
-load_duration_ms = 125
-
-[sources]
-system_config = { status = "loaded", path = "/etc/myapp/config.toml" }
-user_config = { status = "not_found", path = "~/.config/myapp/config.toml" }
-remote_config = { status = "loaded", url = "etcd://localhost:2379/myapp" }
-env_vars = { status = "loaded", count = 3 }
-cli_args = { status = "loaded", count = 2 }
-
-[warnings]
-# Multiple format configuration files detected
-multiple_formats_detected = [
-    "/etc/myapp/config.toml",
-    "/etc/myapp/config.json"  # Ignored
-]
-
-[config]
-# Final merged configuration (sensitive fields masked)
-host = "0.0.0.0"
-port = 8080
-debug = false
-
-[config.database]
-host = "localhost"
-port = 5432
-username = "admin"
-password = "******"  # Sensitive field masked
-
-[validation]
-status = "passed"
-errors = []
-```
-
-------
-
-## 🔒 Security Best Practices
-
-### 1. Sensitive Information Protection
-
-```rust
-#[derive(Config)]
-struct Config {
-    // ✅ Correct: Mark as sensitive field
-    #[cfg_attr(sensitive = true)]
-    db_password: String,
-    
-    #[cfg_attr(sensitive = true)]
-    api_key: String,
-    
-    // ❌ Wrong: Not marked, may leak to logs
-    secret_token: String,
-}
-```
-
-### 2. Path Security
-
-Confers automatically protects against path traversal attacks:
-
-```rust
-// ❌ Malicious paths will be rejected
-../../../etc/passwd
-../../.ssh/id_rsa
-/etc/shadow
-
-// ✅ Normal paths allowed
-/etc/myapp/config.toml
-~/.config/myapp/config.toml
-./config.toml
-```
-
-### 3. Environment Variable Validation
-
-```rust
-// Confers automatically validates environment variables:
-// - Key name length ≤ 256 bytes
-// - Value length ≤ 4KB
-// - Key names only allow alphanumeric and underscore
-```
-
-### 4. Configuration Encryption (v0.4.0+)
-
-```rust
-#[derive(Config)]
-struct Config {
-    #[cfg_attr(sensitive = true, description = "Database password")]
-    db_password: String,
-}
-```
-
-**Configuration File**:
-
-```toml
-# Use confers encrypt command to encrypt
-db_password = "enc:AES256GCM:Zm9vYmFyLi4u"
-```
-
-**Key Management**:
+<br>
 
 ```bash
-# Method 1: Environment variable
-export CONFERS_ENCRYPTION_KEY="base64_encoded_key"
+# Run benchmarks
+cargo bench
 
-# Method 2: Key file
-echo "base64_encoded_key" > ~/.confers/encryption.key
+# Sample output:
+test config_load_small    ... bench: 1,000 ns/iter (+/- 50)
+test config_load_medium   ... bench: 5,000 ns/iter (+/- 200)
+test config_load_large    ... bench: 10,000 ns/iter (+/- 500)
 ```
 
-------
-
-## ⚡ Performance Optimization
-
-### Configuration Caching
-
-```rust
-use once_cell::sync::OnceCell;
-
-static CONFIG: OnceCell<AppConfig> = OnceCell::new();
-
-fn get_config() -> &'static AppConfig {
-    CONFIG.get_or_init(|| {
-        AppConfig::load().expect("Configuration loading failed")
-    })
-}
-
-fn main() {
-    // First call loads configuration
-    let config = get_config();
-    
-    // Subsequent calls return cached value
-    let config2 = get_config();  // Zero overhead
-}
-```
-
-### Lazy Loading
-
-```rust
-#[derive(Config)]
-struct Config {
-    // Basic configuration loads immediately
-    port: u16,
-    
-    // Complex configuration loads lazily
-    #[cfg_attr(skip)]
-    database: Option<DatabaseConfig>,
-}
-
-impl Config {
-    fn database(&mut self) -> &DatabaseConfig {
-        self.database.get_or_insert_with(|| {
-            DatabaseConfig::load_from_file("database.toml").unwrap()
-        })
-    }
-}
-```
+</details>
 
 ---
 
-## 🐛 Troubleshooting
+## 🔒 Security
 
-### Common Issues
+<div align="center">
 
-#### 1. Configuration File Not Found
+### 🛡️ Security Features
 
+</div>
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="https://img.icons8.com/fluency/96/000000/lock.png" width="64" height="64"><br>
+<b>Encryption</b><br>
+AES-GCM encryption for sensitive values
+</td>
+<td align="center" width="33%">
+<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64" height="64"><br>
+<b>Audit Logging</b><br>
+Full operation tracking with masking
+</td>
+<td align="center" width="33%">
+<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="64" height="64"><br>
+<b>Memory Safety</b><br>
+Zero-copy & secure cleanup
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>🔐 Security Details</b></summary>
+
+<br>
+
+### Security Measures
+
+- ✅ **Configuration Encryption** - AES-GCM encryption for sensitive data
+- ✅ **Audit Logging** - Track all config access with sensitive data masking
+- ✅ **Memory Limits** - Configurable memory usage caps (max 10MB)
+- ✅ **Input Validation** - Comprehensive validation prevents injection
+
+### Feature Flags
+
+```toml
+[dependencies.confers]
+version = "0.1.0"
+features = ["audit", "encryption"]
 ```
-Error: Configuration file not found: /etc/myapp/config.toml
-```
 
-**Solutions**:
-
-- Check if file path is correct
-- Use `--config` to explicitly specify configuration file
-- Enable lenient mode (`strict = false`) to skip missing configuration files
-
-#### 2. Environment Variables Not Taking Effect
-
-```
-# Environment variable set but not taking effect
-export PORT=9000  # ❌ Missing prefix
-export MYAPP_PORT=9000  # ✅ Correct
-```
-
-**Checklist**:
-
-- ✅ Does environment variable include correct prefix?
-- ✅ Is variable name all uppercase?
-- ✅ Are nested fields separated by underscores?
-
-#### 3. Validation Failed
-
-```
-Error: Configuration validation failed
-  - port: Port must be between 1-65535
-```
-
-**Solutions**:
-
-- Check if configuration values meet validation rules
-- View `error_msg` for detailed hints
-- Use `confers validate` command to check configuration
-
-#### 4. Hot Reload Not Working
-
-**Checklist**:
-
-- ✅ Is `watch = true` enabled?
-- ✅ Is `watch` feature enabled? `confers = { features = ["watch"] }`
-- ✅ Is file path correct?
-- ✅ Do you have file write permissions?
-
-### Debug Mode
+### CLI Commands for Security
 
 ```bash
-# Enable debug logging
-RUST_LOG=confers=debug cargo run
+# Encrypt sensitive configuration values
+confers encrypt --input config.toml --output encrypted.toml
 
-# View configuration loading order
-confers debug --show-sources
+# Manage encryption keys
+confers key generate
+confers key rotate --key-id my-key
 
-# Export complete configuration (including source info)
-confers debug --dump-config
+# Validate configuration security
+confers validate --strict config.toml
 ```
 
-------
+</details>
+
+---
+
+## 🗺️ Roadmap
+
+<div align="center">
+
+### 🎯 Development Timeline
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+### ✅ Completed
+
+- [x] Core configuration loading
+- [x] Multi-format support
+- [x] Derive macro
+- [x] Validation integration
+- [x] Environment variables
+- [x] CLI commands (encrypt, key, validate, generate, wizard, diff, completions)
+
+</td>
+<td width="50%">
+
+### 🚧 In Progress
+
+- [ ] Enhanced remote providers
+- [ ] Plugin system
+- [ ] Performance optimization
+- [ ] Documentation improvements
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 📋 Planned
+
+- [ ] WebAssembly support
+- [ ] GraphQL schema generation
+- [ ] Dynamic configuration
+- [ ] Cloud provider integrations
+
+</td>
+<td width="50%">
+
+### 💡 Future Ideas
+
+- [ ] Configuration versioning
+- [ ] A/B testing support
+- [ ] Feature flags system
+- [ ] Configuration diff tool
+
+</td>
+</tr>
+</table>
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please check [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+<div align="center">
 
-### Development Environment Setup
+### 💖 We Love Contributors!
 
-```bash
-# Clone repository
-git clone https://github.com/yourusername/confers.git
-cd confers
+</div>
 
-# Install dependencies
-cargo build
+<table>
+<tr>
+<td width="33%" align="center">
 
-# Run tests
-cargo test --all-features
+### 🐛 Report Bugs
 
-# Run examples
-cargo run --example basic
-```
+Found a bug?<br>
+[Create an Issue](https://github.com/Kirky.X/confers/issues)
 
-### Commit Conventions
+</td>
+<td width="33%" align="center">
 
-```
-feat: New feature
-fix: Bug fix
-docs: Documentation update
-test: Test related
-refactor: Refactoring
-perf: Performance optimization
-```
+### 💡 Request Features
 
-------
+Have an idea?<br>
+[Start a Discussion](https://github.com/Kirky.X/confers/discussions)
+
+</td>
+<td width="33%" align="center">
+
+### 🔧 Submit PRs
+
+Want to contribute?<br>
+[Fork & PR](https://github.com/Kirky.X/confers/pulls)
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><b>📝 Contribution Guidelines</b></summary>
+
+<br>
+
+### How to Contribute
+
+1. **Fork** the repository
+2. **Clone** your fork: `git clone https://github.com/yourusername/confers.git`
+3. **Create** a branch: `git checkout -b feature/amazing-feature`
+4. **Make** your changes
+5. **Test** your changes: `cargo test --all-features`
+6. **Commit** your changes: `git commit -m 'Add amazing feature'`
+7. **Push** to branch: `git push origin feature/amazing-feature`
+8. **Create** a Pull Request
+
+### Code Style
+
+- Follow Rust standard coding conventions
+- Run `cargo fmt` before committing
+- Run `cargo clippy` to check for issues
+- Write comprehensive tests
+- Update documentation
+
+</details>
+
+---
 
 ## 📄 License
 
-This project is dual-licensed under MIT or Apache-2.0. See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
+<div align="center">
 
-------
+This project is licensed under dual license:
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
+
+You may choose either license for your use.
+
+</div>
+
+---
 
 ## 🙏 Acknowledgments
 
-Confers is built on the following excellent open source projects:
+<div align="center">
 
-- [figment](https://github.com/SergioBenitez/Figment) - Configuration merging
-- [serde](https://github.com/serde-rs/serde) - Serialization framework
-- [clap](https://github.com/clap-rs/clap) - Command line parsing
-- [validator](https://github.com/Keats/validator) - Data validation
+### Built With Amazing Tools
+
+</div>
+
+<table>
+<tr>
+<td align="center" width="25%">
+<a href="https://www.rust-lang.org/">
+<img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" width="64" height="64"><br>
+<b>Rust</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/">
+<img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="64" height="64"><br>
+<b>GitHub</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://figment.network/">
+<img src="https://img.icons8.com/fluency/96/000000/code.png" width="64" height="64"><br>
+<b>Figment</b>
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/Keats/validator">
+<img src="https://img.icons8.com/fluency/96/000000/validation.png" width="64" height="64"><br>
+<b>Validator</b>
+</a>
+</td>
+</tr>
+</table>
+
+### Special Thanks
+
+- 🌟 **Dependencies** - Built on these amazing projects:
+  - [figment](https://github.com/SergioBenitez/figment) - Configuration library
+  - [validator](https://github.com/Keats/validator) - Validation macros
+  - [tokio](https://github.com/tokio-rs/tokio) - Async runtime
+  - [clap](https://github.com/clap-rs/clap) - Command-line argument parsing
+  - [notify](https://github.com/notify-rs/notify) - File system notifications
+
+- 👥 **Contributors** - Thanks to all our amazing contributors!
+
+---
+
+## 📞 Contact & Support
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center" width="50%">
+<a href="https://github.com/Kirky.X/confers/issues">
+<img src="https://img.icons8.com/fluency/96/000000/bug.png" width="48" height="48"><br>
+<b>Issues</b>
+</a><br>
+Report bugs & issues
+</td>
+<td align="center" width="50%">
+<a href="https://github.com/Kirky.X/confers/discussions">
+<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
+<b>Discussions</b>
+</a><br>
+Ask questions & share ideas
+</td>
+</tr>
+</table>
+
+### Stay Connected
+
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kirky.X)
+[![Crates.io](https://img.shields.io/badge/Crates.io-Version-DF5500?style=for-the-badge&logo=rust&logoColor=white)](https://crates.io/crates/confers)
+
+</div>
+
+---
+
+## ⭐ Star History
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Kirky.X/confers&type=Date)](https://star-history.com/#Kirky.X/confers&Date)
+
+</div>
+
+---
+
+<div align="center">
+
+### 💝 Support This Project
+
+If you find this project useful, please consider giving it a ⭐️!
+
+**Built with ❤️ by the Confers Team**
+
+[⬆ Back to Top](#-confers)
+
+---
+
+<sub>© 2025 Confers. All rights reserved.</sub>

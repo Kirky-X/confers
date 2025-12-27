@@ -565,11 +565,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     async fn load_remote_config(
         &self,
     ) -> Result<figment::value::Map<String, figment::value::Value>, ConfigError> {
-        use crate::providers::remote::http::HttpProvider;
+        use crate::providers::http_provider::HttpConfigProvider;
+        use crate::providers::provider::ConfigProvider;
         use figment::value::Map;
 
         if let Some(url) = &self.remote_config.url {
-            let mut provider = HttpProvider::new(url.clone());
+            let mut provider = HttpConfigProvider::new(url.clone());
 
             if let Some(token) = &self.remote_config.token {
                 provider = provider.with_bearer_token(token);
@@ -590,7 +591,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 );
             }
 
-            let figment = provider.load().await?;
+            let figment: Figment = provider.load()?;
             let map: figment::value::Map<String, figment::value::Value> = figment.extract()?;
             Ok(map)
         } else {
