@@ -59,19 +59,22 @@
 - ✅ **Type-safe Configuration** - Auto-generate configuration structs via derive macros
 - ✅ **Multi-format Support** - TOML, YAML, JSON, INI configuration files
 - ✅ **Environment Variable Override** - Support environment variable overrides
-- ✅ **Configuration Validation** - Built-in validator integration with custom validation rules
-- ✅ **Schema Generation** - Auto-generate JSON Schema from configuration structs
+- ✅ **Configuration Validation** - Built-in validator integration with custom validation rules and parallel validation
+- ✅ **Schema Generation** - Auto-generate JSON Schema from configuration structs (requires `schema` feature)
 
 </td>
 <td width="50%">
 
 ### ⚡ Advanced Features
 
-- 🚀 **File Watching & Hot Reload** - Real-time configuration file monitoring
-- 🔐 **Configuration Encryption** - Support encrypted storage for sensitive config
-- 🌐 **Remote Configuration Support** - Load config from etcd, Consul, HTTP and other remote sources
-- 📦 **Audit Logging** - Record configuration access and change history
-- 🔧 **Configuration Diff** - Compare different configuration files
+- 🚀 **File Watching & Hot Reload** - Real-time configuration file monitoring (requires `watch` feature)
+- 🔐 **Configuration Encryption** - Support AES-256 encrypted storage for sensitive config
+- 🌐 **Remote Configuration Support** - Load config from etcd, Consul, HTTP and other remote sources (requires `remote` feature)
+- 📦 **Audit Logging** - Record configuration access and change history (requires `audit` feature)
+- 🔧 **Configuration Diff** - Compare different configuration files with multiple output formats
+- 🎨 **Interactive Wizard** - Generate configuration file templates through interactive CLI
+- 📊 **Multi-level Output** - Support Minimal, Full, Documentation three output levels
+- 💾 **Memory Limit** - Configurable memory usage limit to prevent excessive memory consumption during config loading
 
 </td>
 </tr>
@@ -404,13 +407,15 @@ graph TB
 | **File Watching** | Real-time configuration monitoring with hot reload | ✅ Stable |
 | **Remote Configuration** | Support for etcd, Consul, HTTP and other remote sources | 🚧 Beta |
 | **Audit Logging** | Record configuration access and change history | ✅ Stable |
-| **Encrypted Storage** | Support encrypted storage for sensitive config | ✅ Stable |
+| **Encrypted Storage** | Support AES-256 encrypted storage for sensitive config | ✅ Stable |
+| **Configuration Diff** | Support Unified, Context, Normal, SideBySide, Strict formats | ✅ Stable |
+| **Interactive Wizard** | Step-by-step configuration file template generation | ✅ Stable |
 
 </details>
 
 ---
 
-## ⚙️ Configuration
+## 💻 CLI Command Reference
 
 <div align="center">
 
