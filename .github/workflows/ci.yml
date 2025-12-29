@@ -55,6 +55,41 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+  license:
+    name: License Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Detect license from LICENSE file
+        id: detect-license
+        run: |
+          if grep -q "MIT License" LICENSE; then
+            echo "type=MIT" >> $GITHUB_OUTPUT
+          elif grep -q "Apache License" LICENSE; then
+            echo "type=Apache-2.0" >> $GITHUB_OUTPUT
+          else
+            echo "type=UNKNOWN" >> $GITHUB_OUTPUT
+          fi
+          echo "Detected license: ${type}"
+      
+      - name: Get license from Cargo.toml
+        id: get-license
+        run: |
+          cargo_license=$(grep '^license = ' Cargo.toml | sed 's/license = //' | tr -d ' "')
+          echo "Cargo.toml license: $cargo_license"
+          echo "cargo_license=$cargo_license" >> $GITHUB_OUTPUT
+      
+      - name: Verify license consistency
+        run: |
+          if [ "${{ steps.detect-license.outputs.type }}" != "${{ steps.get-license.outputs.cargo_license }}" ]; then
+            echo "License mismatch!"
+            echo "LICENSE file: ${{ steps.detect-license.outputs.type }}"
+            echo "Cargo.toml: ${{ steps.get-license.outputs.cargo_license }}"
+            exit 1
+          fi
+          echo "License check passed: ${{ steps.get-license.outputs.cargo_license }}"
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
