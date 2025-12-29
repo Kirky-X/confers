@@ -558,7 +558,7 @@ confers key generate --length 32
 
 ### 🎯 测试覆盖
 
-![Coverage](https://img.shields.io/badge/coverage-80%25-success?style=for-the-badge)
+[![codecov](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
 
 </div>
 
