@@ -1285,7 +1285,8 @@ pub fn generate_impl(
                 }
 
                 if let Some(validator_name) = validate_str.strip_prefix("custom:") {
-                    let validator_name_lit = syn::LitStr::new(validator_name, proc_macro2::Span::call_site());
+                    let validator_name_lit =
+                        syn::LitStr::new(validator_name, proc_macro2::Span::call_site());
                     validation_fields.push(quote! {
                         if !confers::validators::validate_with_custom(#validator_name_lit, &self.#field_ident) {
                             let mut error = validator::ValidationError::new("custom");

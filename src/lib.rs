@@ -29,8 +29,8 @@ pub use validator::{
 };
 
 pub use validators::{
-    register_custom_validator, unregister_custom_validator, validate_with_custom,
-    list_custom_validators, CustomValidator,
+    list_custom_validators, register_custom_validator, unregister_custom_validator,
+    validate_with_custom, CustomValidator,
 };
 
 pub use security::{EnvSecurityError, EnvSecurityValidator, EnvironmentValidationConfig};

@@ -95,6 +95,7 @@ value: 999
             json_file.clone(),
             yaml_file.clone(),
         ])
+        .with_memory_limit(256) // Increase memory limit for audit logging overhead
         .with_audit_log(true)
         .with_audit_log_path(audit_log.to_str().unwrap().to_string());
 

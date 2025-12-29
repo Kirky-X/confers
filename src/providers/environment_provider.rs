@@ -118,11 +118,14 @@ impl ConfigProvider for EnvironmentProvider {
         let validator = get_global_validator();
 
         let env_vars = self.get_env_vars();
-        eprintln!(
-            "Found {} env vars with prefix '{}'",
-            env_vars.len(),
-            self.prefix
-        );
+        // Reduced logging to avoid performance issues in tests
+        if cfg!(debug_assertions) {
+            tracing::debug!(
+                "Found {} env vars with prefix '{}'",
+                env_vars.len(),
+                self.prefix
+            );
+        }
 
         if !env_vars.is_empty() {
             let mut nested_env_map = figment::value::Dict::new();
@@ -130,7 +133,6 @@ impl ConfigProvider for EnvironmentProvider {
 
             for (key, value) in env_vars {
                 if let Err(e) = validator.validate_env_name(&key, Some(&value)) {
-                    eprintln!("WARNING: Failed to validate env name '{}': {}", key, e);
                     validation_warnings.push(format!("环境变量名称 '{}' 验证失败: {}", key, e));
                     continue;
                 }
@@ -140,7 +142,6 @@ impl ConfigProvider for EnvironmentProvider {
                 }
 
                 if let Err(e) = validator.validate_env_value(&value) {
-                    eprintln!("WARNING: Failed to validate env value for '{}': {}", key, e);
                     validation_warnings.push(format!("环境变量值 '{}' 验证失败: {}", key, e));
                     continue;
                 }

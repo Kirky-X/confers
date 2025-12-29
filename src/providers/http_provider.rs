@@ -109,10 +109,14 @@ impl HttpConfigProvider {
                 let cert_data = std::fs::read(cert_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
                 })?;
-                let _key_data = std::fs::read(key_path).map_err(|e| {
+                let key_data = std::fs::read(key_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read client key: {}", e))
                 })?;
-                let identity = reqwest::Identity::from_pem(&cert_data).map_err(|e| {
+                // Combine cert and key for identity
+                let mut combined = cert_data;
+                combined.extend_from_slice(b"\n");
+                combined.extend_from_slice(&key_data);
+                let identity = reqwest::Identity::from_pem(&combined).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
                 })?;
                 builder = builder.identity(identity);
