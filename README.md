@@ -15,7 +15,7 @@
   <a href="https://crates.io/crates/confers">
     <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads">
   </a>
-  <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE-MIT">
+  <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE">
     <img src="https://img.shields.io/crates/l/confers.svg" alt="License">
   </a>
   <a href="https://www.rust-lang.org/">

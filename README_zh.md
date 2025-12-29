@@ -3,10 +3,27 @@
 # 🚀 Confers
 
 <p>
-  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
-  <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
+  <a href="https://github.com/Kirky-X/confers/actions/workflows/ci.yml">
+    <img src="https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://crates.io/crates/confers">
+    <img src="https://img.shields.io/crates/v/confers.svg" alt="Version">
+  </a>
+  <a href="https://docs.rs/confers">
+    <img src="https://docs.rs/confers/badge.svg" alt="Documentation">
+  </a>
+  <a href="https://crates.io/crates/confers">
+    <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads">
+  </a>
+  <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE">
+    <img src="https://img.shields.io/crates/l/confers.svg" alt="License">
+  </a>
+  <a href="https://www.rust-lang.org/">
+    <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
+  </a>
+  <a href="https://codecov.io/gh/Kirky-X/confers">
+    <img src="https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg" alt="Coverage">
+  </a>
 </p>
 
 <p align="center">
