@@ -776,12 +776,9 @@ Want to contribute code?<br>
 
 <div align="center">
 
-This project is licensed under dual license:
+This project is licensed under MIT License:
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-
-You may choose either license for your use.
 
 </div>
 

@@ -837,12 +837,9 @@ gantt
 
 <div align="center">
 
-This project is licensed under dual license:
+本项目采用 MIT 许可证：
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
-
-You may choose either license for your use.
 
 </div>
 
