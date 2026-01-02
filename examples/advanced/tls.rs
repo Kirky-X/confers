@@ -28,14 +28,12 @@ fn demonstrate_watcher_tls() {
         ca_cert_path: Some("/path/to/ca.crt".to_string()),
         client_cert_path: Some("/path/to/client.crt".to_string()),
         client_key_path: Some("/path/to/client.key".to_string()),
-        skip_verify: false,
     };
 
     println!("TLS配置创建成功！");
     println!("CA证书路径: {:?}", tls_config.ca_cert_path);
     println!("客户端证书路径: {:?}", tls_config.client_cert_path);
     println!("客户端密钥路径: {:?}", tls_config.client_key_path);
-    println!("跳过验证: {}", tls_config.skip_verify);
 
     let _watcher = confers::watcher::ConfigWatcher::new_remote(
         "https://example.com/config",

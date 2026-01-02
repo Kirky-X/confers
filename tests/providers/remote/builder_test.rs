@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use confers::ConfigMap;
-use figment::value::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, Validate)]
@@ -19,19 +18,10 @@ struct TestConfig {
 }
 
 impl ConfigMap for TestConfig {
-    fn to_map(&self) -> HashMap<String, Value> {
+    fn to_map(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
-        map.insert(
-            "name".to_string(),
-            Value::String(figment::value::Tag::Default, self.name.clone()),
-        );
-        map.insert(
-            "value".to_string(),
-            Value::Num(
-                figment::value::Tag::Default,
-                figment::value::Num::I32(self.value),
-            ),
-        );
+        map.insert("name".to_string(), serde_json::json!(self.name));
+        map.insert("value".to_string(), serde_json::json!(self.value));
         map
     }
 

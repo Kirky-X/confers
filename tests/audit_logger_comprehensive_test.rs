@@ -37,13 +37,11 @@ impl confers::Sanitize for TestConfig {
 }
 
 impl confers::ConfigMap for TestConfig {
-    fn to_map(&self) -> std::collections::HashMap<String, confers::figment::value::Value> {
-        use confers::figment::value::Value;
-
+    fn to_map(&self) -> std::collections::HashMap<String, serde_json::Value> {
         let mut map = std::collections::HashMap::new();
-        map.insert("name".to_string(), Value::from(self.name.clone()));
-        map.insert("value".to_string(), Value::from(self.value));
-        map.insert("enabled".to_string(), Value::from(self.enabled));
+        map.insert("name".to_string(), serde_json::json!(self.name));
+        map.insert("value".to_string(), serde_json::json!(self.value));
+        map.insert("enabled".to_string(), serde_json::json!(self.enabled));
         map
     }
 
@@ -108,7 +106,7 @@ async fn test_audit_logger_comprehensive_metadata() {
             env_toml_path.clone(),
         ])
         .with_format_detection("ByExtension")
-        .with_memory_limit(256) // Increase memory limit for audit logging overhead
+        .with_memory_limit(300) // Increase memory limit for audit logging overhead
         .with_audit_log(true)
         .with_audit_log_path(audit_log_path.to_str().unwrap().to_string());
 

@@ -5,7 +5,7 @@
 
 use crate::error::ConfigError;
 use crate::providers::{ConfigProvider, ProviderMetadata, ProviderType};
-use crate::security::get_global_validator;
+use crate::security::EnvSecurityValidator;
 use figment::Figment;
 
 fn insert_nested_value(
@@ -41,6 +41,9 @@ pub struct EnvironmentProvider {
     name: String,
     priority: u8,
     custom_mappings: std::collections::HashMap<String, String>,
+    /// Optional security validator for dependency injection
+    /// If None, a default validator will be used
+    validator: Option<EnvSecurityValidator>,
 }
 
 impl EnvironmentProvider {
@@ -56,6 +59,7 @@ impl EnvironmentProvider {
             name: "environment".to_string(),
             priority: 30,
             custom_mappings: std::collections::HashMap::new(),
+            validator: None,
         }
     }
 
@@ -72,6 +76,7 @@ impl EnvironmentProvider {
             name: "env".to_string(),
             priority: 30,
             custom_mappings: std::collections::HashMap::new(),
+            validator: None,
         }
     }
 
@@ -98,6 +103,18 @@ impl EnvironmentProvider {
         self
     }
 
+    /// Set a custom security validator
+    /// This allows for dependency injection instead of using global state
+    pub fn with_validator(mut self, validator: EnvSecurityValidator) -> Self {
+        self.validator = Some(validator);
+        self
+    }
+
+    /// Get the validator to use (either custom or default)
+    fn get_validator(&self) -> EnvSecurityValidator {
+        self.validator.clone().unwrap_or_default()
+    }
+
     /// Check if any environment variables with the given prefix exist
     pub fn has_env_vars(&self) -> bool {
         std::env::vars().any(|(key, _)| key.starts_with(&self.prefix))
@@ -115,7 +132,7 @@ impl ConfigProvider for EnvironmentProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
         let mut figment = Figment::new();
 
-        let validator = get_global_validator();
+        let validator = self.get_validator();
 
         let env_vars = self.get_env_vars();
         // Reduced logging to avoid performance issues in tests

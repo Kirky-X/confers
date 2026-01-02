@@ -4,7 +4,6 @@
 // See LICENSE file in the project root for full license information.
 
 use confers::ConfigMap;
-use figment::value::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
@@ -16,9 +15,9 @@ struct TestConfig {
 }
 
 impl ConfigMap for TestConfig {
-    fn to_map(&self) -> HashMap<String, Value> {
+    fn to_map(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
-        map.insert("value".to_string(), Value::from(self.value.clone()));
+        map.insert("value".to_string(), serde_json::json!(self.value));
         map
     }
 

@@ -4,7 +4,6 @@
 // See LICENSE file in the project root for full license information.
 
 use confers::Config;
-use figment::value::Value;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Config)]
@@ -58,8 +57,8 @@ fn test_serde_roundtrip() {
         db_url: "postgres://localhost:5432/db".to_string(),
     };
 
-    let value = Value::serialize(config.clone()).expect("Failed to serialize");
-    let deserialized: AppConfig = value.deserialize().expect("Failed to deserialize");
+    let value = serde_json::to_value(config.clone()).expect("Failed to serialize");
+    let deserialized: AppConfig = serde_json::from_value(value).expect("Failed to deserialize");
     assert_eq!(config, deserialized);
 }
 

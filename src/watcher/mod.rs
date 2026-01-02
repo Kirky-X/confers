@@ -5,12 +5,15 @@
 
 use crate::core::loader::is_editor_temp_file;
 use crate::error::ConfigError;
+
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{new_debouncer, DebouncedEvent, Debouncer, FileIdMap};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "remote")]
+use crate::utils::ssrf::validate_remote_url;
 #[cfg(feature = "remote")]
 use reqwest;
 #[cfg(feature = "remote")]
@@ -86,7 +89,6 @@ pub struct TlsConfig {
     pub ca_cert_path: Option<String>,
     pub client_cert_path: Option<String>,
     pub client_key_path: Option<String>,
-    pub skip_verify: bool,
 }
 
 #[cfg(feature = "remote")]
@@ -109,15 +111,22 @@ impl ConfigWatcher {
     }
 
     #[cfg(feature = "remote")]
-    pub fn new_remote(url: impl Into<String>, poll_interval: Duration) -> Self {
-        Self {
+    pub fn new_remote(
+        url: impl Into<String>,
+        poll_interval: Duration,
+    ) -> Result<Self, ConfigError> {
+        let url_str = url.into();
+        // Validate URL to prevent SSRF attacks
+        validate_remote_url(&url_str)?;
+
+        Ok(Self {
             target: WatchTarget::Remote {
-                url: url.into(),
+                url: url_str,
                 poll_interval,
                 auth: None,
                 tls: None,
             },
-        }
+        })
     }
 
     #[cfg(feature = "remote")]
@@ -244,10 +253,6 @@ impl ConfigWatcher {
             let client_builder = if let Some(ref tls_config) = tls {
                 // Apply TLS configuration
                 let mut builder = client_builder;
-
-                if tls_config.skip_verify {
-                    builder = builder.danger_accept_invalid_certs(true);
-                }
 
                 if let Some(ref ca_cert_path) = tls_config.ca_cert_path {
                     match std::fs::read(ca_cert_path) {
@@ -600,7 +605,6 @@ mod tests {
             ca_cert_path: Some("/path/to/ca.crt".to_string()),
             client_cert_path: Some("/path/to/client.crt".to_string()),
             client_key_path: Some("/path/to/client.key".to_string()),
-            skip_verify: false,
         };
 
         assert_eq!(tls_config.ca_cert_path, Some("/path/to/ca.crt".to_string()));
@@ -612,7 +616,6 @@ mod tests {
             tls_config.client_key_path,
             Some("/path/to/client.key".to_string())
         );
-        assert!(!tls_config.skip_verify);
     }
 
     #[cfg(feature = "remote")]
@@ -620,11 +623,11 @@ mod tests {
     fn test_watcher_with_tls_config() {
         let watcher =
             ConfigWatcher::new_remote("https://example.com/config", Duration::from_secs(60))
+                .unwrap()
                 .with_tls_config(TlsConfig {
                     ca_cert_path: Some("/path/to/ca.crt".to_string()),
                     client_cert_path: None,
                     client_key_path: None,
-                    skip_verify: true,
                 });
 
         match watcher.target {
@@ -632,7 +635,6 @@ mod tests {
                 assert!(tls.is_some());
                 if let Some(tls_config) = tls {
                     assert_eq!(tls_config.ca_cert_path, Some("/path/to/ca.crt".to_string()));
-                    assert!(tls_config.skip_verify);
                 }
             }
             _ => panic!("Expected remote target"),

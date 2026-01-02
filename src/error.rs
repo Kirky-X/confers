@@ -8,79 +8,79 @@ use thiserror::Error;
 
 #[derive(Debug, Error, Clone)]
 pub enum ConfigError {
-    #[error("配置文件未找到: {path}")]
+    #[error("Configuration file not found: {path}")]
     FileNotFound { path: PathBuf },
 
-    #[error("格式检测失败: {0}")]
+    #[error("Format detection failed: {0}")]
     FormatDetectionFailed(String),
 
-    #[error("解析失败: {0}")]
+    #[error("Parse error: {0}")]
     ParseError(String),
 
-    #[error("验证失败: {0}")]
+    #[error("Validation error: {0}")]
     ValidationError(String),
 
-    #[error("路径不安全: {0}")]
+    #[error("Unsafe path: {0}")]
     UnsafePath(PathBuf),
 
-    #[error("远程配置加载失败: {0}")]
+    #[error("Remote configuration load failed: {0}")]
     RemoteError(String),
 
-    #[error("加载配置失败")]
+    #[error("Configuration load failed")]
     LoadError,
 
-    #[error("运行时错误: {0}")]
+    #[error("Runtime error: {0}")]
     RuntimeError(String),
 
-    #[error("序列化错误: {0}")]
+    #[error("Serialization error: {0}")]
     SerializationError(String),
 
-    #[error("IO 错误: {0}")]
+    #[error("IO error: {0}")]
     IoError(String),
 
-    #[error("内存限制超出: 限制 {limit}MB, 当前 {current}MB")]
+    #[error("Memory limit exceeded: limit {limit}MB, current {current}MB")]
     MemoryLimitExceeded { limit: usize, current: usize },
 
-    #[error("密钥错误: {0}")]
+    #[error("Key error: {0}")]
     KeyError(String),
 
-    #[error("密钥未找到: {key_id}")]
+    #[error("Key not found: {key_id}")]
     KeyNotFound { key_id: String },
 
-    #[error("密钥版本不匹配: 期望 {expected}, 实际 {actual}")]
+    #[error("Key version mismatch: expected {expected}, actual {actual}")]
     KeyVersionMismatch { expected: u32, actual: u32 },
 
-    #[error("密钥轮换失败: {0}")]
+    #[error("Key rotation failed: {0}")]
     KeyRotationFailed(String),
 
-    #[error("密钥存储错误: {0}")]
+    #[error("Key storage error: {0}")]
     KeyStorageError(String),
 
-    #[error("密钥验证失败: 校验和不匹配")]
+    #[error("Key verification failed: checksum mismatch")]
     KeyChecksumMismatch,
 
-    #[error("密钥已过期: {key_id}, 版本 {version}")]
+    #[error("Key expired: {key_id}, version {version}")]
     KeyExpired { key_id: String, version: u32 },
 
-    #[error("密钥已废弃: {key_id}, 版本 {version}")]
+    #[error("Key deprecated: {key_id}, version {version}")]
     KeyDeprecated { key_id: String, version: u32 },
 
-    #[error("主密钥无效: {0}")]
+    #[error("Invalid master key: {0}")]
     InvalidMasterKey(String),
 
-    #[error("密钥策略错误: {0}")]
+    #[error("Key policy error: {0}")]
     KeyPolicyError(String),
 
-    #[error("环境变量安全验证失败: {0}")]
+    #[error("Environment variable security validation failed: {0}")]
     EnvSecurityError(String),
 
-    #[error("其他错误: {0}")]
+    #[error("Other error: {0}")]
     Other(String),
 }
 
 impl From<validator::ValidationErrors> for ConfigError {
     fn from(_err: validator::ValidationErrors) -> Self {
-        ConfigError::ValidationError("验证失败".to_string())
+        ConfigError::ValidationError("Validation failed".to_string())
     }
 }
 

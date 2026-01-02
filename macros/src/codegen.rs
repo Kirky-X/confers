@@ -1632,54 +1632,16 @@ pub fn generate_impl(
         }
 
         impl confers::ConfigMap for #struct_name {
-            fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
-                use figment::value::{Value, Dict, Tag, Num};
-
-                let json_value = confers::serde_json::to_value(self)
-                    .expect("Failed to serialize config to JSON");
-
-                fn json_to_figment_value(json: confers::serde_json::Value) -> figment::value::Value {
-                    use figment::value::{Value, Dict, Tag, Num};
-
-                    match json {
-                        confers::serde_json::Value::Null => Value::String(Tag::Default, String::new()),
-                        confers::serde_json::Value::Bool(b) => Value::Bool(Tag::Default, b),
-                        confers::serde_json::Value::Number(n) => {
-                            if let Some(i) = n.as_i64() {
-                                Value::Num(Tag::Default, Num::from(i))
-                            } else if let Some(f) = n.as_f64() {
-                                Value::Num(Tag::Default, Num::from(f))
-                            } else {
-                                Value::String(Tag::Default, String::new())
-                            }
-                        },
-                        confers::serde_json::Value::String(s) => Value::String(Tag::Default, s),
-                        confers::serde_json::Value::Array(arr) => {
-                            let figment_arr: Vec<figment::value::Value> = arr.into_iter()
-                                .map(json_to_figment_value)
-                                .collect();
-                            Value::Array(Tag::Default, figment_arr)
-                        },
-                        confers::serde_json::Value::Object(obj) => {
-                            let mut dict = Dict::new();
-                            for (key, value) in obj {
-                                dict.insert(key.into(), json_to_figment_value(value));
-                            }
-                            Value::Dict(Tag::Default, dict)
-                        },
-                    }
-                }
-
-                let mut map = std::collections::HashMap::new();
-
-                if let confers::serde_json::Value::Object(obj) = json_value {
-                    for (key, value) in obj {
-                        let figment_value = json_to_figment_value(value);
-                        map.insert(key, figment_value);
-                    }
-                }
-
-                map
+            fn to_map(&self) -> std::collections::HashMap<String, confers::serde_json::Value> {
+                confers::serde_json::to_value(self)
+                    .map(|v| {
+                        if let confers::serde_json::Value::Object(map) = v {
+                            map.into_iter().collect()
+                        } else {
+                            std::collections::HashMap::new()
+                        }
+                    })
+                    .unwrap_or_default()
             }
 
             fn env_mapping() -> std::collections::HashMap<String, String> {

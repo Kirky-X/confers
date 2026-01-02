@@ -6,7 +6,6 @@
 #[cfg(feature = "audit")]
 use confers::audit::Sanitize;
 use confers::ConfigMap;
-use figment::value::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
@@ -30,10 +29,10 @@ impl Sanitize for TestConfig {
 }
 
 impl ConfigMap for TestConfig {
-    fn to_map(&self) -> HashMap<String, Value> {
+    fn to_map(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
-        map.insert("name".to_string(), Value::from(self.name.clone()));
-        map.insert("value".to_string(), Value::from(self.value));
+        map.insert("name".to_string(), serde_json::json!(self.name));
+        map.insert("value".to_string(), serde_json::json!(self.value));
         map
     }
 

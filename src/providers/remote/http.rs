@@ -4,13 +4,42 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::error::ConfigError;
+use crate::utils::ssrf::validate_remote_url;
 use figment::value::Value as FigmentValue;
 use figment::{
     providers::Serialized,
     value::{Dict, Map},
     Error, Figment, Profile, Provider,
 };
+use lazy_static::lazy_static;
 use serde_json::Value as JsonValue;
+use std::sync::Arc;
+use std::time::Duration;
+
+/// Global HTTP client with connection pooling
+/// Reuses connections across multiple requests to improve performance
+static HTTP_CLIENT: lazy_static::lazy_static! {
+    Arc::new(
+            reqwest::blocking::Client::builder()
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .expect("Failed to create HTTP client"),
+        )
+    };
+
+/// Global async HTTP client with connection pooling
+static HTTP_CLIENT_ASYNC: lazy_static::lazy_static! {
+    Arc::new(
+            reqwest::Client::builder()
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .expect("Failed to create async HTTP client"),
+        )
+    };
 
 pub struct HttpProvider {
     url: String,
@@ -23,7 +52,6 @@ pub struct TlsConfig {
     pub ca_cert: Option<std::path::PathBuf>,
     pub client_cert: Option<std::path::PathBuf>,
     pub client_key: Option<std::path::PathBuf>,
-    pub skip_verify: bool,
 }
 
 #[derive(Clone)]
@@ -34,13 +62,21 @@ pub struct HttpAuth {
 }
 
 impl HttpProvider {
-    pub fn new(url: impl Into<String>) -> Self {
-        Self {
-            url: url.into(),
+    pub fn new(url: impl Into<String>) -> Result<Self, ConfigError> {
+        let url_str = url.into();
+        // Validate URL to prevent SSRF attacks
+        validate_remote_url(&url_str)?;
+
+        Ok(Self {
+            url: url_str,
             auth: None,
             tls_config: None,
             timeout: None,
-        }
+        })
+    }
+
+    pub fn from_url(url: impl Into<String>) -> Result<Self, ConfigError> {
+        Self::new(url)
     }
 
     pub fn with_tls(
@@ -48,13 +84,11 @@ impl HttpProvider {
         ca_cert: impl Into<std::path::PathBuf>,
         client_cert: Option<impl Into<std::path::PathBuf>>,
         client_key: Option<impl Into<std::path::PathBuf>>,
-        skip_verify: bool,
     ) -> Self {
         self.tls_config = Some(TlsConfig {
             ca_cert: Some(ca_cert.into()),
             client_cert: client_cert.map(|p| p.into()),
             client_key: client_key.map(|p| p.into()),
-            skip_verify,
         });
         self
     }
@@ -83,41 +117,7 @@ impl HttpProvider {
     }
 
     pub fn load_sync(&self) -> Result<Figment, ConfigError> {
-        let mut builder =
-            reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(30));
-
-        if let Some(tls) = &self.tls_config {
-            if let Some(ca_path) = &tls.ca_cert {
-                let cert_data = std::fs::read(ca_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
-                })?;
-                let cert = reqwest::Certificate::from_pem(&cert_data).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e))
-                })?;
-                builder = builder.add_root_certificate(cert);
-            }
-
-            if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
-                let cert_data = std::fs::read(cert_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
-                })?;
-                let _key_data = std::fs::read(key_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read client key: {}", e))
-                })?;
-                let identity = reqwest::Identity::from_pem(&cert_data).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
-                })?;
-                builder = builder.identity(identity);
-            }
-
-            if tls.skip_verify {
-                builder = builder.danger_accept_invalid_certs(true);
-            }
-        }
-
-        let client = builder.build().map_err(|e| {
-            ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
-        })?;
+        let client = (*HTTP_CLIENT).clone();
 
         let mut request = client.get(&self.url);
 
@@ -189,50 +189,7 @@ impl HttpProvider {
     }
 
     pub async fn load(&self) -> Result<Figment, ConfigError> {
-        let mut builder = reqwest::Client::builder();
-
-        if let Some(timeout_str) = &self.timeout {
-            if let Ok(duration) = humantime::parse_duration(timeout_str) {
-                builder = builder.timeout(duration);
-            } else {
-                builder = builder.timeout(std::time::Duration::from_secs(30));
-            }
-        } else {
-            builder = builder.timeout(std::time::Duration::from_secs(30));
-        }
-
-        if let Some(tls) = &self.tls_config {
-            if let Some(ca_path) = &tls.ca_cert {
-                let cert_data = std::fs::read(ca_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
-                })?;
-                let cert = reqwest::Certificate::from_pem(&cert_data).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e))
-                })?;
-                builder = builder.add_root_certificate(cert);
-            }
-
-            if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
-                let cert_data = std::fs::read(cert_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
-                })?;
-                let _key_data = std::fs::read(key_path).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to read client key: {}", e))
-                })?;
-                let identity = reqwest::Identity::from_pem(&cert_data).map_err(|e| {
-                    ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
-                })?;
-                builder = builder.identity(identity);
-            }
-
-            if tls.skip_verify {
-                builder = builder.danger_accept_invalid_certs(true);
-            }
-        }
-
-        let client = builder.build().map_err(|e| {
-            ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
-        })?;
+        let client = (*HTTP_CLIENT_ASYNC).clone();
 
         let mut request = client.get(&self.url);
 

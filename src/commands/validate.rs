@@ -405,7 +405,7 @@ impl ValidateCommand {
     /// Detect file format from extension
     fn detect_format(path: &Path) -> String {
         if let Some(ext) = path.extension() {
-            ext.to_string_lossy().to_string()
+            ext.to_string_lossy().as_ref().to_string()
         } else {
             "unknown".to_string()
         }

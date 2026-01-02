@@ -76,7 +76,7 @@ mod memory_limit_tests {
         };
 
         let error_msg = format!("{}", error);
-        assert!(error_msg.contains("内存限制超出"));
+        assert!(error_msg.contains("Memory limit exceeded"));
         assert!(error_msg.contains("100"));
         assert!(error_msg.contains("150"));
     }
@@ -135,7 +135,6 @@ mod memory_limit_tests {
 mod memory_limit_exact_tests {
     use super::*;
     use confers::{sanitize_impl, ConfigLoader, ConfigMap, Validate};
-    use figment::value::Value;
     use std::collections::HashMap;
     use std::fs;
 
@@ -149,9 +148,9 @@ mod memory_limit_exact_tests {
     sanitize_impl!(SimpleConfig, app_name);
 
     impl ConfigMap for SimpleConfig {
-        fn to_map(&self) -> HashMap<String, Value> {
+        fn to_map(&self) -> HashMap<String, serde_json::Value> {
             let mut map = HashMap::new();
-            map.insert("app_name".to_string(), Value::from(self.app_name.clone()));
+            map.insert("app_name".to_string(), serde_json::json!(self.app_name));
             map
         }
 

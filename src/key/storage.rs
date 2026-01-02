@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedKeyStore {
@@ -52,6 +53,12 @@ impl KeyStorage {
 
     pub fn set_master_key(&mut self, master_key: &[u8; 32]) {
         self.master_key = Some(*master_key);
+    }
+
+    pub fn clear_master_key(&mut self) {
+        if let Some(mut key) = self.master_key.take() {
+            key.zeroize();
+        }
     }
 
     pub fn initialize_with_master_key(
@@ -139,13 +146,12 @@ impl KeyStorage {
     }
 
     fn calculate_checksum(data: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use sha2::{Digest, Sha256};
 
-        let mut hasher = DefaultHasher::new();
-        data.hash(&mut hasher);
-        let hash = hasher.finish();
-        BASE64.encode(hash.to_ne_bytes())
+        let mut hasher = Sha256::new();
+        hasher.update(data.as_bytes());
+        let hash = hasher.finalize();
+        BASE64.encode(hash)
     }
 
     fn validate_checksum(&self, store: &EncryptedKeyStore) -> Result<(), ConfigError> {
@@ -375,6 +381,12 @@ pub struct BackupInfo {
     pub path: PathBuf,
     pub timestamp: u64,
     pub file_name: String,
+}
+
+impl Drop for KeyStorage {
+    fn drop(&mut self) {
+        self.clear_master_key();
+    }
 }
 
 fn now_timestamp() -> u64 {

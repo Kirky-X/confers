@@ -39,19 +39,10 @@ fn test_http_url_parsing() {
     impl OptionalValidate for TestConfig {}
 
     impl confers::ConfigMap for TestConfig {
-        fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
+        fn to_map(&self) -> std::collections::HashMap<String, serde_json::Value> {
             let mut map = std::collections::HashMap::new();
-            map.insert(
-                "name".to_string(),
-                figment::value::Value::String(figment::value::Tag::Default, self.name.clone()),
-            );
-            map.insert(
-                "value".to_string(),
-                figment::value::Value::Num(
-                    figment::value::Tag::Default,
-                    figment::value::Num::I32(self.value),
-                ),
-            );
+            map.insert("name".to_string(), serde_json::json!(self.name));
+            map.insert("value".to_string(), serde_json::json!(self.value));
             map
         }
 
@@ -81,19 +72,10 @@ fn test_https_url_parsing() {
     impl OptionalValidate for HttpsTestConfig {}
 
     impl confers::ConfigMap for HttpsTestConfig {
-        fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
+        fn to_map(&self) -> std::collections::HashMap<String, serde_json::Value> {
             let mut map = std::collections::HashMap::new();
-            map.insert(
-                "name".to_string(),
-                figment::value::Value::String(figment::value::Tag::Default, self.name.clone()),
-            );
-            map.insert(
-                "value".to_string(),
-                figment::value::Value::Num(
-                    figment::value::Tag::Default,
-                    figment::value::Num::I32(self.value),
-                ),
-            );
+            map.insert("name".to_string(), serde_json::json!(self.name));
+            map.insert("value".to_string(), serde_json::json!(self.value));
             map
         }
 
@@ -122,12 +104,9 @@ fn test_http_integration_with_auth() {
     impl OptionalValidate for AuthTestConfig {}
 
     impl confers::ConfigMap for AuthTestConfig {
-        fn to_map(&self) -> std::collections::HashMap<String, figment::value::Value> {
+        fn to_map(&self) -> std::collections::HashMap<String, serde_json::Value> {
             let mut map = std::collections::HashMap::new();
-            map.insert(
-                "name".to_string(),
-                figment::value::Value::String(figment::value::Tag::Default, self.name.clone()),
-            );
+            map.insert("name".to_string(), serde_json::json!(self.name));
             map
         }
 

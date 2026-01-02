@@ -123,6 +123,7 @@ impl EnvironmentValidationConfig {
 }
 
 /// Security validation for environment variable mapping
+#[derive(Debug, Clone)]
 pub struct EnvSecurityValidator {
     /// Maximum length for environment variable names
     max_name_length: usize,
@@ -299,36 +300,6 @@ impl EnvSecurityValidator {
     pub fn should_allow_env_var(&self, name: &str) -> bool {
         self.validate_env_name_simple(name).is_ok()
     }
-}
-
-/// Global security validator instance
-static GLOBAL_VALIDATOR: OnceLock<EnvSecurityValidator> = OnceLock::new();
-static GLOBAL_VALIDATOR_CONFIG: OnceLock<EnvironmentValidationConfig> = OnceLock::new();
-
-/// Get the global security validator
-pub fn get_global_validator() -> &'static EnvSecurityValidator {
-    GLOBAL_VALIDATOR.get_or_init(EnvSecurityValidator::new)
-}
-
-/// Get the global validation configuration
-pub fn get_global_config() -> &'static EnvironmentValidationConfig {
-    GLOBAL_VALIDATOR_CONFIG.get_or_init(EnvironmentValidationConfig::new)
-}
-
-/// Set a custom global security validator
-pub fn set_global_validator(validator: EnvSecurityValidator) {
-    let _ = GLOBAL_VALIDATOR.set(validator);
-}
-
-/// Set the global validation configuration
-pub fn set_global_config(config: EnvironmentValidationConfig) {
-    let _ = GLOBAL_VALIDATOR_CONFIG.set(config.clone());
-    let _ = GLOBAL_VALIDATOR.set(EnvSecurityValidator::with_config(config));
-}
-
-/// Initialize the global validator with configuration
-pub fn init_global_validator(config: EnvironmentValidationConfig) {
-    set_global_config(config);
 }
 
 /// Security validation errors
@@ -597,13 +568,10 @@ mod tests {
             .with_max_name_length(512)
             .with_max_value_length(8192);
 
-        init_global_validator(config);
+        let validator = EnvSecurityValidator::with_config(config.clone());
 
-        let validator = get_global_validator();
-        let global_config = get_global_config();
-
-        assert_eq!(global_config.max_name_length(), 512);
-        assert_eq!(global_config.max_value_length(), 8192);
+        assert_eq!(config.max_name_length(), 512);
+        assert_eq!(config.max_value_length(), 8192);
 
         let long_name = "A".repeat(512);
         assert!(validator.validate_env_name_simple(&long_name).is_ok());
