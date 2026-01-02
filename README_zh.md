@@ -92,6 +92,7 @@
 - 🎨 **交互式向导** - 通过命令行交互式生成配置文件模板
 - 📊 **多级输出** - 支持 Minimal、Full、Documentation 三种输出级别
 - 💾 **内存限制** - 可配置的内存使用限制，防止配置加载占用过多内存
+- 🛡️ **安全增强** - LRU 缓存的 Nonce 重用检测、SSRF 防护工具和安全密钥管理
 
 </td>
 </tr>
@@ -129,7 +130,7 @@ graph LR
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.1.1"
 ```
 
 </td>

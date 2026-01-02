@@ -14,19 +14,30 @@
 
 - [简介](#简介)
 - [快速入门](#快速入门)
-    - [先决条件](#先决条件)
-    - [安装](#安装)
-    - [第一步](#第一步)
+  - [先决条件](#先决条件)
+  - [安装](#安装)
+  - [第一步](#第一步)
 - [核心概念](#核心概念)
+- [命令行工具](#命令行工具)
+  - [安装 CLI](#安装-cli)
+  - [命令参考](#命令参考)
+  - [diff - 配置差分](#diff---配置差分)
+  - [generate - 模板生成](#generate---模板生成)
+  - [validate - 配置验证](#validate---配置验证)
+  - [encrypt - 配置加密](#encrypt---配置加密)
+  - [wizard - 交互式向导](#wizard---交互式向导)
+  - [key - 密钥管理](#key---密钥管理)
 - [基础用法](#基础用法)
-    - [定义配置结构体](#定义配置结构体)
-    - [加载配置](#加载配置)
-    - [默认值与环境变量](#默认值与环境变量)
+  - [定义配置结构体](#定义配置结构体)
+  - [加载配置](#加载配置)
+  - [默认值与环境变量](#默认值与环境变量)
 - [高级用法](#高级用法)
-    - [验证与清洗](#验证与清洗)
-    - [远程配置 (Etcd/HTTP)](#远程配置-etcdhttp)
-    - [审计日志](#审计日志)
-    - [文件监听与热重载](#文件监听与热重载)
+  - [验证与清洗](#验证与清洗)
+  - [远程配置 (Etcd/Consul/HTTP)](#远程配置-etcdconsulhttp)
+  - [审计日志](#审计日志)
+  - [文件监听与热重载](#文件监听与热重载)
+  - [配置差分对比](#配置差分对比)
+  - [敏感数据加密](#敏感数据加密)
 - [最佳实践](#最佳实践)
 - [故障排除](#故障排除)
 - [后续步骤](#后续步骤)
@@ -66,11 +77,9 @@
 </tr>
 </table>
 
-**confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用程序的配置加载、验证和管理。它支持从文件（JSON, TOML,
-YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配置。
+**confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用程序的配置加载、验证和管理。它支持从文件（JSON, TOML, YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配置。
 
-> 💡 **提示**: 本指南假设你具备基本的 Rust 知识。如果你是 Rust
-> 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
+> 💡 **提示**: 本指南假设你具备基本的 Rust 知识。如果你是 Rust 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
 
 ---
 
@@ -85,7 +94,6 @@ YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配
 <td width="50%">
 
 **必选**
-
 - ✅ Rust 1.75+ (stable)
 - ✅ Cargo (随 Rust 一起安装)
 - ✅ Git
@@ -94,7 +102,6 @@ YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配
 <td width="50%">
 
 **可选**
-
 - 🔧 支持 Rust 的 IDE (如 VS Code + rust-analyzer)
 - 🔧 Docker (用于容器化部署)
 - 🔧 Etcd (用于远程配置测试)
@@ -124,7 +131,7 @@ cargo --version
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.2"
 # 如果需要验证功能
 validator = { version = "0.16", features = ["derive"] }
 # 如果需要异步/远程支持
@@ -175,8 +182,7 @@ fn main() {
 
 ### 2️⃣ 层次化加载
 
-`confers` 遵循“最后定义的胜出”原则，按以下优先级合并配置：
-
+`confers` 遵循"最后定义的胜出"原则，按以下优先级合并配置：
 1. **命令行参数** (最高优先级)
 2. **环境变量**
 3. **配置文件** (如 `config.toml`)
@@ -185,10 +191,215 @@ fn main() {
 ### 3️⃣ 灵活的数据源
 
 你可以轻松地从不同来源组合配置：
-
 - **文件**: 支持自动检测 JSON, TOML, YAML 格式。
 - **环境**: 通过 `env_prefix` 自动映射环境变量。
-- **远程**: 支持 Etcd 和 HTTP 轮询/监听。
+- **远程**: 支持 Etcd、Consul 和 HTTP 轮询/监听。
+
+---
+
+## 命令行工具
+
+confers 提供了功能完整的命令行工具，支持配置文件的生成、验证、加密、差分等功能。
+
+### 安装 CLI
+
+```bash
+# 从源码安装
+cargo install confers
+
+# 或从 crates.io 安装
+cargo install confers-cli
+
+# 查看版本
+confers --version
+
+# 查看帮助
+confers --help
+```
+
+### 命令参考
+
+```bash
+confers 0.2.0
+A powerful Rust configuration management library
+
+USAGE:
+    confers [OPTIONS] <SUBCOMMAND>
+
+OPTIONS:
+    -h, --help         打印帮助信息
+    -V, --version      打印版本信息
+    -v, --verbose      启用详细输出 (-vv 更详细)
+
+SUBCOMMANDS:
+    diff       比较两个配置文件的差异
+    generate   生成配置模板
+    validate   验证配置文件
+    encrypt    加密敏感配置
+    wizard     交互式配置生成向导
+    key        生成和管理加密密钥
+    help       打印帮助信息
+```
+
+### diff - 配置差分
+
+比较两个配置文件的差异，支持多种输出格式：
+
+```bash
+# 基本用法 - 比较两个配置文件
+confers diff config1.toml config2.toml
+
+# 指定输出格式
+confers diff config1.toml config2.toml --format unified    # 统一 diff 格式
+confers diff config1.toml config2.toml --format context    # 上下文 diff 格式
+confers diff config1.toml config2.toml --format normal     # 标准 diff 格式
+confers diff config1.toml config2.toml --format side-by-side  # 并排对比格式
+confers diff config1.toml config2.toml --format strict     # 严格模式
+
+# 生成报告
+confers diff config1.toml config2.toml -o diff_report.md
+
+# 查看详细帮助
+confers diff --help
+```
+
+**输出格式说明：**
+
+| 格式 | 描述 | 适用场景 |
+|------|------|----------|
+| `unified` | 统一 diff 格式，含行号和上下文 | 代码审查、版本对比 |
+| `context` | 上下文 diff 格式 | 查看变更上下文 |
+| `normal` | 标准 diff 格式 | 简单差异对比 |
+| `side-by-side` | 并排对比格式 | 可视化对比 |
+| `strict` | 严格模式，仅显示实际差异 | 精确差异分析 |
+
+### generate - 模板生成
+
+从配置结构体生成模板文件：
+
+```bash
+# 基本用法
+confers generate --struct "AppConfig" --output config_template.toml
+
+# 指定输出格式
+confers generate --struct "AppConfig" --format toml --output config.toml
+confers generate --struct "AppConfig" --format yaml --output config.yaml
+confers generate --struct "AppConfig" --format json --output config.json
+
+# 指定输出级别
+confers generate --struct "AppConfig" --level minimal    # 最小输出
+confers generate --struct "AppConfig" --level full       # 完整输出
+confers generate --struct "AppConfig" --level doc        # 文档化输出
+
+# 查看详细帮助
+confers generate --help
+```
+
+**输出级别说明：**
+
+| 级别 | 描述 | 适用场景 |
+|------|------|----------|
+| `minimal` | 仅包含必需字段和注释 | 快速开始 |
+| `full` | 包含所有字段、默认值和注释 | 完整配置 |
+| `doc` | 包含字段说明文档 | 文档生成 |
+
+### validate - 配置文件验证
+
+验证配置文件的格式和值：
+
+```bash
+# 基本用法 - 验证配置文件
+confers validate config.toml
+
+# 指定输出级别
+confers validate config.toml --level minimal    # 最小输出
+confers validate config.toml --level full       # 完整输出
+confers validate config.toml --level doc        # 文档化输出
+
+# 跳过严格模式
+confers validate config.toml --no-strict
+
+# 验证并生成报告
+confers validate config.toml -o validation_report.md
+
+# 查看详细帮助
+confers validate --help
+```
+
+### encrypt - 配置加密
+
+加密敏感配置信息：
+
+```bash
+# 加密配置文件
+confers encrypt input.toml --key-file secret.key --output encrypted.toml
+
+# 加密单个值
+confers encrypt "sensitive_value" --key-file secret.key
+
+# 解密配置文件
+confers encrypt encrypted.toml --key-file secret.key --decrypt --output decrypted.toml
+
+# 查看详细帮助
+confers encrypt --help
+```
+
+**使用示例：**
+
+```bash
+# 生成密钥并加密
+confers key -o secret.key
+confers encrypt config.toml --key-file secret.key -o config.encrypted.toml
+
+# 解密使用
+confers encrypt config.encrypted.toml --key-file secret.key --decrypt -o config.toml
+```
+
+### wizard - 交互式向导
+
+通过交互式 CLI 生成配置文件：
+
+```bash
+# 启动交互式向导
+confers wizard
+
+# 指定配置文件类型
+confers wizard --format toml
+confers wizard --format yaml
+confers wizard --format json
+
+# 查看详细帮助
+confers wizard --help
+```
+
+**向导流程：**
+
+1. 输入配置名称
+2. 设置服务器参数（host、port）
+3. 配置数据库连接（url、pool）
+4. 配置日志级别
+5. 生成配置文件
+
+### key - 密钥管理
+
+生成和管理加密密钥：
+
+```bash
+# 生成新密钥
+confers key -o encryption.key
+
+# 生成 256 位密钥
+confers key --length 256 -o encryption.key
+
+# 从密码派生密钥
+confers key --derive --password "your_password" -o derived.key
+
+# 查看密钥信息
+confers key --info encryption.key
+
+# 查看详细帮助
+confers key --help
+```
 
 ---
 
@@ -235,10 +446,8 @@ let config = MyConfig::new_loader()
     .load()
     .await?;
 ```
-
 // 异步加载（适用于远程配置）
 let config = MyConfig::load().await?;
-
 ```
 
 ### 默认值与环境变量
@@ -280,7 +489,7 @@ let config = MyConfig::new_loader()
     .await?;
 ```
 
-### 远程配置 (Etcd/HTTP)
+### 远程配置 (Etcd/Consul/HTTP)
 
 通过启用 `remote` 特性，你可以从远程源加载配置。`confers` 支持身份验证和 TLS 加密：
 
@@ -290,6 +499,13 @@ let config = MyConfig::new_loader()
     .with_remote_url("http://localhost:2379")
     .with_remote_auth("admin", "password")
     .with_remote_tls("ca.crt", "client.crt", "client.key")
+    .load()
+    .await?;
+
+// 从 Consul 加载配置
+let config = MyConfig::new_loader()
+    .with_remote_url("consul://localhost:8500")
+    .with_remote_token("your-consul-token")
     .load()
     .await?;
 
@@ -362,6 +578,69 @@ for i in 1..=5 {
 }
 ```
 
+### 配置差分对比
+
+使用 `confers` 的配置差分功能，可以比较不同环境或版本的配置文件差异：
+
+```rust
+use confers::ConfigDiff;
+
+// 比较两个配置文件
+let diff = ConfigDiff::new("development.toml", "production.toml")?;
+
+// 使用统一格式输出
+diff.print_unified_diff()?;
+
+// 使用并排格式输出
+diff.print_side_by_side_diff()?;
+
+// 生成差异报告
+diff.generate_report("diff_report.md")?;
+```
+
+**命令行方式：**
+
+```bash
+# 使用 CLI 进行配置差分
+confers diff development.toml production.toml --format unified -o diff_report.md
+```
+
+### 敏感数据加密
+
+`confers` 使用 AES-256 加密算法保护敏感配置信息：
+
+```rust
+use confers::{ConfigEncrypt, EncryptedConfig};
+
+// 生成加密密钥
+let key = ConfigEncrypt::generate_key()?;
+
+// 加密敏感配置
+let encrypted = ConfigEncrypt::encrypt_value(
+    "super_secret_password",
+    &key
+)?;
+
+// 解密配置
+let decrypted = ConfigEncrypt::decrypt_value(
+    &encrypted,
+    &key
+)?;
+```
+
+**命令行方式：**
+
+```bash
+# 生成密钥
+confers key -o encryption.key
+
+# 加密配置文件
+confers encrypt config.toml --key-file encryption.key -o config.encrypted.toml
+
+# 解密配置文件
+confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o config.toml
+```
+
 ---
 
 ## 最佳实践
@@ -394,7 +673,6 @@ for i in 1..=5 {
 <summary><b>❓ 问题：环境变量没有生效</b></summary>
 
 **解决方案：**
-
 1. 检查 `#[config(env_prefix = "APP")]` 是否正确设置。
 2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。
 3. 对于嵌套结构体，使用双下划线，例如 `APP_DB__HOST` 映射到 `db.host`。
@@ -405,7 +683,6 @@ for i in 1..=5 {
 <summary><b>❓ 问题：加载时报 MemoryLimitExceeded 错误</b></summary>
 
 **解决方案：**
-
 1. 检查配置文件是否过大，或者是否存在循环引用的配置。
 2. 调大 `with_memory_limit(mb)` 的阈值（默认不限制）。
 
@@ -415,7 +692,6 @@ for i in 1..=5 {
 <summary><b>❓ 问题：验证失败 ValidationError</b></summary>
 
 **解决方案：**
-
 1. 检查 `validator` 的约束逻辑。`confers` 会在加载后立即运行验证。
 2. 查看错误输出，它会指明哪个字段未满足哪个约束。
 
@@ -425,7 +701,6 @@ for i in 1..=5 {
 <summary><b>❓ 问题：远程配置加载失败 RemoteError</b></summary>
 
 **解决方案：**
-
 1. 检查网络连接及 URL 是否正确。
 2. 如果启用了 TLS，确保证书路径正确且有效。
 3. 检查身份验证令牌或用户名密码是否过期。

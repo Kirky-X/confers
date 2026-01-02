@@ -92,6 +92,7 @@
 - 🎨 **Interactive Wizard** - Generate configuration file templates through interactive CLI
 - 📊 **Multi-level Output** - Support Minimal, Full, Documentation three output levels
 - 💾 **Memory Limit** - Configurable memory usage limit to prevent excessive memory consumption during config loading
+- 🛡️ **Security Enhancements** - Nonce reuse detection with LRU cache, SSRF protection utilities, and secure key management
 
 </td>
 </tr>
@@ -129,7 +130,7 @@ graph LR
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.1.1"
 ```
 
 </td>
