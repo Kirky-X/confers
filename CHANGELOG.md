@@ -7,26 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2026-01-02
 
+### Security
+- Add DNS rebinding protection to SSRF validation to prevent SSRF attacks via hostname resolution
+- Add safe_display() method to ConfigError to sanitize sensitive information from error messages
+- Mask key IDs in error messages to prevent sensitive data leakage
+
+### Fixed
+- Increase default memory limit from 10MB to 512MB to prevent production outages
+- Make HTTP request timeouts configurable (default 30s) for better performance control
+- Replace RwLock unwrap() calls with proper error handling to prevent panics
+- Update validator registry methods to return Results instead of panicking
+
 ### Added
-- Nonce reuse detection with LRU cache in encryption module for enhanced security
-- SecureKey type with automatic memory zeroing for sensitive data protection
-- SSRF protection utilities to prevent server-side request forgery attacks
-- ConfigMap trait refactored to use serde_json::Value for better flexibility
-- Simplified macro code generation for improved compile-time performance
+- Add nonce cache monitoring methods (usage_percent, cache_stats) for production observability
+- Add warning for low memory limits (< 100MB) in ConfigLoader
 
 ### Changed
-- Performance test threshold adjustments for better CI/CD reliability
-- License clarifications and advisories for compliance improvements
-- Enhanced CLI tool documentation with complete command reference
-
-### Security
-- Improved nonce management with LRU cache-based reuse detection
-- Automatic memory cleanup for SecureKey type to prevent data leakage
-- SSRF protection utilities to validate and sanitize remote URLs
-
-### Documentation
-- Updated USER_GUIDE.md with comprehensive CLI tool documentation
-- Added detailed command references for diff, generate, validate, encrypt, wizard, and key commands
+- Simplified boolean expressions in SSRF validation (Clippy improvements)
+- Improved code formatting and documentation
 
 ## [0.1.0] - 2025-12-27
 
