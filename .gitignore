@@ -16,6 +16,7 @@ IFLOW.md
 .idea/
 target/
 temp/
+Cargo.lock
 
 # ============================================
 # Logs and audit files
