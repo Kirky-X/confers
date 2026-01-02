@@ -184,7 +184,7 @@ impl<T> Default for ConfigLoader<T> {
             consul_provider: None,
             #[cfg(feature = "audit")]
             audit: AuditConfig::default(),
-            memory_limit_mb: 10,
+            memory_limit_mb: 512, // Increased to reasonable default for production
         }
     }
 }
@@ -359,6 +359,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
     /// Set memory limit in MB
     pub fn with_memory_limit(mut self, limit_mb: usize) -> Self {
+        if limit_mb > 0 && limit_mb < 100 {
+            tracing::warn!(
+                "Memory limit of {}MB may be too low for production. Recommended minimum: 100MB",
+                limit_mb
+            );
+        }
         self.memory_limit_mb = limit_mb;
         self
     }

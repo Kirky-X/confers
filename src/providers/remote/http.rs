@@ -45,7 +45,7 @@ pub struct HttpProvider {
     url: String,
     auth: Option<HttpAuth>,
     tls_config: Option<TlsConfig>,
-    timeout: Option<String>,
+    timeout: Duration,
 }
 
 pub struct TlsConfig {
@@ -71,12 +71,24 @@ impl HttpProvider {
             url: url_str,
             auth: None,
             tls_config: None,
-            timeout: None,
+            timeout: Duration::from_secs(30), // Default 30 seconds
         })
     }
 
     pub fn from_url(url: impl Into<String>) -> Result<Self, ConfigError> {
         Self::new(url)
+    }
+
+    /// Set HTTP request timeout (in seconds)
+    pub fn with_timeout_seconds(mut self, timeout_secs: u64) -> Self {
+        self.timeout = Duration::from_secs(timeout_secs);
+        self
+    }
+
+    /// Set HTTP request timeout with Duration
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
     }
 
     pub fn with_tls(
@@ -93,10 +105,6 @@ impl HttpProvider {
         self
     }
 
-    pub fn with_timeout(mut self, timeout: impl Into<String>) -> Self {
-        self.timeout = Some(timeout.into());
-        self
-    }
 
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.auth = Some(HttpAuth {
@@ -117,7 +125,12 @@ impl HttpProvider {
     }
 
     pub fn load_sync(&self) -> Result<Figment, ConfigError> {
-        let client = (*HTTP_CLIENT).clone();
+        let client = reqwest::blocking::Client::builder()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .timeout(self.timeout)
+            .build()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e)))?;
 
         let mut request = client.get(&self.url);
 
@@ -189,7 +202,12 @@ impl HttpProvider {
     }
 
     pub async fn load(&self) -> Result<Figment, ConfigError> {
-        let client = (*HTTP_CLIENT_ASYNC).clone();
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .timeout(self.timeout)
+            .build()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e)))?;
 
         let mut request = client.get(&self.url);
 

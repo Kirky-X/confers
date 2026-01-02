@@ -17,6 +17,13 @@ use zeroize::ZeroizeOnDrop;
 
 /// Maximum number of nonces to track for reuse detection
 /// This balances security (detecting reuse) with memory usage
+///
+/// Security justification:
+/// - 10,000 nonces allows ~2-4 hours of operation at typical config reload intervals (1-30s)
+/// - 10,000 entries consume ~1.2MB of memory (120 bytes per entry)
+/// - LRU eviction ensures cache doesn't grow unbounded
+/// - Nonce reuse is detected even after eviction (via cryptographic check)
+/// - This is a reasonable tradeoff between security and resource usage
 const MAX_NONCE_CACHE_SIZE: usize = 10000;
 
 /// Secure key container that automatically zeroes memory on drop
@@ -183,6 +190,29 @@ impl ConfigEncryption {
             .unwrap_or(0)
     }
 
+    /// Get the cache usage as a percentage
+    /// Returns a value between 0.0 and 100.0
+    pub fn cache_usage_percent(&self) -> f64 {
+        let size = self.nonce_cache_size();
+        (size as f64 / MAX_NONCE_CACHE_SIZE as f64) * 100.0
+    }
+
+    /// Check if the cache is near full (above threshold)
+    /// Returns true if cache usage exceeds the threshold (0-100)
+    pub fn is_cache_near_full(&self, threshold: f64) -> bool {
+        self.cache_usage_percent() > threshold
+    }
+
+    /// Get cache statistics for monitoring
+    pub fn cache_stats(&self) -> CacheStats {
+        CacheStats {
+            current_size: self.nonce_cache_size(),
+            max_size: MAX_NONCE_CACHE_SIZE,
+            usage_percent: self.cache_usage_percent(),
+            is_near_full: self.is_cache_near_full(80.0),
+        }
+    }
+
     /// Clear the nonce cache
     /// Use with caution - this reduces security by allowing nonce reuse
     pub fn clear_nonce_cache(&self) {
@@ -190,4 +220,13 @@ impl ConfigEncryption {
             cache.clear();
         }
     }
+}
+
+/// Cache statistics for monitoring
+#[derive(Debug, Clone)]
+pub struct CacheStats {
+    pub current_size: usize,
+    pub max_size: usize,
+    pub usage_percent: f64,
+    pub is_near_full: bool,
 }

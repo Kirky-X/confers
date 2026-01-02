@@ -157,28 +157,38 @@ pub fn is_url(value: &str) -> bool {
 pub fn register_custom_validator(
     name: &str,
     validator: impl Fn(&str) -> bool + Send + Sync + 'static,
-) {
-    let mut validators = CUSTOM_VALIDATORS.write().unwrap();
+) -> Result<(), String> {
+    let mut validators = CUSTOM_VALIDATORS
+        .write()
+        .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
     validators.insert(name.to_string(), Box::new(validator));
+    Ok(())
 }
 
-pub fn unregister_custom_validator(name: &str) {
-    let mut validators = CUSTOM_VALIDATORS.write().unwrap();
+pub fn unregister_custom_validator(name: &str) -> Result<(), String> {
+    let mut validators = CUSTOM_VALIDATORS
+        .write()
+        .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
     validators.remove(name);
+    Ok(())
 }
 
-pub fn validate_with_custom(name: &str, value: &str) -> bool {
-    let validators = CUSTOM_VALIDATORS.read().unwrap();
+pub fn validate_with_custom(name: &str, value: &str) -> Result<bool, String> {
+    let validators = CUSTOM_VALIDATORS
+        .read()
+        .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
     if let Some(validator) = validators.get(name) {
-        validator(value)
+        Ok(validator(value))
     } else {
-        false
+        Ok(false)
     }
 }
 
-pub fn list_custom_validators() -> Vec<String> {
-    let validators = CUSTOM_VALIDATORS.read().unwrap();
-    validators.keys().cloned().collect()
+pub fn list_custom_validators() -> Result<Vec<String>, String> {
+    let validators = CUSTOM_VALIDATORS
+        .read()
+        .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
+    Ok(validators.keys().cloned().collect())
 }
 
 #[cfg(test)]

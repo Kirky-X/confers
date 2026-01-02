@@ -13,6 +13,7 @@ use url::Url;
 /// - Blocking access to internal/private IP addresses
 /// - Blocking access to localhost
 /// - Blocking access to link-local addresses
+/// - Protecting against DNS rebinding attacks
 pub fn validate_remote_url(url: &str) -> Result<(), ConfigError> {
     let parsed_url =
         Url::parse(url).map_err(|e| ConfigError::RemoteError(format!("Invalid URL: {}", e)))?;
@@ -28,30 +29,88 @@ pub fn validate_remote_url(url: &str) -> Result<(), ConfigError> {
         }
     }
 
-    // Check if the host is an IP address
+    // Check if the host is an IP address or hostname
     if let Some(host) = parsed_url.host_str() {
         // Remove IPv6 brackets if present
-        let host = host.trim_start_matches('[').trim_end_matches(']');
+        let host_clean = host.trim_start_matches('[').trim_end_matches(']');
 
         // Check for localhost variants
-        if is_localhost(host) {
+        if is_localhost(host_clean) {
             return Err(ConfigError::RemoteError(
                 "Access to localhost is not allowed".to_string(),
             ));
         }
 
-        // Check for private IP addresses
-        if is_private_ip(host) {
-            return Err(ConfigError::RemoteError(
-                "Access to private IP addresses is not allowed".to_string(),
-            ));
-        }
+        // Check if it's a hostname (not an IP address)
+        if is_hostname(host_clean) {
+            // Perform DNS resolution to detect DNS rebinding attacks
+            check_dns_rebinding(host_clean)?;
+        } else {
+            // It's an IP address, check if it's private
+            if is_private_ip(host_clean) {
+                return Err(ConfigError::RemoteError(
+                    "Access to private IP addresses is not allowed".to_string(),
+                ));
+            }
 
-        // Check for link-local addresses
-        if is_link_local(host) {
-            return Err(ConfigError::RemoteError(
-                "Access to link-local addresses is not allowed".to_string(),
-            ));
+            // Check for link-local addresses
+            if is_link_local(host_clean) {
+                return Err(ConfigError::RemoteError(
+                    "Access to link-local addresses is not allowed".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if the host is a hostname (not an IP address)
+fn is_hostname(host: &str) -> bool {
+    host.parse::<std::net::Ipv4Addr>().is_err() && host.parse::<std::net::Ipv6Addr>().is_err()
+}
+
+/// Check for DNS rebinding attacks by resolving the hostname
+/// and verifying all resolved IP addresses are not private
+fn check_dns_rebinding(host: &str) -> Result<(), ConfigError> {
+    use std::net::ToSocketAddrs;
+
+    // Attempt to resolve the hostname
+    match (host, 0).to_socket_addrs() {
+        Ok(addrs) => {
+            for addr in addrs {
+                let ip = addr.ip();
+                let ip_str = ip.to_string();
+
+                // Check if any resolved IP is private
+                if is_private_ip(&ip_str) {
+                    return Err(ConfigError::RemoteError(format!(
+                        "DNS rebinding detected: {} resolves to private IP {}",
+                        host, ip
+                    )));
+                }
+
+                // Check if any resolved IP is link-local
+                if is_link_local(&ip_str) {
+                    return Err(ConfigError::RemoteError(format!(
+                        "DNS rebinding detected: {} resolves to link-local IP {}",
+                        host, ip
+                    )));
+                }
+
+                // Check if any resolved IP is localhost
+                if is_localhost(&ip_str) {
+                    return Err(ConfigError::RemoteError(format!(
+                        "DNS rebinding detected: {} resolves to localhost {}",
+                        host, ip
+                    )));
+                }
+            }
+        }
+        Err(e) => {
+            // If DNS resolution fails, it might be a valid hostname that's not currently resolvable
+            // We'll allow this but log a warning
+            tracing::warn!("Failed to resolve hostname {}: {}", host, e);
         }
     }
 
