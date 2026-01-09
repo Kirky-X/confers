@@ -672,7 +672,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 3. Load environment variables
         if self.use_env {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
-            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Higher priority than files (lower number = higher priority, loaded later, overrides)
+            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Loaded after files (priority 40), so it can override file values
 
             // Add custom environment variable mappings from ConfigMap trait
             let custom_mappings = T::env_mapping();
@@ -839,7 +839,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         if !self.explicit_files.is_empty() {
             let mut file_provider = FileConfigProvider::new(self.explicit_files.clone())
                 .with_name("explicit_files")
-                .with_priority(40); // Higher priority than environment (loaded later, overrides)
+                .with_priority(40); // Loaded before environment (priority 50), so environment can override
 
             if let Some(format_mode) = &self.format_detection {
                 file_provider = file_provider.with_format_detection(format_mode.clone());
@@ -851,7 +851,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 3. Load environment variables
         if self.use_env {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
-            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Lower priority than files (loaded first, overridden by files)
+            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Higher priority than files (loaded later, overrides file values)
 
             // Add custom environment variable mappings from ConfigMap trait
             let custom_mappings = T::env_mapping();
