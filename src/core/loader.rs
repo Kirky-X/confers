@@ -672,7 +672,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 3. Load environment variables
         if self.use_env {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
-            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Higher priority than files (loaded later, overrides)
+            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Higher priority than files (lower number = higher priority, loaded later, overrides)
 
             // Add custom environment variable mappings from ConfigMap trait
             let custom_mappings = T::env_mapping();
@@ -692,7 +692,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         #[cfg(feature = "remote")]
         if self.remote_config.enabled {
             if let Some(url) = &self.remote_config.url {
-                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(30);
+                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token(token.clone());
@@ -839,7 +839,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         if !self.explicit_files.is_empty() {
             let mut file_provider = FileConfigProvider::new(self.explicit_files.clone())
                 .with_name("explicit_files")
-                .with_priority(40); // Lower priority than environment (loaded first, overridden)
+                .with_priority(40); // Higher priority than environment (loaded later, overrides)
 
             if let Some(format_mode) = &self.format_detection {
                 file_provider = file_provider.with_format_detection(format_mode.clone());
@@ -851,7 +851,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 3. Load environment variables
         if self.use_env {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
-            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Higher priority than files (loaded later, overrides)
+            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50); // Lower priority than files (loaded first, overridden by files)
 
             // Add custom environment variable mappings from ConfigMap trait
             let custom_mappings = T::env_mapping();
@@ -871,7 +871,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         #[cfg(feature = "remote")]
         if self.remote_config.enabled {
             if let Some(url) = &self.remote_config.url {
-                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(30);
+                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token(token.clone());
@@ -1279,7 +1279,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
             let mut env_provider = EnvironmentProvider::new(env_prefix)
                 .with_custom_mappings(T::env_mapping())
-                .with_priority(30);
+                .with_priority(50);
 
             // Add custom environment variable mappings from ConfigMap trait
             let custom_mappings = T::env_mapping();
@@ -1299,7 +1299,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         #[cfg(feature = "remote")]
         if self.remote_config.enabled {
             if let Some(url) = &self.remote_config.url {
-                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(30);
+                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token(token.clone());
