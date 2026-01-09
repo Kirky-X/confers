@@ -37,3 +37,11 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# ============================================
+# Project specific files/directories
+# ============================================
+.iflow
+openspec/
+AGENTS.md
+requirements.db
