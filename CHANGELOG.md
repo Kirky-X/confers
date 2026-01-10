@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Dependencies Updated
+- Updated all dependencies to their latest stable versions
+- Upgraded `lru` from 0.12 to 0.16.3 to fix soundness issue (RUSTSEC-2026-0002)
+- Updated core dependencies: tokio 1.48 → 1.49, serde, validator, schemars, thiserror, clap, etc.
+- All 108 tests pass with updated dependencies
+
 ## [0.1.1] - 2026-01-02
 
 ### Security
