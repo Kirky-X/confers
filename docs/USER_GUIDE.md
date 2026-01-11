@@ -129,7 +129,7 @@ cargo --version
 
 在你的 `Cargo.toml` 中添加 `confers`：
 
-**默认安装**（包含 derive、validation 和 CLI）：
+**默认安装**（仅包含 derive）：
 ```toml
 [dependencies]
 confers = "0.1.1"

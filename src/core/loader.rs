@@ -1556,7 +1556,8 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_template_expansion(&mut config)?;
 
         // Apply decryption
-        // TODO: Apply encryption when feature is enabled
+        #[cfg(feature = "encryption")]
+        self.apply_decryption(&mut config)?;
 
         // Apply sanitization if available
         if let Some(sanitizer) = &self.sanitizer {
