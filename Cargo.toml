@@ -114,7 +114,7 @@ warp = "0.3"
 cargo-tarpaulin = "0.27"
 
 [features]
-default = ["derive", "validation", "encryption", "cli"]
+default = ["derive", "validation", "cli"]
 
 # Core features
 derive = ["confers-macros"]

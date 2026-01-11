@@ -46,6 +46,7 @@ pub struct KeyManager {
 }
 
 impl KeyManager {
+    #[cfg(feature = "encryption")]
     pub fn new(storage_path: PathBuf) -> Result<Self, ConfigError> {
         Ok(Self {
             master_key_hash: String::new(),
@@ -56,6 +57,7 @@ impl KeyManager {
         })
     }
 
+    #[cfg(feature = "encryption")]
     pub fn initialize(
         &mut self,
         master_key: &[u8; 32],
@@ -87,6 +89,7 @@ impl KeyManager {
         Ok(key_bytes)
     }
 
+    #[cfg(feature = "encryption")]
     pub fn create_key_ring(
         &mut self,
         master_key: &[u8; 32],
@@ -123,6 +126,7 @@ impl KeyManager {
         })
     }
 
+    #[cfg(feature = "encryption")]
     pub fn rotate_key(
         &mut self,
         master_key: &[u8; 32],

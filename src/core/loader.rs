@@ -6,6 +6,7 @@
 #[cfg(feature = "audit")]
 use crate::audit::AuditConfig as AuditConfigComplex;
 use crate::audit::Sanitize;
+#[cfg(feature = "encryption")]
 use crate::encryption::ConfigEncryption;
 use crate::error::ConfigError;
 use crate::providers::cli_provider::CliConfigProvider;
@@ -779,7 +780,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Note: load_all returns a new Figment merged from all providers
 
         // Decrypt encrypted values before extraction
-        figment = self.decrypt_figment(figment)?;
+        // Decrypt encrypted values before extraction
+        #[cfg(feature = "encryption")]
+        {
+            figment = self.decrypt_figment(figment)?;
+        }
 
         // Check memory limit before extraction
         if self.memory_limit_mb > 0 {
@@ -958,7 +963,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Note: load_all returns a new Figment merged from all providers
 
         // Decrypt encrypted values before extraction
-        figment = self.decrypt_figment(figment)?;
+        // Decrypt encrypted values before extraction
+        #[cfg(feature = "encryption")]
+        {
+            figment = self.decrypt_figment(figment)?;
+        }
 
         // Check memory limit before extraction
         if self.memory_limit_mb > 0 {
@@ -1327,7 +1336,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         figment = manager.load_all()?;
 
         // Decrypt encrypted values before extraction
-        figment = self.decrypt_figment(figment)?;
+        // Decrypt encrypted values before extraction
+        #[cfg(feature = "encryption")]
+        {
+            figment = self.decrypt_figment(figment)?;
+        }
 
         // Check memory limit before extraction
         if self.memory_limit_mb > 0 {
@@ -1647,6 +1660,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Decrypt encrypted values recursively
+    #[cfg(feature = "encryption")]
     #[allow(clippy::only_used_in_recursion)]
     fn decrypt_value_recursive(&self, value: &mut Value, encryptor: &ConfigEncryption) -> bool {
         match value {
@@ -1702,8 +1716,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             .map_err(|e| ConfigError::ParseError(format!("Failed to serialize config: {}", e)))?;
 
         // Try to decrypt values if encryption key is available
-        if let Ok(encryptor) = ConfigEncryption::from_env() {
-            self.decrypt_value_recursive(&mut value, &encryptor);
+        #[cfg(feature = "encryption")]
+        {
+            if let Ok(encryptor) = ConfigEncryption::from_env() {
+                self.decrypt_value_recursive(&mut value, &encryptor);
+            }
         }
 
         // Expand templates recursively
@@ -1718,6 +1735,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Apply decryption to configuration values
+    #[cfg(feature = "encryption")]
     #[allow(dead_code)]
     fn apply_decryption<U>(&self, config: &mut U) -> Result<(), ConfigError>
     where
@@ -1751,6 +1769,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Decrypt encrypted values in a figment before extraction
+    #[cfg(feature = "encryption")]
     fn decrypt_figment(&self, figment: Figment) -> Result<Figment, ConfigError> {
         // Try to get encryption key from environment
         if let Ok(encryptor) = ConfigEncryption::from_env() {

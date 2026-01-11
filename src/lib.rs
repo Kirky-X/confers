@@ -7,6 +7,7 @@ pub mod audit;
 pub mod commands;
 pub mod constants;
 pub mod core;
+#[cfg(feature = "encryption")]
 pub mod encryption;
 pub mod error;
 pub mod error_helpers;

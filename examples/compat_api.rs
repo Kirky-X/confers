@@ -191,32 +191,31 @@ mod tests {
 
     #[test]
     fn test_environment_override() {
-        std::env::set_var("TEST_SERVER_PORT", "7777");
+        temp_env::with_var("TEST_SERVER_PORT", Some("7777"), || {
+            let config: AppConfig = ConfigBuilder::new()
+                .set_default("server.host", "localhost")
+                .unwrap()
+                .set_default("server.port", 8080)
+                .unwrap()
+                .add_source(Environment::with_prefix("TEST").separator("_"))
+                .build()
+                .unwrap();
 
-        let config: AppConfig = ConfigBuilder::new()
-            .set_default("server.host", "localhost")?
-            .set_default("server.port", 8080)?
-            .add_source(Environment::with_prefix("TEST").separator("_"))
-            .build()
-            .unwrap();
-
-        assert_eq!(config.server.port, 7777);
-
-        std::env::remove_var("TEST_SERVER_PORT");
+            assert_eq!(config.server.port, 7777);
+        });
     }
 
     #[test]
     fn test_double_underscore_separator() {
-        std::env::set_var("TEST__SERVER__PORT", "6666");
+        temp_env::with_var("TEST__SERVER__PORT", Some("6666"), || {
+            let config: AppConfig = ConfigBuilder::new()
+                .set_default("server.port", 8080)
+                .unwrap()
+                .add_source(Environment::with_prefix("TEST").separator("__"))
+                .build()
+                .unwrap();
 
-        let config: AppConfig = ConfigBuilder::new()
-            .set_default("server.port", 8080)?
-            .add_source(Environment::with_prefix("TEST").separator("__"))
-            .build()
-            .unwrap();
-
-        assert_eq!(config.server.port, 6666);
-
-        std::env::remove_var("TEST__SERVER__PORT");
+            assert_eq!(config.server.port, 6666);
+        });
     }
 }

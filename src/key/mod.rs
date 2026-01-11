@@ -5,14 +5,18 @@
 
 mod manager;
 mod rotation;
+#[cfg(feature = "encryption")]
 mod storage;
 
 pub use manager::{KeyInfo, KeyManager, KeyVersion};
 pub use rotation::{KeyRotationPolicy, KeyRotationService, RotationResult};
+#[cfg(feature = "encryption")]
 pub use storage::KeyStorage;
 
+#[cfg(feature = "encryption")]
 use crate::encryption::ConfigEncryption;
 use crate::error::ConfigError;
+#[cfg(feature = "encryption")]
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -114,6 +118,7 @@ impl KeyBundle {
         ))
     }
 
+    #[cfg(feature = "encryption")]
     pub fn get_plaintext_key(&self, master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
         let encryptor = ConfigEncryption::new(*master_key);
         let decrypted = encryptor.decrypt(&self.encrypted_key)?;
@@ -144,6 +149,7 @@ pub struct KeyRing {
 }
 
 impl KeyRing {
+    #[cfg(feature = "encryption")]
     pub fn new(
         master_key: &[u8; 32],
         key_id: String,
@@ -161,6 +167,7 @@ impl KeyRing {
         })
     }
 
+    #[cfg(feature = "encryption")]
     pub fn rotate(
         &mut self,
         master_key: &[u8; 32],

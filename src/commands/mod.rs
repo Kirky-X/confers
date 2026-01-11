@@ -5,8 +5,10 @@
 
 pub mod completions;
 pub mod diff;
+#[cfg(feature = "encryption")]
 pub mod encrypt;
 pub mod generate;
+#[cfg(feature = "encryption")]
 pub mod key;
 pub mod validate;
 pub mod wizard;

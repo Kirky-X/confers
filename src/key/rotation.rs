@@ -240,6 +240,7 @@ impl KeyRotationService {
         Ok(())
     }
 
+    #[cfg(feature = "encryption")]
     pub fn execute_rotation(
         key_ring: &mut KeyRing,
         master_key: &[u8; 32],

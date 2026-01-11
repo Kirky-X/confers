@@ -160,16 +160,23 @@ impl ConfigBuilder {
         // Apply defaults first
         let mut figment = self.figment;
 
+        // Merge all defaults into a single map for better performance
+        let mut defaults_map = serde_json::Map::new();
         for (key, value) in self.defaults {
-            let mut map = serde_json::Map::new();
-            insert_nested_value(&mut map, &key, value);
-            let value = serde_json::Value::Object(map);
-            figment = figment.merge(figment::providers::Serialized::defaults(value));
+            insert_nested_value(&mut defaults_map, &key, value)?;
+        }
+
+        if !defaults_map.is_empty() {
+            let defaults_value = serde_json::Value::Object(defaults_map);
+            figment = figment.merge(figment::providers::Serialized::defaults(defaults_value));
         }
 
         // Extract the configuration
         figment.extract().map_err(|e| {
-            ConfigError::ParseError(format!("Failed to extract configuration: {}", e))
+            ConfigError::ParseError(format!(
+                "Failed to extract configuration: {}. Check if all required fields are provided and have correct types.",
+                e
+            ))
         })
     }
 
@@ -199,24 +206,45 @@ impl ConfigBuilder {
 }
 
 /// Helper function to insert nested values using dot notation
-fn insert_nested_value(map: &mut serde_json::Map<String, serde_json::Value>, key: &str, value: serde_json::Value) {
+fn insert_nested_value(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    value: serde_json::Value,
+) -> Result<(), ConfigError> {
+    if key.is_empty() {
+        return Err(ConfigError::ParseError("Key cannot be empty".to_string()));
+    }
+
     let parts: Vec<&str> = key.split('.').collect();
 
     if parts.len() == 1 {
         map.insert(parts[0].to_string(), value);
-        return;
+        return Ok(());
     }
 
     let current_key = parts[0].to_string();
     let remaining_key = parts[1..].join(".");
 
     if !map.contains_key(&current_key) {
-        map.insert(current_key.clone(), serde_json::Value::Object(serde_json::Map::new()));
+        map.insert(
+            current_key.clone(),
+            serde_json::Value::Object(serde_json::Map::new()),
+        );
+    } else {
+        // Check if existing value is an object type
+        if !matches!(map[&current_key], serde_json::Value::Object(_)) {
+            return Err(ConfigError::ParseError(format!(
+                "Cannot set nested value '{}' because '{}' is not an object",
+                remaining_key, current_key
+            )));
+        }
     }
 
     if let serde_json::Value::Object(ref mut nested_map) = map[&current_key] {
-        insert_nested_value(nested_map, &remaining_key, value);
+        insert_nested_value(nested_map, &remaining_key, value)?;
     }
+
+    Ok(())
 }
 
 /// Configuration source
@@ -288,8 +316,29 @@ impl FileSource {
     /// let file = File::with_name("config/default");
     /// ```
     pub fn with_name(name: impl AsRef<Path>) -> Self {
+        let path = name.as_ref();
+
+        // Validate path is not empty
+        if path.as_os_str().is_empty() {
+            tracing::warn!("File path is empty, using default configuration");
+            return Self {
+                name: PathBuf::from("config"),
+                format: None,
+                required: false,
+            };
+        }
+
+        // Validate path doesn't contain path traversal attacks
+        let path_str = path.to_string_lossy();
+        if path_str.contains("..") {
+            tracing::warn!(
+                "Path contains '..' which may indicate a path traversal attempt: {}",
+                path_str
+            );
+        }
+
         Self {
-            name: name.as_ref().to_path_buf(),
+            name: path.to_path_buf(),
             format: None,
             required: false,
         }
@@ -392,8 +441,16 @@ impl EnvironmentSource {
     /// let env = Environment::with_prefix("APP");
     /// ```
     pub fn with_prefix(prefix: impl Into<String>) -> Self {
+        let prefix_str = prefix.into();
+        if prefix_str.is_empty() {
+            tracing::warn!("Empty prefix for environment variables, no prefix will be applied");
+        }
         Self {
-            prefix: Some(prefix.into()),
+            prefix: if prefix_str.is_empty() {
+                None
+            } else {
+                Some(prefix_str)
+            },
             separator: "_".to_string(),
         }
     }
@@ -412,7 +469,11 @@ impl EnvironmentSource {
     /// let env = Environment::with_prefix("APP").separator("__");
     /// ```
     pub fn separator(mut self, separator: impl Into<String>) -> Self {
-        self.separator = separator.into();
+        let sep = separator.into();
+        if sep.is_empty() {
+            tracing::warn!("Empty separator for environment variables may cause unexpected behavior");
+        }
+        self.separator = sep;
         self
     }
 
