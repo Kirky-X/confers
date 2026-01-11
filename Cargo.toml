@@ -148,6 +148,3 @@ full = [
     "encryption",
     "cli",
 ]
-
-# Compatibility feature - enables config-rs compatible API
-compat = []

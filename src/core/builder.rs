@@ -245,12 +245,39 @@ impl ConfigBuilder {
         T: DeserializeOwned + Serialize + validator::Validate,
     {
         let config = self.build::<T>()?;
-
+    
         config.validate().map_err(|e| {
             ConfigError::ValidationError(format!("Configuration validation failed: {}", e))
         })?;
-
+    
         Ok(config)
+    }
+    
+        /// Clear all default values
+        ///
+        /// This method removes all previously set default values.
+        ///
+        /// # Example
+        ///
+        /// ```rust
+        /// use confers::ConfigBuilder;
+        ///
+        /// let builder = ConfigBuilder::new()
+        ///     .set_default("port", 8080)?
+        ///     .clear_defaults();
+        /// ```
+        pub fn clear_defaults(mut self) -> Self {
+            self.defaults.clear();
+            self
+        }
+
+    /// Get the number of default values set
+    ///
+    /// # Returns
+    ///
+    /// The number of default values currently set
+    pub fn defaults_count(&self) -> usize {
+        self.defaults.len()
     }
 }
 
