@@ -242,6 +242,74 @@ fn main() {
 }
 ```
 
+</details>
+
+<details>
+<summary><b>❓ 如何选择合适的特性组合？</b></summary>
+
+<br>
+
+confers 提供了多种特性预设和单独特性，你可以根据项目需求选择：
+
+**特性预设（推荐）**：
+
+| 预设 | 说明 | 适用场景 |
+|------|------|----------|
+| `minimal` | 仅配置加载（最小依赖） | 仅需基本配置加载功能 |
+| `recommended` | 配置加载 + 验证 | 大多数应用（推荐） |
+| `dev` | 开发配置（包含 CLI、schema、audit、monitoring） | 开发和调试 |
+| `production` | 生产配置（包含 watch、encryption、remote、monitoring） | 生产环境 |
+| `full` | 所有功能 | 需要完整功能 |
+
+**使用示例**：
+
+```toml
+# 最小化使用
+[dependencies]
+confers = { version = "0.1", default-features = false, features = ["minimal"] }
+
+# 推荐配置
+[dependencies]
+confers = { version = "0.1", default-features = false, features = ["recommended"] }
+
+# 生产配置
+[dependencies]
+confers = { version = "0.1", default-features = false, features = ["production"] }
+```
+
+**单独特性**：
+
+- `derive` - 配置结构体的 derive 宏
+- `validation` - 配置验证支持
+- `cli` - 命令行工具
+- `watch` - 文件监控和热重载
+- `audit` - 审计日志
+- `schema` - JSON Schema 生成
+- `parallel` - 并行验证
+- `monitoring` - 系统监控
+- `remote` - 远程配置（etcd、consul、http）
+- `encryption` - 配置加密
+
+> 💡 **提示**: 默认特性为 `derive`（仅配置加载）。如需验证功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
+
+</details>
+
+<details>
+<summary><b>❓ 不同特性组合的依赖数量有何差异？</b></summary>
+
+<br>
+
+| 特性组合 | 依赖数量 | 编译时间 | 二进制大小 |
+|----------|----------|----------|------------|
+| `minimal` | ~15 个 | 最短 | 最小 |
+| `recommended` | ~20 个 | 短 | 小 |
+| `dev` | ~30 个 | 中 | 中 |
+| `production` | ~35 个 | 中 | 中 |
+| `full` | ~50+ 个 | 长 | 大 |
+
+选择合适的特性组合可以显著减少编译时间和二进制大小。
+```
+
 **另请参阅：** [安装指南](USER_GUIDE.md#安装)
 
 </details>

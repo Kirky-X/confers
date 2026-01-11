@@ -71,32 +71,43 @@
 <tr>
 <td width="50%">
 
-### 🎯 核心功能
+### 🎯 核心功能（始终可用）
 
-- ✅ **类型安全配置** - 通过 derive 宏自动生成配置结构体
+- ✅ **类型安全配置** - 通过 derive 宏自动生成配置结构体（`derive` 特性）
 - ✅ **多格式支持** - TOML、YAML、JSON、INI 配置文件
 - ✅ **环境变量覆盖** - 支持环境变量覆盖配置值
-- ✅ **配置验证** - 内置 validator 集成，支持自定义验证规则和并行验证
-- ✅ **Schema 生成** - 根据配置结构自动生成 JSON Schema（需启用 `schema` 特性）
+- ✅ **CLI 参数覆盖** - 支持命令行参数覆盖（`cli` 特性）
 
 </td>
 <td width="50%">
 
-### ⚡ 高级功能
+### ⚡ 可选功能
 
-- 🚀 **文件监控与热重载** - 实时监听配置文件变化（需启用 `watch` 特性）
-- 🔐 **配置加密** - 支持敏感配置项 AES-256 加密存储
-- 🌐 **远程配置支持** - 从 etcd、Consul、HTTP 等远程源加载配置（需启用 `remote` 特性）
-- 📦 **审计日志** - 记录配置访问和变更历史（需启用 `audit` 特性）
+- 🔍 **配置验证** - 内置 validator 集成（`validation` 特性）
+- 📊 **Schema 生成** - 根据配置结构自动生成 JSON Schema（`schema` 特性）
+- 🚀 **文件监控与热重载** - 实时监听配置文件变化（`watch` 特性）
+- 🔐 **配置加密** - 支持敏感配置项 AES-256 加密存储（`encryption` 特性）
+- 🌐 **远程配置支持** - 从 etcd、Consul、HTTP 加载配置（`remote` 特性）
+- 📦 **审计日志** - 记录配置访问和变更历史（`audit` 特性）
+- ⚡ **并行验证** - 大型配置的并行验证（`parallel` 特性）
+- 📈 **系统监控** - 内存使用监控（`monitoring` 特性）
 - 🔧 **配置差分** - 对比不同配置文件差异，支持多种输出格式
 - 🎨 **交互式向导** - 通过命令行交互式生成配置文件模板
-- 📊 **多级输出** - 支持 Minimal、Full、Documentation 三种输出级别
-- 💾 **内存限制** - 可配置的内存使用限制，防止配置加载占用过多内存
-- 🛡️ **安全增强** - LRU 缓存的 Nonce 重用检测、SSRF 防护工具和安全密钥管理
+- 🛡️ **安全增强** - Nonce 重用检测、SSRF 防护、安全密钥管理
 
 </td>
 </tr>
 </table>
+
+### 📦 特性预设
+
+| 预设 | 特性 | 使用场景 |
+|------|------|----------|
+| `minimal` | `derive` | 最小化配置加载（无验证、无 CLI） |
+| `recommended` | `derive`, `validation` | 推荐大多数应用使用 |
+| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发环境，包含所有工具 |
+| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产就绪的配置 |
+| `full` | 所有特性 | 完整功能集 |
 
 <div align="center">
 
@@ -128,10 +139,48 @@ graph LR
 
 #### 🦀 Rust
 
+**默认安装**（包含 derive、validation 和 CLI）：
 ```toml
 [dependencies]
 confers = "0.1.1"
 ```
+
+**最小化安装**（仅配置加载）：
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["minimal"] }
+```
+
+**推荐安装**（配置加载 + 验证）：
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["recommended"] }
+```
+
+**包含所有功能**：
+```toml
+[dependencies]
+confers = { version = "0.1.1", features = ["full"] }
+```
+
+**可用特性预设**：
+- `minimal` - 仅配置加载
+- `recommended` - 配置加载 + 验证
+- `dev` - 开发配置（包含 CLI、schema、audit、monitoring）
+- `production` - 生产配置（包含 watch、encryption、remote、monitoring）
+- `full` - 启用所有功能
+
+**单独特性**：
+- `derive` - 配置结构体的 derive 宏
+- `validation` - 配置验证支持
+- `cli` - 命令行工具
+- `watch` - 文件监控和热重载
+- `audit` - 审计日志
+- `schema` - JSON Schema 生成
+- `parallel` - 并行验证
+- `monitoring` - 系统监控
+- `remote` - 远程配置（etcd、consul、http）
+- `encryption` - 配置加密
 
 </td>
 </tr>

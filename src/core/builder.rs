@@ -240,16 +240,17 @@ impl ConfigBuilder {
     /// # Returns
     ///
     /// Returns the validated configuration or an error
+    #[cfg(feature = "validation")]
     pub fn build_with_validation<T>(self) -> Result<T, ConfigError>
     where
         T: DeserializeOwned + Serialize + validator::Validate,
     {
         let config = self.build::<T>()?;
-    
+
         config.validate().map_err(|e| {
             ConfigError::ValidationError(format!("Configuration validation failed: {}", e))
         })?;
-    
+
         Ok(config)
     }
     

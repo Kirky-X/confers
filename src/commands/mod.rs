@@ -10,5 +10,6 @@ pub mod encrypt;
 pub mod generate;
 #[cfg(feature = "encryption")]
 pub mod key;
+#[cfg(feature = "validation")]
 pub mod validate;
 pub mod wizard;

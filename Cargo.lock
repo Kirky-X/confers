@@ -591,7 +591,6 @@ dependencies = [
  "mockall",
  "notify",
  "notify-debouncer-full",
- "num_cpus",
  "once_cell",
  "path-absolutize",
  "pbkdf2",

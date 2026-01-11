@@ -129,19 +129,53 @@ cargo --version
 
 在你的 `Cargo.toml` 中添加 `confers`：
 
+**默认安装**（包含 derive、validation 和 CLI）：
 ```toml
 [dependencies]
-confers = "0.2"
-# 如果需要验证功能
-validator = { version = "0.16", features = ["derive"] }
-# 如果需要异步/远程支持
-tokio = { version = "1.0", features = ["full"] }
+confers = "0.1.1"
 ```
 
-或者使用命令行：
+**最小化安装**（仅配置加载）：
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["minimal"] }
+```
 
-```bash
-cargo add confers validator --features validator/derive
+**推荐安装**（配置加载 + 验证）：
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["recommended"] }
+```
+
+**完整功能安装**：
+```toml
+[dependencies]
+confers = { version = "0.1.1", features = ["full"] }
+```
+
+**可用特性预设**：
+- `minimal` - 仅配置加载
+- `recommended` - 配置加载 + 验证
+- `dev` - 开发配置（包含 CLI、schema、audit、monitoring）
+- `production` - 生产配置（包含 watch、encryption、remote、monitoring）
+- `full` - 所有功能
+
+**单独特性**：
+- `derive` - 配置结构体的 derive 宏
+- `validation` - 配置验证支持
+- `cli` - 命令行工具
+- `watch` - 文件监控和热重载
+- `audit` - 审计日志
+- `schema` - JSON Schema 生成
+- `parallel` - 并行验证
+- `monitoring` - 系统监控
+- `remote` - 远程配置（etcd、consul、http）
+- `encryption` - 配置加密
+
+如果需要异步/远程支持，添加 tokio：
+```toml
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
 ```
 
 ### 第一步

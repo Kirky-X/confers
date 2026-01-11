@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated core dependencies: tokio 1.48 → 1.49, serde, validator, schemars, thiserror, clap, etc.
 - All 108 tests pass with updated dependencies
 
+### Changed
+- **BREAKING**: Default features changed from `["derive", "validation", "cli"]` to `["derive"]` for minimal dependency footprint
+- Made `rustls` optional (now only enabled with `remote` feature)
+- Made `chrono`, `sysinfo`, `lru` optional dependencies (moved to `encryption` and `monitoring` features)
+- Removed unused `num_cpus` dependency
+- Added feature presets for easier configuration:
+  - `minimal` - Only configuration loading
+  - `recommended` - Configuration loading + validation
+  - `dev` - Development configuration with all tools
+  - `production` - Production-ready configuration
+  - `full` - All features enabled
+- Added conditional compilation for all optional features to minimize compilation time and binary size
+- Updated `remote` feature to include `rustls`, `rustls-pki-types`, `tokio-rustls`, `failsafe`, and `base64`
+- Updated `encryption` feature to include `lru` and `chrono`
+- Fixed `RefreshKind::new()` to `RefreshKind::nothing()` for sysinfo compatibility
+
 ## [0.1.1] - 2026-01-02
 
 ### Security

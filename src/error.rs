@@ -78,6 +78,7 @@ pub enum ConfigError {
     Other(String),
 }
 
+#[cfg(feature = "validation")]
 impl From<validator::ValidationErrors> for ConfigError {
     fn from(_err: validator::ValidationErrors) -> Self {
         ConfigError::ValidationError("Validation failed".to_string())

@@ -71,32 +71,43 @@
 <tr>
 <td width="50%">
 
-### 🎯 Core Features
+### 🎯 Core Features (Always Available)
 
-- ✅ **Type-safe Configuration** - Auto-generate configuration structs via derive macros
+- ✅ **Type-safe Configuration** - Auto-generate configuration structs via derive macros (`derive` feature)
 - ✅ **Multi-format Support** - TOML, YAML, JSON, INI configuration files
 - ✅ **Environment Variable Override** - Support environment variable overrides
-- ✅ **Configuration Validation** - Built-in validator integration with custom validation rules and parallel validation
-- ✅ **Schema Generation** - Auto-generate JSON Schema from configuration structs (requires `schema` feature)
+- ✅ **CLI Argument Override** - Support command-line argument overrides (`cli` feature)
 
 </td>
 <td width="50%">
 
-### ⚡ Advanced Features
+### ⚡ Optional Features
 
-- 🚀 **File Watching & Hot Reload** - Real-time configuration file monitoring (requires `watch` feature)
-- 🔐 **Configuration Encryption** - Support AES-256 encrypted storage for sensitive config
-- 🌐 **Remote Configuration Support** - Load config from etcd, Consul, HTTP and other remote sources (requires `remote` feature)
-- 📦 **Audit Logging** - Record configuration access and change history (requires `audit` feature)
+- 🔍 **Configuration Validation** - Built-in validator integration (`validation` feature)
+- 📊 **Schema Generation** - Auto-generate JSON Schema from configuration structs (`schema` feature)
+- 🚀 **File Watching & Hot Reload** - Real-time configuration file monitoring (`watch` feature)
+- 🔐 **Configuration Encryption** - Support AES-256 encrypted storage for sensitive config (`encryption` feature)
+- 🌐 **Remote Configuration Support** - Load config from etcd, Consul, HTTP (`remote` feature)
+- 📦 **Audit Logging** - Record configuration access and change history (`audit` feature)
+- ⚡ **Parallel Validation** - Parallel validation for large configurations (`parallel` feature)
+- 📈 **System Monitoring** - Memory usage monitoring (`monitoring` feature)
 - 🔧 **Configuration Diff** - Compare different configuration files with multiple output formats
 - 🎨 **Interactive Wizard** - Generate configuration file templates through interactive CLI
-- 📊 **Multi-level Output** - Support Minimal, Full, Documentation three output levels
-- 💾 **Memory Limit** - Configurable memory usage limit to prevent excessive memory consumption during config loading
-- 🛡️ **Security Enhancements** - Nonce reuse detection with LRU cache, SSRF protection utilities, and secure key management
+- 🛡️ **Security Enhancements** - Nonce reuse detection, SSRF protection, secure key management
 
 </td>
 </tr>
 </table>
+
+### 📦 Feature Presets
+
+| Preset | Features | Use Case |
+|--------|----------|----------|
+| `minimal` | `derive` | Minimal configuration loading (no validation, no CLI) |
+| `recommended` | `derive`, `validation` | Recommended for most applications |
+| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development with all tools |
+| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production-ready configuration |
+| `full` | All features | Complete feature set |
 
 <div align="center">
 
@@ -128,10 +139,48 @@ graph LR
 
 #### 🦀 Rust
 
+**Default Installation** (includes derive, validation, and CLI):
 ```toml
 [dependencies]
 confers = "0.1.1"
 ```
+
+**Minimal Installation** (only configuration loading):
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["minimal"] }
+```
+
+**Recommended Installation** (configuration loading + validation):
+```toml
+[dependencies]
+confers = { version = "0.1.1", default-features = false, features = ["recommended"] }
+```
+
+**With All Features**:
+```toml
+[dependencies]
+confers = { version = "0.1.1", features = ["full"] }
+```
+
+**Available Features**:
+- `minimal` - Only configuration loading
+- `recommended` - Configuration loading + validation
+- `dev` - Development configuration (includes CLI, schema, audit, monitoring)
+- `production` - Production configuration (includes watch, encryption, remote, monitoring)
+- `full` - All features enabled
+
+**Individual Features**:
+- `derive` - Derive macros for configuration structs
+- `validation` - Configuration validation support
+- `cli` - Command-line interface tools
+- `watch` - File watching and hot reload
+- `audit` - Audit logging
+- `schema` - JSON Schema generation
+- `parallel` - Parallel validation
+- `monitoring` - System monitoring
+- `remote` - Remote configuration (etcd, consul, http)
+- `encryption` - Configuration encryption
 
 </td>
 </tr>

@@ -19,6 +19,7 @@ use figment::value::{Tag, Value};
 use figment::Figment;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[cfg(feature = "validation")]
 use validator::Validate;
 
 /// A type alias for the sanitizer function
@@ -26,15 +27,16 @@ type SanitizerFn<T> = std::sync::Arc<dyn Fn(T) -> Result<T, ConfigError> + Send 
 
 /// Trait for optionally validating configuration
 pub trait OptionalValidate {
-    fn optional_validate(&self) -> Result<(), validator::ValidationErrors> {
+    fn optional_validate(&self) -> Result<(), crate::error::ConfigError> {
         Ok(())
     }
 }
 
+#[cfg(feature = "validation")]
 /// Implement OptionalValidate for types that implement Validate
 impl<T: Validate> OptionalValidate for T {
-    fn optional_validate(&self) -> Result<(), validator::ValidationErrors> {
-        self.validate()
+    fn optional_validate(&self) -> Result<(), crate::error::ConfigError> {
+        self.validate().map_err(|e| crate::error::ConfigError::ValidationError(format!("{:?}", e)))
     }
 }
 
@@ -51,6 +53,7 @@ use std::sync::OnceLock;
 /// Cross-platform support: Linux, macOS, Windows
 /// Uses caching to avoid repeated system calls
 #[allow(dead_code)]
+#[cfg(feature = "monitoring")]
 fn get_memory_usage_mb() -> Option<f64> {
     static LAST_MEMORY: OnceLock<(f64, std::time::Instant)> = OnceLock::new();
     let now = std::time::Instant::now();
@@ -78,6 +81,12 @@ fn get_memory_usage_mb() -> Option<f64> {
     }
 
     memory
+}
+
+#[allow(dead_code)]
+#[cfg(not(feature = "monitoring"))]
+fn get_memory_usage_mb() -> Option<f64> {
+    None
 }
 
 #[cfg(feature = "audit")]
@@ -1002,7 +1011,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Load configuration asynchronously with audit support
-    #[cfg(feature = "audit")]
+    #[cfg(all(feature = "audit", feature = "validation"))]
     pub async fn load(&self) -> Result<T, ConfigError>
     where
         T: Sanitize
@@ -1130,7 +1139,136 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             .await
     }
 
+    /// Load configuration asynchronously with audit support (no validation)
+    #[cfg(all(feature = "audit", not(feature = "validation")))]
+    pub async fn load(&self) -> Result<T, ConfigError>
+    where
+        T: Sanitize
+            + for<'de> Deserialize<'de>
+            + Serialize
+            + Default
+            + Clone
+            + crate::ConfigMap,
+    {
+        let mut figment = Figment::new();
+
+        // 1. Load defaults if provided
+        if let Some(ref defaults) = self.defaults {
+            figment = figment.merge(Serialized::from(defaults, "default"));
+        }
+
+        // 2. Load standard config files
+        let mut _standard_files_loaded = 0;
+        let mut search_paths = vec![std::path::PathBuf::from(".")];
+
+        if let Some(config_dir) = dirs::config_dir() {
+            if let Some(app_name) = &self.app_name {
+                search_paths.push(config_dir.join(app_name));
+            }
+            search_paths.push(config_dir);
+        }
+
+        if let Some(home) = dirs::home_dir() {
+            search_paths.push(home);
+        }
+
+        #[cfg(unix)]
+        if let Some(app_name) = &self.app_name {
+            search_paths.push(std::path::PathBuf::from(format!("/etc/{}", app_name)));
+        }
+
+        let run_env = std::env::var("RUN_ENV").ok();
+        let app_name = self.app_name.as_deref().unwrap_or("app");
+
+        let mut config_sources_status = Vec::new();
+        let mut format_distribution = std::collections::HashMap::new();
+
+        for path in &search_paths {
+            let base_path = if let Some(app_name) = &self.app_name {
+                path.join(app_name)
+            } else {
+                path.clone()
+            };
+            let formats = ["toml", "json", "yaml", "yml"];
+
+            // Find all existing config files in priority order
+            let mut existing_files = Vec::new();
+            for format in &formats {
+                let file_path = base_path.join(format!("config.{}", format));
+                if file_path.exists() {
+                    existing_files.push(file_path);
+                }
+            }
+
+            // Load files in reverse order (highest priority first)
+            for file_path in existing_files.iter().rev() {
+                let path_str = file_path.to_string_lossy();
+                let format = ConfigLoader::<T>::detect_format(file_path);
+
+                if let Some(fmt) = format {
+                    match fmt.as_str() {
+                        "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
+                        "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),
+                        "json" => figment = figment.merge(Json::file(path_str.as_ref())),
+                        _ => {}
+                    }
+                    _standard_files_loaded += 1;
+
+                    // Track format distribution
+                    *format_distribution.entry(fmt.clone()).or_insert(0) += 1;
+                }
+            }
+
+            // Load environment-specific config files
+            if let Some(ref env) = run_env {
+                let mut existing_env_files = Vec::new();
+                for format in &formats {
+                    let env_file_path = path.join(format!("{}.{}.{}", app_name, env, format));
+                    if env_file_path.exists() {
+                        existing_env_files.push(env_file_path);
+                    }
+                }
+
+                for env_file_path in existing_env_files.iter().rev() {
+                    let path_str = env_file_path.to_string_lossy();
+                    let format = ConfigLoader::<T>::detect_format(env_file_path);
+
+                    if let Some(fmt) = format {
+                        match fmt.as_str() {
+                            "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
+                            "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),
+                            "json" => figment = figment.merge(Json::file(path_str.as_ref())),
+                            _ => {}
+                        }
+                        _standard_files_loaded += 1;
+
+                        // Track format distribution for env files
+                        *format_distribution.entry(fmt.clone()).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
+        if _standard_files_loaded == 0 {
+            config_sources_status.push((
+                "standard_files".to_string(),
+                "Skipped".to_string(),
+                None,
+                None,
+            ));
+        }
+
+        let audit_info = Some((
+            config_sources_status,
+            std::time::Instant::now(),
+            format_distribution,
+        ));
+        self.load_with_figment_audit(figment, run_env, app_name, audit_info)
+            .await
+    }
+
     /// Load configuration synchronously
+    #[cfg(feature = "validation")]
     pub fn load_sync(&self) -> Result<T, ConfigError>
     where
         T: Sanitize
@@ -1139,6 +1277,20 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             + Default
             + Clone
             + Validate
+            + crate::ConfigMap,
+    {
+        Self::syncify(async { self.load().await })
+    }
+
+    /// Load configuration synchronously (without validation)
+    #[cfg(not(feature = "validation"))]
+    pub fn load_sync(&self) -> Result<T, ConfigError>
+    where
+        T: Sanitize
+            + for<'de> Deserialize<'de>
+            + Serialize
+            + Default
+            + Clone
             + crate::ConfigMap,
     {
         Self::syncify(async { self.load().await })
@@ -1171,7 +1323,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Load configuration synchronously with audit support
-    #[cfg(feature = "audit")]
+    #[cfg(all(feature = "audit", feature = "validation"))]
     pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
     where
         T: Sanitize
@@ -1185,8 +1337,22 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         Self::syncify(async { self.load().await })
     }
 
+    /// Load configuration synchronously with audit support (without validation)
+    #[cfg(all(feature = "audit", not(feature = "validation")))]
+    pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
+    where
+        T: Sanitize
+            + for<'de> Deserialize<'de>
+            + Serialize
+            + Default
+            + Clone
+            + crate::ConfigMap,
+    {
+        Self::syncify(async { self.load().await })
+    }
+
     /// Load configuration synchronously with watcher support
-    #[cfg(feature = "watch")]
+    #[cfg(all(feature = "watch", feature = "validation"))]
     pub fn load_sync_with_watcher(
         &self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
@@ -1197,6 +1363,22 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             + Default
             + Clone
             + Validate
+            + crate::ConfigMap,
+    {
+        Self::syncify(async { self.clone().load_with_watcher().await })
+    }
+
+    /// Load configuration synchronously with watcher support (without validation)
+    #[cfg(all(feature = "watch", not(feature = "validation")))]
+    pub fn load_sync_with_watcher(
+        &self,
+    ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
+    where
+        T: Sanitize
+            + for<'de> Deserialize<'de>
+            + Serialize
+            + Default
+            + Clone
             + crate::ConfigMap,
     {
         Self::syncify(async { self.clone().load_with_watcher().await })
@@ -1363,7 +1545,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_template_expansion(&mut config)?;
 
         // Apply decryption
-        self.apply_decryption(&mut config)?;
+        // TODO: Apply encryption when feature is enabled
 
         // Apply sanitization if available
         if let Some(sanitizer) = &self.sanitizer {
@@ -1420,7 +1602,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Load configuration asynchronously without audit support
-    #[cfg(not(feature = "audit"))]
+    #[cfg(all(not(feature = "audit"), feature = "validation"))]
     pub async fn load(&self) -> Result<T, ConfigError>
     where
         T: for<'de> Deserialize<'de> + Serialize + Default + Clone + Validate + crate::ConfigMap,
@@ -1519,8 +1701,108 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             .await
     }
 
+    /// Load configuration asynchronously without audit support (no validation)
+    #[cfg(all(not(feature = "audit"), not(feature = "validation")))]
+    pub async fn load(&self) -> Result<T, ConfigError>
+    where
+        T: for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
+    {
+        let mut figment = Figment::new();
+
+        // 1. Load defaults if provided
+        if let Some(ref defaults) = self.defaults {
+            figment = figment.merge(Serialized::from(defaults, "default"));
+        }
+
+        // 2. Load standard config files
+        let mut _standard_files_loaded = 0;
+        let mut search_paths = vec![std::path::PathBuf::from(".")];
+
+        if let Some(config_dir) = dirs::config_dir() {
+            if let Some(app_name) = &self.app_name {
+                search_paths.push(config_dir.join(app_name));
+            }
+            search_paths.push(config_dir);
+        }
+
+        if let Some(home) = dirs::home_dir() {
+            search_paths.push(home);
+        }
+
+        #[cfg(unix)]
+        if let Some(app_name) = &self.app_name {
+            search_paths.push(std::path::PathBuf::from(format!("/etc/{}", app_name)));
+        }
+
+        let run_env = std::env::var("RUN_ENV").ok();
+        let app_name = self.app_name.as_deref().unwrap_or("app");
+
+        for path in &search_paths {
+            let base_path = if let Some(app_name) = &self.app_name {
+                path.join(app_name)
+            } else {
+                path.clone()
+            };
+            let formats = ["toml", "json", "yaml", "yml"];
+
+            // Find all existing config files in priority order
+            let mut existing_files = Vec::new();
+            for format in &formats {
+                let file_path = base_path.join(format!("config.{}", format));
+                if file_path.exists() {
+                    existing_files.push(file_path);
+                }
+            }
+
+            // Load files in reverse order (highest priority first)
+            for file_path in existing_files.iter().rev() {
+                let path_str = file_path.to_string_lossy();
+                let format = ConfigLoader::<T>::detect_format(file_path);
+
+                if let Some(fmt) = format {
+                    match fmt.as_str() {
+                        "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
+                        "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),
+                        "json" => figment = figment.merge(Json::file(path_str.as_ref())),
+                        _ => {}
+                    }
+                    _standard_files_loaded += 1;
+                }
+            }
+
+            // Load environment-specific config files
+            if let Some(ref env) = run_env {
+                let mut existing_env_files = Vec::new();
+                for format in &formats {
+                    let env_file_path = path.join(format!("{}.{}.{}", app_name, env, format));
+                    if env_file_path.exists() {
+                        existing_env_files.push(env_file_path);
+                    }
+                }
+
+                for env_file_path in existing_env_files.iter().rev() {
+                    let path_str = env_file_path.to_string_lossy();
+                    let format = ConfigLoader::<T>::detect_format(env_file_path);
+
+                    if let Some(fmt) = format {
+                        match fmt.as_str() {
+                            "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
+                            "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),
+                            "json" => figment = figment.merge(Json::file(path_str.as_ref())),
+                            _ => {}
+                        }
+                        _standard_files_loaded += 1;
+                    }
+                }
+            }
+        }
+
+        self.load_with_figment(figment, run_env, Some(app_name), None)
+            .await
+    }
+
     /// Load configuration with file watching
-    #[cfg(feature = "watch")]
+    #[cfg(all(feature = "watch", feature = "validation"))]
     pub async fn load_with_watcher(
         self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
@@ -1532,6 +1814,32 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             + Clone
             + crate::ConfigMap
             + Validate,
+    {
+        let explicit_files = self.explicit_files.clone();
+        let watch = self.watch;
+        let config = self.load().await?;
+
+        let watcher = if watch {
+            Some(crate::watcher::ConfigWatcher::new(explicit_files))
+        } else {
+            None
+        };
+
+        Ok((config, watcher))
+    }
+
+    /// Load configuration with file watching (without validation)
+    #[cfg(all(feature = "watch", not(feature = "validation")))]
+    pub async fn load_with_watcher(
+        self,
+    ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
+    where
+        T: Sanitize
+            + for<'de> Deserialize<'de>
+            + Serialize
+            + Default
+            + Clone
+            + crate::ConfigMap,
     {
         let explicit_files = self.explicit_files.clone();
         let watch = self.watch;

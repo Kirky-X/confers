@@ -58,6 +58,31 @@
 </tr>
 </table>
 
+### 📦 特性说明
+
+confers 提供了灵活的特性配置，允许用户根据需求选择需要的功能：
+
+**特性预设**：
+- `minimal` - 仅配置加载（最小依赖）
+- `recommended` - 配置加载 + 验证（推荐大多数应用）
+- `dev` - 开发配置（包含 CLI、schema、audit、monitoring）
+- `production` - 生产配置（包含 watch、encryption、remote、monitoring）
+- `full` - 所有功能
+
+**单独特性**：
+- `derive` - 配置结构体的 derive 宏
+- `validation` - 配置验证支持
+- `cli` - 命令行工具
+- `watch` - 文件监控和热重载
+- `audit` - 审计日志
+- `schema` - JSON Schema 生成
+- `parallel` - 并行验证
+- `monitoring` - 系统监控
+- `remote` - 远程配置（etcd、consul、http）
+- `encryption` - 配置加密
+
+> 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
+
 ---
 
 ## 核心 API
