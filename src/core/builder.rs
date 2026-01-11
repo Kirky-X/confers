@@ -266,6 +266,7 @@ impl ConfigBuilder {
     /// let builder = ConfigBuilder::new()
     ///     .set_default("port", 8080)?
     ///     .clear_defaults();
+    /// # Ok::<(), confers::ConfigError>(())
     /// ```
     pub fn clear_defaults(mut self) -> Self {
         self.defaults.clear();
@@ -586,7 +587,7 @@ mod tests {
 
         assert_eq!(config.server.host, "localhost");
         assert_eq!(config.server.port, 8080);
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
         Ok(())
     }
 
@@ -600,18 +601,18 @@ mod tests {
 
         assert_eq!(config.server.host, "0.0.0.0");
         assert_eq!(config.server.port, 8899);
-        assert_eq!(config.debug, false);
+        assert!(!config.debug);
         Ok(())
     }
 
     #[test]
     fn test_file_source() {
         let file = File::with_name("config/default");
-        assert_eq!(file.required, false);
+        assert!(!file.required);
         assert_eq!(file.format, None);
 
         let file = File::with_name("config/default").required(true);
-        assert_eq!(file.required, true);
+        assert!(file.required);
     }
 
     #[test]
@@ -705,7 +706,7 @@ mod tests {
 
         assert_eq!(config.server.host, "localhost");
         assert_eq!(config.server.port, 8080);
-        assert_eq!(config.debug, true);
+        assert!(config.debug);
         Ok(())
     }
 

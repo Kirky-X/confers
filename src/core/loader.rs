@@ -15,7 +15,9 @@ use crate::providers::file_provider::FileConfigProvider;
 use crate::providers::provider::ProviderManager;
 use crate::providers::SerializedProvider;
 use figment::providers::{Format, Json, Serialized, Toml, Yaml};
-use figment::value::{Tag, Value};
+use figment::value::Value;
+#[cfg(feature = "encryption")]
+use figment::value::Tag;
 use figment::Figment;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

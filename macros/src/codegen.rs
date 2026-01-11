@@ -923,6 +923,7 @@ pub fn generate_impl(
 
             if f.flatten {
                 return Some(quote!{
+                    #[cfg(feature = "validation")]
                     confers::validator::Validate::validate(&config.#field_name)
                         .map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
                 });
@@ -934,6 +935,7 @@ pub fn generate_impl(
                     let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
 
                     return Some(quote!{
+                        #[cfg(feature = "validation")]
                         if !(#min_lit as _..=#max_lit as _).contains(&config.#field_name) {
                             let mut errors = validator::ValidationErrors::new();
                              let mut error = validator::ValidationError::new("range");
@@ -957,6 +959,7 @@ pub fn generate_impl(
                     let max_lit = syn::LitInt::new(&max.to_string(), proc_macro2::Span::call_site());
 
                     return Some(quote!{
+                        #[cfg(feature = "validation")]
                         let field_len = config.#field_name.chars().count() as u64;
                         if !(#min_lit..=#max_lit).contains(&field_len) {
                             let mut errors = validator::ValidationErrors::new();
@@ -978,6 +981,7 @@ pub fn generate_impl(
             if let Some(validate_str) = &f.validate {
                 if validate_str == "email" {
                     return Some(quote!{
+                        #[cfg(feature = "validation")]
                         if !confers::validators::is_email(&config.#field_name) {
                             let mut errors = validator::ValidationErrors::new();
                             let mut error = validator::ValidationError::new("email");
@@ -996,6 +1000,7 @@ pub fn generate_impl(
             if let Some(validate_str) = &f.validate {
                 if validate_str == "url" {
                     return Some(quote!{
+                        #[cfg(feature = "validation")]
                         if !confers::validators::is_url(&config.#field_name) {
                             let mut errors = validator::ValidationErrors::new();
                             let mut error = validator::ValidationError::new("url");
@@ -1333,6 +1338,7 @@ pub fn generate_impl(
     }
 
     let impl_validate = quote! {
+        #[cfg(feature = "validation")]
         impl validator::Validate for #struct_name {
             fn validate(&self) -> Result<(), validator::ValidationErrors> {
                 let mut errors = validator::ValidationErrors::new();
@@ -1427,6 +1433,7 @@ pub fn generate_impl(
         #schema_impl
 
         /// Clap-compatible argument structure for command line parsing
+        #[cfg(feature = "cli")]
         #[derive(clap::Parser, Debug, serde::Serialize, serde::Deserialize)]
         #[command(name = stringify!(#struct_name))]
         struct #clap_shadow_name {
@@ -1473,7 +1480,7 @@ pub fn generate_impl(
                 let mut loader = Self::new_loader();
 
                 // Parse command line arguments and add them as overrides
-                #[cfg(not(test))]
+                #[cfg(all(feature = "cli", not(test)))]
                 match <#clap_shadow_name as confers::clap::Parser>::try_parse() {
                     Ok(clap_args) => {
                         // Convert Clap arguments to CLI format and add them
@@ -1495,7 +1502,7 @@ pub fn generate_impl(
                         }
                     }
                 }
-                #[cfg(test)]
+                #[cfg(all(feature = "cli", test))]
                 {
                     let clap_args = <#clap_shadow_name as confers::clap::Parser>::try_parse_from(std::iter::empty::<&str>()).ok();
                     if let Some(clap_args) = clap_args {
@@ -1511,6 +1518,7 @@ pub fn generate_impl(
                 let config = loader.load_sync()?;
 
                 // Apply validation only if there are validations to apply
+                #[cfg(feature = "validation")]
                 if #has_validations {
                     confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
                 }
@@ -1522,6 +1530,7 @@ pub fn generate_impl(
             }
 
             /// Load configuration with custom command line arguments
+            #[cfg(feature = "cli")]
             pub fn load_from_args(args: Vec<String>) -> Result<Self, confers::prelude::ConfigError> {
                 let mut loader = Self::new_loader();
 
@@ -1557,6 +1566,7 @@ pub fn generate_impl(
                 let config = loader.load_sync()?;
 
                 // Apply validation only if there are validations to apply
+                #[cfg(feature = "validation")]
                 if #has_validations {
                     confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
                 }
@@ -1602,6 +1612,7 @@ pub fn generate_impl(
                 let config = loader.load_sync()?;
 
                 // Apply validation only if there are validations to apply
+                #[cfg(feature = "validation")]
                 if #has_validations {
                     confers::validator::Validate::validate(&config).map_err(|e| confers::prelude::ConfigError::ValidationError(format!("验证失败: {:?}", e)))?;
                 }
@@ -1672,7 +1683,16 @@ pub fn generate_impl(
             }
         }
 
+        /// Implement OptionalValidate for all Config-derived structs (only when validation feature is NOT enabled)
+        #[cfg(not(feature = "validation"))]
+        impl confers::core::OptionalValidate for #struct_name {
+            fn optional_validate(&self) -> Result<(), confers::ConfigError> {
+                Ok(())
+            }
+        }
+
         /// Convert ClapShadow to CLI arguments in key=value format
+        #[cfg(feature = "cli")]
         impl #clap_shadow_name {
             pub fn to_cli_args(&self) -> Vec<String> {
                 let mut args = Vec::new();
