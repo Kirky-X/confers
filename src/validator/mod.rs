@@ -225,7 +225,14 @@ pub struct ParallelValidator {
 #[cfg(feature = "parallel")]
 impl ParallelValidator {
     pub fn new(config: ParallelValidationConfig) -> Self {
-        Self { config }
+        // Limit maximum threads to prevent resource exhaustion
+        // Use at most 2x the number of CPU cores
+        let max_threads = config.num_threads().min(num_cpus::get() * 2);
+        let adjusted_config = ParallelValidationConfig {
+            num_threads: Some(max_threads),
+            ..config
+        };
+        Self { config: adjusted_config }
     }
 
     pub fn config(&self) -> &ParallelValidationConfig {

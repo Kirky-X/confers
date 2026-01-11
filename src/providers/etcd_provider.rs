@@ -7,6 +7,7 @@ use crate::error::ConfigError;
 use crate::providers::provider::{
     ConfigProvider, ProviderMetadata, ProviderType, WatchableProvider,
 };
+use crate::utils::ssrf::validate_remote_url;
 use etcd_client::{Client, ConnectOptions, Identity, TlsOptions};
 use failsafe::futures::CircuitBreaker;
 use figment::{
@@ -134,6 +135,11 @@ impl EtcdConfigProvider {
 
 impl ConfigProvider for EtcdConfigProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
+        // Validate all endpoints to prevent SSRF attacks
+        for endpoint in &self.endpoints {
+            validate_remote_url(endpoint)?;
+        }
+
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

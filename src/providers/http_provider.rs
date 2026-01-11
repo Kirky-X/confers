@@ -5,6 +5,7 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
+use crate::utils::ssrf::validate_remote_url;
 use figment::value::{Dict, Value as FigmentValue};
 use figment::{providers::Serialized, Figment, Profile};
 use serde_json::Value as JsonValue;
@@ -164,6 +165,9 @@ impl HttpConfigProvider {
 
 impl ConfigProvider for HttpConfigProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
+        // Validate URL to prevent SSRF attacks
+        validate_remote_url(&self.url)?;
+
         let client = self.build_client()?;
 
         let mut request = client.get(&self.url);

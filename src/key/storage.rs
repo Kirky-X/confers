@@ -68,8 +68,17 @@ impl KeyStorage {
         created_by: String,
     ) -> Result<(), ConfigError> {
         self.master_key = Some(*master_key);
+        let key_id_for_error = key_id.clone(); // Clone for error handling
         self.key_manager
-            .initialize(master_key, key_id, created_by)?;
+            .initialize(master_key, key_id, created_by)
+            .map_err(|e| {
+                // 转换错误，移除可能包含的密钥信息
+                ConfigError::RuntimeError(format!(
+                    "Failed to initialize key ring for '{}': {}",
+                    key_id_for_error,
+                    e.to_string().replace(&hex::encode(master_key), "***")
+                ))
+            })?;
         self.save()?;
         Ok(())
     }
@@ -80,7 +89,12 @@ impl KeyStorage {
             .ok_or_else(|| ConfigError::RuntimeError("Master key not set".to_string()))?;
 
         let key_data = self.serialize_key_manager()?;
-        let encrypted_data = self.encrypt_data(&key_data, &master_key)?;
+        let encrypted_data = self.encrypt_data(&key_data, &master_key).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Failed to encrypt key data: {}",
+                e.to_string().replace(&hex::encode(master_key), "***")
+            ))
+        })?;
         let checksum = KeyStorage::calculate_checksum(&encrypted_data);
 
         let store = EncryptedKeyStore {
@@ -111,7 +125,12 @@ impl KeyStorage {
 
         let store = self.read_store()?;
         self.validate_checksum(&store)?;
-        let key_data = self.decrypt_data(&store.encrypted_data, &master_key)?;
+        let key_data = self.decrypt_data(&store.encrypted_data, &master_key).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Failed to decrypt key data: {}",
+                e.to_string().replace(&hex::encode(master_key), "***")
+            ))
+        })?;
         self.deserialize_key_manager(&key_data)?;
 
         Ok(())
@@ -137,12 +156,22 @@ impl KeyStorage {
 
     fn encrypt_data(&self, data: &str, master_key: &[u8; 32]) -> Result<String, ConfigError> {
         let encryptor = ConfigEncryption::new(*master_key);
-        encryptor.encrypt(data)
+        encryptor.encrypt(data).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Encryption failed: {}",
+                e.to_string().replace(&hex::encode(master_key), "***")
+            ))
+        })
     }
 
     fn decrypt_data(&self, encrypted: &str, master_key: &[u8; 32]) -> Result<String, ConfigError> {
         let encryptor = ConfigEncryption::new(*master_key);
-        encryptor.decrypt(encrypted)
+        encryptor.decrypt(encrypted).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Decryption failed: {}",
+                e.to_string().replace(&hex::encode(master_key), "***")
+            ))
+        })
     }
 
     fn calculate_checksum(data: &str) -> String {
@@ -345,8 +374,18 @@ impl KeyStorage {
         new_master_key: &[u8; 32],
     ) -> Result<(), ConfigError> {
         let key_data = self.serialize_key_manager()?;
-        let decrypted_data = self.decrypt_data(&key_data, old_master_key)?;
-        let reencrypted_data = self.encrypt_data(&decrypted_data, new_master_key)?;
+        let decrypted_data = self.decrypt_data(&key_data, old_master_key).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Failed to decrypt with old master key: {}",
+                e.to_string().replace(&hex::encode(old_master_key), "***")
+            ))
+        })?;
+        let reencrypted_data = self.encrypt_data(&decrypted_data, new_master_key).map_err(|e| {
+            ConfigError::RuntimeError(format!(
+                "Failed to encrypt with new master key: {}",
+                e.to_string().replace(&hex::encode(new_master_key), "***")
+            ))
+        })?;
 
         self.master_key = Some(*new_master_key);
 

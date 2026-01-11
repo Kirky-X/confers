@@ -5,6 +5,7 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
+use crate::utils::ssrf::validate_remote_url;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use failsafe::{
     backoff, failure_policy, CircuitBreaker, Config as CircuitBreakerConfig, Error as FailsafeError,
@@ -191,6 +192,9 @@ impl ConsulConfigProvider {
 
 impl ConfigProvider for ConsulConfigProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
+        // Validate URL to prevent SSRF attacks
+        validate_remote_url(&self.address)?;
+
         let circuit_breaker = CircuitBreakerConfig::new()
             .failure_policy(failure_policy::consecutive_failures(
                 3,

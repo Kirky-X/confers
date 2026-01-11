@@ -409,14 +409,22 @@ impl FileSource {
         // Validate path doesn't contain path traversal attacks
         let path_str = path.to_string_lossy();
         if path_str.contains("..") {
-            tracing::warn!(
-                "Path contains '..' which may indicate a path traversal attempt: {}",
+            tracing::error!(
+                "Path contains '..' which may indicate a path traversal attempt: {}. Using safe default.",
                 path_str
             );
+            return Self {
+                name: PathBuf::from("config"),
+                format: None,
+                required: false,
+            };
         }
 
+        // Canonicalize path to resolve any symlinks or relative paths
+        let canonical_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
         Self {
-            name: path.to_path_buf(),
+            name: canonical_path,
             format: None,
             required: false,
         }
@@ -729,8 +737,8 @@ mod tests {
     }
 
     #[test]
-    fn test_path_traversal_warning() {
+    fn test_path_traversal_rejection() {
         let file = File::with_name("../etc/passwd");
-        assert_eq!(file.name, PathBuf::from("../etc/passwd")); // Path is stored as-is with warning
+        assert_eq!(file.name, PathBuf::from("config")); // Path traversal is rejected, using safe default
     }
 }
