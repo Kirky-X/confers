@@ -14,9 +14,11 @@ pub use storage::KeyStorage;
 use crate::encryption::ConfigEncryption;
 use crate::error::ConfigError;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "encryption")]
+use rand::Rng;
 
 pub const CONFERS_KEY_VERSION: &str = "v1";
 pub const KEY_VERSION_PREFIX: &str = "v";
@@ -87,6 +89,7 @@ impl KeyBundle {
         }
     }
 
+    #[cfg(feature = "encryption")]
     pub fn generate(
         master_key: &[u8; 32],
         version: u32,

@@ -6,7 +6,9 @@
 use crate::core::loader::is_editor_temp_file;
 use crate::error::ConfigError;
 
+#[cfg(feature = "watch")]
 use notify::{RecursiveMode, Watcher};
+#[cfg(feature = "watch")]
 use notify_debouncer_full::{new_debouncer, DebouncedEvent, Debouncer, FileIdMap};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
@@ -23,7 +25,7 @@ use tokio::time::interval;
 use std::fs;
 
 /// Type alias for the debounced watcher result
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "watch"))]
 type DebouncedWatcherResult = Result<
     (
         Debouncer<notify::RecommendedWatcher, FileIdMap>,
@@ -154,6 +156,7 @@ impl ConfigWatcher {
         self
     }
 
+    #[cfg(feature = "watch")]
     #[allow(clippy::type_complexity)]
     pub fn watch(
         &self,
@@ -176,6 +179,7 @@ impl ConfigWatcher {
         }
     }
 
+    #[cfg(feature = "watch")]
     #[allow(clippy::type_complexity)]
     fn watch_files(
         &self,
@@ -231,7 +235,7 @@ impl ConfigWatcher {
         Ok((debouncer, rx))
     }
 
-    #[cfg(feature = "remote")]
+    #[cfg(all(feature = "remote", feature = "watch"))]
     fn watch_remote(
         &self,
         url: &str,
@@ -373,6 +377,7 @@ mod tests {
     use std::time::Instant;
     use tempfile::TempDir;
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_watcher_single_file_change() {
         let temp_dir = TempDir::new().unwrap();
@@ -391,6 +396,7 @@ mod tests {
         assert!(result.is_ok(), "Should receive file change event");
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_concurrent_file_modifications() {
         let temp_dir = TempDir::new().unwrap();
@@ -443,6 +449,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_multiple_files_watching() {
         let temp_dir = TempDir::new().unwrap();
@@ -468,6 +475,7 @@ mod tests {
         assert!(result.is_ok(), "Should receive file change event");
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_rapid_successive_changes() {
         let temp_dir = TempDir::new().unwrap();
@@ -497,6 +505,7 @@ mod tests {
         assert!(events_received >= 1);
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_debounce_behavior() {
         let temp_dir = TempDir::new().unwrap();
@@ -540,6 +549,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "watch")]
     #[test]
     fn test_reload_latency_measurement() {
         let temp_dir = TempDir::new().unwrap();

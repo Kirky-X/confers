@@ -8,11 +8,13 @@ use crate::key::{
     KeyBundle, KeyRing, KeyRotationSchedule, KeyStatus, RotationPlan, RotationResult,
     CURRENT_KEY_VERSION,
 };
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "encryption")]
+use rand::Rng;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyVersion {
@@ -77,6 +79,7 @@ impl KeyManager {
         })
     }
 
+    #[cfg(feature = "encryption")]
     pub fn generate_key(&mut self, _master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
         let mut key_bytes = [0u8; 32];
         let mut rng = rand::rng();

@@ -22,14 +22,11 @@ pub mod watcher;
 // Re-export common items
 pub use audit::Sanitize;
 pub use confers_macros::Config;
-pub use core::ConfigLoader;
-pub use core::OptionalValidate;
+pub use core::{ConfigLoader, OptionalValidate};
+pub use core::builder::{ConfigBuilder, Environment, File, FileFormat};
 pub use error::ConfigError;
 pub use error_helpers::{OptionExt, ResultExt};
-pub use validator::{
-    ParallelValidationConfig, ParallelValidationResult, ParallelValidator, Validate,
-    ValidationErrors,
-};
+pub use validator::{Validate, ValidationErrors};
 
 // Re-export macro dependencies
 pub use clap;
@@ -43,9 +40,6 @@ pub mod prelude {
     pub use crate::ConfigError;
     pub use crate::ConfigLoader;
     pub use crate::OptionalValidate;
-    pub use crate::ParallelValidationConfig;
-    pub use crate::ParallelValidationResult;
-    pub use crate::ParallelValidator;
     pub use crate::ResultExt;
     pub use crate::Sanitize;
     pub use crate::Validate;

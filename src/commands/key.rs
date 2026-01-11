@@ -6,8 +6,10 @@
 use crate::error::ConfigError;
 use crate::key::KeyStorage;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use rand::Rng;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "encryption")]
+use rand::Rng;
 
 pub struct KeyCommand;
 
@@ -155,6 +157,7 @@ impl KeyCommand {
         Ok(())
     }
 
+    #[cfg(feature = "encryption")]
     fn generate_key(
         output: &Option<String>,
         algorithm: &str,
