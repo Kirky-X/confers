@@ -6,7 +6,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as ProcMacro2TokenStream;
-use syn::{parse_macro_input, DeriveInput, Meta};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 mod codegen;
 mod parse;
@@ -44,7 +44,9 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
         let after_equals = &tokens_str[start + 10..];
 
         if after_equals.starts_with('"') {
-            let after_first_quote = &after_equals[1..];
+            let after_first_quote = after_equals
+                .get(1..)
+                .expect("String should have at least one character after quote");
             let mut i = 0;
             let mut end_pos = None;
 
@@ -299,13 +301,17 @@ fn parse_field_opts(field: &syn::Field) -> parse::FieldOpts {
                             opts.default = Some(expr);
                         }
                     }
-                } else {
+                }
+
+                if !is_string {
                     if already_wrapped {
                         let wrapped_str = format!("{}.to_string()", value);
                         if let Ok(expr) = syn::parse_str::<syn::Expr>(&wrapped_str) {
                             opts.default = Some(expr);
                         }
-                    } else {
+                    }
+
+                    if !already_wrapped {
                         if let Ok(expr) = syn::parse_str::<syn::Expr>(&value) {
                             opts.default = Some(expr);
                         }
