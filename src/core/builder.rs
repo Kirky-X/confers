@@ -7,6 +7,55 @@
 //!
 //! This module provides a Builder-style API that is compatible with config-rs,
 //! making migration from config-rs to confers much easier.
+//!
+//! # Configuration Source Priority
+//!
+//! Configuration sources are applied in the order they are added, with later sources
+//! overriding earlier ones. The priority order is:
+//!
+//! 1. **Default values** (lowest priority) - Set via `set_default()`
+//! 2. **File sources** - Added via `add_source(File::with_name(...))`
+//! 3. **Environment variables** (highest priority) - Added via `add_source(Environment::with_prefix(...))`
+//!
+//! # Merging Strategy
+//!
+//! - Default values are merged together into a single configuration object
+//! - Configuration sources are merged sequentially, with later sources overriding earlier ones
+//! - Nested values are merged at the field level, not at the object level
+//! - If a parent key exists but is not an object type, setting a nested value will return an error
+//!
+//! # Performance Considerations
+//!
+//! - All default values are combined into a single map before merging, reducing unnecessary operations
+//! - File format detection is done once per file source
+//! - Configuration extraction uses figment's efficient deserialization
+//! - For large configurations with many defaults, consider using `Default` trait instead
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use confers::{ConfigBuilder, Environment, File};
+//! use serde::{Deserialize, Serialize};
+//!
+//! #[derive(Debug, Serialize, Deserialize)]
+//! struct MyConfig {
+//!     server: ServerConfig,
+//! }
+//!
+//! #[derive(Debug, Serialize, Deserialize)]
+//! struct ServerConfig {
+//!     port: u16,
+//!     host: String,
+//! }
+//!
+//! let config: MyConfig = ConfigBuilder::new()
+//!     .set_default("server.port", 8899)?
+//!     .set_default("server.host", "0.0.0.0")?
+//!     .add_source(File::with_name("config/default").required(false))
+//!     .add_source(Environment::with_prefix("CRAWLRS").separator("__"))
+//!     .build()?;
+//! # Ok::<(), confers::ConfigError>(())
+//! ```
 
 use crate::error::ConfigError;
 use figment::providers::{Env, Format, Json, Toml, Yaml};
@@ -361,32 +410,17 @@ impl FileSource {
     fn into_figment(self) -> Figment {
         let path = self.name;
 
-        // Try to detect format from extension if not specified
+        // Determine format: use explicit format, or detect from extension, or default to TOML
         let format = self.format.or_else(|| {
             path.extension()
                 .and_then(|ext| ext.to_str())
                 .and_then(|ext| FileFormat::from_str(ext).ok())
-        });
+        }).unwrap_or(FileFormat::Toml); // Default to TOML if no extension matches
 
         match format {
-            Some(FileFormat::Toml) => Figment::from(Toml::file(path)),
-            Some(FileFormat::Json) => Figment::from(Json::file(path)),
-            Some(FileFormat::Yaml) => Figment::from(Yaml::file(path)),
-            None => {
-                // Try auto-detection by checking file extensions
-                if path.extension().map_or(false, |ext| ext == "toml") {
-                    Figment::from(Toml::file(path))
-                } else if path.extension().map_or(false, |ext| ext == "json") {
-                    Figment::from(Json::file(path))
-                } else if path.extension().map_or(false, |ext| {
-                    ext == "yaml" || ext == "yml"
-                }) {
-                    Figment::from(Yaml::file(path))
-                } else {
-                    // Default to TOML
-                    Figment::from(Toml::file(path))
-                }
-            }
+            FileFormat::Toml => Figment::from(Toml::file(path)),
+            FileFormat::Json => Figment::from(Json::file(path)),
+            FileFormat::Yaml => Figment::from(Yaml::file(path)),
         }
     }
 }
@@ -575,5 +609,106 @@ mod tests {
             FileFormat::from_str("yml").unwrap(),
             FileFormat::Yaml
         );
+    }
+
+    #[test]
+    fn test_empty_key_error() {
+        let result: Result<TestConfig, ConfigError> = ConfigBuilder::new()
+            .set_default("", "value")
+            .unwrap()
+            .build();
+
+        assert!(result.is_err());
+        if let Err(ConfigError::ParseError(msg)) = result {
+            assert!(msg.contains("Key cannot be empty"));
+        } else {
+            panic!("Expected ParseError for empty key");
+        }
+    }
+
+    #[test]
+    fn test_nested_value_conflict_error() {
+        // First set a non-object value, then try to set a nested value
+        let result: Result<TestConfig, ConfigError> = ConfigBuilder::new()
+            .set_default("server", "string_value")
+            .unwrap()
+            .set_default("server.host", "localhost")
+            .unwrap()
+            .build();
+
+        assert!(result.is_err());
+        if let Err(ConfigError::ParseError(msg)) = result {
+            assert!(msg.contains("not an object"));
+        } else {
+            panic!("Expected ParseError for nested value conflict");
+        }
+    }
+
+    #[test]
+    fn test_deeply_nested_defaults() -> Result<(), Box<dyn std::error::Error>> {
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        struct DeepConfig {
+            level1: Level1Config,
+        }
+
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        struct Level1Config {
+            level2: Level2Config,
+        }
+
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        struct Level2Config {
+            level3: Level3Config,
+        }
+
+        #[derive(Debug, Serialize, Deserialize, PartialEq)]
+        struct Level3Config {
+            value: String,
+        }
+
+        let config: DeepConfig = ConfigBuilder::new()
+            .set_default("level1.level2.level3.value", "deep_value")?
+            .build()?;
+
+        assert_eq!(config.level1.level2.level3.value, "deep_value");
+        Ok(())
+    }
+
+    #[test]
+    fn test_multiple_defaults_same_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let config: TestConfig = ConfigBuilder::new()
+            .set_default("server.host", "localhost")?
+            .set_default("server.port", 8080)?
+            .set_default("debug", true)?
+            .build()?;
+
+        assert_eq!(config.server.host, "localhost");
+        assert_eq!(config.server.port, 8080);
+        assert_eq!(config.debug, true);
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_prefix_validation() {
+        let env = Environment::with_prefix("");
+        assert_eq!(env.prefix, None); // Empty prefix should be treated as None
+    }
+
+    #[test]
+    fn test_empty_separator_warning() {
+        let env = Environment::with_prefix("APP").separator("");
+        assert_eq!(env.separator, ""); // Empty separator is allowed but may cause issues
+    }
+
+    #[test]
+    fn test_empty_file_path_validation() {
+        let file = File::with_name("");
+        assert_eq!(file.name, PathBuf::from("config")); // Empty path defaults to "config"
+    }
+
+    #[test]
+    fn test_path_traversal_warning() {
+        let file = File::with_name("../etc/passwd");
+        assert_eq!(file.name, PathBuf::from("../etc/passwd")); // Path is stored as-is with warning
     }
 }
