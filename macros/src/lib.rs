@@ -6,7 +6,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as ProcMacro2TokenStream;
-use syn::{DeriveInput, Meta, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput, Meta};
 
 mod codegen;
 mod parse;
