@@ -253,24 +253,24 @@ impl ConfigBuilder {
 
         Ok(config)
     }
-    
-        /// Clear all default values
-        ///
-        /// This method removes all previously set default values.
-        ///
-        /// # Example
-        ///
-        /// ```rust
-        /// use confers::ConfigBuilder;
-        ///
-        /// let builder = ConfigBuilder::new()
-        ///     .set_default("port", 8080)?
-        ///     .clear_defaults();
-        /// ```
-        pub fn clear_defaults(mut self) -> Self {
-            self.defaults.clear();
-            self
-        }
+
+    /// Clear all default values
+    ///
+    /// This method removes all previously set default values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use confers::ConfigBuilder;
+    ///
+    /// let builder = ConfigBuilder::new()
+    ///     .set_default("port", 8080)?
+    ///     .clear_defaults();
+    /// ```
+    pub fn clear_defaults(mut self) -> Self {
+        self.defaults.clear();
+        self
+    }
 
     /// Get the number of default values set
     ///
@@ -439,11 +439,14 @@ impl FileSource {
         let path = self.name;
 
         // Determine format: use explicit format, or detect from extension, or default to TOML
-        let format = self.format.or_else(|| {
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .and_then(|ext| FileFormat::from_str(ext).ok())
-        }).unwrap_or(FileFormat::Toml); // Default to TOML if no extension matches
+        let format = self
+            .format
+            .or_else(|| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .and_then(|ext| FileFormat::from_str(ext).ok())
+            })
+            .unwrap_or(FileFormat::Toml); // Default to TOML if no extension matches
 
         match format {
             FileFormat::Toml => Figment::from(Toml::file(path)),
@@ -533,7 +536,9 @@ impl EnvironmentSource {
     pub fn separator(mut self, separator: impl Into<String>) -> Self {
         let sep = separator.into();
         if sep.is_empty() {
-            tracing::warn!("Empty separator for environment variables may cause unexpected behavior");
+            tracing::warn!(
+                "Empty separator for environment variables may cause unexpected behavior"
+            );
         }
         self.separator = sep;
         self
@@ -621,22 +626,10 @@ mod tests {
 
     #[test]
     fn test_file_format_detection() {
-        assert_eq!(
-            FileFormat::from_str("toml").unwrap(),
-            FileFormat::Toml
-        );
-        assert_eq!(
-            FileFormat::from_str("json").unwrap(),
-            FileFormat::Json
-        );
-        assert_eq!(
-            FileFormat::from_str("yaml").unwrap(),
-            FileFormat::Yaml
-        );
-        assert_eq!(
-            FileFormat::from_str("yml").unwrap(),
-            FileFormat::Yaml
-        );
+        assert_eq!(FileFormat::from_str("toml").unwrap(), FileFormat::Toml);
+        assert_eq!(FileFormat::from_str("json").unwrap(), FileFormat::Json);
+        assert_eq!(FileFormat::from_str("yaml").unwrap(), FileFormat::Yaml);
+        assert_eq!(FileFormat::from_str("yml").unwrap(), FileFormat::Yaml);
     }
 
     #[test]

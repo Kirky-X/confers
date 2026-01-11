@@ -36,29 +36,22 @@ pub trait OptionalValidate {
 /// Implement OptionalValidate for types that implement Validate
 impl<T: Validate> OptionalValidate for T {
     fn optional_validate(&self) -> Result<(), crate::error::ConfigError> {
-        self.validate().map_err(|e| crate::error::ConfigError::ValidationError(format!("{:?}", e)))
+        self.validate()
+            .map_err(|e| crate::error::ConfigError::ValidationError(format!("{:?}", e)))
     }
 }
 
 #[cfg(feature = "remote")]
-
 use crate::providers::consul_provider::ConsulConfigProvider;
 
 #[cfg(feature = "remote")]
-
 use crate::providers::etcd_provider::EtcdConfigProvider;
 
 #[cfg(feature = "remote")]
-
 use crate::providers::http_provider::HttpConfigProvider;
 
-
-
 #[cfg(feature = "monitoring")]
-
 use std::sync::OnceLock;
-
-
 
 /// Get current memory usage in MB using sysinfo crate
 /// Cross-platform support: Linux, macOS, Windows
@@ -1154,12 +1147,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(all(feature = "audit", not(feature = "validation")))]
     pub async fn load(&self) -> Result<T, ConfigError>
     where
-        T: Sanitize
-            + for<'de> Deserialize<'de>
-            + Serialize
-            + Default
-            + Clone
-            + crate::ConfigMap,
+        T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         let mut figment = Figment::new();
 
@@ -1297,12 +1285,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(not(feature = "validation"))]
     pub fn load_sync(&self) -> Result<T, ConfigError>
     where
-        T: Sanitize
-            + for<'de> Deserialize<'de>
-            + Serialize
-            + Default
-            + Clone
-            + crate::ConfigMap,
+        T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         Self::syncify(async { self.load().await })
     }
@@ -1352,12 +1335,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(all(feature = "audit", not(feature = "validation")))]
     pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
     where
-        T: Sanitize
-            + for<'de> Deserialize<'de>
-            + Serialize
-            + Default
-            + Clone
-            + crate::ConfigMap,
+        T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         Self::syncify(async { self.load().await })
     }
@@ -1385,12 +1363,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         &self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
     where
-        T: Sanitize
-            + for<'de> Deserialize<'de>
-            + Serialize
-            + Default
-            + Clone
-            + crate::ConfigMap,
+        T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         Self::syncify(async { self.clone().load_with_watcher().await })
     }
@@ -1568,7 +1541,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         let _sanitized = config.sanitize();
 
         // Validate configuration
-        config.optional_validate().map_err(ConfigError::from)?;
+        config.optional_validate()?;
 
         // 10. Audit logging
         let default_path = self
@@ -1846,12 +1819,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
     where
-        T: Sanitize
-            + for<'de> Deserialize<'de>
-            + Serialize
-            + Default
-            + Clone
-            + crate::ConfigMap,
+        T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         let explicit_files = self.explicit_files.clone();
         let watch = self.watch;

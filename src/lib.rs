@@ -27,8 +27,8 @@ pub mod watcher;
 // Re-export common items
 pub use audit::Sanitize;
 pub use confers_macros::Config;
-pub use core::{ConfigLoader, OptionalValidate};
 pub use core::builder::{ConfigBuilder, Environment, File, FileFormat};
+pub use core::{ConfigLoader, OptionalValidate};
 pub use error::ConfigError;
 pub use error_helpers::{OptionExt, ResultExt};
 #[cfg(feature = "validation")]
