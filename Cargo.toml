@@ -142,7 +142,7 @@ http = ["reqwest"]
 encryption = ["aes", "cbc", "rand", "base64", "pbkdf2", "hmac", "sha2", "aes-gcm", "zeroize", "lru", "chrono"]
 
 # CLI features
-cli = ["clap", "clap_complete"]
+cli = ["clap", "clap_complete", "derive", "encryption", "validation"]
 
 # Full feature set (enables all optional features)
 full = [

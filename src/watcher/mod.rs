@@ -3,7 +3,6 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::core::loader::is_editor_temp_file;
 use crate::error::ConfigError;
 
 #[cfg(feature = "watch")]
@@ -11,7 +10,6 @@ use notify::{RecursiveMode, Watcher};
 #[cfg(feature = "watch")]
 use notify_debouncer_full::{new_debouncer, DebouncedEvent, Debouncer, FileIdMap};
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "remote")]
@@ -23,6 +21,12 @@ use tokio::time::interval;
 
 #[cfg(feature = "remote")]
 use std::fs;
+
+#[cfg(feature = "watch")]
+use std::sync::mpsc::{channel, Receiver};
+
+#[cfg(feature = "watch")]
+use crate::core::loader::is_editor_temp_file;
 
 /// Type alias for the debounced watcher result
 #[cfg(all(feature = "remote", feature = "watch"))]
@@ -102,6 +106,7 @@ pub struct RemoteAuth {
 }
 
 pub struct ConfigWatcher {
+    #[allow(dead_code)]
     target: WatchTarget,
 }
 

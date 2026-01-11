@@ -1,3 +1,32 @@
+#!/bin/bash
+# 自动修复代码审查中发现的问题
+
+set -e
+
+echo "🔧 开始自动修复代码审查问题..."
+echo ""
+
+# 颜色定义
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# 1. 修复未使用的导入
+echo -e "${YELLOW}1. 修复未使用的导入...${NC}"
+cargo fix --lib --allow-dirty
+cargo fix --bin --allow-dirty
+echo -e "${GREEN}✓ 未使用的导入已修复${NC}"
+echo ""
+
+# 2. 创建修复 main.rs 的补丁
+echo -e "${YELLOW}2. 修复 main.rs 条件编译问题...${NC}"
+
+# 备份原文件
+cp src/main.rs src/main.rs.backup
+
+# 创建修复后的 main.rs
+cat > src/main.rs << 'EOF'
 // Copyright (c) 2025 Kirky.X
 //
 // Licensed under the MIT License
@@ -159,3 +188,100 @@ fn main() -> Result<(), ConfigError> {
     eprintln!("See the documentation for more information on feature presets.");
     std::process::exit(1);
 }
+EOF
+
+echo -e "${GREEN}✓ main.rs 条件编译已修复${NC}"
+echo ""
+
+# 3. 修复 watcher 模块
+echo -e "${YELLOW}3. 修复 watcher 模块未使用的导入...${NC}"
+
+# 备份原文件
+cp src/watcher/mod.rs src/watcher/mod.rs.backup
+
+# 修复 watcher 模块的导入
+# 移除未使用的导入，将条件导入移到条件编译块内
+cat > /tmp/watcher_fix.txt << 'EOF'
+--- a/src/watcher/mod.rs
++++ b/src/watcher/mod.rs
+@@ -3,8 +3,6 @@
+ // See LICENSE file in the project root for full license information.
+ 
+-use crate::core::loader::is_editor_temp_file;
+-use crate::error::ConfigError;
+-
+ #[cfg(feature = "watch")]
+ use notify::{RecursiveMode, Watcher};
+ #[cfg(feature = "watch")]
+ use notify_debouncer_full::{new_debouncer, DebouncedEvent, Debouncer, FileIdMap};
+ use std::path::PathBuf;
+-use std::sync::mpsc::{channel, Receiver};
+ use std::time::{Duration, Instant};
+ 
+ #[cfg(feature = "remote")]
+ use crate::utils::ssrf::validate_remote_url;
+ #[cfg(feature = "remote")]
+ use reqwest;
+ #[cfg(feature = "remote")]
+ use tokio::time::interval;
+ 
+ #[cfg(feature = "remote")]
+ use std::fs;
+ 
++#[cfg(feature = "watch")]
++use std::sync::mpsc::{channel, Receiver};
++
++#[cfg(feature = "watch")]
++use crate::core::loader::is_editor_temp_file;
++
++#[cfg(feature = "watch")]
++use crate::error::ConfigError;
++
+EOF
+
+# 应用修复（需要手动应用，因为 patch 可能不完美）
+echo -e "${YELLOW}  请手动应用 watcher 模块的修复${NC}"
+echo -e "${YELLOW}  或运行: patch -p1 < /tmp/watcher_fix.txt${NC}"
+echo ""
+
+# 4. 验证修复
+echo -e "${YELLOW}4. 验证修复...${NC}"
+
+# 测试 minimal 特性
+echo "  测试 minimal 特性..."
+if cargo build --no-default-features --features minimal --lib 2>&1 | grep -q "Finished"; then
+    echo -e "${GREEN}  ✓ minimal 特性编译成功${NC}"
+else
+    echo -e "${RED}  ✗ minimal 特性编译失败${NC}"
+fi
+
+# 测试 recommended 特性
+echo "  测试 recommended 特性..."
+if cargo build --no-default-features --features recommended --lib 2>&1 | grep -q "Finished"; then
+    echo -e "${GREEN}  ✓ recommended 特性编译成功${NC}"
+else
+    echo -e "${RED}  ✗ recommended 特性编译失败${NC}"
+fi
+
+# 测试 CLI 特性
+echo "  测试 CLI 特性..."
+if cargo build --no-default-features --features cli 2>&1 | grep -q "Finished"; then
+    echo -e "${GREEN}  ✓ CLI 特性编译成功${NC}"
+else
+    echo -e "${RED}  ✗ CLI 特性编译失败${NC}"
+fi
+
+echo ""
+echo -e "${GREEN}✅ 自动修复完成！${NC}"
+echo ""
+echo "📝 剩余需要手动修复的问题："
+echo "  1. 完成 encryption 功能集成 (medium)"
+echo "  2. 减少代码重复 (medium)"
+echo "  3. 更新文档 (medium)"
+echo "  4. 手动修复 watcher 模块导入 (high)"
+echo ""
+echo "📄 详细修复说明请查看: CODE_REVIEW_REPORT.md"
+echo ""
+echo "🔍 查看备份文件："
+echo "  - src/main.rs.backup"
+echo "  - src/watcher/mod.rs.backup"

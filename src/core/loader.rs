@@ -41,13 +41,24 @@ impl<T: Validate> OptionalValidate for T {
 }
 
 #[cfg(feature = "remote")]
+
 use crate::providers::consul_provider::ConsulConfigProvider;
+
 #[cfg(feature = "remote")]
+
 use crate::providers::etcd_provider::EtcdConfigProvider;
+
 #[cfg(feature = "remote")]
+
 use crate::providers::http_provider::HttpConfigProvider;
 
+
+
+#[cfg(feature = "monitoring")]
+
 use std::sync::OnceLock;
+
+
 
 /// Get current memory usage in MB using sysinfo crate
 /// Cross-platform support: Linux, macOS, Windows
