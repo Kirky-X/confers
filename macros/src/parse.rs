@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use darling::{FromDeriveInput, FromField};
+use darling::FromDeriveInput;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RemoteProtocol {
@@ -156,60 +156,37 @@ impl darling::FromMeta for ValidateOpt {
 }
 
 impl quote::ToTokens for ConfigOpts {
-    fn to_tokens(&self, _tokens: &mut proc_macro2::TokenStream) {
-        // 不再在 codegen.rs 中的 quote! 宏中使用
-    }
+    fn to_tokens(&self, _tokens: &mut proc_macro2::TokenStream) {}
 }
 
-#[derive(Debug, FromField)]
-#[darling(attributes(config), forward_attrs(serde, schemars, validate))]
+#[derive(Debug, Clone)]
 pub struct FieldOpts {
     pub ident: Option<syn::Ident>,
     pub ty: syn::Type,
     pub attrs: Vec<syn::Attribute>,
-    #[darling(default)]
     pub description: Option<String>,
-    #[darling(default)]
     pub default: Option<syn::Expr>,
-    #[darling(default)]
     pub flatten: bool,
-    #[darling(skip)]
     pub serde_flatten: bool,
-    #[darling(default)]
     pub skip: bool,
-    #[darling(default)]
     pub name_config: Option<String>,
-    #[darling(default)]
     pub name_env: Option<String>,
-    #[darling(default)]
     pub name_clap_long: Option<String>,
-    #[darling(default)]
     pub name_clap_short: Option<char>,
-    #[darling(default)]
     #[allow(dead_code)]
     pub validate: Option<String>,
-    #[darling(default)]
     pub custom_validate: Option<String>,
-    #[darling(default)]
     pub sensitive: Option<bool>,
-    #[darling(default)]
     pub remote: Option<String>,
-    #[darling(default)]
     pub remote_timeout: Option<String>,
-    #[darling(default)]
     pub remote_auth: Option<bool>,
-    #[darling(default)]
     pub remote_username: Option<String>,
-    #[darling(default)]
     pub remote_password: Option<String>,
-    #[darling(default)]
     pub remote_token: Option<String>,
-    #[darling(default)]
     pub remote_tls: Option<bool>,
-    #[darling(default)]
     pub remote_ca_cert: Option<String>,
-    #[darling(default)]
     pub remote_client_cert: Option<String>,
-    #[darling(default)]
     pub remote_client_key: Option<String>,
 }
+
+impl FieldOpts {}

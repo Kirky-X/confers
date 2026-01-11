@@ -66,7 +66,7 @@ fn test_serde_roundtrip() {
 #[config(env_prefix = "ATTR")]
 struct AttributeConfig {
     #[config(name_env = "CUSTOM_VAR_NAME")]
-    #[config(default = "1234")]
+    #[config(default = 1234)]
     custom_field: u32,
 
     #[config(default = "\"default\".to_string()")]
@@ -109,7 +109,7 @@ fn test_watch_attribute_generation() {
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Config)]
     #[config(watch = true)]
     struct WatchConfig {
-        #[config(default = "0")]
+        #[config(default = 0)]
         val: u32,
     }
 
@@ -144,4 +144,44 @@ fn test_validate_attribute() {
         let config = ValidateConfig::load().expect("Should load with env override");
         assert_eq!(config.val, 15);
     });
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Config, PartialEq)]
+#[config(env_prefix = "MIXED")]
+struct MixedSyntaxConfig {
+    #[config(default = "new_syntax")]
+    new_syntax_field: String,
+
+    #[config(default = "\"old_syntax\".to_string()")]
+    old_syntax_field: String,
+
+    #[config(default = 42)]
+    number_field: u32,
+}
+
+#[test]
+fn test_mixed_syntax_defaults() {
+    let config = MixedSyntaxConfig::default();
+
+    assert_eq!(config.new_syntax_field, "new_syntax");
+    assert_eq!(config.old_syntax_field, "old_syntax");
+    assert_eq!(config.number_field, 42);
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Config)]
+#[config(env_prefix = "OPTIONAL")]
+struct OptionalStringConfig {
+    #[config(default = "default_value")]
+    required_field: String,
+
+    #[config(default = "optional_default")]
+    optional_field: Option<String>,
+}
+
+#[test]
+fn test_optional_string_defaults() {
+    let config = OptionalStringConfig::default();
+
+    assert_eq!(config.required_field, "default_value");
+    assert_eq!(config.optional_field, Some("optional_default".to_string()));
 }

@@ -7,7 +7,20 @@ use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::str::FromStr;
-use syn::{Attribute, Meta, Type};
+use syn::{Attribute, Expr, Meta, Type};
+
+fn is_string_literal(expr: &Expr) -> bool {
+    matches!(expr, Expr::Lit(expr_lit) if matches!(expr_lit.lit, syn::Lit::Str(_)))
+}
+
+fn is_string_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "String";
+        }
+    }
+    false
+}
 
 /// 检查字段是否有 serde(flatten) 属性
 fn has_serde_flatten(attrs: &[Attribute]) -> bool {
@@ -1171,7 +1184,15 @@ pub fn generate_impl(
     let default_impl_body = fields.iter().map(|f| {
         let name = &f.ident;
         if let Some(d) = &f.default {
-            quote! { #name: #d }
+            let ty = &f.ty;
+            let type_string = quote!(#ty).to_string();
+            if type_string.starts_with("Option <") {
+                quote! { #name: Some(#d) }
+            } else if is_string_type(ty) && is_string_literal(d) {
+                quote! { #name: #d.to_string() }
+            } else {
+                quote! { #name: #d }
+            }
         } else {
             quote! { #name: Default::default() }
         }
