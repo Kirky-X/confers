@@ -1191,9 +1191,11 @@ pub fn generate_impl(
         if let Some(d) = &f.default {
             let ty = &f.ty;
             let type_string = quote!(#ty).to_string();
+            let is_str_type = is_string_type(ty);
+            let is_str_lit = is_string_literal(d);
             if type_string.starts_with("Option <") {
                 quote! { #name: Some(#d) }
-            } else if is_string_type(ty) && is_string_literal(d) {
+            } else if is_str_type && is_str_lit {
                 quote! { #name: #d.to_string() }
             } else {
                 quote! { #name: #d }

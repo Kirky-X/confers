@@ -25,6 +25,46 @@ fn has_serde_flatten(attrs: &Vec<syn::Attribute>) -> bool {
     false
 }
 
+/// Properly unescape a Rust string literal content
+/// Handles escape sequences: \\\" -> ", \\\\ -> \\\, \n -> newline, \t -> tab
+fn unescape_rust_string(content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.peek() {
+                Some(&'\\') => {
+                    result.push('\\');
+                    chars.next();
+                }
+                Some(&'"') => {
+                    result.push('"');
+                    chars.next();
+                }
+                Some(&'n') => {
+                    result.push('\n');
+                    chars.next();
+                }
+                Some(&'t') => {
+                    result.push('\t');
+                    chars.next();
+                }
+                Some(&'0') => {
+                    result.push('\0');
+                    chars.next();
+                }
+                _ => {
+                    result.push(c);
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 fn has_validate_derive(input: &syn::DeriveInput) -> bool {
     for attr in &input.attrs {
         if attr.path().is_ident("derive") {
@@ -70,24 +110,50 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
                 let inner_value = &after_first_quote[..end];
                 // Check if this is already a .to_string() call
                 let already_wrapped = inner_value.contains(".to_string()");
-                // If already wrapped, extract just the string part inside quotes
+                
                 let (value, wrapped) = if already_wrapped {
-                    // Format as a lit str to parse just the string part
-                    let wrapped_str = format!("\"{}\"", inner_value);
-                    if let Ok(lit_str) = syn::parse_str::<syn::LitStr>(&wrapped_str) {
-                        (lit_str.value(), true)
+                    // Extract the string part inside quotes before .to_string()
+                    // For input like "\"old_syntax\".to_string()", extract "old_syntax"
+                    let before_to_string = inner_value
+                        .strip_suffix(".to_string()")
+                        .unwrap_or(inner_value);
+                    
+                    // Manually extract and unescape the string content
+                    // before_to_string is something like \"old_syntax\" (with escaped inner quotes)
+                    // The format is: \"content\" where \" is an escaped quote
+                    // We need to strip the outer \"...\" and unescape inner \"
+                    
+                    // Check if content is wrapped in escaped quotes: \"...\"
+                    let content = if before_to_string.starts_with("\\\"") && before_to_string.ends_with("\\\"") {
+                        &before_to_string[2..before_to_string.len()-2]
+                    } else if before_to_string.starts_with('"') && before_to_string.ends_with('"') {
+                        // Regular quotes
+                        before_to_string
+                            .strip_prefix('"')
+                            .and_then(|s| s.strip_suffix('"'))
+                            .unwrap_or(before_to_string)
                     } else {
-                        // Fallback: return the whole thing as-is
-                        (inner_value.to_string(), true)
-                    }
+                        before_to_string
+                    };
+                    
+                    // Use proper unescape function for any remaining escapes
+                    let unescaped = unescape_rust_string(content);
+                    
+                    (unescaped, true)
                 } else {
-                    // Parse the inner value as a string literal
+                    // Parse the inner value as a string literal (simplified syntax)
+                    // For input like "./storage", wrapped should be false
                     let parse_str = format!("\"{}\"", inner_value);
                     if let Ok(lit_str) = syn::parse_str::<syn::LitStr>(&parse_str) {
                         (lit_str.value(), false)
                     } else {
-                        // Failed to parse, return as-is
-                        (inner_value.to_string(), false)
+                        // Fallback: strip outer quotes and unescape
+                        let content = inner_value
+                            .strip_prefix('"')
+                            .and_then(|s| s.strip_suffix('"'))
+                            .unwrap_or(inner_value);
+                        let unescaped = unescape_rust_string(content);
+                        (unescaped, false)
                     }
                 };
                 return Some((value, wrapped, true));
@@ -335,9 +401,63 @@ fn parse_field_opts(field: &syn::Field) -> parse::FieldOpts {
                 }
             }
 
-            for item in list.tokens.clone().into_iter() {
-                match item {
-                    proc_macro2::TokenTree::Group(group) => {
+            // Build tokens stream for parsing MetaNameValue
+            let tokens_stream: ProcMacro2TokenStream = list.tokens.clone().into_iter().collect();
+
+            // Try to parse as a single MetaNameValue (for simple cases like name_env = "value")
+            if let Ok(nv) = syn::parse2::<syn::MetaNameValue>(tokens_stream.clone()) {
+                process_meta_name_value(&nv, &mut opts);
+            } else {
+                // Try to parse individual MetaNameValue pairs
+                let mut current_nv_tokens = ProcMacro2TokenStream::new();
+                let mut expect_value = false;
+
+                for token in tokens_stream {
+                    if let proc_macro2::TokenTree::Ident(ident) = &token {
+                        let ident_str = ident.to_string();
+                        // Check if this is a keyword that should be treated as a flag
+                        if ident_str == "flatten" {
+                            opts.flatten = true;
+                            continue;
+                        } else if ident_str == "skip" {
+                            opts.skip = true;
+                            continue;
+                        }
+                    }
+
+                    if let proc_macro2::TokenTree::Punct(punct) = &token {
+                        if punct.as_char() == '=' && !expect_value {
+                            expect_value = true;
+                            continue;
+                        }
+                    }
+
+                    if expect_value {
+                        current_nv_tokens = ProcMacro2TokenStream::new();
+                        expect_value = false;
+                    }
+
+                    current_nv_tokens.extend(std::iter::once(token));
+
+                    // Try to parse when we have a complete MetaNameValue
+                    if current_nv_tokens.clone().into_iter().next().is_some() {
+                        // Check if we have an = sign in the stream
+                        let has_equals = current_nv_tokens.clone().into_iter().any(|t|
+                            if let proc_macro2::TokenTree::Punct(p) = t { p.as_char() == '=' } else { false }
+                        );
+
+                        if has_equals {
+                            if let Ok(nv) = syn::parse2::<syn::MetaNameValue>(current_nv_tokens.clone()) {
+                                process_meta_name_value(&nv, &mut opts);
+                                current_nv_tokens = ProcMacro2TokenStream::new();
+                            }
+                        }
+                    }
+                }
+
+                // Handle remaining tokens in Group
+                for item in list.tokens.clone().into_iter() {
+                    if let proc_macro2::TokenTree::Group(group) = item {
                         for inner in group.stream().into_iter() {
                             if let Ok(nv) = syn::parse2::<syn::MetaNameValue>(
                                 ProcMacro2TokenStream::from(inner),
@@ -346,15 +466,6 @@ fn parse_field_opts(field: &syn::Field) -> parse::FieldOpts {
                             }
                         }
                     }
-                    proc_macro2::TokenTree::Ident(ident) => {
-                        let ident_str = ident.to_string();
-                        if ident_str == "flatten" {
-                            opts.flatten = true;
-                        } else if ident_str == "skip" {
-                            opts.skip = true;
-                        }
-                    }
-                    _ => {}
                 }
             }
         }
