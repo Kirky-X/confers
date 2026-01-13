@@ -232,7 +232,9 @@ impl ParallelValidator {
             num_threads: Some(max_threads),
             ..config
         };
-        Self { config: adjusted_config }
+        Self {
+            config: adjusted_config,
+        }
     }
 
     pub fn config(&self) -> &ParallelValidationConfig {

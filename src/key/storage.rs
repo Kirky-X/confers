@@ -125,12 +125,14 @@ impl KeyStorage {
 
         let store = self.read_store()?;
         self.validate_checksum(&store)?;
-        let key_data = self.decrypt_data(&store.encrypted_data, &master_key).map_err(|e| {
-            ConfigError::RuntimeError(format!(
-                "Failed to decrypt key data: {}",
-                e.to_string().replace(&hex::encode(master_key), "***")
-            ))
-        })?;
+        let key_data = self
+            .decrypt_data(&store.encrypted_data, &master_key)
+            .map_err(|e| {
+                ConfigError::RuntimeError(format!(
+                    "Failed to decrypt key data: {}",
+                    e.to_string().replace(&hex::encode(master_key), "***")
+                ))
+            })?;
         self.deserialize_key_manager(&key_data)?;
 
         Ok(())
@@ -380,12 +382,14 @@ impl KeyStorage {
                 e.to_string().replace(&hex::encode(old_master_key), "***")
             ))
         })?;
-        let reencrypted_data = self.encrypt_data(&decrypted_data, new_master_key).map_err(|e| {
-            ConfigError::RuntimeError(format!(
-                "Failed to encrypt with new master key: {}",
-                e.to_string().replace(&hex::encode(new_master_key), "***")
-            ))
-        })?;
+        let reencrypted_data = self
+            .encrypt_data(&decrypted_data, new_master_key)
+            .map_err(|e| {
+                ConfigError::RuntimeError(format!(
+                    "Failed to encrypt with new master key: {}",
+                    e.to_string().replace(&hex::encode(new_master_key), "***")
+                ))
+            })?;
 
         self.master_key = Some(*new_master_key);
 

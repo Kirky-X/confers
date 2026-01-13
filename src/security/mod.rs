@@ -249,7 +249,10 @@ impl EnvSecurityValidator {
 
         if self.config.enable_blocked_patterns {
             // Check for control characters (excluding common whitespace)
-            if value.chars().any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+            if value
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+            {
                 return Err(EnvSecurityError::CommandInjection {
                     pattern: "control_character".to_string(),
                 });
@@ -265,8 +268,8 @@ impl EnvSecurityValidator {
 
             // Extended list of dangerous patterns
             let dangerous_patterns = [
-                ";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r",
-                "\\", "\t", // Backslash and tab
+                ";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r", "\\",
+                "\t", // Backslash and tab
                 "\\n", "\\r", "\\t", // Escape sequences
                 "; ", "& ", "| ", "$ ", // Patterns with space
             ];

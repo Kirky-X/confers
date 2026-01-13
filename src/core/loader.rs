@@ -9,16 +9,16 @@ use crate::audit::Sanitize;
 #[cfg(feature = "encryption")]
 use crate::encryption::ConfigEncryption;
 use crate::error::ConfigError;
+use crate::providers::SerializedProvider;
 use crate::providers::cli_provider::CliConfigProvider;
 use crate::providers::environment_provider::EnvironmentProvider;
 use crate::providers::file_provider::FileConfigProvider;
 use crate::providers::provider::ProviderManager;
-use crate::providers::SerializedProvider;
+use figment::Figment;
 use figment::providers::{Format, Json, Serialized, Toml, Yaml};
-use figment::value::Value;
 #[cfg(feature = "encryption")]
 use figment::value::Tag;
-use figment::Figment;
+use figment::value::Value;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 #[cfg(feature = "validation")]
@@ -593,46 +593,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         }
     }
 
-    /// Load remote configuration
-    #[cfg(feature = "remote")]
-    #[allow(dead_code)]
-    async fn load_remote_config(
-        &self,
-    ) -> Result<figment::value::Map<String, figment::value::Value>, ConfigError> {
-        use crate::providers::http_provider::HttpConfigProvider;
-        use crate::providers::provider::ConfigProvider;
-        use figment::value::Map;
-
-        if let Some(url) = &self.remote_config.url {
-            let mut provider = HttpConfigProvider::new(url.clone());
-
-            if let Some(token) = &self.remote_config.token {
-                provider = provider.with_bearer_token(token);
-            }
-
-            if let Some(username) = &self.remote_config.username {
-                provider = provider.with_auth(
-                    username,
-                    self.remote_config.password.as_deref().unwrap_or(""),
-                );
-            }
-
-            if let Some(ca_cert) = &self.remote_config.ca_cert {
-                provider = provider.with_tls(
-                    ca_cert.clone(),
-                    self.remote_config.client_cert.clone(),
-                    self.remote_config.client_key.clone(),
-                );
-            }
-
-            let figment: Figment = provider.load()?;
-            let map: figment::value::Map<String, figment::value::Value> = figment.extract()?;
-            Ok(map)
-        } else {
-            Ok(Map::new())
-        }
-    }
-
     /// Helper method to load configuration with a given figment (non-audit version)
     #[allow(clippy::type_complexity)]
     #[allow(dead_code)]
@@ -806,8 +766,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Merge with initial figment to preserve profiles/metadata if any
         // Note: load_all returns a new Figment merged from all providers
 
-        // Decrypt encrypted values before extraction
-        // Decrypt encrypted values before extraction
         #[cfg(feature = "encryption")]
         {
             figment = self.decrypt_figment(figment)?;
@@ -821,7 +779,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 mb
             } else {
                 // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| ConfigError::RuntimeError("Failed to get memory usage".to_string()))?
+                get_memory_usage_mb().ok_or_else(|| {
+                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
+                })?
             };
 
             if current_mb as usize > self.memory_limit_mb {
@@ -996,8 +956,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Merge with initial figment to preserve profiles/metadata if any
         // Note: load_all returns a new Figment merged from all providers
 
-        // Decrypt encrypted values before extraction
-        // Decrypt encrypted values before extraction
         #[cfg(feature = "encryption")]
         {
             figment = self.decrypt_figment(figment)?;
@@ -1011,7 +969,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 mb
             } else {
                 // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| ConfigError::RuntimeError("Failed to get memory usage".to_string()))?
+                get_memory_usage_mb().ok_or_else(|| {
+                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
+                })?
             };
 
             if current_mb as usize > self.memory_limit_mb {
@@ -1529,8 +1489,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // 9. Extract and validate configuration using ProviderManager
         figment = manager.load_all()?;
 
-        // Decrypt encrypted values before extraction
-        // Decrypt encrypted values before extraction
         #[cfg(feature = "encryption")]
         {
             figment = self.decrypt_figment(figment)?;
@@ -1544,7 +1502,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 mb
             } else {
                 // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| ConfigError::RuntimeError("Failed to get memory usage".to_string()))?
+                get_memory_usage_mb().ok_or_else(|| {
+                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
+                })?
             };
 
             if current_mb as usize > self.memory_limit_mb {
@@ -1867,48 +1827,6 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         };
 
         Ok((config, watcher))
-    }
-
-    /// Get standard configuration file paths for the given app name
-    #[allow(dead_code)]
-    fn get_standard_config_paths(&self, app_name: &str) -> Vec<(String, PathBuf)> {
-        let mut paths = Vec::new();
-
-        // Common config file locations
-        let config_names = vec![
-            format!("{}.toml", app_name),
-            format!("{}.yaml", app_name),
-            format!("{}.yml", app_name),
-            format!("{}.json", app_name),
-            format!("{}.conf", app_name),
-            format!("{}.config", app_name),
-            "config.toml".to_string(),
-            "config.yaml".to_string(),
-            "config.yml".to_string(),
-            "config.json".to_string(),
-            "config.conf".to_string(),
-            "config.config".to_string(),
-        ];
-
-        // Search in current directory and common locations
-        let search_dirs = vec![
-            std::path::PathBuf::from("."),
-            std::path::PathBuf::from("config"),
-            std::path::PathBuf::from("configs"),
-            std::path::PathBuf::from("etc"),
-            std::path::PathBuf::from("/etc"),
-        ];
-
-        for dir in search_dirs {
-            for config_name in &config_names {
-                let path = dir.join(config_name);
-                if path.exists() {
-                    paths.push((config_name.clone(), path));
-                }
-            }
-        }
-
-        paths
     }
 
     /// Expand template variables in a value recursively

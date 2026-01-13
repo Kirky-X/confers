@@ -82,9 +82,12 @@ impl ConfigEncryption {
         })?;
 
         // Validate key string format
-        if !key_str.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
+        if !key_str
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+        {
             return Err(ConfigError::FormatDetectionFailed(
-                "Invalid base64 key format: contains invalid characters".to_string()
+                "Invalid base64 key format: contains invalid characters".to_string(),
             ));
         }
 
@@ -93,45 +96,47 @@ impl ConfigEncryption {
         })?;
 
         if key_bytes.len() != 32 {
-            return Err(ConfigError::FormatDetectionFailed(
-                format!("Key must be 32 bytes (256 bits), got {} bytes", key_bytes.len())
-            ));
+            return Err(ConfigError::FormatDetectionFailed(format!(
+                "Key must be 32 bytes (256 bits), got {} bytes",
+                key_bytes.len()
+            )));
         }
 
         // Check for weak key (all zeros)
         if key_bytes.iter().all(|&b| b == 0) {
             return Err(ConfigError::FormatDetectionFailed(
-                "Weak key: all zeros".to_string()
+                "Weak key: all zeros".to_string(),
             ));
         }
 
         // Check for weak key (all same byte)
         if key_bytes.windows(2).all(|w| w[0] == w[1]) {
             return Err(ConfigError::FormatDetectionFailed(
-                "Weak key: all bytes are identical".to_string()
+                "Weak key: all bytes are identical".to_string(),
             ));
         }
 
         // Check for weak key (sequential pattern)
         if is_sequential_pattern(&key_bytes) {
             return Err(ConfigError::FormatDetectionFailed(
-                "Weak key: sequential pattern detected".to_string()
+                "Weak key: sequential pattern detected".to_string(),
             ));
         }
 
         // Check for weak key (repeating pattern)
         if is_repeating_pattern(&key_bytes) {
             return Err(ConfigError::FormatDetectionFailed(
-                "Weak key: repeating pattern detected".to_string()
+                "Weak key: repeating pattern detected".to_string(),
             ));
         }
 
         // Check key entropy - should have at least 7 bits of entropy per byte on average
         let entropy = calculate_entropy(&key_bytes);
         if entropy < 7.0 {
-            return Err(ConfigError::FormatDetectionFailed(
-                format!("Weak key: insufficient entropy ({} bits per byte, minimum 7.0)", entropy)
-            ));
+            return Err(ConfigError::FormatDetectionFailed(format!(
+                "Weak key: insufficient entropy ({} bits per byte, minimum 7.0)",
+                entropy
+            )));
         }
 
         let mut key = [0u8; 32];
