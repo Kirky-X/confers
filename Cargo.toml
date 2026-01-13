@@ -1,5 +1,5 @@
 [workspace]
-members = ["macros", "temp/api-test", "temp/macro-test"]
+members = ["macros", "temp/api-test", "temp/cli-test", "temp/macro-test", "temp/remote-test"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

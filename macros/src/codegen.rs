@@ -1243,8 +1243,6 @@ pub fn generate_impl(
         }
     };
 
-    // Generate Validate trait implementation that integrates field validation logic
-    // Always generate Validate implementation for Config derive to satisfy OptionalValidate bound
     let mut validation_fields = Vec::new();
 
     for field in fields {
@@ -1680,14 +1678,6 @@ pub fn generate_impl(
                 let mut map = std::collections::HashMap::new();
                 #(#env_mapping_entries)*
                 map
-            }
-        }
-
-        /// Implement OptionalValidate for all Config-derived structs (only when validation feature is NOT enabled)
-        #[cfg(not(feature = "validation"))]
-        impl confers::core::OptionalValidate for #struct_name {
-            fn optional_validate(&self) -> Result<(), confers::ConfigError> {
-                Ok(())
             }
         }
 

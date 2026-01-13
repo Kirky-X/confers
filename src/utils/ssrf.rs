@@ -6,6 +6,11 @@
 use crate::error::ConfigError;
 use url::Url;
 
+/// Check if SSRF protection should be disabled for testing
+fn is_test_mode() -> bool {
+    std::env::var("CONFERS_TEST_ALLOW_LOCALHOST").is_ok()
+}
+
 /// Validate URL to prevent SSRF (Server-Side Request Forgery) attacks
 ///
 /// This function checks if the URL is safe to access by:
@@ -15,6 +20,11 @@ use url::Url;
 /// - Blocking access to link-local addresses
 /// - Protecting against DNS rebinding attacks
 pub fn validate_remote_url(url: &str) -> Result<(), ConfigError> {
+    // Allow bypassing SSRF protection in test mode
+    if is_test_mode() {
+        return Ok(());
+    }
+
     let parsed_url =
         Url::parse(url).map_err(|e| ConfigError::RemoteError(format!("Invalid URL: {}", e)))?;
 

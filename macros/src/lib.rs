@@ -6,7 +6,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as ProcMacro2TokenStream;
-use syn::{parse_macro_input, DeriveInput, Meta};
+use syn::{DeriveInput, Meta, parse_macro_input};
 
 mod codegen;
 mod parse;
@@ -67,14 +67,30 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
             }
 
             if let Some(end) = end_pos {
-                let value_with_quotes = &after_first_quote[..end + 1];
-                if let Ok(lit_str) = syn::parse_str::<syn::LitStr>(value_with_quotes) {
-                    let value = lit_str.value();
-                    let already_wrapped = value.starts_with('"')
-                        && value.ends_with('"')
-                        && value.contains(".to_string()");
-                    return Some((value, already_wrapped, true));
-                }
+                let inner_value = &after_first_quote[..end];
+                // Check if this is already a .to_string() call
+                let already_wrapped = inner_value.contains(".to_string()");
+                // If already wrapped, extract just the string part inside quotes
+                let (value, wrapped) = if already_wrapped {
+                    // Format as a lit str to parse just the string part
+                    let wrapped_str = format!("\"{}\"", inner_value);
+                    if let Ok(lit_str) = syn::parse_str::<syn::LitStr>(&wrapped_str) {
+                        (lit_str.value(), true)
+                    } else {
+                        // Fallback: return the whole thing as-is
+                        (inner_value.to_string(), true)
+                    }
+                } else {
+                    // Parse the inner value as a string literal
+                    let parse_str = format!("\"{}\"", inner_value);
+                    if let Ok(lit_str) = syn::parse_str::<syn::LitStr>(&parse_str) {
+                        (lit_str.value(), false)
+                    } else {
+                        // Failed to parse, return as-is
+                        (inner_value.to_string(), false)
+                    }
+                };
+                return Some((value, wrapped, true));
             }
         } else {
             let value = after_equals.trim();

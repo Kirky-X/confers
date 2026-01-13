@@ -9,16 +9,16 @@ use crate::audit::Sanitize;
 #[cfg(feature = "encryption")]
 use crate::encryption::ConfigEncryption;
 use crate::error::ConfigError;
-use crate::providers::SerializedProvider;
 use crate::providers::cli_provider::CliConfigProvider;
 use crate::providers::environment_provider::EnvironmentProvider;
 use crate::providers::file_provider::FileConfigProvider;
 use crate::providers::provider::ProviderManager;
-use figment::Figment;
+use crate::providers::SerializedProvider;
 use figment::providers::{Format, Json, Serialized, Toml, Yaml};
 #[cfg(feature = "encryption")]
 use figment::value::Tag;
 use figment::value::Value;
+use figment::Figment;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 #[cfg(feature = "validation")]
