@@ -6,7 +6,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as ProcMacro2TokenStream;
-use syn::{DeriveInput, Meta, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput, Meta};
 
 mod codegen;
 mod parse;
@@ -30,7 +30,7 @@ fn has_serde_flatten(attrs: &Vec<syn::Attribute>) -> bool {
 fn unescape_rust_string(content: &str) -> String {
     let mut result = String::with_capacity(content.len());
     let mut chars = content.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.peek() {
@@ -110,22 +110,24 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
                 let inner_value = &after_first_quote[..end];
                 // Check if this is already a .to_string() call
                 let already_wrapped = inner_value.contains(".to_string()");
-                
+
                 let (value, wrapped) = if already_wrapped {
                     // Extract the string part inside quotes before .to_string()
                     // For input like "\"old_syntax\".to_string()", extract "old_syntax"
                     let before_to_string = inner_value
                         .strip_suffix(".to_string()")
                         .unwrap_or(inner_value);
-                    
+
                     // Manually extract and unescape the string content
                     // before_to_string is something like \"old_syntax\" (with escaped inner quotes)
                     // The format is: \"content\" where \" is an escaped quote
                     // We need to strip the outer \"...\" and unescape inner \"
-                    
+
                     // Check if content is wrapped in escaped quotes: \"...\"
-                    let content = if before_to_string.starts_with("\\\"") && before_to_string.ends_with("\\\"") {
-                        &before_to_string[2..before_to_string.len()-2]
+                    let content = if before_to_string.starts_with("\\\"")
+                        && before_to_string.ends_with("\\\"")
+                    {
+                        &before_to_string[2..before_to_string.len() - 2]
                     } else if before_to_string.starts_with('"') && before_to_string.ends_with('"') {
                         // Regular quotes
                         before_to_string
@@ -135,10 +137,10 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
                     } else {
                         before_to_string
                     };
-                    
+
                     // Use proper unescape function for any remaining escapes
                     let unescaped = unescape_rust_string(content);
-                    
+
                     (unescaped, true)
                 } else {
                     // Parse the inner value as a string literal (simplified syntax)
@@ -442,12 +444,18 @@ fn parse_field_opts(field: &syn::Field) -> parse::FieldOpts {
                     // Try to parse when we have a complete MetaNameValue
                     if current_nv_tokens.clone().into_iter().next().is_some() {
                         // Check if we have an = sign in the stream
-                        let has_equals = current_nv_tokens.clone().into_iter().any(|t|
-                            if let proc_macro2::TokenTree::Punct(p) = t { p.as_char() == '=' } else { false }
-                        );
+                        let has_equals = current_nv_tokens.clone().into_iter().any(|t| {
+                            if let proc_macro2::TokenTree::Punct(p) = t {
+                                p.as_char() == '='
+                            } else {
+                                false
+                            }
+                        });
 
                         if has_equals {
-                            if let Ok(nv) = syn::parse2::<syn::MetaNameValue>(current_nv_tokens.clone()) {
+                            if let Ok(nv) =
+                                syn::parse2::<syn::MetaNameValue>(current_nv_tokens.clone())
+                            {
                                 process_meta_name_value(&nv, &mut opts);
                                 current_nv_tokens = ProcMacro2TokenStream::new();
                             }
