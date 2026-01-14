@@ -3,6 +3,40 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+//! Security constants for sensitive data detection
+const SENSITIVE_PATTERNS: &[&str] = &[
+    "password",
+    "token",
+    "secret",
+    "key",
+    "credential",
+    "auth",
+    "private",
+];
+
+/// Check if a value should trigger security warnings
+fn should_warn_about_value(value: &str, field_name: &str) -> bool {
+    // Check field name patterns
+    let field_lower = field_name.to_lowercase();
+    if SENSITIVE_PATTERNS.iter().any(|p| field_lower.contains(p)) {
+        return true;
+    }
+
+    // Check value entropy (simplified check for high-entropy strings)
+    if value.len() >= 16 {
+        let has_upper = value.chars().any(|c| c.is_uppercase());
+        let has_lower = value.chars().any(|c| c.is_lowercase());
+        let has_digit = value.chars().any(|c| c.is_ascii_digit());
+        let has_special = value.chars().any(|c| !c.is_alphanumeric());
+
+        if has_upper && has_lower && has_digit && has_special {
+            return true;
+        }
+    }
+
+    false
+}
+
 use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -422,16 +456,44 @@ pub fn generate_impl(
             });
         }
         if let Some(val) = &opts.remote_password {
-            tokens.extend(quote! {
-                #[cfg(feature = "remote")]
-                { loader = loader.with_remote_password(#val); }
-            });
+            // Security: Add warning about hardcoded passwords in generated code
+            if should_warn_about_value(val, "password") {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    {
+                        #[cfg(debug_assertions)]
+                        eprintln!("⚠️  SECURITY WARNING: Hardcoded password detected in generated code. \
+                                 This password may be visible in compiled binaries and through `cargo expand`. \
+                                 Consider using environment variables instead.");
+                        loader = loader.with_remote_password(#val);
+                    }
+                });
+            } else {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_password(#val); }
+                });
+            }
         }
         if let Some(val) = &opts.remote_token {
-            tokens.extend(quote! {
-                #[cfg(feature = "remote")]
-                { loader = loader.with_remote_token(#val); }
-            });
+            // Security: Add warning about hardcoded tokens in generated code
+            if should_warn_about_value(val, "token") {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    {
+                        #[cfg(debug_assertions)]
+                        eprintln!("⚠️  SECURITY WARNING: Hardcoded token detected in generated code. \
+                                 This token may be visible in compiled binaries and through `cargo expand`. \
+                                 Consider using environment variables instead.");
+                        loader = loader.with_remote_token(#val);
+                    }
+                });
+            } else {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_token(#val); }
+                });
+            }
         }
         if tokens.is_empty() {
             quote! {}
@@ -455,10 +517,24 @@ pub fn generate_impl(
             });
         }
         if let Some(val) = &opts.remote_client_key {
-            tokens.extend(quote! {
-                #[cfg(feature = "remote")]
-                { loader = loader.with_remote_client_key(#val); }
-            });
+            // Security: Add warning about hardcoded private keys in generated code
+            if should_warn_about_value(val, "private_key") {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    {
+                        #[cfg(debug_assertions)]
+                        eprintln!("⚠️  SECURITY WARNING: Hardcoded private key detected in generated code. \
+                                 Private keys should never be embedded in compiled binaries. \
+                                 This is a critical security vulnerability.");
+                        loader = loader.with_remote_client_key(#val);
+                    }
+                });
+            } else {
+                tokens.extend(quote! {
+                    #[cfg(feature = "remote")]
+                    { loader = loader.with_remote_client_key(#val); }
+                });
+            }
         }
         if tokens.is_empty() {
             quote! {}

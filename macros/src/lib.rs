@@ -3,6 +3,58 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+//! Security warning constants and patterns
+const SENSITIVE_FIELD_PATTERNS: &[&str] = &[
+    "password",
+    "token",
+    "secret",
+    "key",
+    "credential",
+    "auth",
+    "private",
+    "cert",
+];
+
+const MAX_INPUT_LENGTH: usize = 10_000;
+
+/// Check if a field name suggests it contains sensitive data
+fn is_sensitive_field_name(field_name: &str) -> bool {
+    let lower = field_name.to_lowercase();
+    SENSITIVE_FIELD_PATTERNS
+        .iter()
+        .any(|pattern| lower.contains(pattern))
+}
+
+/// Check if a value appears to be sensitive (simple heuristic)
+fn is_sensitive_value(value: &str) -> bool {
+    // Check for common secret patterns
+    if value.len() >= 8 {
+        // High entropy check: mix of different character types
+        let has_uppercase = value.chars().any(|c| c.is_uppercase());
+        let has_lowercase = value.chars().any(|c| c.is_lowercase());
+        let has_digit = value.chars().any(|c| c.is_ascii_digit());
+        let has_special = value.chars().any(|c| !c.is_alphanumeric());
+
+        if has_uppercase && has_lowercase && has_digit && has_special {
+            return true;
+        }
+    }
+    false
+}
+
+/// Emit a security warning for hardcoded sensitive values
+fn emit_security_warning(field_name: &str, _value: &str) {
+    // Only log warning, don't fail - maintain backward compatibility
+    eprintln!(
+        "⚠️  SECURITY WARNING: Hardcoded sensitive value detected for field '{}'.\n\
+         Consider using environment variables instead to avoid embedding secrets in compiled code.\n\
+         Example: Use #[config({}_env = \"MY_SECRET_VAR\")] instead of #[config({} = \"...\")]",
+        field_name,
+        field_name.split("_").next().unwrap_or(field_name),
+        field_name
+    );
+}
+
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as ProcMacro2TokenStream;
@@ -79,7 +131,19 @@ fn has_validate_derive(input: &syn::DeriveInput) -> bool {
     false
 }
 
+/// Extract default value with input validation and length limits
 fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
+    // Security: Enforce input length limit to prevent DoS
+    if tokens_str.len() > MAX_INPUT_LENGTH {
+        eprintln!(
+            "⚠️  SECURITY WARNING: Input token length ({}) exceeds maximum allowed ({}). \
+             Potential denial of service attack detected.",
+            tokens_str.len(),
+            MAX_INPUT_LENGTH
+        );
+        return None;
+    }
+
     if let Some(start) = tokens_str.find("default = ") {
         let after_equals = &tokens_str[start + 10..];
 
@@ -171,6 +235,13 @@ fn extract_default_value(tokens_str: &str) -> Option<(String, bool, bool)> {
 
 fn process_meta_name_value(nv: &syn::MetaNameValue, opts: &mut parse::FieldOpts) {
     let ident = nv.path.get_ident().map(|i| i.to_string());
+    let field_name = opts
+        .ident
+        .as_ref()
+        .map(|i| i.to_string())
+        .unwrap_or_default();
+    let is_sensitive_field = is_sensitive_field_name(&field_name);
+
     match ident.as_deref() {
         Some("description") => {
             if let syn::Expr::Lit(syn::ExprLit {
@@ -284,7 +355,12 @@ fn process_meta_name_value(nv: &syn::MetaNameValue, opts: &mut parse::FieldOpts)
                 ..
             }) = &nv.value
             {
-                opts.remote_password = Some(s.value());
+                let value = s.value();
+                // Security check: warn about hardcoded passwords
+                if is_sensitive_field || is_sensitive_value(&value) {
+                    emit_security_warning("remote_password", &value);
+                }
+                opts.remote_password = Some(value);
             }
         }
         Some("remote_token") => {
@@ -293,7 +369,12 @@ fn process_meta_name_value(nv: &syn::MetaNameValue, opts: &mut parse::FieldOpts)
                 ..
             }) = &nv.value
             {
-                opts.remote_token = Some(s.value());
+                let value = s.value();
+                // Security check: warn about hardcoded tokens
+                if is_sensitive_field || is_sensitive_value(&value) {
+                    emit_security_warning("remote_token", &value);
+                }
+                opts.remote_token = Some(value);
             }
         }
         Some("remote_tls") => {
@@ -329,7 +410,12 @@ fn process_meta_name_value(nv: &syn::MetaNameValue, opts: &mut parse::FieldOpts)
                 ..
             }) = &nv.value
             {
-                opts.remote_client_key = Some(s.value());
+                let value = s.value();
+                // Security check: warn about hardcoded private keys
+                if is_sensitive_field || is_sensitive_value(&value) {
+                    emit_security_warning("remote_client_key", &value);
+                }
+                opts.remote_client_key = Some(value);
             }
         }
         _ => {}

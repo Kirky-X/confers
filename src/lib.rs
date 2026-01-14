@@ -34,6 +34,16 @@ pub use error_helpers::{OptionExt, ResultExt};
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationErrors};
 
+// Re-export security module items for convenience
+#[cfg(feature = "encryption")]
+pub use security::config_injector::{ConfigInjectionError, ConfigInjector};
+#[cfg(feature = "encryption")]
+pub use security::error_sanitization::{ErrorSanitizer, SafeResult, SecureLogger};
+#[cfg(feature = "encryption")]
+pub use security::input_validation::{ConfigValidator, InputValidator};
+#[cfg(feature = "encryption")]
+pub use security::secure_string::{SecureString, SensitivityLevel};
+
 // Re-export macro dependencies
 #[cfg(feature = "cli")]
 pub use clap;

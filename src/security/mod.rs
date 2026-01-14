@@ -610,3 +610,39 @@ mod tests {
         assert!(!config.enable_length_validation);
     }
 }
+
+// 安全模块导出
+#[cfg(feature = "encryption")]
+pub mod secure_string;
+#[cfg(feature = "encryption")]
+pub use secure_string::{
+    allocated_secure_strings, deallocated_secure_strings, reset_secure_string_counters,
+    SecureString, SecureStringBuilder, SensitiveData, SensitivityLevel,
+};
+
+#[cfg(feature = "encryption")]
+pub mod config_injector;
+#[cfg(feature = "encryption")]
+pub use config_injector::{
+    ConfigInjectionError, ConfigInjector, EnvironmentConfig, InjectionRecord,
+};
+
+#[cfg(feature = "encryption")]
+pub mod input_validation;
+#[cfg(feature = "encryption")]
+pub use input_validation::{
+    ConfigValidationError as ConfigFieldValidationError, ConfigValidationResult, ConfigValidator,
+    ConfigValidatorBuilder, InputValidationError, InputValidator, SensitiveDataDetector,
+    SensitivityResult,
+};
+
+#[cfg(feature = "encryption")]
+pub mod error_sanitization;
+#[cfg(feature = "encryption")]
+pub use error_sanitization::{
+    Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
+    SensitiveDataFilter,
+};
+
+#[cfg(all(test, feature = "encryption"))]
+mod security_tests;

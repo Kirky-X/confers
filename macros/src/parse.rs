@@ -3,6 +3,22 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+//! Security notice for ConfigOpts and FieldOpts:
+//!
+//! The following fields may contain sensitive data (passwords, tokens, keys):
+//! - remote_password
+//! - remote_token
+//! - remote_client_key
+//!
+//! WARNING: Hardcoding sensitive values in proc-macro attributes is insecure!
+//! Sensitive values will be embedded in the compiled binary and can be extracted
+//! using tools like `cargo expand`.
+//!
+//! RECOMMENDATION: Use environment variables or runtime configuration instead.
+//! Example: Instead of `#[config(remote_password = "secret")]`,
+//! use `#[config(remote_password_env = "APP_PASSWORD")]` and set the environment variable.
+//!
+
 use darling::FromDeriveInput;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
