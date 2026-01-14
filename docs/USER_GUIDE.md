@@ -1,6 +1,8 @@
 <div align="center">
 
-# 📖 User Guide
+<img src="../image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+
+# 📖 用户指南
 
 ### 完整的 confers 使用指南
 
@@ -12,6 +14,9 @@
 
 ## 📋 目录
 
+<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+
 - [简介](#简介)
 - [快速入门](#快速入门)
   - [先决条件](#先决条件)
@@ -19,67 +24,56 @@
   - [第一步](#第一步)
 - [核心概念](#核心概念)
 - [命令行工具](#命令行工具)
-  - [安装 CLI](#安装-cli)
-  - [命令参考](#命令参考)
-  - [diff - 配置差分](#diff---配置差分)
-  - [generate - 模板生成](#generate---模板生成)
-  - [validate - 配置验证](#validate---配置验证)
-  - [encrypt - 配置加密](#encrypt---配置加密)
-  - [wizard - 交互式向导](#wizard---交互式向导)
-  - [key - 密钥管理](#key---密钥管理)
 - [基础用法](#基础用法)
-  - [定义配置结构体](#定义配置结构体)
-  - [加载配置](#加载配置)
-  - [默认值与环境变量](#默认值与环境变量)
 - [高级用法](#高级用法)
-  - [验证与清洗](#验证与清洗)
-  - [远程配置 (Etcd/Consul/HTTP)](#远程配置-etcdconsulhttp)
-  - [审计日志](#审计日志)
-  - [文件监听与热重载](#文件监听与热重载)
-  - [配置差分对比](#配置差分对比)
-  - [敏感数据加密](#敏感数据加密)
 - [最佳实践](#最佳实践)
 - [故障排除](#故障排除)
 - [后续步骤](#后续步骤)
+
+</details>
 
 ---
 
 ## 简介
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🎯 你将学到什么
 
 </div>
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/rocket.png" width="64"><br>
-<b>快速入门</b><br>
-5 分钟内完成环境搭建
+<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/rocket.png" width="48" height="48"><br>
+<b style="color:#166534;">快速入门</b><br>
+<span style="color:#166534;">5 分钟内完成环境搭建</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/settings.png" width="64"><br>
-<b>灵活配置</b><br>
-支持多种源与格式
+<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/settings.png" width="48" height="48"><br>
+<b style="color:#1E40AF;">灵活配置</b><br>
+<span style="color:#1E40AF;">支持多种源与格式</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="64"><br>
-<b>最佳实践</b><br>
-学习规范的配置管理
+<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
+<b style="color:#92400E;">最佳实践</b><br>
+<span style="color:#92400E;">学习规范的配置管理</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/rocket-take-off.png" width="64"><br>
-<b>高级特性</b><br>
-掌握热重载与远程配置
+<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/rocket-take-off.png" width="48" height="48"><br>
+<b style="color:#5B21B6;">高级特性</b><br>
+<span style="color:#5B21B6;">掌握热重载与远程配置</span>
 </td>
 </tr>
 </table>
 
 **confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用程序的配置加载、验证和管理。它支持从文件（JSON, TOML, YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配置。
 
+<div style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+
 > 💡 **提示**: 本指南假设你具备基本的 Rust 知识。如果你是 Rust 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
+
+</div>
 
 ---
 
@@ -89,9 +83,9 @@
 
 在开始之前，请确保你已安装以下工具：
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%">
+<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
 
 **必选**
 - ✅ Rust 1.75+ (stable)
@@ -99,7 +93,7 @@
 - ✅ Git
 
 </td>
-<td width="50%">
+<td width="50%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
 
 **可选**
 - 🔧 支持 Rust 的 IDE (如 VS Code + rust-analyzer)
@@ -110,8 +104,8 @@
 </tr>
 </table>
 
-<details>
-<summary><b>🔍 验证安装</b></summary>
+<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">🔍 验证安装</summary>
 
 ```bash
 # 检查 Rust 版本
@@ -129,48 +123,41 @@ cargo --version
 
 在你的 `Cargo.toml` 中添加 `confers`：
 
-**默认安装**（仅包含 derive）：
-```toml
-[dependencies]
-confers = "0.1.1"
-```
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
-**最小化安装**（仅配置加载）：
-```toml
-[dependencies]
-confers = { version = "0.1.1", default-features = false, features = ["minimal"] }
-```
+| 安装类型 | 配置 | 使用场景 |
+|----------|------|----------|
+| **默认** | `confers = "0.1.1"` | 包含 derive、validation 和 CLI |
+| **最小化** | `confers = { version = "0.1.1", default-features = false, features = ["minimal"] }` | 仅配置加载 |
+| **推荐** | `confers = { version = "0.1.1", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
+| **完整** | `confers = { version = "0.1.1", features = ["full"] }` | 所有功能 |
 
-**推荐安装**（配置加载 + 验证）：
-```toml
-[dependencies]
-confers = { version = "0.1.1", default-features = false, features = ["recommended"] }
-```
+**可用特性预设：**
 
-**完整功能安装**：
-```toml
-[dependencies]
-confers = { version = "0.1.1", features = ["full"] }
-```
+| 预设 | 特性 | 使用场景 |
+|------|------|----------|
+| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 仅配置加载 |
+| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | 配置加载 + 验证 |
+| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
+| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
+| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
 
-**可用特性预设**：
-- `minimal` - 仅配置加载
-- `recommended` - 配置加载 + 验证
-- `dev` - 开发配置（包含 CLI、schema、audit、monitoring）
-- `production` - 生产配置（包含 watch、encryption、remote、monitoring）
-- `full` - 所有功能
+**单独特性：**
 
-**单独特性**：
-- `derive` - 配置结构体的 derive 宏
-- `validation` - 配置验证支持
-- `cli` - 命令行工具
-- `watch` - 文件监控和热重载
-- `audit` - 审计日志
-- `schema` - JSON Schema 生成
-- `parallel` - 并行验证
-- `monitoring` - 系统监控
-- `remote` - 远程配置（etcd、consul、http）
-- `encryption` - 配置加密
+| 特性 | 描述 | 默认 |
+|------|------|------|
+| `derive` | 配置结构体的 derive 宏 | ✅ |
+| `validation` | 配置验证支持 | ✅ |
+| `cli` | 命令行工具 | ❌ |
+| `watch` | 文件监控和热重载 | ❌ |
+| `audit` | 审计日志 | ❌ |
+| `schema` | JSON Schema 生成 | ❌ |
+| `parallel` | 并行验证 | ❌ |
+| `monitoring` | 系统监控 | ❌ |
+| `remote` | 远程配置（etcd、consul、http） | ❌ |
+| `encryption` | 配置加密 | ❌ |
+
+</div>
 
 如果需要异步/远程支持，添加 tokio：
 ```toml
@@ -209,6 +196,40 @@ fn main() {
 ## 核心概念
 
 理解这些核心概念将帮助你更有效地使用 `confers`。
+
+<div align="center" style="margin: 24px 0;">
+
+### 🔑 核心概念
+
+</div>
+
+```mermaid
+graph TB
+    subgraph Sources ["📥 配置来源"]
+        A[📁 配置文件<br/>JSON, TOML, YAML]
+        B[🌐 环境变量]
+        C[💻 CLI 参数]
+        D[☁️ 远程源<br/>Etcd, Consul, HTTP]
+    end
+    
+    subgraph Priority ["📊 优先级（高→低）"]
+        P1["💻 CLI 参数<br/>最高优先级"]
+        P2["🌐 环境变量"]
+        P3["📁 配置文件"]
+        P4["🔧 默认值<br/>最低优先级"]
+    end
+    
+    subgraph Result ["📤 结果"]
+        R[🚀 类型安全配置]
+    end
+    
+    Sources --> Priority
+    Priority --> R
+    
+    style Sources fill:#DBEAFE,stroke:#1E40AF
+    style Priority fill:#FEF3C7,stroke:#92400E
+    style Result fill:#DCFCE7,stroke:#166534
+```
 
 ### 1️⃣ `Config` 派生宏
 
@@ -277,7 +298,11 @@ SUBCOMMANDS:
 
 ### diff - 配置差分
 
+<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+
 比较两个配置文件的差异，支持多种输出格式：
+
+</div>
 
 ```bash
 # 基本用法 - 比较两个配置文件
@@ -309,8 +334,6 @@ confers diff --help
 
 ### generate - 模板生成
 
-从配置结构体生成模板文件：
-
 ```bash
 # 基本用法
 confers generate --struct "AppConfig" --output config_template.toml
@@ -337,9 +360,7 @@ confers generate --help
 | `full` | 包含所有字段、默认值和注释 | 完整配置 |
 | `doc` | 包含字段说明文档 | 文档生成 |
 
-### validate - 配置文件验证
-
-验证配置文件的格式和值：
+### validate - 配置验证
 
 ```bash
 # 基本用法 - 验证配置文件
@@ -361,8 +382,6 @@ confers validate --help
 ```
 
 ### encrypt - 配置加密
-
-加密敏感配置信息：
 
 ```bash
 # 加密配置文件
@@ -391,8 +410,6 @@ confers encrypt config.encrypted.toml --key-file secret.key --decrypt -o config.
 
 ### wizard - 交互式向导
 
-通过交互式 CLI 生成配置文件：
-
 ```bash
 # 启动交互式向导
 confers wizard
@@ -415,8 +432,6 @@ confers wizard --help
 5. 生成配置文件
 
 ### key - 密钥管理
-
-生成和管理加密密钥：
 
 ```bash
 # 生成新密钥
@@ -441,7 +456,11 @@ confers key --help
 
 ### 定义配置结构体
 
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+
 使用 `#[derive(Config)]` 和 `#[config(...)]` 属性来配置你的结构体。你还可以嵌套结构体：
+
+</div>
 
 ```rust
 use serde::Deserialize;
@@ -479,7 +498,7 @@ let config = MyConfig::new_loader()
     .with_memory_limit(10)
     .load()
     .await?;
-```
+
 // 异步加载（适用于远程配置）
 let config = MyConfig::load().await?;
 ```
@@ -525,6 +544,12 @@ let config = MyConfig::new_loader()
 
 ### 远程配置 (Etcd/Consul/HTTP)
 
+<div style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
+
+⚠️ **注意**: 以下功能需要启用 `remote` 特性。
+
+</div>
+
 通过启用 `remote` 特性，你可以从远程源加载配置。`confers` 支持身份验证和 TLS 加密：
 
 ```rust
@@ -553,6 +578,12 @@ let config = MyConfig::new_loader()
 
 ### 审计日志与安全
 
+<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+
+📝 **提示**: 以下功能需要启用 `audit` 特性。
+
+</div>
+
 启用 `audit` 特性后，`confers` 可以记录配置加载的历史，并自动对敏感字段进行脱敏。你还可以限制加载过程中的内存占用：
 
 ```rust
@@ -573,6 +604,12 @@ let config = SecureConfig::new_loader()
 ```
 
 ### 文件监听与热重载
+
+<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+
+✨ **提示**: 以下功能需要启用 `watch` 特性。
+
+</div>
 
 `confers` 支持监听配置文件或远程源的变化。启用 `watch` 特性后，你可以手动检查配置文件的变化并重新加载：
 
@@ -679,11 +716,15 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ## 最佳实践
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🌟 推荐的设计模式
 
 </div>
+
+<table style="width:100%; border-collapse: collapse;">
+<tr>
+<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
 
 ### ✅ 推荐做法
 
@@ -693,55 +734,36 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 - **验证与清洗**: 始终启用 `validate` 属性，并使用 `with_sanitizer` 清理输入（如去除字符串首尾空格）。
 - **安全性**: 敏感字段标记 `sensitive = true` 以防审计日志泄露。
 
+</td>
+<td width="50%" style="padding: 16px; background:#FEF2F2; border-radius:8px;">
+
 ### ❌ 避免做法
 
 - **全局静态变量**: 尽量避免使用全局 `static` 存储配置，推荐通过依赖注入或 `Arc` 传递配置。
 - **忽略错误**: 生产环境应严格检查 `ConfigError`，特别是 `MemoryLimitExceeded` 和 `ValidationError`。
 - **硬编码**: 任何可能随环境变化的参数都应通过配置管理，而非硬编码。
+- **敏感信息明文存储**: 敏感配置应使用加密功能保护。
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## 故障排除
 
-<details>
-<summary><b>❓ 问题：环境变量没有生效</b></summary>
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
-**解决方案：**
-1. 检查 `#[config(env_prefix = "APP")]` 是否正确设置。
-2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。
-3. 对于嵌套结构体，使用双下划线，例如 `APP_DB__HOST` 映射到 `db.host`。
+| 问题 | 解决方案 |
+|------|----------|
+| **❓ 环境变量没有生效** | 1. 检查 `#[config(env_prefix = "APP")]` 是否正确设置。<br>2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。<br>3. 对于嵌套结构体，使用双下划线，例如 `APP_DB__HOST` 映射到 `db.host`。 |
+| **❓ 加载时报 MemoryLimitExceeded 错误** | 1. 检查配置文件是否过大，或者是否存在循环引用的配置。<br>2. 调大 `with_memory_limit(mb)` 的阈值（默认不限制）。 |
+| **❓ 验证失败 ValidationError** | 1. 检查 `validator` 的约束逻辑。`confers` 会在加载后立即运行验证。<br>2. 查看错误输出，它会指明哪个字段未满足哪个约束。 |
+| **❓ 远程配置加载失败 RemoteError** | 1. 检查网络连接及 URL 是否正确。<br>2. 如果启用了 TLS，确保证书路径正确且有效。<br>3. 检查身份验证令牌或用户名密码是否过期。 |
 
-</details>
+</div>
 
-<details>
-<summary><b>❓ 问题：加载时报 MemoryLimitExceeded 错误</b></summary>
-
-**解决方案：**
-1. 检查配置文件是否过大，或者是否存在循环引用的配置。
-2. 调大 `with_memory_limit(mb)` 的阈值（默认不限制）。
-
-</details>
-
-<details>
-<summary><b>❓ 问题：验证失败 ValidationError</b></summary>
-
-**解决方案：**
-1. 检查 `validator` 的约束逻辑。`confers` 会在加载后立即运行验证。
-2. 查看错误输出，它会指明哪个字段未满足哪个约束。
-
-</details>
-
-<details>
-<summary><b>❓ 问题：远程配置加载失败 RemoteError</b></summary>
-
-**解决方案：**
-1. 检查网络连接及 URL 是否正确。
-2. 如果启用了 TLS，确保证书路径正确且有效。
-3. 检查身份验证令牌或用户名密码是否过期。
-
-</details>
-
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 **💬 仍然需要帮助？** [提交 Issue](../../issues) 或 [访问文档中心](https://github.com/project/confers)
 
@@ -751,46 +773,52 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ## 后续步骤
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🎯 继续探索
 
 </div>
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="33%" align="center">
+<td align="center" width="33%" style="padding: 16px;">
 <a href="API_REFERENCE.md">
-<img src="https://img.icons8.com/fluency/96/000000/graduation-cap.png" width="64"><br>
-<b>📚 API 参考</b>
-</a><br>
-详细的接口说明
+<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<img src="https://img.icons8.com/fluency/96/000000/graduation-cap.png" width="48" height="48"><br>
+<b style="color:#1E293B;">📚 API 参考</b>
+</div>
+</a>
+<br><span style="color:#64748B;">详细的接口说明</span>
 </td>
-<td width="33%" align="center">
+<td align="center" width="33%" style="padding: 16px;">
 <a href="ARCHITECTURE.md">
-<img src="https://img.icons8.com/fluency/96/000000/settings.png" width="64"><br>
-<b>🔧 架构设计</b>
-</a><br>
-深入了解内部机制
+<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<img src="https://img.icons8.com/fluency/96/000000/settings.png" width="48" height="48"><br>
+<b style="color:#1E293B;">🔧 架构设计</b>
+</div>
+</a>
+<br><span style="color:#64748B;">深入了解内部机制</span>
 </td>
-<td width="33%" align="center">
+<td align="center" width="33%" style="padding: 16px;">
 <a href="../examples/">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="64"><br>
-<b>💻 示例代码</b>
-</a><br>
-真实场景的代码样例
+<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
+<b style="color:#1E293B;">💻 示例代码</b>
+</div>
+</a>
+<br><span style="color:#64748B;">真实场景的代码样例</span>
 </td>
 </tr>
 </table>
 
 ---
 
-<div align="center">
+<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
 
 **[📖 API 文档](https://docs.rs/confers)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](../../issues)**
 
-由 Project Team 用 ❤️ 制作
+**由 Confers Team 用 ❤️ 制作**
 
-[⬆ 回到顶部](#-用户指南)
+**[⬆ 回到顶部](#📖-用户指南)**
 
 </div>

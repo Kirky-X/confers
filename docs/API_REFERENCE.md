@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="../image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+
 # 📘 API 参考文档
 
 ### 完整的 API 文档
@@ -12,74 +14,93 @@
 
 ## 📋 目录
 
+<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+
 - [概述](#概述)
 - [核心 API](#核心-api)
-    - [配置加载器](#配置加载器)
-    - [密钥管理](#密钥管理)
-    - [加密功能](#加密功能)
-    - [配置差异比较](#配置差异比较)
-    - [架构生成](#架构生成)
+  - [配置加载器](#配置加载器)
+  - [密钥管理](#密钥管理)
+  - [加密功能](#加密功能)
+  - [配置差异比较](#配置差异比较)
+  - [架构生成](#架构生成)
 - [错误处理](#错误处理)
 - [类型定义](#类型定义)
 - [示例](#示例)
+- [最佳实践](#最佳实践)
+- [高级功能](#高级功能)
+- [性能优化](#性能优化)
+- [故障排除](#故障排除)
+
+</details>
 
 ---
 
 ## 概述
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🎯 API 设计原则
 
 </div>
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/easy.png" width="64"><br>
-<b>简洁</b><br>
-直观易用
+<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/easy.png" width="48" height="48"><br>
+<b style="color:#166534;">简洁</b><br>
+<span style="color:#166534;">直观易用</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="64"><br>
-<b>安全</b><br>
-默认类型安全
+<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
+<b style="color:#1E40AF;">安全</b><br>
+<span style="color:#1E40AF;">默认类型安全</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/module.png" width="64"><br>
-<b>可组合</b><br>
-轻松构建复杂工作流
+<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/module.png" width="48" height="48"><br>
+<b style="color:#92400E;">可组合</b><br>
+<span style="color:#92400E;">轻松构建复杂工作流</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="64"><br>
-<b>完善文档</b><br>
-全面的文档支持
+<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
+<b style="color:#5B21B6;">完善文档</b><br>
+<span style="color:#5B21B6;">全面的文档支持</span>
 </td>
 </tr>
 </table>
 
 ### 📦 特性说明
 
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+
 confers 提供了灵活的特性配置，允许用户根据需求选择需要的功能：
 
-**特性预设**：
-- `minimal` - 仅配置加载（最小依赖）
-- `recommended` - 配置加载 + 验证（推荐大多数应用）
-- `dev` - 开发配置（包含 CLI、schema、audit、monitoring）
-- `production` - 生产配置（包含 watch、encryption、remote、monitoring）
-- `full` - 所有功能
+**特性预设：**
 
-**单独特性**：
-- `derive` - 配置结构体的 derive 宏
-- `validation` - 配置验证支持
-- `cli` - 命令行工具
-- `watch` - 文件监控和热重载
-- `audit` - 审计日志
-- `schema` - JSON Schema 生成
-- `parallel` - 并行验证
-- `monitoring` - 系统监控
-- `remote` - 远程配置（etcd、consul、http）
-- `encryption` - 配置加密
+| 预设 | 特性 | 使用场景 |
+|------|------|----------|
+| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 仅配置加载（最小依赖） |
+| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
+| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
+| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring> | 生产配置 |
+| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
+
+**单独特性：**
+
+| 特性 | 描述 | 默认 |
+|------|------|------|
+| `derive` | 配置结构体的 derive 宏 | ✅ |
+| `validation` | 配置验证支持 | ✅ |
+| `cli` | 命令行工具 | ❌ |
+| `watch` | 文件监控和热重载 | ❌ |
+| `audit` | 审计日志 | ❌ |
+| `schema` | JSON Schema 生成 | ❌ |
+| `parallel` | 并行验证 | ❌ |
+| `monitoring` | 系统监控 | ❌ |
+| `remote` | 远程配置（etcd、consul、http） | ❌ |
+| `encryption` | 配置加密 | ❌ |
+
+</div>
 
 > 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
 
@@ -90,6 +111,39 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 ### 配置加载器
 
 `ConfigLoader<T>` 是从多个来源加载和合并配置的核心组件，支持文件、环境变量、远程源等多种配置来源的智能合并。
+
+<div align="center" style="margin: 24px 0;">
+
+#### 🏗️ ConfigLoader 架构
+
+</div>
+
+```mermaid
+graph TB
+    subgraph Sources ["📥 配置来源"]
+        A[📁 配置文件]
+        B[🌐 环境变量]
+        C[💻 CLI 参数]
+        D[☁️ 远程源]
+    end
+    
+    subgraph Loader ["🔧 ConfigLoader"]
+        E[⚡ 智能合并]
+        F[✅ 验证]
+        G[🔄 热重载]
+    end
+    
+    subgraph Output ["📤 输出"]
+        H[🚀 类型安全配置]
+    end
+    
+    Sources --> Loader
+    Loader --> Output
+    
+    style Sources fill:#DBEAFE,stroke:#1E40AF
+    style Loader fill:#FEF3C7,stroke:#92400E
+    style Output fill:#DCFCE7,stroke:#166534
+```
 
 #### 创建与配置
 
@@ -250,15 +304,19 @@ pub fn with_cli_provider(mut self, provider: CliConfigProvider) -> Self
 
 设置内存限制（MB），当内存使用超过限制时会触发警告。
 
+**默认值：** 10 MB
+
 ```rust
 pub fn with_memory_limit(mut self, limit_mb: usize) -> Self
 ```
 
-**默认值：** 10 MB
-
 #### 远程配置
 
-以下方法需要启用 `remote` 特性。
+<div style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
+
+⚠️ **注意**: 以下方法需要启用 `remote` 特性。
+
+</div>
 
 ##### `with_remote_config(url: impl Into<String>)`
 
@@ -298,24 +356,6 @@ pub fn with_remote_auth(
 ```rust
 #[cfg(feature = "remote")]
 pub fn with_remote_token(mut self, token: impl Into<String>) -> Self
-```
-
-##### `remote_username(username: impl Into<String>)`
-
-设置远程配置的用户名。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn remote_username(self, username: impl Into<String>) -> Self
-```
-
-##### `remote_password(password: impl Into<String>)`
-
-设置远程配置的密码。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn remote_password(self, password: impl Into<String>) -> Self
 ```
 
 ##### `with_remote_tls(ca_cert: impl AsRef<Path>, client_cert: Option<impl AsRef<Path>>, client_key: Option<impl AsRef<Path>>)`
@@ -370,7 +410,11 @@ pub fn with_consul(mut self, provider: ConsulConfigProvider) -> Self
 
 #### 审计功能
 
-以下方法需要启用 `audit` 特性。
+<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+
+📝 **提示**: 以下方法需要启用 `audit` 特性。
+
+</div>
 
 ##### `with_audit(enabled: bool)`
 
@@ -425,7 +469,7 @@ pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
 pub fn detect_format(path: &Path) -> Option<String>
 ```
 
-支持检测的格式：JSON、YAML、TOML、XML。
+**支持检测的格式：** JSON、YAML、TOML、XML
 
 ##### `detect_format_by_extension(path: &Path) -> Option<String>`
 
@@ -440,6 +484,41 @@ pub fn detect_format_by_extension(path: &Path) -> Option<String>
 ### 密钥管理
 
 `KeyManager` 提供加密密钥的综合管理，包括轮换、版本控制和密钥存储。
+
+<div align="center" style="margin: 24px 0;">
+
+#### 🔐 密钥管理架构
+
+</div>
+
+```mermaid
+graph TB
+    subgraph Storage ["📦 密钥存储"]
+        A[🔑 密钥环]
+        B[📋 版本历史]
+        C[🛡️ 元数据]
+    end
+    
+    subgraph Manager ["🔧 KeyManager"]
+        D[🔄 轮换管理]
+        E[✅ 版本控制]
+        F[🔒 安全存储]
+    end
+    
+    subgraph Operations ["⚡ 操作"]
+        G[创建]
+        H[轮换]
+        I[获取]
+        J[删除]
+    end
+    
+    Storage --> Manager
+    Manager --> Operations
+    
+    style Storage fill:#FEF3C7,stroke:#92400E
+    style Manager fill:#DBEAFE,stroke:#1E40AF
+    style Operations fill:#DCFCE7,stroke:#166534
+```
 
 #### 创建与管理
 
@@ -474,9 +553,11 @@ pub fn initialize(
 
 **参数说明：**
 
-- `master_key`：32字节的主密钥，用于加密密钥存储
-- `key_id`：密钥环的唯一标识符
-- `created_by`：创建者标识，用于审计追踪
+| 参数 | 描述 |
+|------|------|
+| `master_key` | 32字节的主密钥，用于加密密钥存储 |
+| `key_id` | 密钥环的唯一标识符 |
+| `created_by` | 创建者标识，用于审计追踪 |
 
 **示例：**
 
@@ -512,7 +593,7 @@ let result = km.rotate_key(
     &master_key,
     Some("production".to_string()),
     "security-team".to_string(),
-    Some("定期密钥轮换".to_string()),
+    Some("定期密钥轮换".to_string(),
 )?;
 
 println!("密钥版本从 {} 轮换到 {}", result.previous_version, result.new_version);
@@ -556,6 +637,24 @@ pub fn delete_key_ring(&mut self, key_id: &str, master_key: &[u8; 32]) -> Result
 
 `ConfigEncryption` 实现 AES-256-GCM 加密以保护敏感配置值，提供前向安全性的加密保护。
 
+<div align="center" style="margin: 24px 0;">
+
+#### 🔐 加密流程
+
+</div>
+
+```mermaid
+graph LR
+    A[📝 明文] --> B[🔐 AES-256-GCM 加密]
+    B --> C[📦 格式化输出<br/>enc:AES256GCM:nonce:ciphertext]
+    C --> D[💾 存储或传输]
+    D --> E[🔓 解密]
+    E --> F[✅ 恢复明文]
+    
+    style B fill:#FEF3C7,stroke:#92400E
+    style E fill:#DCFCE7,stroke:#166534
+```
+
 #### 创建
 
 ##### `ConfigEncryption::new(key_bytes: [u8; 32])`
@@ -595,15 +694,15 @@ let encryption = ConfigEncryption::from_env()?;
 
 加密字符串值。返回格式化字符串：`enc:AES256GCM:<nonce_base64>:<ciphertext_base64>`。
 
-```rust
-pub fn encrypt(&self, plaintext: &str) -> Result<String, ConfigError>
-```
-
 **特点：**
 
 - 使用 AES-256-GCM 算法，提供加密和完整性验证
 - 每次加密生成随机的 96 位 nonce
 - 密文格式：前缀标识 + Base64 编码的 nonce + Base64 编码的密文
+
+```rust
+pub fn encrypt(&self, plaintext: &str) -> Result<String, ConfigError>
+```
 
 **示例：**
 
@@ -617,15 +716,15 @@ println!("加密结果: {}", encrypted);
 
 解密格式化的加密字符串。
 
-```rust
-pub fn decrypt(&self, encrypted_value: &str) -> Result<String, ConfigError>
-```
-
 **特点：**
 
 - 自动识别 `enc:AES256GCM:` 前缀
 - 支持向后兼容未经加密的纯文本值
 - 验证 GCM 认证标签，篡改检测会触发错误
+
+```rust
+pub fn decrypt(&self, encrypted_value: &str) -> Result<String, ConfigError>
+```
 
 **示例：**
 
@@ -640,7 +739,21 @@ assert_eq!(decrypted, "my-secret-api-key");
 
 `DiffCommand` 提供配置文件的差异比较功能，支持多种输出格式。
 
-#### `DiffCommand::execute(file1: &str, file2: &str, options: DiffOptions) -> Result<(), ConfigError>`
+<div align="center" style="margin: 24px 0;">
+
+#### 📊 差异比较格式
+
+</div>
+
+| 格式 | 说明 | 使用场景 |
+|------|------|----------|
+| `Unified` | 统一格式，Git diff 默认格式 | 代码审查、版本对比 |
+| `Context` | 上下文格式，显示变更周围的上下文 | 详细分析变更影响 |
+| `Normal` | 普通格式，简洁的变更列表 | 快速概览差异 |
+| `SideBySide` | 并排格式，左右对照显示 | 对比复杂的配置结构 |
+| `Strict` | 严格格式，无颜色和 ANSI 转义 | CI/CD 自动化脚本 |
+
+#### `DiffCommand::execute`
 
 执行配置差异比较。
 
@@ -662,16 +775,6 @@ let options = DiffOptions {
 
 DiffCommand::execute("config/dev.toml", "config/prod.toml", options)?;
 ```
-
-#### 差异格式枚举
-
-| 格式 | 说明 | 使用场景 |
-|------|------|----------|
-| `Unified` | 统一格式，Git diff 默认格式 | 代码审查、版本对比 |
-| `Context` | 上下文格式，显示变更周围的上下文 | 详细分析变更影响 |
-| `Normal` | 普通格式，简洁的变更列表 | 快速概览差异 |
-| `SideBySide` | 并排格式，左右对照显示 | 对比复杂的配置结构 |
-| `Strict` | 严格格式，无颜色和 ANSI 转义 | CI/CD 自动化脚本 |
 
 #### `DiffOptions`
 
@@ -720,6 +823,8 @@ where
 
 操作过程中遇到的常见错误变体。
 
+<div style="background:#FEF2F2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+
 | 变体 | 描述 | 处理建议 |
 |-------------------------|--------------------------------------------------------------|----------|
 | `FileNotFound { path: PathBuf }` | 在指定路径未找到配置文件 | 检查文件路径是否正确，确认文件存在 |
@@ -732,6 +837,8 @@ where
 | `RemoteError(String)` | 从远程源加载配置时出错（etcd、http）| 检查远程服务可用性和网络连接 |
 | `IoError(String)` | IO 操作错误 | 检查文件权限和磁盘空间 |
 | `SerializationError(String)` | 序列化/反序列化错误 | 检查数据结构是否匹配 |
+
+</div>
 
 ---
 
@@ -784,18 +891,6 @@ pub struct RotationResult {
     pub new_version: u32,         // 轮换后版本
     pub rotated_at: u64,          // 轮换时间戳
     pub reencryption_required: bool, // 是否需要重新加密
-}
-```
-
-#### `KeyStorage`
-
-```rust
-pub struct KeyStorage {
-    pub key_id: String,           // 密钥 ID
-    pub encrypted_key: Vec<u8>,   // 加密后的密钥数据
-    pub key_version: u32,         // 密钥版本
-    pub created_at: u64,          // 创建时间
-    pub metadata: Option<String>, // 附加元数据
 }
 ```
 
@@ -930,76 +1025,17 @@ fn compare_configs() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 环境变量配置
-
-```rust
-use confers::ConfigLoader;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct AppConfig {
-    debug_mode: bool,
-    api_endpoint: String,
-    timeout: u64,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ConfigLoader::<AppConfig>::new()
-        .with_file("config.toml")
-        .with_env(true)
-        .with_env_prefix("APP")
-        .load()
-        .await?;
-
-    println!("调试模式: {}", config.debug_mode);
-    Ok(())
-}
-```
-
-TOML 配置（`config.toml`）：
-
-```toml
-debug_mode = false
-api_endpoint = "https://api.example.com"
-timeout = 30
-```
-
-环境变量覆盖：
-
-```bash
-export APP_DEBUG_MODE=true
-export APP_API_ENDPOINT="https://staging.api.example.com"
-```
-
-### 远程配置加载
-
-```rust
-use confers::ConfigLoader;
-
-#[cfg(feature = "remote")]
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ConfigLoader::<AppConfig>::new()
-        .with_file("config.toml")
-        .remote("https://config.example.com/api/v1/configs/myapp")
-        .remote_username("service-account")
-        .remote_password(load_password()?)
-        .with_remote_timeout("30s")
-        .load()
-        .await?;
-
-    Ok(())
-}
-```
-
 ---
 
 ## 最佳实践
 
 ### 配置验证
 
+<div style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+
 始终使用 serde 的验证特性来确保配置的有效性：
+
+</div>
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1036,7 +1072,11 @@ fn default_timeout() -> Duration {
 
 ### 密钥管理安全
 
-生产环境中务必安全地管理密钥：
+<div style="background:#FEF2F2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+
+⚠️ 生产环境中务必安全地管理密钥：
+
+</div>
 
 ```rust
 use confers::key::manager::KeyManager;
@@ -1108,7 +1148,6 @@ struct Secrets {
 fn load_secrets() -> Result<Secrets, Box<dyn std::error::Error>> {
     let encryption = ConfigEncryption::from_env()?;
     
-    // 加载并解密敏感配置
     let encrypted_key = load_encrypted_key()?;
     let api_key = encryption.decrypt(&encrypted_key)?;
     
@@ -1184,7 +1223,11 @@ async fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>
 
 ### 异步加载
 
-对于大型配置或远程配置源，始终使用异步加载：
+<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+
+💡 **提示**: 对于大型配置或远程配置源，始终使用异步加载：
+
+</div>
 
 ```rust
 use confers::ConfigLoader;
@@ -1252,29 +1295,18 @@ impl CachedConfig {
 
 ### 常见问题
 
-**Q: 配置文件未找到？**
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
-A: 检查文件路径是否正确，确保使用绝对路径或相对于工作目录的路径。建议使用 `with_app_name()` 让库自动查找标准位置。
+| 问题 | 解决方案 |
+|------|----------|
+| **Q: 配置文件未找到？** | 检查文件路径是否正确，确保使用绝对路径或相对于工作目录的路径。建议使用 `with_app_name()` 让库自动查找标准位置。 |
+| **Q: 环境变量未生效？** | 确认已调用 `with_env(true)`，并检查环境变量名称是否使用正确的前缀。例如，配置字段 `port` 对应的环境变量名为 `<PREFIX>_PORT`。 |
+| **Q: 加密解密失败？** | 确保使用相同的密钥进行加密和解密，检查 `CONFERS_ENCRYPTION_KEY` 环境变量是否正确设置且格式为有效的 Base64 编码。 |
+| **Q: 配置验证失败？** | 查看详细的验证错误信息，确保配置值满足所有验证约束。检查字段类型是否匹配。 |
+| **Q: 远程配置加载超时？** | 检查网络连接和远程服务可用性，考虑增加超时时间 `with_remote_timeout("60s")`。 |
+| **Q: 内存使用过高？** | 使用 `with_memory_limit()` 设置内存限制，优化配置文件大小，避免在配置中存储大型二进制数据。 |
 
-**Q: 环境变量未生效？**
-
-A: 确认已调用 `with_env(true)`，并检查环境变量名称是否使用正确的前缀。例如，配置字段 `port` 对应的环境变量名为 `<PREFIX>_PORT`。
-
-**Q: 加密解密失败？**
-
-A: 确保使用相同的密钥进行加密和解密，检查 `CONFERS_ENCRYPTION_KEY` 环境变量是否正确设置且格式为有效的 Base64 编码。
-
-**Q: 配置验证失败？**
-
-A: 查看详细的验证错误信息，确保配置值满足所有验证约束。检查字段类型是否匹配。
-
-**Q: 远程配置加载超时？**
-
-A: 检查网络连接和远程服务可用性，考虑增加超时时间 `with_remote_timeout("60s")`。
-
-**Q: 内存使用过高？**
-
-A: 使用 `with_memory_limit()` 设置内存限制，优化配置文件大小，避免在配置中存储大型二进制数据。
+</div>
 
 ### 日志调试
 
@@ -1311,10 +1343,12 @@ RUST_LOG=confers=debug ./myapp
 
 ---
 
-<div align="center">
+<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
 
-### 感谢使用 Confers！
+### 💝 感谢使用 Confers！
 
 如有问题或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
+
+**[🏠 返回首页](../README.md)** • **[📖 用户指南](USER_GUIDE.md)**
 
 </div>

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="../image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+
 # 🤝 贡献指南
 
 ### 加入我们，共同打造卓越项目！
@@ -14,31 +16,31 @@
 
 感谢您对 **confers** 的关注！我们非常期待您的加入。无论是修复 Bug、添加新功能、改进文档还是帮助他人，您的贡献都是无价的。
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🌟 贡献方式
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="64"><br>
-<b>代码</b><br>
-修复 Bug & 添加功能
+<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
+<b style="color:#166534;">代码</b><br>
+<span style="color:#166534;">修复 Bug & 添加功能</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="64"><br>
-<b>文档</b><br>
-完善文档 & 指南
+<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
+<b style="color:#1E40AF;">文档</b><br>
+<span style="color:#1E40AF;">完善文档 & 指南</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/test-tube.png" width="64"><br>
-<b>测试</b><br>
-编写测试 & 发现 Bug
+<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/test-tube.png" width="48" height="48"><br>
+<b style="color:#92400E;">测试</b><br>
+<span style="color:#92400E;">编写测试 & 发现 Bug</span>
 </td>
-<td width="25%" align="center">
-<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="64"><br>
-<b>社区</b><br>
-提供帮助 & 支持
+<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
+<b style="color:#5B21B6;">社区</b><br>
+<span style="color:#5B21B6;">提供帮助 & 支持</span>
 </td>
 </tr>
 </table>
@@ -49,6 +51,9 @@
 
 ## 📋 目录
 
+<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+
 - [行为准则](#行为准则)
 - [快速开始](#快速开始)
 - [开发工作流](#开发工作流)
@@ -57,13 +62,14 @@
 - [文档规范](#文档规范)
 - [提交变更](#提交变更)
 - [评审流程](#评审流程)
-- [社区互动](#社区互动)
+
+</details>
 
 ---
 
 ## 行为准则
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🤗 友善与尊重
 
@@ -71,9 +77,9 @@
 
 我们致力于提供一个包容和友好的环境。参与本项目即表示您同意：
 
-<table>
+<table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%">
+<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
 
 **✅ 推荐行为**
 
@@ -84,7 +90,7 @@
 - 对他人表现出同理心
 
 </td>
-<td width="50%">
+<td width="50%" style="padding: 16px; background:#FEF2F2; border-radius:8px;">
 
 **❌ 禁止行为**
 
@@ -111,8 +117,8 @@
 - **Cargo** - Rust 包管理器
 - **IDE** - VS Code (推荐安装 rust-analyzer 插件)、IntJ 或类似工具
 
-<details>
-<summary><b>🔧 环境搭建步骤</b></summary>
+<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">🔧 环境搭建步骤</summary>
 
 **1. 安装 Rust:**
 
@@ -144,50 +150,16 @@ cargo --version
 
 ### Fork 与 Clone
 
-<table>
-<tr>
-<td width="50%">
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
-**1. Fork 仓库**
+| 步骤 | 操作 |
+|:----:|:-----|
+| **1. Fork 仓库** | 点击 GitHub 上的 "Fork" 按钮 |
+| **2. Clone** | `git clone https://github.com/YOUR_USERNAME/confers` |
+| **3. 添加上游** | `git remote add upstream https://github.com/Confers-Project/confers` |
+| **4. 验证** | `git remote -v` |
 
-点击 GitHub 上的 "Fork" 按钮
-
-</td>
-<td width="50%">
-
-**2. Clone 您的 Fork**
-
-```bash
-git clone https://github.com/YOUR_USERNAME/confers
-cd confers
-```
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-**3. 添加上游远程仓库**
-
-```bash
-git remote add upstream \
-  https://github.com/Confers-Project/confers
-```
-
-</td>
-<td width="50%">
-
-**4. 验证远程仓库**
-
-```bash
-git remote -v
-# origin    your-fork
-# upstream  original-repo
-```
-
-</td>
-</tr>
-</table>
+</div>
 
 ### 构建与测试
 
@@ -206,7 +178,7 @@ cargo run --example basic --features watch
 
 ## 开发工作流
 
-<div align="center">
+<div align="center" style="margin: 24px 0;">
 
 ### 🔄 标准贡献流程
 
@@ -228,8 +200,8 @@ graph LR
     K -->|需要修改| C
     K -->|是| L[合并!]
     
-    style A fill:#e1f5ff
-    style L fill:#4caf50
+    style A fill:#DBEAFE,stroke:#1E40AF
+    style L fill:#DCFCE7,stroke:#166534
 ```
 
 ### 详细步骤
@@ -253,18 +225,16 @@ git checkout -b bugfix/TICKET-ID-description
 
 **分支命名规范:**
 
-- `feature/*` - 新功能开发
-- `bugfix/*` - 缺陷修复
-- `hotfix/*` - 紧急修复
-- `release/*` - 版本发布
-- `refactor/*` - 代码重构
-- `docs/*` - 文档更新
+| 类型 | 前缀 | 示例 |
+|:-----|:-----|:-----|
+| 新功能 | `feature/*` | `feature/add-encryption` |
+| 缺陷修复 | `bugfix/*` | `bugfix/fix-memory-leak` |
+| 紧急修复 | `hotfix/*` | `hotfix/critical-security` |
+| 版本发布 | `release/*` | `release/v1.0.0` |
+| 代码重构 | `refactor/*` | `refactor/improve-perf` |
+| 文档更新 | `docs/*` | `docs/update-readme` |
 
-#### 2️⃣ 修改代码
-
-请遵循项目的编码标准和最佳实践。
-
-#### 3️⃣ 运行静态检查与测试
+#### 2️⃣ 运行静态检查与测试
 
 在提交前，请确保代码通过所有本地检查。
 
@@ -279,7 +249,7 @@ cargo clippy -- -D warnings
 cargo test --all-features
 ```
 
-#### 4️⃣ 提交代码
+#### 3️⃣ 提交代码
 
 我们遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
 
@@ -288,14 +258,16 @@ cargo test --all-features
 
 **常见类型:**
 
-- `feat`: 新功能
-- `fix`: 修复 Bug
-- `docs`: 文档变更
-- `style`: 代码格式调整 (不影响功能)
-- `refactor`: 代码重构
-- `perf`: 性能优化
-- `test`: 测试相关
-- `chore`: 构建工具、依赖更新等
+| 类型 | 描述 | 示例 |
+|:-----|:-----|:-----|
+| `feat` | 新功能 | `feat(auth): add JWT token refresh` |
+| `fix` | 修复 Bug | `fix(loader): resolve memory leak` |
+| `docs` | 文档变更 | `docs: update README` |
+| `style` | 代码格式 | `style: format code` |
+| `refactor` | 代码重构 | `refactor: improve performance` |
+| `perf` | 性能优化 | `perf: optimize hot path` |
+| `test` | 测试相关 | `test: add unit tests` |
+| `chore` | 构建工具 | `chore: update dependencies` |
 
 **示例:**
 
@@ -303,111 +275,88 @@ cargo test --all-features
 git commit -m "feat(auth): add JWT token refresh mechanism"
 ```
 
-#### 5️⃣ 推送到 Fork 仓库
-
-```bash
-git push origin feature/TICKET-ID-description
-```
-
-#### 6️⃣ 创建 Pull Request (PR)
-
-1. 前往 GitHub 上的 Fork 仓库
-2. 点击 "Compare & pull request"
-3. 按照 [PR 模板](#提交变更) 填写信息
-4. 关联相关的 Issue
-5. 提交 PR！
-
 ---
 
 ## 编码标准
 
 ### Rust 最佳实践
 
-#### 所有权与借用
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
-- 优先使用借用而非所有权转移
-- 使用 `&` 进行不可变借用，`&mut` 进行可变借用
-- 避免不必要的 `.clone()`；优先使用引用
-- 保持生命周期标注尽可能简单，让编译器推断
+| 类别 | 要求 |
+|:-----|:-----|
+| **所有权与借用** | 优先使用借用而非所有权转移，使用 `&` 进行不可变借用 |
+| **类型系统** | 优先使用 `Option<T>` 而非空值，使用 `Result<T, E>` 进行错误处理 |
+| **并发与异步** | 使用 `Arc<RwLock<T>>` 共享可变数据，优先使用通道进行线程间通信 |
+| **性能优化** | 使用 `Vec::with_capacity()` 预分配内存，优先使用迭代器链 |
 
-#### 类型系统
-
-- 利用类型系统表达业务约束 (NewType 模式)
-- 优先使用 `Option<T>` 而非空值
-- 使用 `Result<T, E>` 进行错误处理；库代码中严禁使用 `panic!`
-- 为自定义错误实现 `std::error::Error` trait
-- 库代码使用 `thiserror` 简化错误定义
-
-#### 并发与异步
-
-- 使用 `Arc<T>` 共享不可变数据，使用 `Arc<Mutex<T>>` 或 `Arc<RwLock<T>>` 共享可变数据
-- 优先使用通道 (Channel) 进行线程间通信
-- 异步代码使用 `async/await`，避免阻塞运行时
-- 使用 `tokio::spawn` 执行独立任务
-
-#### 性能优化
-
-- 使用 `Vec::with_capacity()` 预分配内存
-- 优先使用迭代器链而非显式循环
-- 函数参数优先使用 `&str` 而非 `String`
-- 避免不必要的堆分配，优先使用栈存储
-- 对小型且性能关键函数使用 `#[inline]` 标注
+</div>
 
 ### 命名规范
 
-- 模块、函数、变量: `snake_case`
-- 类型、Trait: `PascalCase`
-- 常量、静态变量: `SCREAMING_SNAKE_CASE`
+| 类型 | 规范 | 示例 |
+|:-----|:-----|:-----|
+| 模块、函数、变量 | `snake_case` | `load_config()` |
+| 类型、Trait | `PascalCase` | `ConfigLoader` |
+| 常量、静态变量 | `SCREAMING_SNAKE_CASE` | `MAX_CACHE_SIZE` |
 
 ### 代码质量要求
 
-- **零警告状态**: 严禁忽略编译器警告。所有警告必须在提交前修复。
-- **Clippy**: 必须通过 `cargo clippy -- -D warnings` 检查，不引入新的 lint 警告。
-- **代码格式**: 使用 `cargo fmt` 确保代码格式统一。
-- **文档注释**: 所有公共 API (`pub`) 必须包含文档注释 `///`。
+| 要求 | 描述 |
+|:-----|:-----|
+| **零警告状态** | 严禁忽略编译器警告 |
+| **Clippy** | 必须通过 `cargo clippy -- -D warnings` |
+| **代码格式** | 使用 `cargo fmt` 确保格式统一 |
+| **文档注释** | 所有公共 API (`pub`) 必须包含 `///` 文档 |
 
 ---
 
 ## 测试指南
 
-### 测试原则
-
-- **TDD**: 鼓励遵循 "红-绿-重构" 循环。
-- **严禁禁用测试**: 测试失败时应修复代码或测试，严禁直接禁用。
-- **真实性**: 除非涉及外部硬件或无法控制的服务，否则严禁使用 Mock/Stub，优先使用真实实现。
-
 ### 测试金字塔
 
-1. **单元测试**: 快速、独立，验证核心逻辑。位于 `src/` 目录下，使用 `#[cfg(test)]` 标注。
-2. **集成测试**: 验证模块间交互。位于 `tests/` 目录。
-3. **E2E 测试**: 验证关键业务流程。
+<div align="center" style="margin: 24px 0;">
+
+```mermaid
+graph TD
+    A[单元测试] --> B[集成测试]
+    B --> C[E2E 测试]
+    
+    style A fill:#DCFCE7,stroke:#166534
+    style B fill:#DBEAFE,stroke:#1E40AF
+    style C fill:#FEF3C7,stroke:#92400E
+```
+
+</div>
+
+| 测试类型 | 描述 | 要求 |
+|:---------|:-----|:-----|
+| **单元测试** | 快速、独立，验证核心逻辑 | ≥ 80% 覆盖 |
+| **集成测试** | 验证模块间交互 | 全部通过 |
+| **E2E 测试** | 验证关键业务流程 | 核心路径 100% |
 
 ### 覆盖率要求
 
-- **新代码覆盖率**: ≥ 80%。
-- **核心业务逻辑**: 100% 覆盖。
+- **新代码覆盖率**: ≥ 80%
+- **核心业务逻辑**: 100% 覆盖
 
 ```bash
-# 运行所有测试（包括条件编译特性）
+# 运行所有测试
 cargo test --all-features
 
 # 生成覆盖率报告
 cargo tarpaulin --out Html
 ```
 
-### 注意事项
-
-- 测试代码应与实现代码位于同一文件，使用 `#[cfg(test)]` 条件编译
-- 使用 `assert!`、`assert_eq!`、`assert_ne!` 进行断言
-- 测试私有函数时，在同一模块的 `tests` 子模块中进行测试
-
 ---
 
 ## 文档规范
 
-- **公共 API**: 所有 `pub` 项目必须包含文档注释 `///`。
-- **示例代码**: 文档注释中应包含可运行的示例代码。
-- **更新同步**: 代码变更时必须同步更新相关的 README 和 API 文档。
+| 要求 | 描述 |
+|:-----|:-----|
+| **公共 API** | 所有 `pub` 项目必须包含 `///` 文档注释 |
+| **示例代码** | 文档注释中应包含可运行的示例代码 |
+| **更新同步** | 代码变更时必须同步更新相关的 README 和 API 文档 |
 
 ---
 
@@ -415,9 +364,9 @@ cargo tarpaulin --out Html
 
 ### PR 提交标准
 
-- **原子性**: 每个 commit/PR 应只包含一个逻辑变更。
-- **规模限制**: PR 变更行数建议控制在 400 行以内。
-- **关联 Issue**: 必须在 PR 描述中关联相关 Issue。
+- **原子性**: 每个 commit/PR 应只包含一个逻辑变更
+- **规模限制**: PR 变更行数建议控制在 400 行以内
+- **关联 Issue**: 必须在 PR 描述中关联相关 Issue
 
 ### PR 模板
 
@@ -451,23 +400,29 @@ Closes #123
 
 ## 评审流程
 
+<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+
 ### 评审要点
 
-- **功能性**: 满足需求，逻辑正确。
-- **代码质量**: 遵循 SOLID 原则，可读性好，无重复代码。
-- **安全性**: 无硬编码敏感信息，有输入验证。
-- **性能**: 无明显的性能隐患。
+| 维度 | 描述 |
+|:-----|:-----|
+| **功能性** | 满足需求，逻辑正确 |
+| **代码质量** | 遵循 SOLID 原则，可读性好，无重复代码 |
+| **安全性** | 无硬编码敏感信息，有输入验证 |
+| **性能** | 无明显的性能隐患 |
 
-### 响应评审反馈
-
-- 及时回复评审者的评论。
-- 根据反馈修改代码并推送，PR 会自动更新。
+</div>
 
 ---
 
-## 社区互动
+<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DCFCE7 0%, #DBEAFE 100%); border-radius: 12px;">
 
-- **GitHub Discussions**: 提问、分享想法。
-- **Issue Tracker**: 报告 Bug、提交功能请求。
+### 💝 感谢您为 Confers 贡献力量！
 
-感谢您为 **confers** 贡献力量！🚀
+**[📖 用户指南](USER_GUIDE.md)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](../../issues)**
+
+由 Confers 团队用 ❤️ 制作
+
+**[⬆ 返回顶部](#贡献指南)**
+
+</div>

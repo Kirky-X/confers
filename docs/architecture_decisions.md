@@ -1,315 +1,253 @@
-# Architecture Decision Record (ADR)
+<div align="center">
 
-This document records important architectural decisions made in the confers project.
+<img src="../image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
 
-## Table of Contents
+# 🏗️ 架构决策记录 (ADR)
 
-1. [Encryption Strategy](#1-encryption-strategy)
-2. [Nonce Cache Size](#2-nonce-cache-size)
-3. [Provider Priority System](#3-provider-priority-system)
-4. [Memory Limit Enforcement](#4-memory-limit-enforcement)
-5. [Config Validation Approach](#5-config-validation-approach)
-6. [Default Value Syntax](#6-default-value-syntax)
+### Confers 项目重要架构决策的记录
+
+[🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md) • [📚 API 参考](API_REFERENCE.md)
 
 ---
 
-## 1. Encryption Strategy
+</div>
 
-**Status**: Implemented
-**Date**: 2025-01-11
-**Context**: Secure storage of sensitive configuration values
+## 📋 目录
 
-### Problem Statement
+<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
 
-Configuration values may contain sensitive information (API keys, passwords, tokens) that needs to be:
-- Encrypted at rest in configuration files
-- Protected from memory inspection (zeroized)
-- Secure against replay attacks (nonce reuse)
+- [1. 加密策略](#1-加密策略)
+- [2. Nonce 缓存大小](#2-nonce-缓存大小)
+- [3. 提供者优先级系统](#3-提供者优先级系统)
+- [4. 内存限制](#4-内存限制)
+- [5. 配置验证方法](#5-配置验证方法)
+- [6. 默认值语法](#6-默认值语法)
+- [附录：决策模板](#附录决策模板)
 
-### Decision
-
-**Chosen**: AES-256-GCM with nonce reuse detection
-
-### Alternatives Considered
-
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| AES-256-CBC | Widely supported | No authenticated encryption | No integrity verification without HMAC |
-| ChaCha20-Poly1305 | Modern AEAD | Less library support | Complexity of implementing |
-| RSA/ECDSA | Key exchange | Slow performance | Not suitable for config values |
-| XChaCha20-Poly1305 | Extended nonce | Less library support | Similar to ChaCha20 |
-
-### Rationale
-
-1. **Security**: AES-256-GCM provides authenticated encryption (confidentiality + integrity + authenticity)
-2. **Performance**: Hardware acceleration available on modern CPUs (AES-NI)
-3. **Library Support**: Widely supported in Rust ecosystem (`aes-gcm` crate)
-4. **Standardization**: NIST-approved algorithm (FIPS 197)
-5. **Nonce Management**: 96-bit nonce provides ~2^96 unique values, sufficient for config lifetimes
-
-### Trade-offs
-
-- **Nonce Cache Size**: 10,000 entries uses ~1.2MB memory (120 bytes per entry)
-  - Allows ~2-4 hours of operation at 1-30s reload intervals
-  - LRU eviction ensures unbounded growth
-  - Cryptographic check still detects reuse after eviction
-  - *Trade-off*: Very short reload intervals (<1s) could exhaust cache
-
-### References
-
-- NIST SP 800-38D: Recommendation for Block Cipher Modes of Operation
-- RFC 5116: The AES-GCM Cipher and its Use with IPsec
+</details>
 
 ---
 
-## 2. Nonce Cache Size
+## 1. 加密策略
 
-**Status**: Implemented
-**Date**: 2025-01-11
-**Context**: Balancing security (nonce reuse detection) with memory usage
+<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
 
-### Problem Statement
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 敏感配置值的安全存储
 
-Nonce reuse detection requires tracking all used nonces. Unbounded growth would:
-- Consume unlimited memory
-- Potential DoS through configuration injection attacks
+</div>
 
-### Decision
+### 问题陈述
 
-**Chosen**: LRU cache with 10,000 entry limit
+配置值可能包含敏感信息（API 密钥、密码、令牌），需要：
 
-### Alternatives Considered
+- 🔐 静态加密 - 文件中的敏感数据加密
+- 🧹 内存安全 - 防止内存检查
+- 🛡️ 重放攻击防护 - Nonce 重用检测
 
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| Unbounded HashSet | Unlimited detection | Memory DoS vulnerability | Security risk too high |
-| 1,000 entries | Lower memory | May not cover typical usage | Too restrictive |
-| 100,000 entries | Better coverage | Higher memory (~12MB) | Not worth cost |
-| Time-based expiration | Auto-cleanup | Complex implementation | Hard to tune timeout |
+### 决策
 
-### Rationale
+**选择**: 带有 Nonce 重用检测的 AES-256-GCM
 
-1. **Security**: 10,000 entries provide ample detection for typical scenarios
-2. **Memory**: 1.2MB is acceptable for a config management library
-3. **LRU Eviction**: Keeps most recent nonces in memory (hot path optimization)
-4. **Double Protection**: LRU eviction + cryptographic check provides defense in depth
-5. **Entry Size**: 120 bytes (nonce + timestamp) is reasonable
+### 替代方案
 
-### Trade-offs
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
+| AES-256-CBC | 广泛支持 | 无认证加密 | 无完整性验证 |
+| ChaCha20-Poly1305 | 现代 AEAD | 库支持较少 | 实现复杂度高 |
+| RSA/ECDSA | 密钥交换 | 性能慢 | 不适合配置值 |
+| XChaCha20-Poly1305 | 扩展 Nonce | 库支持较少 | 与 ChaCha20 类似 |
 
-- **High-Frequency Reloads**: Config reloading every second for hours could exhaust cache
-- **Solution**: Document recommended reload intervals (5-60 seconds)
+### 理由
 
-### Implementation Notes
+1. **安全性**: AES-256-GCM 提供认证加密（机密性 + 完整性 + 真实性）
+2. **性能**: 现代 CPU 支持硬件加速（AES-NI）
+3. **库支持**: Rust 生态系统中广泛支持（`aes-gcm` crate）
+4. **标准化**: NIST 批准的算法（FIPS 197）
+5. **Nonve 管理**: 96 位 Nonce 提供 ~2^96 个唯一值，足以应对配置生命周期
 
-```rust
-// From src/encryption/mod.rs
-const MAX_NONCE_CACHE_SIZE: usize = 10000;
+### 权衡
 
-pub struct ConfigEncryption {
-    key: SecureKey,
-    nonce_cache: Mutex<LruCache<Vec<u8>, ()>>,
-}
-```
+- **Nonce 缓存大小**: 10,000 个条目使用约 1.2MB 内存（每个条目 120 字节）
+  - 在 1-30 秒重新加载间隔下可支持约 2-4 小时操作
+  - LRU 驱逐确保无界增长
+  - 加密检查仍能在驱逐后检测到重用
 
-### Future Considerations
+### 参考
 
-- If high-frequency reload becomes a requirement, consider:
-  - Time-based eviction (e.g., nonces older than 1 hour)
-  - Per-provider nonce pools
-  - Adaptive cache sizing based on usage patterns
+- NIST SP 800-38D: 块密码工作模式建议
+- RFC 5116: AES-GCM 密码及其在 IPsec 中的使用
 
 ---
 
-## 3. Provider Priority System
+## 2. Nonce 缓存大小
 
-**Status**: Implemented
-**Date**: 2025-01-11
-**Context**: Configuration can come from multiple sources (files, env, CLI, remote)
+<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
 
-### Problem Statement
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 安全性与内存使用的平衡
 
-When multiple providers return the same configuration key, which value should be used?
+</div>
 
-### Decision
+### 问题陈述
 
-**Chosen**: Numeric priority system (higher number = higher priority)
+Nonce 重用检测需要跟踪所有使用的 Nonce。无界增长将：
 
-### Alternatives Considered
+- 消耗无限内存
+- 通过配置注入攻击导致潜在的 DoS
 
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| First-wins | Simple | Inflexible order | User control limited |
-| Last-wins | Recent values dominate | File order becomes irrelevant | Not user-friendly |
-| Weighted average | Fair distribution | Complex configuration | Hard to predict behavior |
+### 决策
 
-### Rationale
+**选择**: 限制为 10,000 个条目的 LRU 缓存
 
-1. **Flexibility**: Users control priority through `with_priority()` builder pattern
-2. **Predictability**: Lower numbers override higher numbers consistently
-3. **Extensibility**: Easy to add custom providers
-4. **Performance**: Linear search is O(n) but n is small (<10 typical providers)
+### 替代方案
 
-### Trade-offs
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
+| 无界 HashSet | 无限检测 | 内存 DoS 漏洞 | 安全风险太高 |
+| 1,000 个条目 | 更低内存 | 可能不覆盖典型使用 | 限制性太强 |
+| 100,000 个条目 | 更好的覆盖范围 | 更高内存 (~12MB) | 不值得成本 |
+| 基于时间的过期 | 自动清理 | 复杂实现 | 难以调优超时 |
 
-- **Complexity**: Users must understand priority system
-- **Documentation**: Requires clear explanation in docs
+### 理由
 
-### Default Priorities
+1. **安全性**: 10,000 个条目为典型场景提供充足的检测
+2. **内存**: 1.2MB 对于配置管理库来说是可接受的
+3. **LRU 驱逐**: 将最近的 Nonce 保留在内存中（热路径优化）
+4. **双重保护**: LRU 驱逐 + 加密检查提供深度防御
+5. **条目大小**: 120 字节（Nonce + 时间戳）是合理的
 
-```rust
-// From src/providers/provider.rs
-// File providers (highest priority)
-FileConfigProvider: priority 10
+### 权衡
 
-// CLI providers
-CliConfigProvider: priority 20
+- **高频重新加载**: 每秒重新加载配置，持续数小时可能耗尽缓存
+- **解决方案**: 记录推荐的重新加载间隔（5-60 秒）
 
-// Environment providers
-EnvironmentProvider: priority 30
+### 未来考虑
 
-// Remote providers (lowest priority)
-HttpConfigProvider: priority 30 (configurable)
-ConsulConfigProvider: priority 30
-EtcdConfigProvider: priority 30
-```
-
-### Implementation Notes
-
-```rust
-// Priority merge in ProviderManager
-pub fn merge_configs(&mut self, sources: Vec<(Priority, Map)>) {
-    // Sort by priority (ascending - lower first)
-    sources.sort_by_key(|(prio, _)| prio);
-
-    // Apply in order (later values override earlier)
-    for (_, map) in sources {
-        for (key, value) in map {
-            self.config.insert(key, value);
-        }
-    }
-}
-```
+如果高频重新加载成为需求，考虑：
+- 基于时间的驱逐（例如，超过 1 小时的 Nonce）
+- 每个提供者的 Nonce 池
+- 基于使用模式的自适应缓存大小调整
 
 ---
 
-## 4. Memory Limit Enforcement
+## 3. 提供者优先级系统
 
-**Status**: Implemented
-**Date**: 2025-01-11
-**Context**: Prevent configuration files from causing memory exhaustion
+<div style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
 
-### Problem Statement
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 配置可来自多个来源
 
-Large configuration files or malicious inputs could:
-- Consume excessive memory during parsing
-- Cause application crashes
-- Enable DoS attacks through config injection
+</div>
 
-### Decision
+### 问题陈述
 
-**Chosen**: Configurable memory limit (default: 512MB) with enforcement
+当多个提供者返回相同的配置键时，应使用哪个值？
 
-### Alternatives Considered
+### 决策
 
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| No limit | Best performance | Security vulnerability | DoS risk too high |
-| Hard limit | Simple | Inflexible | Doesn't adapt to use cases |
-| Percentage-based | Relative | Hard to set correctly | Complex user configuration |
-| Per-provider limits | Granular | Complex implementation | Over-engineering |
+**选择**: 数字优先级系统（数字越高 = 优先级越高）
 
-### Rationale
+### 替代方案
 
-1. **Security**: 512MB limit prevents most DoS attacks while being reasonable
-2. **Flexibility**: Users can increase limit via `ConfigLoader::with_memory_limit()`
-3. **Predictability**: Fixed size allows better capacity planning
-4. **Implementation**: Easy to track and enforce using `sysinfo`
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
+| 先到先得 | 简单 | 顺序不灵活 | 用户控制有限 |
+| 后到先得 | 最近的值为王 | 文件顺序无关 | 不友好 |
+| 加权平均 | 公平分布 | 复杂配置 | 难以预测行为 |
 
-### Trade-offs
+### 默认优先级
 
-- **Large Config Files**: Users with large configs must increase limit
-- **Dynamic Allocation**: May reject valid (but large) configs during growth phases
-- **Platform Differences**: Memory tracking varies by OS
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
 
-### Implementation Notes
+| 提供者 | 优先级 | 描述 |
+|:-------|:------:|:-----|
+| FileConfigProvider | 10 | 文件提供者（最高优先级） |
+| CliConfigProvider | 20 | CLI 提供者 |
+| EnvironmentProvider | 30 | 环境变量提供者 |
+| HttpConfigProvider | 30 | HTTP 提供者（可配置） |
+| ConsulConfigProvider | 30 | Consul 提供者 |
+| EtcdConfigProvider | 30 | Etcd 提供者 |
 
-```rust
-// From src/core/loader.rs
-use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
-
-pub struct ConfigLoader<T> {
-    memory_limit_mb: Option<usize>,
-    // ...
-}
-
-fn get_memory_usage_mb() -> Option<f64> {
-    // System call to get current process memory
-    let sys = System::new_with_specifics(
-        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
-    );
-
-    let current_pid = Pid::from_u32(process::id());
-    let memory = sys.process(current_pid)
-        .map(|process| process.memory() as f64 / 1024.0 / 1024.0);
-
-    memory
-}
-```
-
-### Future Considerations
-
-- Consider adding soft limit (warning) before hard limit (error)
-- Consider limit per configuration type (different limits for file vs remote)
-- Provide more detailed memory usage reporting
+</div>
 
 ---
 
-## 5. Config Validation Approach
+## 4. 内存限制
 
-**Status**: Implemented
-**Date**: 2025-01-11
-**Context**: Ensure configuration values meet application requirements
+<div style="background:#EDE9FE; border-radius:8px; padding:16px; border:1px solid #A78BFA; margin: 16px 0;">
 
-### Problem Statement
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 防止配置文件导致内存耗尽
 
-Configuration values may have constraints:
-- Type validation (e.g., port is u16)
-- Business rules (e.g., port > 1024)
-- Cross-field validation (e.g., db_url depends on db_type)
-- Custom validation logic
+</div>
 
-### Decision
+### 问题陈述
 
-**Chosen**: Declarative validation using `validator` crate with custom validator support
+大型配置文件或恶意输入可能导致：
 
-### Alternatives Considered
+- 解析时消耗过多内存
+- 导致应用程序崩溃
+- 通过配置注入启用 DoS 攻击
 
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| Manual if-checks | Simple | Boilerplate, errors at runtime | Not maintainable |
-| Procedural macro | Less boilerplate | Complex to debug | Hard to customize |
-| Type-state machine | Strong guarantees | Complex for users | Over-engineering for config |
-| Custom derive macro | Perfect integration | Complex implementation | Reimplementing validator |
+### 决策
 
-### Rationale
+**选择**: 可配置的内存限制（默认: 512MB）并强制执行
 
-1. **Declarative**: Use `#[validate]` attribute to specify rules
-2. **Library Support**: `validator` crate is mature, well-tested
-3. **Derive Integration**: Seamlessly works with `#[derive(Config)]`
-4. **Custom Support**: `#[config(custom_validate = "...")]` for complex rules
-5. **Error Messages**: `validator` provides clear, localized errors
+### 替代方案
 
-### Trade-offs
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
+| 无限制 | 最佳性能 | 安全漏洞 | DoS 风险太高 |
+| 硬限制 | 简单 | 不灵活 | 不适应用例 |
+| 基于百分比 | 相对 | 难以正确设置 | 复杂的用户配置 |
+| 每个提供者限制 | 粒度 | 复杂实现 | 过度设计 |
 
-- **Compilation Time**: Derive macros increase build time
-- **Binary Size**: Adds validator dependency (~small increase)
-- **Complexity**: Custom validators must be valid expressions
+### 理由
 
-### Implementation Notes
+1. **安全性**: 512MB 限制防止大多数 DoS 攻击，同时保持合理
+2. **灵活性**: 用户可以通过 `ConfigLoader::with_memory_limit()` 增加限制
+3. **可预测性**: 固定大小允许更好的容量规划
+4. **实现**: 使用 `sysinfo` 易于跟踪和执行
+
+### 权衡
+
+- **大型配置文件**: 用户必须增加限制
+- **动态分配**: 可能在增长阶段拒绝有效（但大型）的配置
+- **平台差异**: 内存跟踪因操作系统而异
+
+---
+
+## 5. 配置验证方法
+
+<div style="background:#FEE2E2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 确保配置值满足应用程序要求
+
+</div>
+
+### 问题陈述
+
+配置值可能有约束：
+
+- 类型验证（例如，端口是 u16）
+- 业务规则（例如，端口 > 1024）
+- 跨字段验证（例如，db_url 取决于 db_type）
+- 自定义验证逻辑
+
+### 决策
+
+**选择**: 使用 `validator` crate 的声明式验证，支持自定义验证器
+
+### 替代方案
+
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
+| 手动 if 检查 | 简单 | 样板代码，运行时错误 | 不可维护 |
+| 过程宏 | 更少的样板代码 | 难以调试 | 难以自定义 |
+| 类型状态机 | 强保证 | 复杂 | 对于配置过度设计 |
+| 自定义派生宏 | 完美集成 | 复杂实现 | 重新实现 validator |
+
+### 实现示例
 
 ```rust
-// Example from docs
 use validator::Validate;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Config, Validate)]
@@ -330,152 +268,124 @@ struct AppConfig {
 }
 ```
 
-### Future Considerations
-
-- Consider async validation for remote config fetching
-- Add validation that depends on environment (e.g., prod vs dev)
-- Support validation-time configuration (strict vs lenient mode)
-
 ---
 
-## 6. Default Value Syntax
+## 6. 默认值语法
 
-**Status**: Implemented (2025-01-11)
-**Date**: 2025-01-11
-**Context**: Simplify default value specification for configuration fields
+<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
 
-### Problem Statement
+**状态**: 已实现 | **日期**: 2025-01-11 | **上下文**: 简化配置字段的默认值指定
 
-Users want to specify default values concisely, especially for String types.
+</div>
 
-### Old Approach (Required Complex Syntax)
+### 旧方法（需要复杂语法）
 
 ```rust
 #[derive(Config)]
 struct Config {
-    // Verbose and error-prone
+    // 冗长且容易出错
     #[config(default = "\"hello\".to_string()")]
     message: String,
-
-    // Works but unintuitive for non-string types
-    #[config(default = "42")]  // This was a string, not a number!
-    number: u32,
 }
 ```
 
-### Decision
-
-**Chosen**: Auto-detect string literals for `String` types and add `.to_string()` automatically
-
-### New Approach (Simple Syntax)
+### 新方法（简单语法）
 
 ```rust
 #[derive(Config)]
 struct Config {
-    // Clean and simple
+    // 干净简单
     #[config(default = "hello")]
     message: String,
 
-    // Works correctly for all types
+    // 对所有类型都正确工作
     #[config(default = 42)]
     number: u32,
 }
 ```
 
-### Rationale
+### 理由
 
-1. **User Experience**: `default = "hello"` is more natural than `default = "\"hello\".to_string()"`
-2. **Type Safety**: Automatically converts `&str` literals to `String` via `.to_string()`
-3. **Backward Compatible**: Old `.to_string()` syntax still works
-4. **Implementation**: Simple pattern matching in macro code generation
+1. **用户体验**: `default = "hello"` 比 `default = "\"hello\".to_string()"` 更自然
+2. **类型安全**: 通过 `.to_string()` 自动将 `&str` 文字转换为 `String`
+3. **向后兼容**: 旧的 `.to_string()` 语法仍然有效
+4. **实现**: 宏代码生成中的简单模式匹配
 
-### Implementation Details
+### 好处
 
-```rust
-// From macros/src/codegen.rs
-fn is_string_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "String";
-        }
-    }
-    false
-}
-
-fn is_string_literal(expr: &Expr) -> bool {
-    matches!(expr, Expr::Lit(expr_lit) if matches!(expr_lit.lit, syn::Lit::Str(_)))
-}
-
-// In default_impl_body generation:
-if is_string_type(ty) && is_string_literal(d) {
-    quote! { #name: #d.to_string() }
-} else {
-    quote! { #name: #d }
-}
-```
-
-### Trade-offs
-
-- **Macro Complexity**: Additional helper functions and pattern matching
-- **Non-string Types**: Must still use correct type syntax (e.g., `42` not `"42"`)
-- **Compilation**: Slight increase in macro expansion time
-
-### Benefits
-
-1. **Reduced Boilerplate**: Users write 60% less code for string defaults
-2. **Fewer Errors**: Compiler catches type mismatches instead of runtime panics
-3. **Better Readability**: Configuration definitions are clearer and more concise
-4. **IDE Support**: Better autocomplete and syntax highlighting
+| 好处 | 描述 |
+|:-----|:-----|
+| 减少样板代码 | 字符串默认值用户代码减少 60% |
+| 更少错误 | 编译器捕获类型不匹配，而不是运行时 panic |
+| 更好的可读性 | 配置定义更清晰、更简洁 |
+| IDE 支持 | 更好的自动完成和语法高亮 |
 
 ---
 
-## Appendix: Decision Template
+## 附录：决策模板
+
+<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 
 ```markdown
-## [N]. [Title]
+## [N]. [标题]
 
-**Status**: [Proposed | Accepted | Deprecated | Superseded]
-**Date**: YYYY-MM-DD
-**Context**: Brief description of the problem or situation
+**状态**: [提议 | 已接受 | 已废弃 | 已替代]
+**日期**: YYYY-MM-DD
+**上下文**: 问题或情况的简要描述
 
-### Problem Statement
+### 问题陈述
 
-What problem are we trying to solve?
+我们要解决什么问题？
 
-### Decision
+### 决策
 
-Brief summary of the chosen approach.
+所选方法的简要总结。
 
-### Alternatives Considered
+### 替代方案
 
-| Alternative | Pros | Cons | Rejection Reason |
-|-------------|------|-------|-----------------|
-| ... | ... | ... | ... |
+| 替代方案 | 优点 | 缺点 | 拒绝原因 |
+|:---------|:-----|:-----|:---------|
 
-### Rationale
+### 理由
 
-Why was this decision made? What are the consequences?
+为什么做出这个决定？有什么后果？
 
-### Trade-offs
+### 权衡
 
-What are the downsides or compromises?
+缺点或妥协是什么？
 
-### Implementation Notes
+### 实现说明
 
-Any relevant code snippets or implementation details.
+任何相关的代码片段或实现细节。
 
-### Future Considerations
+### 未来考虑
 
-What should we revisit or reconsider later?
+以后应该重新考虑什么？
 ```
+
+</div>
 
 ---
 
-## How to Add a New Decision
+## 如何添加新决策
 
-1. Copy the template from the Appendix
-2. Fill in all sections
-3. Give it a sequential number
-4. Commit with message: `docs(adrs): add decision for [topic]`
-5. Add a brief summary to the table of contents
-6. Update this file's last modified date
+1. 从附录复制模板
+2. 填写所有部分
+3. 赋予一个顺序编号
+4. 提交消息: `docs(adrs): add decision for [topic]`
+5. 在目录中添加简要摘要
+6. 更新此文件的最后修改日期
+
+---
+
+<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #FEF3C7 0%, #EDE9FE 100%); border-radius: 12px;">
+
+### 📖 了解更多
+
+**[📖 用户指南](USER_GUIDE.md)** • **[📚 API 参考](API_REFERENCE.md)** • **[🏠 首页](../README.md)**
+
+由 Confers 团队用 ❤️ 制作
+
+**[⬆ 返回顶部](#架构决策记录-adr)**
+
+</div>
