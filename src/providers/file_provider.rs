@@ -5,6 +5,9 @@
 
 use crate::error::ConfigError;
 use crate::providers::{ConfigProvider, ProviderMetadata, ProviderType};
+use crate::utils::file_format::{
+    detect_format_by_content, detect_format_by_extension, detect_format_smart,
+};
 use figment::providers::{Format, Json, Toml, Yaml};
 use figment::Figment;
 use std::path::{Path, PathBuf};
@@ -90,57 +93,13 @@ impl FileConfigProvider {
 
     pub fn detect_format(&self, path: &Path) -> Option<String> {
         match self.format_detection.as_str() {
-            "ByExtension" => self.detect_by_extension(path),
-            "ByContent" => self.detect_by_content(path),
+            "ByExtension" => detect_format_by_extension(path).map(|f| f.to_string()),
+            "ByContent" => detect_format_by_content(path).map(|f| f.to_string()),
             _ => {
                 // Auto: try extension first, then content
-                self.detect_by_extension(path)
-                    .or_else(|| self.detect_by_content(path))
+                detect_format_smart(path).map(|f| f.to_string())
             }
         }
-    }
-
-    fn detect_by_extension(&self, path: &Path) -> Option<String> {
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.to_lowercase())
-            .and_then(|ext| match ext.as_str() {
-                "toml" => Some("toml".to_string()),
-                "json" => Some("json".to_string()),
-                "yaml" | "yml" => Some("yaml".to_string()),
-                _ => None,
-            })
-    }
-
-    fn detect_by_content(&self, path: &Path) -> Option<String> {
-        let content = std::fs::read_to_string(path).ok()?;
-        let trimmed = content.trim();
-
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        // Check for JSON
-        if ((trimmed.starts_with('{') && trimmed.ends_with('}'))
-            || (trimmed.starts_with('[') && trimmed.ends_with(']')))
-            && serde_json::from_str::<serde_json::Value>(trimmed).is_ok()
-        {
-            return Some("json".to_string());
-        }
-
-        // Check for TOML
-        if trimmed.contains('=') && toml::from_str::<toml::Value>(trimmed).is_ok() {
-            return Some("toml".to_string());
-        }
-
-        // Check for YAML
-        if (trimmed.starts_with("---") || trimmed.contains(':'))
-            && serde_yaml::from_str::<serde_yaml::Value>(trimmed).is_ok()
-        {
-            return Some("yaml".to_string());
-        }
-
-        None
     }
 
     fn load_file(&self, path: &Path) -> Result<Figment, ConfigError> {
@@ -168,7 +127,7 @@ impl FileConfigProvider {
             Some("yaml") => figment = figment.merge(Yaml::file(path_str.as_ref())),
             _ => {
                 // Fallback: try extension as last resort, or default to JSON
-                if let Some(ext_fmt) = self.detect_by_extension(path) {
+                if let Some(ext_fmt) = detect_format_by_extension(path).map(|f| f.to_string()) {
                     match ext_fmt.as_str() {
                         "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
                         "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),

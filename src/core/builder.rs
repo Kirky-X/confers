@@ -408,9 +408,54 @@ impl FileSource {
 
         // Validate path doesn't contain path traversal attacks
         let path_str = path.to_string_lossy();
-        if path_str.contains("..") {
+
+        // Security: Check for various path traversal patterns
+        let suspicious_patterns = [
+            "..",      // Standard traversal
+            "./",      // Current directory reference
+            "//",      // Double slash
+            "\\",      // Windows backslash (can bypass some checks)
+            "%2e%2e",  // URL encoded ".."
+            "%2e%2e/", // URL encoded "../"
+            "..%2f",   // Mixed encoding
+        ];
+
+        let is_suspicious = suspicious_patterns
+            .iter()
+            .any(|pattern| path_str.contains(pattern));
+
+        if is_suspicious {
             tracing::error!(
-                "Path contains '..' which may indicate a path traversal attempt: {}. Using safe default.",
+                "Path contains suspicious patterns that may indicate a path traversal attempt: {}. Using safe default.",
+                path_str
+            );
+            return Self {
+                name: PathBuf::from("config"),
+                format: None,
+                required: false,
+            };
+        }
+
+        // Additional security: Ensure path is within allowed directories
+        // This prevents paths like /etc/passwd or other sensitive files
+        let sensitive_prefixes = [
+            "/etc/",
+            "/usr/",
+            "/var/log/",
+            "/root/",
+            "/home/",
+            "C:\\Windows\\",
+            "C:\\Program Files\\",
+        ];
+
+        let lower_path = path_str.to_lowercase();
+        let is_sensitive = sensitive_prefixes
+            .iter()
+            .any(|prefix| lower_path.starts_with(prefix));
+
+        if is_sensitive {
+            tracing::error!(
+                "Path points to sensitive system directory: {}. Using safe default.",
                 path_str
             );
             return Self {
@@ -421,7 +466,26 @@ impl FileSource {
         }
 
         // Canonicalize path to resolve any symlinks or relative paths
+        // This helps prevent symlink attacks
         let canonical_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        // Final check: ensure the canonical path is still safe
+        let canonical_str = canonical_path.to_string_lossy();
+        let canonical_sensitive = sensitive_prefixes
+            .iter()
+            .any(|prefix| canonical_str.to_lowercase().starts_with(prefix));
+
+        if canonical_sensitive {
+            tracing::error!(
+                "Resolved path points to sensitive system directory: {}. Using safe default.",
+                canonical_str
+            );
+            return Self {
+                name: PathBuf::from("config"),
+                format: None,
+                required: false,
+            };
+        }
 
         Self {
             name: canonical_path,

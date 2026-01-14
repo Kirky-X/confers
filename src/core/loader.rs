@@ -468,129 +468,21 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
     /// Detect file format by content with improved heuristics
     pub fn detect_format(path: &Path) -> Option<String> {
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
+        use crate::utils::file_format::{detect_format_by_content, detect_format_by_extension};
 
-        let file = File::open(path).ok()?;
-        let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().map_while(Result::ok).take(20).collect();
-
-        if lines.is_empty() {
-            return Self::detect_format_by_extension(path);
+        // Try content detection first
+        if let Some(format) = detect_format_by_content(path) {
+            return Some(format.to_string());
         }
 
-        let first_line = lines.first().map(|s| s.trim()).unwrap_or("");
-        let second_line = lines.get(1).map(|s| s.trim());
-
-        if first_line.starts_with('{') {
-            return Some("json".to_string());
-        }
-
-        if first_line.starts_with('[') {
-            if lines.len() == 1 {
-                return Some("json".to_string());
-            } else {
-                if let Some(second) = second_line {
-                    if second.starts_with('{') || second.starts_with('[') {
-                        return Some("json".to_string());
-                    }
-                }
-                return Some("json".to_string());
-            }
-        }
-
-        if first_line.starts_with("---") {
-            return Some("yaml".to_string());
-        }
-
-        if first_line.starts_with('#') {
-            if let Some(second) = second_line {
-                if second.starts_with('%') && (second.contains("YAML") || second.contains("yml")) {
-                    return Some("yaml".to_string());
-                }
-            }
-            return Some("yaml".to_string());
-        }
-
-        let has_yaml_indicator = lines.iter().any(|line| {
-            let trimmed = line.trim();
-            trimmed.starts_with("---") || trimmed.ends_with(':')
-        });
-
-        if has_yaml_indicator {
-            return Some("yaml".to_string());
-        }
-
-        let mut has_toml_equal = false;
-        let mut has_toml_dot_table = false;
-        let mut has_json_brace = false;
-        let mut has_yaml_colon = false;
-
-        for line in &lines {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            if !has_toml_equal && trimmed.contains('=') {
-                let before_eq = trimmed.split('=').next().unwrap_or("").trim();
-                if !before_eq.is_empty() {
-                    let after_eq = trimmed.split('=').nth(1).unwrap_or("").trim();
-                    if !after_eq.is_empty() && after_eq != "true" && after_eq != "false" {
-                        has_toml_equal = true;
-                    }
-                }
-            }
-
-            if !has_toml_dot_table
-                && (trimmed.starts_with('[') || trimmed.ends_with(']'))
-                && trimmed.contains('.')
-            {
-                has_toml_dot_table = true;
-            }
-
-            if !has_json_brace
-                && (trimmed.contains("{\"") || trimmed.contains("\":") || trimmed.contains("\":"))
-            {
-                has_json_brace = true;
-            }
-
-            if !has_yaml_colon && trimmed.contains(':') && !trimmed.contains("://") {
-                has_yaml_colon = true;
-            }
-        }
-
-        if has_toml_equal && !has_json_brace {
-            return Some("toml".to_string());
-        }
-
-        if has_yaml_colon && !has_toml_equal {
-            return Some("yaml".to_string());
-        }
-
-        if has_json_brace && has_toml_equal {
-            return Some("json".to_string());
-        }
-
-        if has_toml_dot_table {
-            return Some("toml".to_string());
-        }
-
-        if first_line.starts_with("<?xml") {
-            return Some("xml".to_string());
-        }
-
-        Self::detect_format_by_extension(path)
+        // Fall back to extension detection
+        detect_format_by_extension(path).map(|f| f.to_string())
     }
 
     /// Detect file format by extension
     pub fn detect_format_by_extension(path: &Path) -> Option<String> {
-        match path.extension()?.to_str()? {
-            "toml" => Some("toml".to_string()),
-            "json" => Some("json".to_string()),
-            "yaml" | "yml" => Some("yaml".to_string()),
-            _ => None,
-        }
+        use crate::utils::file_format::detect_format_by_extension;
+        detect_format_by_extension(path).map(|f| f.to_string())
     }
 
     /// Helper method to load configuration with a given figment (non-audit version)
@@ -1887,8 +1779,18 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 };
 
                 if let Ok(env_value) = env_value {
-                    result.replace_range(var_start..=var_end, &env_value);
-                    start = var_start + env_value.len();
+                    // Security: Validate environment value before substitution
+                    // Block potentially dangerous characters that could enable injection attacks
+                    if Self::is_safe_env_value(&env_value) {
+                        result.replace_range(var_start..=var_end, &env_value);
+                        start = var_start + env_value.len();
+                    } else {
+                        tracing::warn!(
+                            "Environment variable '{}' contains unsafe characters, skipping substitution",
+                            var_name
+                        );
+                        start = var_end + 1;
+                    }
                 } else {
                     start = var_end + 1;
                 }
@@ -1898,6 +1800,24 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         }
 
         Some(result)
+    }
+
+    /// Check if an environment variable value is safe to substitute
+    /// Blocks characters that could enable injection attacks
+    fn is_safe_env_value(value: &str) -> bool {
+        // Check for dangerous shell characters and injection patterns
+        let dangerous_patterns = [';', '|', '&', '$', '`', '\'', '"', '\\', '\n', '\r', '\0'];
+
+        // Check for dangerous patterns
+        if value.contains("&&") || value.contains("||") {
+            return false;
+        }
+        if value.contains("${") || value.contains("$(") {
+            return false;
+        }
+
+        // Check for dangerous characters
+        !value.chars().any(|c| dangerous_patterns.contains(&c))
     }
 
     /// Decrypt encrypted values recursively

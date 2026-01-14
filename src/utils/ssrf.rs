@@ -7,8 +7,19 @@ use crate::error::ConfigError;
 use url::Url;
 
 /// Check if SSRF protection should be disabled for testing
+/// Security fix: Only allow bypass in non-production environments
 fn is_test_mode() -> bool {
-    std::env::var("CONFERS_TEST_ALLOW_LOCALHOST").is_ok()
+    // Only allow bypass if:
+    // 1. Environment explicitly allows it, AND
+    // 2. We're not in production
+    if std::env::var("CONFERS_TEST_ALLOW_LOCALHOST").is_ok() {
+        let env = std::env::var("APP_ENV").unwrap_or_default();
+        // Allow bypass in development or testing environments only
+        // Never bypass in production
+        env != "production"
+    } else {
+        false
+    }
 }
 
 /// Validate URL to prevent SSRF (Server-Side Request Forgery) attacks

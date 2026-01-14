@@ -3,5 +3,6 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+pub mod file_format;
 pub mod path;
 pub mod ssrf;

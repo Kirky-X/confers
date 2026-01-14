@@ -404,11 +404,11 @@ impl ValidateCommand {
 
     /// Detect file format from extension
     fn detect_format(path: &Path) -> String {
-        if let Some(ext) = path.extension() {
-            ext.to_string_lossy().as_ref().to_string()
-        } else {
-            "unknown".to_string()
-        }
+        use crate::utils::file_format::{detect_format_by_extension, FileFormat};
+
+        detect_format_by_extension(path)
+            .map(|f| f.to_string())
+            .unwrap_or_else(|| "unknown".to_string())
     }
 
     /// 验证语法并将结果添加到报告
