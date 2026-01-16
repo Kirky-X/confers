@@ -5,7 +5,7 @@
 
 # 📖 用户指南
 
-[🏠 首页](../README.md) • [📚 文档](README.md) • [🎯 示例](../examples/) • [❓ 常见问题](FAQ.md)
+[🏠 首页](../README.md) • [📚 文档](../README.md) • [🎯 示例](../examples/) • [❓ 常见问题](FAQ.md)
 
 ---
 
@@ -762,7 +762,7 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 <div align="center" style="margin: 24px 0">
 
-**💬 仍然需要帮助？** [提交 Issue](../../issues) 或 [访问文档中心](https://github.com/project/confers)
+**💬 仍然需要帮助？** [提交 Issue](https://github.com/Kirky-X/confers/issues) 或 [访问文档中心](https://github.com/project/confers)
 
 </div>
 
@@ -812,7 +812,7 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 <div align="center" style="margin: 32px 0; padding: 24px">
 
-**[📖 API 文档](https://docs.rs/confers)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](../../issues)**
+**[📖 API 文档](https://docs.rs/confers)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](https://github.com/Kirky-X/confers/issues)**
 
 **由 Kirky.X 用 ❤️ 制作**
 

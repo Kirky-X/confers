@@ -5,7 +5,7 @@
 
 # 📘 API 参考文档
 
-[🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md) • [🏗️ 架构设计](ARCHITECTURE.md)
+[🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md)
 
 ---
 

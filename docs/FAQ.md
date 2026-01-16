@@ -509,7 +509,7 @@ Error: 验证失败: ...
 4. ✅ 添加测试
 5. 📤 提交 PR
 
-**指南：** [CONTRIBUTING.md](../CONTRIBUTING.md)
+**指南：** [CONTRIBUTING.md](CONTRIBUTING.md)
 
 </details>
 
@@ -520,8 +520,8 @@ Error: 验证失败: ...
 
 | 渠道 | 描述 | 响应时间 |
 |:-----|:-----|:--------:|
-| 🐛 [GitHub Issues](../../issues) | Bug 报告和功能请求 | 关键 bug：24 小时 |
-| 💬 [GitHub Discussions](../../discussions) | 问答和想法 | 2-3 天 |
+| 🐛 [GitHub Issues](https://github.com/Kirky-X/confers/issues) | Bug 报告和功能请求 | 关键 bug：24 小时 |
+| 💬 [GitHub Discussions](https://github.com/Kirky-X/confers/discussions) | 问答和想法 | 2-3 天 |
 | 💡 [Discord](https://discord.gg/project) | 实时聊天 | 即时 |
 
 </details>
@@ -584,7 +584,7 @@ Error: 验证失败: ...
 
 | 创建 Issue | 开始讨论 | 发送邮件 |
 |:----------:|:--------:|:--------:|
-| [🐛 报告问题](../../issues) | [💬 社区讨论](../../discussions) | [📧 联系支持](mailto:support@example.com) |
+| [🐛 报告问题](https://github.com/Kirky-X/confers/issues) | [💬 社区讨论](https://github.com/Kirky-X/confers/discussions) | [📧 联系支持](mailto:support@example.com) |
 
 ---
 
