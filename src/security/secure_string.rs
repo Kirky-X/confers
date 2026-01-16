@@ -46,9 +46,10 @@ pub trait SensitiveData {
 }
 
 /// 敏感数据类别
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum SensitivityLevel {
     /// 低敏感度 - 内部数据
+    #[default]
     Low,
     /// 中敏感度 - 用户数据
     Medium,
@@ -61,12 +62,6 @@ pub enum SensitivityLevel {
 impl SensitivityLevel {
     pub fn is_critical_or_high(&self) -> bool {
         matches!(self, SensitivityLevel::Critical | SensitivityLevel::High)
-    }
-}
-
-impl Default for SensitivityLevel {
-    fn default() -> Self {
-        SensitivityLevel::Low
     }
 }
 
@@ -107,7 +102,7 @@ pub fn reset_secure_string_counters() {
 /// # 示例
 ///
 /// ```rust
-/// use confers::security::{SecureString, SensitivityLevel};
+/// use confers::security::{SecureString, SensitivityLevel, SensitiveData};
 ///
 /// let secret = SecureString::from("password123");
 ///
@@ -198,16 +193,17 @@ impl SecureString {
     /// # 返回
     ///
     /// 如果相等返回 Ok(())，否则返回 Err(())
+    #[allow(clippy::result_unit_err)]
     pub fn compare(&self, other: &str) -> Result<(), ()> {
         // 使用恒定时间比较
         let mut result: u8 = 0;
 
-        for (a, b) in self.data.iter().zip(other.as_bytes().iter()) {
+        for (a, b) in self.data.iter().zip(other.bytes()) {
             result |= a ^ b;
         }
 
         // 检查长度是否相同
-        if self.data.len() != other.as_bytes().len() {
+        if self.data.len() != other.len() {
             result |= 1;
         }
 
@@ -260,7 +256,7 @@ impl SecureString {
         let result = hasher.finalize();
 
         // 转换为十六进制字符串并截断
-        let hex = hex::encode(&result);
+        let hex = hex::encode(result);
         if hex.len() > max_len {
             hex[..max_len].to_string()
         } else {

@@ -161,8 +161,8 @@ impl ConfigError {
             ConfigError::IoError(msg) => {
                 // Remove potential path information from IO errors
                 let sanitized = msg
-                    .split(|c| c == '/' || c == '\\')
-                    .last()
+                    .split(['/', '\\'])
+                    .next_back()
                     .unwrap_or(msg)
                     .to_string();
                 format!("IO error: {}", sanitized)
@@ -195,8 +195,8 @@ impl ConfigError {
 
         let result = url_regex.replace_all(msg, |caps: &regex::Captures| {
             let protocol = caps.get(1).map(|m| m.as_str()).unwrap_or("");
-            let username = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let password = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+            let _username = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+            let _password = caps.get(3).map(|m| m.as_str()).unwrap_or("");
             let host = caps.get(4).map(|m| m.as_str()).unwrap_or("");
             let path = caps.get(5).map(|m| m.as_str()).unwrap_or("");
 

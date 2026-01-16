@@ -23,10 +23,14 @@
 //! let injector = ConfigInjector::new();
 //!
 //! // 注入配置值
-//! injector.inject("APP_SECRET", "my-secret-value");
+//! if let Err(e) = injector.inject("APP_SECRET", "my-secret-value") {
+//!     eprintln!("注入失败: {:?}", e);
+//! }
 //!
 //! // 获取配置
-//! let value = injector.get("APP_SECRET").unwrap();
+//! if let Some(value) = injector.get("APP_SECRET") {
+//!     println!("配置值: {}", value);
+//! }
 //! ```
 
 use crate::security::{EnvSecurityError, EnvSecurityValidator};
@@ -157,12 +161,12 @@ impl InjectionRateLimiter {
 
 /// Global rate limiter instance (enabled by default)
 pub static GLOBAL_RATE_LIMITER: Lazy<InjectionRateLimiter> =
-    Lazy::new(|| InjectionRateLimiter::new());
+    Lazy::new(InjectionRateLimiter::new);
 
 /// Global rate limiter for testing (disabled)
 #[cfg(test)]
 pub static TEST_RATE_LIMITER: Lazy<InjectionRateLimiter> =
-    Lazy::new(|| InjectionRateLimiter::disabled());
+    Lazy::new(InjectionRateLimiter::disabled);
 
 /// 全局默认配置注入器
 pub static GLOBAL_INJECTOR: Lazy<Arc<RwLock<ConfigInjector>>> =
@@ -541,14 +545,18 @@ impl From<EnvSecurityError> for ConfigInjectionError {
 /// use confers::security::{EnvironmentConfig, ConfigInjector};
 ///
 /// let injector = ConfigInjector::new();
-/// injector.inject("APP_PORT", "8080").unwrap();
-/// injector.inject("APP_DEBUG", "true").unwrap();
+/// if let Err(e) = injector.inject("APP_PORT", "8080") {
+///     eprintln!("注入失败: {:?}", e);
+/// }
+/// if let Err(e) = injector.inject("APP_DEBUG", "true") {
+///     eprintln!("注入失败: {:?}", e);
+/// }
 ///
 /// let config = EnvironmentConfig::from_injector(&injector);
 ///
 /// // 获取配置值
-/// let port: u16 = config.get("APP_PORT").unwrap_or(8080);
-/// let debug: bool = config.get("APP_DEBUG").unwrap_or(false);
+/// let port: u16 = config.get("APP_PORT", 8080);
+/// let debug: bool = config.get("APP_DEBUG", false);
 /// ```
 #[derive(Debug, Clone)]
 pub struct EnvironmentConfig<'a> {
@@ -632,19 +640,18 @@ impl<'a> EnvironmentConfig<'a> {
 
 /// 配置宏辅助函数
 pub mod macros {
-    use super::*;
-
     /// 安全注入配置宏
     ///
     /// # 使用示例
     ///
     /// ```rust
     /// use confers::security::ConfigInjector;
+    /// use confers::safe_inject;
     ///
     /// let injector = ConfigInjector::new();
-    /// unsafe_inject!(injector, {
+    /// safe_inject!(injector, {
     ///     "APP_NAME" => "my-app",
-    ///     "APP_PORT" => "8080",
+    ///     "APP_PORT" => "8080"
     /// });
     /// ```
     #[macro_export]
@@ -662,6 +669,7 @@ pub mod macros {
     ///
     /// ```rust
     /// use confers::security::ConfigInjector;
+    /// use confers::inject_from_env;
     ///
     /// let injector = ConfigInjector::new();
     /// inject_from_env!(injector, "APP_", ["PORT", "HOST", "DEBUG"]);

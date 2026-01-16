@@ -105,7 +105,7 @@ fn bench_json_parsing(c: &mut Criterion) {
     let mut group = c.benchmark_group("config_parsing_json");
     group.throughput(Throughput::Bytes(SAMPLE_JSON.len() as u64));
 
-    group.bench_function("parse_json_small", |b| {
+    group.bench_function("parse_json_small", |b: &mut criterion::Bencher| {
         b.iter(|| {
             let _: Result<serde_json::Value, _> = serde_json::from_str(SAMPLE_JSON);
         });
@@ -125,7 +125,7 @@ fn bench_config_scaling(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::from_parameter(format!("{}KB", size_kb)),
             &config_str,
-            |b, config| {
+            |b: &mut criterion::Bencher, config: &String| {
                 b.iter(|| {
                     let _: Result<toml::Value, _> = config.parse();
                 });
@@ -139,7 +139,7 @@ fn bench_config_scaling(c: &mut Criterion) {
 fn bench_provider_loading(c: &mut Criterion) {
     let mut group = c.benchmark_group("provider_loading");
 
-    group.bench_function("file_provider_creation", |b| {
+    group.bench_function("file_provider_creation", |b: &mut criterion::Bencher| {
         b.iter(|| {
             let provider = FileConfigProvider::new(vec![PathBuf::from("/tmp/config.toml")]);
             black_box(provider);

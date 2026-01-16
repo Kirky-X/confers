@@ -58,7 +58,7 @@ static SENSITIVE_PATTERNS: Lazy<Vec<(Regex, Replacement)>> = Lazy::new(|| {
         (
             Regex::new(r"(?i)(database[ ]?url|connection[ ]?string|mongodb(\+ssl)?://)[^\s]+")
                 .unwrap(),
-            Replacement::ReplacementValue("***CONNECTION_STRING***".to_string()),
+            Replacement::Value("***CONNECTION_STRING***".to_string()),
         ),
         // Bearer 令牌
         (
@@ -78,7 +78,7 @@ static SENSITIVE_PATTERNS: Lazy<Vec<(Regex, Replacement)>> = Lazy::new(|| {
         // IP 地址（可选）
         (
             Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap(),
-            Replacement::ReplacementValue("***IP_ADDRESS***".to_string()),
+            Replacement::Value("***IP_ADDRESS***".to_string()),
         ),
     ]
 });
@@ -89,7 +89,7 @@ enum Replacement {
     /// 掩码特定分组
     MaskedGroup(usize, usize),
     /// 完全替换
-    ReplacementValue(String),
+    Value(String),
     /// 邮箱掩码
     EmailMask,
 }
@@ -242,7 +242,7 @@ fn apply_replacement(input: &str, pattern: &Regex, replacement: &Replacement) ->
                     "***".to_string()
                 }
             }
-            Replacement::ReplacementValue(repl) => repl.clone(),
+            Replacement::Value(repl) => repl.clone(),
             Replacement::EmailMask => {
                 if let Some(email) = caps.get(0) {
                     let s = email.as_str();

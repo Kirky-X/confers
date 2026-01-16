@@ -13,6 +13,8 @@ pub mod cli_provider;
 pub mod default_provider;
 pub mod file_provider;
 
+pub use file_provider::FileConfigProvider;
+
 #[cfg(feature = "remote")]
 pub mod consul_provider;
 #[cfg(feature = "remote")]

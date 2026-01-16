@@ -601,6 +601,12 @@ impl ConfigValidator {
     }
 }
 
+impl Default for ConfigValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 配置验证结果
 #[derive(Debug, Clone)]
 pub struct ConfigValidationResult {

@@ -404,7 +404,7 @@ impl ValidateCommand {
 
     /// Detect file format from extension
     fn detect_format(path: &Path) -> String {
-        use crate::utils::file_format::{detect_format_by_extension, FileFormat};
+        use crate::utils::file_format::detect_format_by_extension;
 
         detect_format_by_extension(path)
             .map(|f| f.to_string())

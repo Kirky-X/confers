@@ -113,6 +113,7 @@ mockall = "0.12"
 wiremock = "0.6"
 warp = "0.3"
 cargo-tarpaulin = "0.27"
+criterion = { workspace = true }
 
 [features]
 default = ["derive"]
