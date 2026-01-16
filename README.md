@@ -1,7 +1,7 @@
 <span id="top"></span>
 <div align="center">
 
-<img src="image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px;">
+<img src="resource/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px;">
 
 <p>
   <!-- CI/CD Status -->
