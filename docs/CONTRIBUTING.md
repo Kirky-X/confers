@@ -1,8 +1,7 @@
+<span id="top"></span>
 <div align="center">
 
-<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
-
-# 🤝 贡献指南
+<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 ### 加入我们，共同打造卓越项目！
 
@@ -16,31 +15,31 @@
 
 感谢您对 **confers** 的关注！我们非常期待您的加入。无论是修复 Bug、添加新功能、改进文档还是帮助他人，您的贡献都是无价的。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🌟 贡献方式
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#166534;">代码</b><br>
-<span style="color:#166534;">修复 Bug & 添加功能</span>
+<b style="color:#166534">代码</b><br>
+<span style="color:#166534">修复 Bug & 添加功能</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
-<b style="color:#1E40AF;">文档</b><br>
-<span style="color:#1E40AF;">完善文档 & 指南</span>
+<b style="color:#1E40AF">文档</b><br>
+<span style="color:#1E40AF">完善文档 & 指南</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/test-tube.png" width="48" height="48"><br>
-<b style="color:#92400E;">测试</b><br>
-<span style="color:#92400E;">编写测试 & 发现 Bug</span>
+<b style="color:#92400E">测试</b><br>
+<span style="color:#92400E">编写测试 & 发现 Bug</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
-<b style="color:#5B21B6;">社区</b><br>
-<span style="color:#5B21B6;">提供帮助 & 支持</span>
+<b style="color:#5B21B6">社区</b><br>
+<span style="color:#5B21B6">提供帮助 & 支持</span>
 </td>
 </tr>
 </table>
@@ -51,8 +50,8 @@
 
 ## 📋 目录
 
-<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+<details open style="padding:16px">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
 
 - [行为准则](#行为准则)
 - [快速开始](#快速开始)
@@ -69,7 +68,7 @@
 
 ## 行为准则
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🤗 友善与尊重
 
@@ -77,9 +76,9 @@
 
 我们致力于提供一个包容和友好的环境。参与本项目即表示您同意：
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **✅ 推荐行为**
 
@@ -90,7 +89,7 @@
 - 对他人表现出同理心
 
 </td>
-<td width="50%" style="padding: 16px; background:#FEF2F2; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **❌ 禁止行为**
 
@@ -117,8 +116,8 @@
 - **Cargo** - Rust 包管理器
 - **IDE** - VS Code (推荐安装 rust-analyzer 插件)、IntJ 或类似工具
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">🔧 环境搭建步骤</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 环境搭建步骤</summary>
 
 **1. 安装 Rust:**
 
@@ -150,13 +149,13 @@ cargo --version
 
 ### Fork 与 Clone
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 步骤 | 操作 |
 |:----:|:-----|
 | **1. Fork 仓库** | 点击 GitHub 上的 "Fork" 按钮 |
 | **2. Clone** | `git clone https://github.com/YOUR_USERNAME/confers` |
-| **3. 添加上游** | `git remote add upstream https://github.com/Confers-Project/confers` |
+| **3. 添加上游** | `git remote add upstream https://github.com/Kirky-X/confers` |
 | **4. 验证** | `git remote -v` |
 
 </div>
@@ -178,7 +177,7 @@ cargo run --example basic --features watch
 
 ## 开发工作流
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🔄 标准贡献流程
 
@@ -281,7 +280,7 @@ git commit -m "feat(auth): add JWT token refresh mechanism"
 
 ### Rust 最佳实践
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 类别 | 要求 |
 |:-----|:-----|
@@ -315,7 +314,7 @@ git commit -m "feat(auth): add JWT token refresh mechanism"
 
 ### 测试金字塔
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ```mermaid
 graph TD
@@ -400,7 +399,7 @@ Closes #123
 
 ## 评审流程
 
-<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 ### 评审要点
 
@@ -415,14 +414,14 @@ Closes #123
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DCFCE7 0%, #DBEAFE 100%); border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px">
 
 ### 💝 感谢您为 Confers 贡献力量！
 
 **[📖 用户指南](USER_GUIDE.md)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](../../issues)**
 
-由 Confers 团队用 ❤️ 制作
+由 Kirky.X 用 ❤️ 制作
 
-**[⬆ 返回顶部](#贡献指南)**
+**[⬆ 返回顶部](#top)**
 
 </div>

@@ -1,10 +1,10 @@
+<span id="top"></span>
 <div align="center">
 
-<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 # ❓ 常见问题解答 (FAQ)
 
-### 常见问题的快速解答
 
 [🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md) • [🔧 API 参考](API_REFERENCE.md)
 
@@ -14,8 +14,8 @@
 
 ## 📋 目录
 
-<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+<details open style="padding:16px">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
 
 - [一般问题](#一般问题)
 - [安装与配置](#安装与配置)
@@ -32,14 +32,14 @@
 
 ## 一般问题
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🤔 关于项目
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 什么是 Confers？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 什么是 Confers？</summary>
 
 **Confers** 是一个现代化、类型安全的 Rust 配置管理库。它提供：
 
@@ -55,10 +55,10 @@
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 为什么应该使用 Confers？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 为什么应该使用 Confers？</summary>
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<div style="padding:16px">
 
 | 功能 | Confers | Figment | Config-rs |
 |:-----|:-------:|:-------:|:---------:|
@@ -78,18 +78,18 @@
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ Confers 可以用于生产环境了吗？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Confers 可以用于生产环境了吗？</summary>
 
-<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 **当前状态：** ✅ **生产就绪！**
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **已就绪功能：**
 
@@ -100,7 +100,7 @@
 - ✅ 远程源（Etcd、Consul）
 
 </td>
-<td width="50%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **成熟度指标：**
 
@@ -111,16 +111,14 @@
 
 </td>
 </tr>
-</table>
-
-> **注意：** 在升级版本之前，请务必查看 [CHANGELOG](../CHANGELOG.md)。
+</table>> **注意：** 在升级版本之前，请务必查看 [CHANGELOG](../CHANGELOG.md)。
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 支持哪些平台？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 支持哪些平台？</summary>
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<div style="padding:16px">
 
 | 平台 | 架构 | 状态 | 备注 |
 |:-----|:-----|:----:|:-----|
@@ -138,14 +136,14 @@
 
 ## 安装与配置
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🚀 快速开始
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 如何安装？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 如何安装？</summary>
 
 **对于 Rust 项目：**
 
@@ -188,20 +186,20 @@ fn main() {
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 如何选择合适的特性组合？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 如何选择合适的特性组合？</summary>
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<div style="padding:16px">
 
 **特性预设（推荐）：**
 
 | 预设 | 说明 | 适用场景 |
 |:----:|------|:---------|
-| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | 仅配置加载 | 仅需基本配置加载功能 |
-| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | 配置加载 + 验证 | 大多数应用（推荐） |
-| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | 开发配置 | 开发和调试 |
-| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | 生产配置 | 生产环境 |
-| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有功能 | 需要完整功能 |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | 仅配置加载 | 仅需基本配置加载功能 |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | 配置加载 + 验证 | 大多数应用（推荐） |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | 开发配置 | 开发和调试 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | 生产配置 | 生产环境 |
+| <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 需要完整功能 |
 
 **使用示例：**
 
@@ -219,16 +217,14 @@ confers = { version = "0.1", default-features = false, features = ["recommended"
 confers = { version = "0.1", default-features = false, features = ["production"] }
 ```
 
-</div>
-
-> 💡 **提示**: 默认特性为 `derive`（仅配置加载）。如需验证功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
+</div>> 💡 **提示**: 默认特性为 `derive`（仅配置加载）。如需验证功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 不同特性组合的依赖数量有何差异？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 不同特性组合的依赖数量有何差异？</summary>
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<div style="padding:16px">
 
 | 特性组合 | 依赖数量 | 编译时间 | 二进制大小 |
 |:---------|:--------:|:--------:|:----------:|
@@ -244,8 +240,8 @@ confers = { version = "0.1", default-features = false, features = ["production"]
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 系统要求是什么？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 系统要求是什么？</summary>
 
 **最低要求：**
 
@@ -266,14 +262,14 @@ confers = { version = "0.1", default-features = false, features = ["production"]
 
 ## 使用与功能
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 💡 使用 API
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 如何开始基本使用？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 如何开始基本使用？</summary>
 
 **5 分钟快速入门：**
 
@@ -301,8 +297,8 @@ fn main() -> anyhow::Result<()> {
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 支持哪些格式和来源？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 支持哪些格式和来源？</summary>
 
 **支持的格式：**
 
@@ -325,8 +321,8 @@ fn main() -> anyhow::Result<()> {
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 可以验证配置吗？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 可以验证配置吗？</summary>
 
 **可以！** Confers 与 `validator` crate 集成。
 
@@ -350,14 +346,14 @@ struct AppConfig {
 
 ## 性能
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### ⚡ 速度和优化
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ Confers 有多快？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Confers 有多快？</summary>
 
 **基准测试结果（加载 100+ 个键）：**
 
@@ -375,8 +371,8 @@ cargo bench
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 内存使用情况如何？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 内存使用情况如何？</summary>
 
 **典型内存使用：**
 
@@ -394,18 +390,18 @@ Confers 使用极少的内存，标准应用程序配置通常 **小于 1MB**。
 
 ## 安全
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🔒 安全功能
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ Confers 安全吗？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Confers 安全吗？</summary>
 
 **是的！** 安全是 Confers 的核心关注点。
 
-<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 **安全功能：**
 
@@ -420,8 +416,8 @@ Confers 使用极少的内存，标准应用程序配置通常 **小于 1MB**。
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 如何报告安全漏洞？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 如何报告安全漏洞？</summary>
 
 **请负责任地报告安全问题：**
 
@@ -444,14 +440,14 @@ Confers 使用极少的内存，标准应用程序配置通常 **小于 1MB**。
 
 ## 故障排除
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🔧 常见问题
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#991B1B;">❓ 我遇到 "FileNotFound" 错误</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#991B1B">❓ 我遇到 "FileNotFound" 错误</summary>
 
 **问题：**
 
@@ -467,8 +463,8 @@ Error: 配置文件未找到: config.toml
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#92400E;">❓ 我遇到 "ValidationError"</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#92400E">❓ 我遇到 "ValidationError"</summary>
 
 **问题：**
 
@@ -487,14 +483,14 @@ Error: 验证失败: ...
 
 ## 贡献
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🤝 加入社区
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 如何贡献？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 如何贡献？</summary>
 
 **贡献方式：**
 
@@ -517,8 +513,8 @@ Error: 验证失败: ...
 
 </details>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 在哪里可以获得帮助？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 在哪里可以获得帮助？</summary>
 
 **支持渠道：**
 
@@ -534,20 +530,20 @@ Error: 验证失败: ...
 
 ## 许可
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 📄 许可信息
 
 </div>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 8px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">❓ 这是什么许可证？</summary>
+<details style="padding:16px; margin: 8px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ 这是什么许可证？</summary>
 
 **双重许可：**
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; background:#FEF3C7; border-radius:8px; text-align:center;">
+<td width="50%" style="padding: 16px; text-align:center">
 
 **MIT 许可证**
 
@@ -560,7 +556,7 @@ Error: 验证失败: ...
 - ✅ 私人使用
 
 </td>
-<td width="50%" style="padding: 16px; background:#DBEAFE; border-radius:8px; text-align:center;">
+<td width="50%" style="padding: 16px; text-align:center">
 
 **Apache 许可证 2.0**
 
@@ -582,7 +578,7 @@ Error: 验证失败: ...
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px">
 
 ### 🎯 仍然有问题？
 
@@ -594,8 +590,8 @@ Error: 验证失败: ...
 
 **[📖 用户指南](USER_GUIDE.md)** • **[🔧 API 文档](https://docs.rs/confers)** • **[🏠 首页](../README.md)**
 
-由 Confers 团队用 ❤️ 制作
+由 Kirky.X 用 ❤️ 制作
 
-**[⬆ 返回顶部](#常见问题解答-faq)**
+**[⬆ 返回顶部](#top)**
 
 </div>

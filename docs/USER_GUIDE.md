@@ -1,10 +1,9 @@
+<span id="top"></span>
 <div align="center">
 
-<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 # 📖 用户指南
-
-### 完整的 confers 使用指南
 
 [🏠 首页](../README.md) • [📚 文档](README.md) • [🎯 示例](../examples/) • [❓ 常见问题](FAQ.md)
 
@@ -14,8 +13,8 @@
 
 ## 📋 目录
 
-<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+<details open style="padding:16px">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
 
 - [简介](#简介)
 - [快速入门](#快速入门)
@@ -36,42 +35,40 @@
 
 ## 简介
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎯 你将学到什么
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/rocket.png" width="48" height="48"><br>
-<b style="color:#166534;">快速入门</b><br>
-<span style="color:#166534;">5 分钟内完成环境搭建</span>
+<b style="color:#166534">快速入门</b><br>
+<span style="color:#166534">5 分钟内完成环境搭建</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/settings.png" width="48" height="48"><br>
-<b style="color:#1E40AF;">灵活配置</b><br>
-<span style="color:#1E40AF;">支持多种源与格式</span>
+<b style="color:#1E40AF">灵活配置</b><br>
+<span style="color:#1E40AF">支持多种源与格式</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#92400E;">最佳实践</b><br>
-<span style="color:#92400E;">学习规范的配置管理</span>
+<b style="color:#92400E">最佳实践</b><br>
+<span style="color:#92400E">学习规范的配置管理</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/rocket-take-off.png" width="48" height="48"><br>
-<b style="color:#5B21B6;">高级特性</b><br>
-<span style="color:#5B21B6;">掌握热重载与远程配置</span>
+<b style="color:#5B21B6">高级特性</b><br>
+<span style="color:#5B21B6">掌握热重载与远程配置</span>
 </td>
 </tr>
 </table>
 
 **confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用程序的配置加载、验证和管理。它支持从文件（JSON, TOML, YAML）、环境变量、命令行参数以及远程源（Etcd, HTTP）加载配置。
 
-<div style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
-
-> 💡 **提示**: 本指南假设你具备基本的 Rust 知识。如果你是 Rust 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
+<div style="padding:16px; margin: 16px 0">> 💡 **提示**: 本指南假设你具备基本的 Rust 知识。如果你是 Rust 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
 
 </div>
 
@@ -83,9 +80,9 @@
 
 在开始之前，请确保你已安装以下工具：
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **必选**
 - ✅ Rust 1.75+ (stable)
@@ -93,7 +90,7 @@
 - ✅ Git
 
 </td>
-<td width="50%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 **可选**
 - 🔧 支持 Rust 的 IDE (如 VS Code + rust-analyzer)
@@ -104,8 +101,8 @@
 </tr>
 </table>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">🔍 验证安装</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔍 验证安装</summary>
 
 ```bash
 # 检查 Rust 版本
@@ -123,24 +120,24 @@ cargo --version
 
 在你的 `Cargo.toml` 中添加 `confers`：
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 安装类型 | 配置 | 使用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.1.1"` | 包含 derive、validation 和 CLI |
-| **最小化** | `confers = { version = "0.1.1", default-features = false, features = ["minimal"] }` | 仅配置加载 |
-| **推荐** | `confers = { version = "0.1.1", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
-| **完整** | `confers = { version = "0.1.1", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.2.0"` | 包含 derive、validation 和 CLI |
+| **最小化** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | 仅配置加载 |
+| **推荐** | `confers = { version = "0.2.0", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
+| **完整** | `confers = { version = "0.2.0", features = ["full"] }` | 所有功能 |
 
 **可用特性预设：**
 
 | 预设 | 特性 | 使用场景 |
 |------|------|----------|
-| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 仅配置加载 |
-| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | 配置加载 + 验证 |
-| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
-| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
-| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 仅配置加载 |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | 配置加载 + 验证 |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
+| <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有特性 | 完整功能集 |
 
 **单独特性：**
 
@@ -197,7 +194,7 @@ fn main() {
 
 理解这些核心概念将帮助你更有效地使用 `confers`。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🔑 核心概念
 
@@ -298,7 +295,7 @@ SUBCOMMANDS:
 
 ### diff - 配置差分
 
-<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 比较两个配置文件的差异，支持多种输出格式：
 
@@ -456,7 +453,7 @@ confers key --help
 
 ### 定义配置结构体
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 使用 `#[derive(Config)]` 和 `#[config(...)]` 属性来配置你的结构体。你还可以嵌套结构体：
 
@@ -544,7 +541,7 @@ let config = MyConfig::new_loader()
 
 ### 远程配置 (Etcd/Consul/HTTP)
 
-<div style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 ⚠️ **注意**: 以下功能需要启用 `remote` 特性。
 
@@ -578,7 +575,7 @@ let config = MyConfig::new_loader()
 
 ### 审计日志与安全
 
-<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 📝 **提示**: 以下功能需要启用 `audit` 特性。
 
@@ -605,7 +602,7 @@ let config = SecureConfig::new_loader()
 
 ### 文件监听与热重载
 
-<div style="background:#DCFCE7; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 ✨ **提示**: 以下功能需要启用 `watch` 特性。
 
@@ -716,15 +713,15 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ## 最佳实践
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🌟 推荐的设计模式
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 ### ✅ 推荐做法
 
@@ -735,7 +732,7 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 - **安全性**: 敏感字段标记 `sensitive = true` 以防审计日志泄露。
 
 </td>
-<td width="50%" style="padding: 16px; background:#FEF2F2; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 ### ❌ 避免做法
 
@@ -752,7 +749,7 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ## 故障排除
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 问题 | 解决方案 |
 |------|----------|
@@ -763,7 +760,7 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 </div>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 **💬 仍然需要帮助？** [提交 Issue](../../issues) 或 [访问文档中心](https://github.com/project/confers)
 
@@ -773,52 +770,52 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ## 后续步骤
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎯 继续探索
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="33%" style="padding: 16px;">
+<td align="center" width="33%" style="padding: 16px">
 <a href="API_REFERENCE.md">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/graduation-cap.png" width="48" height="48"><br>
-<b style="color:#1E293B;">📚 API 参考</b>
+<b style="color:#1E293B">📚 API 参考</b>
 </div>
 </a>
-<br><span style="color:#64748B;">详细的接口说明</span>
+<br><span style="color:#64748B">详细的接口说明</span>
 </td>
-<td align="center" width="33%" style="padding: 16px;">
+<td align="center" width="33%" style="padding: 16px">
 <a href="ARCHITECTURE.md">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/settings.png" width="48" height="48"><br>
-<b style="color:#1E293B;">🔧 架构设计</b>
+<b style="color:#1E293B">🔧 架构设计</b>
 </div>
 </a>
-<br><span style="color:#64748B;">深入了解内部机制</span>
+<br><span style="color:#64748B">深入了解内部机制</span>
 </td>
-<td align="center" width="33%" style="padding: 16px;">
+<td align="center" width="33%" style="padding: 16px">
 <a href="../examples/">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#1E293B;">💻 示例代码</b>
+<b style="color:#1E293B">💻 示例代码</b>
 </div>
 </a>
-<br><span style="color:#64748B;">真实场景的代码样例</span>
+<br><span style="color:#64748B">真实场景的代码样例</span>
 </td>
 </tr>
 </table>
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px">
 
 **[📖 API 文档](https://docs.rs/confers)** • **[❓ 常见问题](FAQ.md)** • **[🐛 报告问题](../../issues)**
 
-**由 Confers Team 用 ❤️ 制作**
+**由 Kirky.X 用 ❤️ 制作**
 
-**[⬆ 回到顶部](#📖-用户指南)**
+**[⬆ 返回顶部](#top)**
 
 </div>

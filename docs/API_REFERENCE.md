@@ -1,10 +1,9 @@
+<span id="top"></span>
 <div align="center">
 
-<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px;">
+<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 # 📘 API 参考文档
-
-### 完整的 API 文档
 
 [🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md) • [🏗️ 架构设计](ARCHITECTURE.md)
 
@@ -14,8 +13,8 @@
 
 ## 📋 目录
 
-<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
+<details open style="padding:16px">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
 
 - [概述](#概述)
 - [核心 API](#核心-api)
@@ -38,40 +37,40 @@
 
 ## 概述
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎯 API 设计原则
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/easy.png" width="48" height="48"><br>
-<b style="color:#166534;">简洁</b><br>
-<span style="color:#166534;">直观易用</span>
+<b style="color:#166534">简洁</b><br>
+<span style="color:#166534">直观易用</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
-<b style="color:#1E40AF;">安全</b><br>
-<span style="color:#1E40AF;">默认类型安全</span>
+<b style="color:#1E40AF">安全</b><br>
+<span style="color:#1E40AF">默认类型安全</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/module.png" width="48" height="48"><br>
-<b style="color:#92400E;">可组合</b><br>
-<span style="color:#92400E;">轻松构建复杂工作流</span>
+<b style="color:#92400E">可组合</b><br>
+<span style="color:#92400E">轻松构建复杂工作流</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
-<b style="color:#5B21B6;">完善文档</b><br>
-<span style="color:#5B21B6;">全面的文档支持</span>
+<b style="color:#5B21B6">完善文档</b><br>
+<span style="color:#5B21B6">全面的文档支持</span>
 </td>
 </tr>
 </table>
 
 ### 📦 特性说明
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 confers 提供了灵活的特性配置，允许用户根据需求选择需要的功能：
 
@@ -79,11 +78,11 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 
 | 预设 | 特性 | 使用场景 |
 |------|------|----------|
-| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 仅配置加载（最小依赖） |
-| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
-| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
-| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring> | 生产配置 |
-| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 仅配置加载（最小依赖） |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring> | 生产配置 |
+| <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有特性 | 完整功能集 |
 
 **单独特性：**
 
@@ -100,9 +99,7 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 | `remote` | 远程配置（etcd、consul、http） | ❌ |
 | `encryption` | 配置加密 | ❌ |
 
-</div>
-
-> 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
+</div>> 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
 
 ---
 
@@ -112,7 +109,7 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 
 `ConfigLoader<T>` 是从多个来源加载和合并配置的核心组件，支持文件、环境变量、远程源等多种配置来源的智能合并。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 #### 🏗️ ConfigLoader 架构
 
@@ -312,7 +309,7 @@ pub fn with_memory_limit(mut self, limit_mb: usize) -> Self
 
 #### 远程配置
 
-<div style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 ⚠️ **注意**: 以下方法需要启用 `remote` 特性。
 
@@ -410,7 +407,7 @@ pub fn with_consul(mut self, provider: ConsulConfigProvider) -> Self
 
 #### 审计功能
 
-<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 📝 **提示**: 以下方法需要启用 `audit` 特性。
 
@@ -485,7 +482,7 @@ pub fn detect_format_by_extension(path: &Path) -> Option<String>
 
 `KeyManager` 提供加密密钥的综合管理，包括轮换、版本控制和密钥存储。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 #### 🔐 密钥管理架构
 
@@ -637,7 +634,7 @@ pub fn delete_key_ring(&mut self, key_id: &str, master_key: &[u8; 32]) -> Result
 
 `ConfigEncryption` 实现 AES-256-GCM 加密以保护敏感配置值，提供前向安全性的加密保护。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 #### 🔐 加密流程
 
@@ -739,7 +736,7 @@ assert_eq!(decrypted, "my-secret-api-key");
 
 `DiffCommand` 提供配置文件的差异比较功能，支持多种输出格式。
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 #### 📊 差异比较格式
 
@@ -823,7 +820,7 @@ where
 
 操作过程中遇到的常见错误变体。
 
-<div style="background:#FEF2F2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 变体 | 描述 | 处理建议 |
 |-------------------------|--------------------------------------------------------------|----------|
@@ -1031,7 +1028,7 @@ fn compare_configs() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 配置验证
 
-<div style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 始终使用 serde 的验证特性来确保配置的有效性：
 
@@ -1072,7 +1069,7 @@ fn default_timeout() -> Duration {
 
 ### 密钥管理安全
 
-<div style="background:#FEF2F2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 ⚠️ 生产环境中务必安全地管理密钥：
 
@@ -1201,7 +1198,7 @@ async fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>
         .filter(|p| p.extension().map(|e| e == "toml").unwrap_or(false))
         .collect::<Vec<_>>();
 
-    if versions.len() >= 2 {
+    if versions.len()>= 2 {
         let previous_version = &versions[versions.len() - 2];
         
         let config = ConfigLoader::<AppConfig>::new()
@@ -1223,7 +1220,7 @@ async fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>
 
 ### 异步加载
 
-<div style="background:#DBEAFE; border-radius:8px; padding:16px; border:1px solid #93C5FD; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 💡 **提示**: 对于大型配置或远程配置源，始终使用异步加载：
 
@@ -1295,7 +1292,7 @@ impl CachedConfig {
 
 ### 常见问题
 
-<div style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<div style="padding:16px; margin: 16px 0">
 
 | 问题 | 解决方案 |
 |------|----------|
@@ -1343,12 +1340,16 @@ RUST_LOG=confers=debug ./myapp
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px">
 
 ### 💝 感谢使用 Confers！
 
 如有问题或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
 
 **[🏠 返回首页](../README.md)** • **[📖 用户指南](USER_GUIDE.md)**
+
+由 Kirky.X 用 ❤️ 制作
+
+**[⬆ 返回顶部](#top)**
 
 </div>

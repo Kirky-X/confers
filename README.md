@@ -1,36 +1,36 @@
 <span id="top"></span>
 <div align="center">
 
-<img src="resource/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px;">
+<img src="resource/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
 
 <p>
   <!-- CI/CD Status -->
   <a href="https://github.com/Kirky-X/confers/actions/workflows/ci.yml">
-    <img src="https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg" alt="CI Status" style="display:inline;margin:0 4px;">
+    <img src="https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg" alt="CI Status" style="display:inline; margin:0 4px">
   </a>
   <!-- Version -->
   <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/v/confers.svg" alt="Version" style="display:inline;margin:0 4px;">
+    <img src="https://img.shields.io/crates/v/confers.svg" alt="Version" style="display:inline; margin:0 4px">
   </a>
   <!-- Documentation -->
   <a href="https://docs.rs/confers">
-    <img src="https://docs.rs/confers/badge.svg" alt="Documentation" style="display:inline;margin:0 4px;">
+    <img src="https://docs.rs/confers/badge.svg" alt="Documentation" style="display:inline; margin:0 4px">
   </a>
   <!-- Downloads -->
   <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads" style="display:inline;margin:0 4px;">
+    <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads" style="display:inline; margin:0 4px">
   </a>
   <!-- License -->
   <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE">
-    <img src="https://img.shields.io/crates/l/confers.svg" alt="License" style="display:inline;margin:0 4px;">
+    <img src="https://img.shields.io/crates/l/confers.svg" alt="License" style="display:inline; margin:0 4px">
   </a>
   <!-- Rust Version -->
   <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust 1.75+" style="display:inline;margin:0 4px;">
+    <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust 1.75+" style="display:inline; margin:0 4px">
   </a>
   <!-- Coverage -->
   <a href="https://codecov.io/gh/Kirky-X/confers">
-    <img src="https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg" alt="Coverage" style="display:inline;margin:0 4px;">
+    <img src="https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg" alt="Coverage" style="display:inline; margin:0 4px">
   </a>
 </p>
 
@@ -39,11 +39,11 @@
 </p>
 
 <p align="center">
-  <a href="#features" style="color:#3B82F6;">✨ Features</a> •
-  <a href="#quick-start" style="color:#3B82F6;">🚀 Quick Start</a> •
-  <a href="#documentation" style="color:#3B82F6;">📚 Documentation</a> •
-  <a href="#examples" style="color:#3B82F6;">💻 Examples</a> •
-  <a href="#contributing" style="color:#3B82F6;">🤝 Contributing</a>
+  <a href="#features" style="color:#3B82F6">✨ Features</a> •
+  <a href="#quick-start" style="color:#3B82F6">🚀 Quick Start</a> •
+  <a href="#documentation" style="color:#3B82F6">📚 Documentation</a> •
+  <a href="#examples" style="color:#3B82F6">💻 Examples</a> •
+  <a href="#contributing" style="color:#3B82F6">🤝 Contributing</a>
 </p>
 
 </div>
@@ -51,7 +51,7 @@
 ---
 
 <!-- Hero Section -->
-<div align="center" style="border-radius: 12px; padding: 32px; margin: 24px 0;">
+<div align="center" style="padding: 32px; margin: 24px 0">
 
 ### 🎯 Zero-Boilerplate Configuration Management
 
@@ -83,8 +83,8 @@ let config = AppConfig::load()?;
 
 ## 📋 Table of Contents
 
-<details open style="border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 Table of Contents (Click to expand)</summary>
+<details open style="padding:16px">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (Click to expand)</summary>
 
 - [✨ Features](#features)
 - [🚀 Quick Start](#quick-start)
@@ -108,7 +108,7 @@ let config = AppConfig::load()?;
 
 ## <span id="features">✨ Features</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 | 🎯 Core Features | ⚡ Optional Features |
 |:-----------------|:--------------------|
@@ -116,9 +116,9 @@ let config = AppConfig::load()?;
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="vertical-align:top; padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="vertical-align:top; padding: 16px">
 
 ### 🎯 Core Features (Always Available)
 
@@ -130,7 +130,7 @@ let config = AppConfig::load()?;
 | ✅ | **CLI Argument Override** | Support command-line argument overrides (`cli` feature) |
 
 </td>
-<td width="50%" style="vertical-align:top; padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="vertical-align:top; padding: 16px">
 
 ### ⚡ Optional Features
 
@@ -156,13 +156,13 @@ let config = AppConfig::load()?;
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | Minimal config loading (no validation, no CLI) |
-| <span style="color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development with all tools |
-| <span style="color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production-ready configuration |
-| <span style="color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | All features | Complete feature set |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | Minimal config loading (no validation, no CLI) |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | **Recommended for most applications** |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development with all tools |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production-ready configuration |
+| <span style="color:#5B21B6; padding:4px 8px">full</span> | All features | Complete feature set |
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎨 Feature Architecture
 
@@ -193,18 +193,18 @@ graph LR
 
 ### <span id="installation">📦 Installation</span>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="100%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="100%" style="padding: 16px">
 
 #### 🦀 Rust Installation
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.1.1"` | Includes derive, validation, and CLI |
-| **Minimal** | `confers = { version = "0.1.1", default-features = false, features = ["minimal"] }` | Only config loading |
-| **Recommended** | `confers = { version = "0.1.1", default-features = false, features = ["recommended"] }` | Config + validation |
-| **Full** | `confers = { version = "0.1.1", features = ["full"] }` | All features |
+| **Default** | `confers = "0.2.0"` | Includes derive, validation, and CLI |
+| **Minimal** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | Only config loading |
+| **Recommended** | `confers = { version = "0.2.0", default-features = false, features = ["recommended"] }` | Config + validation |
+| **Full** | `confers = { version = "0.2.0", features = ["full"] }` | All features |
 
 **Individual Features:**
 
@@ -227,15 +227,15 @@ graph LR
 
 ### <span id="basic-usage">💡 Basic Usage</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 #### 🎬 5-Minute Quick Start
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 **Step 1: Define Config Structure**
 
@@ -254,7 +254,7 @@ pub struct AppConfig {
 ```
 
 </td>
-<td width="50%" style="padding: 16px; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 **Step 2: Create Config File**
 
@@ -268,7 +268,7 @@ debug = true
 </td>
 </tr>
 <tr>
-<td width="50%" style="padding: 16px; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 **Step 3: Load Config**
 
@@ -281,7 +281,7 @@ fn main() -> anyhow::Result<()> {
 ```
 
 </td>
-<td width="50%" style="padding: 16px; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 **Step 4: Environment Override**
 
@@ -295,8 +295,8 @@ export APP_DEBUG=true
 </tr>
 </table>
 
-<details style="border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#166534;">📖 Complete Working Example</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Complete Working Example</summary>
 
 ```rust
 use confers::Config;
@@ -339,36 +339,36 @@ debug = true
 
 ## <span id="documentation">📚 Documentation</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
-<table style="width:100%; max-width: 800px;">
+<table style="width:100%; max-width: 800px">
 <tr>
-<td align="center" width="33%" style="padding: 16px;">
-<a href="docs/USER_GUIDE.md" style="text-decoration:none;">
-<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<td align="center" width="33%" style="padding: 16px">
+<a href="docs/USER_GUIDE.md" style="text-decoration:none">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/book.png" width="48" height="48"><br>
-<b style="color:#1E293B;">User Guide</b>
+<b style="color:#1E293B">User Guide</b>
 </div>
 </a>
-<br><span style="color:#64748B;">Complete usage guide</span>
+<br><span style="color:#64748B">Complete usage guide</span>
 </td>
-<td align="center" width="33%" style="padding: 16px;">
-<a href="https://docs.rs/confers" style="text-decoration:none;">
-<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<td align="center" width="33%" style="padding: 16px">
+<a href="https://docs.rs/confers" style="text-decoration:none">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/api.png" width="48" height="48"><br>
-<b style="color:#1E293B;">API Reference</b>
+<b style="color:#1E293B">API Reference</b>
 </div>
 </a>
-<br><span style="color:#64748B;">Complete API docs</span>
+<br><span style="color:#64748B">Complete API docs</span>
 </td>
-<td align="center" width="33%" style="padding: 16px;">
-<a href="examples/" style="text-decoration:none;">
-<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<td align="center" width="33%" style="padding: 16px">
+<a href="examples/" style="text-decoration:none">
+<div style="padding: 24px; transition: transform 0.2s">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#1E293B;">Examples</b>
+<b style="color:#1E293B">Examples</b>
 </div>
 </a>
-<br><span style="color:#64748B;">Code examples</span>
+<br><span style="color:#64748B">Code examples</span>
 </td>
 </tr>
 </table>
@@ -388,15 +388,15 @@ debug = true
 
 ## <span id="examples">💻 Examples</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 💡 Real-World Examples
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 #### 📝 Example 1: Basic Configuration
 
@@ -418,8 +418,8 @@ fn basic_example() -> anyhow::Result<()> {
 }
 ```
 
-<details style="margin-top:8px;">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6;">View Output</summary>
+<details style="margin-top:8px">
+<summary style="cursor:pointer; font-weight:600; color:#3B82F6">View Output</summary>
 
 ```
 ✅ Name: my-app, Port: 8080
@@ -428,7 +428,7 @@ fn basic_example() -> anyhow::Result<()> {
 </details>
 
 </td>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="50%" style="padding: 16px; vertical-align:top">
 
 #### 🔥 Example 2: Advanced Configuration
 
@@ -455,8 +455,8 @@ fn advanced_example() -> anyhow::Result<()> {
 }
 ```
 
-<details style="margin-top:8px;">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6;">View Output</summary>
+<details style="margin-top:8px">
+<summary style="cursor:pointer; font-weight:600; color:#3B82F6">View Output</summary>
 
 ```
 🚀 Server: localhost:8080
@@ -468,7 +468,7 @@ fn advanced_example() -> anyhow::Result<()> {
 </tr>
 </table>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 **[📂 Explore All Examples →](examples/)**
 
@@ -478,7 +478,7 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ## <span id="architecture">🏗️ Architecture</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🏗️ System Architecture
 
@@ -538,15 +538,15 @@ graph TB
 
 ## <span id="configuration">⚙️ Configuration</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎛️ Configuration Options
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="padding: 16px">
 
 **Basic Configuration**
 
@@ -565,7 +565,7 @@ logging = true
 ```
 
 </td>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="padding: 16px">
 
 **Advanced Configuration**
 
@@ -591,8 +591,8 @@ cache_size = 1000
 </tr>
 </table>
 
-<details style="border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">🔧 All Configuration Options</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 All Configuration Options</summary>
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -610,7 +610,7 @@ cache_size = 1000
 
 ## <span id="testing">🧪 Testing</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎯 Test Coverage
 
@@ -632,8 +632,8 @@ cargo bench
 cargo test test_name
 ```
 
-<details style="border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#166534;">📊 Test Statistics</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#166534">📊 Test Statistics</summary>
 
 | Category | Test Count | Coverage |
 |----------|------------|----------|
@@ -648,15 +648,15 @@ cargo test test_name
 
 ## <span id="performance">📊 Performance</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### ⚡ Benchmark Results
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
+<td width="50%" style="padding: 16px; text-align:center">
 
 **📊 Throughput**
 
@@ -667,7 +667,7 @@ cargo test test_name
 | Schema Gen | 2,000,000 ops/sec |
 
 </td>
-<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
+<td width="50%" style="padding: 16px; text-align:center">
 
 **⏱️ Latency**
 
@@ -681,8 +681,8 @@ cargo test test_name
 </tr>
 </table>
 
-<details style="border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#92400E;">📈 Detailed Benchmarks</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 Detailed Benchmarks</summary>
 
 ```bash
 # Run benchmarks
@@ -700,39 +700,39 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ## <span id="security">🔒 Security</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🛡️ Security Features
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/lock.png" width="48" height="48"><br>
 <b>Memory Safety</b><br>
-<span style="color:#166534;">Zero-copy & secure cleanup</span>
+<span style="color:#166534">Zero-copy & secure cleanup</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
 <b>Audited</b><br>
-<span style="color:#1E40AF;">Regular security audits</span>
+<span style="color:#1E40AF">Regular security audits</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="48" height="48"><br>
 <b>Privacy</b><br>
-<span style="color:#92400E;">No data collection</span>
+<span style="color:#92400E">No data collection</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/shield.png" width="48" height="48"><br>
 <b>Compliance</b><br>
-<span style="color:#5B21B6;">Industry standards</span>
+<span style="color:#5B21B6">Industry standards</span>
 </td>
 </tr>
 </table>
 
-<details style="border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#991B1B;">🔐 Security Details</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#991B1B">🔐 Security Details</summary>
 
 ### 🛡️ Security Measures
 
@@ -753,7 +753,7 @@ Please report security vulnerabilities to: **security@confers.example**
 
 ## <span id="roadmap">🗺️ Roadmap</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🎯 Development Roadmap
 
@@ -777,9 +777,9 @@ gantt
     Audit Logging         :done, 2024-08, 2024-10
 ```
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="padding: 16px; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 ### ✅ Completed
 
@@ -794,7 +794,7 @@ gantt
 - [x] Remote Configuration Support (etcd, Consul, HTTP)
 
 </td>
-<td width="50%" style="padding: 16px; border-radius:8px;">
+<td width="50%" style="padding: 16px">
 
 ### 📋 Planned
 
@@ -815,7 +815,7 @@ gantt
 
 ## <span id="contributing">🤝 Contributing</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 💖 Thank You to All Contributors!
 
@@ -823,9 +823,9 @@ gantt
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px">
 
 ### 🐛 Report Bugs
 
@@ -833,7 +833,7 @@ Found an issue?<br>
 <a href="https://github.com/Kirky-X/confers/issues/new">Create Issue</a>
 
 </td>
-<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px">
 
 ### 💡 Feature Suggestions
 
@@ -841,7 +841,7 @@ Have a great idea?<br>
 <a href="https://github.com/Kirky-X/confers/discussions">Start Discussion</a>
 
 </td>
-<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px">
 
 ### 🔧 Submit PR
 
@@ -852,8 +852,8 @@ Want to contribute code?<br>
 </tr>
 </table>
 
-<details style="border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B;">📝 Contribution Guidelines</summary>
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📝 Contribution Guidelines</summary>
 
 ### 🚀 How to Contribute
 
@@ -880,7 +880,7 @@ Want to contribute code?<br>
 
 ## <span id="license">📄 License</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 This project is licensed under **MIT License**:
 
@@ -892,38 +892,38 @@ This project is licensed under **MIT License**:
 
 ## <span id="acknowledgments">🙏 Acknowledgments</span>
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
 ### 🌟 Built With Amazing Tools
 
 </div>
 
-<table style="width:100%; border-collapse: collapse;">
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 16px;">
-<a href="https://www.rust-lang.org/" style="text-decoration:none;">
-<div style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
+<a href="https://www.rust-lang.org/" style="text-decoration:none">
+<div style="padding: 16px">
 <img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" width="48" height="48"><br>
 <b>Rust</b>
 </div>
 </a>
 </td>
-<td align="center" width="25%" style="padding: 16px;">
-<a href="https://github.com/" style="text-decoration:none;">
-<div style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
+<a href="https://github.com/" style="text-decoration:none">
+<div style="padding: 16px">
 <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="48" height="48"><br>
 <b>GitHub</b>
 </div>
 </a>
 </td>
-<td align="center" width="25%" style="padding: 16px;">
-<div style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
+<div style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
 <b>Open Source</b>
 </div>
 </td>
-<td align="center" width="25%" style="padding: 16px;">
-<div style="padding: 16px; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px">
+<div style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/community.png" width="48" height="48"><br>
 <b>Community</b>
 </div>
@@ -945,36 +945,36 @@ This project is licensed under **MIT License**:
 
 ## 📞 Contact & Support
 
-<div align="center" style="margin: 24px 0;">
+<div align="center" style="margin: 24px 0">
 
-<table style="width:100%; max-width: 600px;">
+<table style="width:100%; max-width: 600px">
 <tr>
 <td align="center" width="33%">
 <a href="https://github.com/Kirky-X/confers/issues">
-<div style="padding: 16px; border-radius:8px;">
+<div style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/bug.png" width="32" height="32"><br>
-<b style="color:#991B1B;">Issues</b>
+<b style="color:#991B1B">Issues</b>
 </div>
 </a>
-<br><span style="color:#64748B;">Report bugs & issues</span>
+<br><span style="color:#64748B">Report bugs & issues</span>
 </td>
 <td align="center" width="33%">
 <a href="https://github.com/Kirky-X/confers/discussions">
-<div style="padding: 16px; border-radius:8px;">
+<div style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="32" height="32"><br>
-<b style="color:#1E40AF;">Discussions</b>
+<b style="color:#1E40AF">Discussions</b>
 </div>
 </a>
-<br><span style="color:#64748B;">Ask questions & share ideas</span>
+<br><span style="color:#64748B">Ask questions & share ideas</span>
 </td>
 <td align="center" width="33%">
 <a href="https://github.com/Kirky-X/confers">
-<div style="padding: 16px; border-radius:8px;">
+<div style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/github.png" width="32" height="32"><br>
-<b style="color:#1E293B;">GitHub</b>
+<b style="color:#1E293B">GitHub</b>
 </div>
 </a>
-<br><span style="color:#64748B;">View source code</span>
+<br><span style="color:#64748B">View source code</span>
 </td>
 </tr>
 </table>
@@ -993,7 +993,7 @@ This project is licensed under **MIT License**:
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px">
 
 ### 💝 Support This Project
 
