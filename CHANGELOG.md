@@ -7,13 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Dependencies Updated
-- Updated all dependencies to their latest stable versions
-- Upgraded `lru` from 0.12 to 0.16.3 to fix soundness issue (RUSTSEC-2026-0002)
-- Updated core dependencies: tokio 1.48 → 1.49, serde, validator, schemars, thiserror, clap, etc.
-- All 108 tests pass with updated dependencies
+### Security
+- Add comprehensive security module with production-ready features:
+  - SecureString with automatic memory zeroization for sensitive data
+  - ConfigInjector for secure runtime configuration injection
+  - InputValidator for SQL/command injection prevention
+  - ErrorSanitizer for sensitive data redaction in error messages
+- Add sensitive data detection and warnings in proc-macros:
+  - Detect hardcoded passwords, tokens, and private keys at compile time
+  - Emit runtime warnings to guide users toward safer alternatives
+  - Implement input length limits to prevent DoS attacks
+- Fix SSRF test mode bypass - only allow localhost bypass in non-production environments
+- Fix environment variable injection - add validation before substitution
+- Fix path traversal protection with comprehensive checks:
+  - Detect traversal patterns including URL encoding and Windows paths
+  - Block access to sensitive system directories (/etc, /usr, /var/log, etc.)
+  - Prevent symlink attacks via canonicalization
+- Enhance security config injector with improved validation
+- Refactor error sanitization for better security
+- Improve input validation logic
+
+### Added
+- Create unified file format detection module (eliminates 4 duplicate implementations)
+- Add comprehensive security tests (800+ lines of test coverage)
 
 ### Changed
+- Enhance error handling with comprehensive error types
+- Optimize HTTP provider for remote configuration
+- Rename `image/` directory to `resource/` for better naming convention
+- Update documentation with cleaner styling and correct links
+- Reduce code duplication by ~120 lines
+- Centralize format detection logic in utils/file_format.rs
 - **BREAKING**: Default features changed from `["derive", "validation", "cli"]` to `["derive"]` for minimal dependency footprint
 - Made `rustls` optional (now only enabled with `remote` feature)
 - Made `chrono`, `sysinfo`, `lru` optional dependencies (moved to `encryption` and `monitoring` features)
@@ -28,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `remote` feature to include `rustls`, `rustls-pki-types`, `tokio-rustls`, `failsafe`, and `base64`
 - Updated `encryption` feature to include `lru` and `chrono`
 - Fixed `RefreshKind::new()` to `RefreshKind::nothing()` for sysinfo compatibility
+
+### Dependencies Updated
+- Updated all dependencies to their latest stable versions
+- Upgraded `lru` from 0.12 to 0.16.3 to fix soundness issue (RUSTSEC-2026-0002)
+- Updated core dependencies: tokio 1.48 → 1.49, serde, validator, schemars, thiserror, clap, etc.
+- All 108 tests pass with updated dependencies
 
 ## [0.1.1] - 2026-01-02
 
