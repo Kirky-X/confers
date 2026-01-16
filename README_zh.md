@@ -1,3 +1,4 @@
+<span id="top"></span>
 <div align="center">
 
 <img src="image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px;">
@@ -38,11 +39,11 @@
 </p>
 
 <p align="center">
-  <a href="#-功能特性" style="color:#3B82F6;">✨ 功能特性</a> •
-  <a href="#-快速开始" style="color:#3B82F6;">🚀 快速开始</a> •
-  <a href="#-文档" style="color:#3B82F6;">📚 文档</a> •
-  <a href="#-示例" style="color:#3B82F6;">💻 示例</a> •
-  <a href="#-贡献" style="color:#3B82F6;">🤝 贡献</a>
+  <a href="#features" style="color:#3B82F6;">✨ 功能特性</a> •
+  <a href="#quick-start" style="color:#3B82F6;">🚀 快速开始</a> •
+  <a href="#documentation" style="color:#3B82F6;">📚 文档</a> •
+  <a href="#examples" style="color:#3B82F6;">💻 示例</a> •
+  <a href="#contributing" style="color:#3B82F6;">🤝 贡献</a>
 </p>
 
 </div>
@@ -50,7 +51,6 @@
 ---
 
 <!-- 英雄区域 -->
-<div align="center" style="background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%); border-radius: 12px; padding: 32px; margin: 24px 0;">
 
 ### 🎯 零样板代码配置管理
 
@@ -76,36 +76,35 @@ pub struct AppConfig {
 let config = AppConfig::load()?;
 ```
 
-</div>
 
 ---
 
 ## 📋 目录
 
-<details open style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
+<details open style="border-radius:8px; padding:16px; border:1px solid #E2E8F0;">
 <summary style="cursor:pointer; font-weight:600; color:#1E293B;">📑 目录（点击展开）</summary>
 
-- [✨ 功能特性](#-功能特性)
-- [🚀 快速开始](#-快速开始)
-  - [📦 安装](#-安装)
-  - [💡 基本用法](#-基本用法)
-- [📚 文档](#-文档)
-- [💻 示例](#-示例)
-- [🏗️ 架构](#️-架构)
-- [💻 CLI 命令参考](#-cli-命令参考)
-- [🧪 测试](#-测试)
-- [📊 性能](#-性能)
-- [🔒 安全](#-安全)
-- [🗺️ 路线图](#-路线图)
-- [🤝 贡献](#-贡献)
-- [📄 许可证](#-许可证)
-- [🙏 致谢](#-致谢)
+- [✨ 功能特性](#features)
+- [🚀 快速开始](#quick-start)
+  - [📦 安装](#installation)
+  - [💡 基本用法](#basic-usage)
+- [📚 文档](#documentation)
+- [💻 示例](#examples)
+- [🏗️ 架构](#architecture)
+- [💻 CLI 命令参考](#cli-reference)
+- [🧪 测试](#testing)
+- [📊 性能](#performance)
+- [🔒 安全](#security)
+- [🗺️ 路线图](#roadmap)
+- [🤝 贡献](#contributing)
+- [📄 许可证](#license)
+- [🙏 致谢](#acknowledgments)
 
 </details>
 
 ---
 
-## ✨ 功能特性
+## <span id="features">✨ 功能特性</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -117,7 +116,7 @@ let config = AppConfig::load()?;
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%" style="vertical-align:top; padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="vertical-align:top; padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
 
 ### 🎯 核心功能（始终可用）
 
@@ -129,7 +128,7 @@ let config = AppConfig::load()?;
 | ✅ | **CLI 参数覆盖** | 支持命令行参数覆盖（`cli` 特性） |
 
 </td>
-<td width="50%" style="vertical-align:top; padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="50%" style="vertical-align:top; padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
 
 ### ⚡ 可选功能
 
@@ -155,11 +154,11 @@ let config = AppConfig::load()?;
 
 | 预设 | 特性 | 使用场景 |
 |------|------|----------|
-| <span style="background:#DCFCE7; color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 最小化配置加载（无验证、无 CLI） |
-| <span style="background:#DBEAFE; color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | **推荐大多数应用使用** |
-| <span style="background:#FEF3C7; color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发环境，包含所有工具 |
-| <span style="background:#FEE2E2; color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产就绪的配置 |
-| <span style="background:#EDE9FE; color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
+| <span style="color:#166534; padding:4px 8px; border-radius:4px;">minimal</span> | `derive` | 最小化配置加载（无验证、无 CLI） |
+| <span style="color:#1E40AF; padding:4px 8px; border-radius:4px;">recommended</span> | `derive`, `validation` | **推荐大多数应用使用** |
+| <span style="color:#92400E; padding:4px 8px; border-radius:4px;">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发环境，包含所有工具 |
+| <span style="color:#991B1B; padding:4px 8px; border-radius:4px;">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产就绪的配置 |
+| <span style="color:#5B21B6; padding:4px 8px; border-radius:4px;">full</span> | 所有特性 | 完整功能集 |
 
 <div align="center" style="margin: 24px 0;">
 
@@ -188,13 +187,13 @@ graph LR
 
 ---
 
-## 🚀 快速开始
+## <span id="quick-start">🚀 快速开始</span>
 
-### 📦 安装
+### <span id="installation">📦 安装</span>
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="100%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0;">
+<td width="100%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0;">
 
 #### 🦀 Rust 安装
 
@@ -224,7 +223,7 @@ graph LR
 </tr>
 </table>
 
-### 💡 基本用法
+### <span id="basic-usage">💡 基本用法</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -294,7 +293,7 @@ export APP_DEBUG=true
 </tr>
 </table>
 
-<details style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<details style="border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
 <summary style="cursor:pointer; font-weight:600; color:#166534;">📖 完整工作示例</summary>
 
 ```rust
@@ -336,7 +335,7 @@ debug = true
 
 ---
 
-## 📚 文档
+## <span id="documentation">📚 文档</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -344,7 +343,7 @@ debug = true
 <tr>
 <td align="center" width="33%" style="padding: 16px;">
 <a href="docs/USER_GUIDE.md" style="text-decoration:none;">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
 <img src="https://img.icons8.com/fluency/96/000000/book.png" width="48" height="48"><br>
 <b style="color:#1E293B;">用户指南</b>
 </div>
@@ -353,7 +352,7 @@ debug = true
 </td>
 <td align="center" width="33%" style="padding: 16px;">
 <a href="https://docs.rs/confers" style="text-decoration:none;">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
 <img src="https://img.icons8.com/fluency/96/000000/api.png" width="48" height="48"><br>
 <b style="color:#1E293B;">API 参考</b>
 </div>
@@ -362,7 +361,7 @@ debug = true
 </td>
 <td align="center" width="33%" style="padding: 16px;">
 <a href="examples/" style="text-decoration:none;">
-<div style="background:#F1F5F9; padding: 24px; border-radius:12px; transition: transform 0.2s;">
+<div style="padding: 24px; border-radius:12px; transition: transform 0.2s;">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
 <b style="color:#1E293B;">示例代码</b>
 </div>
@@ -385,7 +384,7 @@ debug = true
 
 ---
 
-## 💻 示例
+## <span id="examples">💻 示例</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -395,7 +394,7 @@ debug = true
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
 
 #### 📝 示例 1：基本配置
 
@@ -427,7 +426,7 @@ fn basic_example() -> anyhow::Result<()> {
 </details>
 
 </td>
-<td width="50%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
 
 #### 🔥 示例 2：高级配置
 
@@ -475,7 +474,7 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ---
 
-## 🏗️ 架构
+## <span id="architecture">🏗️ 架构</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -535,7 +534,7 @@ graph TB
 
 ---
 
-## 💻 CLI 命令参考
+## <span id="cli-reference">💻 CLI 命令参考</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -561,7 +560,7 @@ confers wizard --help
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### 🔍 diff - 配置差分
 
@@ -581,7 +580,7 @@ confers diff config1.toml config2.toml --format side-by-side
 - `strict` - 严格模式
 
 </td>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### 📦 generate - 模板生成
 
@@ -600,7 +599,7 @@ confers generate --level documentation
 - `documentation` - 文档模板，带详细注释
 
 </td>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### ✅ validate - 配置验证
 
@@ -620,7 +619,7 @@ confers validate config.toml --level documentation
 </td>
 </tr>
 <tr>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### 🔐 encrypt - 配置加密
 
@@ -635,7 +634,7 @@ confers encrypt "my-secret-value" --key base64-key
 - 支持从环境变量 `CONFERS_KEY` 读取密钥
 
 </td>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### 🎨 wizard - 交互式向导
 
@@ -653,7 +652,7 @@ confers wizard --output config.toml
 4. 日志配置（级别、格式）
 
 </td>
-<td width="33%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; vertical-align:top;">
+<td width="33%" style="padding: 16px; border-radius:8px; vertical-align:top;">
 
 #### 🔑 key - 密钥管理
 
@@ -672,7 +671,7 @@ confers key generate --length 32
 
 ---
 
-## 🧪 测试
+## <span id="testing">🧪 测试</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -696,7 +695,7 @@ cargo bench
 cargo test test_name
 ```
 
-<details style="background:#F0FDF4; border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
+<details style="border-radius:8px; padding:16px; border:1px solid #86EFAC; margin: 16px 0;">
 <summary style="cursor:pointer; font-weight:600; color:#166534;">📊 测试统计</summary>
 
 | 类别 | 测试数量 | 覆盖率 |
@@ -710,7 +709,7 @@ cargo test test_name
 
 ---
 
-## 📊 性能
+## <span id="performance">📊 性能</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -720,7 +719,7 @@ cargo test test_name
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
+<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
 
 **📊 吞吐量**
 
@@ -731,7 +730,7 @@ cargo test test_name
 | Schema 生成 | 2,000,000 ops/sec |
 
 </td>
-<td width="50%" style="padding: 16px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
+<td width="50%" style="padding: 16px; border-radius:8px; border:1px solid #E2E8F0; text-align:center;">
 
 **⏱️ 延迟**
 
@@ -745,7 +744,7 @@ cargo test test_name
 </tr>
 </table>
 
-<details style="background:#FEF3C7; border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
+<details style="border-radius:8px; padding:16px; border:1px solid #FCD34D; margin: 16px 0;">
 <summary style="cursor:pointer; font-weight:600; color:#92400E;">📈 详细基准测试</summary>
 
 ```bash
@@ -762,7 +761,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ---
 
-## 🔒 安全
+## <span id="security">🔒 安全</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -772,22 +771,22 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td align="center" width="25%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/lock.png" width="48" height="48"><br>
 <b>内存安全</b><br>
 <span style="color:#166534;">零拷贝和安全清理</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#DBEAFE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
 <b>已审计</b><br>
 <span style="color:#1E40AF;">定期安全审计</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="48" height="48"><br>
 <b>隐私保护</b><br>
 <span style="color:#92400E;">不收集数据</span>
 </td>
-<td align="center" width="25%" style="padding: 16px; background:#EDE9FE; border-radius:8px;">
+<td align="center" width="25%" style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/shield.png" width="48" height="48"><br>
 <b>合规性</b><br>
 <span style="color:#5B21B6;">行业标准</span>
@@ -795,7 +794,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 </tr>
 </table>
 
-<details style="background:#FEF2F2; border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
+<details style="border-radius:8px; padding:16px; border:1px solid #FCA5A5; margin: 16px 0;">
 <summary style="cursor:pointer; font-weight:600; color:#991B1B;">🔐 安全详情</summary>
 
 ### 🛡️ 安全措施
@@ -815,7 +814,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ---
 
-## 🗺️ 路线图
+## <span id="roadmap">🗺️ 路线图</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -843,7 +842,7 @@ gantt
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="50%" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="50%" style="padding: 16px; border-radius:8px;">
 
 ### ✅ 已完成
 
@@ -862,7 +861,7 @@ gantt
 - [x] 配置验证命令行工具（支持多级输出）
 
 </td>
-<td width="50%" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td width="50%" style="padding: 16px; border-radius:8px;">
 
 ### 📋 计划中
 
@@ -881,46 +880,46 @@ gantt
 
 ---
 
-## 🤝 贡献
+## <span id="contributing">🤝 贡献</span>
 
 <div align="center" style="margin: 24px 0;">
 
 ### 💖 感谢所有贡献者！
 
-<img src="https://contrib.rocks/image?repo=Confers-Project/confers" alt="Contributors">
+<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
 
 </div>
 
 <table style="width:100%; border-collapse: collapse;">
 <tr>
-<td width="33%" align="center" style="padding: 16px; background:#FEF2F2; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
 
 ### 🐛 报告 Bug
 
 发现问题？<br>
-<a href="https://github.com/Confers-Project/confers/issues/new">创建 Issue</a>
+<a href="https://github.com/Kirky-X/confers/issues/new">创建 Issue</a>
 
 </td>
-<td width="33%" align="center" style="padding: 16px; background:#FEF3C7; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
 
 ### 💡 功能建议
 
 有好的想法？<br>
-<a href="https://github.com/Confers-Project/confers/discussions">发起讨论</a>
+<a href="https://github.com/Kirky-X/confers/discussions">发起讨论</a>
 
 </td>
-<td width="33%" align="center" style="padding: 16px; background:#DCFCE7; border-radius:8px;">
+<td width="33%" align="center" style="padding: 16px; border-radius:8px;">
 
 ### 🔧 提交 PR
 
 想要贡献代码？<br>
-<a href="https://github.com/Confers-Project/confers/pulls">Fork & PR</a>
+<a href="https://github.com/Kirky-X/confers/pulls">Fork & PR</a>
 
 </td>
 </tr>
 </table>
 
-<details style="background:#F8FAFC; border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
+<details style="border-radius:8px; padding:16px; border:1px solid #E2E8F0; margin: 16px 0;">
 <summary style="cursor:pointer; font-weight:600; color:#1E293B;">📝 贡献指南</summary>
 
 ### 🚀 如何贡献
@@ -946,7 +945,7 @@ gantt
 
 ---
 
-## 📄 许可证
+## <span id="license">📄 许可证</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -958,7 +957,7 @@ gantt
 
 ---
 
-## 🙏 致谢
+## <span id="acknowledgments">🙏 致谢</span>
 
 <div align="center" style="margin: 24px 0;">
 
@@ -970,7 +969,7 @@ gantt
 <tr>
 <td align="center" width="25%" style="padding: 16px;">
 <a href="https://www.rust-lang.org/" style="text-decoration:none;">
-<div style="background:#F8FAFC; padding: 16px; border-radius:8px;">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" width="48" height="48"><br>
 <b>Rust</b>
 </div>
@@ -978,20 +977,20 @@ gantt
 </td>
 <td align="center" width="25%" style="padding: 16px;">
 <a href="https://github.com/" style="text-decoration:none;">
-<div style="background:#F8FAFC; padding: 16px; border-radius:8px;">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="48" height="48"><br>
 <b>GitHub</b>
 </div>
 </a>
 </td>
 <td align="center" width="25%" style="padding: 16px;">
-<div style="background:#F8FAFC; padding: 16px; border-radius:8px;">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
 <b>开源</b>
 </div>
 </td>
 <td align="center" width="25%" style="padding: 16px;">
-<div style="background:#F8FAFC; padding: 16px; border-radius:8px;">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/community.png" width="48" height="48"><br>
 <b>社区</b>
 </div>
@@ -1018,8 +1017,8 @@ gantt
 <table style="width:100%; max-width: 600px;">
 <tr>
 <td align="center" width="33%">
-<a href="https://github.com/Confers-Project/confers/issues">
-<div style="background:#FEF2F2; padding: 16px; border-radius:8px;">
+<a href="https://github.com/Kirky-X/confers/issues">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/bug.png" width="32" height="32"><br>
 <b style="color:#991B1B;">Issues</b>
 </div>
@@ -1027,8 +1026,8 @@ gantt
 <br><span style="color:#64748B;">报告 Bug 和问题</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Confers-Project/confers/discussions">
-<div style="background:#DBEAFE; padding: 16px; border-radius:8px;">
+<a href="https://github.com/Kirky-X/confers/discussions">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/chat.png" width="32" height="32"><br>
 <b style="color:#1E40AF;">Discussions</b>
 </div>
@@ -1036,8 +1035,8 @@ gantt
 <br><span style="color:#64748B;">提问和分享想法</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Confers-Project/confers">
-<div style="background:#F8FAFC; padding: 16px; border-radius:8px;">
+<a href="https://github.com/Kirky-X/confers">
+<div style="padding: 16px; border-radius:8px;">
 <img src="https://img.icons8.com/fluency/96/000000/github.png" width="32" height="32"><br>
 <b style="color:#1E293B;">GitHub</b>
 </div>
@@ -1055,26 +1054,26 @@ gantt
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Confers-Project/confers&type=Date)](https://star-history.com/#Confers-Project/confers&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
 </div>
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px; background: linear-gradient(135deg, #DBEAFE 0%, #EDE9FE 100%); border-radius: 12px;">
+<div align="center" style="margin: 32px 0; padding: 24px; border-radius: 12px;">
 
 ### 💝 支持本项目
 
 如果您觉得这个项目有用，请考虑给它一个 ⭐️！
 
-**由 Confers 团队用 ❤️ 构建**
+**由 Kirky.X 用 ❤️ 构建**
 
 ---
 
-**[⬆ 返回顶部](#🚀-confers)**
+**[⬆ 返回顶部](#top)**
 
 ---
 
-<sub>© 2024 Confers Project. All rights reserved.</sub>
+<sub>© 2026 Kirky.X. All rights reserved.</sub>
 
 </div>

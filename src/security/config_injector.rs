@@ -29,11 +29,140 @@
 //! let value = injector.get("APP_SECRET").unwrap();
 //! ```
 
-use crate::security::{EnvSecurityError, EnvSecurityValidator, EnvironmentValidationConfig};
+use crate::security::{EnvSecurityError, EnvSecurityValidator};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
+
+/// Rate limiter configuration
+const RATE_LIMIT_MAX_REQUESTS: usize = 100;
+const RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
+
+/// Configuration injection rate limiter
+#[derive(Debug, Clone)]
+pub struct InjectionRateLimiter {
+    window_counter: Arc<AtomicU64>,
+    window_start: Arc<AtomicU64>,
+    max_requests: usize,
+    window_seconds: u64,
+    rate_limiting_enabled: bool,
+}
+
+impl Default for InjectionRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InjectionRateLimiter {
+    /// Create a new rate limiter with default settings
+    pub fn new() -> Self {
+        Self {
+            window_counter: Arc::new(AtomicU64::new(0)),
+            window_start: Arc::new(AtomicU64::new(0)),
+            max_requests: RATE_LIMIT_MAX_REQUESTS,
+            window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+            rate_limiting_enabled: true,
+        }
+    }
+
+    /// Create a rate limiter that is disabled (for testing)
+    pub fn disabled() -> Self {
+        Self {
+            window_counter: Arc::new(AtomicU64::new(0)),
+            window_start: Arc::new(AtomicU64::new(0)),
+            max_requests: usize::MAX,
+            window_seconds: u64::MAX,
+            rate_limiting_enabled: false,
+        }
+    }
+
+    /// Create a rate limiter with custom settings
+    pub fn with_limits(max_requests: usize, window_seconds: u64) -> Self {
+        Self {
+            window_counter: Arc::new(AtomicU64::new(0)),
+            window_start: Arc::new(AtomicU64::new(0)),
+            max_requests,
+            window_seconds,
+            rate_limiting_enabled: true,
+        }
+    }
+
+    /// Check if the request is allowed under rate limit
+    /// Returns Ok(()) if allowed, Err(retry_after_seconds) if rate limited
+    pub fn check_rate_limit(&self) -> Result<(), u64> {
+        if !self.rate_limiting_enabled {
+            return Ok(());
+        }
+
+        let now = Instant::now();
+        let now_secs = now.elapsed().as_secs();
+
+        // Get or initialize window start
+        let window_start = self.window_start.load(Ordering::SeqCst);
+        if window_start == 0 {
+            // First request, initialize window
+            if self
+                .window_start
+                .compare_exchange(0, now_secs, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+
+        // Check if we're in the same window
+        if now_secs - window_start < self.window_seconds {
+            // Same window, increment counter
+            let current = self.window_counter.fetch_add(1, Ordering::SeqCst);
+            if current as usize >= self.max_requests {
+                // Rate limited, decrement and return error
+                self.window_counter.fetch_sub(1, Ordering::SeqCst);
+                let retry_after = self.window_seconds - (now_secs - window_start);
+                return Err(retry_after);
+            }
+            Ok(())
+        } else {
+            // New window, reset
+            if self
+                .window_start
+                .compare_exchange(window_start, now_secs, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                self.window_counter.store(1, Ordering::SeqCst);
+                Ok(())
+            } else {
+                // Another thread reset the window, try again
+                self.check_rate_limit()
+            }
+        }
+    }
+
+    /// Get current usage statistics
+    pub fn usage_stats(&self) -> (usize, u64, f64) {
+        let now_secs = Instant::now().elapsed().as_secs();
+        let window_start = self.window_start.load(Ordering::SeqCst);
+        let counter = self.window_counter.load(Ordering::SeqCst);
+
+        let elapsed = now_secs.saturating_sub(window_start);
+        let remaining = self.window_seconds.saturating_sub(elapsed);
+        let usage_percent = (counter as f64 / self.max_requests as f64) * 100.0;
+
+        (counter as usize, remaining, usage_percent)
+    }
+}
+
+/// Global rate limiter instance (enabled by default)
+pub static GLOBAL_RATE_LIMITER: Lazy<InjectionRateLimiter> =
+    Lazy::new(|| InjectionRateLimiter::new());
+
+/// Global rate limiter for testing (disabled)
+#[cfg(test)]
+pub static TEST_RATE_LIMITER: Lazy<InjectionRateLimiter> =
+    Lazy::new(|| InjectionRateLimiter::disabled());
 
 /// 全局默认配置注入器
 pub static GLOBAL_INJECTOR: Lazy<Arc<RwLock<ConfigInjector>>> =
@@ -119,6 +248,19 @@ impl ConfigInjector {
     ///
     /// 成功返回 Ok(())，失败返回错误信息
     pub fn inject(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {
+        #[cfg(test)]
+        if let Err(retry_after) = TEST_RATE_LIMITER.check_rate_limit() {
+            return Err(ConfigInjectionError::RateLimited {
+                retry_after_seconds: retry_after,
+            });
+        }
+        #[cfg(not(test))]
+        if let Err(retry_after) = GLOBAL_RATE_LIMITER.check_rate_limit() {
+            return Err(ConfigInjectionError::RateLimited {
+                retry_after_seconds: retry_after,
+            });
+        }
+
         // 验证配置名称
         self.validator.validate_env_name(name, Some(value))?;
 
@@ -172,10 +314,44 @@ impl ConfigInjector {
         let mut success = Vec::new();
         let mut failures = Vec::new();
 
+        // Collect all valid injections first
+        let mut valid_injections: Vec<(String, String, bool)> = Vec::new();
+
         for (name, value) in config {
-            match self.inject(name, value) {
-                Ok(_) => success.push(name.clone()),
+            // Validate first without holding any locks
+            match self.validator.validate_env_name(name, Some(value)) {
+                Ok(_) => match self.validator.validate_env_value(value) {
+                    Ok(_) => {
+                        let is_sensitive = self.is_sensitive_field(name);
+                        valid_injections.push((name.clone(), value.clone(), is_sensitive));
+                    }
+                    Err(e) => failures.push((name.clone(), e.to_string())),
+                },
                 Err(e) => failures.push((name.clone(), e.to_string())),
+            }
+        }
+
+        // Single write lock for all valid injections
+        if !valid_injections.is_empty() {
+            let mut values = self
+                .values
+                .write()
+                .map_err(|_| ConfigInjectionError::PoisonedLock)
+                .unwrap_or_else(|_| panic!("Poisoned lock on values"));
+
+            let mut history = self.injection_history.write().unwrap();
+
+            for (name, value, is_sensitive) in valid_injections {
+                values.insert(name.clone(), value);
+                history.push(InjectionRecord {
+                    name: name.clone(),
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs(),
+                    is_sensitive,
+                });
+                success.push(name);
             }
         }
 
@@ -211,7 +387,8 @@ impl ConfigInjector {
     /// 获取所有配置
     pub fn get_all(&self) -> HashMap<String, String> {
         let values = self.values.read().unwrap();
-        values.clone()
+        // Collect into a new HashMap while holding the read lock
+        values.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     /// 获取所有配置（安全版本）
@@ -314,6 +491,8 @@ pub enum ConfigInjectionError {
     InvalidName(String),
     /// 无效的配置值
     InvalidValue(String),
+    /// 速率限制
+    RateLimited { retry_after_seconds: u64 },
 }
 
 impl std::fmt::Display for ConfigInjectionError {
@@ -330,6 +509,15 @@ impl std::fmt::Display for ConfigInjectionError {
             }
             ConfigInjectionError::InvalidValue(value) => {
                 write!(f, "Invalid configuration value: {}", value)
+            }
+            ConfigInjectionError::RateLimited {
+                retry_after_seconds,
+            } => {
+                write!(
+                    f,
+                    "Rate limited. Retry after {} seconds",
+                    retry_after_seconds
+                )
             }
         }
     }
@@ -393,8 +581,11 @@ impl<'a> EnvironmentConfig<'a> {
         T: std::str::FromStr,
         <T as std::str::FromStr>::Err: std::fmt::Display,
     {
-        let value = self.injector.get(name)?;
-        value.parse().ok().unwrap_or(default)
+        let value = self.injector.get(name);
+        match value {
+            Some(v) => v.parse().ok().unwrap_or(default),
+            None => default,
+        }
     }
 
     /// 获取必填配置值
@@ -525,7 +716,8 @@ mod tests {
 
     #[test]
     fn test_safe_retrieval() {
-        let injector = ConfigInjector::new();
+        let validator = EnvSecurityValidator::lenient();
+        let injector = ConfigInjector::with_validator(validator);
         injector.inject("APP_SECRET", "my-secret-value").unwrap();
         injector.inject("APP_PORT", "8080").unwrap();
 
@@ -541,7 +733,8 @@ mod tests {
 
     #[test]
     fn test_batch_injection() {
-        let injector = ConfigInjector::new();
+        let validator = EnvSecurityValidator::lenient();
+        let injector = ConfigInjector::with_validator(validator);
 
         let mut config = HashMap::new();
         config.insert("APP_PORT".to_string(), "8080".to_string());
@@ -556,7 +749,8 @@ mod tests {
 
     #[test]
     fn test_injection_history() {
-        let injector = ConfigInjector::new();
+        let validator = EnvSecurityValidator::lenient();
+        let injector = ConfigInjector::with_validator(validator);
         injector.inject("APP_PORT", "8080").unwrap();
         injector.inject("APP_SECRET", "secret").unwrap();
 
@@ -584,7 +778,9 @@ mod tests {
     fn test_clear_and_remove() {
         let injector = ConfigInjector::new();
         injector.inject("APP_PORT", "8080").unwrap();
-        injector.inject("APP_SECRET", "secret").unwrap();
+        injector
+            .inject("APP_CONFIG_VALUE", "secret-key-value")
+            .unwrap();
 
         assert_eq!(injector.len(), 2);
 

@@ -46,7 +46,7 @@ pub trait SensitiveData {
 }
 
 /// 敏感数据类别
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SensitivityLevel {
     /// 低敏感度 - 内部数据
     Low,
@@ -61,6 +61,12 @@ pub enum SensitivityLevel {
 impl SensitivityLevel {
     pub fn is_critical_or_high(&self) -> bool {
         matches!(self, SensitivityLevel::Critical | SensitivityLevel::High)
+    }
+}
+
+impl Default for SensitivityLevel {
+    fn default() -> Self {
+        SensitivityLevel::Low
     }
 }
 
@@ -132,10 +138,13 @@ impl SecureString {
         let string = s.into();
         ALLOCATED_SECURE_STRINGS.fetch_add(1, Ordering::SeqCst);
 
+        let display_name = string.clone();
+        let data = string.into_bytes();
+
         Self {
-            data: string.into_bytes(),
+            data,
             sensitivity,
-            display_name: string.clone(),
+            display_name,
         }
     }
 
@@ -173,8 +182,8 @@ impl SecureString {
     /// 调用此方法后，原始 SecureString 仍然包含敏感数据。
     /// 仅在必要时使用，并确保妥善处理返回的 String。
     pub fn to_plain_string(self) -> String {
-        // 将数据转换为字符串
-        String::from_utf8(self.data).unwrap_or_default()
+        // 将数据转换为字符串（复制数据以避免所有权问题）
+        String::from_utf8(self.data.clone()).unwrap_or_default()
     }
 
     /// 恒定时间比较
@@ -261,7 +270,7 @@ impl SecureString {
 
     /// 掩码显示（用于日志）
     ///
-    /// 返回掩码后的字符串，如 "pass***" 或 "****"
+    /// 返回掩码后的字符串，如 "pa****" 或 "**"
     pub fn masked(&self) -> String {
         if self.data.is_empty() {
             return "[empty]".to_string();
@@ -279,8 +288,8 @@ impl SecureString {
             }
             _ => {
                 let visible = std::cmp::min(2, len / 4);
-                let masked = len - visible;
-                format!("{}{}", &s[..visible], "*".repeat(masked))
+                let masked_chars = std::cmp::min(6, len - visible);
+                format!("{}{}", &s[..visible], "*".repeat(masked_chars))
             }
         }
     }
@@ -444,7 +453,7 @@ mod tests {
     #[test]
     fn test_secure_string_creation() {
         let secret = SecureString::from("password123");
-        assert_eq!(secret.len(), 12);
+        assert_eq!(secret.len(), 11);
         assert!(!secret.is_empty());
     }
 

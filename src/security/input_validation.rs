@@ -15,8 +15,7 @@
 //! - **白名单验证**: 支持白名单格式验证
 
 use regex::Regex;
-use std::collections::HashSet;
-use std::sync::OnceLock;
+use std::collections::{HashMap, HashSet};
 
 /// 敏感数据检测器
 #[derive(Debug, Clone)]
@@ -218,6 +217,14 @@ impl InputValidator {
             Regex::new(r"\|\|").unwrap(),        // 条件执行
             Regex::new(r">>").unwrap(),          // 追加重定向
             Regex::new(r"2>").unwrap(),          // 错误重定向
+            // 路径遍历检测
+            Regex::new(r"\.\.[/\\]").unwrap(),      // ../ or ..\
+            Regex::new(r"[/\\]\.\.[/\\]").unwrap(), // /../ or \..\
+            // SQL 注入检测
+            Regex::new(r"(?i)(;?\s*(drop|delete|update|insert|alter|create)\b)").unwrap(),
+            Regex::new(r"(?i)(union\s+select\b)").unwrap(),
+            Regex::new(r"(?i)'+\s*(or|and)\b").unwrap(),
+            Regex::new(r"(?i)--\s*$").unwrap(),
         ]
     }
 
@@ -284,16 +291,16 @@ impl InputValidator {
 
     /// 验证并清理字符串
     pub fn sanitize_string(&self, value: &str) -> Result<String, InputValidationError> {
-        // 先验证
-        self.validate_string(value)?;
-
-        // 清理危险字符
+        // 先清理危险字符
         let mut result = String::new();
         for c in value.chars() {
             if !self.is_dangerous_char(c) {
                 result.push(c);
             }
         }
+
+        // 验证清理后的结果
+        self.validate_string(&result)?;
 
         Ok(result)
     }
@@ -302,7 +309,7 @@ impl InputValidator {
     fn is_dangerous_char(&self, c: char) -> bool {
         matches!(
             c,
-            ';' | '<' | '>' | '&' | '|' | '`' | '$' | '(' | ')' | '\0'
+            ';' | '<' | '>' | '&' | '|' | '`' | '$' | '(' | ')' | '\0' | '{' | '}'
         )
     }
 
@@ -392,10 +399,10 @@ impl InputValidator {
     }
 
     /// 批量验证
-    pub fn validate_all(
-        &self,
-        data: &HashMap<String, String>,
-    ) -> Vec<(&String, InputValidationError)> {
+    pub fn validate_all<'a>(
+        &'a self,
+        data: &'a HashMap<String, String>,
+    ) -> Vec<(&'a String, InputValidationError)> {
         let mut errors = Vec::new();
 
         for (name, value) in data {
@@ -544,6 +551,12 @@ impl ConfigValidator {
         ConfigValidatorBuilder::new()
     }
 
+    /// 获取敏感数据检测器（用于测试）
+    #[cfg(test)]
+    pub fn sensitive_detector(&self) -> &SensitiveDataDetector {
+        &self.sensitive_detector
+    }
+
     /// 验证配置数据
     pub fn validate(&self, data: &HashMap<String, String>) -> ConfigValidationResult {
         let mut errors = Vec::new();
@@ -574,7 +587,6 @@ impl ConfigValidator {
         }
 
         ConfigValidationResult {
-            is_valid: errors.is_empty(),
             errors,
             sensitive_fields,
         }
@@ -592,8 +604,6 @@ impl ConfigValidator {
 /// 配置验证结果
 #[derive(Debug, Clone)]
 pub struct ConfigValidationResult {
-    /// 是否有效
-    pub is_valid: bool,
     /// 验证错误列表
     pub errors: Vec<ConfigValidationError>,
     /// 敏感字段列表
@@ -601,6 +611,11 @@ pub struct ConfigValidationResult {
 }
 
 impl ConfigValidationResult {
+    /// 检查是否有效
+    pub fn is_valid(&self) -> bool {
+        self.errors.is_empty()
+    }
+
     /// 检查是否有敏感数据
     pub fn has_sensitive_data(&self) -> bool {
         !self.sensitive_fields.is_empty()
@@ -738,7 +753,7 @@ mod tests {
 
         let result = validator.validate(&config);
 
-        assert!(result.is_valid);
+        assert!(result.is_valid());
         assert!(result.has_sensitive_data());
         assert_eq!(result.sensitive_fields.len(), 1);
     }

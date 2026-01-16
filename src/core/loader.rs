@@ -1234,7 +1234,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             + Validate
             + crate::ConfigMap,
     {
-        Self::syncify(async { self.clone().load_with_watcher().await })
+        Self::syncify(async { self.load_with_watcher().await })
     }
 
     /// Load configuration synchronously with watcher support (without validation)
@@ -1245,7 +1245,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     where
         T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
-        Self::syncify(async { self.clone().load_with_watcher().await })
+        Self::syncify(async { self.load_with_watcher().await })
     }
 
     /// Helper method to load configuration with a given figment (audit version)
@@ -1676,7 +1676,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// Load configuration with file watching
     #[cfg(all(feature = "watch", feature = "validation"))]
     pub async fn load_with_watcher(
-        self,
+        &self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
     where
         T: Sanitize
@@ -1703,7 +1703,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// Load configuration with file watching (without validation)
     #[cfg(all(feature = "watch", not(feature = "validation")))]
     pub async fn load_with_watcher(
-        self,
+        &self,
     ) -> Result<(T, Option<crate::watcher::ConfigWatcher>), ConfigError>
     where
         T: Sanitize + for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,

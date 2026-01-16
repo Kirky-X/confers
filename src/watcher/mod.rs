@@ -231,11 +231,6 @@ impl ConfigWatcher {
                 .watcher()
                 .watch(path, RecursiveMode::NonRecursive)
                 .map_err(|_e| ConfigError::FileNotFound { path: path.clone() })?;
-
-            // Add to cache to ensure events are tracked (notify-debouncer-full specifics)
-            debouncer
-                .cache()
-                .add_root(path, RecursiveMode::NonRecursive);
         }
 
         Ok((debouncer, rx))

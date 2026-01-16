@@ -11,35 +11,50 @@ use figment::{
     value::{Dict, Map},
     Error, Figment, Profile, Provider,
 };
-use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Global HTTP client with connection pooling
-/// Reuses connections across multiple requests to improve performance
-static HTTP_CLIENT: lazy_static::lazy_static! {
-    Arc::new(
+// Global HTTP client - lazily initialized to avoid startup panics
+// Uses OnceCell for safe initialization that can propagate errors
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
+
+static HTTP_CLIENT: OnceCell<Arc<reqwest::blocking::Client>> = OnceCell::new();
+static HTTP_CLIENT_ASYNC: OnceCell<Arc<reqwest::Client>> = OnceCell::new();
+
+/// Get the global blocking HTTP client, initializing it if needed
+pub fn get_http_client() -> Result<&'static Arc<reqwest::blocking::Client>, ConfigError> {
+    HTTP_CLIENT.get_or_try_init(|| {
+        Arc::new(
             reqwest::blocking::Client::builder()
                 .pool_max_idle_per_host(10)
                 .pool_idle_timeout(Duration::from_secs(90))
                 .timeout(Duration::from_secs(30))
                 .build()
-                .expect("Failed to create HTTP client"),
+                .map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
+                })?,
         )
-    };
+    })
+}
 
-/// Global async HTTP client with connection pooling
-static HTTP_CLIENT_ASYNC: lazy_static::lazy_static! {
-    Arc::new(
+/// Get the global async HTTP client, initializing it if needed
+pub fn get_async_http_client() -> Result<&'static Arc<reqwest::Client>, ConfigError> {
+    HTTP_CLIENT_ASYNC.get_or_try_init(|| {
+        Arc::new(
             reqwest::Client::builder()
                 .pool_max_idle_per_host(10)
                 .pool_idle_timeout(Duration::from_secs(90))
                 .timeout(Duration::from_secs(30))
                 .build()
-                .expect("Failed to create async HTTP client"),
+                .map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e))
+                })?,
         )
-    };
+    })
+}
 
 pub struct HttpProvider {
     url: String,
@@ -105,7 +120,6 @@ impl HttpProvider {
         self
     }
 
-
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.auth = Some(HttpAuth {
             username: username.into(),
@@ -130,7 +144,9 @@ impl HttpProvider {
             .pool_idle_timeout(Duration::from_secs(90))
             .timeout(self.timeout)
             .build()
-            .map_err(|e| ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| {
+                ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
+            })?;
 
         let mut request = client.get(&self.url);
 
@@ -207,7 +223,9 @@ impl HttpProvider {
             .pool_idle_timeout(Duration::from_secs(90))
             .timeout(self.timeout)
             .build()
-            .map_err(|e| ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e)))?;
+            .map_err(|e| {
+                ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e))
+            })?;
 
         let mut request = client.get(&self.url);
 

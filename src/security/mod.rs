@@ -616,8 +616,8 @@ mod tests {
 pub mod secure_string;
 #[cfg(feature = "encryption")]
 pub use secure_string::{
-    allocated_secure_strings, deallocated_secure_strings, reset_secure_string_counters,
-    SecureString, SecureStringBuilder, SensitiveData, SensitivityLevel,
+    allocated_secure_strings, deallocated_secure_strings, SecureString, SecureStringBuilder,
+    SensitiveData, SensitivityLevel,
 };
 
 #[cfg(feature = "encryption")]

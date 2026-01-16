@@ -126,13 +126,7 @@ impl ConfigError {
     pub fn safe_display(&self) -> String {
         match self {
             ConfigError::RemoteError(msg) => {
-                // Remove any URLs from error messages
-                let safe_msg = msg
-                    .replace("http://", "http://***@")
-                    .replace("https://", "https://***@")
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                let safe_msg = Self::sanitize_url(msg);
                 format!("Remote configuration load failed: {}", safe_msg)
             }
             ConfigError::FileNotFound { path } => {
@@ -164,8 +158,71 @@ impl ConfigError {
                     version
                 )
             }
+            ConfigError::IoError(msg) => {
+                // Remove potential path information from IO errors
+                let sanitized = msg
+                    .split(|c| c == '/' || c == '\\')
+                    .last()
+                    .unwrap_or(msg)
+                    .to_string();
+                format!("IO error: {}", sanitized)
+            }
+            ConfigError::ParseError(msg) => {
+                // Remove any potential sensitive data from parse errors
+                let sanitized = msg
+                    .split_whitespace()
+                    .take(10)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("Parse error: {}", sanitized)
+            }
             _ => self.to_string(),
         }
+    }
+
+    /// Sanitize URLs from error messages to prevent information leakage
+    fn sanitize_url(msg: &str) -> String {
+        // Use regex to replace URLs with sanitized versions
+        use regex::Regex;
+
+        // Pattern to match full URLs with potential credentials
+        static URL_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+
+        let url_regex = URL_PATTERN.get_or_init(|| {
+            Regex::new(r"(?i)(https?://)([^:/\s]+):([^@/\s]+)@([^/\s]+)(/\S*)?")
+                .unwrap_or_else(|_| Regex::new(r"https?://\S+").unwrap())
+        });
+
+        let result = url_regex.replace_all(msg, |caps: &regex::Captures| {
+            let protocol = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            let username = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+            let password = caps.get(3).map(|m| m.as_str()).unwrap_or("");
+            let host = caps.get(4).map(|m| m.as_str()).unwrap_or("");
+            let path = caps.get(5).map(|m| m.as_str()).unwrap_or("");
+
+            // Show protocol and host, mask credentials
+            format!("{}***:***@{}{}", protocol, host, path)
+        });
+
+        // Also mask IP addresses in URLs (show only last octet for IPv4, similar for IPv6)
+        static IP_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+
+        let ip_regex = IP_PATTERN.get_or_init(|| {
+            Regex::new(r"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b")
+                .unwrap_or_else(|_| Regex::new(r"\d+\.\d+\.\d+\.\d+").unwrap())
+        });
+
+        let result = ip_regex.replace_all(&result, |caps: &regex::Captures| {
+            format!(
+                "{}.{}.{}.{}",
+                caps.get(1).map(|m| m.as_str()).unwrap_or("*"),
+                caps.get(2).map(|m| m.as_str()).unwrap_or("*"),
+                caps.get(3).map(|m| m.as_str()).unwrap_or("*"),
+                caps.get(4).map(|m| m.as_str()).unwrap_or("*")
+            )
+        });
+
+        result.to_string()
     }
 
     /// Masks a key ID for safe display (show only first 4 and last 4 characters)

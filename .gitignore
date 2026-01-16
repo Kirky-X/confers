@@ -41,6 +41,10 @@ Thumbs.db
 # ============================================
 # Project specific files/directories
 # ============================================
+.cargo/
+.claude/
+.sisyphus/
+fuzz/
 .iflow
 openspec/
 AGENTS.md
