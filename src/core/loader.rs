@@ -24,6 +24,10 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "validation")]
 use validator::Validate;
 
+#[cfg(feature = "encryption")]
+use crate::security::{SecureString, SensitivityLevel};
+use std::sync::Arc;
+
 /// A type alias for the sanitizer function
 type SanitizerFn<T> = std::sync::Arc<dyn Fn(T) -> Result<T, ConfigError> + Send + Sync>;
 
@@ -182,7 +186,10 @@ impl RemoteConfig {
     }
 
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
-        self.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
+        self.token = Some(Arc::new(SecureString::new(
+            token.into(),
+            SensitivityLevel::High,
+        )));
         self
     }
 
@@ -192,7 +199,10 @@ impl RemoteConfig {
     }
 
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
+        self.password = Some(Arc::new(SecureString::new(
+            password.into(),
+            SensitivityLevel::Critical,
+        )));
         self
     }
 
@@ -372,7 +382,10 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ) -> Self {
         self.remote_config.enabled = true;
         self.remote_config.username = Some(username.into());
-        self.remote_config.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
+        self.remote_config.password = Some(Arc::new(SecureString::new(
+            password.into(),
+            SensitivityLevel::Critical,
+        )));
         self
     }
 
@@ -380,7 +393,10 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(feature = "remote")]
     pub fn with_remote_token(mut self, token: impl Into<String>) -> Self {
         self.remote_config.enabled = true;
-        self.remote_config.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
+        self.remote_config.token = Some(Arc::new(SecureString::new(
+            token.into(),
+            SensitivityLevel::High,
+        )));
         self
     }
 
@@ -470,7 +486,10 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// Set remote password
     #[cfg(feature = "remote")]
     pub fn with_remote_password(mut self, password: impl Into<String>) -> Self {
-        self.remote_config.password = Some(password.into());
+        self.remote_config.password = Some(Arc::new(SecureString::new(
+            password.into(),
+            SensitivityLevel::Critical,
+        )));
         self
     }
 
@@ -631,7 +650,8 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
-                    http_provider = http_provider.with_auth_secure(username.clone(), password.clone());
+                    http_provider =
+                        http_provider.with_auth_secure(username.clone(), password.clone());
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {
@@ -821,7 +841,8 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
-                    http_provider = http_provider.with_auth_secure(username.clone(), password.clone());
+                    http_provider =
+                        http_provider.with_auth_secure(username.clone(), password.clone());
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {

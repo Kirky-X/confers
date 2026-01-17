@@ -54,13 +54,20 @@ impl HttpConfigProvider {
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.auth = Some(HttpAuth {
             username: username.into(),
-            password: Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical))),
+            password: Some(Arc::new(SecureString::new(
+                password.into(),
+                SensitivityLevel::Critical,
+            ))),
             bearer_token: None,
         });
         self
     }
 
-    pub fn with_auth_secure(mut self, username: impl Into<String>, password: Arc<SecureString>) -> Self {
+    pub fn with_auth_secure(
+        mut self,
+        username: impl Into<String>,
+        password: Arc<SecureString>,
+    ) -> Self {
         self.auth = Some(HttpAuth {
             username: username.into(),
             password: Some(password),
@@ -73,7 +80,10 @@ impl HttpConfigProvider {
         self.auth = Some(HttpAuth {
             username: String::new(),
             password: None,
-            bearer_token: Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High))),
+            bearer_token: Some(Arc::new(SecureString::new(
+                token.into(),
+                SensitivityLevel::High,
+            ))),
         });
         self
     }
@@ -196,7 +206,8 @@ impl ConfigProvider for HttpConfigProvider {
             if let Some(token) = &auth.bearer_token {
                 request = request.bearer_auth(token.as_str());
             } else {
-                request = request.basic_auth(&auth.username, auth.password.as_ref().map(|p| p.as_str()));
+                request =
+                    request.basic_auth(&auth.username, auth.password.as_ref().map(|p| p.as_str()));
             }
         }
 

@@ -160,8 +160,7 @@ impl InjectionRateLimiter {
 }
 
 /// Global rate limiter instance (enabled by default)
-pub static GLOBAL_RATE_LIMITER: Lazy<InjectionRateLimiter> =
-    Lazy::new(InjectionRateLimiter::new);
+pub static GLOBAL_RATE_LIMITER: Lazy<InjectionRateLimiter> = Lazy::new(InjectionRateLimiter::new);
 
 /// Global rate limiter for testing (disabled)
 #[cfg(test)]
@@ -314,7 +313,7 @@ impl ConfigInjector {
     pub fn inject_all(
         &self,
         config: &HashMap<String, String>,
-    ) -> (Vec<String>, Vec<(String, String)>) {
+    ) -> Result<(Vec<String>, Vec<(String, String)>), ConfigInjectionError> {
         let mut success = Vec::new();
         let mut failures = Vec::new();
 
@@ -340,10 +339,12 @@ impl ConfigInjector {
             let mut values = self
                 .values
                 .write()
-                .map_err(|_| ConfigInjectionError::PoisonedLock)
-                .unwrap_or_else(|_| panic!("Poisoned lock on values"));
+                .map_err(|_| ConfigInjectionError::PoisonedLock)?;
 
-            let mut history = self.injection_history.write().unwrap();
+            let mut history = self
+                .injection_history
+                .write()
+                .map_err(|_| ConfigInjectionError::PoisonedLock)?;
 
             for (name, value, is_sensitive) in valid_injections {
                 values.insert(name.clone(), value);
@@ -359,7 +360,7 @@ impl ConfigInjector {
             }
         }
 
-        (success, failures)
+        Ok((success, failures))
     }
 
     /// 获取配置值
@@ -389,16 +390,22 @@ impl ConfigInjector {
     }
 
     /// 获取所有配置
-    pub fn get_all(&self) -> HashMap<String, String> {
-        let values = self.values.read().unwrap();
+    pub fn get_all(&self) -> Result<HashMap<String, String>, ConfigInjectionError> {
+        let values = self
+            .values
+            .read()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
         // Collect into a new HashMap while holding the read lock
-        values.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        Ok(values.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
     }
 
     /// 获取所有配置（安全版本）
-    pub fn get_all_safe(&self) -> HashMap<String, String> {
-        let values = self.values.read().unwrap();
-        values
+    pub fn get_all_safe(&self) -> Result<HashMap<String, String>, ConfigInjectionError> {
+        let values = self
+            .values
+            .read()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+        Ok(values
             .iter()
             .map(|(k, v)| {
                 let safe_value = if self.is_sensitive_field(k) {
@@ -408,34 +415,51 @@ impl ConfigInjector {
                 };
                 (k.clone(), safe_value)
             })
-            .collect()
+            .collect())
     }
 
     /// 检查配置是否存在
-    pub fn contains(&self, name: &str) -> bool {
-        let values = self.values.read().unwrap();
-        values.contains_key(name)
+    pub fn contains(&self, name: &str) -> Result<bool, ConfigInjectionError> {
+        let values = self
+            .values
+            .read()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+        Ok(values.contains_key(name))
     }
 
     /// 删除配置
-    pub fn remove(&self, name: &str) -> Option<String> {
-        let mut values = self.values.write().unwrap();
-        values.remove(name)
+    pub fn remove(&self, name: &str) -> Result<Option<String>, ConfigInjectionError> {
+        let mut values = self
+            .values
+            .write()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+        Ok(values.remove(name))
     }
 
     /// 清空所有配置
-    pub fn clear(&self) {
-        let mut values = self.values.write().unwrap();
+    pub fn clear(&self) -> Result<(), ConfigInjectionError> {
+        let mut values = self
+            .values
+            .write()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
         values.clear();
 
-        let mut history = self.injection_history.write().unwrap();
+        let mut history = self
+            .injection_history
+            .write()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
         history.clear();
+
+        Ok(())
     }
 
     /// 获取注入历史
-    pub fn get_injection_history(&self) -> Vec<InjectionRecord> {
-        let history = self.injection_history.read().unwrap();
-        history.clone()
+    pub fn get_injection_history(&self) -> Result<Vec<InjectionRecord>, ConfigInjectionError> {
+        let history = self
+            .injection_history
+            .read()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+        Ok(history.clone())
     }
 
     /// 检查是否为敏感字段
@@ -457,14 +481,17 @@ impl ConfigInjector {
     }
 
     /// 获取配置数量
-    pub fn len(&self) -> usize {
-        let values = self.values.read().unwrap();
-        values.len()
+    pub fn len(&self) -> Result<usize, ConfigInjectionError> {
+        let values = self
+            .values
+            .read()
+            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+        Ok(values.len())
     }
 
     /// 检查是否为空
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub fn is_empty(&self) -> Result<bool, ConfigInjectionError> {
+        Ok(self.len()? == 0)
     }
 
     /// 获取安全验证器引用
@@ -703,8 +730,8 @@ mod tests {
         assert_eq!(injector.get("APP_DEBUG"), Some("true".to_string()));
 
         // 检查存在性
-        assert!(injector.contains("APP_PORT"));
-        assert!(!injector.contains("APP_NONEXISTENT"));
+        assert!(injector.contains("APP_PORT").unwrap());
+        assert!(!injector.contains("APP_NONEXISTENT").unwrap());
     }
 
     #[test]
@@ -749,7 +776,7 @@ mod tests {
         config.insert("APP_HOST".to_string(), "localhost".to_string());
         config.insert("APP_SECRET".to_string(), "secret".to_string());
 
-        let (success, failures) = injector.inject_all(&config);
+        let (success, failures) = injector.inject_all(&config).unwrap();
 
         assert_eq!(success.len(), 3);
         assert!(failures.is_empty());
@@ -762,7 +789,7 @@ mod tests {
         injector.inject("APP_PORT", "8080").unwrap();
         injector.inject("APP_SECRET", "secret").unwrap();
 
-        let history = injector.get_injection_history();
+        let history = injector.get_injection_history().unwrap();
         assert_eq!(history.len(), 2);
         assert!(history[0].is_sensitive == false);
         assert!(history[1].is_sensitive == true);
@@ -790,16 +817,16 @@ mod tests {
             .inject("APP_CONFIG_VALUE", "secret-key-value")
             .unwrap();
 
-        assert_eq!(injector.len(), 2);
+        assert_eq!(injector.len().unwrap(), 2);
 
         // 移除一个配置
-        let removed = injector.remove("APP_PORT");
+        let removed = injector.remove("APP_PORT").unwrap();
         assert_eq!(removed, Some("8080".to_string()));
-        assert_eq!(injector.len(), 1);
+        assert_eq!(injector.len().unwrap(), 1);
 
         // 清空所有配置
-        injector.clear();
-        assert!(injector.is_empty());
+        injector.clear().unwrap();
+        assert!(injector.is_empty().unwrap());
     }
 
     #[test]

@@ -23,6 +23,9 @@ use tokio::time::interval;
 #[cfg(feature = "remote")]
 use std::fs;
 
+#[cfg(feature = "remote")]
+use crate::security::{SecureString, SensitivityLevel};
+
 #[cfg(feature = "watch")]
 use std::sync::mpsc::{channel, Receiver};
 
@@ -101,9 +104,66 @@ pub struct TlsConfig {
 #[cfg(feature = "remote")]
 #[derive(Clone)]
 pub struct RemoteAuth {
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub bearer_token: Option<String>,
+    username: Option<String>,
+    password: Option<SecureString>,
+    bearer_token: Option<SecureString>,
+}
+
+#[cfg(feature = "remote")]
+impl RemoteAuth {
+    /// Create a new RemoteAuth with builder pattern
+    pub fn new() -> Self {
+        Self {
+            username: None,
+            password: None,
+            bearer_token: None,
+        }
+    }
+
+    /// Set username
+    pub fn with_username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Set password securely
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(SecureString::new(
+            password.into(),
+            SensitivityLevel::Critical,
+        ));
+        self
+    }
+
+    /// Set bearer token securely
+    pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(SecureString::new(token.into(), SensitivityLevel::Critical));
+        self
+    }
+
+    /// Get username reference
+    pub fn username(&self) -> Option<&String> {
+        self.username.as_ref()
+    }
+
+    /// Get password reference (for internal use only)
+    #[doc(hidden)]
+    pub fn password(&self) -> Option<&SecureString> {
+        self.password.as_ref()
+    }
+
+    /// Get bearer token reference (for internal use only)
+    #[doc(hidden)]
+    pub fn bearer_token(&self) -> Option<&SecureString> {
+        self.bearer_token.as_ref()
+    }
+}
+
+#[cfg(feature = "remote")]
+impl Default for RemoteAuth {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub struct ConfigWatcher {
@@ -145,11 +205,19 @@ impl ConfigWatcher {
         bearer_token: Option<String>,
     ) -> Self {
         if let WatchTarget::Remote { ref mut auth, .. } = self.target {
-            *auth = Some(RemoteAuth {
-                username,
-                password,
-                bearer_token,
-            });
+            let mut remote_auth = RemoteAuth::new();
+
+            if let Some(username) = username {
+                remote_auth = remote_auth.with_username(username);
+            }
+            if let Some(password) = password {
+                remote_auth = remote_auth.with_password(password);
+            }
+            if let Some(bearer_token) = bearer_token {
+                remote_auth = remote_auth.with_bearer_token(bearer_token);
+            }
+
+            *auth = Some(remote_auth);
         }
         self
     }
@@ -324,13 +392,12 @@ impl ConfigWatcher {
 
                 // Apply authentication if configured
                 if let Some(ref auth_config) = auth {
-                    if let Some(ref token) = auth_config.bearer_token {
-                        request = request.bearer_auth(token);
-                    } else if let (Some(ref username), password) =
-                        (&auth_config.username, &auth_config.password)
+                    if let Some(ref token) = auth_config.bearer_token() {
+                        request = request.bearer_auth(token.as_str());
+                    } else if let (Some(ref username), Some(ref password)) =
+                        (auth_config.username(), auth_config.password())
                     {
-                        request =
-                            request.basic_auth(username, password.as_ref().map(|s| s.as_str()));
+                        request = request.basic_auth(username, Some(password.as_str()));
                     }
                 }
 

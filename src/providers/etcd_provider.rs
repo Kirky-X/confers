@@ -51,16 +51,22 @@ impl EtcdConfigProvider {
 
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.username = Some(username.into());
-        self.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
+        self.password = Some(Arc::new(SecureString::new(
+            password.into(),
+            SensitivityLevel::Critical,
+        )));
         self
     }
 
-    pub fn with_auth_secure(mut self, username: impl Into<String>, password: Arc<SecureString>) -> Self {
+    pub fn with_auth_secure(
+        mut self,
+        username: impl Into<String>,
+        password: Arc<SecureString>,
+    ) -> Self {
         self.username = Some(username.into());
         self.password = Some(password);
         self
     }
-
 
     pub fn with_tls(
         mut self,

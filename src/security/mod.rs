@@ -7,24 +7,32 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-fn compile_pattern(pattern: &str) -> Regex {
-    Regex::new(pattern).unwrap_or_else(|_| panic!("Failed to compile regex pattern: {}", pattern))
+fn compile_pattern(pattern: &str) -> Result<Regex, EnvSecurityError> {
+    Regex::new(pattern).map_err(|e| EnvSecurityError::InvalidRegex {
+        pattern: pattern.to_string(),
+        error: e.to_string(),
+    })
 }
 
-fn get_allowed_patterns() -> &'static Vec<Regex> {
-    static ALLOWED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
-    ALLOWED_PATTERNS.get_or_init(|| {
+fn get_allowed_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
+    static ALLOWED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
+    match ALLOWED_PATTERNS.get_or_init(|| {
         vec![
             compile_pattern(r"^[A-Z][A-Z0-9_]*$"),
             compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
             compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
         ]
-    })
+        .into_iter()
+        .collect()
+    }) {
+        Ok(patterns) => Ok(patterns),
+        Err(e) => Err(e.clone()),
+    }
 }
 
-fn get_blocked_patterns() -> &'static Vec<Regex> {
-    static BLOCKED_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
-    BLOCKED_PATTERNS.get_or_init(|| {
+fn get_blocked_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
+    static BLOCKED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
+    match BLOCKED_PATTERNS.get_or_init(|| {
         vec![
             compile_pattern(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$"),
             compile_pattern(r"(?i)^(SHELL|HOME|USER|LOGNAME)$"),
@@ -38,7 +46,12 @@ fn get_blocked_patterns() -> &'static Vec<Regex> {
             compile_pattern(r".*[;<>&|`$].*"),
             compile_pattern(r"^BASH_FUNC_.*"),
         ]
-    })
+        .into_iter()
+        .collect()
+    }) {
+        Ok(patterns) => Ok(patterns),
+        Err(e) => Err(e.clone()),
+    }
 }
 
 fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
@@ -196,8 +209,8 @@ impl EnvSecurityValidator {
         name: &str,
         value: Option<&str>,
     ) -> Result<(), EnvSecurityError> {
-        let blocked_patterns = get_blocked_patterns();
-        let allowed_patterns = get_allowed_patterns();
+        let blocked_patterns = get_blocked_patterns()?;
+        let allowed_patterns = get_allowed_patterns()?;
 
         if self.config.enable_length_validation && name.len() > self.max_name_length {
             return Err(EnvSecurityError::NameTooLong {
@@ -349,6 +362,8 @@ pub enum EnvSecurityError {
         name: String,
         expected_patterns: Vec<String>,
     },
+    /// Invalid regex pattern
+    InvalidRegex { pattern: String, error: String },
     /// Environment variable value is too long
     ValueTooLong {
         value_length: usize,
@@ -394,6 +409,9 @@ impl std::fmt::Display for EnvSecurityError {
                     "Environment variable name '{}' doesn't match any allowed pattern: {:?}",
                     name, expected_patterns
                 )
+            }
+            EnvSecurityError::InvalidRegex { pattern, error } => {
+                write!(f, "Invalid regex pattern '{}': {}", pattern, error)
             }
             EnvSecurityError::ValueTooLong {
                 value_length,

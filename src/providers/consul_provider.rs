@@ -55,7 +55,10 @@ impl ConsulConfigProvider {
     }
 
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
-        self.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
+        self.token = Some(Arc::new(SecureString::new(
+            token.into(),
+            SensitivityLevel::High,
+        )));
         self
     }
 
@@ -63,7 +66,6 @@ impl ConsulConfigProvider {
         self.token = Some(token);
         self
     }
-
 
     pub fn with_auth(self, _username: impl Into<String>, _password: impl Into<String>) -> Self {
         self
