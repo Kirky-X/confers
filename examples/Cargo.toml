@@ -1,0 +1,230 @@
+[package]
+name = "confers-examples"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+publish = false
+
+[dependencies]
+confers = { path = "..", features = ["derive"] }
+serde = { workspace = true }
+tokio = { workspace = true }
+figment = { version = "0.10", features = ["toml", "json", "yaml", "env"] }
+anyhow = "1.0"
+tracing-subscriber = "0.3"
+
+[[bin]]
+name = "01-basics-basic"
+path = "src/01-basics/01-basics-basic.rs"
+
+[[bin]]
+name = "01-basics-default_values"
+path = "src/01-basics/01-basics-default_values.rs"
+
+[[bin]]
+name = "01-basics-env_override"
+path = "src/01-basics/01-basics-env_override.rs"
+
+[[bin]]
+name = "01-basics-minimal"
+path = "src/01-basics/01-basics-minimal.rs"
+
+[[bin]]
+name = "02-validation-basic_validation"
+path = "src/02-validation/02-validation-basic_validation.rs"
+
+[[bin]]
+name = "02-validation-custom_validators"
+path = "src/02-validation/02-validation-custom_validators.rs"
+
+[[bin]]
+name = "02-validation-validation_errors"
+path = "src/02-validation/02-validation-validation_errors.rs"
+
+[[bin]]
+name = "03-formats-auto_detection"
+path = "src/03-formats/03-formats-auto_detection.rs"
+
+[[bin]]
+name = "03-formats-ini_example"
+path = "src/03-formats/03-formats-ini_example.rs"
+
+[[bin]]
+name = "03-formats-json_example"
+path = "src/03-formats/03-formats-json_example.rs"
+
+[[bin]]
+name = "03-formats-toml_example"
+path = "src/03-formats/03-formats-toml_example.rs"
+
+[[bin]]
+name = "03-formats-yaml_example"
+path = "src/03-formats/03-formats-yaml_example.rs"
+
+[[bin]]
+name = "04-nested-array_fields"
+path = "src/04-nested/04-nested-array_fields.rs"
+
+[[bin]]
+name = "04-nested-deep_nesting"
+path = "src/04-nested/04-nested-deep_nesting.rs"
+
+[[bin]]
+name = "04-nested-nested_structs"
+path = "src/04-nested/04-nested-nested_structs.rs"
+
+[[bin]]
+name = "05-watch-reload-basic_watch"
+path = "src/05-watch-reload/05-watch-reload-basic_watch.rs"
+
+[[bin]]
+name = "05-watch-reload-debounce"
+path = "src/05-watch-reload/05-watch-reload-debounce.rs"
+
+[[bin]]
+name = "05-watch-reload-hot_reload"
+path = "src/05-watch-reload/05-watch-reload-hot_reload.rs"
+
+[[bin]]
+name = "06-encryption-basic_encryption"
+path = "src/06-encryption/06-encryption-basic_encryption.rs"
+
+[[bin]]
+name = "06-encryption-decrypt_config"
+path = "src/06-encryption/06-encryption-decrypt_config.rs"
+
+[[bin]]
+name = "06-encryption-encrypt_sensitive"
+path = "src/06-encryption/06-encryption-encrypt_sensitive.rs"
+
+[[bin]]
+name = "06-encryption-key_management"
+path = "src/06-encryption/06-encryption-key_management.rs"
+
+[[bin]]
+name = "07-remote-consul_remote"
+path = "src/07-remote/07-remote-consul_remote.rs"
+
+[[bin]]
+name = "07-remote-etcd_remote"
+path = "src/07-remote/07-remote-etcd_remote.rs"
+
+[[bin]]
+name = "07-remote-fallback"
+path = "src/07-remote/07-remote-fallback.rs"
+
+[[bin]]
+name = "07-remote-http_remote"
+path = "src/07-remote/07-remote-http_remote.rs"
+
+[[bin]]
+name = "07-remote-tls_config"
+path = "src/07-remote/07-remote-tls_config.rs"
+
+[[bin]]
+name = "08-audit-audit_history"
+path = "src/08-audit/08-audit-audit_history.rs"
+
+[[bin]]
+name = "08-audit-basic_audit"
+path = "src/08-audit/08-audit-basic_audit.rs"
+
+[[bin]]
+name = "08-audit-sensitive_fields"
+path = "src/08-audit/08-audit-sensitive_fields.rs"
+
+[[bin]]
+name = "09-schema-json_schema"
+path = "src/09-schema/09-schema-json_schema.rs"
+
+[[bin]]
+name = "09-schema-schema_validation"
+path = "src/09-schema/09-schema-schema_validation.rs"
+
+[[bin]]
+name = "09-schema-typescript_types"
+path = "src/09-schema/09-schema-typescript_types.rs"
+
+[[bin]]
+name = "10-diff-basic_diff"
+path = "src/10-diff/10-diff-basic_diff.rs"
+
+[[bin]]
+name = "10-diff-diff_formats"
+path = "src/10-diff/10-diff-diff_formats.rs"
+
+[[bin]]
+name = "10-diff-diff_report"
+path = "src/10-diff/10-diff-diff_report.rs"
+
+[[bin]]
+name = "11-cli-tools-diff_command"
+path = "src/11-cli-tools/11-cli-tools-diff_command.rs"
+
+[[bin]]
+name = "11-cli-tools-encrypt_command"
+path = "src/11-cli-tools/11-cli-tools-encrypt_command.rs"
+
+[[bin]]
+name = "11-cli-tools-generate_command"
+path = "src/11-cli-tools/11-cli-tools-generate_command.rs"
+
+[[bin]]
+name = "11-cli-tools-key_command"
+path = "src/11-cli-tools/11-cli-tools-key_command.rs"
+
+[[bin]]
+name = "11-cli-tools-validate_command"
+path = "src/11-cli-tools/11-cli-tools-validate_command.rs"
+
+[[bin]]
+name = "11-cli-tools-wizard_command"
+path = "src/11-cli-tools/11-cli-tools-wizard_command.rs"
+
+[[bin]]
+name = "12-advanced-custom_sanitizer"
+path = "src/12-advanced/12-advanced-custom_sanitizer.rs"
+
+[[bin]]
+name = "12-advanced-memory_limit"
+path = "src/12-advanced/12-advanced-memory_limit.rs"
+
+[[bin]]
+name = "12-advanced-parallel_validation"
+path = "src/12-advanced/12-advanced-parallel_validation.rs"
+
+[[bin]]
+name = "12-advanced-ssrf_protection"
+path = "src/12-advanced/12-advanced-ssrf_protection.rs"
+
+[[bin]]
+name = "12-advanced-system_monitoring"
+path = "src/12-advanced/12-advanced-system_monitoring.rs"
+
+[[bin]]
+name = "13-wizard-basic_wizard"
+path = "src/13-wizard/13-wizard-basic_wizard.rs"
+
+[[bin]]
+name = "13-wizard-template_generation"
+path = "src/13-wizard/13-wizard-template_generation.rs"
+
+[[bin]]
+name = "14-compat-config_rs_compat"
+path = "src/14-compat/14-compat-config_rs_compat.rs"
+
+[[bin]]
+name = "14-compat-migration_guide"
+path = "src/14-compat/14-compat-migration_guide.rs"
+
+[[bin]]
+name = "15-complete-development_app"
+path = "src/15-complete/15-complete-development_app.rs"
+
+[[bin]]
+name = "15-complete-multi_source"
+path = "src/15-complete/15-complete-multi_source.rs"
+
+[[bin]]
+name = "15-complete-production_app"
+path = "src/15-complete/15-complete-production_app.rs"

@@ -1,0 +1,17 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 8080,
+    "tls": {
+      "enabled": true,
+      "cert": "/path/to/cert"
+    }
+  },
+  "database": {
+    "url": "postgresql://localhost/mydb",
+    "pool": {
+      "min": 5,
+      "max": 20
+    }
+  }
+}

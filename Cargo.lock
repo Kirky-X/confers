@@ -654,6 +654,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "confers-examples"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "confers",
+ "figment",
+ "serde",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "confers-macros"
 version = "0.2.0"
 dependencies = [

@@ -1,0 +1,6 @@
+
+# 注意：这些值包含需要清理的空白和大小写问题
+app_name = "  My Awesome App  "
+environment = "PRODUCTION"
+api_key = "secret_key_123"
+log_path = "./logs//app.log"

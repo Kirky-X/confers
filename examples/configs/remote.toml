@@ -1,3 +1,0 @@
-api_key = 'local-fallback'
-endpoint = 'http://localhost'
-timeout = 60

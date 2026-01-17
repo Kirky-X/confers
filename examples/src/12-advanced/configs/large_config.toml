@@ -1,0 +1,17 @@
+name = "large-config"
+port = 8080
+
+[features]
+feature1 = true
+feature2 = false
+feature3 = true
+
+[database]
+url = "postgresql://localhost/mydb"
+pool_size = 100
+timeout = 30
+
+[cache]
+enabled = true
+size = 1000
+ttl = 3600

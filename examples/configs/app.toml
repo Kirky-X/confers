@@ -1,4 +1,0 @@
-name = "basic-example"
-port = 8080
-debug = true
-tags = ["rust", "config", "example"]
