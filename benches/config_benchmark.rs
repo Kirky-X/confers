@@ -6,8 +6,7 @@
 //! Benchmark tests for configuration parsing performance
 
 use confers::providers::file_provider::FileConfigProvider;
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::path::PathBuf;
 
 static SAMPLE_TOML: &str = r#"

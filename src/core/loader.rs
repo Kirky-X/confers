@@ -26,7 +26,6 @@ use validator::Validate;
 
 #[cfg(feature = "encryption")]
 use crate::security::{SecureString, SensitivityLevel};
-use std::sync::Arc;
 
 /// A type alias for the sanitizer function
 type SanitizerFn<T> = std::sync::Arc<dyn Fn(T) -> Result<T, ConfigError> + Send + Sync>;
@@ -1428,13 +1427,14 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(token.clone());
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
-                    http_provider = http_provider.with_auth(username.clone(), password.clone());
+                    http_provider =
+                        http_provider.with_auth_secure(username.clone(), password.clone());
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {

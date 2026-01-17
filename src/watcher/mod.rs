@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-#[cfg(feature = "watch")]
+#[cfg(any(feature = "watch", feature = "remote"))]
 use crate::error::ConfigError;
 
 #[cfg(feature = "watch")]
@@ -43,8 +43,8 @@ type DebouncedWatcherResult = Result<
 >;
 
 pub struct ReloadLatencyMetrics {
-    pub change_detected_at: Instant,
-    pub reload_completed_at: Option<Instant>,
+    change_detected_at: Instant,
+    reload_completed_at: Option<Instant>,
 }
 
 impl ReloadLatencyMetrics {
@@ -74,6 +74,11 @@ impl ReloadLatencyMetrics {
     pub fn latency_ms(&self) -> Option<u128> {
         self.latency().map(|d| d.as_millis())
     }
+
+    /// Get the change detection time (for testing/debugging)
+    pub fn change_detected_at(&self) -> &Instant {
+        &self.change_detected_at
+    }
 }
 
 impl Default for ReloadLatencyMetrics {
@@ -96,9 +101,61 @@ pub enum WatchTarget {
 #[cfg(feature = "remote")]
 #[derive(Clone)]
 pub struct TlsConfig {
-    pub ca_cert_path: Option<String>,
-    pub client_cert_path: Option<String>,
-    pub client_key_path: Option<String>,
+    ca_cert_path: Option<String>,
+    client_cert_path: Option<String>,
+    client_key_path: Option<String>,
+}
+
+#[cfg(feature = "remote")]
+impl TlsConfig {
+    /// Create a new TlsConfig with builder pattern
+    pub fn new() -> Self {
+        Self {
+            ca_cert_path: None,
+            client_cert_path: None,
+            client_key_path: None,
+        }
+    }
+
+    /// Set CA certificate path
+    pub fn with_ca_cert(mut self, path: impl Into<String>) -> Self {
+        self.ca_cert_path = Some(path.into());
+        self
+    }
+
+    /// Set client certificate path
+    pub fn with_client_cert(mut self, path: impl Into<String>) -> Self {
+        self.client_cert_path = Some(path.into());
+        self
+    }
+
+    /// Set client key path
+    pub fn with_client_key(mut self, path: impl Into<String>) -> Self {
+        self.client_key_path = Some(path.into());
+        self
+    }
+
+    /// Get CA certificate path reference
+    pub fn ca_cert_path(&self) -> Option<&String> {
+        self.ca_cert_path.as_ref()
+    }
+
+    /// Get client certificate path reference
+    pub fn client_cert_path(&self) -> Option<&String> {
+        self.client_cert_path.as_ref()
+    }
+
+    /// Get client key path reference
+    pub fn client_key_path(&self) -> Option<&String> {
+        self.client_key_path.as_ref()
+    }
+}
+
+#[cfg(feature = "remote")]
+impl Default for TlsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(feature = "remote")]
@@ -327,7 +384,7 @@ impl ConfigWatcher {
                 // Apply TLS configuration
                 let mut builder = client_builder;
 
-                if let Some(ref ca_cert_path) = tls_config.ca_cert_path {
+                if let Some(ref ca_cert_path) = tls_config.ca_cert_path() {
                     match std::fs::read(ca_cert_path) {
                         Ok(cert_data) => match reqwest::Certificate::from_pem(&cert_data) {
                             Ok(cert) => {
@@ -352,7 +409,7 @@ impl ConfigWatcher {
                 }
 
                 if let (Some(ref client_cert_path), Some(ref client_key_path)) =
-                    (&tls_config.client_cert_path, &tls_config.client_key_path)
+                    (tls_config.client_cert_path(), tls_config.client_key_path())
                 {
                     // Load client certificate and key, then create Identity for reqwest
                     match load_client_identity(client_cert_path, client_key_path) {
@@ -679,20 +736,22 @@ mod tests {
     #[cfg(feature = "remote")]
     #[test]
     fn test_tls_config_creation() {
-        let tls_config = TlsConfig {
-            ca_cert_path: Some("/path/to/ca.crt".to_string()),
-            client_cert_path: Some("/path/to/client.crt".to_string()),
-            client_key_path: Some("/path/to/client.key".to_string()),
-        };
+        let tls_config = TlsConfig::new()
+            .with_ca_cert("/path/to/ca.crt")
+            .with_client_cert("/path/to/client.crt")
+            .with_client_key("/path/to/client.key");
 
-        assert_eq!(tls_config.ca_cert_path, Some("/path/to/ca.crt".to_string()));
         assert_eq!(
-            tls_config.client_cert_path,
-            Some("/path/to/client.crt".to_string())
+            tls_config.ca_cert_path(),
+            Some(&"/path/to/ca.crt".to_string())
         );
         assert_eq!(
-            tls_config.client_key_path,
-            Some("/path/to/client.key".to_string())
+            tls_config.client_cert_path(),
+            Some(&"/path/to/client.crt".to_string())
+        );
+        assert_eq!(
+            tls_config.client_key_path(),
+            Some(&"/path/to/client.key".to_string())
         );
     }
 
@@ -702,17 +761,16 @@ mod tests {
         let watcher =
             ConfigWatcher::new_remote("https://example.com/config", Duration::from_secs(60))
                 .unwrap()
-                .with_tls_config(TlsConfig {
-                    ca_cert_path: Some("/path/to/ca.crt".to_string()),
-                    client_cert_path: None,
-                    client_key_path: None,
-                });
+                .with_tls_config(TlsConfig::new().with_ca_cert("/path/to/ca.crt"));
 
         match watcher.target {
             WatchTarget::Remote { tls, .. } => {
                 assert!(tls.is_some());
                 if let Some(tls_config) = tls {
-                    assert_eq!(tls_config.ca_cert_path, Some("/path/to/ca.crt".to_string()));
+                    assert_eq!(
+                        tls_config.ca_cert_path(),
+                        Some(&"/path/to/ca.crt".to_string())
+                    );
                 }
             }
             _ => panic!("Expected remote target"),
