@@ -1502,10 +1502,22 @@ pub fn generate_impl(
         }
     });
 
+    let impl_optional_validate = if has_validations {
+        quote! {
+            #[cfg(not(feature = "validation"))]
+            impl confers::OptionalValidate for #struct_name {}
+        }
+    } else {
+        quote! {
+            impl confers::OptionalValidate for #struct_name {}
+        }
+    };
+
     let generated_code = quote! {
         #impl_default
         #impl_sanitize
         #impl_validate
+        #impl_optional_validate
         #schema_impl
 
         /// Clap-compatible argument structure for command line parsing

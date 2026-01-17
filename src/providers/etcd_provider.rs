@@ -7,6 +7,7 @@ use crate::error::ConfigError;
 use crate::providers::provider::{
     ConfigProvider, ProviderMetadata, ProviderType, WatchableProvider,
 };
+use crate::security::{SecureString, SensitivityLevel};
 use crate::utils::ssrf::validate_remote_url;
 use etcd_client::{Client, ConnectOptions, Identity, TlsOptions};
 use failsafe::futures::CircuitBreaker;
@@ -15,6 +16,7 @@ use figment::{
     Figment, Profile,
 };
 use std::fs;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -22,7 +24,7 @@ pub struct EtcdConfigProvider {
     endpoints: Vec<String>,
     key: String,
     username: Option<String>,
-    password: Option<String>,
+    password: Option<Arc<SecureString>>,
     ca_path: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -49,9 +51,16 @@ impl EtcdConfigProvider {
 
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.username = Some(username.into());
-        self.password = Some(password.into());
+        self.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
         self
     }
+
+    pub fn with_auth_secure(mut self, username: impl Into<String>, password: Arc<SecureString>) -> Self {
+        self.username = Some(username.into());
+        self.password = Some(password);
+        self
+    }
+
 
     pub fn with_tls(
         mut self,
@@ -74,7 +83,7 @@ impl EtcdConfigProvider {
         let mut options = ConnectOptions::new();
 
         if let (Some(username), Some(password)) = (&self.username, &self.password) {
-            options = options.with_user(username, password);
+            options = options.with_user(username, password.as_str());
         }
 
         if let (Some(ca), Some(cert), Some(key_p)) =

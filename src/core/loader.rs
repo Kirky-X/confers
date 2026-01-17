@@ -146,23 +146,73 @@ pub struct ConfigLoader<T> {
     #[cfg(feature = "audit")]
     audit: AuditConfig,
     /// Maximum memory limit in MB (0 = no limit)
-    pub memory_limit_mb: usize,
+    memory_limit_mb: usize,
 }
 
 /// Remote configuration settings
 #[cfg(feature = "remote")]
 #[derive(Clone, Debug)]
 pub struct RemoteConfig {
-    pub enabled: bool,
-    pub url: Option<String>,
-    pub token: Option<String>,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub ca_cert: Option<PathBuf>,
-    pub client_cert: Option<PathBuf>,
-    pub client_key: Option<PathBuf>,
-    pub timeout: Option<String>,
-    pub fallback: bool,
+    enabled: bool,
+    url: Option<String>,
+    token: Option<Arc<SecureString>>,
+    username: Option<String>,
+    password: Option<Arc<SecureString>>,
+    ca_cert: Option<PathBuf>,
+    client_cert: Option<PathBuf>,
+    client_key: Option<PathBuf>,
+    timeout: Option<String>,
+    fallback: bool,
+}
+
+#[cfg(feature = "remote")]
+impl RemoteConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    pub fn with_url(mut self, url: impl Into<String>) -> Self {
+        self.url = Some(url.into());
+        self
+    }
+
+    pub fn with_token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
+        self
+    }
+
+    pub fn with_username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout: impl Into<String>) -> Self {
+        self.timeout = Some(timeout.into());
+        self
+    }
+
+    pub fn with_fallback(mut self, fallback: bool) -> Self {
+        self.fallback = fallback;
+        self
+    }
+
+    pub fn url(&self) -> Option<&str> {
+        self.url.as_deref()
+    }
+
+    pub fn username(&self) -> Option<&str> {
+        self.username.as_deref()
+    }
 }
 
 #[cfg(feature = "remote")]
@@ -322,7 +372,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ) -> Self {
         self.remote_config.enabled = true;
         self.remote_config.username = Some(username.into());
-        self.remote_config.password = Some(password.into());
+        self.remote_config.password = Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical)));
         self
     }
 
@@ -330,7 +380,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(feature = "remote")]
     pub fn with_remote_token(mut self, token: impl Into<String>) -> Self {
         self.remote_config.enabled = true;
-        self.remote_config.token = Some(token.into());
+        self.remote_config.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
         self
     }
 
@@ -575,13 +625,13 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(token.clone());
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
-                    http_provider = http_provider.with_auth(username.clone(), password.clone());
+                    http_provider = http_provider.with_auth_secure(username.clone(), password.clone());
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {
@@ -619,7 +669,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
-                provider = provider.with_auth(username.clone(), password.clone());
+                provider = provider.with_auth_secure(username.clone(), password.clone());
             }
 
             manager.add_provider(provider);
@@ -646,7 +696,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
             // Also apply token if provided in remote_config
             if let Some(token) = &self.remote_config.token {
-                provider = provider.with_token(token.clone());
+                provider = provider.with_token_secure(token.clone());
             }
 
             manager.add_provider(provider);
@@ -765,13 +815,13 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(token.clone());
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
-                    http_provider = http_provider.with_auth(username.clone(), password.clone());
+                    http_provider = http_provider.with_auth_secure(username.clone(), password.clone());
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {
@@ -809,7 +859,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
-                provider = provider.with_auth(username.clone(), password.clone());
+                provider = provider.with_auth_secure(username.clone(), password.clone());
             }
 
             manager.add_provider(provider);
@@ -836,7 +886,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
             // Also apply token if provided in remote_config
             if let Some(token) = &self.remote_config.token {
-                provider = provider.with_token(token.clone());
+                provider = provider.with_token_secure(token.clone());
             }
 
             manager.add_provider(provider);

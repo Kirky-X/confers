@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-01-17
+
+### Security
+- **Internal Implementation Protection**: Privatized sensitive fields in `RemoteConfig` and `ConfigLoader` to prevent accidental exposure.
+- **Sensitive Data Isolation**: Replaced `String` with `Arc<SecureString>` for sensitive fields (`password`, `token`, `bearer_token`) in `HttpProvider` and `RemoteConfig`.
+- **Access Control**: Introduced secure Builder patterns for `EnvironmentValidationConfig` and `RemoteConfig`, enforcing secure construction via `with_auth_secure` and `with_bearer_token_secure`.
+- **SSRF Protection**: Enhanced `HttpProvider` to validate URLs in all loading methods (`load`, `load_sync`), preventing potential SSRF attacks even if internal state is mutated.
+- **Leakage Prevention**: Fixed potential sensitive data leakage in HTTP provider by correctly handling `SecureString` during request authentication (avoiding masked output).
+
+### Fixed
+- Fixed compilation errors in `Config` derive macro by automatically implementing `OptionalValidate` trait when validation feature is disabled.
+- Resolved duplicate method definitions in `ConfigLoader`.
 
 ## [0.2.0] - 2026-01-16
 

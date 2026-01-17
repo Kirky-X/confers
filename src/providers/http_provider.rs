@@ -5,11 +5,13 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
+use crate::security::{SecureString, SensitivityLevel};
 use crate::utils::ssrf::validate_remote_url;
 use figment::value::{Dict, Value as FigmentValue};
 use figment::{providers::Serialized, Figment, Profile};
 use serde_json::Value as JsonValue;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct HttpConfigProvider {
@@ -21,17 +23,17 @@ pub struct HttpConfigProvider {
 }
 
 #[derive(Clone)]
-pub struct TlsConfig {
-    pub ca_cert: Option<PathBuf>,
-    pub client_cert: Option<PathBuf>,
-    pub client_key: Option<PathBuf>,
+pub(crate) struct TlsConfig {
+    pub(crate) ca_cert: Option<PathBuf>,
+    pub(crate) client_cert: Option<PathBuf>,
+    pub(crate) client_key: Option<PathBuf>,
 }
 
 #[derive(Clone)]
-pub struct HttpAuth {
-    pub username: String,
-    pub password: Option<String>,
-    pub bearer_token: Option<String>,
+pub(crate) struct HttpAuth {
+    pub(crate) username: String,
+    pub(crate) password: Option<Arc<SecureString>>,
+    pub(crate) bearer_token: Option<Arc<SecureString>>,
 }
 
 impl HttpConfigProvider {
@@ -52,7 +54,16 @@ impl HttpConfigProvider {
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.auth = Some(HttpAuth {
             username: username.into(),
-            password: Some(password.into()),
+            password: Some(Arc::new(SecureString::new(password.into(), SensitivityLevel::Critical))),
+            bearer_token: None,
+        });
+        self
+    }
+
+    pub fn with_auth_secure(mut self, username: impl Into<String>, password: Arc<SecureString>) -> Self {
+        self.auth = Some(HttpAuth {
+            username: username.into(),
+            password: Some(password),
             bearer_token: None,
         });
         self
@@ -62,7 +73,16 @@ impl HttpConfigProvider {
         self.auth = Some(HttpAuth {
             username: String::new(),
             password: None,
-            bearer_token: Some(token.into()),
+            bearer_token: Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High))),
+        });
+        self
+    }
+
+    pub fn with_bearer_token_secure(mut self, token: Arc<SecureString>) -> Self {
+        self.auth = Some(HttpAuth {
+            username: String::new(),
+            password: None,
+            bearer_token: Some(token),
         });
         self
     }
@@ -174,9 +194,9 @@ impl ConfigProvider for HttpConfigProvider {
 
         if let Some(auth) = &self.auth {
             if let Some(token) = &auth.bearer_token {
-                request = request.bearer_auth(token);
+                request = request.bearer_auth(token.as_str());
             } else {
-                request = request.basic_auth(&auth.username, auth.password.as_deref());
+                request = request.basic_auth(&auth.username, auth.password.as_ref().map(|p| p.as_str()));
             }
         }
 

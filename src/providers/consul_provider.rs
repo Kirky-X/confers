@@ -5,6 +5,7 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
+use crate::security::{SecureString, SensitivityLevel};
 use crate::utils::ssrf::validate_remote_url;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use failsafe::{
@@ -15,6 +16,7 @@ use figment::{
     value::{Dict, Map},
     Figment, Profile,
 };
+use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
 
@@ -22,7 +24,7 @@ use url::Url;
 pub struct ConsulConfigProvider {
     address: String,
     key: String,
-    token: Option<String>,
+    token: Option<Arc<SecureString>>,
     ca_path: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -53,9 +55,15 @@ impl ConsulConfigProvider {
     }
 
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
-        self.token = Some(token.into());
+        self.token = Some(Arc::new(SecureString::new(token.into(), SensitivityLevel::High)));
         self
     }
+
+    pub fn with_token_secure(mut self, token: Arc<SecureString>) -> Self {
+        self.token = Some(token);
+        self
+    }
+
 
     pub fn with_auth(self, _username: impl Into<String>, _password: impl Into<String>) -> Self {
         self
@@ -142,7 +150,7 @@ impl ConsulConfigProvider {
         let mut req = client.get(url);
 
         if let Some(token) = &self.token {
-            req = req.header("X-Consul-Token", token);
+            req = req.header("X-Consul-Token", token.as_str());
         }
 
         let resp = req

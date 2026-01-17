@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::error::ConfigError;
+use crate::security::secure_string::SecureString;
 use crate::utils::ssrf::validate_remote_url;
 use figment::value::Value as FigmentValue;
 use figment::{
@@ -63,17 +63,18 @@ pub struct HttpProvider {
     timeout: Duration,
 }
 
-pub struct TlsConfig {
-    pub ca_cert: Option<std::path::PathBuf>,
-    pub client_cert: Option<std::path::PathBuf>,
-    pub client_key: Option<std::path::PathBuf>,
+#[derive(Clone)]
+pub(crate) struct TlsConfig {
+    pub(crate) ca_cert: Option<std::path::PathBuf>,
+    pub(crate) client_cert: Option<std::path::PathBuf>,
+    pub(crate) client_key: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone)]
-pub struct HttpAuth {
-    pub username: String,
-    pub password: Option<String>,
-    pub bearer_token: Option<String>,
+pub(crate) struct HttpAuth {
+    pub(crate) username: String,
+    pub(crate) password: Option<Arc<SecureString>>,
+    pub(crate) bearer_token: Option<Arc<SecureString>>,
 }
 
 impl HttpProvider {
@@ -123,7 +124,16 @@ impl HttpProvider {
     pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
         self.auth = Some(HttpAuth {
             username: username.into(),
-            password: Some(password.into()),
+            password: Some(Arc::new(SecureString::from(password.into()))),
+            bearer_token: None,
+        });
+        self
+    }
+
+    pub fn with_auth_secure(mut self, username: String, password: Arc<SecureString>) -> Self {
+        self.auth = Some(HttpAuth {
+            username,
+            password: Some(password),
             bearer_token: None,
         });
         self
@@ -133,12 +143,24 @@ impl HttpProvider {
         self.auth = Some(HttpAuth {
             username: String::new(),
             password: None,
-            bearer_token: Some(token.into()),
+            bearer_token: Some(Arc::new(SecureString::from(token.into()))),
+        });
+        self
+    }
+
+    pub fn with_bearer_token_secure(mut self, token: Arc<SecureString>) -> Self {
+        self.auth = Some(HttpAuth {
+            username: String::new(),
+            password: None,
+            bearer_token: Some(token),
         });
         self
     }
 
     pub fn load_sync(&self) -> Result<Figment, ConfigError> {
+        // Validate URL again before use to prevent SSRF if struct was mutated
+        validate_remote_url(&self.url)?;
+
         let client = reqwest::blocking::Client::builder()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -153,9 +175,12 @@ impl HttpProvider {
         // Apply authentication if configured
         if let Some(auth) = &self.auth {
             if let Some(token) = &auth.bearer_token {
-                request = request.bearer_auth(token);
+                request = request.bearer_auth(token.as_str());
             } else {
-                request = request.basic_auth(&auth.username, auth.password.as_deref());
+                request = request.basic_auth(
+                    &auth.username,
+                    auth.password.as_ref().map(|p| p.as_str()),
+                );
             }
         }
 
@@ -218,6 +243,9 @@ impl HttpProvider {
     }
 
     pub async fn load(&self) -> Result<Figment, ConfigError> {
+        // Validate URL again before use to prevent SSRF if struct was mutated
+        validate_remote_url(&self.url)?;
+
         let client = reqwest::Client::builder()
             .pool_max_idle_per_host(10)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -231,9 +259,12 @@ impl HttpProvider {
 
         if let Some(auth) = &self.auth {
             if let Some(token) = &auth.bearer_token {
-                request = request.bearer_auth(token);
+                request = request.bearer_auth(token.as_str());
             } else {
-                request = request.basic_auth(&auth.username, auth.password.as_deref());
+                request = request.basic_auth(
+                    &auth.username,
+                    auth.password.as_ref().map(|p| p.as_str()),
+                );
             }
         }
 

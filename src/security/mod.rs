@@ -55,13 +55,13 @@ fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
 /// Configuration for environment variable validation
 #[derive(Debug, Clone)]
 pub struct EnvironmentValidationConfig {
-    pub max_name_length: usize,
-    pub max_value_length: usize,
-    pub enable_blocked_patterns: bool,
-    pub enable_length_validation: bool,
-    pub allow_encrypted_values: bool,
-    pub blocked_patterns: Vec<String>,
-    pub allowed_patterns: Vec<String>,
+    max_name_length: usize,
+    max_value_length: usize,
+    enable_blocked_patterns: bool,
+    enable_length_validation: bool,
+    allow_encrypted_values: bool,
+    blocked_patterns: Vec<String>,
+    allowed_patterns: Vec<String>,
 }
 
 impl Default for EnvironmentValidationConfig {
@@ -93,6 +93,16 @@ impl EnvironmentValidationConfig {
         self
     }
 
+    pub fn with_blocked_patterns_check(mut self, enabled: bool) -> Self {
+        self.enable_blocked_patterns = enabled;
+        self
+    }
+
+    pub fn with_length_validation(mut self, enabled: bool) -> Self {
+        self.enable_length_validation = enabled;
+        self
+    }
+
     pub fn with_blocked_patterns_disabled(mut self) -> Self {
         self.enable_blocked_patterns = false;
         self
@@ -110,6 +120,11 @@ impl EnvironmentValidationConfig {
 
     pub fn with_custom_allowed_patterns(mut self, patterns: Vec<String>) -> Self {
         self.allowed_patterns = patterns;
+        self
+    }
+
+    pub fn with_encrypted_values(mut self, allow: bool) -> Self {
+        self.allow_encrypted_values = allow;
         self
     }
 
