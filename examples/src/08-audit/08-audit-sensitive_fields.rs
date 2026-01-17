@@ -8,6 +8,7 @@ use confers::Config;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensitiveAuditConfig {
@@ -60,7 +61,7 @@ fn main() -> anyhow::Result<()> {
     let audit_config = AuditConfig {
         validation_error: None,
         config_source: Some("config.toml".to_string()),
-        load_duration: Some(100),
+        load_duration: Some(Duration::from_millis(100)),
         config_sources_status: None,
         files_attempted: None,
         files_loaded: None,

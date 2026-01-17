@@ -41,6 +41,9 @@ pub enum ConfigError {
     #[error("Memory limit exceeded: limit {limit}MB, current {current}MB")]
     MemoryLimitExceeded { limit: usize, current: usize },
 
+    #[error("Configuration file too large: {path} ({size_mb}MB exceeds limit {limit_mb}MB)")]
+    ConfigTooLarge { path: PathBuf, size_mb: usize, limit_mb: usize },
+
     #[error("Key error: {0}")]
     KeyError(String),
 
@@ -182,7 +185,120 @@ impl ConfigError {
                     .join(" ");
                 format!("Parse error: {}", sanitized)
             }
-            _ => self.to_string(),
+            ConfigError::EnvSecurityError(msg) => {
+                // Remove environment variable values, keep only names
+                let sanitized = msg
+                    .split('=')
+                    .next()
+                    .unwrap_or("ENVIRONMENT")
+                    .to_string();
+                format!("Environment security validation failed: {}", sanitized)
+            }
+            ConfigError::EncryptionError(msg) => {
+                // Limit error message length and remove potential key information
+                let sanitized = msg.chars().take(100).collect::<String>();
+                format!("Encryption error: {}", sanitized)
+            }
+            ConfigError::DecryptionError(msg) => {
+                // Limit error message length
+                let sanitized = msg.chars().take(100).collect::<String>();
+                format!("Decryption error: {}", sanitized)
+            }
+            ConfigError::RuntimeError(msg) => {
+                // Remove path information
+                let sanitized = msg
+                    .split(['/', '\\'])
+                    .next_back()
+                    .unwrap_or(msg)
+                    .to_string();
+                format!("Runtime error: {}", sanitized)
+            }
+            ConfigError::MemoryLimitExceeded { limit, current } => {
+                // No sensitive information, display directly
+                format!(
+                    "Memory limit exceeded: limit {}MB, current {}MB",
+                    limit, current
+                )
+            }
+            ConfigError::ConfigTooLarge { path, size_mb, limit_mb } => {
+                // Only show filename, not full path
+                let filename = path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "config file".to_string());
+                format!(
+                    "Configuration file too large: {} ({}MB exceeds limit {}MB)",
+                    filename, size_mb, limit_mb
+                )
+            }
+            ConfigError::KeyError(msg) => {
+                // Remove potential key information
+                let sanitized = msg.chars().take(50).collect::<String>();
+                format!("Key error: {}", sanitized)
+            }
+            ConfigError::KeyVersionMismatch { expected, actual } => {
+                // No sensitive information, display directly
+                format!(
+                    "Key version mismatch: expected {}, actual {}",
+                    expected, actual
+                )
+            }
+            ConfigError::KeyRotationFailed(msg) => {
+                // Remove potential key information
+                let sanitized = msg.chars().take(50).collect::<String>();
+                format!("Key rotation failed: {}", sanitized)
+            }
+            ConfigError::KeyStorageError(msg) => {
+                // Remove path information
+                let sanitized = msg
+                    .split(['/', '\\'])
+                    .next_back()
+                    .unwrap_or(msg)
+                    .to_string();
+                format!("Key storage error: {}", sanitized)
+            }
+            ConfigError::InvalidMasterKey(msg) => {
+                // Remove potential key information
+                let sanitized = msg.chars().take(50).collect::<String>();
+                format!("Invalid master key: {}", sanitized)
+            }
+            ConfigError::KeyPolicyError(msg) => {
+                // No sensitive information, display directly
+                format!("Key policy error: {}", msg)
+            }
+            ConfigError::KeyChecksumMismatch => {
+                // No sensitive information, display directly
+                "Key verification failed: checksum mismatch".to_string()
+            }
+            ConfigError::FormatDetectionFailed(msg) => {
+                // No sensitive information, display directly
+                format!("Format detection failed: {}", msg)
+            }
+            ConfigError::ValidationError(msg) => {
+                // No sensitive information, display directly
+                format!("Validation error: {}", msg)
+            }
+            ConfigError::UnsafePath(path) => {
+                // Only show filename
+                if let Some(filename) = path.file_name() {
+                    format!("Unsafe path: {}", filename.to_string_lossy())
+                } else {
+                    "Unsafe path".to_string()
+                }
+            }
+            ConfigError::LoadError => {
+                "Configuration load failed".to_string()
+            }
+            ConfigError::SerializationError(msg) => {
+                // Limit error message length
+                let sanitized = msg.chars().take(100).collect::<String>();
+                format!("Serialization error: {}", sanitized)
+            }
+            ConfigError::Other(msg) => {
+                // Limit error message length
+                let sanitized = msg.chars().take(100).collect::<String>();
+                format!("Error: {}", sanitized)
+            }
         }
     }
 
@@ -210,7 +326,7 @@ impl ConfigError {
             format!("{}***:***@{}{}", protocol, host, path)
         });
 
-        // Also mask IP addresses in URLs (show only last octet for IPv4, similar for IPv6)
+        // Also mask IP addresses in URLs (show first two octets for debugging)
         static IP_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
 
         let ip_regex = IP_PATTERN.get_or_init(|| {
@@ -219,12 +335,11 @@ impl ConfigError {
         });
 
         let result = ip_regex.replace_all(&result, |caps: &regex::Captures| {
+            // Show first two octets for debugging, mask the rest
             format!(
-                "{}.{}.{}.{}",
-                caps.get(1).map(|m| m.as_str()).unwrap_or("*"),
-                caps.get(2).map(|m| m.as_str()).unwrap_or("*"),
-                caps.get(3).map(|m| m.as_str()).unwrap_or("*"),
-                caps.get(4).map(|m| m.as_str()).unwrap_or("*")
+                "{}.{}.*.*",
+                caps.get(1).map(|m| m.as_str()).unwrap_or("x"),
+                caps.get(2).map(|m| m.as_str()).unwrap_or("x")
             )
         });
 

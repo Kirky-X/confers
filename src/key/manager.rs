@@ -122,13 +122,12 @@ impl KeyManager {
     /// # use confers::encryption::ConfigEncryption;
     /// # use std::path::PathBuf;
     /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
-    /// # let master_key = [0u8; 32];
-    /// let key = km.generate_key(&master_key)?;
+    /// let key = km.generate_key()?;
     /// let encryption = ConfigEncryption::new(key);
     /// # Ok::<(), confers::error::ConfigError>(())
     /// ```
     #[cfg(feature = "encryption")]
-    pub fn generate_key(&mut self, _master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
+    pub fn generate_key(&mut self) -> Result<[u8; 32], ConfigError> {
         let mut key_bytes = [0u8; 32];
         let mut rng = rand::rng();
         rng.fill(&mut key_bytes);

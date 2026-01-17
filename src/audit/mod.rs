@@ -9,7 +9,6 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub trait Sanitize {
@@ -138,27 +137,6 @@ macro_rules! sanitize_sensitive_impl {
                     let sanitized = $crate::audit::sanitize_value(&value, &$crate::audit::SanitizeConfig::default());
                     map.insert(stringify!($field).to_string(), sanitized);
                 )*
-                serde_json::Value::Object(map)
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! sanitize_mixed_impl {
-    ($struct_name:ident, { $($field:ident => $sensitive:expr),+ }) => {
-        impl $crate::audit::Sanitize for $struct_name {
-            fn sanitize(&self) -> serde_json::Value {
-                let mut map = serde_json::Map::new();
-                $(
-                    let value = serde_json::to_value(&self.$field).unwrap_or(serde_json::Value::Null);
-                    let sanitized = if $sensitive {
-                        $crate::audit::sanitize_value(&value, &$crate::audit::SanitizeConfig::default())
-                    } else {
-                        value
-                    };
-                    map.insert(stringify!($field).to_string(), sanitized);
-                )+
                 serde_json::Value::Object(map)
             }
         }
@@ -430,6 +408,18 @@ impl AuditLogger {
 
         writeln!(file, "{}", json_str).map_err(|e| ConfigError::RemoteError(e.to_string()))?;
 
+        // Set restrictive permissions (0600) - owner read/write only
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(path)
+                .map_err(|e| ConfigError::RemoteError(e.to_string()))?
+                .permissions();
+            perms.set_mode(0o600);
+            std::fs::set_permissions(path, perms)
+                .map_err(|e| ConfigError::RemoteError(e.to_string()))?;
+        }
+
         Ok(())
     }
 }
@@ -564,6 +554,7 @@ pub struct AuditLogWriter {
     rotation_config: RotationConfig,
     integrity_key: [u8; 32],
     current_log_size: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    rotation_lock: std::sync::Arc<std::sync::Mutex<()>>,
 }
 
 impl AuditLogWriter {
@@ -593,6 +584,7 @@ impl AuditLogWriter {
             rotation_config,
             integrity_key,
             current_log_size: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(initial_size)),
+            rotation_lock: std::sync::Arc::new(std::sync::Mutex::new(())),
         })
     }
 
@@ -668,7 +660,15 @@ impl AuditLogWriter {
     /// Rotate the log file
     fn rotate(&self) -> Result<(), ConfigError> {
         use std::fs;
-        use std::io::Write;
+
+        // Acquire rotation lock to prevent concurrent rotations
+        let _lock = self.rotation_lock.lock()
+            .map_err(|e| ConfigError::IoError(format!("Failed to acquire rotation lock: {}", e)))?;
+
+        // Check again if rotation is still needed after acquiring lock
+        if !self.should_rotate() {
+            return Ok(());
+        }
 
         // Generate timestamp for archived filename
         let now = SystemTime::now()
@@ -739,7 +739,7 @@ impl AuditLogWriter {
             .flush()
             .map_err(|e: std::io::Error| ConfigError::IoError(e.to_string()))?;
 
-        // Remove original archive file
+        // Remove original archive file only after successful compression
         std::fs::remove_file(archive_path)
             .map_err(|e| ConfigError::IoError(e.to_string()))?;
 

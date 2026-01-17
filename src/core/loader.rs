@@ -68,9 +68,9 @@ fn get_memory_usage_mb() -> Option<f64> {
     static LAST_MEMORY: OnceLock<(f64, std::time::Instant)> = OnceLock::new();
     let now = std::time::Instant::now();
 
-    // Reduced cache duration from 1 second to 0.1 seconds for more accurate monitoring
+    // Use cache duration from constants (1 second) to balance performance and accuracy
     if let Some((memory, time)) = LAST_MEMORY.get() {
-        if now.duration_since(*time) < std::time::Duration::from_millis(100) {
+        if now.duration_since(*time) < std::time::Duration::from_millis(crate::constants::time::MEMORY_CACHE_DURATION_MS) {
             return Some(*memory);
         }
     }
@@ -94,14 +94,23 @@ fn get_memory_usage_mb() -> Option<f64> {
     memory
 }
 
-/// Force refresh memory usage cache and get current value
-/// Use this before critical operations to ensure accurate memory check
+/// Get current memory usage with cache (deprecated)
+///
+/// # Deprecated
+///
+/// This method is deprecated because OnceLock cannot clear the cache.
+/// Please use `get_memory_usage_mb()` directly, which automatically refreshes
+/// the cache after 1 second (see `crate::constants::time::MEMORY_CACHE_DURATION_MS`).
+///
+/// The cache cannot be force-refreshed due to OnceLock limitations.
+/// For more accurate memory checks, the system relies on a reasonable cache
+/// duration that balances performance and accuracy.
+#[deprecated(since = "0.3.0", note = "Use get_memory_usage_mb() instead")]
 #[allow(dead_code)]
 #[cfg(feature = "monitoring")]
 pub fn force_refresh_memory() -> Option<f64> {
-    // Clear the cache to force a fresh read
-    // Note: OnceLock cannot be cleared, so we rely on the short cache duration
-    // This function is provided for API compatibility and future enhancement
+    // Note: OnceLock cannot be cleared, so this function cannot force a refresh.
+    // It returns the cached value (or fresh if cache expired).
     get_memory_usage_mb()
 }
 
@@ -151,6 +160,8 @@ pub struct ConfigLoader<T> {
     audit: AuditConfig,
     /// Maximum memory limit in MB (0 = no limit)
     memory_limit_mb: usize,
+    /// Maximum configuration file size in MB (0 = no limit)
+    max_config_size_mb: usize,
 }
 
 /// Remote configuration settings
@@ -273,6 +284,7 @@ impl<T> Default for ConfigLoader<T> {
             #[cfg(feature = "audit")]
             audit: AuditConfig::default(),
             memory_limit_mb: 512, // Increased to reasonable default for production
+            max_config_size_mb: crate::constants::config::MAX_CONFIG_SIZE_MB,
         }
     }
 }
@@ -463,6 +475,35 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self
     }
 
+    /// Set maximum configuration file size in MB
+    ///
+    /// This prevents loading extremely large configuration files that could
+    /// cause memory issues or DoS attacks. Set to 0 to disable the limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `size_mb` - Maximum file size in megabytes (default: 10MB)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use confers::ConfigLoader;
+    /// # use serde::{Deserialize, Serialize};
+    /// # #[derive(Debug, Clone, Serialize, Deserialize)]
+    /// # struct Config {}
+    /// # impl confers::OptionalValidate for Config {
+    /// #     fn optional_validate(&self) -> Result<(), confers::ConfigError> {
+    /// #         Ok(())
+    /// #     }
+    /// # }
+    /// let loader = ConfigLoader::<Config>::new()
+    ///     .with_max_config_size(5); // Limit to 5MB
+    /// ```
+    pub fn with_max_config_size(mut self, size_mb: usize) -> Self {
+        self.max_config_size_mb = size_mb;
+        self
+    }
+
     /// Set remote configuration fallback
     #[cfg(feature = "remote")]
     pub fn with_remote_fallback(mut self, fallback: bool) -> Self {
@@ -554,6 +595,218 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         detect_format_by_extension(path).map(|f| f.to_string())
     }
 
+    /// Setup base provider with default configuration
+    ///
+    /// This helper method initializes the ProviderManager and adds the base figment
+    /// as a SerializedProvider, which includes default configuration values.
+    fn setup_base_provider(&self, figment: &Figment) -> ProviderManager {
+        let mut manager = ProviderManager::new();
+        manager.add_provider(SerializedProvider::new(figment.clone(), "base_config"));
+        manager
+    }
+
+    /// Setup file provider for loading explicit configuration files
+    ///
+    /// This helper method adds a FileConfigProvider to the manager if explicit files
+    /// are configured. Files are loaded with priority 40 (lower than environment variables).
+    fn setup_file_provider(&self, manager: &mut ProviderManager) -> Result<(), ConfigError> {
+        if !self.explicit_files.is_empty() {
+            // Check file sizes before loading
+            if self.max_config_size_mb > 0 {
+                for path in &self.explicit_files {
+                    if path.exists() {
+                        let metadata = std::fs::metadata(path)
+                            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+
+                        let file_size = metadata.len();
+                        let max_size_bytes = self.max_config_size_mb * 1024 * 1024;
+
+                        if file_size > max_size_bytes as u64 {
+                            return Err(ConfigError::ConfigTooLarge {
+                                path: path.clone(),
+                                size_mb: (file_size / (1024 * 1024)) as usize,
+                                limit_mb: self.max_config_size_mb,
+                            });
+                        }
+                    }
+                }
+            }
+
+            let mut file_provider = FileConfigProvider::new(self.explicit_files.clone())
+                .with_name("explicit_files")
+                .with_priority(40); // Lower priority than environment (loaded first, overridden)
+
+            if let Some(format_mode) = &self.format_detection {
+                file_provider = file_provider.with_format_detection(format_mode.clone());
+            }
+
+            manager.add_provider(file_provider);
+        }
+        Ok(())
+    }
+
+    /// Setup environment variable provider
+    ///
+    /// This helper method adds an EnvironmentProvider to the manager if environment
+    /// loading is enabled. Environment variables have priority 50 (higher than files).
+    fn setup_env_provider<C: crate::ConfigMap>(&self, manager: &mut ProviderManager) {
+        if self.use_env {
+            let env_prefix = self.env_prefix.as_deref().unwrap_or("");
+            let mut env_provider = EnvironmentProvider::new(env_prefix).with_priority(50);
+
+            // Add custom environment variable mappings from ConfigMap trait
+            let custom_mappings = C::env_mapping();
+            if !custom_mappings.is_empty() {
+                env_provider = env_provider.with_custom_mappings(custom_mappings);
+            }
+
+            manager.add_provider(env_provider);
+        }
+    }
+
+    /// Setup remote configuration providers (HTTP, etcd, Consul)
+    ///
+    /// This helper method adds remote configuration providers to the manager if they
+    /// are configured. All remote providers have priority 50.
+    #[cfg(feature = "remote")]
+    fn setup_remote_providers(&self, manager: &mut ProviderManager) {
+        // Load HTTP remote config if enabled
+        if self.remote_config.enabled {
+            if let Some(url) = &self.remote_config.url {
+                let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
+
+                if let Some(token) = &self.remote_config.token {
+                    http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
+                }
+
+                if let (Some(username), Some(password)) =
+                    (&self.remote_config.username, &self.remote_config.password)
+                {
+                    http_provider =
+                        http_provider.with_auth_secure(username.clone(), Arc::clone(password));
+                }
+
+                if let Some(ca_cert) = &self.remote_config.ca_cert {
+                    http_provider = http_provider.with_tls(
+                        ca_cert.clone(),
+                        self.remote_config.client_cert.clone(),
+                        self.remote_config.client_key.clone(),
+                    );
+                }
+
+                manager.add_provider(http_provider);
+            }
+        }
+
+        // Load etcd config if provided
+        if let Some(etcd_provider) = &self.etcd_provider {
+            let mut provider = etcd_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply auth if provided in remote_config
+            if let (Some(username), Some(password)) =
+                (&self.remote_config.username, &self.remote_config.password)
+            {
+                provider = provider.with_auth_secure(username.clone(), Arc::clone(password));
+            }
+
+            manager.add_provider(provider);
+        }
+
+        // Load consul config if provided
+        if let Some(consul_provider) = &self.consul_provider {
+            let mut provider = consul_provider.clone();
+            if let (Some(ca_cert), Some(client_cert), Some(client_key)) = (
+                self.remote_config.ca_cert.as_ref(),
+                self.remote_config.client_cert.as_ref(),
+                self.remote_config.client_key.as_ref(),
+            ) {
+                provider = provider.with_tls(
+                    Some(ca_cert.to_string_lossy().into_owned()),
+                    Some(client_cert.to_string_lossy().into_owned()),
+                    Some(client_key.to_string_lossy().into_owned()),
+                );
+            } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
+                provider =
+                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+            }
+
+            // Also apply token if provided in remote_config
+            if let Some(token) = &self.remote_config.token {
+                provider = provider.with_token_secure(Arc::clone(token));
+            }
+
+            manager.add_provider(provider);
+        }
+    }
+
+    /// Apply decryption to configuration if encryption is enabled
+    /// Apply memory limit check before configuration extraction
+    ///
+    /// This helper method checks if the current memory usage exceeds the configured
+    /// limit and returns an error if it does.
+    #[cfg(feature = "monitoring")]
+    fn apply_memory_check(&self) -> Result<(), ConfigError> {
+        if self.memory_limit_mb > 0 {
+            // Force refresh memory check for accuracy before critical operation
+            let current_mb = if let Some(mb) = force_refresh_memory() {
+                mb
+            } else {
+                // Fallback to cached value if refresh fails
+                get_memory_usage_mb().ok_or_else(|| {
+                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
+                })?
+            };
+
+            if current_mb as usize > self.memory_limit_mb {
+                return Err(ConfigError::MemoryLimitExceeded {
+                    limit: self.memory_limit_mb,
+                    current: current_mb as usize,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Finalize configuration by applying template expansion, sanitization, and validation
+    ///
+    /// This helper method applies post-processing steps to the extracted configuration:
+    /// 1. Template expansion
+    /// 2. Sanitization (if configured)
+    /// 3. Validation
+    fn finalize_config(&self, mut config: T) -> Result<T, ConfigError>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + Clone,
+    {
+        // Apply template expansion
+        self.apply_template_expansion(&mut config)?;
+
+        // Apply sanitization if available
+        if let Some(sanitizer) = &self.sanitizer {
+            config = sanitizer(config)?;
+        }
+
+        // Validate configuration - return error if validation fails
+        if let Err(ref validation_errors) = config.optional_validate() {
+            return Err(ConfigError::ValidationError(validation_errors.to_string()));
+        }
+
+        Ok(config)
+    }
+
     /// Helper method to load configuration with a given figment (non-audit version)
     #[allow(clippy::type_complexity)]
     #[allow(dead_code)]
@@ -593,6 +846,27 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         let file_start = std::time::Instant::now();
 
         if !self.explicit_files.is_empty() {
+            // Check file sizes before loading
+            if self.max_config_size_mb > 0 {
+                for path in &self.explicit_files {
+                    if path.exists() {
+                        let metadata = std::fs::metadata(path)
+                            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+
+                        let file_size = metadata.len();
+                        let max_size_bytes = self.max_config_size_mb * 1024 * 1024;
+
+                        if file_size > max_size_bytes as u64 {
+                            return Err(ConfigError::ConfigTooLarge {
+                                path: path.clone(),
+                                size_mb: (file_size / (1024 * 1024)) as usize,
+                                limit_mb: self.max_config_size_mb,
+                            });
+                        }
+                    }
+                }
+            }
+
             let mut file_provider = FileConfigProvider::new(self.explicit_files.clone())
                 .with_name("explicit_files")
                 .with_priority(40); // Lower priority than environment (loaded first, overridden)
