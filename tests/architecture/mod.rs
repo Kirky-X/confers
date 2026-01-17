@@ -3,8 +3,11 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! 架构测试模块
-//! 
-//! 包含所有架构相关的测试
+//! 架构配置测试模块
+//!
+//! 测试架构相关的配置功能，包括内存对齐、平台特定配置等
 
-pub mod architecture_test;
+pub mod unit;
+pub mod integration;
+pub mod performance;
+pub mod edge_case;

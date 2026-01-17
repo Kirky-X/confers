@@ -3,8 +3,9 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! 特性测试模块
+//! 单元测试模块
 //!
-//! 测试特性功能
+//! 包含审计日志的功能测试
 
-pub mod unit;
+pub mod audit_logger;
+pub mod audit_with_format;

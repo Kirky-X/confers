@@ -3,8 +3,8 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! 特性测试模块
+//! 边界测试模块
 //!
-//! 测试特性功能
+//! 包含加密解密的边界条件测试
 
-pub mod unit;
+pub mod encryption_boundary;

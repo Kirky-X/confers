@@ -3,7 +3,9 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! HTTP provider tests
+//! 集成测试：HTTP 提供者功能
+//!
+//! 测试 HTTP 配置提供者的功能
 
 #[cfg(test)]
 mod tests {
@@ -75,23 +77,5 @@ mod tests {
         // Provider can be created with invalid URL, but will fail when loading
         let provider = HttpConfigProvider::new("not-a-valid-url");
         assert_eq!(provider.name(), "http");
-    }
-
-    /// Test HTTP provider with localhost URL (should be blocked by SSRF protection)
-    #[test]
-    fn test_http_provider_localhost_blocked() {
-        // Localhost URLs should be blocked by SSRF protection in load()
-        let provider = HttpConfigProvider::new("http://127.0.0.1:8080/config");
-        let result = provider.load();
-        assert!(result.is_err());
-    }
-
-    /// Test HTTP provider with private IP blocked
-    #[test]
-    fn test_http_provider_private_ip_blocked() {
-        // Private IPs should be blocked by SSRF protection
-        let provider = HttpConfigProvider::new("http://192.168.1.1/config");
-        let result = provider.load();
-        assert!(result.is_err());
     }
 }

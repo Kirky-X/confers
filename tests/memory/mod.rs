@@ -4,7 +4,8 @@
 // See LICENSE file in the project root for full license information.
 
 //! 内存限制测试模块
-//! 
-//! 包含所有内存限制相关的测试
+//!
+//! 测试内存限制功能
 
-pub mod memory_limit_test;
+pub mod unit;
+pub mod edge_case;

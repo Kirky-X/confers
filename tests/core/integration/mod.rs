@@ -3,8 +3,8 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! 特性测试模块
+//! 集成测试模块
 //!
-//! 测试特性功能
+//! 包含核心配置的文件加载和环境变量覆盖测试
 
-pub mod unit;
+pub mod core_file_loading;

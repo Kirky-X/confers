@@ -4,8 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 //! 审计日志测试模块
-//! 
-//! 包含所有审计日志相关的测试
+//!
+//! 测试审计日志功能
 
-pub mod audit_logger;
-pub mod audit_with_format;
+pub mod unit;

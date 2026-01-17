@@ -4,18 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 //! 验证测试模块
-//! 
-//! 包含所有配置验证相关的测试
+//!
+//! 测试配置验证功能，包括基础验证、嵌套验证和并行验证
 
-// 基础验证测试
-#[path = "../validation_test.rs"]
-mod basic_validation;
-
-// 嵌套验证测试
-#[path = "../nested_validation_test.rs"]
-mod nested_validation;
-
-// 并行验证测试
-#[cfg(feature = "parallel")]
-#[path = "../parallel_validation_test.rs"]
-mod parallel_validation;
+pub mod unit;

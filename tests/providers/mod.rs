@@ -4,7 +4,9 @@
 // See LICENSE file in the project root for full license information.
 
 //! 提供者测试模块
-//! 
-//! 包含所有配置提供者相关的测试
+//!
+//! 测试配置提供者功能
 
-pub mod remote;
+pub mod unit;
+pub mod integration;
+pub mod edge_case;
