@@ -610,6 +610,7 @@ dependencies = [
  "etcd-client",
  "failsafe",
  "figment",
+ "flate2",
  "hex",
  "hmac",
  "humantime",

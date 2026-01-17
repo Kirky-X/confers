@@ -21,6 +21,7 @@ use figment::value::Value;
 use figment::Figment;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 #[cfg(feature = "validation")]
 use validator::Validate;
 
@@ -643,14 +644,14 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token_secure(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
                     http_provider =
-                        http_provider.with_auth_secure(username.clone(), password.clone());
+                        http_provider.with_auth_secure(username.clone(), Arc::clone(password));
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {
@@ -688,7 +689,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
-                provider = provider.with_auth_secure(username.clone(), password.clone());
+                provider = provider.with_auth_secure(username.clone(), Arc::clone(password));
             }
 
             manager.add_provider(provider);
@@ -715,7 +716,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
             // Also apply token if provided in remote_config
             if let Some(token) = &self.remote_config.token {
-                provider = provider.with_token_secure(token.clone());
+                provider = provider.with_token_secure(Arc::clone(token));
             }
 
             manager.add_provider(provider);
@@ -834,14 +835,14 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token_secure(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
                     http_provider =
-                        http_provider.with_auth_secure(username.clone(), password.clone());
+                        http_provider.with_auth_secure(username.clone(), Arc::clone(password));
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {
@@ -879,7 +880,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
-                provider = provider.with_auth_secure(username.clone(), password.clone());
+                provider = provider.with_auth_secure(username.clone(), Arc::clone(password));
             }
 
             manager.add_provider(provider);
@@ -906,7 +907,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
 
             // Also apply token if provided in remote_config
             if let Some(token) = &self.remote_config.token {
-                provider = provider.with_token_secure(token.clone());
+                provider = provider.with_token_secure(Arc::clone(token));
             }
 
             manager.add_provider(provider);
@@ -1427,14 +1428,14 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
                 if let Some(token) = &self.remote_config.token {
-                    http_provider = http_provider.with_bearer_token_secure(token.clone());
+                    http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
                     http_provider =
-                        http_provider.with_auth_secure(username.clone(), password.clone());
+                        http_provider.with_auth_secure(username.clone(), Arc::clone(password));
                 }
 
                 if let Some(ca_cert) = &self.remote_config.ca_cert {

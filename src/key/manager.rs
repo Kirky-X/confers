@@ -57,6 +57,30 @@ impl KeyManager {
         })
     }
 
+    /// Initialize a new key ring with the given master key
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Master Key**: The master key must be stored securely and never shared or committed to version control
+    /// - ⚠️ **Key ID**: Use descriptive key IDs (e.g., "production", "staging", "development")
+    /// - ⚠️ **Created By**: Include creator information for audit trail
+    /// - ⚠️ **Key Backup**: Ensure you have a secure backup of the master key
+    /// - ⚠️ **Key Rotation**: Set up automatic key rotation schedule after initialization
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use confers::key::KeyManager;
+    /// # use std::path::PathBuf;
+    /// # let master_key = [0u8; 32];
+    /// let mut km = KeyManager::new(PathBuf::from("./keys"))?;
+    /// let version = km.initialize(
+    ///     &master_key,
+    ///     "production".to_string(),
+    ///     "security-team".to_string()
+    /// )?;
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     #[cfg(feature = "encryption")]
     pub fn initialize(
         &mut self,
@@ -81,6 +105,28 @@ impl KeyManager {
         })
     }
 
+    /// Generate a new cryptographically secure random key
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Randomness**: Uses cryptographically secure random number generator (CSPRNG)
+    /// - ⚠️ **Key Strength**: Generates 256-bit keys for AES-256-GCM encryption
+    /// - ⚠️ **Key Usage**: Use the generated key immediately or store it securely
+    /// - ⚠️ **Key Disposal**: Ensure the key is properly zeroized when no longer needed
+    /// - ⚠️ **Key Reuse**: Never reuse keys for different purposes
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use confers::key::KeyManager;
+    /// # use confers::encryption::ConfigEncryption;
+    /// # use std::path::PathBuf;
+    /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
+    /// # let master_key = [0u8; 32];
+    /// let key = km.generate_key(&master_key)?;
+    /// let encryption = ConfigEncryption::new(key);
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     #[cfg(feature = "encryption")]
     pub fn generate_key(&mut self, _master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
         let mut key_bytes = [0u8; 32];
@@ -126,6 +172,32 @@ impl KeyManager {
         })
     }
 
+    /// Rotate the key to a new version
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Master Key**: Must use the same master key that was used to initialize the key ring
+    /// - ⚠️ **Key Rotation**: Regular key rotation is recommended (every 90 days for production)
+    /// - ⚠️ **Key Transition**: Old keys remain available for decryption during transition period
+    /// - ⚠️ **Audit Trail**: Include creation information and description for audit purposes
+    /// - ⚠️ **Re-encryption**: After rotation, re-encrypt all data that was encrypted with the old key
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use confers::key::KeyManager;
+    /// # use std::path::PathBuf;
+    /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
+    /// # let master_key = [0u8; 32];
+    /// let result = km.rotate_key(
+    ///     &master_key,
+    ///     Some("production".to_string()),
+    ///     "security-team".to_string(),
+    ///     Some("Scheduled rotation".to_string())
+    /// )?;
+    /// println!("Rotated from version {} to {}", result.previous_version, result.new_version);
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     #[cfg(feature = "encryption")]
     pub fn rotate_key(
         &mut self,

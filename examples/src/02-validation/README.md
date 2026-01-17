@@ -9,6 +9,7 @@
 | basic_validation.rs | 基本验证功能 | validation |
 | custom_validators.rs | 自定义验证器 | validation |
 | validation_errors.rs | 验证错误处理 | validation |
+| advanced_validation.rs | 高级验证功能（范围、依赖、格式、一致性） | validation |
 
 ## 前提条件
 
@@ -26,6 +27,9 @@ cargo run --example custom_validators --features validation
 
 # 运行验证错误处理示例
 cargo run --example validation_errors --features validation
+
+# 运行高级验证示例
+cargo run --example advanced_validation --features validation
 ```
 
 ## 配置文件

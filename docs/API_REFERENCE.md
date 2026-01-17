@@ -29,6 +29,7 @@
 - [最佳实践](#最佳实践)
 - [高级功能](#高级功能)
 - [性能优化](#性能优化)
+- [安全注意事项](#安全注意事项)
 - [故障排除](#故障排除)
 
 </details>
@@ -1288,6 +1289,261 @@ impl CachedConfig {
 
 ---
 
+## 安全注意事项
+
+<div align="center" style="margin: 24px 0">
+
+### 🔒 安全最佳实践
+
+</div>
+
+#### 敏感数据处理
+
+<div style="padding:16px; margin: 16px 0">
+
+**如何识别敏感字段：**
+
+- 密码、API 密钥、访问令牌
+- 数据库连接字符串
+- 私钥、证书
+- 个人身份信息（PII）
+
+**如何加密敏感数据：**
+
+```rust
+use confers::encryption::ConfigEncryption;
+
+// 从环境变量获取加密密钥（推荐）
+let encryption = ConfigEncryption::from_env()?;
+
+// 加密敏感值
+let encrypted = encryption.encrypt("my-secret-api-key")?;
+println!("加密后的值: {}", encrypted);
+
+// 解密敏感值
+let decrypted = encryption.decrypt(&encrypted)?;
+assert_eq!(decrypted, "my-secret-api-key");
+```
+
+**⚠️ 安全提示：**
+
+- 🔴 **密钥管理**：加密密钥必须安全存储，绝不能提交到版本控制系统
+- 🔴 **密钥轮换**：生产环境建议定期轮换密钥
+- 🔴 **密钥长度**：密钥必须恰好 32 字节（256 位）用于 AES-256-GCM
+- 🔴 **密钥存储**：考虑使用密钥管理服务（如 AWS Secrets Manager、HashiCorp Vault）
+
+</div>
+
+#### 密钥管理
+
+**如何生成安全的密钥：**
+
+```rust
+use rand::Rng;
+
+// 生成安全的随机密钥
+let mut key = [0u8; 32];
+let mut rng = rand::thread_rng();
+rng.fill(&mut key);
+
+// 使用密钥
+let encryption = ConfigEncryption::new(key);
+```
+
+**如何轮换密钥：**
+
+```rust
+use confers::key::manager::KeyManager;
+use std::path::PathBuf;
+
+let mut km = KeyManager::new(PathBuf::from("./keys"))?;
+let master_key = load_master_key()?; // 从安全存储加载主密钥
+
+// 轮换密钥
+let result = km.rotate_key(
+    &master_key,
+    Some("production".to_string()),
+    "security-team".to_string(),
+    Some("定期密钥轮换".to_string())
+)?;
+
+println!("密钥版本从 {} 轮换到 {}", result.previous_version, result.new_version);
+```
+
+**⚠️ 安全提示：**
+
+- 🔴 **密钥存储**：使用硬件安全模块（HSM）或密钥管理服务
+- 🔴 **密钥轮换**：建议每 90 天轮换一次密钥
+- 🔴 **密钥备份**：安全备份密钥，确保可以恢复
+- 🔴 **密钥泄露应急处理**：如果密钥泄露，立即轮换并通知相关团队
+
+</div>
+
+#### 审计日志配置
+
+**如何启用审计日志：**
+
+```rust
+use confers::audit::{AuditLogWriter, RotationConfig};
+
+let rotation_config = RotationConfig {
+    max_size_mb: 100,
+    max_age_days: 30,
+    max_files: 10,
+    compress_archived: true,
+};
+
+let integrity_key = [0u8; 32]; // 从安全存储获取
+let writer = AuditLogWriter::new(
+    PathBuf::from("/var/log/audit.log"),
+    rotation_config,
+    integrity_key
+)?;
+```
+
+**⚠️ 安全提示：**
+
+- 🔴 **日志完整性**：审计日志使用 HMAC 签名保护完整性
+- 🔴 **日志访问控制**：限制审计日志文件访问权限（仅 root/管理员）
+- 🔴 **日志归档**：定期归档审计日志，防止日志文件过大
+- 🔴 **日志监控**：监控审计日志访问记录，检测异常访问
+
+</div>
+
+#### 生产环境安全配置
+
+**环境变量安全配置：**
+
+```bash
+# 使用环境变量存储敏感信息
+export APP_DATABASE_URL="postgres://user:password@localhost/db"
+export APP_API_KEY="your-api-key"
+export CONFERS_ENCRYPTION_KEY="base64-encoded-key"
+```
+
+**远程配置安全配置：**
+
+```rust
+let config = ConfigLoader::<AppConfig>::new()
+    .with_remote_config("https://config.example.com")
+    .with_remote_token("your-access-token")
+    .with_remote_tls(
+        PathBuf::from("/etc/ssl/certs/ca.pem"),
+        Some(PathBuf::from("/etc/ssl/certs/client.pem")),
+        Some(PathBuf::from("/etc/ssl/keys/client.key"))
+    )
+    .load()
+    .await?;
+```
+
+**⚠️ 安全提示：**
+
+- 🔴 **TLS 配置**：始终使用 TLS 加密远程配置传输
+- 🔴 **访问控制**：限制远程配置服务的访问权限
+- 🔴 **最小权限原则**：仅授予必要的权限
+- 🔴 **安全审查**：定期审查生产环境配置
+
+</div>
+
+#### API 方法安全标注
+
+**加密 API：**
+
+```rust
+/// 加密敏感配置值
+///
+/// # Security Notes
+///
+/// - ⚠️ **Key Management**: The encryption key must be stored securely and never committed to version control
+/// - ⚠️ **Key Rotation**: Regular key rotation is recommended for production environments
+/// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for AES-256-GCM
+/// - ⚠️ **Key Storage**: Consider using a secrets manager (e.g., AWS Secrets Manager, HashiCorp Vault)
+///
+/// # Example
+///
+/// ```rust
+/// let encryption = ConfigEncryption::new(secure_key);
+/// let encrypted = encryption.encrypt("sensitive-data")?;
+/// ```
+pub fn encrypt(&self, plaintext: &str) -> Result<String, ConfigError>
+```
+
+**密钥管理 API：**
+
+```rust
+/// 初始化新的密钥环
+///
+/// # Security Notes
+///
+/// - ⚠️ **Master Key**: The master key must be stored securely and never shared
+/// - ⚠️ **Key ID**: Use descriptive key IDs (e.g., "production", "staging")
+/// - ⚠️ **Created By**: Include creator information for audit trail
+/// - ⚠️ **Key Backup**: Ensure you have a secure backup of the master key
+///
+/// # Example
+///
+/// ```rust
+/// let version = km.initialize(
+///     &master_key,
+///     "production".to_string(),
+///     "security-team".to_string()
+/// )?;
+/// ```
+pub fn initialize(
+    &mut self,
+    master_key: &[u8; 32],
+    key_id: String,
+    created_by: String,
+) -> Result<KeyVersion, ConfigError>
+```
+
+**审计日志 API：**
+
+```rust
+/// 记录配置加载到审计日志
+///
+/// # Security Notes
+///
+/// - ⚠️ **Log Path**: Store audit logs in a secure location with restricted access
+/// - ⚠️ **Log Rotation**: Configure log rotation to prevent disk space exhaustion
+/// - ⚠️ **Log Integrity**: Audit logs are signed to prevent tampering
+/// - ⚠️ **Log Monitoring**: Monitor audit logs for suspicious activity
+///
+/// # Example
+///
+/// ```rust
+/// AuditLogger::log_to_file(&config, PathBuf::from("/var/log/audit.log"), None)?;
+/// ```
+pub fn log_to_file<T>(
+    config: &T,
+    path: &Path,
+    validation_error: Option<&str>,
+) -> Result<(), ConfigError>
+```
+
+**配置验证 API：**
+
+```rust
+/// 验证配置范围
+///
+/// # Security Notes
+///
+/// - ⚠️ **Input Validation**: Always validate user input before use
+/// - ⚠️ **Range Checking**: Ensure numeric values are within expected ranges
+/// - ⚠️ **Error Messages**: Avoid exposing sensitive information in error messages
+/// - ⚠️ **Validation Failures**: Treat validation failures as potential security incidents
+///
+/// # Example
+///
+/// ```rust
+/// let validator = RangeFieldValidator::new("port", Some(1024.0), Some(65535.0));
+/// validator.validate(&config)?;
+/// ```
+pub fn validate(&self, config: &Value) -> Result<(), ValidationError>
+```
+
+---
+
 ## 故障排除
 
 ### 常见问题
@@ -1332,11 +1588,27 @@ RUST_LOG=confers=debug ./myapp
 
 | 特性 | 描述 | 默认启用 |
 |------|------|----------|
-| `remote` | 启用远程配置支持（etcd、Consul、HTTP） | 否 |
-| `audit` | 启用配置加载审计日志 | 否 |
-| `watch` | 启用文件监视和热重载 | 是 |
-| `encryption` | 启用配置加密功能 | 是 |
+| `derive` | 配置结构体的 derive 宏 | 是 |
+| `validation` | 配置验证支持 | 否 |
+| `watch` | 文件监视和热重载 | 否 |
+| `audit` | 配置加载审计日志 | 否 |
+| `schema` | JSON Schema 生成 | 否 |
+| `parallel` | 并行验证 | 否 |
+| `monitoring` | 系统监控 | 否 |
+| `remote` | 远程配置（etcd、Consul、HTTP） | 否 |
+| `encryption` | 配置加密功能 | 否 |
+| `cli` | 命令行工具 | 否 |
 | `full` | 启用所有功能 | 否 |
+
+**特性预设：**
+
+| 预设 | 包含特性 | 使用场景 |
+|------|----------|----------|
+| `minimal` | `derive` | 仅配置加载（最小依赖） |
+| `recommended` | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
+| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
+| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
+| `full` | 所有特性 | 完整功能集 |
 
 ---
 

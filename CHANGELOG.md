@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-17
+
+### Security
+- **Enhanced Audit Logging System**: Added comprehensive audit logging with event classification, integrity protection, log rotation, and query capabilities
+- **Enhanced Configuration Validation**: Implemented advanced validation system with range, dependency, format, and consistency validators
+- **Security Documentation**: Added comprehensive security documentation in API reference and user guide
+- **Security Annotations**: Added security annotations to sensitive API methods (encryption, key management, audit logging, configuration validation)
+- **Security Examples**: Added security examples for audit logging, configuration validation, and key management
+
+### Added
+- Audit event types and priorities (ConfigLoad, KeyRotation, SecurityViolation, etc.)
+- Audit event generator with metadata tracking
+- Audit log writer with HMAC integrity protection
+- Log rotation and archival with gzip compression
+- Audit log query interface with filtering and pagination
+- AdvancedConfigValidator trait for extensible validation
+- ValidationEngine with priority-based validator execution
+- RangeFieldValidator for numeric range validation
+- DependencyValidator for field dependency validation
+- FormatValidator for string format validation (email, URL, etc.)
+- ConsistencyValidator for cross-field consistency validation
+- CachedValidationEngine with LRU cache for performance
+- Comprehensive security documentation in API_REFERENCE.md
+- Security configuration best practices in USER_GUIDE.md
+- Security examples in examples/src/06-encryption/ and examples/src/08-audit/
+- Advanced validation example in examples/src/02-validation/02-validation-advanced_validation.rs
+
+### Changed
+- Added EncryptionError and DecryptionError to ConfigError enum
+- Added std::io::Write import to src/audit/mod.rs
+- Fixed Arc::clone usage for SecureString in src/core/loader.rs
+- Updated Cargo.toml with flate2 dependency for log compression
+- Updated API_REFERENCE.md with comprehensive security notes
+- Updated USER_GUIDE.md with security configuration best practices
+- Updated examples with complete security demonstrations
+
+### Fixed
+- Fixed compilation errors with Arc<SecureString> type annotations
+- Fixed unused import warnings in src/audit/mod.rs and src/validator/mod.rs
+- Fixed documentation tests with proper imports and types
+
+### Tests
+- All 204 tests passing (178 unit tests + 26 doc tests)
+- All security tests passing (93 tests)
+- All audit tests passing (6 tests)
+- All validator tests passing (13 tests)
+
 ## [0.2.1] - 2026-01-17
 
 ### Security

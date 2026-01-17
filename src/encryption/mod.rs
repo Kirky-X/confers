@@ -58,11 +58,45 @@ pub struct ConfigEncryption {
 
 impl ConfigEncryption {
     /// Create a new encryptor with a 32-byte key
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Key Management**: The encryption key must be stored securely and never committed to version control
+    /// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for AES-256-GCM
+    /// - ⚠️ **Key Security**: Use a cryptographically secure random number generator to generate the key
+    /// - ⚠️ **Key Storage**: Consider using a secrets manager (e.g., AWS Secrets Manager, HashiCorp Vault)
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use confers::encryption::ConfigEncryption;
+    /// # let secure_key = [0u8; 32];
+    /// let encryption = ConfigEncryption::new(secure_key);
+    /// let encrypted = encryption.encrypt("sensitive-data")?;
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     pub fn new(key_bytes: [u8; 32]) -> Self {
         Self::with_cache_size(key_bytes, MAX_NONCE_CACHE_SIZE)
     }
 
     /// Create a new encryptor with a 32-byte key and custom cache size
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Key Management**: The encryption key must be stored securely and never committed to version control
+    /// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for AES-256-GCM
+    /// - ⚠️ **Cache Size**: Larger cache sizes increase memory usage but improve nonce reuse detection
+    /// - ⚠️ **Key Security**: Use a cryptographically secure random number generator to generate the key
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use confers::encryption::ConfigEncryption;
+    /// # let secure_key = [0u8; 32];
+    /// let encryption = ConfigEncryption::with_cache_size(secure_key, 100000);
+    /// let encrypted = encryption.encrypt("sensitive-data")?;
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     pub fn with_cache_size(key_bytes: [u8; 32], cache_size: usize) -> Self {
         let key = SecureKey::new(key_bytes);
         Self {
@@ -76,6 +110,25 @@ impl ConfigEncryption {
     }
 
     /// Create from environment variable CONFERS_ENCRYPTION_KEY (base64 encoded)
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Environment Variable**: The CONFERS_ENCRYPTION_KEY environment variable must be set securely
+    /// - ⚠️ **Key Format**: The key must be base64 encoded and exactly 32 bytes (256 bits)
+    /// - ⚠️ **Key Storage**: Never commit environment variables to version control
+    /// - ⚠️ **Key Rotation**: Regular key rotation is recommended for production environments
+    ///
+    /// # Example
+    ///
+    /// ```bash,no_run
+    /// export CONFERS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+    /// ```
+    ///
+    /// ```rust,no_run
+    /// # use confers::encryption::ConfigEncryption;
+    /// let encryption = ConfigEncryption::from_env()?;
+    /// # Ok::<(), confers::error::ConfigError>(())
+    /// ```
     pub fn from_env() -> Result<Self, ConfigError> {
         let key_str = env::var("CONFERS_ENCRYPTION_KEY").map_err(|_| {
             ConfigError::FormatDetectionFailed("CONFERS_ENCRYPTION_KEY not found".to_string())

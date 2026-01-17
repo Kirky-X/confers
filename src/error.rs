@@ -74,6 +74,12 @@ pub enum ConfigError {
     #[error("Environment variable security validation failed: {0}")]
     EnvSecurityError(String),
 
+    #[error("Encryption error: {0}")]
+    EncryptionError(String),
+
+    #[error("Decryption error: {0}")]
+    DecryptionError(String),
+
     #[error("Other error: {0}")]
     Other(String),
 }

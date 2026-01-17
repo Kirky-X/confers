@@ -747,6 +747,318 @@ confers encrypt config.encrypted.toml --key-file encryption.key --decrypt -o con
 
 ---
 
+## 安全配置最佳实践
+
+<div align="center" style="margin: 24px 0">
+
+### 🔒 安全配置指南
+
+</div>
+
+<div style="padding:16px; margin: 16px 0">
+
+在生产环境中，正确配置安全选项至关重要。本节介绍如何安全地使用 `confers` 的各种安全功能。
+
+</div>
+
+### 1. 敏感数据处理
+
+<div style="padding:16px; margin: 16px 0">
+
+**⚠️ 重要**: 永远不要在配置文件中明文存储敏感信息（如密码、API 密钥、令牌等）。
+
+</div>
+
+```rust
+use confers::Config;
+use serde::Deserialize;
+
+#[derive(Config, Deserialize)]
+#[config(env_prefix = "APP")]
+struct SecureConfig {
+    // 标记敏感字段，审计日志会自动脱敏
+    #[config(sensitive = true)]
+    database_password: String,
+    
+    #[config(sensitive = true)]
+    api_key: String,
+    
+    // 非敏感字段
+    server_name: String,
+}
+```
+
+**推荐做法：**
+
+- 使用环境变量存储敏感信息
+- 使用 `confers encrypt` 命令加密敏感配置
+- 在密钥管理系统（如 AWS Secrets Manager、HashiCorp Vault）中存储密钥
+
+### 2. 配置加密
+
+<div style="padding:16px; margin: 16px 0">
+
+使用 AES-256-GCM 加密算法保护敏感配置信息。
+
+</div>
+
+```rust
+use confers::encryption::ConfigEncryption;
+
+// 从环境变量加载加密密钥
+let encryption = ConfigEncryption::from_env()?;
+
+// 加密敏感值
+let encrypted_password = encryption.encrypt("my_secret_password")?;
+
+// 解密配置
+let decrypted_password = encryption.decrypt(&encrypted_password)?;
+```
+
+**命令行方式：**
+
+```bash
+# 设置加密密钥环境变量
+export CONFERS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# 加密配置文件
+confers encrypt config.toml -o config.encrypted.toml
+
+# 解密配置文件
+confers encrypt config.encrypted.toml --decrypt -o config.toml
+```
+
+### 3. 密钥管理
+
+<div style="padding:16px; margin: 16px 0">
+
+**⚠️ 重要**: 密钥必须安全存储，绝不能提交到版本控制系统。
+
+</div>
+
+```rust
+use confers::key::KeyManager;
+use std::path::PathBuf;
+
+// 创建密钥管理器
+let mut key_manager = KeyManager::new(PathBuf::from("./secure_keys"))?;
+
+// 初始化密钥环（仅首次）
+let master_key = [0u8; 32]; // 从安全位置获取
+let version = key_manager.initialize(
+    &master_key,
+    "production".to_string(),
+    "security-team".to_string()
+)?;
+
+// 定期轮换密钥（建议每 90 天）
+let rotation_result = key_manager.rotate_key(
+    &master_key,
+    Some("production".to_string()),
+    "security-team".to_string(),
+    Some("Scheduled rotation".to_string())
+)?;
+
+println!("密钥已从版本 {} 轮换到 {}", 
+    rotation_result.previous_version, 
+    rotation_result.new_version);
+```
+
+**密钥管理最佳实践：**
+
+- ✅ 使用硬件安全模块（HSM）或密钥管理服务
+- ✅ 定期轮换密钥（建议每 90 天）
+- ✅ 为不同环境使用不同的密钥
+- ✅ 使用强随机数生成器创建密钥
+- ❌ 不要在代码中硬编码密钥
+- ❌ 不要将密钥提交到版本控制系统
+- ❌ 不要在日志中记录密钥
+
+### 4. 审计日志配置
+
+<div style="padding:16px; margin: 16px 0">
+
+配置审计日志以跟踪所有配置加载和修改操作。
+
+</div>
+
+```rust
+use confers::audit::{AuditLogger, AuditConfig};
+use std::path::PathBuf;
+
+// 创建审计配置
+let audit_config = AuditConfig {
+    validation_error: Some("Invalid configuration".to_string()),
+    config_source: Some("config.toml".to_string()),
+    load_duration: Some(100),
+    ..Default::default()
+};
+
+// 记录配置加载
+AuditLogger::log_to_file_with_source(
+    &config,
+    &PathBuf::from("/var/log/confers/audit.log"),
+    audit_config
+)?;
+```
+
+**审计日志最佳实践：**
+
+- ✅ 将审计日志存储在安全位置（如 `/var/log/confers/`）
+- ✅ 配置日志轮转以防止磁盘空间耗尽
+- ✅ 限制审计日志文件的访问权限（仅 root/administrator）
+- ✅ 监控审计日志中的可疑活动
+- ✅ 实现日志保留策略以满足合规性要求
+
+### 5. 远程配置安全
+
+<div style="padding:16px; margin: 16px 0">
+
+从远程源加载配置时，必须确保连接安全。
+
+</div>
+
+```rust
+use confers::Config;
+
+// 使用 TLS 加密连接
+let config = MyConfig::new_loader()
+    .with_remote_url("https://config.example.com")
+    .with_remote_tls(
+        Some("/path/to/ca.crt".to_string()),
+        Some("/path/to/client.crt".to_string()),
+        Some("/path/to/client.key".to_string())
+    )
+    .with_remote_token("secure_token") // 使用 Bearer Token
+    .load()
+    .await?;
+
+// 或者使用用户名/密码认证
+let config = MyConfig::new_loader()
+    .with_remote_url("https://config.example.com")
+    .with_remote_auth_secure(
+        "username".to_string(),
+        std::sync::Arc::new(confers::security::SecureString::new(
+            "password".to_string(),
+            confers::security::SensitivityLevel::High
+        ))
+    )
+    .load()
+    .await?;
+```
+
+**远程配置安全最佳实践：**
+
+- ✅ 始终使用 HTTPS/TLS 加密连接
+- ✅ 使用强密码和安全的认证令牌
+- ✅ 定期轮换认证凭据
+- ✅ 使用证书验证服务器身份
+- ✅ 配置超时以防止长时间挂起
+- ❌ 不要在 URL 中传递敏感信息
+- ❌ 不要使用不安全的 HTTP 连接
+
+### 6. 配置验证
+
+<div style="padding:16px; margin: 16px 0">
+
+使用验证器确保配置值在预期范围内。
+
+</div>
+
+```rust
+use confers::validator::{ValidationEngine, RangeFieldValidator};
+use serde_json::json;
+
+// 创建验证引擎
+let mut engine = ValidationEngine::new();
+
+// 添加范围验证器
+engine.add_validator(Box::new(RangeFieldValidator::new(
+    "port", 
+    Some(1024.0), 
+    Some(65535.0)
+)));
+
+// 验证配置
+let config = json!({"port": 8080});
+match engine.validate(&config) {
+    Ok(()) => println!("配置验证通过"),
+    Err(errors) => {
+        eprintln!("配置验证失败:");
+        for error in errors {
+            eprintln!("  - {}", error.message);
+        }
+    }
+}
+```
+
+**配置验证最佳实践：**
+
+- ✅ 验证所有用户输入
+- ✅ 确保数值在预期范围内
+- ✅ 验证字符串格式（如 URL、邮箱）
+- ✅ 记录所有验证失败
+- ✅ 将验证失败视为潜在安全事件
+- ❌ 不要为了便利而绕过验证
+
+### 7. 生产环境安全清单
+
+<div style="padding:16px; margin: 16px 0">
+
+在部署到生产环境之前，请检查以下安全项目：
+
+</div>
+
+<table style="width:100%; border-collapse: collapse">
+<tr>
+<th style="padding: 12px; text-align: left; background-color: #F3F4F6">安全项目</th>
+<th style="padding: 12px; text-align: left; background-color: #F3F4F6">状态</th>
+<th style="padding: 12px; text-align: left; background-color: #F3F4F6">说明</th>
+</tr>
+<tr>
+<td style="padding: 12px">敏感数据加密</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">所有敏感信息都已加密</td>
+</tr>
+<tr>
+<td style="padding: 12px">密钥管理</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">密钥安全存储，定期轮换</td>
+</tr>
+<tr>
+<td style="padding: 12px">审计日志</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">审计日志已启用，安全存储</td>
+</tr>
+<tr>
+<td style="padding: 12px">配置验证</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">所有配置都经过验证</td>
+</tr>
+<tr>
+<td style="padding: 12px">TLS 加密</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">远程连接使用 TLS</td>
+</tr>
+<tr>
+<td style="padding: 12px">访问控制</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">配置文件访问权限受限</td>
+</tr>
+<tr>
+<td style="padding: 12px">错误处理</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">错误信息不泄露敏感数据</td>
+</tr>
+<tr>
+<td style="padding: 12px">日志脱敏</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">敏感字段标记为 sensitive</td>
+</tr>
+</table>
+
+---
+
 ## 故障排除
 
 <div style="padding:16px; margin: 16px 0">
