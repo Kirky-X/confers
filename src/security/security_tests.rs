@@ -15,8 +15,7 @@
 //! - **内存安全测试**: 内存清零和防止泄漏测试
 
 use crate::security::{
-    ConfigInjectionError, ConfigInjector, ConfigValidationResult, ConfigValidator,
-    EnvSecurityError, EnvSecurityValidator, ErrorSanitizer, FilterResult, InputValidationError,
+    ConfigInjector, ConfigValidator, EnvSecurityValidator, ErrorSanitizer, FilterResult,
     InputValidator, SafeResult, SecureString, SecureStringBuilder, SensitiveDataDetector,
     SensitiveDataFilter, SensitivityLevel,
 };
@@ -196,7 +195,7 @@ mod injection_attack_tests {
         ];
 
         for attack in attacks {
-            let result = validator.validate_string(attack);
+            let _result = validator.validate_string(attack);
             // 这些可能不会全部被阻止，取决于验证器配置
             // 但应该至少对危险的模式进行警告
         }
@@ -231,7 +230,7 @@ mod injection_attack_tests {
             ("SECRET_KEY", "value"),
         ];
 
-        for (name, value) in attacks {
+        for (name, _value) in attacks {
             let result = validator.validate_env_name(name, None);
             assert!(
                 result.is_err(),
@@ -513,7 +512,7 @@ mod sensitive_data_detection_tests {
         let sanitizer = ErrorSanitizer::new().with_strict_mode();
 
         let msg = "The password is secret and the token is key data";
-        let sanitized = sanitizer.sanitize(&msg);
+        let sanitized = sanitizer.sanitize(msg);
 
         // 所有敏感关键词都应该被掩码
         assert!(!sanitized.contains("password"));

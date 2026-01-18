@@ -4,7 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 use serde::Serialize;
-use serde_json::{json, Number, Value};
+use serde_json::{Number, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 pub use validator::{Validate, ValidationErrors};
@@ -562,7 +562,10 @@ impl RangeFieldValidator {
                     return Err(ValidationError {
                         field_path: self.field_path.clone(),
                         error_type: ValidationErrorType::RangeError,
-                        message: format!("Cannot navigate to field '{}' through non-object value", part),
+                        message: format!(
+                            "Cannot navigate to field '{}' through non-object value",
+                            part
+                        ),
                         suggestions: vec![
                             "Check the configuration structure".to_string(),
                             "Verify field path is correct".to_string(),
@@ -589,7 +592,7 @@ impl AdvancedConfigValidator for RangeFieldValidator {
                 if let Some(min) = &self.min {
                     let num_f64 = num.as_f64().unwrap_or(0.0);
                     let min_f64 = min.as_f64().unwrap_or(0.0);
-                    
+
                     if !self.inclusive && num_f64 <= min_f64 {
                         return Err(ValidationError {
                             field_path: self.field_path.clone(),
@@ -619,7 +622,7 @@ impl AdvancedConfigValidator for RangeFieldValidator {
                 if let Some(max) = &self.max {
                     let num_f64 = num.as_f64().unwrap_or(0.0);
                     let max_f64 = max.as_f64().unwrap_or(0.0);
-                    
+
                     if !self.inclusive && num_f64 >= max_f64 {
                         return Err(ValidationError {
                             field_path: self.field_path.clone(),
@@ -637,10 +640,7 @@ impl AdvancedConfigValidator for RangeFieldValidator {
                         return Err(ValidationError {
                             field_path: self.field_path.clone(),
                             error_type: ValidationErrorType::RangeError,
-                            message: format!(
-                                "Field '{}' must be at most {}",
-                                self.field_path, max
-                            ),
+                            message: format!("Field '{}' must be at most {}", self.field_path, max),
                             suggestions: vec![format!("Decrease the value to be at most {}", max)],
                         });
                     }
@@ -666,20 +666,21 @@ impl AdvancedConfigValidator for RangeFieldValidator {
 }
 
 /// Dependency validator for fields that depend on other fields
+#[allow(clippy::type_complexity)]
 pub struct DependencyValidator {
     field_path: String,
     depends_on: Vec<String>,
-    validator: Box<dyn Fn(&Value, &HashMap<String, Value>) -> Result<(), ValidationError> + Send + Sync>,
+    validator:
+        Box<dyn Fn(&Value, &HashMap<String, Value>) -> Result<(), ValidationError> + Send + Sync>,
 }
 
 impl DependencyValidator {
-    pub fn new<F>(
-        field_path: &str,
-        depends_on: Vec<String>,
-        validator: F,
-    ) -> Self
+    pub fn new<F>(field_path: &str, depends_on: Vec<String>, validator: F) -> Self
     where
-        F: Fn(&Value, &HashMap<String, Value>) -> Result<(), ValidationError> + Send + Sync + 'static,
+        F: Fn(&Value, &HashMap<String, Value>) -> Result<(), ValidationError>
+            + Send
+            + Sync
+            + 'static,
     {
         Self {
             field_path: field_path.to_string(),
@@ -688,7 +689,7 @@ impl DependencyValidator {
         }
     }
 
-    fn get_field_value<'a>(&self, config: &'a Value, path: &str) -> Result<Value, ValidationError> {
+    fn get_field_value(&self, config: &Value, path: &str) -> Result<Value, ValidationError> {
         let parts: Vec<&str> = path.split('.').collect();
         let mut current = config;
 
@@ -706,7 +707,10 @@ impl DependencyValidator {
                     return Err(ValidationError {
                         field_path: path.to_string(),
                         error_type: ValidationErrorType::DependencyError,
-                        message: format!("Cannot navigate to field '{}' through non-object value", part),
+                        message: format!(
+                            "Cannot navigate to field '{}' through non-object value",
+                            part
+                        ),
                         suggestions: vec!["Check the configuration structure".to_string()],
                     })
                 }
@@ -773,7 +777,10 @@ impl FormatValidator {
                     return Err(ValidationError {
                         field_path: self.field_path.clone(),
                         error_type: ValidationErrorType::FormatError,
-                        message: format!("Cannot navigate to field '{}' through non-object value", part),
+                        message: format!(
+                            "Cannot navigate to field '{}' through non-object value",
+                            part
+                        ),
                         suggestions: vec!["Check the configuration structure".to_string()],
                     })
                 }
@@ -829,16 +836,14 @@ impl AdvancedConfigValidator for FormatValidator {
 }
 
 /// Consistency validator for checking logical consistency across multiple fields
+#[allow(clippy::type_complexity)]
 pub struct ConsistencyValidator {
     fields: Vec<String>,
     validator: Box<dyn Fn(&HashMap<String, Value>) -> Result<(), ValidationError> + Send + Sync>,
 }
 
 impl ConsistencyValidator {
-    pub fn new<F>(
-        fields: Vec<String>,
-        validator: F,
-    ) -> Self
+    pub fn new<F>(fields: Vec<String>, validator: F) -> Self
     where
         F: Fn(&HashMap<String, Value>) -> Result<(), ValidationError> + Send + Sync + 'static,
     {
@@ -848,7 +853,7 @@ impl ConsistencyValidator {
         }
     }
 
-    fn get_field_values<'a>(&self, config: &'a Value) -> Result<HashMap<String, Value>, ValidationError> {
+    fn get_field_values(&self, config: &Value) -> Result<HashMap<String, Value>, ValidationError> {
         let mut values = HashMap::new();
 
         for field_path in &self.fields {
@@ -869,7 +874,10 @@ impl ConsistencyValidator {
                         return Err(ValidationError {
                             field_path: field_path.clone(),
                             error_type: ValidationErrorType::ConsistencyError,
-                            message: format!("Cannot navigate to field '{}' through non-object value", part),
+                            message: format!(
+                                "Cannot navigate to field '{}' through non-object value",
+                                part
+                            ),
                             suggestions: vec!["Check the configuration structure".to_string()],
                         })
                     }
@@ -899,6 +907,7 @@ impl AdvancedConfigValidator for ConsistencyValidator {
 }
 
 /// Cached validation engine that caches validation results
+#[allow(clippy::type_complexity)]
 pub struct CachedValidationEngine {
     engine: ValidationEngine,
     cache: Arc<RwLock<HashMap<String, Result<(), Vec<ValidationError>>>>>,
@@ -976,6 +985,7 @@ impl CachedValidationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_range_validator() {
@@ -990,7 +1000,8 @@ mod tests {
 
     #[test]
     fn test_format_validator() {
-        let validator = FormatValidator::new("email", r"^[^@]+@[^@]+\.[^@]+$", "email address").unwrap();
+        let validator =
+            FormatValidator::new("email", r"^[^@]+@[^@]+\.[^@]+$", "email address").unwrap();
 
         let valid_config = json!({ "email": "test@example.com" });
         assert!(validator.validate(&valid_config).is_ok());
@@ -1003,17 +1014,25 @@ mod tests {
     fn test_dependency_validator() {
         let validator = DependencyValidator::new(
             "database.url",
-            vec!["database.username".to_string(), "database.password".to_string()],
+            vec![
+                "database.username".to_string(),
+                "database.password".to_string(),
+            ],
             |url, deps| {
-                if !url.as_str().unwrap_or("").is_empty() {
-                    if deps.get("database.username").unwrap().as_str().unwrap_or("").is_empty() {
-                        return Err(ValidationError {
-                            field_path: "database.url".to_string(),
-                            error_type: ValidationErrorType::DependencyError,
-                            message: "Database URL requires username".to_string(),
-                            suggestions: vec!["Provide database username".to_string()],
-                        });
-                    }
+                if !url.as_str().unwrap_or("").is_empty()
+                    && deps
+                        .get("database.username")
+                        .unwrap()
+                        .as_str()
+                        .unwrap_or("")
+                        .is_empty()
+                {
+                    return Err(ValidationError {
+                        field_path: "database.url".to_string(),
+                        error_type: ValidationErrorType::DependencyError,
+                        message: "Database URL requires username".to_string(),
+                        suggestions: vec!["Provide database username".to_string()],
+                    });
                 }
                 Ok(())
             },
@@ -1043,8 +1062,14 @@ mod tests {
         let validator = ConsistencyValidator::new(
             vec!["server.port".to_string(), "server.ssl_port".to_string()],
             |values| {
-                let port = values.get("server.port").and_then(|v| v.as_u64()).unwrap_or(0);
-                let ssl_port = values.get("server.ssl_port").and_then(|v| v.as_u64()).unwrap_or(0);
+                let port = values
+                    .get("server.port")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let ssl_port = values
+                    .get("server.ssl_port")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
 
                 if port == ssl_port {
                     return Err(ValidationError {
@@ -1079,7 +1104,11 @@ mod tests {
     fn test_validation_engine() {
         let mut engine = ValidationEngine::new();
 
-        engine.add_validator(Box::new(RangeFieldValidator::new("port", Some(1024.0), Some(65535.0))));
+        engine.add_validator(Box::new(RangeFieldValidator::new(
+            "port",
+            Some(1024.0),
+            Some(65535.0),
+        )));
         engine.add_validator(Box::new(
             FormatValidator::new("email", r"^[^@]+@[^@]+\.[^@]+$", "email address").unwrap(),
         ));
@@ -1100,7 +1129,11 @@ mod tests {
     #[test]
     fn test_cached_validation_engine() {
         let mut engine = ValidationEngine::new();
-        engine.add_validator(Box::new(RangeFieldValidator::new("port", Some(1024.0), Some(65535.0))));
+        engine.add_validator(Box::new(RangeFieldValidator::new(
+            "port",
+            Some(1024.0),
+            Some(65535.0),
+        )));
 
         let cached_engine = CachedValidationEngine::new(engine);
 

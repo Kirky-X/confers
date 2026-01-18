@@ -128,7 +128,7 @@ production = ["derive", "validation", "watch", "encryption", "remote", "monitori
 
 # Core features
 derive = ["confers-macros"]
-validation = ["validator"]
+validation = ["validator", "confers-macros/validation"]
 
 # Optional features
 watch = ["notify", "notify-debouncer-full"]
@@ -147,7 +147,7 @@ http = ["reqwest"]
 encryption = ["aes", "cbc", "rand", "base64", "pbkdf2", "hmac", "sha2", "aes-gcm", "zeroize", "lru", "chrono", "hex", "flate2"]
 
 # CLI features
-cli = ["clap", "clap_complete", "derive", "encryption", "validation"]
+cli = ["clap", "clap_complete", "derive", "encryption", "validation", "confers-macros/cli"]
 
 # Full feature set (enables all optional features)
 full = [

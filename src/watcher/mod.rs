@@ -87,6 +87,7 @@ impl Default for ReloadLatencyMetrics {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum WatchTarget {
     Files(Vec<PathBuf>),
     #[cfg(feature = "remote")]
@@ -408,6 +409,7 @@ impl ConfigWatcher {
                     }
                 }
 
+                #[allow(clippy::needless_borrow)]
                 if let (Some(ref client_cert_path), Some(ref client_key_path)) =
                     (tls_config.client_cert_path(), tls_config.client_key_path())
                 {
@@ -448,6 +450,7 @@ impl ConfigWatcher {
                 let mut request = client.get(&url);
 
                 // Apply authentication if configured
+                #[allow(clippy::needless_borrow)]
                 if let Some(ref auth_config) = auth {
                     if let Some(ref token) = auth_config.bearer_token() {
                         request = request.bearer_auth(token.as_str());

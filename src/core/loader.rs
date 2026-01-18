@@ -21,11 +21,12 @@ use figment::value::Value;
 use figment::Figment;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[allow(unused_imports)]
 use std::sync::Arc;
 #[cfg(feature = "validation")]
 use validator::Validate;
 
-#[cfg(feature = "encryption")]
+#[cfg(any(feature = "encryption", feature = "remote"))]
 use crate::security::{SecureString, SensitivityLevel};
 
 /// A type alias for the sanitizer function
@@ -70,7 +71,9 @@ fn get_memory_usage_mb() -> Option<f64> {
 
     // Use cache duration from constants (1 second) to balance performance and accuracy
     if let Some((memory, time)) = LAST_MEMORY.get() {
-        if now.duration_since(*time) < std::time::Duration::from_millis(crate::constants::time::MEMORY_CACHE_DURATION_MS) {
+        if now.duration_since(*time)
+            < std::time::Duration::from_millis(crate::constants::time::MEMORY_CACHE_DURATION_MS)
+        {
             return Some(*memory);
         }
     }
@@ -599,6 +602,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ///
     /// This helper method initializes the ProviderManager and adds the base figment
     /// as a SerializedProvider, which includes default configuration values.
+    #[allow(dead_code)]
     fn setup_base_provider(&self, figment: &Figment) -> ProviderManager {
         let mut manager = ProviderManager::new();
         manager.add_provider(SerializedProvider::new(figment.clone(), "base_config"));
@@ -609,6 +613,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ///
     /// This helper method adds a FileConfigProvider to the manager if explicit files
     /// are configured. Files are loaded with priority 40 (lower than environment variables).
+    #[allow(dead_code)]
     fn setup_file_provider(&self, manager: &mut ProviderManager) -> Result<(), ConfigError> {
         if !self.explicit_files.is_empty() {
             // Check file sizes before loading
@@ -649,6 +654,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ///
     /// This helper method adds an EnvironmentProvider to the manager if environment
     /// loading is enabled. Environment variables have priority 50 (higher than files).
+    #[allow(dead_code)]
     fn setup_env_provider<C: crate::ConfigMap>(&self, manager: &mut ProviderManager) {
         if self.use_env {
             let env_prefix = self.env_prefix.as_deref().unwrap_or("");
@@ -669,6 +675,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// This helper method adds remote configuration providers to the manager if they
     /// are configured. All remote providers have priority 50.
     #[cfg(feature = "remote")]
+    #[allow(dead_code)]
     fn setup_remote_providers(&self, manager: &mut ProviderManager) {
         // Load HTTP remote config if enabled
         if self.remote_config.enabled {
@@ -758,18 +765,13 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     ///
     /// This helper method checks if the current memory usage exceeds the configured
     /// limit and returns an error if it does.
+    #[allow(dead_code)]
     #[cfg(feature = "monitoring")]
     fn apply_memory_check(&self) -> Result<(), ConfigError> {
         if self.memory_limit_mb > 0 {
-            // Force refresh memory check for accuracy before critical operation
-            let current_mb = if let Some(mb) = force_refresh_memory() {
-                mb
-            } else {
-                // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| {
-                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
-                })?
-            };
+            let current_mb = get_memory_usage_mb().ok_or_else(|| {
+                ConfigError::RuntimeError("Failed to get memory usage".to_string())
+            })?;
 
             if current_mb as usize > self.memory_limit_mb {
                 return Err(ConfigError::MemoryLimitExceeded {
@@ -787,6 +789,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// 1. Template expansion
     /// 2. Sanitization (if configured)
     /// 3. Validation
+    #[allow(dead_code)]
     fn finalize_config(&self, mut config: T) -> Result<T, ConfigError>
     where
         T: Serialize + for<'de> Deserialize<'de> + Clone,
@@ -1010,15 +1013,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Check memory limit before extraction
         #[cfg(feature = "monitoring")]
         if self.memory_limit_mb > 0 {
-            // Force refresh memory check for accuracy before critical operation
-            let current_mb = if let Some(mb) = force_refresh_memory() {
-                mb
-            } else {
-                // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| {
-                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
-                })?
-            };
+            let current_mb = get_memory_usage_mb().ok_or_else(|| {
+                ConfigError::RuntimeError("Failed to get memory usage".to_string())
+            })?;
 
             if current_mb as usize > self.memory_limit_mb {
                 return Err(ConfigError::MemoryLimitExceeded {
@@ -1201,15 +1198,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Check memory limit before extraction
         #[cfg(feature = "monitoring")]
         if self.memory_limit_mb > 0 {
-            // Force refresh memory check for accuracy before critical operation
-            let current_mb = if let Some(mb) = force_refresh_memory() {
-                mb
-            } else {
-                // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| {
-                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
-                })?
-            };
+            let current_mb = get_memory_usage_mb().ok_or_else(|| {
+                ConfigError::RuntimeError("Failed to get memory usage".to_string())
+            })?;
 
             if current_mb as usize > self.memory_limit_mb {
                 return Err(ConfigError::MemoryLimitExceeded {
@@ -1248,7 +1239,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             + Serialize
             + Default
             + Clone
-            + Validate
+            + OptionalValidate
             + crate::ConfigMap,
     {
         let mut figment = Figment::new();
@@ -1735,15 +1726,9 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         // Check memory limit before extraction
         #[cfg(feature = "monitoring")]
         if self.memory_limit_mb > 0 {
-            // Force refresh memory check for accuracy before critical operation
-            let current_mb = if let Some(mb) = force_refresh_memory() {
-                mb
-            } else {
-                // Fallback to cached value if refresh fails
-                get_memory_usage_mb().ok_or_else(|| {
-                    ConfigError::RuntimeError("Failed to get memory usage".to_string())
-                })?
-            };
+            let current_mb = get_memory_usage_mb().ok_or_else(|| {
+                ConfigError::RuntimeError("Failed to get memory usage".to_string())
+            })?;
 
             if current_mb as usize > self.memory_limit_mb {
                 return Err(ConfigError::MemoryLimitExceeded {
@@ -1823,7 +1808,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     #[cfg(all(not(feature = "audit"), feature = "validation"))]
     pub async fn load(&self) -> Result<T, ConfigError>
     where
-        T: for<'de> Deserialize<'de> + Serialize + Default + Clone + Validate + crate::ConfigMap,
+        T: for<'de> Deserialize<'de> + Serialize + Default + Clone + crate::ConfigMap,
     {
         let mut figment = Figment::new();
 

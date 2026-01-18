@@ -310,6 +310,7 @@ impl ConfigInjector {
     /// # 返回
     ///
     /// 返回成功和失败的注入记录
+    #[allow(clippy::type_complexity)]
     pub fn inject_all(
         &self,
         config: &HashMap<String, String>,
@@ -791,8 +792,8 @@ mod tests {
 
         let history = injector.get_injection_history().unwrap();
         assert_eq!(history.len(), 2);
-        assert!(history[0].is_sensitive == false);
-        assert!(history[1].is_sensitive == true);
+        assert!(!history[0].is_sensitive);
+        assert!(history[1].is_sensitive);
     }
 
     #[test]
@@ -805,7 +806,7 @@ mod tests {
         let config = EnvironmentConfig::from_injector(&injector);
 
         assert_eq!(config.get::<u16>("APP_PORT", 8080), 8080);
-        assert_eq!(config.get::<bool>("APP_DEBUG", false), true);
+        assert!(config.get::<bool>("APP_DEBUG", false));
         assert_eq!(config.get_string("APP_NAME", "default"), "test-app");
     }
 
