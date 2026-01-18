@@ -73,6 +73,7 @@ fn has_serde_flatten(attrs: &[Attribute]) -> bool {
     false
 }
 
+#[allow(dead_code)]
 fn get_shadow_type(ty: &Type) -> Option<TokenStream> {
     if let Type::Path(type_path) = ty {
         let mut new_path = type_path.clone();
@@ -154,6 +155,7 @@ fn detect_protocol(
 }
 
 /// 为字段列表生成 Clap 字段，处理 flatten 属性
+#[allow(dead_code)]
 fn generate_clap_fields(fields: &[FieldOpts]) -> Vec<TokenStream> {
     let mut clap_fields = Vec::new();
 
@@ -825,7 +827,10 @@ pub fn generate_impl(
     };
 
     // 为每个字段生成 Clap 参数
+    #[cfg(feature = "cli")]
     let clap_fields = generate_clap_fields(fields);
+    #[cfg(not(feature = "cli"))]
+    let clap_fields: Vec<proc_macro2::TokenStream> = Vec::new();
 
     // 生成字段名称字符串映射（仅包含原始类型、非展平、非跳过的字段）
     let _field_names: Vec<_> = fields
@@ -1502,12 +1507,15 @@ pub fn generate_impl(
         }
     });
 
-    let impl_optional_validate = if has_validations {
+    let impl_optional_validate = if has_validate_derive {
+        // 如果结构体有 Validate derive，则在启用 validation feature 时不生成 OptionalValidate 实现
+        // 因为 blanket implementation 已经提供了
         quote! {
             #[cfg(not(feature = "validation"))]
             impl confers::OptionalValidate for #struct_name {}
         }
     } else {
+        // 如果结构体没有 Validate derive，则总是生成 OptionalValidate 实现
         quote! {
             impl confers::OptionalValidate for #struct_name {}
         }
@@ -1522,8 +1530,8 @@ pub fn generate_impl(
 
         /// Clap-compatible argument structure for command line parsing
         #[cfg(feature = "cli")]
-        #[derive(clap::Parser, Debug, serde::Serialize, serde::Deserialize)]
-        #[command(name = stringify!(#struct_name))]
+        #[derive(confers::clap::Parser, Debug, serde::Serialize, serde::Deserialize)]
+        #[clap(name = stringify!(#struct_name))]
         struct #clap_shadow_name {
             #(#clap_fields)*
         }
@@ -1599,11 +1607,11 @@ pub fn generate_impl(
                     }
                 }
 
-                // Validate the config
+                // Load config
                 #[cfg(feature = "audit")]
-                let config = loader.load_sync()?;
+                let config = futures::executor::block_on(async { loader.load().await })?;
                 #[cfg(not(feature = "audit"))]
-                let config = loader.load_sync()?;
+                let config = futures::executor::block_on(async { loader.load().await })?;
 
                 // Apply validation only if there are validations to apply
                 #[cfg(feature = "validation")]
@@ -1647,11 +1655,11 @@ pub fn generate_impl(
                     }
                 }
 
-                // Validate the config
+                // Load config
                 #[cfg(feature = "audit")]
-                let config = loader.load_sync_with_audit()?;
+                let config = futures::executor::block_on(async { loader.load().await })?;
                 #[cfg(not(feature = "audit"))]
-                let config = loader.load_sync()?;
+                let config = futures::executor::block_on(async { loader.load().await })?;
 
                 // Apply validation only if there are validations to apply
                 #[cfg(feature = "validation")]
@@ -1697,7 +1705,7 @@ pub fn generate_impl(
                 Self: Sized + confers::Sanitize + for<'de> serde::Deserialize<'de> + serde::Serialize + std::default::Default + Clone + confers::ConfigMap,
             {
                 let mut loader = Self::new_loader();
-                let config = loader.load_sync()?;
+                let config = futures::executor::block_on(async { loader.load().await })?;
 
                 // Apply validation only if there are validations to apply
                 #[cfg(feature = "validation")]

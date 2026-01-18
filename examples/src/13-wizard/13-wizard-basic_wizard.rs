@@ -115,7 +115,12 @@ environment = "{}"
 port = {}
 debug = {}
 "#,
-        config.app_name, config.app_name, config.version, config.environment, config.port, config.debug
+        config.app_name,
+        config.app_name,
+        config.version,
+        config.environment,
+        config.port,
+        config.debug
     );
 
     let config_path = "src/13-wizard/configs/wizard.toml";

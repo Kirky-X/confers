@@ -661,6 +661,7 @@ dependencies = [
  "anyhow",
  "confers",
  "figment",
+ "futures",
  "hex",
  "serde",
  "serde_json",

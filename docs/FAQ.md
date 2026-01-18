@@ -151,7 +151,7 @@
 
 ```toml
 [dependencies]
-confers = "0.1"
+confers = "0.2.0"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -206,15 +206,15 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.1", default-features = false, features = ["minimal"] }
+confers = { version = "0.2.0", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.1", default-features = false, features = ["recommended"] }
+confers = { version = "0.2.0", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.1", default-features = false, features = ["production"] }
+confers = { version = "0.2.0", default-features = false, features = ["production"] }
 ```
 
 </div>> 💡 **提示**: 默认特性为 `derive`（仅配置加载）。如需验证功能，请使用 `recommended` 预设或显式启用 `validation` 特性。

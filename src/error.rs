@@ -42,7 +42,11 @@ pub enum ConfigError {
     MemoryLimitExceeded { limit: usize, current: usize },
 
     #[error("Configuration file too large: {path} ({size_mb}MB exceeds limit {limit_mb}MB)")]
-    ConfigTooLarge { path: PathBuf, size_mb: usize, limit_mb: usize },
+    ConfigTooLarge {
+        path: PathBuf,
+        size_mb: usize,
+        limit_mb: usize,
+    },
 
     #[error("Key error: {0}")]
     KeyError(String),
@@ -187,11 +191,7 @@ impl ConfigError {
             }
             ConfigError::EnvSecurityError(msg) => {
                 // Remove environment variable values, keep only names
-                let sanitized = msg
-                    .split('=')
-                    .next()
-                    .unwrap_or("ENVIRONMENT")
-                    .to_string();
+                let sanitized = msg.split('=').next().unwrap_or("ENVIRONMENT").to_string();
                 format!("Environment security validation failed: {}", sanitized)
             }
             ConfigError::EncryptionError(msg) => {
@@ -220,7 +220,11 @@ impl ConfigError {
                     limit, current
                 )
             }
-            ConfigError::ConfigTooLarge { path, size_mb, limit_mb } => {
+            ConfigError::ConfigTooLarge {
+                path,
+                size_mb,
+                limit_mb,
+            } => {
                 // Only show filename, not full path
                 let filename = path
                     .file_name()
@@ -286,9 +290,7 @@ impl ConfigError {
                     "Unsafe path".to_string()
                 }
             }
-            ConfigError::LoadError => {
-                "Configuration load failed".to_string()
-            }
+            ConfigError::LoadError => "Configuration load failed".to_string(),
             ConfigError::SerializationError(msg) => {
                 // Limit error message length
                 let sanitized = msg.chars().take(100).collect::<String>();

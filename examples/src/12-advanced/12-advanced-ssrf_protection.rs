@@ -24,10 +24,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "remote")]
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(
-    ssrf_protection = true,
-    description = "配置结构，启用 SSRF 保护"
-)]
+#[config(ssrf_protection = true, description = "配置结构，启用 SSRF 保护")]
 pub struct SSRFProtectedConfig {
     #[config(
         validate = "url",
@@ -92,7 +89,10 @@ cdn_endpoint = "http://127.0.0.1:8080/assets"
 webhook_url = "https://hooks.example.com/webhook"
 "#;
 
-    std::fs::write("src/12-advanced/configs/ssrf_internal.toml", internal_config)?;
+    std::fs::write(
+        "src/12-advanced/configs/ssrf_internal.toml",
+        internal_config,
+    )?;
 
     match SSRFProtectedConfig::load_file("src/12-advanced/configs/ssrf_internal.toml").load() {
         Ok(_) => {
@@ -112,7 +112,10 @@ cdn_endpoint = "https://cdn.example.com/assets"
 webhook_url = "http://169.254.169.254/latest/meta-data/"
 "#;
 
-    std::fs::write("src/12-advanced/configs/ssrf_metadata.toml", metadata_config)?;
+    std::fs::write(
+        "src/12-advanced/configs/ssrf_metadata.toml",
+        metadata_config,
+    )?;
 
     match SSRFProtectedConfig::load_file("src/12-advanced/configs/ssrf_metadata.toml").load() {
         Ok(_) => {

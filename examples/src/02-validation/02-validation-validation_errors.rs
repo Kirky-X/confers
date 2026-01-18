@@ -49,12 +49,18 @@ name = "example"
 email = "user@example.com"
 port = 8080
 "#;
-        std::fs::write("src/02-validation/configs/error_handling.toml", valid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/error_handling.toml",
+            valid_content,
+        )?;
 
         match ErrorHandlingConfig::load() {
             Ok(config) => {
                 println!("   ✅ 配置有效");
-                println!("   Name: {}, Email: {}, Port: {}", config.name, config.email, config.port);
+                println!(
+                    "   Name: {}, Email: {}, Port: {}",
+                    config.name, config.email, config.port
+                );
             }
             Err(e) => println!("   ❌ 加载失败: {}", e),
         }
@@ -66,7 +72,10 @@ name = "x"
 email = "invalid-email"
 port = 70000
 "#;
-        std::fs::write("src/02-validation/configs/error_handling.toml", invalid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/error_handling.toml",
+            invalid_content,
+        )?;
 
         match ErrorHandlingConfig::load() {
             Ok(config) => {
@@ -82,14 +91,20 @@ name = "valid-name"
 email = "valid@example.com"
 port = 8080
 "#;
-        std::fs::write("src/02-validation/configs/error_handling.toml", invalid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/error_handling.toml",
+            invalid_content,
+        )?;
 
         let result = ErrorHandlingConfig::load();
 
         match result {
             Ok(config) => {
                 println!("   ✅ 配置有效");
-                println!("   Name: {}, Email: {}, Port: {}", config.name, config.email, config.port);
+                println!(
+                    "   Name: {}, Email: {}, Port: {}",
+                    config.name, config.email, config.port
+                );
             }
             Err(e) => println!("   ❌ 配置无效: {}", e),
         }
@@ -98,7 +113,9 @@ port = 8080
     #[cfg(not(feature = "validation"))]
     {
         println!("This example requires the 'validation' feature.");
-        println!("Run with: cargo run --example 02-validation-validation_errors --features validation");
+        println!(
+            "Run with: cargo run --example 02-validation-validation_errors --features validation"
+        );
     }
 
     Ok(())

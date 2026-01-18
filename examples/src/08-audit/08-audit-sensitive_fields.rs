@@ -4,7 +4,6 @@
 // See LICENSE file in the project root for full license information.
 
 use confers::audit::{AuditConfig, AuditLogger, Sanitize};
-use confers::Config;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -71,11 +70,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let audit_log_path = audit_dir.join("audit.log");
-    AuditLogger::log_to_file_with_source(
-        &config,
-        &audit_log_path,
-        audit_config
-    )?;
+    AuditLogger::log_to_file_with_source(&config, &audit_log_path, audit_config)?;
     println!("✓ 审计日志已记录到: {:?}", audit_log_path);
 
     // 读取审计日志

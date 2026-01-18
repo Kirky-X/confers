@@ -181,8 +181,16 @@ struct AppConfig {
 }
 
 fn main() {
-    // 加载配置（按顺序：默认值 -> 配置文件 -> 环境变量）
-    let config = AppConfig::load().await.expect("无法加载配置");
+    // 加载配置（同步方式，按顺序：默认值 -> 配置文件 -> 环境变量）
+    let config = AppConfig::load().expect("无法加载配置");
+    
+    println!("🚀 服务器运行在: {}:{}", config.host, config.port);
+}
+
+// 或者使用异步方式（适用于远程配置）
+#[tokio::main]
+async fn async_main() {
+    let config = AppConfig::load_async().await.expect("无法加载配置");
     
     println!("🚀 服务器运行在: {}:{}", config.host, config.port);
 }
@@ -493,11 +501,11 @@ struct MyConfig {
 let config = MyConfig::new_loader()
     .with_file("custom.yaml")
     .with_memory_limit(10)
-    .load()
-    .await?;
+    .load_sync()?;
 
 // 异步加载（适用于远程配置）
-let config = MyConfig::load().await?;
+let config = MyConfig::new_loader()
+    .load().await?;
 ```
 
 ### 默认值与环境变量
@@ -535,8 +543,7 @@ let config = MyConfig::new_loader()
         cfg.admin_email = cfg.admin_email.trim().to_lowercase();
         Ok(cfg)
     })
-    .load()
-    .await?;
+    .load_sync()?;
 ```
 
 ### 远程配置 (Etcd/Consul/HTTP)
@@ -596,8 +603,7 @@ let config = SecureConfig::new_loader()
     .with_audit_log(true)
     .with_audit_log_path("audit.log")
     .with_memory_limit(50) // 限制为 50MB
-    .load()
-    .await?;
+    .load_sync()?;
 ```
 
 ### 文件监听与热重载
@@ -617,8 +623,7 @@ use std::time::Duration;
 let config = MyConfig::new_loader()
     .with_file("config.toml")
     .with_watch(true)
-    .load()
-    .await?;
+    .load_sync()?;
 
 println!("初始配置已加载，消息: {}", config.message);
 
@@ -634,8 +639,7 @@ for i in 1..=5 {
     // 检查是否发生变化
     let current_config = MyConfig::new_loader()
         .with_file("config.toml")
-        .load()
-        .await?;
+        .load_sync()?;
     
     if current_config.message != last_message {
         println!(">>> 配置已变更！新消息: {}", current_config.message);
@@ -651,19 +655,27 @@ for i in 1..=5 {
 使用 `confers` 的配置差分功能，可以比较不同环境或版本的配置文件差异：
 
 ```rust
-use confers::ConfigDiff;
+use confers::commands::{DiffCommand, DiffOptions, DiffFormat};
 
 // 比较两个配置文件
-let diff = ConfigDiff::new("development.toml", "production.toml")?;
+let options = DiffOptions {
+    format: DiffFormat::Unified,
+    context_lines: 5,
+    show_line_numbers: true,
+    ..Default::default()
+};
 
-// 使用统一格式输出
-diff.print_unified_diff()?;
+DiffCommand::execute("development.toml", "production.toml", options)?;
 
-// 使用并排格式输出
-diff.print_side_by_side_diff()?;
+// 或者使用并排格式
+let side_by_side_options = DiffOptions {
+    format: DiffFormat::SideBySide,
+    context_lines: 3,
+    show_line_numbers: false,
+    ..Default::default()
+};
 
-// 生成差异报告
-diff.generate_report("diff_report.md")?;
+DiffCommand::execute("development.toml", "production.toml", side_by_side_options)?;
 ```
 
 **命令行方式：**
@@ -678,22 +690,22 @@ confers diff development.toml production.toml --format unified -o diff_report.md
 `confers` 使用 AES-256 加密算法保护敏感配置信息：
 
 ```rust
-use confers::{ConfigEncrypt, EncryptedConfig};
+use confers::encryption::ConfigEncryption;
+use confers::key::KeyManager;
+use std::path::PathBuf;
 
-// 生成加密密钥
-let key = ConfigEncrypt::generate_key()?;
+// 创建密钥管理器并生成密钥
+let mut km = KeyManager::new(PathBuf::from("./keys"))?;
+let key = km.generate_key()?;
+
+// 创建加密器
+let encryption = ConfigEncryption::new(key);
 
 // 加密敏感配置
-let encrypted = ConfigEncrypt::encrypt_value(
-    "super_secret_password",
-    &key
-)?;
+let encrypted = encryption.encrypt("super_secret_password")?;
 
 // 解密配置
-let decrypted = ConfigEncrypt::decrypt_value(
-    &encrypted,
-    &key
-)?;
+let decrypted = encryption.decrypt(&encrypted)?;
 ```
 
 **命令行方式：**
@@ -943,8 +955,7 @@ let config = MyConfig::new_loader()
             confers::security::SensitivityLevel::High
         ))
     )
-    .load()
-    .await?;
+    .load_sync()?;
 ```
 
 **远程配置安全最佳实践：**

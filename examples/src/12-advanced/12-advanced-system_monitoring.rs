@@ -18,7 +18,7 @@
 //! ```
 
 #[cfg(feature = "monitoring")]
-use confers::{Config, metrics::ConfigMetrics};
+use confers::{metrics::ConfigMetrics, Config};
 #[cfg(feature = "monitoring")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "monitoring")]
@@ -26,10 +26,7 @@ use std::time::Instant;
 
 #[cfg(feature = "monitoring")]
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(
-    enable_monitoring = true,
-    description = "配置结构，启用系统监控"
-)]
+#[config(enable_monitoring = true, description = "配置结构，启用系统监控")]
 pub struct MonitoringConfig {
     pub app_name: String,
     pub version: String,
@@ -87,10 +84,12 @@ timeout = 30
     println!("\n3. 性能分析:");
     let total_time = metrics.parse_time() + metrics.validate_time();
 
-    println!("   解析耗时占比: {:.1}%",
+    println!(
+        "   解析耗时占比: {:.1}%",
         (metrics.parse_time().as_millis() as f64 / total_time.as_millis() as f64) * 100.0
     );
-    println!("   验证耗时占比: {:.1}%",
+    println!(
+        "   验证耗时占比: {:.1}%",
         (metrics.validate_time().as_millis() as f64 / total_time.as_millis() as f64) * 100.0
     );
 
@@ -101,12 +100,15 @@ timeout = 30
 
     for i in 0..iterations {
         let start = Instant::now();
-        let _ = MonitoringConfig::load_file("src/12-advanced/configs/monitoring.toml")
-            .load()?;
+        let _ = MonitoringConfig::load_file("src/12-advanced/configs/monitoring.toml").load()?;
         total_duration += start.elapsed();
 
         if (i + 1) % 5 == 0 {
-            println!("   已加载 {} 次，平均耗时: {:?}", i + 1, total_duration / (i + 1) as u32);
+            println!(
+                "   已加载 {} 次，平均耗时: {:?}",
+                i + 1,
+                total_duration / (i + 1) as u32
+            );
         }
     }
 

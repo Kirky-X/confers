@@ -1,5 +1,5 @@
 #[cfg(feature = "cli")]
-use confers::commands::{DiffCommand, DiffOptions, DiffFormat};
+use confers::commands::{DiffCommand, DiffFormat, DiffOptions};
 
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "cli")]
@@ -8,7 +8,11 @@ fn main() -> anyhow::Result<()> {
             format: DiffFormat::SideBySide,
             ..Default::default()
         };
-        DiffCommand::execute("src/10-diff/configs/config_v1.toml", "src/10-diff/configs/config_v2.toml", options)?;
+        DiffCommand::execute(
+            "src/10-diff/configs/config_v1.toml",
+            "src/10-diff/configs/config_v2.toml",
+            options,
+        )?;
     }
     #[cfg(not(feature = "cli"))]
     {

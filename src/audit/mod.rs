@@ -432,30 +432,75 @@ impl AuditLogger {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuditEventType {
     // Configuration loading events
-    ConfigLoad { source: String },
-    ConfigLoadFailed { source: String, error: String },
-    ConfigReload { source: String },
+    ConfigLoad {
+        source: String,
+    },
+    ConfigLoadFailed {
+        source: String,
+        error: String,
+    },
+    ConfigReload {
+        source: String,
+    },
 
     // Key management events
-    KeyRotation { key_id: String, previous_version: u32, new_version: u32 },
-    KeyGeneration { key_id: String, version: u32 },
-    KeyDeletion { key_id: String },
-    KeyAccess { key_id: String, operation: String },
+    KeyRotation {
+        key_id: String,
+        previous_version: u32,
+        new_version: u32,
+    },
+    KeyGeneration {
+        key_id: String,
+        version: u32,
+    },
+    KeyDeletion {
+        key_id: String,
+    },
+    KeyAccess {
+        key_id: String,
+        operation: String,
+    },
 
     // Configuration modification events
-    ConfigUpdate { field: String, old_value: String, new_value: String },
-    ConfigDelete { field: String, value: String },
-    ConfigValidationFailed { field: String, error: String },
+    ConfigUpdate {
+        field: String,
+        old_value: String,
+        new_value: String,
+    },
+    ConfigDelete {
+        field: String,
+        value: String,
+    },
+    ConfigValidationFailed {
+        field: String,
+        error: String,
+    },
 
     // Remote access events
-    RemoteConfigFetch { url: String },
-    RemoteConfigFetchFailed { url: String, error: String },
-    RemoteConfigUpdate { url: String },
+    RemoteConfigFetch {
+        url: String,
+    },
+    RemoteConfigFetchFailed {
+        url: String,
+        error: String,
+    },
+    RemoteConfigUpdate {
+        url: String,
+    },
 
     // Security events
-    SecurityViolation { violation_type: String, details: String },
-    UnauthorizedAccess { resource: String, attempt: String },
-    EncryptionFailure { operation: String, error: String },
+    SecurityViolation {
+        violation_type: String,
+        details: String,
+    },
+    UnauthorizedAccess {
+        resource: String,
+        attempt: String,
+    },
+    EncryptionFailure {
+        operation: String,
+        error: String,
+    },
 }
 
 /// Audit event priority levels
@@ -508,7 +553,9 @@ impl AuditEventGenerator {
         metadata: std::collections::HashMap<String, String>,
     ) -> AuditEvent {
         AuditEvent {
-            id: self.event_id_generator.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            id: self
+                .event_id_generator
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
@@ -566,15 +613,12 @@ impl AuditLogWriter {
     ) -> Result<Self, ConfigError> {
         // Ensure parent directory exists
         if let Some(parent) = log_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| ConfigError::IoError(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| ConfigError::IoError(e.to_string()))?;
         }
 
         // Get initial log size if file exists
         let initial_size = if log_path.exists() {
-            std::fs::metadata(&log_path)
-                .map(|m| m.len() as u64)
-                .unwrap_or(0)
+            std::fs::metadata(&log_path).map(|m| m.len()).unwrap_or(0)
         } else {
             0
         };
@@ -591,8 +635,8 @@ impl AuditLogWriter {
     /// Write an audit event to the log file
     pub fn write_event(&self, event: &AuditEvent) -> Result<(), ConfigError> {
         // Serialize event
-        let serialized = serde_json::to_string(event)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        let serialized =
+            serde_json::to_string(event).map_err(|e| ConfigError::ParseError(e.to_string()))?;
 
         // Sign event for integrity protection
         let signature = self.sign_event(&serialized)?;
@@ -653,7 +697,9 @@ impl AuditLogWriter {
 
     /// Check if log rotation is needed
     fn should_rotate(&self) -> bool {
-        let current_size = self.current_log_size.load(std::sync::atomic::Ordering::SeqCst);
+        let current_size = self
+            .current_log_size
+            .load(std::sync::atomic::Ordering::SeqCst);
         current_size > (self.rotation_config.max_size_mb * 1024 * 1024) as u64
     }
 
@@ -662,7 +708,9 @@ impl AuditLogWriter {
         use std::fs;
 
         // Acquire rotation lock to prevent concurrent rotations
-        let _lock = self.rotation_lock.lock()
+        let _lock = self
+            .rotation_lock
+            .lock()
             .map_err(|e| ConfigError::IoError(format!("Failed to acquire rotation lock: {}", e)))?;
 
         // Check again if rotation is still needed after acquiring lock
@@ -714,18 +762,18 @@ impl AuditLogWriter {
     /// Compress an archived log file
     #[cfg(feature = "encryption")]
     fn compress_archive(&self, archive_path: &std::path::Path) -> Result<(), ConfigError> {
-        use std::fs::File;
-        use std::io::{BufReader, BufWriter, Read};
         use flate2::write::GzEncoder;
         use flate2::Compression;
+        use std::fs::File;
+        use std::io::{BufReader, BufWriter, Read};
 
-        let input_file = File::open(archive_path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        let input_file =
+            File::open(archive_path).map_err(|e| ConfigError::IoError(e.to_string()))?;
         let mut reader = BufReader::new(input_file);
 
         let compressed_path = archive_path.with_extension("log.gz");
-        let output_file = File::create(&compressed_path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        let output_file =
+            File::create(&compressed_path).map_err(|e| ConfigError::IoError(e.to_string()))?;
         let mut writer = BufWriter::new(GzEncoder::new(output_file, Compression::default()));
 
         let mut buffer = Vec::new();
@@ -740,8 +788,7 @@ impl AuditLogWriter {
             .map_err(|e: std::io::Error| ConfigError::IoError(e.to_string()))?;
 
         // Remove original archive file only after successful compression
-        std::fs::remove_file(archive_path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        std::fs::remove_file(archive_path).map_err(|e| ConfigError::IoError(e.to_string()))?;
 
         Ok(())
     }
@@ -757,7 +804,8 @@ impl AuditLogWriter {
         use std::fs;
         use std::path::PathBuf;
 
-        let parent_dir = self.log_path
+        let parent_dir = self
+            .log_path
             .parent()
             .ok_or_else(|| ConfigError::IoError("Invalid log path".to_string()))?;
 
@@ -785,13 +833,13 @@ impl AuditLogWriter {
         if archives.len() > self.rotation_config.max_files {
             let to_remove = &archives[..archives.len() - self.rotation_config.max_files];
             for path in to_remove {
-                fs::remove_file(path)
-                    .map_err(|e| ConfigError::IoError(e.to_string()))?;
+                fs::remove_file(path).map_err(|e| ConfigError::IoError(e.to_string()))?;
             }
         }
 
         // Remove archives older than max_age_days
-        let max_age = std::time::Duration::from_secs(self.rotation_config.max_age_days as u64 * 24 * 3600);
+        let max_age =
+            std::time::Duration::from_secs(self.rotation_config.max_age_days as u64 * 24 * 3600);
         let now = SystemTime::now();
         archives.retain(|path| {
             fs::metadata(path)
@@ -814,7 +862,8 @@ impl AuditLogWriter {
 
     /// Get the current log size in bytes
     pub fn current_log_size(&self) -> u64 {
-        self.current_log_size.load(std::sync::atomic::Ordering::SeqCst)
+        self.current_log_size
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -917,7 +966,7 @@ impl AuditLogReader {
             .collect();
 
         let total_pages = if limit > 0 {
-            (total_count + limit - 1) / limit
+            total_count.div_ceil(limit)
         } else {
             1
         };
@@ -978,8 +1027,7 @@ impl AuditLogReader {
             return Ok(Vec::new());
         }
 
-        let file = File::open(&self.log_path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        let file = File::open(&self.log_path).map_err(|e| ConfigError::IoError(e.to_string()))?;
         let reader = BufReader::new(file);
         let mut events = Vec::new();
 
@@ -1092,7 +1140,10 @@ mod tests {
             violation_type: "UnauthorizedAccess".to_string(),
             details: "Invalid credentials".to_string(),
         };
-        assert!(matches!(event_type, AuditEventType::SecurityViolation { .. }));
+        assert!(matches!(
+            event_type,
+            AuditEventType::SecurityViolation { .. }
+        ));
     }
 
     #[test]
@@ -1116,7 +1167,10 @@ mod tests {
         let event = generator.generate_event(event_type.clone(), priority, metadata);
 
         assert_eq!(event.id, 1);
-        assert!(matches!(event.event_type, AuditEventType::ConfigLoad { .. }));
+        assert!(matches!(
+            event.event_type,
+            AuditEventType::ConfigLoad { .. }
+        ));
         assert_eq!(event.priority, AuditPriority::Info);
         assert!(!event.hostname.is_empty());
         assert!(event.process_id > 0);

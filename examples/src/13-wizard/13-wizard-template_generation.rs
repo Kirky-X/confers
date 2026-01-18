@@ -76,7 +76,16 @@ workers = 4
 level = "info"
 format = "json"
 "#,
-        app_name, version, environment, db_host, db_port, db_name, redis_host, redis_port, api_port, admin_port
+        app_name,
+        version,
+        environment,
+        db_host,
+        db_port,
+        db_name,
+        redis_host,
+        redis_port,
+        api_port,
+        admin_port
     );
 
     println!("=== 生成的配置内容 ===\n");

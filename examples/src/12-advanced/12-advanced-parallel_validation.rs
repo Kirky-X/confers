@@ -28,45 +28,24 @@ use std::time::Instant;
 
 #[cfg(feature = "parallel")]
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(
-    parallel_validation = true,
-    description = "配置结构，启用并行验证"
-)]
+#[config(parallel_validation = true, description = "配置结构，启用并行验证")]
 pub struct ParallelConfig {
-    #[config(
-        validate = "length(min = 3, max = 50)",
-        description = "应用名称"
-    )]
+    #[config(validate = "length(min = 3, max = 50)", description = "应用名称")]
     pub app_name: String,
 
-    #[config(
-        validate = "email",
-        description = "管理员邮箱"
-    )]
+    #[config(validate = "email", description = "管理员邮箱")]
     pub admin_email: String,
 
-    #[config(
-        validate = "url",
-        description = "API 端点"
-    )]
+    #[config(validate = "url", description = "API 端点")]
     pub api_endpoint: String,
 
-    #[config(
-        validate = "range(min = 1, max = 65535)",
-        description = "端口号"
-    )]
+    #[config(validate = "range(min = 1, max = 65535)", description = "端口号")]
     pub port: u16,
 
-    #[config(
-        validate = "regex(^[a-zA-Z0-9_-]+$)",
-        description = "环境标识符"
-    )]
+    #[config(validate = "regex(^[a-zA-Z0-9_-]+$)", description = "环境标识符")]
     pub environment: String,
 
-    #[config(
-        validate = "range(min = 1, max = 100)",
-        description = "工作线程数"
-    )]
+    #[config(validate = "range(min = 1, max = 100)", description = "工作线程数")]
     pub workers: u32,
 }
 
@@ -142,12 +121,16 @@ workers = 150  # 超出范围
 
     // 并行验证
     let start = Instant::now();
-    let valid_count = configs.par_iter()
+    let valid_count = configs
+        .par_iter()
         .filter(|config| validate_config(config).is_ok())
         .count();
     let parallel_duration = start.elapsed();
 
-    println!("   并行验证: {:?} (有效: {}/{})", parallel_duration, valid_count, config_count);
+    println!(
+        "   并行验证: {:?} (有效: {}/{})",
+        parallel_duration, valid_count, config_count
+    );
 
     // 4. 清理临时文件
     let _ = std::fs::remove_file("src/12-advanced/configs/parallel.toml");

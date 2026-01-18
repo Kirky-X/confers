@@ -21,6 +21,8 @@ watch = []
 audit = []
 remote = []
 parallel = []
+cli = []
+validation = []
 
 [dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }

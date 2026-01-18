@@ -9,7 +9,7 @@ pub struct TsConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    let config = TsConfig::load()?;
+    let _config = TsConfig::load()?;
     // let ts_types = generate_typescript(&config)?;
     // println!("TypeScript Types: {}", ts_types);
     Ok(())

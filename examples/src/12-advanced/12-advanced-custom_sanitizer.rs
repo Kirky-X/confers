@@ -27,22 +27,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct SanitizerConfig {
-    #[config(
-        sanitize = "trim",
-        description = "应用名称，自动去除前后空白"
-    )]
+    #[config(sanitize = "trim", description = "应用名称，自动去除前后空白")]
     pub app_name: String,
 
-    #[config(
-        sanitize = "lowercase",
-        description = "环境名称，自动转换为小写"
-    )]
+    #[config(sanitize = "lowercase", description = "环境名称，自动转换为小写")]
     pub environment: String,
 
-    #[config(
-        sanitize = "uppercase",
-        description = "API 密钥，自动转换为大写"
-    )]
+    #[config(sanitize = "uppercase", description = "API 密钥，自动转换为大写")]
     pub api_key: String,
 
     #[config(

@@ -18,11 +18,10 @@ fn main() -> anyhow::Result<()> {
     println!("✓ 密钥管理器已创建");
 
     // 从环境变量获取主密钥（实际应用中应从安全的密钥管理系统获取）
-    let master_key_hex = std::env::var("CONFERS_MASTER_KEY")
-        .unwrap_or_else(|_| {
-            // 示例用途：使用默认密钥（仅用于演示，生产环境必须使用安全密钥）
-            "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20".to_string()
-        });
+    let master_key_hex = std::env::var("CONFERS_MASTER_KEY").unwrap_or_else(|_| {
+        // 示例用途：使用默认密钥（仅用于演示，生产环境必须使用安全密钥）
+        "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20".to_string()
+    });
 
     let master_key = hex::decode(master_key_hex)
         .map_err(|_| anyhow::anyhow!("无效的主密钥格式，应为 64 字符的十六进制字符串"))?;
@@ -37,7 +36,7 @@ fn main() -> anyhow::Result<()> {
     let version = key_manager.initialize(
         &master_key,
         "production".to_string(),
-        "security-team".to_string()
+        "security-team".to_string(),
     )?;
     println!("✓ 密钥环已初始化，版本: {:?}", version);
 
@@ -52,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         &master_key,
         Some("production".to_string()),
         "security-team".to_string(),
-        Some("Scheduled rotation".to_string())
+        Some("Scheduled rotation".to_string()),
     )?;
     println!("✓ 密钥已轮换:");
     println!("  - 旧版本: {}", rotation_result.previous_version);
@@ -64,7 +63,7 @@ fn main() -> anyhow::Result<()> {
         &master_key,
         "app-encryption".to_string(),
         "application-team".to_string(),
-        Some("Application encryption key ring".to_string())
+        Some("Application encryption key ring".to_string()),
     )?;
     println!("✓ 密钥环已创建:");
     println!("  - 密钥 ID: {}", key_ring.id);

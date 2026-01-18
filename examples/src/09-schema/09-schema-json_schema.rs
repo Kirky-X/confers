@@ -13,7 +13,7 @@ pub struct SchemaConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    let config = SchemaConfig::load()?;
+    let _config = SchemaConfig::load()?;
 
     // 注意：Schema 生成功能需要 schema 特性
     // 示例代码（需要启用 schema 特性）：

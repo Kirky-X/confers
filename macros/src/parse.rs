@@ -187,10 +187,13 @@ pub struct FieldOpts {
     pub skip: bool,
     pub name_config: Option<String>,
     pub name_env: Option<String>,
+    #[allow(dead_code)]
     pub name_clap_long: Option<String>,
+    #[allow(dead_code)]
     pub name_clap_short: Option<char>,
     #[allow(dead_code)]
     pub validate: Option<String>,
+    #[allow(dead_code)]
     pub custom_validate: Option<String>,
     pub sensitive: Option<bool>,
     pub remote: Option<String>,

@@ -65,7 +65,10 @@ admin_email = "admin@example.com"
     // 2. 显示配置摘要
     println!("\n2. 配置摘要:");
     println!("   应用: {} v{}", config.app_name, config.version);
-    println!("   端口: HTTP={}, HTTPS={}", config.http_port, config.https_port);
+    println!(
+        "   端口: HTTP={}, HTTPS={}",
+        config.http_port, config.https_port
+    );
     println!("   工作线程: {}", config.workers);
     println!("   API 端点: {}", config.api_endpoint);
     println!("   管理员: {}", config.admin_email);

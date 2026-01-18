@@ -57,7 +57,10 @@ fn validate_username(username: &str) -> Result<(), validator::ValidationError> {
     if username.len() > 20 {
         return Err(validator::ValidationError::new("username_too_long"));
     }
-    if !username.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+    if !username
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
         return Err(validator::ValidationError::new("username_invalid_chars"));
     }
     Ok(())
@@ -102,7 +105,10 @@ username = "valid_user_123"
 password = "short"
 port = 8080
 "#;
-        std::fs::write("src/02-validation/configs/custom_valid.toml", invalid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/custom_valid.toml",
+            invalid_content,
+        )?;
 
         let config = CustomValidationConfig::load()?;
         println!("❌ 密码太短");
@@ -114,7 +120,10 @@ username = "invalid@user"
 password = "SecurePass123"
 port = 8080
 "#;
-        std::fs::write("src/02-validation/configs/custom_valid.toml", invalid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/custom_valid.toml",
+            invalid_content,
+        )?;
 
         let config = CustomValidationConfig::load()?;
         println!("❌ 用户名包含非法字符");
@@ -126,7 +135,10 @@ username = "valid_user_123"
 password = "SecurePass123"
 port = 80
 "#;
-        std::fs::write("src/02-validation/configs/custom_valid.toml", invalid_content)?;
+        std::fs::write(
+            "src/02-validation/configs/custom_valid.toml",
+            invalid_content,
+        )?;
 
         let config = CustomValidationConfig::load()?;
         println!("❌ 端口号是特权端口");
@@ -135,7 +147,9 @@ port = 80
     #[cfg(not(feature = "validation"))]
     {
         println!("This example requires the 'validation' feature.");
-        println!("Run with: cargo run --example 02-validation-custom_validators --features validation");
+        println!(
+            "Run with: cargo run --example 02-validation-custom_validators --features validation"
+        );
     }
 
     Ok(())

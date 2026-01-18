@@ -144,18 +144,18 @@ fn main() -> Result<(), ConfigError> {
 #[cfg(not(feature = "cli"))]
 fn main() -> Result<(), ConfigError> {
     eprintln!("❌ Error: CLI feature is not enabled.");
-    eprintln!("");
+    eprintln!();
     eprintln!("The confers CLI tool requires the 'cli' feature to be enabled.");
-    eprintln!("");
+    eprintln!();
     eprintln!("To build the CLI tool, use one of the following commands:");
     eprintln!("  cargo build --features cli");
     eprintln!("  cargo build --features dev");
     eprintln!("  cargo build --features full");
-    eprintln!("");
+    eprintln!();
     eprintln!("For library-only usage, you can use:");
     eprintln!("  cargo build --features minimal");
     eprintln!("  cargo build --features recommended");
-    eprintln!("");
+    eprintln!();
     eprintln!("See the documentation for more information on feature presets.");
     std::process::exit(1);
 }

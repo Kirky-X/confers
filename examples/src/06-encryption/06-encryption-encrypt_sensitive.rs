@@ -8,7 +8,7 @@ pub struct SensitiveConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    let config = SensitiveConfig::load()?;
+    let _config = SensitiveConfig::load()?;
     println!("Sensitive Config: api_key=[REDACTED]");
     Ok(())
 }

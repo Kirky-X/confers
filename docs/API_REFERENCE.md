@@ -459,22 +459,22 @@ pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
 
 #### 格式检测
 
-##### `detect_format(path: &Path) -> Option<String>`
+##### `detect_format(path: &Path) -> Option<FileFormat>`
 
 根据文件内容智能检测配置格式。
 
 ```rust
-pub fn detect_format(path: &Path) -> Option<String>
+pub fn detect_format(path: &Path) -> Option<FileFormat>
 ```
 
-**支持检测的格式：** JSON、YAML、TOML、XML
+**支持检测的格式：** JSON、YAML、TOML、INI
 
-##### `detect_format_by_extension(path: &Path) -> Option<String>`
+##### `detect_format_by_extension(path: &Path) -> Option<FileFormat>`
 
 根据文件扩展名检测配置格式。
 
 ```rust
-pub fn detect_format_by_extension(path: &Path) -> Option<String>
+pub fn detect_format_by_extension(path: &Path) -> Option<FileFormat>
 ```
 
 ---
@@ -560,11 +560,15 @@ pub fn initialize(
 **示例：**
 
 ```rust
-let master_key = generate_secure_key();
+use confers::key::KeyManager;
+use std::path::PathBuf;
+
+let mut km = KeyManager::new(PathBuf::from("./secure_keys"))?;
+let master_key = [0u8; 32]; // 从安全位置获取
 let version = km.initialize(
     &master_key,
     "production".to_string(),
-    "security-team".to_string(),
+    "security-team".to_string()
 )?;
 ```
 
@@ -793,24 +797,20 @@ pub struct DiffOptions {
 
 ### 架构生成
 
-#### `generate_schema(config: &T) -> Result<String, ConfigError>`
+#### `JsonSchemaGenerator::generate<T>() -> Result<Value, ConfigError>`
 
 从配置结构体生成 JSON Schema。
 
 ```rust
-pub fn generate_schema<T>(config: &T) -> Result<String, ConfigError>
-where
-    T: Serialize + ConfigType,
+pub fn generate<T: JsonSchema>() -> Result<Value, ConfigError>
 ```
 
-#### `generate_typescript(config: &T) -> Result<String, ConfigError>`
+#### `TypeScriptGenerator::generate<T>() -> Result<String, ConfigError>`
 
 从配置结构体生成 TypeScript 类型定义。
 
 ```rust
-pub fn generate_typescript<T>(config: &T) -> Result<String, ConfigError>
-where
-    T: Serialize + ConfigType,
+pub fn generate<T: JsonSchema>() -> Result<String, ConfigError>
 ```
 
 ---
