@@ -27,7 +27,7 @@ use std::sync::Arc;
 use validator::Validate;
 
 #[cfg(any(feature = "encryption", feature = "remote"))]
-use crate::security::{SecureString, SensitivityLevel};
+use crate::security;
 
 /// A type alias for the sanitizer function
 type SanitizerFn<T> = std::sync::Arc<dyn Fn(T) -> Result<T, ConfigError> + Send + Sync>;

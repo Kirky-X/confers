@@ -7,7 +7,6 @@ use crate::error::ConfigError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -599,6 +598,7 @@ impl Default for RotationConfig {
 pub struct AuditLogWriter {
     log_path: std::path::PathBuf,
     rotation_config: RotationConfig,
+    #[allow(dead_code)]
     integrity_key: [u8; 32],
     current_log_size: std::sync::Arc<std::sync::atomic::AtomicU64>,
     rotation_lock: std::sync::Arc<std::sync::Mutex<()>>,
