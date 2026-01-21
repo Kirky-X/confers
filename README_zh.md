@@ -1,7 +1,7 @@
 <span id="top"></span>
 <div align="center">
 
-<img src="resource/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
+<img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
 
 <p>
   <!-- CI/CD 状态 -->
@@ -199,9 +199,10 @@ graph LR
 
 | 安装类型 | 配置 | 使用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.2.0"` | 包含 derive、validation 和 CLI |
-| **最小化** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | 仅配置加载 |
+| **默认** | `confers = "0.2.0"` | 仅包含 `derive` (最小配置加载) |
+| **最小化** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | 仅配置加载 (与默认相同) |
 | **推荐** | `confers = { version = "0.2.0", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
+| **CLI工具** | `confers = { version = "0.2.0", features = ["cli"] }` | CLI 及验证和加密功能 |
 | **完整** | `confers = { version = "0.2.0", features = ["full"] }` | 所有功能 |
 
 **单独特性：**
@@ -209,14 +210,14 @@ graph LR
 | 特性 | 描述 | 默认 |
 |------|------|------|
 | `derive` | 配置结构体的 derive 宏 | ✅ |
-| `validation` | 配置验证支持 | ✅ |
+| `validation` | 配置验证支持 | ❌ |
 | `cli` | 命令行工具 | ❌ |
 | `watch` | 文件监控和热重载 | ❌ |
 | `audit` | 审计日志 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
 | `parallel` | 并行验证 | ❌ |
 | `monitoring` | 系统监控 | ❌ |
-| `remote` | 远程配置（etcd、consul、http） | ❌ |
+| `remote` | 远程配置 (etcd, consul, http) | ❌ |
 | `encryption` | 配置加密 | ❌ |
 
 </td>
@@ -229,7 +230,7 @@ graph LR
 
 #### 🎬 5 分钟快速开始
 
-</div>
+**必需特性**: `derive`, `validation` (使用: `features = ["recommended"]`)
 
 <table style="width:100%; border-collapse: collapse">
 <tr>

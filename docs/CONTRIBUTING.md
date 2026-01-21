@@ -1,7 +1,7 @@
 <span id="top"></span>
 <div align="center">
 
-<img src="../resource/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
+<img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 ### 加入我们，共同打造卓越项目！
 

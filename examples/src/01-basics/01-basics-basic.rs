@@ -14,7 +14,7 @@
 //! ## 运行方式
 //!
 //! ```bash
-//! cargo run --example basic --features validation
+//! cargo run --example basic --features "derive,validation"
 //! ```
 
 use confers::Config;

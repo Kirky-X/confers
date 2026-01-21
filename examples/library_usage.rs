@@ -7,6 +7,17 @@
 //! 
 //! This example demonstrates how to integrate confers CLI functionality
 //! into your own applications using the ConfersCli struct.
+//!
+//! ## Prerequisites
+//!
+//! Required features: `cli`, `derive`
+//! Optional features: `validation`, `encryption`, `schema`
+//!
+//! ## Run with
+//!
+//! ```bash
+//! cargo run --example library_usage --features "cli,derive,validation,encryption"
+//! ```
 
 use confers::ConfersCli;
 

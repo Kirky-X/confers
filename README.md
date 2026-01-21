@@ -1,7 +1,7 @@
 <span id="top"></span>
 <div align="center">
 
-<img src="resource/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
+<img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
 
 <p>
   <!-- CI/CD Status -->
@@ -201,9 +201,10 @@ graph LR
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.2.0"` | Includes derive, validation, and CLI |
-| **Minimal** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | Only config loading |
+| **Default** | `confers = "0.2.0"` | Includes only `derive` (minimal config loading) |
+| **Minimal** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | Only config loading (same as default) |
 | **Recommended** | `confers = { version = "0.2.0", default-features = false, features = ["recommended"] }` | Config + validation |
+| **CLI with Tools** | `confers = { version = "0.2.0", features = ["cli"] }` | CLI with validation and encryption |
 | **Full** | `confers = { version = "0.2.0", features = ["full"] }` | All features |
 
 **Individual Features:**
@@ -211,7 +212,7 @@ graph LR
 | Feature | Description | Default |
 |---------|-------------|---------|
 | `derive` | Derive macros for config structs | ✅ |
-| `validation` | Config validation support | ✅ |
+| `validation` | Config validation support | ❌ |
 | `cli` | Command-line interface tools | ❌ |
 | `watch` | File watching and hot reload | ❌ |
 | `audit` | Audit logging | ❌ |
@@ -220,6 +221,20 @@ graph LR
 | `monitoring` | System monitoring | ❌ |
 | `remote` | Remote config (etcd, consul, http) | ❌ |
 | `encryption` | Config encryption | ❌ |
+
+### 🔧 CLI Command Feature Dependencies
+
+| Command | Required Features | Optional Features | Description |
+|---------|------------------|------------------|-------------|
+| `generate` | `cli` (includes: `derive`, `validation`, `encryption`) | `schema` | Generate configuration templates |
+| `validate` | `cli` (includes: `derive`, `validation`, `encryption`) | `schema` | Validate configuration files |
+| `diff` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Compare configuration files |
+| `encrypt` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Encrypt configuration values |
+| `key` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Manage encryption keys |
+| `wizard` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Interactive configuration wizard |
+| `completions` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Generate shell completions |
+
+**Note**: The `cli` feature automatically includes `derive`, `validation`, and `encryption` for convenience.
 
 </td>
 </tr>
@@ -231,7 +246,7 @@ graph LR
 
 #### 🎬 5-Minute Quick Start
 
-</div>
+**Required Features**: `derive`, `validation` (use: `features = ["recommended"]`)
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -784,12 +799,47 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ### 🛡️ Security Measures
 
-| Measure | Description |
-|---------|-------------|
-| ✅ **Memory Protection** | Automatic secure cleanup with zeroization |
-| ✅ **Side-channel Protection** | Constant-time cryptographic operations |
-| ✅ **Input Validation** | Comprehensive input sanitization |
-| ✅ **Audit Logging** | Full operation tracking |
+| Measure | Description | API Reference |
+|---------|-------------|---------------|
+| ✅ **Memory Protection** | Automatic secure cleanup with zeroization | `SecureString`, `zeroize` crate |
+| ✅ **Side-channel Protection** | Constant-time cryptographic operations | AES-256-GCM encryption |
+| ✅ **Input Validation** | Comprehensive input sanitization | `ConfigValidator`, `InputValidator` |
+| ✅ **Audit Logging** | Full operation tracking | `AuditConfig`, audit trails |
+| ✅ **SSRF Protection** | Server-Side Request Forgery prevention | `validate_remote_url()` |
+| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields | `SensitiveDataDetector` |
+| ✅ **Error Sanitization** | Remove sensitive info from error messages | `ErrorSanitizer`, `SecureLogger` |
+| ✅ **Nonce Reuse Detection** | Prevent cryptographic nonce reuse | Built into encryption module |
+
+### 🔐 Security APIs
+
+```rust
+// Secure string handling
+use confers::security::{SecureString, SensitivityLevel};
+let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
+
+// Input validation
+use confers::security::ConfigValidator;
+let validator = ConfigValidator::new();
+let result = validator.validate_input(user_input);
+
+// Error sanitization
+use confers::security::ErrorSanitizer;
+let sanitizer = ErrorSanitizer::default();
+let safe_error = sanitizer.sanitize(&error_message);
+
+// Audit logging
+#[cfg(feature = "audit")]
+use confers::audit::AuditConfig;
+let audit = AuditConfig::new().enable_sensitive_field_tracking();
+```
+
+### 🚨 Security Best Practices
+
+1. **Use SecureString for sensitive data**: Automatically zeroizes memory
+2. **Enable audit logging**: Track all configuration access and changes
+3. **Validate all inputs**: Use built-in validators for user inputs
+4. **Use encryption**: Enable `encryption` feature for sensitive configs
+5. **Follow principle of least privilege**: Minimize sensitive data exposure
 
 ### 📧 Reporting Security Issues
 

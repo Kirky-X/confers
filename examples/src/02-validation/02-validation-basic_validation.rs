@@ -3,6 +3,20 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+//! 基本验证示例
+//!
+//! 展示 confers 的配置验证功能。
+//!
+//! ## 前提条件
+//!
+//! - 需要启用的特性：`derive`, `validation`
+//!
+//! ## 运行方式
+//!
+//! ```bash
+//! cargo run --example 02-validation-basic_validation --features "derive,validation"
+//! ```
+
 use confers::Config;
 use serde::{Deserialize, Serialize};
 

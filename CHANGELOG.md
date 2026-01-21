@@ -94,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Enhance error handling with comprehensive error types
 - Optimize HTTP provider for remote configuration
-- Rename `image/` directory to `resource/` for better naming convention
+- Rename `resource/` directory to `docs/image/` for better organization
 - Update documentation with cleaner styling and correct links
 - Reduce code duplication by ~120 lines
 - Centralize format detection logic in utils/file_format.rs
