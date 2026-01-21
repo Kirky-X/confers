@@ -14,13 +14,12 @@
 //! - **错误消息过滤**: 过滤包含敏感信息的错误消息
 //! - **自定义脱敏规则**: 支持自定义脱敏模式和规则
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 /// 敏感信息模式
-static SENSITIVE_PATTERNS: Lazy<Vec<(Regex, Replacement)>> = Lazy::new(|| {
+static SENSITIVE_PATTERNS: LazyLock<Vec<(Regex, Replacement)>> = LazyLock::new(|| {
     vec![
         // API 密钥和令牌 - 使用更严格的模式避免误匹配
         (
@@ -330,6 +329,7 @@ impl SecureLogger {
         let sanitized = self.sanitizer.sanitize(message);
         let log_entry = format!("[{}] {}", level.as_str(), sanitized);
 
+        #[cfg(feature = "tracing")]
         match level {
             LogLevel::Error => tracing::error!("{}", log_entry),
             LogLevel::Warn => tracing::warn!("{}", log_entry),

@@ -34,11 +34,10 @@
 //! ```
 
 use crate::security::{EnvSecurityError, EnvSecurityValidator};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Instant;
 
 /// Rate limiter configuration
@@ -160,16 +159,17 @@ impl InjectionRateLimiter {
 }
 
 /// Global rate limiter instance (enabled by default)
-pub static GLOBAL_RATE_LIMITER: Lazy<InjectionRateLimiter> = Lazy::new(InjectionRateLimiter::new);
+pub static GLOBAL_RATE_LIMITER: LazyLock<InjectionRateLimiter> =
+    LazyLock::new(InjectionRateLimiter::new);
 
 /// Global rate limiter for testing (disabled)
 #[cfg(test)]
-pub static TEST_RATE_LIMITER: Lazy<InjectionRateLimiter> =
-    Lazy::new(InjectionRateLimiter::disabled);
+pub static TEST_RATE_LIMITER: LazyLock<InjectionRateLimiter> =
+    LazyLock::new(InjectionRateLimiter::disabled);
 
 /// 全局默认配置注入器
-pub static GLOBAL_INJECTOR: Lazy<Arc<RwLock<ConfigInjector>>> =
-    Lazy::new(|| Arc::new(RwLock::new(ConfigInjector::new())));
+pub static GLOBAL_INJECTOR: LazyLock<Arc<RwLock<ConfigInjector>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(ConfigInjector::new())));
 
 /// 配置注入器
 ///

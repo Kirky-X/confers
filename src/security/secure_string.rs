@@ -315,6 +315,7 @@ impl Clone for SecureString {
     fn clone(&self) -> Self {
         // 警告: 克隆会创建数据副本
         // 在安全敏感场景中应避免使用
+        #[cfg(feature = "tracing")]
         tracing::warn!("Cloning SecureString - this may leak sensitive data");
 
         Self {

@@ -4,14 +4,12 @@
 // See LICENSE file in the project root for full license information.
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 
 type CustomValidatorFn = Box<dyn Fn(&str) -> bool + Send + Sync>;
 
-lazy_static::lazy_static! {
-    static ref CUSTOM_VALIDATORS: RwLock<HashMap<String, CustomValidatorFn>> =
-        RwLock::new(HashMap::new());
-}
+static CUSTOM_VALIDATORS: LazyLock<RwLock<HashMap<String, CustomValidatorFn>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub trait CustomValidator: Send + Sync + 'static {
     fn name(&self) -> &'static str;

@@ -137,6 +137,7 @@ impl ConfigProvider for EnvironmentProvider {
         let env_vars = self.get_env_vars();
         // Reduced logging to avoid performance issues in tests
         if cfg!(debug_assertions) {
+            #[cfg(feature = "tracing")]
             tracing::debug!(
                 "Found {} env vars with prefix '{}'",
                 env_vars.len(),
@@ -184,6 +185,7 @@ impl ConfigProvider for EnvironmentProvider {
             }
 
             if !validation_warnings.is_empty() {
+                #[cfg(feature = "tracing")]
                 tracing::warn!(
                     "Environment variable validation warnings: {}",
                     validation_warnings.join("; ")
@@ -200,6 +202,7 @@ impl ConfigProvider for EnvironmentProvider {
 
         if !self.custom_mappings.is_empty() {
             if let Err(e) = validator.validate_env_mapping(&self.custom_mappings) {
+                #[cfg(feature = "tracing")]
                 tracing::warn!("Failed to validate env mapping: {}", e);
             }
 
@@ -208,6 +211,7 @@ impl ConfigProvider for EnvironmentProvider {
             for (field_name, env_name) in &self.custom_mappings {
                 if let Ok(value) = std::env::var(env_name) {
                     if let Err(e) = validator.validate_env_value(&value) {
+                        #[cfg(feature = "tracing")]
                         tracing::warn!(
                             "Failed to validate custom mapping env value for '{}': {}",
                             field_name,

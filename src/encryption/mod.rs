@@ -227,6 +227,7 @@ impl ConfigEncryption {
             // Warn if cache is near full (>80%)
             let usage = cache.len() as f64 / self.max_nonce_cache_size as f64;
             if usage > 0.8 {
+                #[cfg(feature = "tracing")]
                 tracing::warn!(
                     "Nonce cache is {:.0}% full ({} entries). Consider increasing cache size or rotating keys more frequently.",
                     usage * 100.0,

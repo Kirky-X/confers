@@ -469,6 +469,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     /// Set memory limit in MB
     pub fn with_memory_limit(mut self, limit_mb: usize) -> Self {
         if limit_mb > 0 && limit_mb < 100 {
+            #[cfg(feature = "tracing")]
             tracing::warn!(
                 "Memory limit of {}MB may be too low for production. Recommended minimum: 100MB",
                 limit_mb
@@ -2116,6 +2117,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                         result.replace_range(var_start..=var_end, &env_value);
                         start = var_start + env_value.len();
                     } else {
+                        #[cfg(feature = "tracing")]
                         tracing::warn!(
                             "Environment variable '{}' contains unsafe characters, skipping substitution",
                             var_name

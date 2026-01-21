@@ -131,6 +131,7 @@ fn check_dns_rebinding(host: &str) -> Result<(), ConfigError> {
         Err(e) => {
             // If DNS resolution fails, it might be a valid hostname that's not currently resolvable
             // We'll allow this but log a warning
+            #[cfg(feature = "tracing")]
             tracing::warn!("Failed to resolve hostname {}: {}", host, e);
         }
     }

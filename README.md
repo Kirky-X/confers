@@ -383,6 +383,54 @@ debug = true
 | 📖 [Contributing Guide](docs/CONTRIBUTING.md) | Code contribution guidelines |
 | 📘 [API Reference](docs/API_REFERENCE.md) | Complete API documentation |
 | 🏗️ [Architecture Decisions](docs/architecture_decisions.md) | ADR documentation |
+| 📚 [Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
+
+---
+
+## 🔌 Library Integration
+
+Confers provides a unified `ConfersCli` API for easy integration into other Rust projects.
+
+### Quick Start
+
+```toml
+[dependencies]
+confers = { version = "0.2.0", features = ["cli"] }
+```
+
+```rust
+use confers::ConfersCli;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Generate configuration template
+    ConfersCli::generate(Some("config.toml"), "full")?;
+    
+    // Validate configuration
+    ConfersCli::validate("config.toml", "full")?;
+    
+    // Compare configurations
+    ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
+    
+    // Encrypt values
+    let encrypted = ConfersCli::encrypt("secret", None)?;
+    
+    Ok(())
+}
+```
+
+### Available Methods
+
+| Method | Description | Example |
+|--------|-------------|----------|
+| `generate(output, level)` | Generate config templates | `ConfersCli::generate(Some("app.toml"), "minimal")?` |
+| `validate(config, level)` | Validate config files | `ConfersCli::validate("app.toml", "full")?` |
+| `diff(file1, file2, format)` | Compare configs | `ConfersCli::diff("old.toml", "new.toml", Some("side-by-side"))?` |
+| `encrypt(value, key)` | Encrypt values | `ConfersCli::encrypt("secret", None)?` |
+| `wizard(non_interactive)` | Interactive setup | `ConfersCli::wizard(false)?` |
+| `completions(shell)` | Generate completions | `ConfersCli::completions("bash")?` |
+| `key(subcommand)` | Key management | `ConfersCli::key(&KeySubcommand::Generate)?` |
+
+**[📚 Complete Integration Guide →](docs/LIBRARY_INTEGRATION.md)**
 
 ---
 

@@ -398,6 +398,7 @@ impl FileSource {
 
         // Validate path is not empty
         if path.as_os_str().is_empty() {
+            #[cfg(feature = "tracing")]
             tracing::warn!("File path is empty, using default configuration");
             return Self {
                 name: PathBuf::from("config"),
@@ -425,6 +426,7 @@ impl FileSource {
             .any(|pattern| path_str.contains(pattern));
 
         if is_suspicious {
+            #[cfg(feature = "tracing")]
             tracing::error!(
                 "Path contains suspicious patterns that may indicate a path traversal attempt: {}. Using safe default.",
                 path_str
@@ -454,6 +456,7 @@ impl FileSource {
             .any(|prefix| lower_path.starts_with(prefix));
 
         if is_sensitive {
+            #[cfg(feature = "tracing")]
             tracing::error!(
                 "Path points to sensitive system directory: {}. Using safe default.",
                 path_str
@@ -476,6 +479,7 @@ impl FileSource {
             .any(|prefix| canonical_str.to_lowercase().starts_with(prefix));
 
         if canonical_sensitive {
+            #[cfg(feature = "tracing")]
             tracing::error!(
                 "Resolved path points to sensitive system directory: {}. Using safe default.",
                 canonical_str
@@ -581,6 +585,7 @@ impl EnvironmentSource {
     pub fn with_prefix(prefix: impl Into<String>) -> Self {
         let prefix_str = prefix.into();
         if prefix_str.is_empty() {
+            #[cfg(feature = "tracing")]
             tracing::warn!("Empty prefix for environment variables, no prefix will be applied");
         }
         Self {
@@ -609,6 +614,7 @@ impl EnvironmentSource {
     pub fn separator(mut self, separator: impl Into<String>) -> Self {
         let sep = separator.into();
         if sep.is_empty() {
+            #[cfg(feature = "tracing")]
             tracing::warn!(
                 "Empty separator for environment variables may cause unexpected behavior"
             );
