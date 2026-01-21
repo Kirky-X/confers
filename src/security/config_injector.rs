@@ -37,7 +37,7 @@ use crate::security::{EnvSecurityError, EnvSecurityValidator};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 
 /// Rate limiter configuration
@@ -159,17 +159,14 @@ impl InjectionRateLimiter {
 }
 
 /// Global rate limiter instance (enabled by default)
-pub static GLOBAL_RATE_LIMITER: LazyLock<InjectionRateLimiter> =
-    LazyLock::new(InjectionRateLimiter::new);
+pub static GLOBAL_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
 
 /// Global rate limiter for testing (disabled)
 #[cfg(test)]
-pub static TEST_RATE_LIMITER: LazyLock<InjectionRateLimiter> =
-    LazyLock::new(InjectionRateLimiter::disabled);
+pub static TEST_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
 
 /// 全局默认配置注入器
-pub static GLOBAL_INJECTOR: LazyLock<Arc<RwLock<ConfigInjector>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(ConfigInjector::new())));
+pub static GLOBAL_INJECTOR: OnceLock<Arc<RwLock<ConfigInjector>>> = OnceLock::new();
 
 /// 配置注入器
 ///
@@ -252,13 +249,19 @@ impl ConfigInjector {
     /// 成功返回 Ok(())，失败返回错误信息
     pub fn inject(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {
         #[cfg(test)]
-        if let Err(retry_after) = TEST_RATE_LIMITER.check_rate_limit() {
+        if let Err(retry_after) = TEST_RATE_LIMITER
+            .get_or_init(InjectionRateLimiter::disabled)
+            .check_rate_limit()
+        {
             return Err(ConfigInjectionError::RateLimited {
                 retry_after_seconds: retry_after,
             });
         }
         #[cfg(not(test))]
-        if let Err(retry_after) = GLOBAL_RATE_LIMITER.check_rate_limit() {
+        if let Err(retry_after) = GLOBAL_RATE_LIMITER
+            .get_or_init(InjectionRateLimiter::new)
+            .check_rate_limit()
+        {
             return Err(ConfigInjectionError::RateLimited {
                 retry_after_seconds: retry_after,
             });

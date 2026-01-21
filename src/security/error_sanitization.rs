@@ -16,10 +16,13 @@
 
 use regex::Regex;
 use std::collections::HashSet;
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// 敏感信息模式
-static SENSITIVE_PATTERNS: LazyLock<Vec<(Regex, Replacement)>> = LazyLock::new(|| {
+static SENSITIVE_PATTERNS: OnceLock<Vec<(Regex, Replacement)>> = OnceLock::new();
+
+/// 初始化敏感信息模式
+fn init_sensitive_patterns() -> Vec<(Regex, Replacement)> {
     vec![
         // API 密钥和令牌 - 使用更严格的模式避免误匹配
         (
@@ -80,7 +83,12 @@ static SENSITIVE_PATTERNS: LazyLock<Vec<(Regex, Replacement)>> = LazyLock::new(|
             Replacement::Value("***IP_ADDRESS***".to_string()),
         ),
     ]
-});
+}
+
+/// 获取敏感信息模式（懒初始化）
+fn get_sensitive_patterns() -> &'static Vec<(Regex, Replacement)> {
+    SENSITIVE_PATTERNS.get_or_init(init_sensitive_patterns)
+}
 
 /// 替换策略
 #[derive(Debug, Clone)]
@@ -159,7 +167,7 @@ impl ErrorSanitizer {
         let mut result = message.to_string();
 
         // 应用内置规则
-        for (ref pattern, ref replacement) in SENSITIVE_PATTERNS.iter() {
+        for (ref pattern, ref replacement) in get_sensitive_patterns().iter() {
             result = apply_replacement(&result, pattern, replacement);
         }
 
@@ -193,7 +201,7 @@ impl ErrorSanitizer {
     /// 检查消息是否包含敏感信息
     pub fn contains_sensitive(&self, message: &str) -> bool {
         // 检查是否匹配任何敏感模式
-        for (ref pattern, _) in SENSITIVE_PATTERNS.iter() {
+        for (ref pattern, _) in get_sensitive_patterns().iter() {
             if pattern.is_match(message) {
                 return true;
             }

@@ -14,6 +14,8 @@ use crate::providers::environment_provider::EnvironmentProvider;
 use crate::providers::file_provider::FileConfigProvider;
 use crate::providers::provider::ProviderManager;
 use crate::providers::SerializedProvider;
+#[cfg(all(feature = "remote", feature = "encryption"))]
+use crate::security::secure_string::{SecureString, SensitivityLevel};
 use figment::providers::{Format, Json, Serialized, Toml, Yaml};
 #[cfg(feature = "encryption")]
 use figment::value::Tag;
@@ -27,8 +29,7 @@ use std::sync::Arc;
 use validator::Validate;
 
 #[cfg(any(feature = "encryption", feature = "remote"))]
-use crate::security;
-
+// use crate::security; // Uncomment when needed
 /// A type alias for the sanitizer function
 type SanitizerFn<T> = std::sync::Arc<dyn Fn(T) -> Result<T, ConfigError> + Send + Sync>;
 
@@ -168,7 +169,7 @@ pub struct ConfigLoader<T> {
 }
 
 /// Remote configuration settings
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 #[derive(Clone, Debug)]
 pub struct RemoteConfig {
     enabled: bool,
@@ -183,7 +184,7 @@ pub struct RemoteConfig {
     fallback: bool,
 }
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 impl RemoteConfig {
     pub fn new() -> Self {
         Self::default()
@@ -239,7 +240,7 @@ impl RemoteConfig {
     }
 }
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 impl Default for RemoteConfig {
     fn default() -> Self {
         Self {

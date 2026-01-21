@@ -4,7 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 //! Example of using confers as a library with the unified CLI facade
-//! 
+//!
 //! This example demonstrates how to integrate confers CLI functionality
 //! into your own applications using the ConfersCli struct.
 //!
@@ -16,14 +16,15 @@
 //! ## Run with
 //!
 //! ```bash
-//! cargo run --example library_usage --features "cli,derive,validation,encryption"
+//! cargo run --example library_usage --features "cli" --bin library_usage
 //! ```
 
+#[cfg(feature = "cli")]
 use confers::ConfersCli;
 
+#[cfg(feature = "cli")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Confers Library Usage Example");
-    println!("================================");
 
     // Example 1: Generate a configuration template
     println!("\n📝 1. Generating configuration template...");
@@ -39,17 +40,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 3: Create a second config for comparison
     println!("\n📝 3. Creating second configuration for diff...");
-    std::fs::write("example_config2.toml", r#"
+    std::fs::write(
+        "example_config2.toml",
+        r#"
 name = "example-app"
 version = "1.1.0"
 port = 9090
 debug = true
-"#)?;
+"#,
+    )?;
     println!("✅ Created example_config2.toml");
 
     // Example 4: Compare two configurations
     println!("\n🔄 4. Comparing configurations...");
-    ConfersCli::diff("example_config.toml", "example_config2.toml", Some("unified"))?;
+    ConfersCli::diff(
+        "example_config.toml",
+        "example_config2.toml",
+        Some("unified"),
+    )?;
 
     // Example 5: Encrypt a value (if encryption feature is enabled)
     #[cfg(feature = "encryption")]
@@ -85,7 +93,13 @@ debug = true
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(not(feature = "cli"))]
+fn main() {
+    println!("This example requires the 'cli' feature.");
+    println!("Run with: cargo run --example library_usage --features \"cli\" --bin library_usage");
+}
+
+#[cfg(all(test, feature = "cli"))]
 mod tests {
     use super::*;
 
@@ -99,10 +113,10 @@ mod tests {
     fn test_library_validate() {
         // First create a test config
         std::fs::write("test_config.toml", "name = \"test\"\nversion = \"1.0.0\"\n").unwrap();
-        
+
         let result = ConfersCli::validate("test_config.toml", "minimal");
         assert!(result.is_ok());
-        
+
         // Cleanup
         let _ = std::fs::remove_file("test_config.toml");
     }

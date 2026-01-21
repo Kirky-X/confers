@@ -6,7 +6,7 @@ rust-version = "1.75"
 publish = false
 
 [dependencies]
-confers = { path = "..", default-features = false, features = ["derive", "validation", "encryption"] }
+confers = { path = "..", default-features = false, features = ["derive", "validation", "encryption", "cli"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -229,5 +229,5 @@ name = "15-complete-multi_source"
 path = "src/15-complete/15-complete-multi_source.rs"
 
 [[bin]]
-name = "15-complete-production_app"
-path = "src/15-complete/15-complete-production_app.rs"
+name = "library_usage"
+path = "library_usage.rs"

@@ -230,7 +230,10 @@ impl ParallelValidator {
     pub fn new(config: ParallelValidationConfig) -> Self {
         // Limit maximum threads to prevent resource exhaustion
         // Use at most 2x the number of CPU cores
-        let max_threads = config.num_threads().min(num_cpus::get() * 2);
+        let cpu_count = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let max_threads = config.num_threads().min(cpu_count * 2);
         let adjusted_config = ParallelValidationConfig {
             num_threads: Some(max_threads),
             ..config

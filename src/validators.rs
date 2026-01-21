@@ -4,12 +4,11 @@
 // See LICENSE file in the project root for full license information.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{OnceLock, RwLock};
 
 type CustomValidatorFn = Box<dyn Fn(&str) -> bool + Send + Sync>;
 
-static CUSTOM_VALIDATORS: LazyLock<RwLock<HashMap<String, CustomValidatorFn>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static CUSTOM_VALIDATORS: OnceLock<RwLock<HashMap<String, CustomValidatorFn>>> = OnceLock::new();
 
 pub trait CustomValidator: Send + Sync + 'static {
     fn name(&self) -> &'static str;
@@ -157,6 +156,7 @@ pub fn register_custom_validator(
     validator: impl Fn(&str) -> bool + Send + Sync + 'static,
 ) -> Result<(), String> {
     let mut validators = CUSTOM_VALIDATORS
+        .get_or_init(|| RwLock::new(HashMap::new()))
         .write()
         .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
     validators.insert(name.to_string(), Box::new(validator));
@@ -165,6 +165,7 @@ pub fn register_custom_validator(
 
 pub fn unregister_custom_validator(name: &str) -> Result<(), String> {
     let mut validators = CUSTOM_VALIDATORS
+        .get_or_init(|| RwLock::new(HashMap::new()))
         .write()
         .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
     validators.remove(name);
@@ -173,6 +174,7 @@ pub fn unregister_custom_validator(name: &str) -> Result<(), String> {
 
 pub fn validate_with_custom(name: &str, value: &str) -> Result<bool, String> {
     let validators = CUSTOM_VALIDATORS
+        .get_or_init(|| RwLock::new(HashMap::new()))
         .read()
         .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
     if let Some(validator) = validators.get(name) {
@@ -184,6 +186,7 @@ pub fn validate_with_custom(name: &str, value: &str) -> Result<bool, String> {
 
 pub fn list_custom_validators() -> Result<Vec<String>, String> {
     let validators = CUSTOM_VALIDATORS
+        .get_or_init(|| RwLock::new(HashMap::new()))
         .read()
         .map_err(|e| format!("Failed to acquire read lock: {}", e))?;
     Ok(validators.keys().cloned().collect())

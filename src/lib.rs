@@ -71,20 +71,23 @@ pub struct ConfersCli;
 #[cfg(feature = "cli")]
 impl ConfersCli {
     /// Generate configuration template
-    /// 
+    ///
     /// # Arguments
     /// * `output` - Optional output file path, if None prints to stdout
     /// * `level` - Template level: "minimal", "full", or "documentation"
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// // Generate to file
-    /// ConfersCli::generate(Some("config.toml"), "full")?;
-    /// 
-    /// // Generate to stdout
-    /// ConfersCli::generate(None, "minimal")?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///
+    ///     // Generate to file
+    ///     ConfersCli::generate(Some("config.toml"), "full")?;
+    ///
+    ///     // Generate to stdout
+    ///     ConfersCli::generate(None, "minimal")?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn generate(output: Option<&str>, level: &str) -> Result<(), ConfigError> {
         let output_str = output.map(|s| s.to_string());
@@ -92,16 +95,19 @@ impl ConfersCli {
     }
 
     /// Validate configuration file
-    /// 
+    ///
     /// # Arguments
     /// * `config` - Path to configuration file
     /// * `level` - Validation level: "minimal", "full", or "documentation"
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// ConfersCli::validate("config.toml", "full")?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///
+    ///     ConfersCli::validate("config.toml", "full")?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn validate(config: &str, level: &str) -> Result<(), ConfigError> {
         let validate_level = ValidateLevel::parse(level);
@@ -109,27 +115,35 @@ impl ConfersCli {
     }
 
     /// Encrypt a configuration value
-    /// 
+    ///
     /// # Arguments
     /// * `value` - Value to encrypt
     /// * `key` - Optional Base64-encoded 32-byte key, if None uses environment variable
-    /// 
+    ///
     /// # Returns
     /// Returns the encrypted value as a Base64-encoded string
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// // Encrypt with environment key
-    /// let encrypted = ConfersCli::encrypt("secret_value", None)?;
-    /// 
-    /// // Encrypt with provided key
-    /// let encrypted = ConfersCli::encrypt("secret_value", Some("base64_key"))?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///
+    ///     // Note: Requires CONFERS_ENCRYPTION_KEY environment variable or valid key parameter
+    ///     // Or generate a key using: base64::encode(&rand::random::<[u8; 32]>())
+    ///     //
+    ///     // Example with key:
+    ///     // let encrypted = ConfersCli::encrypt("secret_value", Some("your_base64_key"))?;
+    ///
+    ///     // For testing, you can set the environment variable:
+    ///     // std::env::set_var("CONFERS_ENCRYPTION_KEY", base64::encode(&rand::random::<[u8; 32]>()));
+    ///     // let encrypted = ConfersCli::encrypt("secret_value", None)?;
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     pub fn encrypt(value: &str, key: Option<&str>) -> Result<String, ConfigError> {
         use crate::encryption::ConfigEncryption;
-        
+
         let encryptor = if let Some(k) = key {
             // Parse key from arg
             use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -155,17 +169,29 @@ impl ConfersCli {
     }
 
     /// Compare two configuration files
-    /// 
+    ///
     /// # Arguments
     /// * `file1` - Path to first configuration file
     /// * `file2` - Path to second configuration file
     /// * `format` - Optional diff format: "unified", "context", "normal", "side-by-side", or "strict"
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///     use std::fs;
+    ///
+    ///     // Create test config files
+    ///     fs::write("config1_test.toml", "name = \"app1\"\nport = 8080\n")?;
+    ///     fs::write("config2_test.toml", "name = \"app2\"\nport = 9090\n")?;
+    ///
+    ///     ConfersCli::diff("config1_test.toml", "config2_test.toml", Some("unified"))?;
+    ///
+    ///     // Cleanup
+    ///     fs::remove_file("config1_test.toml")?;
+    ///     fs::remove_file("config2_test.toml")?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn diff(file1: &str, file2: &str, format: Option<&str>) -> Result<(), ConfigError> {
         let diff_format = format
@@ -180,19 +206,22 @@ impl ConfersCli {
     }
 
     /// Run interactive configuration wizard
-    /// 
+    ///
     /// # Arguments
     /// * `non_interactive` - If true, uses default values without prompting
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// // Interactive wizard
-    /// ConfersCli::wizard(false)?;
-    /// 
-    /// // Non-interactive with defaults
-    /// ConfersCli::wizard(true)?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///
+    ///     // Interactive wizard
+    ///     // ConfersCli::wizard(false)?;
+    ///
+    ///     // Non-interactive with defaults
+    ///     ConfersCli::wizard(true)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn wizard(non_interactive: bool) -> Result<(), ConfigError> {
         let wizard = ConfigWizard::new();
@@ -208,22 +237,25 @@ impl ConfersCli {
     }
 
     /// Generate shell completion scripts
-    /// 
+    ///
     /// # Arguments
     /// * `shell` - Shell type: "bash", "fish", "zsh", "powershell", or "elvish"
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::ConfersCli;
-    /// 
-    /// ConfersCli::completions("bash")?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::ConfersCli;
+    ///
+    ///     ConfersCli::completions("bash")?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn completions(shell: &str) -> Result<(), ConfigError> {
         // For library usage, we provide a simplified completion generation
         // that doesn't depend on the CLI structure from main.rs
         use clap_complete::{generate, Shell};
         use std::io;
-        
+
         let shell_enum = match shell {
             "bash" => Shell::Bash,
             "zsh" => Shell::Zsh,
@@ -247,31 +279,31 @@ impl ConfersCli {
                 clap::Command::new("generate")
                     .about("Generate configuration template")
                     .arg(clap::arg!(--output <FILE> "Output file path"))
-                    .arg(clap::arg!(--level <LEVEL> "Template level").default_value("full"))
+                    .arg(clap::arg!(--level <LEVEL> "Template level").default_value("full")),
             )
             .subcommand(
                 clap::Command::new("validate")
                     .about("Validate configuration file")
                     .arg(clap::arg!(--config <FILE> "Configuration file path").required(true))
-                    .arg(clap::arg!(--level <LEVEL> "Validation level").default_value("full"))
+                    .arg(clap::arg!(--level <LEVEL> "Validation level").default_value("full")),
             )
             .subcommand(
                 clap::Command::new("diff")
                     .about("Compare two configuration files")
                     .arg(clap::arg!(<FILE1> "First file").required(true))
                     .arg(clap::arg!(<FILE2> "Second file").required(true))
-                    .arg(clap::arg!(--style <STYLE> "Diff style").default_value("unified"))
+                    .arg(clap::arg!(--style <STYLE> "Diff style").default_value("unified")),
             )
             .subcommand(
                 clap::Command::new("encrypt")
                     .about("Encrypt a value")
                     .arg(clap::arg!(<VALUE> "Value to encrypt").required(true))
-                    .arg(clap::arg!(--key <KEY> "Encryption key"))
+                    .arg(clap::arg!(--key <KEY> "Encryption key")),
             )
             .subcommand(
                 clap::Command::new("wizard")
                     .about("Interactive configuration wizard")
-                    .arg(clap::arg!(--non_interactive "Skip interactive prompts"))
+                    .arg(clap::arg!(--non_interactive "Skip interactive prompts")),
             );
 
         generate(shell_enum, &mut cmd, "confers", &mut io::stdout());
@@ -279,16 +311,23 @@ impl ConfersCli {
     }
 
     /// Execute key management operations
-    /// 
+    ///
     /// # Arguments
     /// * `subcommand` - Key subcommand to execute
-    /// 
+    ///
     /// # Examples
     /// ```
-    /// use confers::{ConfersCli, commands::key::KeySubcommand};
-    /// 
-    /// let subcommand = KeySubcommand::Generate;
-    /// ConfersCli::key(&subcommand)?;
+    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::{ConfersCli, commands::key::KeySubcommand};
+    ///
+    ///     let subcommand = KeySubcommand::Generate {
+    ///         output: None,
+    ///         algorithm: "AES256".to_string(),
+    ///         size: 256,
+    ///     };
+    ///     ConfersCli::key(&subcommand)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn key(subcommand: &crate::commands::key::KeySubcommand) -> Result<(), ConfigError> {
         KeyCommand::execute(subcommand, None, None)
@@ -309,7 +348,7 @@ pub mod prelude {
     pub use crate::ValidationErrors;
     pub use serde::Deserialize;
     pub use serde::Serialize;
-    
+
     // Re-export CLI facade when feature is enabled
     #[cfg(feature = "cli")]
     pub use crate::ConfersCli;

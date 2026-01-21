@@ -13,47 +13,48 @@ use figment::{
 };
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
-use std::sync::LazyLock;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 // Global HTTP client - lazily initialized to avoid startup panics
-// Uses LazyLock for safe initialization
+// Uses OnceLock for safe initialization
 
-static HTTP_CLIENT: LazyLock<Arc<reqwest::blocking::Client>> = LazyLock::new(|| {
-    Arc::new(
-        reqwest::blocking::Client::builder()
-            .pool_max_idle_per_host(10)
-            .pool_idle_timeout(Duration::from_secs(90))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
-            })
-            .unwrap(),
-    )
-});
-static HTTP_CLIENT_ASYNC: LazyLock<Arc<reqwest::Client>> = LazyLock::new(|| {
-    Arc::new(
-        reqwest::Client::builder()
-            .pool_max_idle_per_host(10)
-            .pool_idle_timeout(Duration::from_secs(90))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e))
-            })
-            .unwrap(),
-    )
-});
+static HTTP_CLIENT: OnceLock<Arc<reqwest::blocking::Client>> = OnceLock::new();
+
+static HTTP_CLIENT_ASYNC: OnceLock<Arc<reqwest::Client>> = OnceLock::new();
 
 /// Get the global blocking HTTP client
 pub fn get_http_client() -> &'static Arc<reqwest::blocking::Client> {
-    &HTTP_CLIENT
+    HTTP_CLIENT.get_or_init(|| {
+        Arc::new(
+            reqwest::blocking::Client::builder()
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| {
+                    crate::error::ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e))
+                })
+                .unwrap(),
+        )
+    })
 }
 
 /// Get the global async HTTP client
 pub fn get_async_http_client() -> &'static Arc<reqwest::Client> {
-    &HTTP_CLIENT_ASYNC
+    HTTP_CLIENT_ASYNC.get_or_init(|| {
+        Arc::new(
+            reqwest::Client::builder()
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| {
+                    crate::error::ConfigError::RemoteError(format!("Failed to create async HTTP client: {}", e))
+                })
+                .unwrap(),
+        )
+    })
 }
 
 pub struct HttpProvider {
