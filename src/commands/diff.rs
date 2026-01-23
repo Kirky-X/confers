@@ -47,6 +47,7 @@ pub struct DiffOptions {
     pub ignore_whitespace: bool,
     pub case_insensitive: bool,
     pub strict: bool,
+    pub output: Option<String>,
 }
 
 impl Clone for DiffOptions {
@@ -58,6 +59,7 @@ impl Clone for DiffOptions {
             ignore_whitespace: self.ignore_whitespace,
             case_insensitive: self.case_insensitive,
             strict: self.strict,
+            output: self.output.clone(),
         }
     }
 }
@@ -71,6 +73,7 @@ impl Default for DiffOptions {
             ignore_whitespace: false,
             case_insensitive: false,
             strict: false,
+            output: None,
         }
     }
 }
@@ -81,21 +84,112 @@ impl DiffCommand {
         let v2 = Self::load_config(file2)?;
 
         if v1 == v2 {
-            println!("Configurations are identical.");
+            if let Some(output_path) = options.output.as_deref() {
+                fs::write(output_path, "Configurations are identical.\n")
+                    .map_err(|e| ConfigError::IoError(e.to_string()))?;
+            } else {
+                println!("Configurations are identical.");
+            }
             return Ok(());
         }
 
-        match options.format {
-            DiffFormat::Unified => Self::print_unified_diff(file1, file2, &v1, &v2, options),
-            DiffFormat::Context => Self::print_context_diff(file1, file2, &v1, &v2, options),
-            DiffFormat::Normal => Self::print_normal_diff(file1, file2, &v1, &v2, options),
-            DiffFormat::SideBySide => {
-                Self::print_side_by_side_diff(file1, file2, &v1, &v2, options)
+        if let Some(output_path) = options.output.as_deref() {
+            let mut render_options = options.clone();
+            render_options.strict = true;
+            let lines = Self::render_diff(file1, file2, &v1, &v2, &render_options);
+            fs::write(output_path, lines.join("\n"))
+                .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        } else {
+            match options.format {
+                DiffFormat::Unified => Self::print_unified_diff(file1, file2, &v1, &v2, options),
+                DiffFormat::Context => Self::print_context_diff(file1, file2, &v1, &v2, options),
+                DiffFormat::Normal => Self::print_normal_diff(file1, file2, &v1, &v2, options),
+                DiffFormat::SideBySide => {
+                    Self::print_side_by_side_diff(file1, file2, &v1, &v2, options)
+                }
+                DiffFormat::Strict => Self::print_strict_diff(file1, file2, &v1, &v2, options),
             }
-            DiffFormat::Strict => Self::print_strict_diff(file1, file2, &v1, &v2, options),
         }
 
         Ok(())
+    }
+
+    fn render_diff(
+        file1: &str,
+        file2: &str,
+        v1: &Value,
+        v2: &Value,
+        options: &DiffOptions,
+    ) -> Vec<String> {
+        match options.format {
+            DiffFormat::Unified => {
+                let header = format!("--- {}", file1);
+                let header2 = format!("+++ {}", file2);
+                let mut lines = Vec::new();
+                if options.strict {
+                    lines.push(header);
+                    lines.push(header2);
+                } else {
+                    lines.push(format!("{}{}{}", BOLD, header, RESET));
+                    lines.push(format!("{}{}{}", BOLD, header2, RESET));
+                }
+                lines.extend(Self::generate_unified_diff(v1, v2, "", options));
+                lines
+            }
+            DiffFormat::Context => {
+                let mut lines = Vec::new();
+                lines.push(format!("*** {}", file1));
+                lines.push(format!("--- {}", file2));
+                lines.extend(Self::generate_context_diff(v1, v2, "", options));
+                lines
+            }
+            DiffFormat::Normal => {
+                let mut lines = Vec::new();
+                if options.strict {
+                    lines.push(file1.to_string());
+                    lines.push(file2.to_string());
+                } else {
+                    lines.push(format!("{} {} {}", BOLD, file1, RESET));
+                    lines.push(format!("{} {} {}", BOLD, file2, RESET));
+                }
+                lines.extend(Self::generate_normal_diff(v1, v2, "", options));
+                lines
+            }
+            DiffFormat::SideBySide => {
+                let sep = if options.show_line_numbers { " | " } else { "   " };
+                let left_header = if options.strict {
+                    format!("Left: {}", file1)
+                } else {
+                    format!("{}Left: {}{}", BOLD, file1, RESET)
+                };
+                let right_header = if options.strict {
+                    format!("Right: {}", file2)
+                } else {
+                    format!("{}Right: {}{}", BOLD, file2, RESET)
+                };
+                let mut lines = Vec::new();
+                if options.strict {
+                    lines.push(format!("{}{}{}", left_header, sep, right_header));
+                } else {
+                    lines.push(format!("{}{}{}{}{}", left_header, sep, right_header, sep, RESET));
+                }
+                lines.push("-".repeat(80));
+                lines.extend(Self::generate_side_by_side_diff(v1, v2, "", options));
+                lines
+            }
+            DiffFormat::Strict => {
+                let strict_opts = DiffOptions {
+                    strict: true,
+                    format: DiffFormat::Strict,
+                    ..options.clone()
+                };
+                let mut lines = Vec::new();
+                lines.push(format!("--- {}", file1));
+                lines.push(format!("+++ {}", file2));
+                lines.extend(Self::generate_standard_unified_diff(v1, v2, "", &strict_opts));
+                lines
+            }
+        }
     }
 
     fn colorize(s: &str, color: &str, options: &DiffOptions) -> String {
@@ -481,6 +575,9 @@ impl DiffCommand {
             Some("toml") => {
                 toml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
             }
+            Some("ini") => {
+                serde_ini::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))
+            }
             _ => Err(ConfigError::ParseError(format!(
                 "Unsupported config format: {:?}",
                 ext
@@ -731,6 +828,7 @@ mod tests {
         assert!(!options.ignore_whitespace);
         assert!(!options.case_insensitive);
         assert!(!options.strict);
+        assert!(options.output.is_none());
     }
 
     #[test]

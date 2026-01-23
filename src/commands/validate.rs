@@ -298,6 +298,19 @@ impl ValidateCommand {
                         return;
                     }
                 },
+                "ini" => match serde_ini::from_str::<serde_json::Value>(&content) {
+                    Ok(value) => {
+                        Self::validate_json_structure(&value, "", report);
+                    }
+                    Err(_) => {
+                        report.add_item(ValidationItem::new(
+                            "structure",
+                            "skipped",
+                            "Skipped due to syntax errors",
+                        ));
+                        return;
+                    }
+                },
                 _ => {
                     report.add_item(ValidationItem::new(
                         "structure",
@@ -477,6 +490,23 @@ impl ValidateCommand {
                             "syntax",
                             "failed",
                             &format!("YAML syntax error: {}", e),
+                        ));
+                        return Err(ConfigError::ParseError(e.to_string()));
+                    }
+                },
+                "ini" => match serde_ini::from_str::<serde_json::Value>(&content) {
+                    Ok(_) => {
+                        report.add_item(ValidationItem::new(
+                            "syntax",
+                            "passed",
+                            "INI syntax valid",
+                        ));
+                    }
+                    Err(e) => {
+                        report.add_item(ValidationItem::new(
+                            "syntax",
+                            "failed",
+                            &format!("INI syntax error: {}", e),
                         ));
                         return Err(ConfigError::ParseError(e.to_string()));
                     }
