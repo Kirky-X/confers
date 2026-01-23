@@ -8,7 +8,7 @@ use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType}
 #[cfg(feature = "encryption")]
 use crate::security::{SecureString, SensitivityLevel};
 use crate::utils::ssrf::validate_remote_url;
-use crate::utils::tls_config::TlsConfig;
+use crate::watcher::TlsConfig;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use failsafe::{
     backoff, failure_policy, CircuitBreaker, Config as CircuitBreakerConfig, Error as FailsafeError,
@@ -261,11 +261,15 @@ impl ConsulConfigProvider {
         client_cert: Option<impl Into<PathBuf>>,
         client_key: Option<impl Into<PathBuf>>,
     ) -> Self {
-        self.tls_config = Some(TlsConfig {
-            ca_cert: Some(ca_cert.into()),
-            client_cert: client_cert.map(|p| p.into()),
-            client_key: client_key.map(|p| p.into()),
-        });
+        let ca_cert: PathBuf = ca_cert.into();
+        let mut tls = TlsConfig::new().with_ca_cert(&ca_cert);
+        if let Some(cert) = client_cert {
+            tls = tls.with_client_cert(cert);
+        }
+        if let Some(key) = client_key {
+            tls = tls.with_client_key(key);
+        }
+        self.tls_config = Some(tls);
         self
     }
 
@@ -284,7 +288,7 @@ impl ConsulConfigProvider {
         let mut client_builder = reqwest::blocking::Client::builder();
 
         if let Some(tls) = &self.tls_config {
-            if let Some(ca_path) = &tls.ca_cert {
+            if let Some(ca_path) = tls.ca_cert_path() {
                 let cert_data = std::fs::read(ca_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
                 })?;
@@ -294,7 +298,7 @@ impl ConsulConfigProvider {
                 client_builder = client_builder.add_root_certificate(cert);
             }
 
-            if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
+            if let (Some(cert_path), Some(key_path)) = (tls.client_cert_path(), tls.client_key_path()) {
                 let cert_data = std::fs::read(cert_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
                 })?;

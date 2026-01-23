@@ -122,20 +122,20 @@ impl TlsConfig {
     }
 
     /// Set CA certificate path
-    pub fn with_ca_cert(mut self, path: impl Into<String>) -> Self {
-        self.ca_cert_path = Some(path.into());
+    pub fn with_ca_cert(mut self, path: impl Into<PathBuf>) -> Self {
+        self.ca_cert_path = Some(path.into().to_string_lossy().into_owned());
         self
     }
 
     /// Set client certificate path
-    pub fn with_client_cert(mut self, path: impl Into<String>) -> Self {
-        self.client_cert_path = Some(path.into());
+    pub fn with_client_cert(mut self, path: impl Into<PathBuf>) -> Self {
+        self.client_cert_path = Some(path.into().to_string_lossy().into_owned());
         self
     }
 
     /// Set client key path
-    pub fn with_client_key(mut self, path: impl Into<String>) -> Self {
-        self.client_key_path = Some(path.into());
+    pub fn with_client_key(mut self, path: impl Into<PathBuf>) -> Self {
+        self.client_key_path = Some(path.into().to_string_lossy().into_owned());
         self
     }
 
@@ -155,9 +155,9 @@ impl TlsConfig {
     }
 
     /// Convert to unified TlsConfig with PathBuf
-    pub fn to_unified_config(&self) -> crate::utils::tls_config::TlsConfig {
+    pub fn to_unified_config(&self) -> TlsConfig {
         use std::path::PathBuf;
-        let mut config = crate::utils::tls_config::TlsConfig::new();
+        let mut config = TlsConfig::new();
         if let Some(path) = &self.ca_cert_path {
             config = config.with_ca_cert(PathBuf::from(path));
         }

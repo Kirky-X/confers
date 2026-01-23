@@ -227,7 +227,3 @@ path = "src/15-complete/15-complete-development_app.rs"
 [[bin]]
 name = "15-complete-multi_source"
 path = "src/15-complete/15-complete-multi_source.rs"
-
-[[bin]]
-name = "library_usage"
-path = "library_usage.rs"

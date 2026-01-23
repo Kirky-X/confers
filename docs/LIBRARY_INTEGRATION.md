@@ -243,10 +243,6 @@ confers = {
 }
 ```
 
-## Examples
-
-See the `examples/library_usage.rs` file for a complete working example that demonstrates all features.
-
 ## Migration from Direct Command Usage
 
 If you were previously using the command modules directly:

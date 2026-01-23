@@ -6,7 +6,6 @@
 pub mod file_format;
 pub mod path;
 pub mod ssrf;
-pub mod tls_config;
 
 pub use file_format::FileFormat;
 pub use file_format::detect_format_by_content;

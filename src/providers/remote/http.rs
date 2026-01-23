@@ -6,7 +6,7 @@
 use crate::security::secure_string::SecureString;
 use crate::utils::file_format::parse_content;
 use crate::utils::ssrf::validate_remote_url;
-use crate::utils::tls_config::TlsConfig;
+use crate::watcher::TlsConfig;
 use figment::Figment;
 use std::path::PathBuf;
 use std::sync::Arc;
