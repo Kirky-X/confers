@@ -27,10 +27,11 @@ pub mod watcher;
 // Re-export common items
 pub use audit::Sanitize;
 pub use confers_macros::Config;
-pub use core::builder::{ConfigBuilder, Environment, File, FileFormat};
+pub use core::builder::{ConfigBuilder, ConfigSaveExt, Environment, File};
 pub use core::{ConfigLoader, OptionalValidate};
 pub use error::ConfigError;
 pub use error_helpers::{OptionExt, ResultExt};
+pub use utils::FileFormat;
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationErrors};
 
@@ -75,6 +76,8 @@ impl ConfersCli {
     /// # Arguments
     /// * `output` - Optional output file path, if None prints to stdout
     /// * `level` - Template level: "minimal", "full", or "documentation"
+    /// * `struct_name` - Optional struct name to generate schema for (currently placeholder)
+    /// * `format` - Output format: "toml", "json", "yaml", "ini"
     ///
     /// # Examples
     /// ```
@@ -82,16 +85,28 @@ impl ConfersCli {
     ///     use confers::ConfersCli;
     ///
     ///     // Generate to file
-    ///     ConfersCli::generate(Some("config.toml"), "full")?;
+    ///     ConfersCli::generate(Some("config.toml"), "full", None, "toml")?;
     ///
     ///     // Generate to stdout
-    ///     ConfersCli::generate(None, "minimal")?;
+    ///     ConfersCli::generate(None, "minimal", None, "toml")?;
     ///     Ok(())
     /// }
     /// ```
-    pub fn generate(output: Option<&str>, level: &str) -> Result<(), ConfigError> {
+    pub fn generate(
+        output: Option<&str>,
+        level: &str,
+        struct_name: Option<&str>,
+        format: &str,
+    ) -> Result<(), ConfigError> {
         let output_str = output.map(|s| s.to_string());
-        GenerateCommand::execute_placeholder(output_str.as_ref(), level).map(|_| ())
+        let struct_str = struct_name.map(|s| s.to_string());
+        GenerateCommand::execute_placeholder(
+            output_str.as_ref(),
+            level,
+            struct_str.as_ref(),
+            format,
+        )
+        .map(|_| ())
     }
 
     /// Validate configuration file
@@ -102,10 +117,20 @@ impl ConfersCli {
     ///
     /// # Examples
     /// ```
+    /// use std::fs::File;
+    /// use std::io::Write;
+    ///
     /// fn main() -> Result<(), Box<dyn std::error::Error>> {
     ///     use confers::ConfersCli;
     ///
-    ///     ConfersCli::validate("config.toml", "full")?;
+    ///     // Create a dummy config file
+    ///     let mut file = File::create("config_test.toml")?;
+    ///     writeln!(file, "[app]\nname = \"test\"")?;
+    ///
+    ///     ConfersCli::validate("config_test.toml", "full")?;
+    ///
+    ///     // Clean up
+    ///     std::fs::remove_file("config_test.toml")?;
     ///     Ok(())
     /// }
     /// ```
@@ -174,6 +199,7 @@ impl ConfersCli {
     /// * `file1` - Path to first configuration file
     /// * `file2` - Path to second configuration file
     /// * `format` - Optional diff format: "unified", "context", "normal", "side-by-side", or "strict"
+    /// * `output` - Optional output file path
     ///
     /// # Examples
     /// ```
@@ -185,7 +211,7 @@ impl ConfersCli {
     ///     fs::write("config1_test.toml", "name = \"app1\"\nport = 8080\n")?;
     ///     fs::write("config2_test.toml", "name = \"app2\"\nport = 9090\n")?;
     ///
-    ///     ConfersCli::diff("config1_test.toml", "config2_test.toml", Some("unified"))?;
+    ///     ConfersCli::diff("config1_test.toml", "config2_test.toml", Some("unified"), None)?;
     ///
     ///     // Cleanup
     ///     fs::remove_file("config1_test.toml")?;
@@ -193,13 +219,14 @@ impl ConfersCli {
     ///     Ok(())
     /// }
     /// ```
-    pub fn diff(file1: &str, file2: &str, format: Option<&str>) -> Result<(), ConfigError> {
+    pub fn diff(file1: &str, file2: &str, format: Option<&str>, output: Option<&str>) -> Result<(), ConfigError> {
         let diff_format = format
             .unwrap_or("unified")
             .parse()
             .map_err(ConfigError::ParseError)?;
         let options = DiffOptions {
             format: diff_format,
+            output: output.map(|s| s.to_string()),
             ..DiffOptions::default()
         };
         DiffCommand::execute(file1, file2, options)

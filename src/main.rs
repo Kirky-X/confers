@@ -43,11 +43,18 @@ enum Commands {
         /// 模板级别 (minimal, full)
         #[arg(short, long, default_value = "full")]
         level: String,
+
+        /// 配置结构体名称
+        #[arg(short, long)]
+        r#struct: Option<String>,
+
+        /// 输出格式 (toml, json, yaml, ini)
+        #[arg(short, long, default_value = "toml")]
+        format: String,
     },
     /// 验证配置文件
     Validate {
         /// 配置文件路径
-        #[arg(short, long)]
         config: String,
 
         /// 输出级别 (minimal, full, documentation)
@@ -62,8 +69,12 @@ enum Commands {
         file2: String,
 
         /// 输出样式 (unified, context, normal, side-by-side, strict)
+        #[arg(short, long, alias = "style")]
+        format: Option<String>,
+
+        /// 输出文件路径
         #[arg(short, long)]
-        style: Option<String>,
+        output: Option<String>,
     },
     /// 生成 Shell 补全脚本
     Completions {
@@ -75,9 +86,13 @@ enum Commands {
         /// 要加密的值
         value: String,
 
-        /// 加密密钥（Base64 编码，32 字节）。如未提供，则使用 CONFERS_ENCRYPTION_KEY 环境变量。
+        /// 加密密钥（Base64 编码，32 字节）。如未提供，则使用 CONFERS_ENCRYPTION_KEY 或 CONFERS_KEY 环境变量。
         #[arg(short, long)]
         key: Option<String>,
+
+        /// 输出文件路径
+        #[arg(short, long)]
+        output: Option<String>,
     },
     /// 交互式配置向导
     Wizard {
@@ -95,8 +110,8 @@ fn main() -> Result<(), ConfigError> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Generate { output, level } => {
-            GenerateCommand::execute_placeholder(output.as_ref(), level)?;
+        Commands::Generate { output, level, r#struct, format } => {
+            GenerateCommand::execute_placeholder(output.as_ref(), level, r#struct.as_ref(), format)?;
         }
         Commands::Validate { config, level } => {
             let validate_level = ValidateLevel::parse(level);
@@ -105,21 +120,28 @@ fn main() -> Result<(), ConfigError> {
         Commands::Diff {
             file1,
             file2,
-            style,
+            format,
+            output,
         } => {
-            let diff_format = DiffFormat::from_str(style.as_deref().unwrap_or("unified"))
-                .map_err(ConfigError::ParseError)?;
+            let diff_format = if let Some(s) = format {
+                DiffFormat::from_str(s).map_err(ConfigError::Other)?
+            } else {
+                DiffFormat::Unified
+            };
+
             let options = DiffOptions {
                 format: diff_format,
-                ..DiffOptions::default()
+                output: output.clone(),
+                ..Default::default()
             };
+
             DiffCommand::execute(file1, file2, options)?;
         }
         Commands::Completions { shell } => {
             CompletionsCommand::execute::<Cli>(shell)?;
         }
-        Commands::Encrypt { value, key } => {
-            EncryptCommand::execute(value, key.as_ref())?;
+        Commands::Encrypt { value, key, output } => {
+            EncryptCommand::execute(value, key.as_ref(), output.as_ref())?;
         }
         Commands::Wizard { non_interactive } => {
             let wizard = ConfigWizard::new();

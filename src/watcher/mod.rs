@@ -23,8 +23,11 @@ use tokio::time::interval;
 #[cfg(feature = "remote")]
 use std::fs;
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 use crate::security::{SecureString, SensitivityLevel};
+
+#[cfg(all(feature = "remote", not(feature = "encryption")))]
+use std::sync::Arc;
 
 #[cfg(feature = "watch")]
 use std::sync::mpsc::{channel, Receiver};
@@ -150,6 +153,22 @@ impl TlsConfig {
     pub fn client_key_path(&self) -> Option<&String> {
         self.client_key_path.as_ref()
     }
+
+    /// Convert to unified TlsConfig with PathBuf
+    pub fn to_unified_config(&self) -> crate::utils::tls_config::TlsConfig {
+        use std::path::PathBuf;
+        let mut config = crate::utils::tls_config::TlsConfig::new();
+        if let Some(path) = &self.ca_cert_path {
+            config = config.with_ca_cert(PathBuf::from(path));
+        }
+        if let Some(path) = &self.client_cert_path {
+            config = config.with_client_cert(PathBuf::from(path));
+        }
+        if let Some(path) = &self.client_key_path {
+            config = config.with_client_key(PathBuf::from(path));
+        }
+        config
+    }
 }
 
 #[cfg(feature = "remote")]
@@ -159,7 +178,7 @@ impl Default for TlsConfig {
     }
 }
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 #[derive(Clone)]
 pub struct RemoteAuth {
     username: Option<String>,
@@ -167,7 +186,7 @@ pub struct RemoteAuth {
     bearer_token: Option<SecureString>,
 }
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
 impl RemoteAuth {
     /// Create a new RemoteAuth with builder pattern
     pub fn new() -> Self {
@@ -217,7 +236,70 @@ impl RemoteAuth {
     }
 }
 
-#[cfg(feature = "remote")]
+#[cfg(all(feature = "remote", feature = "encryption"))]
+impl Default for RemoteAuth {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// RemoteAuth without encryption feature (simplified version)
+#[cfg(all(feature = "remote", not(feature = "encryption")))]
+#[derive(Clone)]
+pub struct RemoteAuth {
+    username: Option<String>,
+    password: Option<String>,
+    bearer_token: Option<String>,
+}
+
+#[cfg(all(feature = "remote", not(feature = "encryption")))]
+impl RemoteAuth {
+    /// Create a new RemoteAuth with builder pattern
+    pub fn new() -> Self {
+        Self {
+            username: None,
+            password: None,
+            bearer_token: None,
+        }
+    }
+
+    /// Set username
+    pub fn with_username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Set password (plain string when encryption is disabled)
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
+        self
+    }
+
+    /// Set bearer token (plain string when encryption is disabled)
+    pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(token.into());
+        self
+    }
+
+    /// Get username reference
+    pub fn username(&self) -> Option<&String> {
+        self.username.as_ref()
+    }
+
+    /// Get password reference
+    #[doc(hidden)]
+    pub fn password(&self) -> Option<&String> {
+        self.password.as_ref()
+    }
+
+    /// Get bearer token reference
+    #[doc(hidden)]
+    pub fn bearer_token(&self) -> Option<&String> {
+        self.bearer_token.as_ref()
+    }
+}
+
+#[cfg(all(feature = "remote", not(feature = "encryption")))]
 impl Default for RemoteAuth {
     fn default() -> Self {
         Self::new()
