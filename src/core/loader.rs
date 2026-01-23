@@ -147,6 +147,7 @@ pub struct ConfigLoader<T> {
     /// Format detection mode (ByContent, ByExtension)
     format_detection: Option<String>,
     /// Custom sanitizer function
+    #[cfg(any(feature = "encryption", feature = "remote"))]
     sanitizer: Option<SanitizerFn<T>>,
     /// CLI configuration provider
     cli_provider: Option<CliConfigProvider>,
@@ -297,6 +298,7 @@ impl<T> Default for ConfigLoader<T> {
             strict: false,
             watch: false,
             format_detection: None,
+            #[cfg(any(feature = "encryption", feature = "remote"))]
             sanitizer: None,
             cli_provider: None,
             #[cfg(feature = "remote")]
@@ -375,6 +377,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Set custom sanitizer function
+    #[cfg(any(feature = "encryption", feature = "remote"))]
     pub fn with_sanitizer(
         mut self,
         sanitizer: impl Fn(T) -> Result<T, ConfigError> + Send + Sync + 'static,
@@ -855,6 +858,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_template_expansion(&mut config)?;
 
         // Apply sanitization if available
+        #[cfg(any(feature = "encryption", feature = "remote"))]
         if let Some(sanitizer) = &self.sanitizer {
             config = sanitizer(config)?;
         }
@@ -1094,6 +1098,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_template_expansion(&mut config)?;
 
         // Apply sanitization if available
+        #[cfg(any(feature = "encryption", feature = "remote"))]
         if let Some(sanitizer) = &self.sanitizer {
             config = sanitizer(config)?;
         }
@@ -1283,6 +1288,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_template_expansion(&mut config)?;
 
         // Apply sanitization if available
+        #[cfg(any(feature = "encryption", feature = "remote"))]
         if let Some(sanitizer) = &self.sanitizer {
             config = sanitizer(config)?;
         }
@@ -1818,6 +1824,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self.apply_decryption(&mut config)?;
 
         // Apply sanitization if available
+        #[cfg(any(feature = "encryption", feature = "remote"))]
         if let Some(sanitizer) = &self.sanitizer {
             config = sanitizer(config)?;
         }
