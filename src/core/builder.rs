@@ -698,7 +698,7 @@ where
             "toml" => FileFormat::Toml,
             "yaml" | "yml" => FileFormat::Yaml,
             "ini" => FileFormat::Ini,
-            "json" | _ => FileFormat::Json,
+            _ => FileFormat::Json,
         };
 
         self.save_to_with_format(path, format)

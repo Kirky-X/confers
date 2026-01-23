@@ -452,7 +452,7 @@ pub fn serialize_to_ini(dict: &serde_json::Map<String, serde_json::Value>) -> St
         value: &serde_json::Value,
         prefix: &str,
         output: &mut String,
-        indent: usize,
+        _indent: usize,
     ) {
         match value {
             serde_json::Value::Object(map) => {
@@ -462,17 +462,13 @@ pub fn serialize_to_ini(dict: &serde_json::Map<String, serde_json::Value>) -> St
                     } else {
                         format!("{}.{}", prefix, k)
                     };
-                    serialize_value(v, &new_prefix, output, indent);
+                    serialize_value(v, &new_prefix, output, _indent);
                 }
             }
             serde_json::Value::Array(arr) => {
                 for (i, item) in arr.iter().enumerate() {
-                    let new_prefix = if prefix.is_empty() {
-                        format!("{}.{}", prefix, i)
-                    } else {
-                        format!("{}.{}", prefix, i)
-                    };
-                    serialize_value(item, &new_prefix, output, indent);
+                    let new_prefix = format!("{}.{}", prefix, i);
+                    serialize_value(item, &new_prefix, output, _indent);
                 }
             }
             serde_json::Value::String(s) => {
