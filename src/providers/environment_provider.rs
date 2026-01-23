@@ -159,8 +159,8 @@ impl ConfigProvider for EnvironmentProvider {
                     continue;
                 }
 
-                if let Err(e) = validator.validate_env_value(&value) {
-                    validation_warnings.push(format!("环境变量值 '{}' 验证失败: {}", key, e));
+                if let Err(_e) = validator.validate_env_value(&value) {
+                    // Skip invalid values
                     continue;
                 }
 
@@ -201,21 +201,21 @@ impl ConfigProvider for EnvironmentProvider {
         }
 
         if !self.custom_mappings.is_empty() {
-            if let Err(e) = validator.validate_env_mapping(&self.custom_mappings) {
+            if let Err(_e) = validator.validate_env_mapping(&self.custom_mappings) {
                 #[cfg(feature = "tracing")]
-                tracing::warn!("Failed to validate env mapping: {}", e);
+                tracing::warn!("Failed to validate env mapping: {}", _e);
             }
 
             let mut custom_env_map = figment::value::Dict::new();
 
             for (field_name, env_name) in &self.custom_mappings {
                 if let Ok(value) = std::env::var(env_name) {
-                    if let Err(e) = validator.validate_env_value(&value) {
+                    if let Err(_e) = validator.validate_env_value(&value) {
                         #[cfg(feature = "tracing")]
                         tracing::warn!(
                             "Failed to validate custom mapping env value for '{}': {}",
                             field_name,
-                            e
+                            _e
                         );
                         continue;
                     }

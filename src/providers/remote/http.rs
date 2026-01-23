@@ -4,14 +4,11 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::security::secure_string::SecureString;
+use crate::utils::file_format::parse_content;
 use crate::utils::ssrf::validate_remote_url;
-use figment::value::Value as FigmentValue;
-use figment::{
-    providers::Serialized,
-    value::{Dict, Map},
-    Error, Figment, Profile, Provider,
-};
-use serde_json::Value as JsonValue;
+use crate::utils::tls_config::TlsConfig;
+use figment::Figment;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -62,13 +59,6 @@ pub struct HttpProvider {
     auth: Option<HttpAuth>,
     tls_config: Option<TlsConfig>,
     timeout: Duration,
-}
-
-#[derive(Clone)]
-pub(crate) struct TlsConfig {
-    pub(crate) ca_cert: Option<std::path::PathBuf>,
-    pub(crate) client_cert: Option<std::path::PathBuf>,
-    pub(crate) client_key: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone)]
@@ -202,43 +192,13 @@ impl HttpProvider {
             .and_then(|h| h.to_str().ok())
             .unwrap_or("");
 
-        let figment: Figment = if content_type.contains("application/json") {
-            let json_value: JsonValue = response
-                .json()
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/toml") || content_type.contains("text/toml") {
-            let toml_str = response.text().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to read TOML response: {}", e))
-            })?;
-            let toml_value: FigmentValue = toml::from_str(&toml_str)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse TOML: {}", e)))?;
-            let dict: Dict = toml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert TOML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/yaml") || content_type.contains("text/yaml") {
-            let yaml_str = response.text().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to read YAML response: {}", e))
-            })?;
-            let yaml_value: FigmentValue = serde_yaml::from_str(&yaml_str)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse YAML: {}", e)))?;
-            let dict: Dict = yaml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert YAML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else {
-            let json_value: JsonValue = response
-                .json()
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        };
+        let body = response
+            .text()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to read response body: {}", e)))?;
+
+        let figment = parse_content(&body, Some(content_type))
+            .map_err(|e| ConfigError::RemoteError(e))?
+            .figment;
 
         Ok(figment)
     }
@@ -287,45 +247,14 @@ impl HttpProvider {
             .and_then(|h| h.to_str().ok())
             .unwrap_or("");
 
-        let figment: Figment = if content_type.contains("application/json") {
-            let json_value: JsonValue = response
-                .json()
-                .await
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/toml") || content_type.contains("text/toml") {
-            let toml_str = response.text().await.map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to read TOML response: {}", e))
-            })?;
-            let toml_value: FigmentValue = toml::from_str(&toml_str)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse TOML: {}", e)))?;
-            let dict: Dict = toml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert TOML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/yaml") || content_type.contains("text/yaml") {
-            let yaml_str = response.text().await.map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to read YAML response: {}", e))
-            })?;
-            let yaml_value: FigmentValue = serde_yaml::from_str(&yaml_str)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse YAML: {}", e)))?;
-            let dict: Dict = yaml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert YAML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else {
-            let json_value: JsonValue = response
-                .json()
-                .await
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        };
+        let body = response
+            .text()
+            .await
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to read response body: {}", e)))?;
+
+        let figment = parse_content(&body, Some(content_type))
+            .map_err(|e| ConfigError::RemoteError(e))?
+            .figment;
 
         Ok(figment)
     }

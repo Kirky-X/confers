@@ -5,13 +5,15 @@
 
 use crate::error::ConfigError;
 use crate::providers::provider::{ConfigProvider, ProviderMetadata, ProviderType};
+#[cfg(feature = "encryption")]
 use crate::security::{SecureString, SensitivityLevel};
+use crate::utils::file_format::parse_content;
 use crate::utils::ssrf::validate_remote_url;
-use figment::value::{Dict, Value as FigmentValue};
-use figment::{providers::Serialized, Figment, Profile};
-use serde_json::Value as JsonValue;
+use crate::utils::tls_config::TlsConfig;
+use figment::Figment;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct HttpConfigProvider {
@@ -20,15 +22,12 @@ pub struct HttpConfigProvider {
     tls_config: Option<TlsConfig>,
     timeout: Option<String>,
     priority: u8,
+    /// Circuit breaker configuration
+    failure_threshold: u32,
+    reset_timeout: Duration,
 }
 
-#[derive(Clone)]
-pub(crate) struct TlsConfig {
-    pub(crate) ca_cert: Option<PathBuf>,
-    pub(crate) client_cert: Option<PathBuf>,
-    pub(crate) client_key: Option<PathBuf>,
-}
-
+#[cfg(feature = "encryption")]
 #[derive(Clone)]
 pub(crate) struct HttpAuth {
     pub(crate) username: String,
@@ -36,6 +35,7 @@ pub(crate) struct HttpAuth {
     pub(crate) bearer_token: Option<Arc<SecureString>>,
 }
 
+#[cfg(feature = "encryption")]
 impl HttpConfigProvider {
     pub fn new(url: impl Into<String>) -> Self {
         Self {
@@ -44,6 +44,8 @@ impl HttpConfigProvider {
             tls_config: None,
             timeout: None,
             priority: 30,
+            failure_threshold: 3,
+            reset_timeout: Duration::from_secs(30),
         }
     }
 
@@ -121,6 +123,18 @@ impl HttpConfigProvider {
         self
     }
 
+    /// Configure circuit breaker failure threshold
+    pub fn with_failure_threshold(mut self, threshold: u32) -> Self {
+        self.failure_threshold = threshold;
+        self
+    }
+
+    /// Configure circuit breaker reset timeout
+    pub fn with_reset_timeout(mut self, timeout: Duration) -> Self {
+        self.reset_timeout = timeout;
+        self
+    }
+
     fn build_client(&self) -> Result<reqwest::blocking::Client, ConfigError> {
         let mut builder =
             reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(30));
@@ -160,36 +174,133 @@ impl HttpConfigProvider {
     }
 
     fn parse_response(&self, content_type: &str, response: &str) -> Result<Figment, ConfigError> {
-        let figment: Figment = if content_type.contains("application/json") {
-            let json_value: JsonValue = serde_json::from_str(response)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/toml") || content_type.contains("text/toml") {
-            let toml_value: FigmentValue = toml::from_str(response)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse TOML: {}", e)))?;
-            let dict: Dict = toml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert TOML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else if content_type.contains("application/yaml") || content_type.contains("text/yaml") {
-            let yaml_value: FigmentValue = serde_yaml::from_str(response)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse YAML: {}", e)))?;
-            let dict: Dict = yaml_value.deserialize().map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert YAML to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        } else {
-            let json_value: JsonValue = serde_json::from_str(response)
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to parse JSON: {}", e)))?;
-            let dict: Dict = serde_json::from_value(json_value).map_err(|e| {
-                ConfigError::RemoteError(format!("Failed to convert JSON to dict: {}", e))
-            })?;
-            Figment::new().merge(Serialized::from(dict, Profile::Default))
-        };
-        Ok(figment)
+        parse_content(response, Some(content_type))
+            .map(|parsed| parsed.figment)
+            .map_err(ConfigError::RemoteError)
+    }
+}
+
+#[cfg(not(feature = "encryption"))]
+#[derive(Clone)]
+pub(crate) struct HttpAuth {
+    pub(crate) username: String,
+    pub(crate) password: Option<String>,
+    pub(crate) bearer_token: Option<String>,
+}
+
+#[cfg(not(feature = "encryption"))]
+impl HttpConfigProvider {
+    pub fn new(url: impl Into<String>) -> Self {
+        Self {
+            url: url.into(),
+            auth: None,
+            tls_config: None,
+            timeout: None,
+            priority: 30,
+            failure_threshold: 3,
+            reset_timeout: Duration::from_secs(30),
+        }
+    }
+
+    pub fn from_url(url: impl Into<String>) -> Self {
+        Self::new(url)
+    }
+
+    pub fn with_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.auth = Some(HttpAuth {
+            username: username.into(),
+            password: Some(password.into()),
+            bearer_token: None,
+        });
+        self
+    }
+
+    pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.auth = Some(HttpAuth {
+            username: String::new(),
+            password: None,
+            bearer_token: Some(token.into()),
+        });
+        self
+    }
+
+    pub fn with_tls(
+        mut self,
+        ca_cert: impl Into<PathBuf>,
+        client_cert: Option<impl Into<PathBuf>>,
+        client_key: Option<impl Into<PathBuf>>,
+    ) -> Self {
+        self.tls_config = Some(TlsConfig {
+            ca_cert: Some(ca_cert.into()),
+            client_cert: client_cert.map(|p| p.into()),
+            client_key: client_key.map(|p| p.into()),
+        });
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout: impl Into<String>) -> Self {
+        self.timeout = Some(timeout.into());
+        self
+    }
+
+    pub fn with_priority(mut self, priority: u8) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    /// Configure circuit breaker failure threshold
+    pub fn with_failure_threshold(mut self, threshold: u32) -> Self {
+        self.failure_threshold = threshold;
+        self
+    }
+
+    /// Configure circuit breaker reset timeout
+    pub fn with_reset_timeout(mut self, timeout: Duration) -> Self {
+        self.reset_timeout = timeout;
+        self
+    }
+
+    fn build_client(&self) -> Result<reqwest::blocking::Client, ConfigError> {
+        let mut builder =
+            reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(30));
+
+        if let Some(tls) = &self.tls_config {
+            if let Some(ca_path) = &tls.ca_cert {
+                let cert_data = std::fs::read(ca_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read CA cert: {}", e))
+                })?;
+                let cert = reqwest::Certificate::from_pem(&cert_data).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse CA cert: {}", e))
+                })?;
+                builder = builder.add_root_certificate(cert);
+            }
+
+            if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
+                let cert_data = std::fs::read(cert_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
+                })?;
+                let key_data = std::fs::read(key_path).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to read client key: {}", e))
+                })?;
+                let mut combined = cert_data;
+                combined.extend_from_slice(b"\n");
+                combined.extend_from_slice(&key_data);
+                let identity = reqwest::Identity::from_pem(&combined).map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to parse client identity: {}", e))
+                })?;
+                builder = builder.identity(identity);
+            }
+        }
+
+        builder
+            .build()
+            .map_err(|e| ConfigError::RemoteError(format!("Failed to create HTTP client: {}", e)))
+    }
+
+    fn parse_response(&self, content_type: &str, response: &str) -> Result<Figment, ConfigError> {
+        parse_content(response, Some(content_type))
+            .map(|parsed| parsed.figment)
+            .map_err(ConfigError::RemoteError)
     }
 }
 
@@ -204,6 +315,7 @@ impl ConfigProvider for HttpConfigProvider {
 
         if let Some(auth) = &self.auth {
             if let Some(token) = &auth.bearer_token {
+                // Both SecureString and String have as_str() method
                 request = request.bearer_auth(token.as_str());
             } else {
                 request =

@@ -8,8 +8,9 @@ use crate::providers::{ConfigProvider, ProviderMetadata, ProviderType};
 use crate::utils::file_format::{
     detect_format_by_content, detect_format_by_extension, detect_format_smart,
 };
-use figment::providers::{Format, Json, Toml, Yaml};
-use figment::Figment;
+use figment::providers::{Format, Json, Serialized, Toml, Yaml};
+use figment::{Figment, Profile};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
@@ -125,12 +126,27 @@ impl FileConfigProvider {
             Some("toml") => figment = figment.merge(Toml::file(path_str.as_ref())),
             Some("json") => figment = figment.merge(Json::file(path_str.as_ref())),
             Some("yaml") => figment = figment.merge(Yaml::file(path_str.as_ref())),
+            Some("ini") => {
+                let content =
+                    fs::read_to_string(path).map_err(|e| ConfigError::IoError(e.to_string()))?;
+                let ini_value = serde_ini::from_str::<serde_json::Value>(&content)
+                    .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+                figment = figment.merge(Serialized::from(ini_value, Profile::Default));
+            }
             _ => {
                 // Fallback: try extension as last resort, or default to JSON
                 if let Some(ext_fmt) = detect_format_by_extension(path).map(|f| f.to_string()) {
                     match ext_fmt.as_str() {
                         "toml" => figment = figment.merge(Toml::file(path_str.as_ref())),
                         "yaml" => figment = figment.merge(Yaml::file(path_str.as_ref())),
+                        "ini" => {
+                            let content = fs::read_to_string(path)
+                                .map_err(|e| ConfigError::IoError(e.to_string()))?;
+                            let ini_value = serde_ini::from_str::<serde_json::Value>(&content)
+                                .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+                            figment =
+                                figment.merge(Serialized::from(ini_value, Profile::Default));
+                        }
                         _ => figment = figment.merge(Json::file(path_str.as_ref())),
                     }
                 } else {
@@ -239,7 +255,7 @@ impl ConfigProvider for StandardFileProvider {
     fn load(&self) -> Result<Figment, ConfigError> {
         let mut base_paths = Vec::new();
         let mut env_paths = Vec::new();
-        let formats = ["toml", "json", "yaml", "yml"];
+        let formats = ["toml", "json", "yaml", "yml", "ini"];
 
         for search_path in &self.search_paths {
             let base_path_no_ext = search_path.join(&self.app_name);
@@ -324,7 +340,7 @@ impl ConfigProvider for StandardFileProvider {
     }
 
     fn is_available(&self) -> bool {
-        let formats = ["toml", "json", "yaml", "yml"];
+        let formats = ["toml", "json", "yaml", "yml", "ini"];
 
         for search_path in &self.search_paths {
             let base_path = search_path.join(&self.app_name);
