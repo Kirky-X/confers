@@ -335,14 +335,14 @@ impl SecureLogger {
         }
 
         let sanitized = self.sanitizer.sanitize(message);
-        let log_entry = format!("[{}] {}", level.as_str(), sanitized);
+        let _log_entry = format!("[{}] {}", level.as_str(), sanitized);
 
         #[cfg(feature = "tracing")]
         match level {
-            LogLevel::Error => tracing::error!("{}", log_entry),
-            LogLevel::Warn => tracing::warn!("{}", log_entry),
-            LogLevel::Info => tracing::info!("{}", log_entry),
-            LogLevel::Debug => tracing::debug!("{}", log_entry),
+            LogLevel::Error => tracing::error!("{}", _log_entry),
+            LogLevel::Warn => tracing::warn!("{}", _log_entry),
+            LogLevel::Info => tracing::info!("{}", _log_entry),
+            LogLevel::Debug => tracing::debug!("{}", _log_entry),
         }
     }
 
