@@ -284,8 +284,8 @@ impl ConfigBuilder {
     }
 }
 
-/// Helper function to insert nested values using dot notation
-fn insert_nested_value(
+/// Helper function to insert nested values using dot notation (internal use only)
+pub(crate) fn insert_nested_value(
     map: &mut serde_json::Map<String, serde_json::Value>,
     key: &str,
     value: serde_json::Value,
