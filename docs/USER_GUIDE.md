@@ -180,21 +180,32 @@ struct AppConfig {
     host: String,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 加载配置（同步方式，按顺序：默认值 -> 配置文件 -> 环境变量）
-    let config = AppConfig::load().expect("无法加载配置");
+    let config = AppConfig::new_loader()
+        .load_sync()?;
     
     println!("🚀 服务器运行在: {}:{}", config.host, config.port);
+    Ok(())
 }
 
 // 或者使用异步方式（适用于远程配置）
 #[tokio::main]
-async fn async_main() {
-    let config = AppConfig::load_async().await.expect("无法加载配置");
+async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = AppConfig::new_loader()
+        .load()
+        .await?;
     
     println!("🚀 服务器运行在: {}:{}", config.host, config.port);
+    Ok(())
 }
 ```
+
+**注意：** `Config` trait 通过宏自动实现，实际的加载方法通过 `ConfigLoader` 提供：
+- `load_sync()` - 同步加载
+- `load()` - 异步加载（适用于远程配置）
+- `load_sync_with_audit()` - 带审计日志的同步加载
+- `load_sync_with_watcher()` - 带文件监控的同步加载
 
 ---
 
@@ -495,17 +506,32 @@ struct MyConfig {
 
 ### 加载配置
 
-`confers` 提供了多种同步和异步加载方法，并支持设置内存限制和自定义清洗逻辑：
+`confers` 通过 `ConfigLoader` 提供了多种同步和异步加载方法：
 
 ```rust
+// 基本同步加载
+let config = MyConfig::new_loader()
+    .load_sync()?;
+
+// 自定义文件路径和内存限制
 let config = MyConfig::new_loader()
     .with_file("custom.yaml")
-    .with_memory_limit(10)
+    .with_memory_limit(10) // 限制为 10MB
     .load_sync()?;
 
 // 异步加载（适用于远程配置）
 let config = MyConfig::new_loader()
     .load().await?;
+
+// 带审计日志的加载
+#[cfg(feature = "audit")]
+let config = MyConfig::new_loader()
+    .load_sync_with_audit()?;
+
+// 带文件监控的加载
+#[cfg(feature = "watch")]
+let (config, watcher) = MyConfig::new_loader()
+    .load_sync_with_watcher()?;
 ```
 
 ### 默认值与环境变量
@@ -830,14 +856,16 @@ let decrypted_password = encryption.decrypt(&encrypted_password)?;
 **命令行方式：**
 
 ```bash
-# 设置加密密钥环境变量
+# 设置加密密钥环境变量 (支持 CONFERS_ENCRYPTION_KEY 或 CONFERS_KEY)
 export CONFERS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+# 或者
+export CONFERS_KEY=$(openssl rand -base64 32)
 
-# 加密配置文件
-confers encrypt config.toml -o config.encrypted.toml
+# 加密敏感配置值
+confers encrypt "my-secret-value"
 
-# 解密配置文件
-confers encrypt config.encrypted.toml --decrypt -o config.toml
+# 将加密结果保存到文件
+confers encrypt "my-secret-value" --output encrypted.txt
 ```
 
 ### 3. 密钥管理

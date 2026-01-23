@@ -1081,6 +1081,7 @@ use confers::key::manager::KeyManager;
 use std::path::PathBuf;
 
 fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
+    // 从环境变量或安全存储获取主密钥
     let master_key = std::env::var("MASTER_KEY")
         .map(|s| {
             let mut key = [0u8; 32];
@@ -1088,15 +1089,28 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
             key.copy_from_slice(&key_bytes[..32.min(key_bytes.len())]);
             key
         })?;
-
+    
     let mut km = KeyManager::new(PathBuf::from("/etc/confers/keys"))?;
     
+    // 初始化密钥环
     km.initialize(
         &master_key,
         "production".to_string(),
         "security-team".to_string(),
     )?;
-
+    
+    // 定期轮换密钥（建议每 90 天）
+    let rotation_result = km.rotate_key(
+        &master_key,
+        Some("production".to_string()),
+        "security-team".to_string(),
+        Some("Scheduled rotation".to_string()),
+    )?;
+    
+    println!("密钥已从版本 {} 轮换到 {}", 
+        rotation_result.previous_version, 
+        rotation_result.new_version);
+    
     Ok(())
 }
 ```
@@ -1111,20 +1125,22 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let loader = ConfigLoader::<AppConfig>::new()
+    let (config, watcher) = AppConfig::new_loader()
         .with_file("config.toml")
-        .with_watch(true);
-
-    let config = loader.load().await?;
+        .load_sync_with_watcher()?;
     
     println!("初始配置已加载: {:?}", config);
 
+    // 监听配置变化
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
-        println!("配置仍在运行，配置版本已更新");
+        // watcher 会自动检测文件变化并触发重新加载
+        println!("配置监控中，版本已更新");
     }
 }
 ```
+
+**注意：** 热重载功能需要启用 `watch` 特性。
 
 ### 敏感数据加密
 

@@ -158,9 +158,11 @@ let config = AppConfig::load()?;
 |--------|----------|----------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | Minimal config loading (no validation, no CLI) |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development with all tools |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production-ready configuration |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring`, `tracing` | Development with all tools |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing` | Production-ready configuration |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | All features | Complete feature set |
+
+**Note:** The `cli` feature automatically includes `derive`, `validation`, and `encryption` dependencies.
 
 <div align="center" style="margin: 24px 0">
 

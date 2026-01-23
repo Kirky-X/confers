@@ -197,8 +197,8 @@ fn main() {
 |:----:|------|:---------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | 仅配置加载 | 仅需基本配置加载功能 |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | 配置加载 + 验证 | 大多数应用（推荐） |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | 开发配置 | 开发和调试 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | 生产配置 | 生产环境 |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | 开发配置（含 tracing） | 开发和调试 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | 生产配置（含 tracing） | 生产环境 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 需要完整功能 |
 
 **使用示例：**

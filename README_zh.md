@@ -156,9 +156,11 @@ let config = AppConfig::load()?;
 |------|------|----------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 最小化配置加载（无验证、无 CLI） |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | **推荐大多数应用使用** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发环境，包含所有工具 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产就绪的配置 |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring`, `tracing` | 开发环境，包含所有工具 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing` | 生产就绪的配置 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有特性 | 完整功能集 |
+
+**注意：** `cli` 特性会自动包含 `derive`、`validation` 和 `encryption` 依赖。
 
 <div align="center" style="margin: 24px 0">
 
@@ -570,31 +572,41 @@ confers wizard --help
 ```bash
 confers diff config1.toml config2.toml
 confers diff config1.toml config2.toml --format unified
-confers diff config1.toml config2.toml --format side-by-side
+confers diff config1.toml config2.toml --style side-by-side
+confers diff config1.toml config2.toml --output diff_result.txt
 ```
 
 **支持格式：**
-- `unified` - 统一 diff 格式
+- `unified` - 统一 diff 格式 (默认)
 - `context` - 上下文 diff 格式
 - `normal` - 标准 diff 格式
 - `side-by-side` - 并排对比格式
 - `strict` - 严格模式
 
+**选项：**
+- `--format` / `--style`: 输出格式
+- `--output` / `-o`: 将结果输出到文件
+
 </td>
 <td width="33%" style="padding: 16px; vertical-align:top">
 
-#### 📦 generate - 模板生成
+#### 📝 generate - 模板生成
 
 生成配置文件模板：
 
 ```bash
 confers generate --output config.toml
-confers generate --level minimal
-confers generate --level full
-confers generate --level documentation
+confers generate --struct MyAppConfig --format toml
+confers generate --level full --format ini
 ```
 
-**生成级别：**
+**选项：**
+- `--output` / `-o`: 输出文件路径
+- `--level` / `-l`: 模板级别 (minimal, full, documentation)
+- `--format` / `-f`: 输出格式 (toml, json, yaml, ini)
+- `--struct` / `-s`: 根据指定结构体生成模板 (支持反射)
+
+**模板级别：**
 - `minimal` - 最小模板，仅包含必要字段
 - `full` - 完整模板，包含所有字段
 - `documentation` - 文档模板，带详细注释
@@ -609,7 +621,7 @@ confers generate --level documentation
 ```bash
 confers validate config.toml
 confers validate config.toml --level full
-confers validate config.toml --level documentation
+confers validate config.ini
 ```
 
 **输出级别：**
@@ -629,10 +641,16 @@ confers validate config.toml --level documentation
 ```bash
 confers encrypt "my-secret-value"
 confers encrypt "my-secret-value" --key base64-key
+confers encrypt "my-secret-value" --output encrypted.txt
 ```
 
-- 支持 base64 编码的 32 字节密钥
-- 支持从环境变量 `CONFERS_KEY` 读取密钥
+**环境密钥：**
+优先读取 `CONFERS_ENCRYPTION_KEY`，如果不存在则读取 `CONFERS_KEY`。
+
+**密钥要求：**
+- 必须是 base64 编码的 32 字节随机数据
+- 建议使用 `confers key generate` 生成
+- 熵值检查 > 4.0 bits/byte
 
 </td>
 <td width="33%" style="padding: 16px; vertical-align:top">
@@ -1075,6 +1093,9 @@ gantt
 
 ---
 
+<sub>© 2026 Kirky.X. All rights reserved.</sub>
+
+</div>
 <sub>© 2026 Kirky.X. All rights reserved.</sub>
 
 </div>

@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example 1: Generate a configuration template
     println!("\n📝 1. Generating configuration template...");
-    ConfersCli::generate(Some("example_config.toml"), "minimal")?;
+    ConfersCli::generate(Some("example_config.toml"), "minimal", None, "toml")?;
     println!("✅ Generated minimal template to example_config.toml");
 
     // Example 2: Validate the generated configuration
@@ -57,6 +57,7 @@ debug = true
         "example_config.toml",
         "example_config2.toml",
         Some("unified"),
+        None,
     )?;
 
     // Example 5: Encrypt a value (if encryption feature is enabled)

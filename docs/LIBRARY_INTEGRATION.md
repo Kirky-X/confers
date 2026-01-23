@@ -28,9 +28,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compare two configurations
     ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
     
+    // Encrypt a value (requires CONFERS_ENCRYPTION_KEY env var)
+    let encrypted = ConfersCli::encrypt("secret_value", None)?;
+    println!("Encrypted: {}", encrypted);
+    
     Ok(())
 }
 ```
+
+**Note:** The CLI feature automatically includes `derive`, `validation`, and `encryption` dependencies.
 
 ## API Reference
 
@@ -48,11 +54,16 @@ Generate configuration templates.
 - `output: Option<&str>` - Output file path (None prints to stdout)
 - `level: &str` - Template level: "minimal", "full", or "documentation"
 
+**Returns:**
+- `Result<(), ConfigError>`
+
 **Example:**
 ```rust
 ConfersCli::generate(Some("app.toml"), "minimal")?;
 ConfersCli::generate(None, "documentation")?; // Prints to stdout
 ```
+
+**Note:** This uses `GenerateCommand::execute_placeholder()` internally.
 
 ##### `validate(config, level)`
 
@@ -62,10 +73,15 @@ Validate configuration files.
 - `config: &str` - Path to configuration file
 - `level: &str` - Validation level: "minimal", "full", or "documentation"
 
+**Returns:**
+- `Result<(), ConfigError>`
+
 **Example:**
 ```rust
 ConfersCli::validate("config.toml", "full")?;
 ```
+
+**Note:** This uses `ValidateCommand::execute_generic()` internally.
 
 ##### `diff(file1, file2, format)`
 
@@ -76,10 +92,15 @@ Compare two configuration files.
 - `file2: &str` - Path to second configuration file
 - `format: Option<&str>` - Diff format: "unified", "context", "normal", "side-by-side", or "strict"
 
+**Returns:**
+- `Result<(), ConfigError>`
+
 **Example:**
 ```rust
 ConfersCli::diff("old.toml", "new.toml", Some("side-by-side"))?;
 ```
+
+**Note:** This creates `DiffOptions` with default values and calls `DiffCommand::execute()`.
 
 ##### `encrypt(value, key)`
 
