@@ -109,11 +109,11 @@ impl ConfigEncryption {
         }
     }
 
-    /// Create from environment variable CONFERS_ENCRYPTION_KEY (base64 encoded)
+    /// Create from environment variable CONFERS_ENCRYPTION_KEY or CONFERS_KEY (base64 encoded)
     ///
     /// # Security Notes
     ///
-    /// - ⚠️ **Environment Variable**: The CONFERS_ENCRYPTION_KEY environment variable must be set securely
+    /// - ⚠️ **Environment Variable**: The CONFERS_ENCRYPTION_KEY (or CONFERS_KEY) environment variable must be set securely
     /// - ⚠️ **Key Format**: The key must be base64 encoded and exactly 32 bytes (256 bits)
     /// - ⚠️ **Key Storage**: Never commit environment variables to version control
     /// - ⚠️ **Key Rotation**: Regular key rotation is recommended for production environments
@@ -130,9 +130,11 @@ impl ConfigEncryption {
     /// # Ok::<(), confers::error::ConfigError>(())
     /// ```
     pub fn from_env() -> Result<Self, ConfigError> {
-        let key_str = env::var("CONFERS_ENCRYPTION_KEY").map_err(|_| {
-            ConfigError::FormatDetectionFailed("CONFERS_ENCRYPTION_KEY not found".to_string())
-        })?;
+        let key_str = env::var("CONFERS_ENCRYPTION_KEY")
+            .or_else(|_| env::var("CONFERS_KEY"))
+            .map_err(|_| {
+                ConfigError::FormatDetectionFailed("CONFERS_ENCRYPTION_KEY (or CONFERS_KEY) not found".to_string())
+            })?;
 
         // Validate key string format
         if !key_str
@@ -183,11 +185,12 @@ impl ConfigEncryption {
             ));
         }
 
-        // Check key entropy - should have at least 7 bits of entropy per byte on average
+        // Check key entropy - should have at least 4.0 bits of entropy per byte for 32-byte keys
+        // Note: For 32 bytes, max entropy is log2(32) = 5.0 bits
         let entropy = calculate_entropy(&key_bytes);
-        if entropy < 7.0 {
+        if entropy < 4.0 {
             return Err(ConfigError::FormatDetectionFailed(format!(
-                "Weak key: insufficient entropy ({} bits per byte, minimum 7.0)",
+                "Weak key: insufficient entropy ({} bits per byte, minimum 4.0)",
                 entropy
             )));
         }
