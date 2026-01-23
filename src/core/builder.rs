@@ -58,8 +58,9 @@
 //! ```
 
 use crate::error::ConfigError;
-use figment::providers::{Env, Format, Json, Toml, Yaml};
-use figment::Figment;
+use crate::utils::FileFormat;
+use figment::providers::{Env, Format, Json, Serialized, Toml, Yaml};
+use figment::{Figment, Profile};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -529,30 +530,15 @@ impl FileSource {
             FileFormat::Toml => Figment::from(Toml::file(path)),
             FileFormat::Json => Figment::from(Json::file(path)),
             FileFormat::Yaml => Figment::from(Yaml::file(path)),
-        }
-    }
-}
-
-/// File format
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FileFormat {
-    /// TOML format
-    Toml,
-    /// JSON format
-    Json,
-    /// YAML format
-    Yaml,
-}
-
-impl FromStr for FileFormat {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "toml" => Ok(FileFormat::Toml),
-            "json" => Ok(FileFormat::Json),
-            "yaml" | "yml" => Ok(FileFormat::Yaml),
-            _ => Err(format!("Unknown file format: {}", s)),
+            FileFormat::Ini => {
+                let content = std::fs::read_to_string(&path).unwrap_or_default();
+                let ini_value =
+                    serde_ini::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| {
+                        serde_json::Value::Object(serde_json::Map::new())
+                    });
+                Figment::from(Serialized::from(ini_value, Profile::Default))
+            }
+            FileFormat::Unknown => Figment::from(Toml::file(path)), // Default to TOML for unknown
         }
     }
 }
@@ -682,7 +668,68 @@ mod tests {
         assert!(!config.debug);
         Ok(())
     }
+}
 
+/// Extension trait for saving configuration
+pub trait ConfigSaveExt {
+    /// Save configuration to a file (infer format from extension)
+    fn save(&self, path: impl AsRef<std::path::Path>) -> Result<u64, ConfigError>;
+    /// Save configuration with explicit format
+    fn save_to_with_format(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        format: FileFormat,
+    ) -> Result<u64, ConfigError>;
+}
+
+impl<T> ConfigSaveExt for T
+where
+    T: Serialize,
+{
+    fn save(&self, path: impl AsRef<std::path::Path>) -> Result<u64, ConfigError> {
+        let ext = path
+            .as_ref()
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+            .unwrap_or_else(|| "json".to_string());
+
+        let format = match ext.as_str() {
+            "toml" => FileFormat::Toml,
+            "yaml" | "yml" => FileFormat::Yaml,
+            "ini" => FileFormat::Ini,
+            "json" | _ => FileFormat::Json,
+        };
+
+        self.save_to_with_format(path, format)
+    }
+
+    fn save_to_with_format(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        format: FileFormat,
+    ) -> Result<u64, ConfigError> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let data = serde_json::to_value(self)
+            .map_err(|e| ConfigError::SerializationError(format!("Failed to serialize config: {}", e)))?;
+
+        let content = crate::utils::file_format::serialize_to_format(&data, format)
+            .map_err(ConfigError::SerializationError)?;
+
+        let mut file = File::create(path)
+            .map_err(|e| ConfigError::IoError(format!("Failed to create file: {}", e)))?;
+
+        file.write_all(content.as_bytes())
+            .map_err(|e| ConfigError::IoError(format!("Failed to write file: {}", e)))?;
+
+        Ok(content.len() as u64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
     #[test]
     fn test_file_source() {
         let file = File::with_name("config/default");
@@ -709,6 +756,7 @@ mod tests {
         assert_eq!(FileFormat::from_str("json").unwrap(), FileFormat::Json);
         assert_eq!(FileFormat::from_str("yaml").unwrap(), FileFormat::Yaml);
         assert_eq!(FileFormat::from_str("yml").unwrap(), FileFormat::Yaml);
+        assert_eq!(FileFormat::from_str("ini").unwrap(), FileFormat::Ini);
     }
 
     #[test]

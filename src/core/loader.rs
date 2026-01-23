@@ -169,14 +169,20 @@ pub struct ConfigLoader<T> {
 }
 
 /// Remote configuration settings
-#[cfg(all(feature = "remote", feature = "encryption"))]
+#[cfg(feature = "remote")]
 #[derive(Clone, Debug)]
 pub struct RemoteConfig {
     enabled: bool,
     url: Option<String>,
+    #[cfg(feature = "encryption")]
     token: Option<Arc<SecureString>>,
+    #[cfg(not(feature = "encryption"))]
+    token: Option<String>,
     username: Option<String>,
+    #[cfg(feature = "encryption")]
     password: Option<Arc<SecureString>>,
+    #[cfg(not(feature = "encryption"))]
+    password: Option<String>,
     ca_cert: Option<PathBuf>,
     client_cert: Option<PathBuf>,
     client_key: Option<PathBuf>,
@@ -184,7 +190,7 @@ pub struct RemoteConfig {
     fallback: bool,
 }
 
-#[cfg(all(feature = "remote", feature = "encryption"))]
+#[cfg(feature = "remote")]
 impl RemoteConfig {
     pub fn new() -> Self {
         Self::default()
@@ -200,6 +206,7 @@ impl RemoteConfig {
         self
     }
 
+    #[cfg(feature = "encryption")]
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(Arc::new(SecureString::new(
             token.into(),
@@ -208,16 +215,29 @@ impl RemoteConfig {
         self
     }
 
+    #[cfg(not(feature = "encryption"))]
+    pub fn with_token(mut self, token: impl Into<String>) -> Self {
+        self.token = Some(token.into());
+        self
+    }
+
     pub fn with_username(mut self, username: impl Into<String>) -> Self {
         self.username = Some(username.into());
         self
     }
 
+    #[cfg(feature = "encryption")]
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
         self.password = Some(Arc::new(SecureString::new(
             password.into(),
             SensitivityLevel::Critical,
         )));
+        self
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    pub fn with_password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
         self
     }
 
@@ -240,7 +260,7 @@ impl RemoteConfig {
     }
 }
 
-#[cfg(all(feature = "remote", feature = "encryption"))]
+#[cfg(feature = "remote")]
 impl Default for RemoteConfig {
     fn default() -> Self {
         Self {
@@ -390,7 +410,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Configure remote configuration with authentication
-    #[cfg(feature = "remote")]
+    #[cfg(all(feature = "remote", feature = "encryption"))]
     pub fn with_remote_auth(
         mut self,
         username: impl Into<String>,
@@ -405,14 +425,37 @@ impl<T: OptionalValidate> ConfigLoader<T> {
         self
     }
 
-    /// Configure remote configuration with bearer token
+    /// Configure remote configuration with authentication (non-encrypted)
     #[cfg(feature = "remote")]
+    #[cfg(not(feature = "encryption"))]
+    pub fn with_remote_auth(
+        mut self,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        self.remote_config.enabled = true;
+        self.remote_config.username = Some(username.into());
+        self.remote_config.password = Some(password.into());
+        self
+    }
+
+    /// Configure remote configuration with bearer token
+    #[cfg(all(feature = "remote", feature = "encryption"))]
     pub fn with_remote_token(mut self, token: impl Into<String>) -> Self {
         self.remote_config.enabled = true;
         self.remote_config.token = Some(Arc::new(SecureString::new(
             token.into(),
             SensitivityLevel::High,
         )));
+        self
+    }
+
+    /// Configure remote configuration with bearer token (non-encrypted)
+    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "encryption"))]
+    pub fn with_remote_token(mut self, token: impl Into<String>) -> Self {
+        self.remote_config.enabled = true;
+        self.remote_config.token = Some(token.into());
         self
     }
 
@@ -530,12 +573,20 @@ impl<T: OptionalValidate> ConfigLoader<T> {
     }
 
     /// Set remote password
-    #[cfg(feature = "remote")]
+    #[cfg(all(feature = "remote", feature = "encryption"))]
     pub fn with_remote_password(mut self, password: impl Into<String>) -> Self {
         self.remote_config.password = Some(Arc::new(SecureString::new(
             password.into(),
             SensitivityLevel::Critical,
         )));
+        self
+    }
+
+    /// Set remote password (non-encrypted)
+    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "encryption"))]
+    pub fn with_remote_password(mut self, password: impl Into<String>) -> Self {
+        self.remote_config.password = Some(password.into());
         self
     }
 
@@ -684,10 +735,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let Some(url) = &self.remote_config.url {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
+                #[cfg(feature = "encryption")]
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
+                #[cfg(feature = "encryption")]
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
@@ -726,6 +779,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             }
 
             // Also apply auth if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
@@ -744,16 +798,17 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 self.remote_config.client_key.as_ref(),
             ) {
                 provider = provider.with_tls(
-                    Some(ca_cert.to_string_lossy().into_owned()),
+                    ca_cert.to_string_lossy().into_owned(),
                     Some(client_cert.to_string_lossy().into_owned()),
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
                 provider =
-                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
             }
 
             // Also apply token if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let Some(token) = &self.remote_config.token {
                 provider = provider.with_token_secure(Arc::clone(token));
             }
@@ -922,10 +977,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let Some(url) = &self.remote_config.url {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
+                #[cfg(feature = "encryption")]
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
+                #[cfg(feature = "encryption")]
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
@@ -965,6 +1022,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             }
 
             // Also apply auth if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
@@ -984,16 +1042,17 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 self.remote_config.client_key.as_ref(),
             ) {
                 provider = provider.with_tls(
-                    Some(ca_cert.to_string_lossy().into_owned()),
+                    ca_cert.to_string_lossy().into_owned(),
                     Some(client_cert.to_string_lossy().into_owned()),
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
                 provider =
-                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
             }
 
             // Also apply token if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let Some(token) = &self.remote_config.token {
                 provider = provider.with_token_secure(Arc::clone(token));
             }
@@ -1107,10 +1166,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let Some(url) = &self.remote_config.url {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
+                #[cfg(feature = "encryption")]
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
+                #[cfg(feature = "encryption")]
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
@@ -1150,6 +1211,7 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             }
 
             // Also apply auth if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let (Some(username), Some(password)) =
                 (&self.remote_config.username, &self.remote_config.password)
             {
@@ -1169,16 +1231,17 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                 self.remote_config.client_key.as_ref(),
             ) {
                 provider = provider.with_tls(
-                    Some(ca_cert.to_string_lossy().into_owned()),
+                    ca_cert.to_string_lossy().into_owned(),
                     Some(client_cert.to_string_lossy().into_owned()),
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
                 provider =
-                    provider.with_tls(Some(ca_cert.to_string_lossy().into_owned()), None, None);
+                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
             }
 
             // Also apply token if provided in remote_config
+            #[cfg(feature = "encryption")]
             if let Some(token) = &self.remote_config.token {
                 provider = provider.with_token_secure(Arc::clone(token));
             }
@@ -1694,10 +1757,12 @@ impl<T: OptionalValidate> ConfigLoader<T> {
             if let Some(url) = &self.remote_config.url {
                 let mut http_provider = HttpConfigProvider::new(url.clone()).with_priority(50);
 
+                #[cfg(feature = "encryption")]
                 if let Some(token) = &self.remote_config.token {
                     http_provider = http_provider.with_bearer_token_secure(Arc::clone(token));
                 }
 
+                #[cfg(feature = "encryption")]
                 if let (Some(username), Some(password)) =
                     (&self.remote_config.username, &self.remote_config.password)
                 {
