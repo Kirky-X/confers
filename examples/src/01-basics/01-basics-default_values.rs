@@ -60,11 +60,10 @@ fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // 1. 创建不完整的配置文件（只包含部分字段）
-    let config_content = r#"
-name = "my-app"
+    let config_content = r#"name = "my-app"
 port = 9000
 "#;
-    std::fs::write("src/01-basics/configs/default_values.toml", config_content)?;
+    std::fs::write("config.toml", config_content)?;
 
     // 2. 加载配置（缺失的字段将使用默认值）
     println!("Loading configuration with default values...");

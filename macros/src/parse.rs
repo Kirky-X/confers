@@ -84,6 +84,8 @@ pub struct ConfigOpts {
     #[darling(default)]
     pub env_prefix: Option<String>,
     #[darling(default)]
+    pub app_name: Option<String>,
+    #[darling(default)]
     pub strict: Option<bool>,
     #[darling(default)]
     pub watch: Option<bool>,

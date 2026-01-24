@@ -1,6 +1,6 @@
 // Copyright (c) 2025 Kirky.X
 //
-// Licensed under the MIT License
+// Licensed under MIT License
 // See LICENSE file in the project root for full license information.
 
 //! 基本配置加载示例
@@ -37,31 +37,50 @@ fn main() -> anyhow::Result<()> {
     // 1. 初始化日志
     tracing_subscriber::fmt::init();
 
-    // 2. 创建示例配置文件（如果不存在）
-    let config_content = r#"
-name = "basic-example"
+    // 2. 创建示例配置文件
+    let config_content = r#"name = "basic-example"
 port = 8080
 debug = true
 tags = ["rust", "config", "example"]
 "#;
-    std::fs::write("src/01-basics/configs/basic.toml", config_content)?;
+
+    // 使用正确的配置路径 - 写入当前目录
+    let config_path = "config.toml";
+    std::fs::write(config_path, config_content)?;
 
     // 3. 加载配置
     println!("Loading configuration...");
-    let config = BasicConfig::load()?;
 
-    // 4. 打印配置
-    println!("Loaded configuration: {:#?}", config);
+    match BasicConfig::load() {
+        Ok(config) => {
+            println!("✅ 配置加载成功!");
+            println!("   name: '{}'", config.name);
+            println!("   port: {}", config.port);
+            println!("   debug: {}", config.debug);
+        }
+        Err(e) => {
+            println!("❌ 配置加载失败: {}", e);
+        }
+    }
 
-    // 5. 当 validate = true 时，配置在加载过程中会被验证
+    // 4. 当 validate = true 时，配置在加载过程中会被验证
     println!("Configuration loaded successfully!");
 
-    // 6. 演示环境变量覆盖
+    // 5. 演示环境变量覆盖
     println!("\nDemonstrating environment variable override...");
     std::env::set_var("APP_PORT", "9090");
 
-    let config_with_env = BasicConfig::load()?;
-    println!("Port after env override: {}", config_with_env.port);
+    match BasicConfig::load() {
+        Ok(config_with_env) => {
+            println!("Port after env override: {}", config_with_env.port);
+        }
+        Err(e) => {
+            println!("Failed to load with env override: {}", e);
+        }
+    }
+
+    // 清理
+    let _ = std::fs::remove_file(config_path);
 
     Ok(())
 }

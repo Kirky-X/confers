@@ -7,7 +7,6 @@ use crate::error::ConfigError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -596,10 +595,10 @@ impl Default for RotationConfig {
 }
 
 /// Writer for audit logs with rotation and integrity protection
+#[allow(dead_code)]
 pub struct AuditLogWriter {
     log_path: std::path::PathBuf,
     rotation_config: RotationConfig,
-    #[allow(dead_code)]
     integrity_key: [u8; 32],
     current_log_size: std::sync::Arc<std::sync::atomic::AtomicU64>,
     rotation_lock: std::sync::Arc<std::sync::Mutex<()>>,
@@ -766,7 +765,7 @@ impl AuditLogWriter {
         use flate2::write::GzEncoder;
         use flate2::Compression;
         use std::fs::File;
-        use std::io::{BufReader, BufWriter, Read};
+        use std::io::{BufReader, BufWriter, Read, Write};
 
         let input_file =
             File::open(archive_path).map_err(|e| ConfigError::IoError(e.to_string()))?;

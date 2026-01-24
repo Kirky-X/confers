@@ -266,6 +266,129 @@ graph TB
 - **环境**: 通过 `env_prefix` 自动映射环境变量。
 - **远程**: 支持 Etcd、Consul 和 HTTP 轮询/监听。
 
+### 4️⃣ 配置文件搜索路径
+
+`confers` 支持灵活的文件搜索策略，可以根据你的需求在不同位置查找配置文件。
+
+#### 默认搜索路径
+
+当你使用 `Config::load()` 或 `Config::create_loader()` 时，`confers` 会在以下位置按优先级搜索配置文件：
+
+| 优先级 | 搜索路径 | 条件 | 文件格式 |
+|--------|----------|------|----------|
+| 1 | `./` | 总是 | `config.{toml,json,yaml,yml}` |
+| 2 | `~/.config/<app_name>/` | 设置 `app_name` | `config.{toml,json,yaml,yml}` |
+| 3 | `~/.config/` | 总是 | `config.{toml,json,yaml,yml}` |
+| 4 | `~/` | 总是 | `config.{toml,json,yaml,yml}` |
+| 5 | `/etc/<app_name>/` | Unix + 设置 `app_name` | `config.{toml,json,yaml,yml}` |
+
+#### app_name 的作用
+
+`app_name` 是一个可选的应用标识符，用于在标准系统目录中组织配置文件：
+
+```rust
+#[derive(Debug, Serialize, Deserialize, Config)]
+#[config(app_name = "myapp")]  // ✅ 显式设置 app_name
+pub struct AppConfig {
+    pub host: String,
+    pub port: u16,
+}
+```
+
+**设置 app_name 后的搜索路径**：
+```
+./myapp/config.toml              ✅
+~/.config/myapp/config.toml      ✅
+~/.config/config.toml            ✅
+~/config.toml                    ✅
+/etc/myapp/config.toml           ✅ (Unix)
+./config.toml                    ❌ (不再搜索)
+```
+
+**不设置 app_name 时的搜索路径**：
+```
+./config.toml                    ✅
+~/.config/config.toml            ✅
+~/config.toml                    ✅
+```
+
+#### 配置文件命名规则
+
+`confers` 支持以下配置文件命名模式：
+
+```bash
+# 标准配置文件
+config.toml
+config.json
+config.yaml
+config.yml
+
+# 环境特定配置文件 (当设置 RUN_ENV 环境变量时)
+<app_name>.<env>.toml
+# 例如: myapp.production.toml, myapp.development.json
+```
+
+#### 使用场景示例
+
+**场景1：应用程序使用标准目录**
+```rust
+#[derive(Config)]
+#[config(app_name = "my-awesome-app")]
+pub struct ProductionConfig {
+    pub database_url: String,
+    pub max_connections: u32,
+}
+// 配置文件位于: ~/.config/my-awesome-app/config.toml
+```
+
+**场景2：简单应用使用当前目录**
+```rust
+#[derive(Config)]
+pub struct SimpleConfig {
+    pub debug: bool,
+    pub workers: usize,
+}
+// 配置文件位于: ./config.toml (推荐简单应用使用)
+```
+
+**场景3：指定精确路径**
+```rust
+#[derive(Config)]
+pub struct AppConfig {
+    pub name: String,
+}
+
+// 使用 load_file() 指定精确路径
+let config = AppConfig::load_file("/etc/myapp/production.toml")
+    .load_sync()?;
+```
+
+**场景4：环境特定配置**
+```bash
+# 设置运行环境
+export RUN_ENV=production
+
+# confers 会自动搜索:
+# ./myapp.production.toml
+# ~/.config/myapp.production.toml
+# /etc/myapp.production.toml (Unix)
+```
+
+#### 最佳实践建议
+
+1. **应用程序**：推荐设置 `app_name` 以使用标准系统目录
+   ```rust
+   #[config(app_name = "your-app-name")]
+   ```
+
+2. **库/工具**：使用默认行为，在当前目录查找 `config.toml`
+
+3. **测试/特殊需求**：使用 `load_file()` 指定精确路径
+
+4. **跨平台应用**：设置 `app_name` 以获得最佳的跨平台兼容性
+
+> 💡 **提示**：如果配置文件未找到，`confers` 会使用默认值并继续加载（除非启用严格模式）。使用 `Config::load_file()` 可以精确控制配置文件路径。
+
 ---
 
 ## 命令行工具

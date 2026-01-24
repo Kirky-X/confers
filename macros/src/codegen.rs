@@ -4,37 +4,16 @@
 // See LICENSE file in the project root for full license information.
 
 //! Security constants for sensitive data detection
-const SENSITIVE_PATTERNS: &[&str] = &[
-    "password",
-    "token",
-    "secret",
-    "key",
-    "credential",
-    "auth",
-    "private",
-];
 
 /// Check if a value should trigger security warnings
 fn should_warn_about_value(value: &str, field_name: &str) -> bool {
     // Check field name patterns
-    let field_lower = field_name.to_lowercase();
-    if SENSITIVE_PATTERNS.iter().any(|p| field_lower.contains(p)) {
+    if confers_common::is_sensitive_field_name(field_name) {
         return true;
     }
 
     // Check value entropy (simplified check for high-entropy strings)
-    if value.len() >= 16 {
-        let has_upper = value.chars().any(|c| c.is_uppercase());
-        let has_lower = value.chars().any(|c| c.is_lowercase());
-        let has_digit = value.chars().any(|c| c.is_ascii_digit());
-        let has_special = value.chars().any(|c| !c.is_alphanumeric());
-
-        if has_upper && has_lower && has_digit && has_special {
-            return true;
-        }
-    }
-
-    false
+    confers_common::is_sensitive_value(value)
 }
 
 use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
@@ -409,12 +388,19 @@ pub fn generate_impl(
 ) -> TokenStream {
     let struct_name = &opts.ident;
     let env_prefix = opts.env_prefix.as_deref().unwrap_or("");
+    let app_name = opts.app_name.clone();
     let strict = opts
         .strict
         .or_else(|| opts.validate.as_ref().map(|v| v.0))
         .unwrap_or(false);
 
     // Conditional code generation for features
+
+    let apply_app_name = if let Some(name) = &app_name {
+        quote! { loader = loader.with_app_name(#name); }
+    } else {
+        quote! {}
+    };
 
     let apply_format_detection = if let Some(val) = &opts.format_detection {
         quote! { loader = loader.with_format_detection(#val); }
@@ -1540,7 +1526,11 @@ pub fn generate_impl(
             /// Create a new ConfigLoader for this struct
             pub fn new_loader() -> confers::core::ConfigLoader<Self> {
                 let mut loader = confers::core::ConfigLoader::<Self>::new();
-                loader = loader.with_app_name(env!("CARGO_PKG_NAME"));
+
+                // Only set app_name if explicitly configured via #[config(app_name = "...")]
+                // Otherwise, the default search path will include the current directory
+                #apply_app_name
+
                 if !#env_prefix.is_empty() {
                     loader = loader.with_env_prefix(#env_prefix);
                 }

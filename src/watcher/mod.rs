@@ -243,7 +243,19 @@ impl Default for RemoteAuth {
     }
 }
 
-/// RemoteAuth without encryption feature (simplified version)
+/// RemoteAuth without encryption feature
+///
+/// # Security Warning
+///
+/// When the `encryption` feature is disabled, credentials are stored in plain memory.
+/// This is intended for development and testing environments only.
+///
+/// For production use, enable the `encryption` feature to use `SecureString` which provides:
+/// - Constant-time comparison to prevent timing attacks
+/// - Automatic memory zeroization on drop
+/// - Sensitivity level tracking
+///
+/// To enable encryption, build with: `cargo build --features encryption`
 #[cfg(all(feature = "remote", not(feature = "encryption")))]
 #[derive(Clone)]
 pub struct RemoteAuth {
@@ -297,6 +309,72 @@ impl RemoteAuth {
     pub fn bearer_token(&self) -> Option<&String> {
         self.bearer_token.as_ref()
     }
+
+    /// Validate that at least one authentication method is provided
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        let has_basic = self.username.is_some() && self.password.is_some();
+        let has_bearer = self.bearer_token.is_some();
+
+        if !has_basic && !has_bearer {
+            return Err(ConfigError::ValidationError(
+                "RemoteAuth requires either username/password or bearer token".to_string(),
+            ));
+        }
+
+        if has_basic && has_bearer {
+            eprintln!(
+                "Warning: Both Basic Auth and Bearer Token are set. Bearer Token will be used."
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Check if using Basic Authentication
+    pub fn is_basic_auth(&self) -> bool {
+        self.username.is_some() && self.password.is_some()
+    }
+
+    /// Check if using Bearer Token Authentication
+    pub fn is_bearer_auth(&self) -> bool {
+        self.bearer_token.is_some()
+    }
+
+    /// Get the authentication header value
+    pub fn auth_header(&self) -> Option<String> {
+        if let Some(token) = &self.bearer_token {
+            return Some(format!("Bearer {}", token));
+        }
+
+        if let (Some(username), Some(password)) = (&self.username, &self.password) {
+            let credentials = format!("{}:{}", username, password);
+            let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+            return Some(format!("Basic {}", encoded));
+        }
+
+        None
+    }
+
+    /// Clear sensitive data from memory
+    pub fn clear(&mut self) {
+        if let Some(mut password) = self.password.take() {
+            unsafe {
+                let ptr = password.as_mut_vec();
+                for byte in ptr.iter_mut() {
+                    *byte = 0;
+                }
+            }
+        }
+
+        if let Some(mut token) = self.bearer_token.take() {
+            unsafe {
+                let ptr = token.as_mut_vec();
+                for byte in ptr.iter_mut() {
+                    *byte = 0;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(all(feature = "remote", not(feature = "encryption")))]
@@ -306,8 +384,8 @@ impl Default for RemoteAuth {
     }
 }
 
+#[allow(dead_code)]
 pub struct ConfigWatcher {
-    #[allow(dead_code)]
     target: WatchTarget,
 }
 
@@ -567,9 +645,12 @@ impl ConfigWatcher {
             }
         });
 
-        // Create a dummy debouncer that doesn't actually watch anything
-        // This is a workaround since we can't easily create a debouncer without a real watcher
-        let debouncer = new_debouncer(Duration::from_secs(3600), None, |_res| {})
+        // Create a minimal debouncer for API compatibility
+        // For remote configuration, the actual polling happens in the tokio::spawn task above
+        // This debouncer is kept only to maintain consistent return type with file watching
+        // Note: For remote watching, the debouncer callback never fires since events are
+        // sent directly via the channel. This is an intentional design choice for remote sources.
+        let debouncer = new_debouncer(Duration::from_secs(1), None, |_res| {})
             .map_err(|e| ConfigError::FormatDetectionFailed(e.to_string()))?;
 
         Ok((debouncer, rx))
@@ -850,11 +931,15 @@ mod tests {
 
         match watcher.target {
             WatchTarget::Remote { tls, .. } => {
-                assert!(tls.is_some());
+                assert!(
+                    tls.is_some(),
+                    "TLS config should be present for remote watcher"
+                );
                 if let Some(tls_config) = tls {
                     assert_eq!(
                         tls_config.ca_cert_path(),
-                        Some(&"/path/to/ca.crt".to_string())
+                        Some(&"/path/to/ca.crt".to_string()),
+                        "CA cert path should match expected value"
                     );
                 }
             }

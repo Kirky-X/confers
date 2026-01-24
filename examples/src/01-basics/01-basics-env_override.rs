@@ -36,12 +36,11 @@ fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // 1. 创建配置文件
-    let config_content = r#"
-name = "config-file-name"
+    let config_content = r#"name = "config-file-name"
 port = 8080
 debug = false
 "#;
-    std::fs::write("src/01-basics/configs/env_override.toml", config_content)?;
+    std::fs::write("config.toml", config_content)?;
 
     // 2. 加载配置（不使用环境变量）
     println!("1. Loading from config file only:");
