@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.1] - 2026-01-24
+## [0.2.2] - 2026-01-25
 
 ### Security
 - Internal function visibility hardening (pub(crate) for internal helpers)
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - FileFormat unified across the codebase
 
-## [0.3.0] - 2026-01-17
+## [0.2.1] - 2026-01-17
 
 ### Security
 - **Enhanced Audit Logging System**: Added comprehensive audit logging with event classification, integrity protection, log rotation, and query capabilities
@@ -76,14 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Access Control**: Introduced secure Builder patterns for `EnvironmentValidationConfig` and `RemoteConfig`, enforcing secure construction via `with_auth_secure` and `with_bearer_token_secure`.
 - **SSRF Protection**: Enhanced `HttpProvider` to validate URLs in all loading methods (`load`, `load_sync`), preventing potential SSRF attacks even if internal state is mutated.
 - **Leakage Prevention**: Fixed potential sensitive data leakage in HTTP provider by correctly handling `SecureString` during request authentication (avoiding masked output).
-
-### Fixed
-- Fixed compilation errors in `Config` derive macro by automatically implementing `OptionalValidate` trait when validation feature is disabled.
-- Resolved duplicate method definitions in `ConfigLoader`.
-
-## [0.2.0] - 2026-01-16
-
-### Security
 - Add comprehensive security module with production-ready features:
   - SecureString with automatic memory zeroization for sensitive data
   - ConfigInjector for secure runtime configuration injection
@@ -102,6 +94,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhance security config injector with improved validation
 - Refactor error sanitization for better security
 - Improve input validation logic
+
+### Fixed
+- Fixed compilation errors in `Config` derive macro by automatically implementing `OptionalValidate` trait when validation feature is disabled.
+- Resolved duplicate method definitions in `ConfigLoader`.
 
 ### Added
 - Create unified file format detection module (eliminates 4 duplicate implementations)

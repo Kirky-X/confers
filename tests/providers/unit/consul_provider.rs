@@ -9,6 +9,7 @@
 
 #[cfg(test)]
 #[cfg(feature = "consul")]
+#[allow(clippy::assertions_on_constants)]
 mod consul_provider_tests {
     use super::super::*;
     use mockall::mock;

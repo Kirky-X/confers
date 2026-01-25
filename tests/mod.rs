@@ -14,7 +14,6 @@ pub mod commands;
 pub mod common;
 #[cfg(feature = "encryption")]
 #[cfg(test)]
-#[cfg(test)]
 pub mod providers;
 #[cfg(feature = "schema")]
 #[cfg(test)]

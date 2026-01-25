@@ -119,10 +119,9 @@ pub fn verify_format_distribution(audit_path: &Path, expected_formats: &[(&str, 
                 let actual_count = format_dist_obj
                     .get(*format_name)
                     .and_then(|v| v.as_u64())
-                    .expect(&format!(
-                        "Format '{}' not found in distribution",
-                        format_name
-                    ));
+                    .unwrap_or_else(|| {
+                        panic!("Format '{}' not found in distribution", format_name)
+                    });
 
                 assert_eq!(
                     actual_count, *expected_count,

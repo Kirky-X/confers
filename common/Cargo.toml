@@ -1,6 +1,6 @@
 [package]
 name = "confers-common"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Kirky.X <kirkyx@outlook.com>"]
 license = "MIT OR Apache-2.0"

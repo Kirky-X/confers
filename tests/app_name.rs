@@ -28,17 +28,19 @@ mod app_name_tests {
         pub port: u16,
     }
 
-    // Multi-format config
+    // Multi-format config (reserved for future tests)
     #[derive(Debug, Clone, Serialize, Deserialize, Config)]
+    #[allow(dead_code)]
     pub struct MultiFormatConfig {
         pub service: String,
         pub port: u16,
         pub enabled: bool,
     }
 
-    // Config with env_prefix
+    // Config with env_prefix (reserved for future tests)
     #[derive(Debug, Clone, Serialize, Deserialize, Config)]
     #[config(env_prefix = "TEST")]
+    #[allow(dead_code)]
     pub struct EnvOverrideConfig {
         pub name: String,
         pub port: u16,

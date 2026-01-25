@@ -1,6 +1,6 @@
 [package]
 name = "confers-macros"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Kirky.X <kirkyx@outlook.com>"]
 license = "MIT OR Apache-2.0"
@@ -29,4 +29,4 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 darling = "0.20"
-confers-common = { path = "../common", version = "0.2.1" }
+confers-common = { path = "../common", version = "0.2.2" }

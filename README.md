@@ -203,11 +203,11 @@ graph LR
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.2.1"` | Includes only `derive` (minimal config loading) |
-| **Minimal** | `confers = { version = "0.2.1", default-features = false, features = ["minimal"] }` | Only config loading (same as default) |
-| **Recommended** | `confers = { version = "0.2.1", default-features = false, features = ["recommended"] }` | Config + validation |
-| **CLI with Tools** | `confers = { version = "0.2.1", features = ["cli"] }` | CLI with validation and encryption |
-| **Full** | `confers = { version = "0.2.1", features = ["full"] }` | All features |
+| **Default** | `confers = "0.2.2"` | Includes only `derive` (minimal config loading) |
+| **Minimal** | `confers = { version = "0.2.2", default-features = false, features = ["minimal"] }` | Only config loading (same as default) |
+| **Recommended** | `confers = { version = "0.2.2", default-features = false, features = ["recommended"] }` | Config + validation |
+| **CLI with Tools** | `confers = { version = "0.2.2", features = ["cli"] }` | CLI with validation and encryption |
+| **Full** | `confers = { version = "0.2.2", features = ["full"] }` | All features |
 
 **Individual Features:**
 
@@ -412,7 +412,7 @@ Confers provides a unified `ConfersCli` API for easy integration into other Rust
 
 ```toml
 [dependencies]
-confers = { version = "0.2.1", features = ["cli"] }
+confers = { version = "0.2.2", features = ["cli"] }
 ```
 
 ```rust

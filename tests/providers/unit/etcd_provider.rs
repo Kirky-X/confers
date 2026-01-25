@@ -9,6 +9,7 @@
 
 #[cfg(test)]
 #[cfg(feature = "etcd")]
+#[allow(clippy::assertions_on_constants)]
 mod etcd_provider_tests {
     use super::super::*;
     use mockall::mock;
