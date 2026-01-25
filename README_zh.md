@@ -201,11 +201,11 @@ graph LR
 
 | 安装类型 | 配置 | 使用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.2.0"` | 仅包含 `derive` (最小配置加载) |
-| **最小化** | `confers = { version = "0.2.0", default-features = false, features = ["minimal"] }` | 仅配置加载 (与默认相同) |
-| **推荐** | `confers = { version = "0.2.0", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
-| **CLI工具** | `confers = { version = "0.2.0", features = ["cli"] }` | CLI 及验证和加密功能 |
-| **完整** | `confers = { version = "0.2.0", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.2.1"` | 仅包含 `derive` (最小配置加载) |
+| **最小化** | `confers = { version = "0.2.1", default-features = false, features = ["minimal"] }` | 仅配置加载 (与默认相同) |
+| **推荐** | `confers = { version = "0.2.1", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
+| **CLI工具** | `confers = { version = "0.2.1", features = ["cli"] }` | CLI 及验证和加密功能 |
+| **完整** | `confers = { version = "0.2.1", features = ["full"] }` | 所有功能 |
 
 **单独特性：**
 

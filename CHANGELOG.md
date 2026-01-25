@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All audit tests passing (6 tests)
 - All validator tests passing (13 tests)
 
-## [0.2.1] - 2026-01-17
+## [0.2.0] - 2026-01-16
 
 ### Security
 - **Internal Implementation Protection**: Privatized sensitive fields in `RemoteConfig` and `ConfigLoader` to prevent accidental exposure.

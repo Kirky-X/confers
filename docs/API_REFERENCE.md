@@ -82,7 +82,7 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 | <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 仅配置加载（最小依赖） |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring> | 生产配置 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有特性 | 完整功能集 |
 
 **单独特性：**
