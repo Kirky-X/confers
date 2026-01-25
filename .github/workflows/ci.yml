@@ -5,42 +5,24 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  schedule:
+    # 每周运行安全审计
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    # 手动触发
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # 使用 sccache 优化编译
+  CARGO_INCREMENTAL: 1
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Run tests
-        run: cargo test --all-features --workspace
-
+  # ================================================
+  # 快速检查阶段 (并行执行)
+  # ================================================
+  
   format:
     name: Format Check
     runs-on: ubuntu-latest
@@ -90,6 +72,46 @@ jobs:
           fi
           echo "License check passed: ${{ steps.get-license.outputs.cargo_license }}"
 
+  # ================================================
+  # 测试阶段
+  # ================================================
+  
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Run tests
+        run: cargo test --all-features --workspace
+
+  test-wasm:
+    name: Test WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      
+      - name: Install wasm-bindgen
+        run: cargo install wasm-bindgen-cli
+      
+      - name: Build WASM
+        run: cargo build --target wasm32-unknown-unknown --features wasm
+      
+      - name: Test WASM
+        run: cargo test --target wasm32-unknown-unknown --features wasm
+
+  # ================================================
+  # 代码质量阶段
+  # ================================================
+  
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -101,27 +123,29 @@ jobs:
         with:
           components: clippy
       
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      
       - name: Run clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
 
+  clippy-nightly:
+    name: Clippy Nightly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust Nightly
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          components: clippy
+      
+      - name: Run clippy nightly
+        run: cargo +nightly clippy --all-targets --all-features --workspace -- -D warnings -A clippy::all
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+  # ================================================
+  # 安全审计阶段
+  # ================================================
+  
   security:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -137,6 +161,26 @@ jobs:
       - name: Run cargo-deny
         run: cargo deny check
 
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+      
+      - name: Check outdated dependencies
+        run: cargo outdated --root-deps-only --version-threshold 0.2.0 || true
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+  # ================================================
+  # 代码覆盖阶段
+  # ================================================
+  
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
@@ -149,18 +193,6 @@ jobs:
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
       
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
       - name: Generate coverage
         run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml --fail-under 0
       
@@ -171,8 +203,120 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: true
 
-  build-check:
-    name: Build Check
+  # ================================================
+  # 构建阶段
+  # ================================================
+  
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build
+        run: cargo build --all-features --workspace
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-build
+          path: target/debug/confers
+          retention-days: 7
+
+  build-release:
+    name: Build Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build release
+        run: cargo build --release --all-features --workspace
+      
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build
+          path: target/release/confers
+          retention-days: 30
+
+  build-matrix:
+    name: Build Matrix (${{ matrix.os }} / ${{ matrix.rust-version }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust-version: [1.75, stable, nightly]
+        include:
+          - rust-version: 1.75
+            minrust: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust ${{ matrix.rust-version }}
+        uses: dtolnay/rust-toolchain@${{ matrix.rust-version }}
+      
+      - name: Build
+        run: cargo build --all-features --workspace
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+  # ================================================
+  # 文档阶段
+  # ================================================
+  
+  docs:
+    name: Generate Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Generate documentation
+        run: cargo doc --all-features --no-deps
+      
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: target/doc/
+          retention-days: 7
+
+  # ================================================
+  # 钩子相关
+  # ================================================
+  
+  pre-commit-check:
+    name: Pre-commit Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install pre-commit
+        run: pip install pre-commit
+      
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+    if: github.event_name == 'pull_request'
+
+  # ================================================
+  # 平台特定测试
+  # ================================================
+  
+  test-cross-platform:
+    name: Test ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -183,5 +327,44 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       
-      - name: Build
-        run: cargo build --all-features --workspace
+      - name: Run tests
+        run: cargo test --all-features --workspace
+
+  # ================================================
+  # 发布准备
+  # ================================================
+  
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Verify version match
+        run: |
+          tag_version=${GITHUB_REF#refs/tags/v}
+          cargo_version=$(grep '^version = ' Cargo.toml | sed 's/version = //' | tr -d ' "')
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "Version mismatch! Tag: $tag_version, Cargo.toml: $cargo_version"
+            exit 1
+          fi
+          echo "Version check passed: $cargo_version"
+      
+      - name: Create release artifacts
+        run: |
+          mkdir -p release
+          cp target/release/confers release/
+          cp Cargo.toml release/
+          cp README.md release/
+          cp LICENSE release/
+      
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
