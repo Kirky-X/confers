@@ -1,0 +1,23 @@
+# Pre-commit hooks configuration for Confers project
+# Install: pip install pre-commit && pre-commit install
+# Docs: https://pre-commit.com/
+
+repos:
+- repo: https://github.com/drhuchu/rustfmt
+  rev: v1.7.1
+  hooks:
+  - id: cargo-fmt
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: trailing-whitespace
+  - id: end-of-file-fixer
+  - id: check-yaml
+  - id: check-toml
+  - id: mixed-line-ending
+    args: ['--fix=lf']
+  - id: detect-private-key
+  - id: check-merge-conflict
+  - id: no-commit-to-branch
+    args: ['--main', '--master']

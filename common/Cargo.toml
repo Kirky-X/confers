@@ -1,0 +1,20 @@
+[package]
+name = "confers-common"
+version = "0.2.1"
+edition = "2021"
+authors = ["Kirky.X <kirkyx@outlook.com>"]
+license = "MIT OR Apache-2.0"
+description = "Common utilities and shared types for Confers configuration management library"
+documentation = "https://docs.rs/confers-common"
+homepage = "https://github.com/Kirky-X/confers"
+repository = "https://github.com/Kirky-X/confers"
+keywords = ["configuration", "shared", "utilities"]
+categories = ["development-tools"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+validator = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
