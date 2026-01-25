@@ -1493,18 +1493,9 @@ pub fn generate_impl(
         }
     });
 
-    let impl_optional_validate = if has_validate_derive {
-        // 如果结构体有 Validate derive，则在启用 validation feature 时不生成 OptionalValidate 实现
-        // 因为 blanket implementation 已经提供了
-        quote! {
-            #[cfg(not(feature = "validation"))]
-            impl confers::OptionalValidate for #struct_name {}
-        }
-    } else {
-        // 如果结构体没有 Validate derive，则总是生成 OptionalValidate 实现
-        quote! {
-            impl confers::OptionalValidate for #struct_name {}
-        }
+    let impl_optional_validate = quote! {
+        #[cfg(not(feature = "validation"))]
+        impl confers::OptionalValidate for #struct_name {}
     };
 
     let generated_code = quote! {

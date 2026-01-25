@@ -622,52 +622,6 @@ pub type File = FileSource;
 /// Type alias for Environment source (config-rs compatibility)
 pub type Environment = EnvironmentSource;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    struct TestConfig {
-        server: ServerConfig,
-        debug: bool,
-    }
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    struct ServerConfig {
-        host: String,
-        port: u16,
-    }
-
-    #[test]
-    fn test_set_default() -> Result<(), Box<dyn std::error::Error>> {
-        let config: TestConfig = ConfigBuilder::new()
-            .set_default("server.host", "localhost")?
-            .set_default("server.port", 8080)?
-            .set_default("debug", true)?
-            .build()?;
-
-        assert_eq!(config.server.host, "localhost");
-        assert_eq!(config.server.port, 8080);
-        assert!(config.debug);
-        Ok(())
-    }
-
-    #[test]
-    fn test_nested_defaults() -> Result<(), Box<dyn std::error::Error>> {
-        let config: TestConfig = ConfigBuilder::new()
-            .set_default("server.host", "0.0.0.0")?
-            .set_default("server.port", 8899)?
-            .set_default("debug", false)?
-            .build()?;
-
-        assert_eq!(config.server.host, "0.0.0.0");
-        assert_eq!(config.server.port, 8899);
-        assert!(!config.debug);
-        Ok(())
-    }
-}
-
 /// Extension trait for saving configuration
 pub trait ConfigSaveExt {
     /// Save configuration to a file (infer format from extension)

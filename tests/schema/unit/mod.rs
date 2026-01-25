@@ -3,8 +3,6 @@
 // Licensed under MIT License
 // See LICENSE file in the project root for full license information.
 
-//! Key测试模块入口
+//! Schema unit tests
 
-#[cfg(test)]
-#[cfg(feature = "encryption")]
-pub mod unit;
+pub mod schema_tests;
