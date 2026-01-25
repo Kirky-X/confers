@@ -8,14 +8,16 @@
 /// Check if a value should trigger security warnings
 fn should_warn_about_value(value: &str, field_name: &str) -> bool {
     // Check field name patterns
-    if confers_common::is_sensitive_field_name(field_name) {
+    if is_sensitive_field_name(field_name) {
         return true;
     }
 
     // Check value entropy (simplified check for high-entropy strings)
-    confers_common::is_sensitive_value(value)
+    is_sensitive_value(value)
 }
 
+use crate::confers_common::is_sensitive_field_name;
+use crate::confers_common::is_sensitive_value;
 use crate::parse::{ConfigOpts, FieldOpts, RemoteProtocol};
 use proc_macro2::TokenStream;
 use quote::quote;

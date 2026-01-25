@@ -3,7 +3,7 @@ name = "confers-macros"
 version = "0.2.2"
 edition = "2021"
 authors = ["Kirky.X <kirkyx@outlook.com>"]
-license = "MIT OR Apache-2.0"
+license = "MIT"
 description = "Procedural macros for the Confers configuration management library"
 documentation = "https://docs.rs/confers-macros"
 homepage = "https://github.com/Kirky-X/confers"
@@ -15,7 +15,6 @@ categories = ["development-tools"]
 proc-macro = true
 
 [features]
-# Declare expected cfg conditions for feature-gated code in generated code
 schema = []
 watch = []
 audit = []
@@ -29,4 +28,6 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 darling = "0.20"
-confers-common = { path = "../common", version = "0.2.2" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["macros", "examples", "common"]
+members = ["macros", "examples"]
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
