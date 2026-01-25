@@ -33,10 +33,9 @@ fn main() {
     println!("Testing simple macro");
 
     // 创建配置文件
-    let config_content = r#"
-name = "minimal-example"
+    let config_content = r#"name = "minimal-example"
 "#;
-    if let Err(e) = std::fs::write("src/01-basics/configs/minimal.toml", config_content) {
+    if let Err(e) = std::fs::write("config.toml", config_content) {
         println!("❌ 创建配置文件失败: {}", e);
         return;
     }
@@ -51,4 +50,7 @@ name = "minimal-example"
             println!("❌ 配置加载失败: {}", e);
         }
     }
+
+    // 清理
+    let _ = std::fs::remove_file("config.toml");
 }

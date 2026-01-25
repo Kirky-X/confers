@@ -219,7 +219,12 @@ impl ConfersCli {
     ///     Ok(())
     /// }
     /// ```
-    pub fn diff(file1: &str, file2: &str, format: Option<&str>, output: Option<&str>) -> Result<(), ConfigError> {
+    pub fn diff(
+        file1: &str,
+        file2: &str,
+        format: Option<&str>,
+        output: Option<&str>,
+    ) -> Result<(), ConfigError> {
         let diff_format = format
             .unwrap_or("unified")
             .parse()

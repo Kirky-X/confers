@@ -48,24 +48,24 @@ fn test_provider_with_url() {
 #[test]
 fn test_provider_with_timeout() {
     // 测试带超时的提供者
-    let provider = HttpConfigProvider::new("https://example.com/config")
-        .with_timeout(Duration::from_secs(30));
+    let provider =
+        HttpConfigProvider::new("https://example.com/config").with_timeout(Duration::from_secs(30));
     assert!(provider.is_available());
 }
 
 #[test]
 fn test_provider_with_auth() {
     // 测试带认证的提供者
-    let provider = HttpConfigProvider::new("https://example.com/config")
-        .with_auth("user", "password");
+    let provider =
+        HttpConfigProvider::new("https://example.com/config").with_auth("user", "password");
     assert!(provider.is_available());
 }
 
 #[test]
 fn test_provider_with_bearer_token() {
     // 测试带 bearer token 的提供者
-    let provider = HttpConfigProvider::new("https://example.com/config")
-        .with_bearer_token("test-token-12345");
+    let provider =
+        HttpConfigProvider::new("https://example.com/config").with_bearer_token("test-token-12345");
     assert!(provider.is_available());
 }
 
@@ -80,5 +80,8 @@ fn test_provider_invalid_url() {
 fn test_provider_type() {
     // 测试提供者类型
     let provider = HttpConfigProvider::new("https://example.com/config");
-    assert_eq!(provider.provider_type(), confers::providers::provider::ProviderType::Http);
+    assert_eq!(
+        provider.provider_type(),
+        confers::providers::provider::ProviderType::Http
+    );
 }

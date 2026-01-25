@@ -154,7 +154,9 @@ impl HttpConfigProvider {
                 builder = builder.add_root_certificate(cert);
             }
 
-            if let (Some(cert_path), Some(key_path)) = (tls.client_cert_path(), tls.client_key_path()) {
+            if let (Some(cert_path), Some(key_path)) =
+                (tls.client_cert_path(), tls.client_key_path())
+            {
                 let cert_data = std::fs::read(cert_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
                 })?;

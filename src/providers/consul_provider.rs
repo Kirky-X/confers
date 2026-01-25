@@ -73,8 +73,10 @@ impl ConsulAclToken {
 
     fn as_str(&self) -> &str {
         match self {
-            ConsulAclToken::Token(t) | ConsulAclToken::Bearer(t)
-            | ConsulAclToken::Identity(t) | ConsulAclToken::Agent(t) => t.as_str(),
+            ConsulAclToken::Token(t)
+            | ConsulAclToken::Bearer(t)
+            | ConsulAclToken::Identity(t)
+            | ConsulAclToken::Agent(t) => t.as_str(),
         }
     }
 
@@ -118,8 +120,10 @@ impl ConsulAclToken {
 
     fn as_str(&self) -> &str {
         match self {
-            ConsulAclToken::Token(t) | ConsulAclToken::Bearer(t)
-            | ConsulAclToken::Identity(t) | ConsulAclToken::Agent(t) => t.as_str(),
+            ConsulAclToken::Token(t)
+            | ConsulAclToken::Bearer(t)
+            | ConsulAclToken::Identity(t)
+            | ConsulAclToken::Agent(t) => t.as_str(),
         }
     }
 
@@ -298,7 +302,9 @@ impl ConsulConfigProvider {
                 client_builder = client_builder.add_root_certificate(cert);
             }
 
-            if let (Some(cert_path), Some(key_path)) = (tls.client_cert_path(), tls.client_key_path()) {
+            if let (Some(cert_path), Some(key_path)) =
+                (tls.client_cert_path(), tls.client_key_path())
+            {
                 let cert_data = std::fs::read(cert_path).map_err(|e| {
                     ConfigError::RemoteError(format!("Failed to read client cert: {}", e))
                 })?;

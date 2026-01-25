@@ -18,10 +18,8 @@ fn test_validate_command_exists() {
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(b"name = \"test\"\nvalue = 42\n").unwrap();
 
-    let result = ValidateCommand::execute_generic(
-        file.path().to_str().unwrap(),
-        ValidateLevel::Minimal,
-    );
+    let result =
+        ValidateCommand::execute_generic(file.path().to_str().unwrap(), ValidateLevel::Minimal);
     assert!(result.is_ok(), "Validate command should exist and work");
 }
 
@@ -32,7 +30,10 @@ fn test_validate_level_parsing() {
         ValidateLevel::from_str("minimal").unwrap(),
         ValidateLevel::Minimal
     );
-    assert_eq!(ValidateLevel::from_str("full").unwrap(), ValidateLevel::Full);
+    assert_eq!(
+        ValidateLevel::from_str("full").unwrap(),
+        ValidateLevel::Full
+    );
     assert_eq!(
         ValidateLevel::from_str("documentation").unwrap(),
         ValidateLevel::Documentation
@@ -43,12 +44,11 @@ fn test_validate_level_parsing() {
 fn test_validate_toml_file() {
     // 测试 TOML 文件验证
     let mut file = NamedTempFile::with_suffix(".toml").unwrap();
-    file.write_all(b"[app]\nname = \"test\"\nport = 8080\n").unwrap();
+    file.write_all(b"[app]\nname = \"test\"\nport = 8080\n")
+        .unwrap();
 
-    let result = ValidateCommand::execute_generic(
-        file.path().to_str().unwrap(),
-        ValidateLevel::Full,
-    );
+    let result =
+        ValidateCommand::execute_generic(file.path().to_str().unwrap(), ValidateLevel::Full);
     assert!(result.is_ok(), "Valid TOML file should pass validation");
 }
 
@@ -56,12 +56,11 @@ fn test_validate_toml_file() {
 fn test_validate_json_file() {
     // 测试 JSON 文件验证
     let mut file = NamedTempFile::with_suffix(".json").unwrap();
-    file.write_all(b"{\"app\": {\"name\": \"test\", \"port\": 8080}}\n").unwrap();
+    file.write_all(b"{\"app\": {\"name\": \"test\", \"port\": 8080}}\n")
+        .unwrap();
 
-    let result = ValidateCommand::execute_generic(
-        file.path().to_str().unwrap(),
-        ValidateLevel::Full,
-    );
+    let result =
+        ValidateCommand::execute_generic(file.path().to_str().unwrap(), ValidateLevel::Full);
     assert!(result.is_ok(), "Valid JSON file should pass validation");
 }
 
@@ -69,12 +68,11 @@ fn test_validate_json_file() {
 fn test_validate_yaml_file() {
     // 测试 YAML 文件验证
     let mut file = NamedTempFile::with_suffix(".yaml").unwrap();
-    file.write_all(b"app:\n  name: test\n  port: 8080\n").unwrap();
+    file.write_all(b"app:\n  name: test\n  port: 8080\n")
+        .unwrap();
 
-    let result = ValidateCommand::execute_generic(
-        file.path().to_str().unwrap(),
-        ValidateLevel::Full,
-    );
+    let result =
+        ValidateCommand::execute_generic(file.path().to_str().unwrap(), ValidateLevel::Full);
     assert!(result.is_ok(), "Valid YAML file should pass validation");
 }
 
@@ -84,19 +82,14 @@ fn test_validate_invalid_toml() {
     let mut file = NamedTempFile::with_suffix(".toml").unwrap();
     file.write_all(b"[invalid toml\n").unwrap();
 
-    let result = ValidateCommand::execute_generic(
-        file.path().to_str().unwrap(),
-        ValidateLevel::Full,
-    );
+    let result =
+        ValidateCommand::execute_generic(file.path().to_str().unwrap(), ValidateLevel::Full);
     assert!(result.is_err(), "Invalid TOML file should fail validation");
 }
 
 #[test]
 fn test_validate_nonexistent_file() {
     // 测试不存在的文件
-    let result = ValidateCommand::execute_generic(
-        "/nonexistent/file.toml",
-        ValidateLevel::Full,
-    );
+    let result = ValidateCommand::execute_generic("/nonexistent/file.toml", ValidateLevel::Full);
     assert!(result.is_err(), "Nonexistent file should fail validation");
 }

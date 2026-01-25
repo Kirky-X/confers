@@ -6,6 +6,6 @@
 pub mod builder;
 pub mod loader;
 
+pub use crate::utils::FileFormat;
 pub use builder::{ConfigBuilder, Environment, File};
 pub use loader::{ConfigLoader, OptionalValidate};
-pub use crate::utils::FileFormat;

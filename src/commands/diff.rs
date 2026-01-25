@@ -156,7 +156,11 @@ impl DiffCommand {
                 lines
             }
             DiffFormat::SideBySide => {
-                let sep = if options.show_line_numbers { " | " } else { "   " };
+                let sep = if options.show_line_numbers {
+                    " | "
+                } else {
+                    "   "
+                };
                 let left_header = if options.strict {
                     format!("Left: {}", file1)
                 } else {
@@ -171,7 +175,10 @@ impl DiffCommand {
                 if options.strict {
                     lines.push(format!("{}{}{}", left_header, sep, right_header));
                 } else {
-                    lines.push(format!("{}{}{}{}{}", left_header, sep, right_header, sep, RESET));
+                    lines.push(format!(
+                        "{}{}{}{}{}",
+                        left_header, sep, right_header, sep, RESET
+                    ));
                 }
                 lines.push("-".repeat(80));
                 lines.extend(Self::generate_side_by_side_diff(v1, v2, "", options));
@@ -186,7 +193,12 @@ impl DiffCommand {
                 let mut lines = Vec::new();
                 lines.push(format!("--- {}", file1));
                 lines.push(format!("+++ {}", file2));
-                lines.extend(Self::generate_standard_unified_diff(v1, v2, "", &strict_opts));
+                lines.extend(Self::generate_standard_unified_diff(
+                    v1,
+                    v2,
+                    "",
+                    &strict_opts,
+                ));
                 lines
             }
         }

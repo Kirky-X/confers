@@ -144,8 +144,7 @@ impl FileConfigProvider {
                                 .map_err(|e| ConfigError::IoError(e.to_string()))?;
                             let ini_value = serde_ini::from_str::<serde_json::Value>(&content)
                                 .map_err(|e| ConfigError::ParseError(e.to_string()))?;
-                            figment =
-                                figment.merge(Serialized::from(ini_value, Profile::Default));
+                            figment = figment.merge(Serialized::from(ini_value, Profile::Default));
                         }
                         _ => figment = figment.merge(Json::file(path_str.as_ref())),
                     }

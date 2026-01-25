@@ -9,7 +9,11 @@ use crate::error::ConfigError;
 pub struct EncryptCommand;
 
 impl EncryptCommand {
-    pub fn execute(value: &str, key: Option<&String>, output: Option<&String>) -> Result<(), ConfigError> {
+    pub fn execute(
+        value: &str,
+        key: Option<&String>,
+        output: Option<&String>,
+    ) -> Result<(), ConfigError> {
         let encryptor = if let Some(k) = key {
             // Parse key from arg
             use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -31,11 +35,10 @@ impl EncryptCommand {
         };
 
         let encrypted = encryptor.encrypt(value)?;
-        
+
         if let Some(path) = output {
-            std::fs::write(path, &encrypted).map_err(|e| {
-                ConfigError::IoError(format!("Failed to write to {}: {}", path, e))
-            })?;
+            std::fs::write(path, &encrypted)
+                .map_err(|e| ConfigError::IoError(format!("Failed to write to {}: {}", path, e)))?;
         } else {
             println!("{}", encrypted);
         }

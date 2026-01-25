@@ -7,7 +7,7 @@
 //!
 //! 测试架构相关的配置功能，包括内存对齐、平台特定配置等
 
-pub mod unit;
+pub mod edge_case;
 pub mod integration;
 pub mod performance;
-pub mod edge_case;
+pub mod unit;

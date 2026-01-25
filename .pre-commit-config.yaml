@@ -3,7 +3,7 @@
 # Docs: https://pre-commit.com/
 
 repos:
-- repo: https://github.com/drhuchu/rustfmt
+- repo: https://github.com/rust-lang/rustfmt
   rev: v1.7.1
   hooks:
   - id: cargo-fmt

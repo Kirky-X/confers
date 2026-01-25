@@ -4,25 +4,25 @@
 // See LICENSE file in the project root for full license information.
 
 //! 统一的测试配置模块
-//! 
+//!
 //! 提供所有测试文件共用的配置结构体
 
+use confers::ConfigMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
-use confers::ConfigMap;
 
 /// 简单的测试配置结构体
-/// 
+///
 /// 包含基本的配置字段，用于大多数测试场景
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Validate)]
 pub struct SimpleTestConfig {
     #[validate(length(min = 1))]
     pub name: String,
-    
+
     #[validate(range(min = 0, max = 1000))]
     pub value: i32,
-    
+
     pub enabled: bool,
 }
 
@@ -45,13 +45,13 @@ impl ConfigMap for SimpleTestConfig {
 }
 
 /// 服务器配置结构体
-/// 
+///
 /// 用于测试服务器相关的配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Validate)]
 pub struct ServerTestConfig {
     #[validate(range(min = 1, max = 65535))]
     pub port: u16,
-    
+
     #[validate(length(min = 1))]
     pub host: String,
 }
@@ -73,13 +73,13 @@ impl ConfigMap for ServerTestConfig {
 }
 
 /// 数据库配置结构体
-/// 
+///
 /// 用于测试数据库相关的配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Validate)]
 pub struct DatabaseTestConfig {
     #[validate(length(min = 1))]
     pub db_url: String,
-    
+
     #[validate(range(min = 1, max = 100))]
     pub pool_size: usize,
 }
@@ -101,26 +101,26 @@ impl ConfigMap for DatabaseTestConfig {
 }
 
 /// 完整的应用配置结构体
-/// 
+///
 /// 包含所有常见配置字段，用于综合测试
 #[derive(Debug, Clone, Serialize, Deserialize, Default, Validate)]
 pub struct FullTestConfig {
     #[validate(length(min = 1))]
     pub app_name: String,
-    
+
     #[validate(range(min = 1, max = 65535))]
     pub server_port: u16,
-    
+
     #[validate(length(min = 1))]
     pub server_host: String,
-    
+
     pub debug_mode: bool,
-    
+
     #[validate(range(min = 1, max = 100))]
     pub log_level: i32,
-    
+
     pub db_password: String,
-    
+
     pub db_url: String,
 }
 
@@ -128,11 +128,20 @@ impl ConfigMap for FullTestConfig {
     fn to_map(&self) -> HashMap<String, serde_json::Value> {
         let mut map = HashMap::new();
         map.insert("app_name".to_string(), serde_json::json!(self.app_name));
-        map.insert("server_port".to_string(), serde_json::json!(self.server_port));
-        map.insert("server_host".to_string(), serde_json::json!(self.server_host));
+        map.insert(
+            "server_port".to_string(),
+            serde_json::json!(self.server_port),
+        );
+        map.insert(
+            "server_host".to_string(),
+            serde_json::json!(self.server_host),
+        );
         map.insert("debug_mode".to_string(), serde_json::json!(self.debug_mode));
         map.insert("log_level".to_string(), serde_json::json!(self.log_level));
-        map.insert("db_password".to_string(), serde_json::json!(self.db_password));
+        map.insert(
+            "db_password".to_string(),
+            serde_json::json!(self.db_password),
+        );
         map.insert("db_url".to_string(), serde_json::json!(self.db_url));
         map
     }

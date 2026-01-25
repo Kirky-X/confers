@@ -278,19 +278,21 @@ impl WatchableProvider for EtcdConfigProvider {
         let result = rt.block_on(async {
             let mut client = Client::connect(&endpoints, Some(options))
                 .await
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to connect to Etcd: {}", e)))?;
+                .map_err(|e| {
+                    ConfigError::RemoteError(format!("Failed to connect to Etcd: {}", e))
+                })?;
 
             // Get current revision to start watching from
-            let resp = client.get(key.as_bytes(), None).await
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to get key for watch: {}", e)))?;
+            let resp = client.get(key.as_bytes(), None).await.map_err(|e| {
+                ConfigError::RemoteError(format!("Failed to get key for watch: {}", e))
+            })?;
 
             let revision = resp.header().map(|h| h.revision()).unwrap_or(0);
 
             // Create a watcher using the correct API for etcd_client v0.13+
-            let _watcher = client
-                .watch(key.as_bytes(), None)
-                .await
-                .map_err(|e| ConfigError::RemoteError(format!("Failed to create watcher: {}", e)))?;
+            let _watcher = client.watch(key.as_bytes(), None).await.map_err(|e| {
+                ConfigError::RemoteError(format!("Failed to create watcher: {}", e))
+            })?;
 
             // Wait for watch response using correct API
             // The new etcd_client API uses a stream-based approach
@@ -327,7 +329,10 @@ impl WatchableProvider for EtcdConfigProvider {
     }
 
     fn is_watching(&self) -> bool {
-        self.watch_state.lock().map(|s| s.is_watching).unwrap_or(false)
+        self.watch_state
+            .lock()
+            .map(|s| s.is_watching)
+            .unwrap_or(false)
     }
 
     fn poll_interval(&self) -> Option<Duration> {

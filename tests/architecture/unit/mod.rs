@@ -7,5 +7,5 @@
 //!
 //! 包含架构配置的基础功能测试
 
-pub mod architecture_basic;
 pub mod architecture_alignment;
+pub mod architecture_basic;

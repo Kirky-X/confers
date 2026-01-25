@@ -434,7 +434,11 @@ mod memory_safety_tests {
             wrong_times.push(start2.elapsed());
         }
 
-        let avg_correct: i64 = correct_times.iter().map(|t| t.as_nanos() as i64).sum::<i64>() / 10;
+        let avg_correct: i64 = correct_times
+            .iter()
+            .map(|t| t.as_nanos() as i64)
+            .sum::<i64>()
+            / 10;
         let avg_wrong: i64 = wrong_times.iter().map(|t| t.as_nanos() as i64).sum::<i64>() / 10;
 
         // 平均时间差应该很小（放宽到5ms以适应CI环境）

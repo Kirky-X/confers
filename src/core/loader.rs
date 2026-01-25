@@ -806,8 +806,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
-                provider =
-                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
+                provider = provider.with_tls(
+                    ca_cert.to_string_lossy().into_owned(),
+                    None::<PathBuf>,
+                    None::<PathBuf>,
+                );
             }
 
             // Also apply token if provided in remote_config
@@ -1051,8 +1054,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
-                provider =
-                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
+                provider = provider.with_tls(
+                    ca_cert.to_string_lossy().into_owned(),
+                    None::<PathBuf>,
+                    None::<PathBuf>,
+                );
             }
 
             // Also apply token if provided in remote_config
@@ -1241,8 +1247,11 @@ impl<T: OptionalValidate> ConfigLoader<T> {
                     Some(client_key.to_string_lossy().into_owned()),
                 );
             } else if let Some(ca_cert) = self.remote_config.ca_cert.as_ref() {
-                provider =
-                    provider.with_tls(ca_cert.to_string_lossy().into_owned(), None::<PathBuf>, None::<PathBuf>);
+                provider = provider.with_tls(
+                    ca_cert.to_string_lossy().into_owned(),
+                    None::<PathBuf>,
+                    None::<PathBuf>,
+                );
             }
 
             // Also apply token if provided in remote_config

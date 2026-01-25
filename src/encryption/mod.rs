@@ -133,7 +133,9 @@ impl ConfigEncryption {
         let key_str = env::var("CONFERS_ENCRYPTION_KEY")
             .or_else(|_| env::var("CONFERS_KEY"))
             .map_err(|_| {
-                ConfigError::FormatDetectionFailed("CONFERS_ENCRYPTION_KEY (or CONFERS_KEY) not found".to_string())
+                ConfigError::FormatDetectionFailed(
+                    "CONFERS_ENCRYPTION_KEY (or CONFERS_KEY) not found".to_string(),
+                )
             })?;
 
         // Validate key string format

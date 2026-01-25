@@ -532,10 +532,8 @@ impl FileSource {
             FileFormat::Yaml => Figment::from(Yaml::file(path)),
             FileFormat::Ini => {
                 let content = std::fs::read_to_string(&path).unwrap_or_default();
-                let ini_value =
-                    serde_ini::from_str::<serde_json::Value>(&content).unwrap_or_else(|_| {
-                        serde_json::Value::Object(serde_json::Map::new())
-                    });
+                let ini_value = serde_ini::from_str::<serde_json::Value>(&content)
+                    .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
                 Figment::from(Serialized::from(ini_value, Profile::Default))
             }
             FileFormat::Unknown => Figment::from(Toml::file(path)), // Default to TOML for unknown
@@ -712,8 +710,9 @@ where
         use std::fs::File;
         use std::io::Write;
 
-        let data = serde_json::to_value(self)
-            .map_err(|e| ConfigError::SerializationError(format!("Failed to serialize config: {}", e)))?;
+        let data = serde_json::to_value(self).map_err(|e| {
+            ConfigError::SerializationError(format!("Failed to serialize config: {}", e))
+        })?;
 
         let content = crate::utils::file_format::serialize_to_format(&data, format)
             .map_err(ConfigError::SerializationError)?;
@@ -727,4 +726,3 @@ where
         Ok(content.len() as u64)
     }
 }
-

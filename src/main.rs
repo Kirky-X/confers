@@ -110,8 +110,18 @@ fn main() -> Result<(), ConfigError> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Generate { output, level, r#struct, format } => {
-            GenerateCommand::execute_placeholder(output.as_ref(), level, r#struct.as_ref(), format)?;
+        Commands::Generate {
+            output,
+            level,
+            r#struct,
+            format,
+        } => {
+            GenerateCommand::execute_placeholder(
+                output.as_ref(),
+                level,
+                r#struct.as_ref(),
+                format,
+            )?;
         }
         Commands::Validate { config, level } => {
             let validate_level = ValidateLevel::parse(level);

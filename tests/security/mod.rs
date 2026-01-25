@@ -7,5 +7,5 @@
 //!
 //! 测试输入验证、安全字符串处理、配置注入和错误清理等安全功能
 
-pub mod unit;
 pub mod integration;
+pub mod unit;

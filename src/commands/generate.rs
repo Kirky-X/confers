@@ -95,10 +95,20 @@ impl GenerateCommand {
 
         // If struct name is provided, customize the template
         if let Some(name) = struct_name {
-            toml_content = toml_content.replace("name = \"example\"", &format!("name = \"{}\"", name));
-            toml_content = toml_content.replace("# Minimal Config Template", &format!("# {} Config Template", name));
-            toml_content = toml_content.replace("# Full Config Template", &format!("# {} Config Template", name));
-            toml_content = toml_content.replace("Configuration Template", &format!("{} Configuration Template", name));
+            toml_content =
+                toml_content.replace("name = \"example\"", &format!("name = \"{}\"", name));
+            toml_content = toml_content.replace(
+                "# Minimal Config Template",
+                &format!("# {} Config Template", name),
+            );
+            toml_content = toml_content.replace(
+                "# Full Config Template",
+                &format!("# {} Config Template", name),
+            );
+            toml_content = toml_content.replace(
+                "Configuration Template",
+                &format!("{} Configuration Template", name),
+            );
         }
 
         // Convert format
@@ -107,7 +117,7 @@ impl GenerateCommand {
         } else {
             let value: toml::Value = toml::from_str(&toml_content)
                 .map_err(|e| ConfigError::ParseError(format!("Failed to parse template: {}", e)))?;
-            
+
             match format.to_lowercase().as_str() {
                 "json" => serde_json::to_string_pretty(&value)
                     .map_err(|e| ConfigError::SerializationError(e.to_string()))?,
@@ -117,10 +127,19 @@ impl GenerateCommand {
                     // Check if the value is flat enough for INI
                     // If it's too nested, serde_ini might fail or produce unexpected results.
                     // But for our templates, they are generally section-based (Map<String, Map<String, Value>>)
-                    serde_ini::to_string(&value)
-                        .map_err(|e| ConfigError::SerializationError(format!("INI serialization failed (structure might be too deep): {}", e)))?
+                    serde_ini::to_string(&value).map_err(|e| {
+                        ConfigError::SerializationError(format!(
+                            "INI serialization failed (structure might be too deep): {}",
+                            e
+                        ))
+                    })?
                 }
-                _ => return Err(ConfigError::FormatDetectionFailed(format!("Unsupported format: {}", format))),
+                _ => {
+                    return Err(ConfigError::FormatDetectionFailed(format!(
+                        "Unsupported format: {}",
+                        format
+                    )))
+                }
             }
         };
 

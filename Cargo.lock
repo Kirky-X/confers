@@ -611,6 +611,7 @@ dependencies = [
  "failsafe",
  "figment",
  "flate2",
+ "futures",
  "hex",
  "hmac",
  "jsonschema",
@@ -651,6 +652,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "confers-common"
+version = "0.2.1"
+dependencies = [
+ "chrono",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "validator",
+]
+
+[[package]]
 name = "confers-examples"
 version = "0.2.0"
 dependencies = [
@@ -669,6 +682,7 @@ dependencies = [
 name = "confers-macros"
 version = "0.2.1"
 dependencies = [
+ "confers-common",
  "darling",
  "proc-macro2",
  "quote",

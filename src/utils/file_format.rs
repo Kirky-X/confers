@@ -79,7 +79,8 @@ pub fn detect_format_by_content(path: &Path) -> Option<FileFormat> {
         let trimmed = first_line.trim();
         // Improved JSON array detection
         // If it contains indicators of a JSON array (quotes, braces, commas, or is just opening bracket)
-        if trimmed == "[" || trimmed.contains('"') || trimmed.contains('{') || trimmed.contains(',') {
+        if trimmed == "[" || trimmed.contains('"') || trimmed.contains('{') || trimmed.contains(',')
+        {
             return Some(FileFormat::Json);
         }
 
@@ -88,8 +89,8 @@ pub fn detect_format_by_content(path: &Path) -> Option<FileFormat> {
         if lines.len() == 1 {
             return Some(FileFormat::Json);
         }
-        
-        // Otherwise, if it looks like [section] and has more lines, 
+
+        // Otherwise, if it looks like [section] and has more lines,
         // let the full scan determine if it's INI/TOML (looking for key=value)
     }
 
@@ -280,10 +281,7 @@ mod tests {
     fn test_detect_ini_by_content() {
         let mut file = NamedTempFile::new().unwrap();
         file.write_all(b"[server]\nport=8080\n").unwrap();
-        assert_eq!(
-            detect_format_by_content(file.path()),
-            Some(FileFormat::Ini)
-        );
+        assert_eq!(detect_format_by_content(file.path()), Some(FileFormat::Ini));
     }
 
     #[test]
@@ -342,8 +340,8 @@ pub fn parse_content(content: &str, content_type: Option<&str>) -> Result<Parsed
             Figment::new().merge(Serialized::from(dict, Profile::Default))
         }
         FileFormat::Toml => {
-            let toml_value: FigmentValue = toml::from_str(content)
-                .map_err(|e| format!("Failed to parse TOML: {}", e))?;
+            let toml_value: FigmentValue =
+                toml::from_str(content).map_err(|e| format!("Failed to parse TOML: {}", e))?;
             let dict: Dict = toml_value
                 .deserialize()
                 .map_err(|e| format!("Failed to convert TOML to dict: {}", e))?;
@@ -358,8 +356,8 @@ pub fn parse_content(content: &str, content_type: Option<&str>) -> Result<Parsed
             Figment::new().merge(Serialized::from(dict, Profile::Default))
         }
         FileFormat::Ini => {
-            let ini_value: JsonValue = serde_ini::from_str(content)
-                .map_err(|e| format!("Failed to parse INI: {}", e))?;
+            let ini_value: JsonValue =
+                serde_ini::from_str(content).map_err(|e| format!("Failed to parse INI: {}", e))?;
             let dict: Dict = serde_json::from_value(ini_value)
                 .map_err(|e| format!("Failed to convert INI to dict: {}", e))?;
             Figment::new().merge(Serialized::from(dict, Profile::Default))
@@ -492,8 +490,10 @@ pub fn serialize_to_ini(dict: &serde_json::Map<String, serde_json::Value>) -> St
     }
 
     // Group by top-level keys as sections
-    let mut sections: std::collections::HashMap<String, serde_json::Map<String, serde_json::Value>> =
-        std::collections::HashMap::new();
+    let mut sections: std::collections::HashMap<
+        String,
+        serde_json::Map<String, serde_json::Value>,
+    > = std::collections::HashMap::new();
 
     for (key, value) in dict {
         if let serde_json::Value::Object(map) = value {
@@ -566,18 +566,16 @@ pub fn serialize_to_ini(dict: &serde_json::Map<String, serde_json::Value>) -> St
 ///
 /// # Returns
 /// Serialized string
-pub fn serialize_to_format(
-    data: &serde_json::Value,
-    format: FileFormat,
-) -> Result<String, String> {
+pub fn serialize_to_format(data: &serde_json::Value, format: FileFormat) -> Result<String, String> {
     match format {
         FileFormat::Json => serde_json::to_string_pretty(data)
             .map_err(|e| format!("Failed to serialize JSON: {}", e)),
         FileFormat::Toml => {
             toml::to_string(data).map_err(|e| format!("Failed to serialize TOML: {}", e))
         }
-        FileFormat::Yaml => serde_yaml::to_string(data)
-            .map_err(|e| format!("Failed to serialize YAML: {}", e)),
+        FileFormat::Yaml => {
+            serde_yaml::to_string(data).map_err(|e| format!("Failed to serialize YAML: {}", e))
+        }
         FileFormat::Ini => {
             if let serde_json::Value::Object(map) = data {
                 Ok(serialize_to_ini(map))

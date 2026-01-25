@@ -7,6 +7,6 @@
 //!
 //! 测试配置提供者功能
 
-pub mod unit;
-pub mod integration;
 pub mod edge_case;
+pub mod integration;
+pub mod unit;
