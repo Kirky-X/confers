@@ -136,7 +136,7 @@ impl FsWatcher {
 
                     // Keep the thread alive to process events
                     while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                        std::thread::sleep(Duration::from_millis(100));
+                        std::thread::sleep(Duration::from_millis(50));
                     }
                 }
                 Err(e) => {
@@ -148,7 +148,7 @@ impl FsWatcher {
 
         // Process events in async context
         while running.load(std::sync::atomic::Ordering::SeqCst) {
-            match bridge_rx.recv_timeout(Duration::from_millis(100)) {
+            match bridge_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {
@@ -326,13 +326,13 @@ impl MultiFsWatcher {
             tracing::info!("MultiFsWatcher watching {} paths", paths_clone.len());
 
             while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(100));
+                std::thread::sleep(Duration::from_millis(50));
             }
         });
 
         // Process events in async context
         while running.load(std::sync::atomic::Ordering::SeqCst) {
-            match bridge_rx.recv_timeout(Duration::from_millis(100)) {
+            match bridge_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {

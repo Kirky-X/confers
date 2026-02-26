@@ -86,10 +86,10 @@ impl MergeEngine {
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::JoinAppend { separator }) =>
                 ConfigValue::String(format!("{}{}{}", l, separator, r)),
             (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Append | MergeStrategy::JoinAppend { .. }) => {
-                let mut m: Vec<_> = l.to_vec(); m.extend(r.to_vec()); ConfigValue::Array(m.into())
+                ConfigValue::Array(l.iter().chain(r.iter()).cloned().collect())
             }
             (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Prepend) => {
-                let mut m: Vec<_> = r.to_vec(); m.extend(l.to_vec()); ConfigValue::Array(m.into())
+                ConfigValue::Array(r.iter().chain(l.iter()).cloned().collect())
             }
             _ => high.inner.clone(),
         };
@@ -109,10 +109,10 @@ impl MergeEngine {
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::JoinAppend { separator }) =>
                 ConfigValue::String(format!("{}{}{}", l, separator, r)),
             (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Append | MergeStrategy::JoinAppend { .. }) => {
-                let mut m: Vec<_> = l.to_vec(); m.extend(r.to_vec()); ConfigValue::Array(m.into())
+                ConfigValue::Array(l.iter().chain(r.iter()).cloned().collect())
             }
             (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Prepend) => {
-                let mut m: Vec<_> = r.to_vec(); m.extend(l.to_vec()); ConfigValue::Array(m.into())
+                ConfigValue::Array(r.iter().chain(l.iter()).cloned().collect())
             }
             _ => high.inner.clone(),
         };

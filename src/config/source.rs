@@ -8,6 +8,7 @@ use crate::loader::{self, Format};
 use crate::value::{AnnotatedValue, ConfigValue, SourceId};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Kind of configuration source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -366,11 +367,11 @@ impl EnvSource {
             return;
         }
 
-        // For nested paths, we need to recursively build the structure
+        // For nested paths, we need to traverse/build the structure
         let first = parts[0];
         let remaining = &parts[1..];
 
-        // Create or get the nested map
+        // Get or create the nested map entry
         let nested = map.entry(std::sync::Arc::from(first)).or_insert_with(|| {
             AnnotatedValue::new(
                 ConfigValue::Map(std::sync::Arc::new(indexmap::IndexMap::new())),
@@ -379,10 +380,17 @@ impl EnvSource {
             )
         });
 
+        // Use Arc::get_mut to avoid cloning when possible (copy-on-write)
         if let ConfigValue::Map(ref mut inner_map) = nested.inner {
-            let mut map_clone = (*inner_map).as_ref().clone();
-            Self::insert_nested(&mut map_clone, remaining, value);
-            nested.inner = ConfigValue::Map(std::sync::Arc::new(map_clone));
+            if let Some(map_ref) = Arc::get_mut(inner_map) {
+                // Arc is uniquely owned, we can mutate directly
+                Self::insert_nested(map_ref, remaining, value);
+            } else {
+                // Arc is shared, need to clone (fallback to original behavior)
+                let mut map_clone = (*inner_map).as_ref().clone();
+                Self::insert_nested(&mut map_clone, remaining, value);
+                *inner_map = Arc::new(map_clone);
+            }
         }
     }
 }
