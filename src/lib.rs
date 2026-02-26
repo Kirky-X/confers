@@ -62,8 +62,12 @@ pub use loader::{
 pub use traits::{ConfigProvider, ConfigProviderExt, KeyProvider, TypedConfigKey};
 pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
 
-// Re-export derive macro
+// Re-export derive macros
 pub use confers_macros::Config;
+pub use confers_macros::ConfigSchema;
+pub use confers_macros::ConfigMigration;
+pub use confers_macros::ConfigModules;
+pub use confers_macros::ConfigClap;
 
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationResult, ValidationRule};
