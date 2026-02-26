@@ -36,3 +36,6 @@ examples/target/
 # Temporary files
 tmp/
 temp/
+
+# Development files
+dev-v2.md
