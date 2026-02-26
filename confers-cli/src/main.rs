@@ -90,6 +90,40 @@ enum Commands {
         #[arg(short, long, default_value = "text")]
         format: String,
     },
+
+    /// Manage configuration snapshots
+    Snapshot {
+        #[command(subcommand)]
+        action: SnapshotCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SnapshotCommands {
+    /// List all snapshots
+    List {
+        /// Directory containing snapshots
+        #[arg(long, default_value = "./snapshots")]
+        directory: PathBuf,
+    },
+    /// Diff between two snapshots
+    Diff {
+        /// Number of recent snapshots to compare
+        #[arg(long, default_value = "2")]
+        latest: usize,
+        /// Directory containing snapshots
+        #[arg(long, default_value = "./snapshots")]
+        directory: PathBuf,
+    },
+    /// Prune old snapshots
+    Prune {
+        /// Keep snapshots newer than this (e.g., "30d", "7d")
+        #[arg(long, default_value = "30d")]
+        older_than: String,
+        /// Directory containing snapshots
+        #[arg(long, default_value = "./snapshots")]
+        directory: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -111,6 +145,9 @@ fn main() -> Result<()> {
         }
         Commands::Diff { base, overlay, format: _ } => {
             cmd_diff(&base, &overlay)?;
+        }
+        Commands::Snapshot { action } => {
+            cmd_snapshot(action)?;
         }
     }
 
@@ -489,5 +526,151 @@ fn cmd_diff(base: &PathBuf, overlay: &PathBuf) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Handle snapshot commands (list, diff, prune)
+fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
+    match action {
+        SnapshotCommands::List { directory } => {
+            cmd_snapshot_list(&directory)?;
+        }
+        SnapshotCommands::Diff { latest, directory } => {
+            cmd_snapshot_diff(latest, &directory)?;
+        }
+        SnapshotCommands::Prune { older_than, directory } => {
+            cmd_snapshot_prune(&older_than, &directory)?;
+        }
+    }
+    Ok(())
+}
+
+/// List all snapshots in a directory
+fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
+    use std::fs;
+
+    if !directory.exists() {
+        println!("Snapshot directory does not exist: {}", directory.display());
+        return Ok(());
+    }
+
+    let entries: Vec<_> = fs::read_dir(directory)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let path = e.path();
+            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+        })
+        .collect();
+
+    if entries.is_empty() {
+        println!("No snapshots found in {}", directory.display());
+        return Ok(());
+    }
+
+    println!("Snapshots in {}:", directory.display());
+    println!("{:<30} {:<40} {}", "TIMESTAMP", "FILENAME", "FORMAT");
+    println!("{}", "-".repeat(90));
+
+    let mut snapshots: Vec<_> = entries.into_iter().collect();
+    snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
+
+    for entry in snapshots.iter().take(10) {
+        let filename = entry.file_name();
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+        let modified = entry.metadata()
+            .and_then(|m| m.modified())
+            .map(|t| {
+                let datetime: chrono::DateTime<chrono::Utc> = t.into();
+                datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+            })
+            .unwrap_or_else(|_| "unknown".to_string());
+
+        println!("{:<30} {:<40} {}", modified, filename.display(), ext);
+    }
+
+    Ok(())
+}
+
+/// Diff between recent snapshots
+fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
+    use std::fs;
+
+    if !directory.exists() {
+        println!("Snapshot directory does not exist: {}", directory.display());
+        return Ok(());
+    }
+
+    let entries: Vec<_> = fs::read_dir(directory)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let path = e.path();
+            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+        })
+        .collect();
+
+    if entries.len() < 2 {
+        println!("Need at least 2 snapshots to diff, found {}", entries.len());
+        return Ok(());
+    }
+
+    let mut snapshots: Vec<_> = entries.into_iter().collect();
+    snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
+
+    let first = snapshots.first().unwrap();
+    let second = snapshots.get(count - 1).unwrap_or(snapshots.get(1).unwrap());
+
+    let content1 = std::fs::read_to_string(first.path())?;
+    let content2 = std::fs::read_to_string(second.path())?;
+
+    let diff = similar::TextDiff::from_lines(&content1, &content2);
+
+    println!("Diff between {} and {}", first.file_name().display(), second.file_name().display());
+    for change in diff.iter_all_changes() {
+        print!("{}", change);
+    }
+
+    Ok(())
+}
+
+/// Prune old snapshots
+fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
+    use std::fs;
+
+    if !directory.exists() {
+        println!("Snapshot directory does not exist: {}", directory.display());
+        return Ok(());
+    }
+
+    // Parse duration (e.g., "30d" -> 30 days)
+    let days = older_than.trim_end_matches('d')
+        .trim_end_matches('D')
+        .parse::<u64>()
+        .unwrap_or(30);
+
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
+
+    let entries: Vec<_> = fs::read_dir(directory)?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let path = e.path();
+            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+        })
+        .collect();
+
+    let mut removed_count = 0;
+    for entry in entries {
+        if let Ok(metadata) = entry.metadata() {
+            if let Ok(modified) = metadata.modified() {
+                if modified < cutoff {
+                    println!("Removing: {}", entry.file_name().display());
+                    let _ = fs::remove_file(entry.path());
+                    removed_count += 1;
+                }
+            }
+        }
+    }
+
+    println!("Pruned {} snapshot(s) older than {} days", removed_count, days);
     Ok(())
 }
