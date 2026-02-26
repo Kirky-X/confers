@@ -81,18 +81,23 @@ fn generate_load_method(
         .map(|(_, _, f)| {
             let env_name = f.effective_env_name(env_prefix);
             let config_key = f.effective_name();
-            
+
             // Handle _FILE suffix for secrets
             if f.is_sensitive_effective() {
                 let file_env_name = format!("{}_FILE", env_name);
                 quote! {
                     // Check for _FILE suffix first (Docker/K8s secrets pattern)
+                    // Security: validate path to prevent directory traversal
                     if let Ok(file_path) = std::env::var(#file_env_name) {
-                        if let Ok(content) = std::fs::read_to_string(&file_path) {
-                            let val = content.trim().to_string();
-                            builder = builder.memory(std::collections::HashMap::from([
-                                (#config_key.to_string(), confers::ConfigValue::string(val)),
-                            ]));
+                        let path = std::path::Path::new(&file_path);
+                        // Reject paths with parent directory references (directory traversal)
+                        if !file_path.contains("..") && !file_path.starts_with('/') {
+                            if let Ok(content) = std::fs::read_to_string(path) {
+                                let val = content.trim().to_string();
+                                builder = builder.memory(std::collections::HashMap::from([
+                                    (#config_key.to_string(), confers::ConfigValue::string(val)),
+                                ]));
+                            }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
                         builder = builder.memory(std::collections::HashMap::from([
@@ -174,18 +179,23 @@ fn generate_load_sync_method(
         .map(|(_ident, _ty, f)| {
             let env_name = f.effective_env_name(env_prefix);
             let config_key = f.effective_name();
-            
+
             // Handle _FILE suffix for secrets
             if f.is_sensitive_effective() {
                 let file_env_name = format!("{}_FILE", env_name);
                 quote! {
                     // Check for _FILE suffix first (Docker/K8s secrets pattern)
+                    // Security: validate path to prevent directory traversal
                     if let Ok(file_path) = std::env::var(#file_env_name) {
-                        if let Ok(content) = std::fs::read_to_string(&file_path) {
-                            let val = content.trim().to_string();
-                            builder = builder.memory(std::collections::HashMap::from([
-                                (#config_key.to_string(), confers::ConfigValue::string(val)),
-                            ]));
+                        let path = std::path::Path::new(&file_path);
+                        // Reject paths with parent directory references (directory traversal)
+                        if !file_path.contains("..") && !file_path.starts_with('/') {
+                            if let Ok(content) = std::fs::read_to_string(path) {
+                                let val = content.trim().to_string();
+                                builder = builder.memory(std::collections::HashMap::from([
+                                    (#config_key.to_string(), confers::ConfigValue::string(val)),
+                                ]));
+                            }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
                         builder = builder.memory(std::collections::HashMap::from([
