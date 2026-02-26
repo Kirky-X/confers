@@ -12,13 +12,13 @@
 //! let upload_limit = ContextAwareField::new(100 * 1024 * 1024)
 //!     .when(
 //!         |ctx| ctx.attributes().get("plan") == Some(&ContextValue::String("enterprise".into())),
-//!         10 * 1024 * 1024 * 1024
+//!         10i64 * 1024 * 1024 * 1024
 //!     );
 //!
 //! let ctx = EvaluationContext::new()
 //!     .attr("plan", "enterprise");
 //!
-//! assert_eq!(upload_limit.evaluate(&ctx), &(10 * 1024 * 1024 * 1024));
+//! assert_eq!(upload_limit.evaluate(&ctx), &(10i64 * 1024 * 1024 * 1024));
 //! ```
 
 use std::collections::HashMap;

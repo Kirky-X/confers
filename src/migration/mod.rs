@@ -16,7 +16,7 @@
 //!
 //! ```rust
 //! use confers::migration::{MigrationRegistry, Versioned};
-//! use confers::value::AnnotatedValue;
+//! use confers::value::{AnnotatedValue, ConfigValue, SourceId};
 //!
 //! // Define versioned configs
 //! struct ConfigV1;
@@ -24,6 +24,13 @@
 //!
 //! impl Versioned for ConfigV1 { const VERSION: u32 = 1; }
 //! impl Versioned for ConfigV2 { const VERSION: u32 = 2; }
+//!
+//! // Create a test value
+//! let value = AnnotatedValue::new(
+//!     ConfigValue::null(),
+//!     SourceId::new("test"),
+//!     "test"
+//! );
 //!
 //! // Create registry and register migrations
 //! let mut registry = MigrationRegistry::new();
@@ -130,11 +137,11 @@ impl MigrationRegistry {
     /// # Example
     ///
     /// ```rust
-    /// use confers::migration::MigrationRegistry;
+    /// use confers::migration::{MigrationRegistry, MigrationFn};
     /// use std::collections::HashMap;
     ///
-    /// let mut migrations = HashMap::new();
-    /// migrations.insert((1, 2), |v| Ok(v));
+    /// let mut migrations: HashMap<(u32, u32), MigrationFn> = HashMap::new();
+    /// migrations.insert((1, 2), Box::new(|v| Ok(v)));
     ///
     /// let registry = MigrationRegistry::with_migrations(migrations);
     /// ```
@@ -304,7 +311,7 @@ impl MigrationRegistry {
     /// registry.register(1, 2, |mut v| { v.version = 2; Ok(v) });
     /// registry.precompute_paths();
     ///
-    /// let value = AnnotatedValue::new(ConfigValue::new("test"), SourceId::Memory, "test");
+    /// let value = AnnotatedValue::new(ConfigValue::null(), SourceId::new("test"), "test");
     /// let result = registry.migrate(value, 1, 2);
     /// assert!(result.is_ok());
     /// ```

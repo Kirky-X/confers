@@ -338,9 +338,13 @@ where
     ///
     /// Returns a receiver for configuration updates and a guard for the watcher.
     ///
-    /// The watcher will monitor all file sources and automatically reload
-    /// configuration when any file changes. Updates are sent through the
-    /// watch channel receiver.
+    /// The watcher will monitor all file sources and detect file changes.
+    /// **Note**: This is a partial implementation. Due to ownership constraints,
+    /// automatic configuration rebuild is not supported. When file changes are detected,
+    /// a warning is logged and users must manually call `build()` to reload configuration.
+    ///
+    /// For full hot reload support, consider using the `watch` feature with
+    /// `FsWatcher` or `MultiFsWatcher` directly.
     ///
     /// # Example
     ///
