@@ -1,0 +1,22 @@
+[package]
+name = "confers-macros"
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.81"
+description = "Procedural macros for confers configuration library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/confers-rs/confers"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# Macro utilities
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+darling = "0.20"
+
+[dev-dependencies]
+confers = { path = ".." }
+trybuild = "1"

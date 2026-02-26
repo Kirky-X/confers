@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  consul:
+    image: consul:1.15
+    container_name: confers-consul-test
+    ports:
+      - "8500:8500"
+    command: agent -server -ui -bootstrap-expect=1 -client=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8500/v1/status/leader"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.5.9
+    container_name: confers-etcd-test
+    ports:
+      - "2379:2379"
+    command: etcd --data-dir=/etcd --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://localhost:2379
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2379/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
