@@ -12,7 +12,10 @@ mod parse;
 mod codegen;
 
 use parse::{StructAttrs, FieldAttrs};
-use codegen::{generate_defaults_impl, generate_load_impl, generate_validate_impl};
+use codegen::{
+    generate_defaults_impl, generate_load_impl, generate_validate_impl,
+    generate_schema_impl, generate_migration_impl, generate_modules_impl, generate_clap_impl
+};
 use darling::FromField;
 
 /// Derive macro for configuration loading.
@@ -61,11 +64,56 @@ use darling::FromField;
 /// - `skip` - Skip this field during loading
 /// - `interpolate = true` - Enable `${VAR:default}` interpolation
 /// - `dynamic` - Generate DynamicField handle
+/// - `module_group = "group"` - Assign field to a config module group
 #[proc_macro_derive(Config, attributes(config))]
 pub fn config_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     match impl_config_derive(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Derive macro for generating JSON Schema.
+#[proc_macro_derive(ConfigSchema, attributes(config))]
+pub fn config_schema_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match impl_config_schema_derive(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Derive macro for generating migration support.
+#[proc_macro_derive(ConfigMigration, attributes(config))]
+pub fn config_migration_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match impl_config_migration_derive(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Derive macro for generating module registry.
+#[proc_macro_derive(ConfigModules, attributes(config))]
+pub fn config_modules_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match impl_config_modules_derive(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Derive macro for generating CLI arguments.
+#[proc_macro_derive(ConfigClap, attributes(config))]
+pub fn config_clap_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match impl_config_clap_derive(&input) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -109,5 +157,97 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
         #defaults_impl
         #load_impl
         #validate_impl
+    })
+}
+
+fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let struct_attrs = StructAttrs::from_derive_input(input)
+        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+
+    let struct_ident = &input.ident;
+
+    let fields = match &input.data {
+        Data::Struct(data) => &data.fields,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "ConfigSchema can only be derived for named structs",
+            ))
+        }
+    };
+
+    let schema_impl = generate_schema_impl(struct_ident, &struct_attrs, fields);
+
+    Ok(quote! {
+        #schema_impl
+    })
+}
+
+fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let struct_attrs = StructAttrs::from_derive_input(input)
+        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+
+    let struct_ident = &input.ident;
+
+    let fields = match &input.data {
+        Data::Struct(data) => &data.fields,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "ConfigMigration can only be derived for named structs",
+            ))
+        }
+    };
+
+    let migration_impl = generate_migration_impl(struct_ident, &struct_attrs, fields);
+
+    Ok(quote! {
+        #migration_impl
+    })
+}
+
+fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let struct_attrs = StructAttrs::from_derive_input(input)
+        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+
+    let struct_ident = &input.ident;
+
+    let fields = match &input.data {
+        Data::Struct(data) => &data.fields,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "ConfigModules can only be derived for named structs",
+            ))
+        }
+    };
+
+    let modules_impl = generate_modules_impl(struct_ident, &struct_attrs, fields);
+
+    Ok(quote! {
+        #modules_impl
+    })
+}
+
+fn impl_config_clap_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let struct_attrs = StructAttrs::from_derive_input(input)
+        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+
+    let struct_ident = &input.ident;
+
+    let fields = match &input.data {
+        Data::Struct(data) => &data.fields,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "ConfigClap can only be derived for named structs",
+            ))
+        }
+    };
+
+    let clap_impl = generate_clap_impl(struct_ident, &struct_attrs, fields);
+
+    Ok(quote! {
+        #clap_impl
     })
 }

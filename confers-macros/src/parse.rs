@@ -110,6 +110,9 @@ pub struct FieldAttrs {
     /// Whether to generate a DynamicField handle
     #[darling(default)]
     pub dynamic: bool,
+
+    /// Module group for this field (config groups)
+    pub module_group: Option<String>,
 }
 
 impl FieldAttrs {
