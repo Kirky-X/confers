@@ -118,6 +118,7 @@ fn main() -> Result<()> {
 }
 
 /// Inspect configuration - list all keys with their sources
+#[allow(dead_code)]
 fn cmd_inspect(
     config_paths: &[PathBuf],
     _env_file: &Option<PathBuf>,
@@ -274,6 +275,7 @@ fn format_value(value: &serde_json::Value) -> String {
 }
 
 /// Validate configuration against schema
+#[allow(dead_code)]
 fn cmd_validate(
     config_paths: &[PathBuf],
     _env_file: &Option<PathBuf>,
@@ -381,6 +383,7 @@ fn check_types(obj: &serde_json::Map<String, serde_json::Value>, issues: &mut Ve
 }
 
 /// Export merged configuration (sanitized)
+#[allow(dead_code)]
 fn cmd_export(
     config_paths: &[PathBuf],
     _env_file: &Option<PathBuf>,

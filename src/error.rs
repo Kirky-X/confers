@@ -8,7 +8,24 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use thiserror::Error;
+
+// Precompiled regex patterns for sanitization (avoid recompiling on each call)
+/// Regex pattern for matching file paths (Unix and Windows style)
+static PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"/[a-zA-Z0-9_\-./]+|[a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+").unwrap()
+});
+
+/// Regex pattern for matching IP addresses
+static IP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap()
+});
+
+/// Regex pattern for matching potential key material (long hex strings)
+static HEX_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap()
+});
 
 /// Precise location of a parse error in source file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -443,13 +460,10 @@ impl ConfigError {
 
 /// Sanitize an error message by removing sensitive data.
 fn sanitize_error_message(msg: &str) -> String {
-    use regex::Regex;
-
     let mut result = msg.to_string();
 
-    // Remove potential file paths (Unix and Windows style)
-    let path_re = Regex::new(r"/[a-zA-Z0-9_\-./]+|[a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+").unwrap();
-    result = path_re.replace_all(&result, |caps: &regex::Captures| {
+    // Remove potential file paths (Unix and Windows style) using precompiled regex
+    result = PATH_RE.replace_all(&result, |caps: &regex::Captures| {
         let full_path = &caps[0];
         // Keep only the filename for debugging
         if let Some(filename) = full_path.split('/').next_back().or_else(|| full_path.split('\\').next_back()) {
@@ -459,13 +473,11 @@ fn sanitize_error_message(msg: &str) -> String {
         }
     }).to_string();
 
-    // Remove potential IP addresses
-    let ip_re = Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap();
-    result = ip_re.replace_all(&result, "<ip>").to_string();
+    // Remove potential IP addresses using precompiled regex
+    result = IP_RE.replace_all(&result, "<ip>").to_string();
 
-    // Remove potential key material (long hex strings)
-    let hex_re = Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap();
-    result = hex_re.replace_all(&result, "<redacted>").to_string();
+    // Remove potential key material (long hex strings) using precompiled regex
+    result = HEX_RE.replace_all(&result, "<redacted>").to_string();
 
     result
 }

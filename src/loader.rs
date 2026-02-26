@@ -279,7 +279,7 @@ pub fn parse_ini(content: &str, source: SourceId, path: Option<&Path>) -> Config
     }
 
     // Log warnings for invalid lines if any were found
-    if !invalid_lines.is_empty() && !invalid_lines.is_empty() {
+    if !invalid_lines.is_empty() {
         tracing::warn!(
             "INI parsing found {} potentially invalid line(s) in {:?}: {:?}",
             invalid_lines.len(),

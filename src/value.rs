@@ -10,6 +10,9 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+// Re-export MergeStrategy from merger module to avoid breaking existing code
+pub use crate::merger::MergeStrategy;
+
 /// Source identifier for tracking where a value came from.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SourceId(Arc<str>);
@@ -692,51 +695,33 @@ impl AnnotatedValue {
         self.inner.is_array()
     }
 
-    /// Get all configuration paths from this value.
+    /// Get all configuration paths from this value (including self).
     pub fn all_paths(&self) -> Vec<Arc<str>> {
-        let mut paths = vec![self.path.clone()];
-        let mut stack: Vec<&ConfigValue> = vec![&self.inner];
-        let mut path_stack: Vec<Arc<str>> = vec![self.path.clone()];
-
-        // Iterative traversal using explicit stack to avoid stack overflow
-        while let Some(value) = stack.pop() {
-            let current_path = path_stack.pop().unwrap_or_else(|| self.path.clone());
-
-            match value {
-                ConfigValue::Map(map) => {
-                    for (key, val) in map.iter() {
-                        let new_path = if current_path.is_empty() {
-                            key.clone()
-                        } else {
-                            let s = format!("{}.{}", current_path, key);
-                            Arc::from(s.as_str())
-                        };
-                        paths.push(new_path.clone());
-                        stack.push(&val.inner);
-                        path_stack.push(new_path);
-                    }
-                }
-                ConfigValue::Array(arr) => {
-                    for (i, val) in arr.iter().enumerate() {
-                        let new_path: Arc<str> = Arc::from(format!("{}.{}", current_path, i));
-                        paths.push(new_path.clone());
-                        stack.push(&val.inner);
-                        path_stack.push(new_path);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        paths
+        self.all_paths_internal(true)
     }
 
     /// Get all paths including this value (legacy method for compatibility).
+    #[deprecated(since = "0.3.0", note = "Use all_paths() instead - this method is identical")]
     pub fn all_paths_including_self(&self) -> Vec<Arc<str>> {
-        let mut paths = vec![self.path.clone()];
-        let mut stack: Vec<&ConfigValue> = vec![&self.inner];
-        let mut path_stack: Vec<Arc<str>> = vec![self.path.clone()];
+        self.all_paths_internal(true)
+    }
 
+    /// Internal implementation for all_paths methods.
+    ///
+    /// # Arguments
+    /// * `include_self` - If true, includes the current path in the result
+    fn all_paths_internal(&self, include_self: bool) -> Vec<Arc<str>> {
+        let mut paths = if include_self {
+            vec![self.path.clone()]
+        } else {
+            Vec::new()
+        };
+        let mut stack: Vec<&ConfigValue> = vec![&self.inner];
+        // Start traversal from inner value with current path
+        let start_path = if include_self { self.path.clone() } else { self.path.clone() };
+        let mut path_stack: Vec<Arc<str>> = vec![start_path];
+
+        // Iterative traversal using explicit stack to avoid stack overflow
         while let Some(value) = stack.pop() {
             let current_path = path_stack.pop().unwrap_or_else(|| self.path.clone());
 
@@ -849,29 +834,6 @@ pub enum SerializeMode {
     Redacted,
     /// Show all values (debug only)
     Full,
-}
-
-/// Merge strategy for combining configuration values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MergeStrategy {
-    /// Replace the existing value
-    Replace,
-    /// Join arrays (extend)
-    Join,
-    /// Prepend to arrays
-    Prepend,
-    /// Append to arrays
-    Append,
-    /// Join arrays without duplicates
-    JoinAppend,
-    /// Deep merge maps recursively
-    DeepMerge,
-}
-
-impl Default for MergeStrategy {
-    fn default() -> Self {
-        Self::Replace
-    }
 }
 
 /// Winner of a merge conflict.
