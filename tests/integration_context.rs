@@ -3,6 +3,8 @@
 //! These tests verify the context-aware configuration feature described in
 //! dev-v2.md Section 3.10 (lines 902-992).
 
+#![cfg(feature = "context-aware")]
+
 use confers::context::{ContextAwareField, ContextValue, EvaluationContext};
 
 /// Test that EvaluationContext can be created with default values

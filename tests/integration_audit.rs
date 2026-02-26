@@ -1,5 +1,7 @@
 //! Integration tests for the Audit module.
 
+#![cfg(feature = "audit")]
+
 #[cfg(test)]
 mod tests {
     use confers::audit::{AuditConfig, AuditEvent, AuditLevel, AuditWriter};
