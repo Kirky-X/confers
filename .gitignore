@@ -1,1 +1,38 @@
+# Build artifacts
 /target
+/debug
+/release
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Cargo
+.cargo/
+Cargo.lock
+
+# Environment
+.env
+.env.local
+
+# Test
+coverage/
+*.profraw
+
+# Docs build
+docs/_book/
+docs/site/
+
+# Examples build
+examples/target/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
