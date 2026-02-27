@@ -266,9 +266,8 @@ mod tests {
     #[tokio::test]
     async fn test_canary_reload_healthy() {
         struct HealthyCheck;
-        #[async_trait]
         impl ReloadHealthCheck for HealthyCheck {
-            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+            fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
                 HealthStatus::Healthy
             }
         }
@@ -290,9 +289,8 @@ mod tests {
     #[tokio::test]
     async fn test_canary_reload_critical_rollback() {
         struct CriticalCheck;
-        #[async_trait]
         impl ReloadHealthCheck for CriticalCheck {
-            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+            fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
                 HealthStatus::Critical {
                     reason: "service unhealthy".to_string(),
                 }

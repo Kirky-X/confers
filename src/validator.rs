@@ -7,7 +7,7 @@
 //!
 //! Add `#[config(validate)]` to your struct and use garde's validation attributes:
 //!
-//! ```ignore
+//! ```rust
 //! use confers::Config;
 //! use garde::Validate;
 //! use serde::Deserialize;
@@ -64,14 +64,14 @@ impl ValidationRule {
     /// Parse a validation rule from a string.
     pub fn from_str(s: &str) -> Option<Self> {
         let s = s.trim();
-        
+
         // Check for length rules
         if s.starts_with("length(") && s.ends_with(')') {
-            let inner = &s[7..s.len()-1];
+            let inner = &s[7..s.len() - 1];
             let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
             let mut min = 0;
             let mut max = usize::MAX;
-            
+
             for part in parts {
                 if part.starts_with("min=") {
                     min = part[4..].parse().ok()?;
@@ -79,17 +79,17 @@ impl ValidationRule {
                     max = part[4..].parse().ok()?;
                 }
             }
-            
+
             return Some(Self::Length { min, max });
         }
-        
+
         // Check for range rules
         if s.starts_with("range(") && s.ends_with(')') {
-            let inner = &s[6..s.len()-1];
+            let inner = &s[6..s.len() - 1];
             let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
             let mut min = i64::MIN;
             let mut max = i64::MAX;
-            
+
             for part in parts {
                 if part.starts_with("min=") {
                     min = part[4..].parse().ok()?;
@@ -97,10 +97,10 @@ impl ValidationRule {
                     max = part[4..].parse().ok()?;
                 }
             }
-            
+
             return Some(Self::Range { min, max });
         }
-        
+
         // Check for simple rules
         match s {
             "email" => Some(Self::Email),
@@ -115,10 +115,10 @@ impl ValidationRule {
 #[cfg(not(feature = "validation"))]
 pub mod no_validation {
     //! Placeholder module when validation feature is disabled.
-    
+
     /// Placeholder trait for Validate when validation is disabled.
     pub trait Validate {}
-    
+
     /// Placeholder for validation result.
     pub type ValidationResult = Result<(), ()>;
 }
@@ -133,11 +133,17 @@ mod tests {
     #[test]
     fn test_validation_rule_parse() {
         let rule = ValidationRule::from_str("length(min=1, max=100)");
-        assert!(matches!(rule, Some(ValidationRule::Length { min: 1, max: 100 })));
-        
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Length { min: 1, max: 100 })
+        ));
+
         let rule = ValidationRule::from_str("range(min=1, max=65535)");
-        assert!(matches!(rule, Some(ValidationRule::Range { min: 1, max: 65535 })));
-        
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Range { min: 1, max: 65535 })
+        ));
+
         let rule = ValidationRule::from_str("email");
         assert!(matches!(rule, Some(ValidationRule::Email)));
     }

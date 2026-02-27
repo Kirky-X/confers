@@ -37,14 +37,18 @@ impl FsWatcher {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use confers::watcher::fs_watcher::FsWatcher;
+    /// ```rust
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::watcher::fs_watcher::FsWatcher;
     ///
-    /// let watcher = FsWatcher::new("./config.toml", 200).await?;
+    ///     let mut watcher = FsWatcher::new("./config.toml", 200).await?;
     ///
-    /// // Wait for file changes
-    /// while let Some(path) = watcher.recv().await {
-    ///     println!("File changed: {:?}", path);
+    ///     // Wait for file changes
+    ///     while let Some(path) = watcher.recv().await {
+    ///         println!("File changed: {:?}", path);
+    ///     }
+    ///
+    ///     Ok(())
     /// }
     /// ```
     pub async fn new(path: impl AsRef<Path>, debounce_ms: u64) -> ConfigResult<Self> {
@@ -202,14 +206,18 @@ impl MultiFsWatcher {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use confers::watcher::fs_watcher::MultiFsWatcher;
+    /// ```rust
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use confers::watcher::fs_watcher::MultiFsWatcher;
     ///
-    /// let paths = vec!["./config.toml", "./config.prod.toml"];
-    /// let watcher = MultiFsWatcher::new(paths, 200).await?;
+    ///     let paths = vec!["./config.toml", "./config.prod.toml"];
+    ///     let mut watcher = MultiFsWatcher::new(paths, 200).await?;
     ///
-    /// while let Some(path) = watcher.recv().await {
-    ///     println!("File changed: {:?}", path);
+    ///     while let Some(path) = watcher.recv().await {
+    ///         println!("File changed: {:?}", path);
+    ///     }
+    ///
+    ///     Ok(())
     /// }
     /// ```
     pub async fn new(paths: impl IntoIterator<Item = impl AsRef<Path>>, debounce_ms: u64) -> ConfigResult<Self> {

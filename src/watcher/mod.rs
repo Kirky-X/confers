@@ -98,13 +98,18 @@ impl WatcherGuard {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// let (rx, guard) = AppConfig::load_with_watcher().await?;
+    /// ```rust
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     use std::time::Duration;
+    ///     use confers::watcher::WatcherGuard;
     ///
-    /// // ... use configuration ...
+    ///     // Create a guard and shutdown after timeout
+    ///     let guard = WatcherGuard::new();
+    ///     let result = guard.shutdown(Duration::from_secs(5)).await?;
+    ///     assert!(result);
     ///
-    /// // Explicit shutdown
-    /// guard.shutdown(std::time::Duration::from_secs(5))?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn shutdown(&self, _timeout: Duration) -> Result<bool, anyhow::Error> {
         self.stop();

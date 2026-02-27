@@ -348,26 +348,30 @@ where
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
     /// use confers::ConfigBuilder;
+    /// use confers::Config;
+    /// use serde::Deserialize;
     ///
-    /// let builder = ConfigBuilder::<MyConfig>::new()
-    ///     .file("config.toml")
-    ///     .env();
+    /// #[derive(Debug, Config, Deserialize)]
+    /// struct MyConfig {
+    ///     host: String,
+    ///     port: u16,
+    /// }
     ///
-    /// let (mut rx, guard) = builder.build_with_watcher().await?;
+    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let builder = ConfigBuilder::<MyConfig>::new()
+    ///         .file("config.toml")
+    ///         .env();
     ///
-    /// // Get initial config
-    /// let config = rx.borrow().clone();
+    ///     let (mut rx, _guard) = builder.build_with_watcher().await?;
     ///
-    /// // Wait for updates
-    /// tokio::spawn(async move {
-    ///     loop {
-    ///         rx.changed().await.unwrap();
-    ///         let new_config = rx.borrow().clone();
-    ///         println!("Config updated!");
-    ///     }
-    /// });
+    ///     // Get initial config
+    ///     let config = rx.borrow().clone();
+    ///     println!("Config loaded: {:?}", config);
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     #[cfg(feature = "watch")]
     pub async fn build_with_watcher(

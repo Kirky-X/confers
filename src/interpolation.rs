@@ -18,16 +18,23 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! # Example
+//!
+//! ```rust
 //! use confers::interpolation::interpolate;
 //!
-//! // With HOST=localhost
-//! let result = interpolate("Server: ${HOST}", &|k| std::env::var(k).ok())?;
-//! assert_eq!(result, "Server: localhost");
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // With HOST=localhost (set env var for test)
+//!     std::env::set_var("HOST", "localhost");
+//!     let result = interpolate("Server: ${HOST}", &|k| std::env::var(k).ok())?;
+//!     assert_eq!(result, "Server: localhost");
 //!
-//! // With default value
-//! let result = interpolate("Port: ${PORT:8080}", &|k| std::env::var(k).ok())?;
-//! assert_eq!(result, "Port: 8080");
+//!     // With default value
+//!     let result = interpolate("Port: ${PORT:8080}", &|k| std::env::var(k).ok())?;
+//!     assert_eq!(result, "Port: 8080");
+//!
+//!     Ok(())
+//! }
 //! ```
 
 use std::collections::{HashMap, HashSet};
@@ -247,7 +254,14 @@ where
 {
     let mut ref_vars = None;
     let mut sens_refs = None;
-    interpolate_inner_impl(template, resolver, visited, &mut ref_vars, &mut sens_refs, false)
+    interpolate_inner_impl(
+        template,
+        resolver,
+        visited,
+        &mut ref_vars,
+        &mut sens_refs,
+        false,
+    )
 }
 
 /// Inner interpolation function with cycle detection and tracking.
@@ -442,7 +456,8 @@ impl InterpolationContext {
     /// Record an interpolation for a field.
     pub fn record(&mut self, field_name: &str, result: &InterpolationResult) {
         // Track all referenced variables
-        self.all_referenced.extend(result.referenced_vars.iter().cloned());
+        self.all_referenced
+            .extend(result.referenced_vars.iter().cloned());
 
         // Track sensitive references
         if result.is_sensitive {
@@ -710,7 +725,7 @@ mod tests {
         let config = InterpolationConfig::new()
             .with_sensitive_var("API_KEY")
             .with_sensitive_var("DB_PASSWORD");
-        
+
         assert!(config.is_sensitive("API_KEY"));
         assert!(config.is_sensitive("DB_PASSWORD"));
         assert!(!config.is_sensitive("HOST"));
