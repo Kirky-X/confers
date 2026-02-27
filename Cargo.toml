@@ -5,45 +5,90 @@ edition = "2021"
 rust-version = "1.81"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT OR Apache-2.0"
+authors = ["Kirky <Kirky-X@outlook.com>"]
+repository = "https://github.com/Kirky-X/confers"
+homepage = "https://github.com/Kirky-X/confers"
+documentation = "https://docs.rs/confers"
+keywords = ["config", "configuration", "settings", "env"]
+categories = ["config", "development-tools::build-tools"]
 
 [dependencies]
-arc-swap = { version = "1.8.2", optional = true }
-async-trait = { version = "0.1.89", optional = true }
-base64 = "0.22.1"
-chacha20poly1305 = { version = "0.10.1", optional = true }
-chrono = { version = "0.4.44", optional = true, features = ["serde"] }
-clap = { version = "4.5.60", features = ["derive", "env"], optional = true }
-compact_str = { version = "0.9.0", features = ["serde"] }
+arc-swap = { version = "1.8", optional = true }
+async-trait = { version = "0.1", optional = true }
+base64 = "0.22"
+chacha20poly1305 = { version = "0.10", optional = true }
+chrono = { version = "0.4", optional = true, features = ["serde"] }
+clap = { version = "4.5", features = ["derive", "env"], optional = true }
+compact_str = { version = "0.9", features = ["serde"] }
 confers-macros = { version = "0.3.0", path = "confers-macros" }
-dashmap = { version = "6.1.0", optional = true }
-garde = { version = "0.22.0", optional = true, features = ["derive", "email", "url", "regex"] }
-futures-util = { version = "0.3.31", optional = true }
-hkdf = { version = "0.12.4", optional = true }
-indexmap = { version = "2.11.4", features = ["serde"] }
-metrics = { version = "0.24.3", optional = true }
-notify-debouncer-full = { version = "0.6.0", optional = true }
-reqwest = { version = "0.13.2", features = ["json", "rustls"], optional = true }
-schemars = { version = "1.2.1", optional = true }
-secrecy = { version = "0.10.3", features = ["serde"], optional = true }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.149", optional = true }
-serde_yaml_ng = { version = "0.10.0", optional = true }
-sha2 = { version = "0.10.9", optional = true }
-thiserror = "2.0.18"
-regex = "1.11.1"
+dashmap = { version = "6.1", optional = true }
+garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
+futures-util = { version = "0.3", optional = true }
+hkdf = { version = "0.12", optional = true }
+indexmap = { version = "2.11", features = ["serde"] }
+metrics = { version = "0.24", optional = true }
+notify-debouncer-full = { version = "0.6", optional = true }
+reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
+schemars = { version = "1.2", optional = true }
+secrecy = { version = "0.10", features = ["serde"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+serde_yaml_ng = { version = "0.10", optional = true }
+sha2 = { version = "0.10", optional = true }
+thiserror = "2.0"
+regex = "1.11"
 anyhow = "1"
-tokio = { version = "1.49.0", features = ["rt", "sync", "time", "fs"], optional = true }
-toml = { version = "1.0.3", features = ["preserve_order"], optional = true }
-tracing = "0.1.44"
-zeroize = { version = "1.8.2", features = ["derive"], optional = true }
-tokio-stream = { version = "0.1.18", features = ["sync"], optional = true }
-etcd-client = { version = "0.18.0", features = ["tls"], optional = true }
+tokio = { version = "1", features = ["rt", "sync", "time", "fs"], optional = true }
+toml = { version = "1.0", features = ["preserve_order"], optional = true }
+tracing = "0.1"
+zeroize = { version = "1.8", features = ["derive"], optional = true }
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
+etcd-client = { version = "0.18", features = ["tls"], optional = true }
 consul-client = { version = "0.1.0-alpha.0", optional = true }
-redis = { version = "0.32.7", features = ["tokio-comp"], optional = true }
-url = "2.5.2"
+redis = { version = "0.32", features = ["tokio-comp"], optional = true }
+url = "2.5"
 
 [workspace]
-members = ["confers-macros", "confers-cli", "examples/full_stack"]
+members = ["confers-macros", "confers-cli", "examples"]
+resolver = "2"
+
+[workspace.package]
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.81"
+description = "Production-ready Rust configuration library with zero boilerplate"
+license = "MIT OR Apache-2.0"
+authors = ["Kirky <Kirky-X@outlook.com>"]
+repository = "https://github.com/Kirky-X/confers"
+homepage = "https://github.com/Kirky-X/confers"
+documentation = "https://docs.rs/confers"
+keywords = ["config", "configuration", "settings", "env"]
+categories = ["config", "development-tools::build-tools"]
+
+[workspace.dependencies]
+anyhow = "1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+compact_str = { version = "0.9", features = ["serde"] }
+darling = "0.20"
+indexmap = { version = "2.11", features = ["serde"] }
+proc-macro2 = "1"
+proptest = "1.8"
+quote = "1"
+regex = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml_ng = "0.10"
+similar = "2"
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+tempfile = "3.26"
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt", "sync", "time", "fs"] }
+toml = { version = "1.0", features = ["preserve_order"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+trybuild = "1"
 
 [features]
 default = ["toml", "json", "env"]
@@ -100,7 +145,22 @@ consul-client = ["dep:consul-client"]
 redis = ["dep:redis"]
 
 [dev-dependencies]
-criterion = { version = "0.7.0", features = ["async_tokio"] }
-proptest = "1.8.0"
-tempfile = "3.26.0"
-tokio = { version = "1.49.0", features = ["full", "test-util"] }
+criterion = { version = "0.7", features = ["async_tokio"] }
+proptest = "1.8"
+tempfile = "3.26"
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
+
+[profile.dev]
+opt-level = 0
+
+[profile.dev.package]
+confers = { opt-level = 2 }
