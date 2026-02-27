@@ -100,11 +100,9 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
         }
     }
 
-    /// Internal: Called when underlying configuration updates (atomic replacement).
-    #[allow(dead_code)]
-    pub(crate) fn update(&self, new_val: T) {
+    /// 更新值并触发所有回调
+    pub fn update(&self, new_val: T) {
         self.value.store(Arc::new(new_val.clone()));
-        // Call callbacks while holding the read lock to avoid use-after-free
         let new_val_ref = &new_val;
         self.callbacks.read().unwrap().values().for_each(|callback| {
             callback(new_val_ref);

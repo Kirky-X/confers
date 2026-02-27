@@ -1,0 +1,83 @@
+[package]
+name = "confers-examples"
+version = "0.1.0"
+edition = "2021"
+description = "Confers - Examples demonstrating all features of the configuration library"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "basic_usage"
+path = "src/examples/basic_usage.rs"
+
+[[bin]]
+name = "hot_reload"
+path = "src/examples/hot_reload.rs"
+
+[[bin]]
+name = "remote_consul"
+path = "src/examples/remote_consul.rs"
+
+[[bin]]
+name = "encryption"
+path = "src/examples/encryption.rs"
+
+[[bin]]
+name = "key_rotation"
+path = "src/examples/key_rotation.rs"
+
+[[bin]]
+name = "migration"
+path = "src/examples/migration.rs"
+
+[[bin]]
+name = "dynamic_fields"
+path = "src/examples/dynamic_fields.rs"
+
+[[bin]]
+name = "config_groups"
+path = "src/examples/config_groups.rs"
+
+[[bin]]
+name = "progressive_reload"
+path = "src/examples/progressive_reload.rs"
+
+[[bin]]
+name = "full_stack"
+path = "src/examples/full_stack.rs"
+
+[dependencies]
+confers = { path = "..", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+toml = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
+base64 = "0.22"
+anyhow = "1.0"
+indexmap = "2.0"
+
+[target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
+notify = "7.0"
+
+[features]
+default = []
+toml = ["confers/toml"]
+json = ["confers/json"]
+env = ["confers/env"]
+watch = ["confers/watch"]
+encryption = ["confers/encryption"]
+dynamic = ["confers/dynamic"]
+migration = ["confers/migration"]
+progressive-reload = ["confers/progressive-reload"]
+consul = ["confers/consul"]
+remote = ["confers/remote"]
+full = ["confers/full"]
+
+[profile.release]
+opt-level = 3
+lto = true

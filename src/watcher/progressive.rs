@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
-use async_trait::async_trait;
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::traits::ConfigProvider;
@@ -30,6 +29,7 @@ pub enum ReloadOutcome {
     RolledBack { reason: String },
 }
 
+/// Health check result
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HealthStatus {
     Healthy,
@@ -37,9 +37,9 @@ pub enum HealthStatus {
     Critical { reason: String },
 }
 
-#[async_trait]
+/// Reload health check trait - synchronous version for dyn compatibility
 pub trait ReloadHealthCheck: Send + Sync {
-    async fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
+    fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
 }
 
 pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
@@ -130,7 +130,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         while Instant::now() < deadline {
             tokio::time::sleep(poll_interval).await;
             if let Some(hc) = &self.health_check {
-                match hc.check(provider.clone()).await {
+                match hc.check(provider.clone()) {
                     HealthStatus::Critical { reason } => {
                         self.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack { reason });
@@ -160,7 +160,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         for step in 0..steps {
             tokio::time::sleep(interval).await;
             if let Some(hc) = &self.health_check {
-                match hc.check(provider.clone()).await {
+                match hc.check(provider.clone()) {
                     HealthStatus::Critical { reason } => {
                         self.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack {

@@ -1,0 +1,23 @@
+# 服务器配置
+[server]
+host = "127.0.0.1"
+port = 8080
+workers = 4
+
+# 数据库配置
+[database]
+url = "postgresql://localhost:5432/mydb"
+max_connections = 10
+connection_timeout = 30
+
+# 功能开关
+[features]
+enable_logging = true
+enable_metrics = false
+log_level = "info"
+
+# 应用元数据
+[app]
+name = "basic-usage-example"
+version = "1.0.0"
+environment = "development"

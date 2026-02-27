@@ -166,7 +166,10 @@ impl EtcdSource {
         // Get header with revision
         let header = get_response.header();
         let current_revision: i64 = match header {
-            Some(h) => h.revision() as i64,
+            Some(h) => {
+                let revision: i64 = h.revision();
+                revision
+            }
             None => 0,
         };
 
@@ -198,11 +201,11 @@ impl EtcdSource {
         let kvs = get_response.kvs();
         for kv in kvs.iter() {
             // Get key as bytes and convert to string
-            let key_bytes = kv.key();
+            let key_bytes: &[u8] = kv.key();
             let key = String::from_utf8_lossy(key_bytes).to_string();
 
             // Get value as bytes and convert to string
-            let value_bytes = kv.value();
+            let value_bytes: &[u8] = kv.value();
             let value = String::from_utf8_lossy(value_bytes).to_string();
 
             // Remove prefix from key

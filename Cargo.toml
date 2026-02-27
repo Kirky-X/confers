@@ -43,7 +43,7 @@ redis = { version = "0.32.7", features = ["tokio-comp"], optional = true }
 url = "2.5.2"
 
 [workspace]
-members = ["confers-macros", "confers-cli"]
+members = ["confers-macros", "confers-cli", "examples/full_stack"]
 
 [features]
 default = ["toml", "json", "env"]
