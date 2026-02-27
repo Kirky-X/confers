@@ -25,16 +25,3 @@ initial_ratio = 10
 step_ratio = 10
 interval_seconds = 5
 trial_duration_seconds = 10
-
-[reload.health_check]
-enabled = true
-error_threshold = 0.05
-latency_ms = 100
-check_timeout = 5
-failure_tolerance = 3
-
-[reload.rollback]
-enabled = true
-max_retries = 3
-preserve_failed_config = true
-rollback_timeout = 30

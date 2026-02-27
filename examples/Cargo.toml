@@ -1,12 +1,10 @@
 [package]
 name = "confers-examples"
 version = "0.1.0"
-edition = "2021"
-description = "Confers - Examples demonstrating all features of the configuration library"
-license = "MIT OR Apache-2.0"
+edition.workspace = true
+description.workspace = true
+license.workspace = true
 publish = false
-
-[workspace]
 
 [[bin]]
 name = "basic_usage"
@@ -50,16 +48,16 @@ path = "src/examples/full_stack.rs"
 
 [dependencies]
 confers = { path = "..", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
-tracing = "0.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-toml = "0.8"
+toml = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
-base64 = "0.22"
-anyhow = "1.0"
-indexmap = "2.0"
+base64 = { workspace = true }
+anyhow = { workspace = true }
+indexmap = { workspace = true }
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
 notify = "7.0"
@@ -77,7 +75,3 @@ progressive-reload = ["confers/progressive-reload"]
 consul = ["confers/consul"]
 remote = ["confers/remote"]
 full = ["confers/full"]
-
-[profile.release]
-opt-level = 3
-lto = true
