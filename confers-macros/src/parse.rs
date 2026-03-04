@@ -189,9 +189,10 @@ pub fn extract_inner_type(ty: &Type) -> Option<&Type> {
 }
 
 /// Merge strategy enum for code generation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[allow(dead_code)]
 pub enum MergeStrategyKind {
+    #[default]
     Replace,
     Join,
     Append,
@@ -211,12 +212,6 @@ impl MergeStrategyKind {
             "deep_merge" | "deepmerge" => Self::DeepMerge,
             _ => Self::Replace,
         }
-    }
-}
-
-impl Default for MergeStrategyKind {
-    fn default() -> Self {
-        Self::Replace
     }
 }
 

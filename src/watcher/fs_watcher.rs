@@ -139,9 +139,8 @@ impl FsWatcher {
                     }
                     Err(e) => {
                         tracing::error!("Failed to create debouncer: {:?}", e);
-                        return;
                     }
-                };
+                }
         });
 
         // Process events in async context

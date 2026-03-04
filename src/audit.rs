@@ -1,4 +1,5 @@
 #![cfg(feature = "audit")]
+#![allow(clippy::duplicated_attributes)]
 
 use chrono::{DateTime, Utc};
 

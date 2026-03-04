@@ -62,43 +62,46 @@ pub enum ValidationRule {
 #[cfg(feature = "validation")]
 impl ValidationRule {
     /// Parse a validation rule from a string.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         let s = s.trim();
 
         // Check for length rules
-        if s.starts_with("length(") && s.ends_with(')') {
-            let inner = &s[7..s.len() - 1];
-            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-            let mut min = 0;
-            let mut max = usize::MAX;
+        if let Some(inner) = s.strip_prefix("length(") {
+            if let Some(inner) = inner.strip_suffix(')') {
+                let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+                let mut min = 0;
+                let mut max = usize::MAX;
 
-            for part in parts {
-                if part.starts_with("min=") {
-                    min = part[4..].parse().ok()?;
-                } else if part.starts_with("max=") {
-                    max = part[4..].parse().ok()?;
+                for part in parts {
+                    if let Some(v) = part.strip_prefix("min=") {
+                        min = v.parse().ok()?;
+                    } else if let Some(v) = part.strip_prefix("max=") {
+                        max = v.parse().ok()?;
+                    }
                 }
-            }
 
-            return Some(Self::Length { min, max });
+                return Some(Self::Length { min, max });
+            }
         }
 
         // Check for range rules
-        if s.starts_with("range(") && s.ends_with(')') {
-            let inner = &s[6..s.len() - 1];
-            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-            let mut min = i64::MIN;
-            let mut max = i64::MAX;
+        if let Some(inner) = s.strip_prefix("range(") {
+            if let Some(inner) = inner.strip_suffix(')') {
+                let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+                let mut min = i64::MIN;
+                let mut max = i64::MAX;
 
-            for part in parts {
-                if part.starts_with("min=") {
-                    min = part[4..].parse().ok()?;
-                } else if part.starts_with("max=") {
-                    max = part[4..].parse().ok()?;
+                for part in parts {
+                    if let Some(v) = part.strip_prefix("min=") {
+                        min = v.parse().ok()?;
+                    } else if let Some(v) = part.strip_prefix("max=") {
+                        max = v.parse().ok()?;
+                    }
                 }
-            }
 
-            return Some(Self::Range { min, max });
+                return Some(Self::Range { min, max });
+            }
         }
 
         // Check for simple rules
