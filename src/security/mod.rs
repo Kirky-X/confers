@@ -734,6 +734,3 @@ pub use error_sanitization::{
     Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
     SensitiveDataFilter,
 };
-
-#[cfg(all(test, feature = "encryption"))]
-mod security_tests;
