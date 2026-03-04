@@ -144,8 +144,7 @@ impl std::fmt::Display for SourceLocation {
 }
 
 /// Core configuration value type.
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ConfigValue {
     /// Null value
     #[default]
@@ -451,7 +450,6 @@ impl ConfigValue {
         ConfigValue::Map(Arc::new(map))
     }
 }
-
 
 impl From<bool> for ConfigValue {
     fn from(b: bool) -> Self {

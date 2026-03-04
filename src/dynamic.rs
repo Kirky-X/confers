@@ -154,7 +154,6 @@ impl<T: Clone + Send + Sync + 'static> CallbackGuard<T> {
     /// This is useful when you want to manually manage the callback lifecycle
     /// but still benefit from RAII cleanup.
     pub fn into_id(self) -> CallbackId {
-        
         // Note: callbacks will be dropped, removing the entry
         self.id
     }

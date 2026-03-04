@@ -123,24 +123,24 @@ impl FsWatcher {
         // Spawn the debouncer in a blocking thread
         std::thread::spawn(move || {
             match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
-                    let _ = bridge_tx.send(result);
-                }) {
-                    Ok(mut d) => {
-                        if let Err(e) = d.watch(&path_owned, RecursiveMode::Recursive) {
-                            tracing::error!("Failed to watch path {:?}: {:?}", path_owned, e);
-                            return;
-                        }
-                        tracing::info!("FsWatcher watching: {:?}", path_owned);
-
-                        // Keep the thread alive to process events
-                        while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                            std::thread::sleep(Duration::from_millis(50));
-                        }
+                let _ = bridge_tx.send(result);
+            }) {
+                Ok(mut d) => {
+                    if let Err(e) = d.watch(&path_owned, RecursiveMode::Recursive) {
+                        tracing::error!("Failed to watch path {:?}: {:?}", path_owned, e);
+                        return;
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to create debouncer: {:?}", e);
+                    tracing::info!("FsWatcher watching: {:?}", path_owned);
+
+                    // Keep the thread alive to process events
+                    while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(50));
                     }
                 }
+                Err(e) => {
+                    tracing::error!("Failed to create debouncer: {:?}", e);
+                }
+            }
         });
 
         // Process events in async context
@@ -342,10 +342,9 @@ impl MultiFsWatcher {
                                 | EventKind::Modify(_)
                                 | EventKind::Remove(_) => {
                                     for event_path in &event.paths {
-                                        if event_path.is_file()
-                                            && paths.contains(event_path) {
-                                                let _ = tx.send(event_path.clone()).await;
-                                            }
+                                        if event_path.is_file() && paths.contains(event_path) {
+                                            let _ = tx.send(event_path.clone()).await;
+                                        }
                                     }
                                 }
                                 _ => {}

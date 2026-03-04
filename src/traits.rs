@@ -118,8 +118,7 @@ pub trait ConfigProviderExt: ConfigProvider {
 impl<T: ConfigProvider + ?Sized> ConfigProviderExt for T {}
 
 /// Caching policy for key providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KeyCachePolicy {
     /// Cache with time-to-live
     #[default]
@@ -129,7 +128,6 @@ pub enum KeyCachePolicy {
     /// Never cache
     Never,
 }
-
 
 /// Synchronous encryption key provider.
 ///

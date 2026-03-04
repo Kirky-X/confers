@@ -19,8 +19,7 @@ use super::limits::ConfigLimits;
 use super::source::Source;
 
 /// Reload strategy for hot reload.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub enum ReloadStrategy {
     /// Immediate reload (default).
     #[default]
@@ -40,7 +39,6 @@ pub enum ReloadStrategy {
         interval: Duration,
     },
 }
-
 
 /// Configuration for snapshots.
 #[derive(Debug, Clone)]

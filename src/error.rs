@@ -453,7 +453,8 @@ impl ConfigError {
 
         // Add source errors if present, but sanitize them
         match self {
-            ConfigError::ParseError { source, .. } | ConfigError::MigrationFailed { source, .. } => {
+            ConfigError::ParseError { source, .. }
+            | ConfigError::MigrationFailed { source, .. } => {
                 if let Some(e) = source {
                     chain.push(sanitize_error_message(&e.to_string()));
                 }
