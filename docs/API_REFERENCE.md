@@ -79,27 +79,52 @@ confers 提供了灵活的特性配置，允许用户根据需求选择需要的
 
 | 预设 | 特性 | 使用场景 |
 |------|------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 仅配置加载（最小依赖） |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
-| <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有特性 | 完整功能集 |
+| <span style="color:#166534">minimal</span> | `env` | 最小依赖（仅环境变量） |
+| <span style="color:#1E40AF">recommended</span> | `toml` + `env` + `validation` | 推荐大多数应用 |
+| <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `profile` + `watch` + `migration` + `snapshot` + `dynamic` | 开发配置 |
+| <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `profile` + `metrics` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | 生产配置 |
+| <span style="color:#5B21B6">full</span> | 所有特性 | 完整功能集 |
 
 **单独特性：**
 
 | 特性 | 描述 | 默认 |
 |------|------|------|
-| `derive` | 配置结构体的 derive 宏 | ✅ |
-| `validation` | 配置验证支持 | ✅ |
-| `cli` | 命令行工具 | ❌ |
-| `watch` | 文件监控和热重载 | ❌ |
-| `audit` | 审计日志 | ❌ |
+| **格式支持** |||
+| `toml` | TOML 格式支持 | ✅ |
+| `json` | JSON 格式支持 | ✅ |
+| `yaml` | YAML 格式支持 | ❌ |
+| `ini` | INI 格式支持 | ❌ |
+| `env` | 环境变量支持 | ✅ |
+| **核心功能** |||
+| `validation` | 配置验证 (garde) | ✅ |
+| `watch` | 文件监控与热重载 | ❌ |
+| `encryption` | XChaCha20 加密 | ❌ |
+| `cli` | 命令行集成 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
+| `typescript-schema` | TypeScript 类型生成 | ❌ |
 | `parallel` | 并行验证 | ❌ |
-| `monitoring` | 系统监控 | ❌ |
-| `remote` | 远程配置（etcd、consul、http、vault） | ❌ |
-| `encryption` | 配置加密 | ❌ |
-| `hocon` | HOCON 格式支持 | ❌ |
+| **安全** |||
+| `security` | 安全模块 | ❌ |
+| `key` | 密钥管理系统 | ❌ |
+| **高级功能** |||
+| `audit` | 审计日志 | ❌ |
+| `metrics` | 指标收集 | ❌ |
+| `dynamic` | 动态字段 | ❌ |
+| `progressive-reload` | 渐进式部署 | ❌ |
+| `migration` | 配置迁移 | ❌ |
+| `snapshot` | 快照回滚 | ❌ |
+| `profile` | 环境配置 | ❌ |
+| `interpolation` | 变量插值 | ❌ |
+| `tracing` | 分布式追踪 | ❌ |
+| **远程源** |||
+| `remote` | HTTP 轮询 | ❌ |
+| `etcd` | Etcd 集成 | ❌ |
+| `consul` | Consul 集成 | ❌ |
+| `cache-redis` | Redis 缓存 | ❌ |
+| **其他** |||
+| `config-bus` | 配置事件总线 | ❌ |
+| `context-aware` | 上下文感知配置 | ❌ |
+| `modules` | 模块化配置 | ❌ |
 
 </div>> 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
 
