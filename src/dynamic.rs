@@ -20,6 +20,9 @@ use std::sync::{Arc, RwLock};
 /// Callback ID type for tracking registered callbacks.
 type CallbackId = u64;
 
+/// Callback storage for dynamic field change notifications.
+type CallbackStorage<T> = Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>>;
+
 /// Field-level dynamic property handle.
 ///
 /// Design advantages (against Netflix Archaius DynamicProperty):
@@ -40,7 +43,7 @@ pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     /// ArcSwap provides lock-free atomic replacement (similar to Linux RCU).
     value: ArcSwap<T>,
     /// Callbacks storage with Arc<RwLock> for shared access.
-    callbacks: Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>>,
+    callbacks: CallbackStorage<T>,
     next_id: AtomicU64,
 }
 
@@ -134,7 +137,7 @@ where
 
 pub struct CallbackGuard<T: Clone + Send + Sync + 'static> {
     id: CallbackId,
-    callbacks: Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>>,
+    callbacks: CallbackStorage<T>,
     _phantom: std::marker::PhantomData<T>,
 }
 
