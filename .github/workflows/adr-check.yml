@@ -1,0 +1,52 @@
+name: ADR Consistency Check
+
+on:
+  pull_request:
+    paths:
+      - 'src/**/*.rs'
+      - 'docs/adr/*.md'
+
+jobs:
+  check:
+    name: Check ADR References
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check ADR references in code
+        run: |
+          # Find all ADR references in source code
+          ADR_REFS=$(grep -roh "ADR-[0-9]\+" src/ --include="*.rs" 2>/dev/null | sort -u || true)
+
+          if [ -z "$ADR_REFS" ]; then
+            echo "No ADR references found in code"
+            exit 0
+          fi
+
+          echo "Found ADR references: $ADR_REFS"
+
+          # Check each ADR reference exists
+          for adr in $ADR_REFS; do
+            adr_num=$(echo $adr | grep -oP '\d+')
+            if [ ! -f "docs/adr/ADR-${adr_num}"*.md ]; then
+              echo "ERROR: $adr referenced but not found in docs/adr/"
+              ls docs/adr/ | grep "ADR-${adr_num}" || true
+              exit 1
+            fi
+          done
+
+          echo "All ADR references are valid"
+
+      - name: Check ADR count in dev.md
+        run: |
+          if [ -f "dev-v2.md" ]; then
+            ADR_COUNT=$(grep -c "ADR-" dev-v2.md || true)
+            echo "Found $ADR_COUNT ADR references in dev-v2.md"
+
+            DOC_ADR_COUNT=$(ls docs/adr/ADR-*.md 2>/dev/null | wc -l || echo "0")
+            echo "Found $DOC_ADR_COUNT ADR documents"
+
+            if [ "$ADR_COUNT" -gt 0 ] && [ "$DOC_ADR_COUNT" -eq 0 ]; then
+              echo "WARNING: dev-v2.md references ADRs but docs/adr/ is empty"
+            fi
+          fi

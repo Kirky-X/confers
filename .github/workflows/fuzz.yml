@@ -1,0 +1,46 @@
+name: Fuzzing
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Weekly at 2 AM UTC on Sunday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Run merger fuzzer
+        run: |
+          cargo +nightly fuzz run merger -- -max_total_time=300 -artifact_prefix=artifacts/
+        continue-on-error: true
+
+      - name: Run parser fuzzer
+        run: |
+          cargo +nightly fuzz run parser -- -max_total_time=300 -artifact_prefix=artifacts/
+        continue-on-error: true
+
+      - name: Run interpolation fuzzer
+        run: |
+          cargo +nightly fuzz run interpolation -- -max_total_time=300 -artifact_prefix=artifacts/
+        continue-on-error: true
+
+      - name: Upload crash artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: artifacts/
