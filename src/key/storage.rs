@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::secret::XChaCha20Crypto as ConfigEncryption;
+use crate::secret::XChaCha20Crypto;
 use crate::error::ConfigError;
 use crate::key::KeyManager;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -206,11 +206,16 @@ impl KeyStorage {
             .initialize(master_key, key_id, created_by)
             .map_err(|e| {
                 // 转换错误，移除可能包含的密钥信息
-                ConfigError::ParseError { format: "key".to_string(), message: format!(
-                    "Failed to initialize key ring for '{}': {}",
-                    key_id_for_error,
-                    self.sanitize_error(&e.to_string())
-                ))
+                ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Failed to initialize key ring for '{}': {}",
+                        key_id_for_error,
+                        self.sanitize_error(&e.to_string())
+                    ),
+                    location: None,
+                    source: None,
+                }
             })?;
         self.save()?;
         Ok(())
@@ -219,14 +224,24 @@ impl KeyStorage {
     pub fn save(&self) -> Result<(), ConfigError> {
         let master_key = self
             .master_key
-            .ok_or_else(|| ConfigError::ParseError { format: "key".to_string(), message: "Master key not set".to_string()))?;
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Master key not set".to_string(),
+                location: None,
+                source: None,
+            })?;
 
         let key_data = self.serialize_key_manager()?;
         let encrypted_data = self.encrypt_data(&key_data, &master_key).map_err(|e| {
-            ConfigError::ParseError { format: "key".to_string(), message: format!(
-                "Failed to encrypt key data: {}",
-                self.sanitize_error(&e.to_string())
-            ))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!(
+                    "Failed to encrypt key data: {}",
+                    self.sanitize_error(&e.to_string())
+                ),
+                location: None,
+                source: None,
+            }
         })?;
         let checksum = KeyStorage::calculate_checksum(&encrypted_data);
 
@@ -250,7 +265,12 @@ impl KeyStorage {
     pub fn load(&mut self) -> Result<(), ConfigError> {
         let master_key = self
             .master_key
-            .ok_or_else(|| ConfigError::ParseError { format: "key".to_string(), message: "Master key not set".to_string()))?;
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Master key not set".to_string(),
+                location: None,
+                source: None,
+            })?;
 
         if !self.storage_path.join("keys.json").exists() {
             return Ok(());
@@ -261,10 +281,15 @@ impl KeyStorage {
         let key_data = self
             .decrypt_data(&store.encrypted_data, &master_key)
             .map_err(|e| {
-                ConfigError::ParseError { format: "key".to_string(), message: format!(
-                    "Failed to decrypt key data: {}",
-                    self.sanitize_error(&e.to_string())
-                ))
+                ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Failed to decrypt key data: {}",
+                        self.sanitize_error(&e.to_string())
+                    ),
+                    location: None,
+                    source: None,
+                }
             })?;
         self.deserialize_key_manager(&key_data)?;
 
@@ -273,7 +298,12 @@ impl KeyStorage {
 
     fn serialize_key_manager(&self) -> Result<String, ConfigError> {
         let data = serde_json::to_vec(&self.key_manager).map_err(|e| {
-            ConfigError::SerializationError(format!("Failed to serialize key manager: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to serialize key manager: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
         Ok(BASE64.encode(data))
     }
@@ -281,31 +311,99 @@ impl KeyStorage {
     fn deserialize_key_manager(&mut self, data: &str) -> Result<(), ConfigError> {
         let bytes = BASE64
             .decode(data)
-            .map_err(|e| ConfigError::FormatDetectionFailed(format!("Invalid key data: {}", e)))?;
+            .map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Invalid key data: {}", e),
+                location: None,
+                source: None,
+            })?;
         let key_manager: KeyManager = serde_json::from_slice(&bytes).map_err(|e| {
-            ConfigError::ParseError(format!("Failed to deserialize key manager: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to deserialize key manager: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
         self.key_manager = key_manager;
         Ok(())
     }
 
     fn encrypt_data(&self, data: &str, master_key: &[u8; 32]) -> Result<String, ConfigError> {
-        let encryptor = ConfigEncryption::new(*master_key);
-        encryptor.encrypt(data).map_err(|e| {
-            ConfigError::ParseError { format: "key".to_string(), message: format!(
-                "Encryption failed: {}",
-                self.sanitize_error(&e.to_string())
-            ))
-        })
+        let encryptor = XChaCha20Crypto::new();
+        let (nonce, ciphertext) = encryptor
+            .encrypt(data.as_bytes(), master_key)
+            .map_err(|e| {
+                ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Encryption failed: {}",
+                        self.sanitize_error(&e.to_string())
+                    ),
+                    location: None,
+                    source: None,
+                }
+            })?;
+
+        // 格式: nonce_base64:ciphertext_base64
+        let result = format!(
+            "{}:{}",
+            BASE64.encode(&nonce),
+            BASE64.encode(&ciphertext)
+        );
+        Ok(result)
     }
 
     fn decrypt_data(&self, encrypted: &str, master_key: &[u8; 32]) -> Result<String, ConfigError> {
-        let encryptor = ConfigEncryption::new(*master_key);
-        encryptor.decrypt(encrypted).map_err(|e| {
-            ConfigError::ParseError { format: "key".to_string(), message: format!(
-                "Decryption failed: {}",
-                self.sanitize_error(&e.to_string())
-            ))
+        let parts: Vec<&str> = encrypted.split(':').collect();
+        if parts.len() != 2 {
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Invalid encrypted data format".to_string(),
+                location: None,
+                source: None,
+            });
+        }
+
+        let nonce = BASE64.decode(parts[0]).map_err(|e| {
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to decode nonce: {}", e),
+                location: None,
+                source: None,
+            }
+        })?;
+        let ciphertext = BASE64.decode(parts[1]).map_err(|e| {
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to decode ciphertext: {}", e),
+                location: None,
+                source: None,
+            }
+        })?;
+
+        let encryptor = XChaCha20Crypto::new();
+        let plaintext = encryptor
+            .decrypt(&nonce, &ciphertext, master_key)
+            .map_err(|e| {
+                ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Decryption failed: {}",
+                        self.sanitize_error(&e.to_string())
+                    ),
+                    location: None,
+                    source: None,
+                }
+            })?;
+
+        String::from_utf8(plaintext).map_err(|e| {
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to convert decrypted data to string: {}", e),
+                location: None,
+                source: None,
+            }
         })
     }
 
@@ -321,9 +419,12 @@ impl KeyStorage {
     fn validate_checksum(&self, store: &EncryptedKeyStore) -> Result<(), ConfigError> {
         let calculated = Self::calculate_checksum(&store.encrypted_data);
         if store.checksum != calculated {
-            return Err(ConfigError::FormatDetectionFailed(
-                "Key store checksum mismatch".to_string(),
-            ));
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Key store checksum mismatch".to_string(),
+                location: None,
+                source: None,
+            });
         }
         Ok(())
     }
@@ -331,7 +432,12 @@ impl KeyStorage {
     fn write_store(&self, store: &EncryptedKeyStore) -> Result<(), ConfigError> {
         let store_path = self.storage_path.join("keys.json");
         let json = serde_json::to_string_pretty(store).map_err(|e| {
-            ConfigError::SerializationError(format!("Failed to serialize key store: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to serialize key store: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
 
         let mut file = OpenOptions::new()
@@ -339,10 +445,10 @@ impl KeyStorage {
             .create(true)
             .truncate(true)
             .open(&store_path)
-            .map_err(|e| ConfigError::IoError(format!("Failed to open key store: {}", e)))?;
+            .map_err(|e| std::io::Error::new(e.kind(), format!("Failed to open key store: {}", e)))?;
 
         file.write_all(json.as_bytes())
-            .map_err(|e| ConfigError::IoError(format!("Failed to write key store: {}", e)))?;
+            .map_err(|e| std::io::Error::new(e.kind(), format!("Failed to write key store: {}", e)))?;
 
         Ok(())
     }
@@ -350,20 +456,29 @@ impl KeyStorage {
     fn read_store(&self) -> Result<EncryptedKeyStore, ConfigError> {
         let store_path = self.storage_path.join("keys.json");
         let mut file = File::open(&store_path)
-            .map_err(|e| ConfigError::IoError(format!("Failed to open key store: {}", e)))?;
+            .map_err(|e| std::io::Error::new(e.kind(), format!("Failed to open key store: {}", e)))?;
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .map_err(|e| ConfigError::IoError(format!("Failed to read key store: {}", e)))?;
+            .map_err(|e| std::io::Error::new(e.kind(), format!("Failed to read key store: {}", e)))?;
 
-        serde_json::from_str(&contents)
-            .map_err(|e| ConfigError::ParseError(format!("Failed to parse key store: {}", e)))
+        serde_json::from_str(&contents).map_err(|e| ConfigError::ParseError {
+            format: "key".to_string(),
+            message: format!("Failed to parse key store: {}", e),
+            location: None,
+            source: None,
+        })
     }
 
     pub fn export_keys(&self, output_path: &PathBuf) -> Result<(), ConfigError> {
         let master_key = self
             .master_key
-            .ok_or_else(|| ConfigError::ParseError { format: "key".to_string(), message: "Master key not set".to_string()))?;
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Master key not set".to_string(),
+                location: None,
+                source: None,
+            })?;
 
         let key_data = self.serialize_key_manager()?;
         let encrypted_data = self.encrypt_data(&key_data, &master_key)?;
@@ -375,7 +490,12 @@ impl KeyStorage {
         };
 
         let json = serde_json::to_string_pretty(&export).map_err(|e| {
-            ConfigError::SerializationError(format!("Failed to serialize export: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to serialize export: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
 
         let mut file = OpenOptions::new()
@@ -383,10 +503,10 @@ impl KeyStorage {
             .create(true)
             .truncate(true)
             .open(output_path)
-            .map_err(|e| ConfigError::IoError(format!("Failed to create export file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to create export file: {}", e)))?;
 
         file.write_all(json.as_bytes())
-            .map_err(|e| ConfigError::IoError(format!("Failed to write export file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to write export file: {}", e)))?;
 
         Ok(())
     }
@@ -399,14 +519,19 @@ impl KeyStorage {
         self.master_key = Some(*master_key);
 
         let mut file = File::open(input_path)
-            .map_err(|e| ConfigError::IoError(format!("Failed to open import file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to open import file: {}", e)))?;
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .map_err(|e| ConfigError::IoError(format!("Failed to read import file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to read import file: {}", e)))?;
 
         let export: KeyExport = serde_json::from_str(&contents)
-            .map_err(|e| ConfigError::ParseError(format!("Failed to parse import file: {}", e)))?;
+            .map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to parse import file: {}", e),
+                location: None,
+                source: None,
+            })?;
 
         self.validate_checksum_by_data(&export.encrypted_data)?;
         let key_data = self.decrypt_data(&export.encrypted_data, master_key)?;
@@ -420,9 +545,12 @@ impl KeyStorage {
         let checksum = Self::calculate_checksum(encrypted_data);
         let store = self.read_store()?;
         if store.checksum != checksum {
-            return Err(ConfigError::FormatDetectionFailed(
-                "Import checksum mismatch".to_string(),
-            ));
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Import checksum mismatch".to_string(),
+                location: None,
+                source: None,
+            });
         }
         Ok(())
     }
@@ -452,7 +580,12 @@ impl KeyStorage {
 
         let master_key = self
             .master_key
-            .ok_or_else(|| ConfigError::ParseError { format: "key".to_string(), message: "Master key not set".to_string()))?;
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Master key not set".to_string(),
+                location: None,
+                source: None,
+            })?;
 
         let key_data = self.serialize_key_manager()?;
         let encrypted_data = self.encrypt_data(&key_data, &master_key)?;
@@ -464,11 +597,21 @@ impl KeyStorage {
         };
 
         let json = serde_json::to_string_pretty(&backup).map_err(|e| {
-            ConfigError::SerializationError(format!("Failed to serialize backup: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to serialize backup: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
 
         fs::create_dir_all(backup_path).map_err(|e| {
-            ConfigError::ParseError { format: "key".to_string(), message: format!("Failed to create backup directory: {}", e))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to create backup directory: {}", e),
+                location: None,
+                source: None,
+            }
         })?;
 
         let mut file = OpenOptions::new()
@@ -476,10 +619,10 @@ impl KeyStorage {
             .create(true)
             .truncate(true)
             .open(&backup_file)
-            .map_err(|e| ConfigError::IoError(format!("Failed to create backup file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to create backup file: {}", e)))?;
 
         file.write_all(json.as_bytes())
-            .map_err(|e| ConfigError::IoError(format!("Failed to write backup file: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to write backup file: {}", e)))?;
 
         Ok(())
     }
@@ -521,18 +664,28 @@ impl KeyStorage {
     ) -> Result<(), ConfigError> {
         let key_data = self.serialize_key_manager()?;
         let decrypted_data = self.decrypt_data(&key_data, old_master_key).map_err(|e| {
-            ConfigError::ParseError { format: "key".to_string(), message: format!(
-                "Failed to decrypt with old master key: {}",
-                self.sanitize_error(&e.to_string())
-            ))
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!(
+                    "Failed to decrypt with old master key: {}",
+                    self.sanitize_error(&e.to_string())
+                ),
+                location: None,
+                source: None,
+            }
         })?;
         let reencrypted_data = self
             .encrypt_data(&decrypted_data, new_master_key)
             .map_err(|e| {
-                ConfigError::ParseError { format: "key".to_string(), message: format!(
-                    "Failed to encrypt with new master key: {}",
-                    self.sanitize_error(&e.to_string())
-                ))
+                ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Failed to encrypt with new master key: {}",
+                        self.sanitize_error(&e.to_string())
+                    ),
+                    location: None,
+                    source: None,
+                }
             })?;
 
         self.master_key = Some(*new_master_key);

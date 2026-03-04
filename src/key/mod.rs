@@ -14,7 +14,7 @@ pub use rotation::{KeyRotationPolicy, KeyRotationService, RotationResult};
 pub use storage::{ErrorSanitizer, KeyStorage, SanitizationLevel};
 
 #[cfg(feature = "encryption")]
-use crate::secret::XChaCha20Crypto as ConfigEncryption;
+use crate::secret::XChaCha20Crypto;
 use crate::error::ConfigError;
 #[cfg(feature = "encryption")]
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -104,8 +104,22 @@ impl KeyBundle {
         let mut rng = rand::thread_rng();
         rng.fill(&mut key_bytes);
 
-        let encryptor = ConfigEncryption::new(*master_key);
-        let encrypted_key = encryptor.encrypt(&BASE64.encode(key_bytes))?;
+        let encryptor = XChaCha20Crypto::new();
+        let (nonce, ciphertext) = encryptor
+            .encrypt(BASE64.encode(key_bytes).as_bytes(), master_key)
+            .map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Encryption failed: {}", e),
+                location: None,
+                source: None,
+            })?;
+
+        // 格式: nonce_base64:ciphertext_base64
+        let encrypted_key = format!(
+            "{}:{}",
+            BASE64.encode(&nonce),
+            BASE64.encode(&ciphertext)
+        );
 
         let key_id = format!("{}_{}", KEY_VERSION_PREFIX, version);
 
@@ -120,16 +134,64 @@ impl KeyBundle {
 
     #[cfg(feature = "encryption")]
     pub fn get_plaintext_key(&self, master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
-        let encryptor = ConfigEncryption::new(*master_key);
-        let decrypted = encryptor.decrypt(&self.encrypted_key)?;
+        let parts: Vec<&str> = self.encrypted_key.split(':').collect();
+        if parts.len() != 2 {
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Invalid encrypted key format".to_string(),
+                location: None,
+                source: None,
+            });
+        }
+
+        let nonce = BASE64.decode(parts[0]).map_err(|e| {
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to decode nonce: {}", e),
+                location: None,
+                source: None,
+            }
+        })?;
+        let ciphertext = BASE64.decode(parts[1]).map_err(|e| {
+            ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Failed to decode ciphertext: {}", e),
+                location: None,
+                source: None,
+            }
+        })?;
+
+        let encryptor = XChaCha20Crypto::new();
+        let plaintext = encryptor
+            .decrypt(&nonce, &ciphertext, master_key)
+            .map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Decryption failed: {}", e),
+                location: None,
+                source: None,
+            })?;
+
         let key_bytes = BASE64
-            .decode(&decrypted)
-            .map_err(|e| ConfigError::FormatDetectionFailed(format!("Invalid key bytes: {}", e)))?;
+            .decode(String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Invalid key bytes: {}", e),
+                location: None,
+                source: None,
+            })?)
+            .map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Invalid key bytes: {}", e),
+                location: None,
+                source: None,
+            })?;
 
         if key_bytes.len() != 32 {
-            return Err(ConfigError::FormatDetectionFailed(
-                "Invalid key length".to_string(),
-            ));
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: "Invalid key length".to_string(),
+                location: None,
+                source: None,
+            });
         }
 
         let mut result = [0u8; 32];

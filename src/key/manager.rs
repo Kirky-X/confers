@@ -119,11 +119,11 @@ impl KeyManager {
     ///
     /// ```rust,no_run
     /// # use confers::key::KeyManager;
-    /// # use confers::encryption::ConfigEncryption;
+    /// # use confers::secret::XChaCha20Crypto;
     /// # use std::path::PathBuf;
     /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
     /// let key = km.generate_key()?;
-    /// let encryption = ConfigEncryption::new(key);
+    /// let encryption = XChaCha20Crypto::new();
     /// # Ok::<(), confers::error::ConfigError>(())
     /// ```
     #[cfg(feature = "encryption")]

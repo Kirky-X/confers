@@ -53,8 +53,8 @@ pub mod schema;
 #[cfg(feature = "security")]
 pub mod security;
 
-// #[cfg(feature = "key")]
-// pub mod key;
+#[cfg(feature = "key")]
+pub mod key;
 
 #[cfg(feature = "remote")]
 pub mod remote;
