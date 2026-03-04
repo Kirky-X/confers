@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
+use async_trait::async_trait;
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::traits::ConfigProvider;
@@ -37,9 +38,10 @@ pub enum HealthStatus {
     Critical { reason: String },
 }
 
-/// Reload health check trait - synchronous version for dyn compatibility
+/// Reload health check trait
+#[async_trait]
 pub trait ReloadHealthCheck: Send + Sync {
-    fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
+    async fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
 }
 
 pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
@@ -130,7 +132,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         while Instant::now() < deadline {
             tokio::time::sleep(poll_interval).await;
             if let Some(hc) = &self.health_check {
-                match hc.check(provider.clone()) {
+                match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack { reason });
@@ -160,7 +162,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         for step in 0..steps {
             tokio::time::sleep(interval).await;
             if let Some(hc) = &self.health_check {
-                match hc.check(provider.clone()) {
+                match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack {
@@ -266,8 +268,9 @@ mod tests {
     #[tokio::test]
     async fn test_canary_reload_healthy() {
         struct HealthyCheck;
+        #[async_trait]
         impl ReloadHealthCheck for HealthyCheck {
-            fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
                 HealthStatus::Healthy
             }
         }
@@ -289,8 +292,9 @@ mod tests {
     #[tokio::test]
     async fn test_canary_reload_critical_rollback() {
         struct CriticalCheck;
+        #[async_trait]
         impl ReloadHealthCheck for CriticalCheck {
-            fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
                 HealthStatus::Critical {
                     reason: "service unhealthy".to_string(),
                 }
