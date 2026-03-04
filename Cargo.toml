@@ -49,6 +49,7 @@ redis = { version = "0.32", features = ["tokio-comp"], optional = true }
 url = "2.5"
 rayon = { version = "1.10", optional = true }
 hex = { version = "0.4", optional = true }
+rand = { version = "0.8", optional = true }
 
 [workspace]
 members = ["confers-macros", "confers-cli", "examples"]
@@ -107,6 +108,7 @@ validation = ["dep:garde"]
 parallel = ["dep:rayon"]
 typescript-schema = ["dep:schemars"]
 security = ["encryption", "dep:hex"]
+key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize"]
 cli = ["dep:clap"]
