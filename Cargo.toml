@@ -104,6 +104,7 @@ env = []
 # Core features
 validation = ["dep:garde"]
 parallel = ["dep:rayon"]
+typescript-schema = ["dep:schemars"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize"]
 cli = ["dep:clap"]

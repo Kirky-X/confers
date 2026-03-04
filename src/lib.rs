@@ -47,6 +47,9 @@ pub mod context;
 #[cfg(feature = "config-bus")]
 pub mod bus;
 
+#[cfg(feature = "typescript-schema")]
+pub mod schema;
+
 #[cfg(feature = "remote")]
 pub mod remote;
 
