@@ -49,8 +49,8 @@ impl SourceChain {
         }
     }
 
-    /// Add a source to the chain.
-    pub fn add(mut self, source: Box<dyn Source>) -> Self {
+    /// Push a source to the chain.
+    pub fn push(mut self, source: Box<dyn Source>) -> Self {
         self.sources.push(source);
         self
     }
@@ -204,7 +204,7 @@ impl SourceChainBuilder {
 
     /// Add a source.
     pub fn source(mut self, source: Box<dyn Source>) -> Self {
-        self.chain = self.chain.add(source);
+        self.chain = self.chain.push(source);
         self
     }
 
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_single_source() {
-        let chain = SourceChain::new().add(Box::new(
+        let chain = SourceChain::new().push(Box::new(
             MemorySource::new().set("key", ConfigValue::string("value")),
         ));
 
@@ -315,10 +315,10 @@ mod tests {
     #[test]
     fn test_multiple_sources() {
         let chain = SourceChain::new()
-            .add(Box::new(
+            .push(Box::new(
                 DefaultSource::new().set("key", ConfigValue::string("default")),
             ))
-            .add(Box::new(
+            .push(Box::new(
                 MemorySource::new()
                     .set("key", ConfigValue::string("override"))
                     .with_priority(50),
@@ -348,8 +348,8 @@ mod tests {
     #[test]
     fn test_source_names() {
         let chain = SourceChain::new()
-            .add(Box::new(MemorySource::new().with_name("first")))
-            .add(Box::new(MemorySource::new().with_name("second")));
+            .push(Box::new(MemorySource::new().with_name("first")))
+            .push(Box::new(MemorySource::new().with_name("second")));
 
         let names = chain.source_names();
         assert_eq!(names, vec!["first", "second"]);
@@ -359,10 +359,10 @@ mod tests {
     fn test_fail_fast_optional() {
         let chain = SourceChain::new()
             .fail_fast(false)
-            .add(Box::new(
+            .push(Box::new(
                 crate::config::source::FileSource::new("/nonexistent.toml").optional(),
             ))
-            .add(Box::new(
+            .push(Box::new(
                 MemorySource::new().set("key", ConfigValue::string("value")),
             ));
 
