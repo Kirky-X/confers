@@ -7,13 +7,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use confers::error::ConfigError;
 use confers::traits::ConfigProvider;
 use confers::value::AnnotatedValue;
 use confers::watcher::progressive::{
     HealthStatus, ProgressiveReloader, ReloadHealthCheck, ReloadOutcome, ReloadStrategy,
 };
-use async_trait::async_trait;
 
 // Mock ConfigProvider for testing - using simpler trait
 #[derive(Debug, Clone)]
@@ -89,10 +89,7 @@ impl ReloadHealthCheck for DegradedHealthCheck {
 // Test: Immediate reload commits successfully
 #[tokio::test]
 async fn test_immediate_reload_commits() {
-    let reloader = ProgressiveReloader::new(
-        Arc::new(1i32),
-        ReloadStrategy::Immediate,
-    );
+    let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate);
 
     let new_config = Arc::new(2i32);
     let provider = Arc::new(MockConfigProvider);
@@ -106,10 +103,7 @@ async fn test_immediate_reload_commits() {
 // Test: Immediate reload replaces current config atomically
 #[tokio::test]
 async fn test_immediate_reload_atomic() {
-    let reloader = ProgressiveReloader::new(
-        Arc::new(10i32),
-        ReloadStrategy::Immediate,
-    );
+    let reloader = ProgressiveReloader::new(Arc::new(10i32), ReloadStrategy::Immediate);
 
     // Reload with new value
     let result = reloader
@@ -145,7 +139,9 @@ async fn test_canary_reload_commits_when_healthy() {
 // Test: Canary strategy rolls back on critical health status
 #[tokio::test]
 async fn test_canary_reload_rollback_on_critical() {
-    let health_check = Arc::new(CriticalHealthCheck::new("config validation failed".to_string()));
+    let health_check = Arc::new(CriticalHealthCheck::new(
+        "config validation failed".to_string(),
+    ));
     let reloader = ProgressiveReloader::builder()
         .initial(Arc::new(1i32))
         .strategy(ReloadStrategy::Canary {
@@ -210,10 +206,7 @@ async fn test_canary_reload_without_health_check() {
 // Test: ProgressiveReloader can be cloned
 #[test]
 fn test_progressive_reloader_is_clone() {
-    let reloader = ProgressiveReloader::new(
-        Arc::new(1i32),
-        ReloadStrategy::Immediate,
-    );
+    let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate);
 
     let _cloned = reloader.clone();
     // If this compiles, the test passes
@@ -222,10 +215,7 @@ fn test_progressive_reloader_is_clone() {
 // Test: ProgressiveReloader current() returns Arc<T>
 #[test]
 fn test_current_returns_arc() {
-    let reloader = ProgressiveReloader::new(
-        Arc::new(42i32),
-        ReloadStrategy::Immediate,
-    );
+    let reloader = ProgressiveReloader::new(Arc::new(42i32), ReloadStrategy::Immediate);
 
     let current = reloader.current();
     assert_eq!(*current, 42);

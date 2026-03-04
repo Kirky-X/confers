@@ -104,9 +104,13 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     pub fn update(&self, new_val: T) {
         self.value.store(Arc::new(new_val.clone()));
         let new_val_ref = &new_val;
-        self.callbacks.read().unwrap().values().for_each(|callback| {
-            callback(new_val_ref);
-        });
+        self.callbacks
+            .read()
+            .unwrap()
+            .values()
+            .for_each(|callback| {
+                callback(new_val_ref);
+            });
     }
 
     pub fn callback_count(&self) -> usize {
@@ -147,9 +151,9 @@ impl<T: Clone + Send + Sync + 'static> CallbackGuard<T> {
     /// This is useful when you want to manually manage the callback lifecycle
     /// but still benefit from RAII cleanup.
     pub fn into_id(self) -> CallbackId {
-        let id = self.id;
+        
         // Note: callbacks will be dropped, removing the entry
-        id
+        self.id
     }
 }
 
@@ -171,7 +175,10 @@ impl<T: Clone + Send + Sync + 'static> DynamicFieldBuilder<T> {
     ///
     /// Panics if no initial value was provided.
     pub fn build(self) -> DynamicField<T> {
-        DynamicField::new(self.initial.unwrap_or_else(|| panic!("initial value required")))
+        DynamicField::new(
+            self.initial
+                .unwrap_or_else(|| panic!("initial value required")),
+        )
     }
 }
 

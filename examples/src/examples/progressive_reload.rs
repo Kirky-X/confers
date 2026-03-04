@@ -1,18 +1,18 @@
 //! 渐进式重载示例程序
-//! 
+//!
 //! 本示例展示如何使用 confers 库的渐进式重载功能，实现配置的热更新与自动回滚。
-//! 
+//!
 //! 核心特性：
 //! - 金丝雀发布 (Canary): 先小比例测试，逐步扩大
 //! - 线性推出 (Linear): 平滑过渡到新配置
 //! - 健康检查: 评估新配置的稳定性
 //! - 自动回滚: 问题配置自动回退
 
+use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
-use anyhow::Result;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 
 // ============================================================
@@ -26,15 +26,15 @@ pub struct AppConfig {
     /// 服务器配置
     #[serde(rename = "server")]
     pub server: ServerConfig,
-    
+
     /// 数据库配置
     #[serde(rename = "database")]
     pub database: DatabaseConfig,
-    
+
     /// 功能开关配置
     #[serde(rename = "feature")]
     pub feature: FeatureConfig,
-    
+
     /// 渐进式重载配置
     #[serde(rename = "reload")]
     pub reload: ReloadConfig,
@@ -69,19 +69,19 @@ pub struct FeatureConfig {
 pub struct ReloadConfig {
     /// 重载策略: "canary" 或 "linear"
     pub strategy: String,
-    
+
     /// 金丝雀策略配置
     #[serde(rename = "canary")]
     pub canary: Option<CanaryConfig>,
-    
+
     /// 线性策略配置
     #[serde(rename = "linear")]
     pub linear: Option<LinearConfig>,
-    
+
     /// 健康检查配置
     #[serde(rename = "health_check")]
     pub health_check: HealthCheckConfig,
-    
+
     /// 自动回滚配置
     #[serde(rename = "rollback")]
     pub rollback: RollbackConfig,
@@ -147,12 +147,12 @@ pub enum ReloadStrategy {
     #[default]
     Immediate,
     /// 金丝雀发布策略
-    /// 
+    ///
     /// 特点：
     /// - 先将新配置应用到少量实例（初始比例）
     /// - 监控健康状态，如果稳定则逐步扩大比例
     /// - 适合风险较高的配置变更
-    /// 
+    ///
     /// 比例进度示例: 10% → 30% → 50% → 100%
     Canary {
         /// 初始流量比例 (默认 10%)
@@ -162,14 +162,14 @@ pub enum ReloadStrategy {
         /// 每批次间隔时间
         interval: Duration,
     },
-    
+
     /// 线性推出策略
-    /// 
+    ///
     /// 特点：
     /// - 均匀地将流量切换到新配置
     /// - 每批次间隔固定时间
     /// - 适合需要平滑过渡的场景
-    /// 
+    ///
     /// 比例进度示例: 10% → 20% → 30% → ... → 100%
     Linear {
         /// 每批次的实例/流量数量
@@ -191,7 +191,7 @@ impl ReloadStrategy {
 }
 
 /// 健康检查状态枚举
-/// 
+///
 /// 用于评估新配置是否稳定
 #[derive(Debug, Clone, PartialEq)]
 pub enum HealthStatus {
@@ -239,7 +239,7 @@ impl HealthCheckContext {
             custom_metrics: std::collections::HashMap::new(),
         }
     }
-    
+
     /// 计算错误率
     pub fn error_rate(&self) -> f64 {
         if self.total_requests == 0 {
@@ -250,25 +250,25 @@ impl HealthCheckContext {
 }
 
 /// 健康检查器特征
-/// 
+///
 /// 用户可以实现此特征来定义自定义的健康检查逻辑
 pub trait HealthCheck: Send + Sync {
     /// 执行健康检查
-    /// 
+    ///
     /// # 参数
     /// - `context`: 健康检查上下文，包含各种指标
-    /// 
+    ///
     /// # 返回
     /// - `HealthStatus::Healthy`: 配置健康，继续扩大比例
     /// - `HealthStatus::Unhealthy`: 配置不健康，需要回滚
     /// - `HealthStatus::Unknown`: 无法判断，需要更多观察时间
     fn check(&self, context: &HealthCheckContext) -> HealthStatus;
-    
+
     /// 获取健康检查器名称（用于日志）
     fn name(&self) -> &'static str {
         "DefaultHealthCheck"
     }
-    
+
     /// 重置健康检查器状态（可选实现）
     fn reset(&mut self) {}
 }
@@ -278,7 +278,7 @@ pub trait HealthCheck: Send + Sync {
 // ============================================================
 
 /// 示例：基于指标的健康检查器
-/// 
+///
 /// 检查以下指标：
 /// - 错误率不超过阈值
 /// - 响应延迟不超过阈值
@@ -305,7 +305,7 @@ impl MetricsBasedHealthCheck {
             consecutive_failures: 0,
         }
     }
-    
+
     /// 重置失败计数
     pub fn reset(&mut self) {
         self.consecutive_failures = 0;
@@ -324,28 +324,27 @@ impl HealthCheck for MetricsBasedHealthCheck {
             );
             return HealthStatus::Unhealthy;
         }
-        
+
         // 检查 P99 延迟
         if context.p99_latency_ms > self.latency_threshold_ms as f64 {
             info!(
                 "健康检查失败: P99 延迟 {:.2}ms 超过阈值 {}ms",
-                context.p99_latency_ms,
-                self.latency_threshold_ms
+                context.p99_latency_ms, self.latency_threshold_ms
             );
             return HealthStatus::Unhealthy;
         }
-        
+
         // 所有检查通过
         HealthStatus::Healthy
     }
-    
+
     fn name(&self) -> &'static str {
         "MetricsBasedHealthCheck"
     }
 }
 
 /// 示例：自定义业务健康检查器
-/// 
+///
 /// 用户可以基于业务逻辑实现更复杂的健康检查
 pub struct BusinessHealthCheck {
     /// 检查项列表
@@ -379,7 +378,7 @@ impl HealthCheck for BusinessHealthCheck {
         }
         HealthStatus::Healthy
     }
-    
+
     fn name(&self) -> &'static str {
         "BusinessHealthCheck"
     }
@@ -390,7 +389,7 @@ impl HealthCheck for BusinessHealthCheck {
 // ============================================================
 
 /// 渐进式重载器
-/// 
+///
 /// 负责管理配置的重载流程，包括：
 /// - 策略执行（金丝雀/线性）
 /// - 健康检查
@@ -419,12 +418,12 @@ impl ProgressiveReloader {
     pub fn builder() -> ReloaderBuilder {
         ReloaderBuilder::default()
     }
-    
+
     /// 启动金丝雀发布
-    /// 
+    ///
     /// # 参数
     /// - `new_config`: 新的配置
-    /// 
+    ///
     /// # 流程
     /// 1. 保存当前配置作为回滚点
     /// 2. 以初始比例（10%）应用新配置
@@ -440,67 +439,69 @@ impl ProgressiveReloader {
             }
             *is_reloading = true;
         }
-        
+
         info!("开始金丝雀发布，策略: {:?}", self.strategy.name());
-        
+
         // 保存当前配置作为回滚点
         let current = self.config.read().await.clone();
         *self.previous_config.write().await = Some(current.clone());
-        
+
         // 重置状态
         *self.current_ratio.write().await = 0.0;
         self.health_check.write().await.reset();
         *self.retry_count.write().await = 0;
-        
+
         // 获取金丝雀配置
         let canary_config = match &self.strategy {
-            ReloadStrategy::Canary { initial_ratio, step_ratio, interval } => {
-                (initial_ratio, step_ratio, interval)
-            }
+            ReloadStrategy::Canary {
+                initial_ratio,
+                step_ratio,
+                interval,
+            } => (initial_ratio, step_ratio, interval),
             _ => {
                 error!("当前策略不是金丝雀发布");
                 *self.is_reloading.write().await = false;
                 return Ok(());
             }
         };
-        
+
         // 开始金丝雀发布流程
         let mut current_ratio = *canary_config.0;
-        
+
         while current_ratio <= 1.0 {
             // 应用当前比例的配置
             info!("应用金丝雀配置，比例: {:.1}%", current_ratio * 100.0);
-            
+
             // 模拟应用配置到对应比例的实例
             self.apply_config_ratio(&new_config, current_ratio).await?;
-            
+
             // 等待一段时间让新配置稳定
             tokio::time::sleep(*canary_config.2).await;
-            
+
             // 执行健康检查
             let context = self.collect_health_metrics(current_ratio).await;
             let status = self.health_check.read().await.check(&context);
-            
+
             match status {
                 HealthStatus::Healthy => {
                     info!("健康检查通过 ✓，当前比例: {:.1}%", current_ratio * 100.0);
-                    
+
                     // 检查是否完成
                     if current_ratio >= 1.0 {
                         info!("金丝雀发布完成 ✓，新配置已完全生效");
                         break;
                     }
-                    
+
                     // 扩大比例
                     current_ratio = (current_ratio + canary_config.1).min(1.0);
                 }
                 HealthStatus::Unhealthy => {
                     error!("健康检查失败 ✗，触发自动回滚");
-                    
+
                     // 检查是否超过最大重试次数
                     let mut retry = self.retry_count.write().await;
                     *retry += 1;
-                    
+
                     if *retry > 3 {
                         error!("重试次数过多，停止重载");
                         // 执行回滚
@@ -509,12 +510,12 @@ impl ProgressiveReloader {
                         }
                         break;
                     }
-                    
+
                     // 自动回滚
                     if self.enable_rollback {
                         self.rollback().await?;
                     }
-                    
+
                     // 重置比例重新开始
                     current_ratio = *canary_config.0;
                 }
@@ -524,64 +525,65 @@ impl ProgressiveReloader {
                 }
             }
         }
-        
+
         *self.is_reloading.write().await = false;
         Ok(())
     }
-    
+
     /// 启动线性推出
     pub async fn start_linear_reload(&self, new_config: AppConfig) -> Result<()> {
         info!("开始线性推出，策略: {:?}", self.strategy.name());
-        
+
         // 保存当前配置
         let current = self.config.read().await.clone();
         *self.previous_config.write().await = Some(current);
-        
+
         *self.current_ratio.write().await = 0.0;
         *self.is_reloading.write().await = true;
-        
+
         // 获取线性配置
         let linear_config = match &self.strategy {
-            ReloadStrategy::Linear { batch_size, interval } => {
-                (batch_size, interval)
-            }
+            ReloadStrategy::Linear {
+                batch_size,
+                interval,
+            } => (batch_size, interval),
             _ => {
                 error!("当前策略不是线性推出");
                 *self.is_reloading.write().await = false;
                 return Ok(());
             }
         };
-        
+
         let mut current_ratio = 0.0;
         let step = *linear_config.0 as f64 / 100.0;
-        
+
         while current_ratio < 1.0 {
             // 增加比例
             current_ratio = (current_ratio + step).min(1.0);
-            
+
             info!("线性推出进度: {:.1}%", current_ratio * 100.0);
-            
+
             // 应用配置
             self.apply_config_ratio(&new_config, current_ratio).await?;
-            
+
             // 等待
             tokio::time::sleep(*linear_config.1).await;
-            
+
             // 健康检查
             let context = self.collect_health_metrics(current_ratio).await;
             let status = self.health_check.read().await.check(&context);
-            
+
             if status == HealthStatus::Unhealthy && self.enable_rollback {
                 error!("健康检查失败，触发回滚");
                 self.rollback().await?;
                 break;
             }
         }
-        
+
         *self.is_reloading.write().await = false;
         Ok(())
     }
-    
+
     /// 应用配置到指定比例的实例
     async fn apply_config_ratio(&self, config: &AppConfig, ratio: f64) -> Result<()> {
         // 这里应该是实际的配置应用逻辑
@@ -590,7 +592,7 @@ impl ProgressiveReloader {
         *self.config.write().await = config.clone();
         Ok(())
     }
-    
+
     /// 收集健康指标
     async fn collect_health_metrics(&self, ratio: f64) -> HealthCheckContext {
         // 这里应该是从监控系统获取实际指标
@@ -606,21 +608,21 @@ impl ProgressiveReloader {
             custom_metrics: std::collections::HashMap::new(),
         }
     }
-    
+
     /// 执行回滚
     async fn rollback(&self) -> Result<()> {
         info!("执行自动回滚...");
-        
+
         let previous = self.previous_config.read().await;
         if let Some(config) = previous.as_ref() {
             *self.config.write().await = config.clone();
             info!("已回滚到上一稳定配置 ✓");
         }
-        
+
         *self.current_ratio.write().await = 0.0;
         Ok(())
     }
-    
+
     /// 获取当前配置
     pub async fn get_config(&self) -> AppConfig {
         self.config.read().await.clone()
@@ -642,25 +644,25 @@ impl ReloaderBuilder {
         self.strategy = Some(strategy);
         self
     }
-    
+
     /// 设置健康检查器
     pub fn health_check<H: HealthCheck + 'static>(mut self, health_check: H) -> Self {
         self.health_check = Some(Arc::new(RwLock::new(health_check)));
         self
     }
-    
+
     /// 设置是否启用自动回滚
     pub fn rollback_on_failure(mut self, enable: bool) -> Self {
         self.enable_rollback = Some(enable);
         self
     }
-    
+
     /// 设置初始配置
     pub fn initial_config(mut self, config: AppConfig) -> Self {
         self.config = Some(config);
         self
     }
-    
+
     /// 构建渐进式重载器
     pub fn build(self) -> ProgressiveReloader {
         let default_config = AppConfig {
@@ -705,19 +707,17 @@ impl ReloaderBuilder {
                 },
             },
         };
-        
-        let health_check = self.health_check.unwrap_or_else(|| {
-            Arc::new(RwLock::new(MetricsBasedHealthCheck::new(0.05, 100, 2)))
+
+        let health_check = self
+            .health_check
+            .unwrap_or_else(|| Arc::new(RwLock::new(MetricsBasedHealthCheck::new(0.05, 100, 2))));
+
+        let strategy = self.strategy.unwrap_or_else(|| ReloadStrategy::Canary {
+            initial_ratio: 0.1,
+            step_ratio: 0.2,
+            interval: Duration::from_secs(10),
         });
-        
-        let strategy = self.strategy.unwrap_or_else(|| {
-            ReloadStrategy::Canary {
-                initial_ratio: 0.1,
-                step_ratio: 0.2,
-                interval: Duration::from_secs(10),
-            }
-        });
-        
+
         ProgressiveReloader {
             config: Arc::new(RwLock::new(self.config.unwrap_or(default_config.clone()))),
             previous_config: Arc::new(RwLock::new(None)),
@@ -745,31 +745,31 @@ async fn main() -> Result<()> {
         .with_file(true)
         .with_line_number(true)
         .finish();
-    
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("设置日志失败");
-    
+
+    tracing::subscriber::set_global_default(subscriber).expect("设置日志失败");
+
     info!("========================================");
     info!("  渐进式重载示例程序启动");
     info!("========================================");
-    
+
     // 读取配置文件
     let config_content = std::fs::read_to_string("config/config.toml")?;
     let config: AppConfig = toml::from_str(&config_content)?;
-    
+
     info!("配置文件加载成功:");
     info!("  - 服务器: {}:{}", config.server.host, config.server.port);
     info!("  - 工作线程: {}", config.server.workers);
     info!("  - 数据库: {}", config.database.url);
-    info!("  - 功能开关: new_ui={}, beta_api={}", 
-          config.feature.new_ui, config.feature.beta_api);
+    info!(
+        "  - 功能开关: new_ui={}, beta_api={}",
+        config.feature.new_ui, config.feature.beta_api
+    );
     info!("  - 重载策略: {}", config.reload.strategy);
-    
+
     // 根据配置创建重载策略
     let strategy = match config.reload.strategy.as_str() {
         "canary" => {
-            let canary = config.reload.canary.as_ref()
-                .expect("金丝雀配置缺失");
+            let canary = config.reload.canary.as_ref().expect("金丝雀配置缺失");
             ReloadStrategy::Canary {
                 initial_ratio: canary.initial_ratio,
                 step_ratio: canary.step_ratio,
@@ -777,8 +777,7 @@ async fn main() -> Result<()> {
             }
         }
         "linear" => {
-            let linear = config.reload.linear.as_ref()
-                .expect("线性配置缺失");
+            let linear = config.reload.linear.as_ref().expect("线性配置缺失");
             ReloadStrategy::Linear {
                 batch_size: linear.batch_size,
                 interval: Duration::from_secs(linear.interval_seconds),
@@ -789,14 +788,14 @@ async fn main() -> Result<()> {
             ReloadStrategy::default()
         }
     };
-    
+
     // 创建健康检查器
     let health_check = MetricsBasedHealthCheck::new(
         config.reload.health_check.error_threshold,
         config.reload.health_check.latency_ms,
         config.reload.health_check.failure_tolerance,
     );
-    
+
     // 创建渐进式重载器
     let reloader = ProgressiveReloader::builder()
         .strategy(strategy)
@@ -804,29 +803,44 @@ async fn main() -> Result<()> {
         .rollback_on_failure(config.reload.rollback.enabled)
         .initial_config(config.clone())
         .build();
-    
+
     info!("渐进式重载器创建成功");
     info!("  - 策略: {}", reloader.strategy.name());
-    info!("  - 自动回滚: {}", if config.reload.rollback.enabled { "启用" } else { "禁用" });
-    
+    info!(
+        "  - 自动回滚: {}",
+        if config.reload.rollback.enabled {
+            "启用"
+        } else {
+            "禁用"
+        }
+    );
+
     // 模拟配置变更
     info!("");
     info!("========================================");
     info!("  模拟配置变更场景");
     info!("========================================");
-    
+
     // 创建新配置（模拟配置变更）
     let mut new_config = config.clone();
-    new_config.server.port = 8081;  // 更改端口
-    new_config.feature.new_ui = true;  // 启用新功能
-    new_config.database.max_connections = 20;  // 增加连接数
-    
+    new_config.server.port = 8081; // 更改端口
+    new_config.feature.new_ui = true; // 启用新功能
+    new_config.database.max_connections = 20; // 增加连接数
+
     info!("新配置:");
-    info!("  - 端口: {} -> {}", config.server.port, new_config.server.port);
-    info!("  - new_ui: {} -> {}", config.feature.new_ui, new_config.feature.new_ui);
-    info!("  - max_connections: {} -> {}", 
-          config.database.max_connections, new_config.database.max_connections);
-    
+    info!(
+        "  - 端口: {} -> {}",
+        config.server.port, new_config.server.port
+    );
+    info!(
+        "  - new_ui: {} -> {}",
+        config.feature.new_ui, new_config.feature.new_ui
+    );
+    info!(
+        "  - max_connections: {} -> {}",
+        config.database.max_connections, new_config.database.max_connections
+    );
+
     // 根据策略启动重载
     match config.reload.strategy.as_str() {
         "canary" => {
@@ -837,7 +851,7 @@ async fn main() -> Result<()> {
         }
         _ => {}
     }
-    
+
     // 显示最终配置
     let final_config = reloader.get_config().await;
     info!("");
@@ -846,10 +860,13 @@ async fn main() -> Result<()> {
     info!("========================================");
     info!("  端口: {}", final_config.server.port);
     info!("  new_ui: {}", final_config.feature.new_ui);
-    info!("  max_connections: {}", final_config.database.max_connections);
-    
+    info!(
+        "  max_connections: {}",
+        final_config.database.max_connections
+    );
+
     info!("");
     info!("示例程序执行完成！");
-    
+
     Ok(())
 }

@@ -109,12 +109,16 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 self.current.store(new_config);
                 Ok(ReloadOutcome::Committed)
             }
-            ReloadStrategy::Canary { trial_duration, poll_interval } => {
+            ReloadStrategy::Canary {
+                trial_duration,
+                poll_interval,
+            } => {
                 self.canary_reload(new_config, *trial_duration, *poll_interval, provider)
                     .await
             }
             ReloadStrategy::Linear { steps, interval } => {
-                self.linear_reload(new_config, *steps, *interval, provider).await
+                self.linear_reload(new_config, *steps, *interval, provider)
+                    .await
             }
         }
     }
@@ -253,14 +257,19 @@ mod tests {
 
     #[test]
     fn test_builder_default_strategy() {
-        let reloader = ProgressiveReloader::builder().initial(Arc::new(1i32)).build();
+        let reloader = ProgressiveReloader::builder()
+            .initial(Arc::new(1i32))
+            .build();
         assert_eq!(*reloader.current(), 1);
     }
 
     #[tokio::test]
     async fn test_immediate_reload() {
         let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate);
-        let result = reloader.begin_reload(Arc::new(2i32), Arc::new(MockProvider)).await.unwrap();
+        let result = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await
+            .unwrap();
         assert!(matches!(result, ReloadOutcome::Committed));
         assert_eq!(*reloader.current(), 2);
     }
@@ -284,7 +293,10 @@ mod tests {
         )
         .with_health_check(Arc::new(HealthyCheck));
 
-        let result = reloader.begin_reload(Arc::new(2i32), Arc::new(MockProvider)).await.unwrap();
+        let result = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await
+            .unwrap();
         assert!(matches!(result, ReloadOutcome::Committed));
         assert_eq!(*reloader.current(), 2);
     }
@@ -310,7 +322,9 @@ mod tests {
         )
         .with_health_check(Arc::new(CriticalCheck));
 
-        let result = reloader.begin_reload(Arc::new(2i32), Arc::new(MockProvider)).await;
+        let result = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await;
         assert!(matches!(result, Err(ConfigError::ReloadRolledBack { .. })));
         assert_eq!(*reloader.current(), 1);
     }
@@ -325,7 +339,10 @@ mod tests {
             },
         );
 
-        let result = reloader.begin_reload(Arc::new(2i32), Arc::new(MockProvider)).await.unwrap();
+        let result = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await
+            .unwrap();
         assert!(matches!(result, ReloadOutcome::Committed));
         assert_eq!(*reloader.current(), 2);
     }

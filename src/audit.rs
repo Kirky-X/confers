@@ -182,10 +182,26 @@ impl AuditWriter {
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {
         // Extended list of sensitive field keywords for redaction
         const SENSITIVE_KEYWORDS: &[&str] = &[
-            "password", "secret", "key", "token", "credential", "auth",
-            "api_key", "apikey", "access_key", "access_key", "private_key",
-            "session_id", "sessionid", "bearer", "refresh_token", "client_secret",
-            "encryption_key", "encrypt_key", "master_key", "service_account",
+            "password",
+            "secret",
+            "key",
+            "token",
+            "credential",
+            "auth",
+            "api_key",
+            "apikey",
+            "access_key",
+            "access_key",
+            "private_key",
+            "session_id",
+            "sessionid",
+            "bearer",
+            "refresh_token",
+            "client_secret",
+            "encryption_key",
+            "encrypt_key",
+            "master_key",
+            "service_account",
         ];
 
         match event {
@@ -195,11 +211,12 @@ impl AuditWriter {
                 timestamp,
             } => {
                 let lower_field = field.to_lowercase();
-                let sanitized_field = if SENSITIVE_KEYWORDS.iter().any(|kw| lower_field.contains(kw)) {
-                    "***REDACTED***".to_string()
-                } else {
-                    field.clone()
-                };
+                let sanitized_field =
+                    if SENSITIVE_KEYWORDS.iter().any(|kw| lower_field.contains(kw)) {
+                        "***REDACTED***".to_string()
+                    } else {
+                        field.clone()
+                    };
                 AuditEvent::Decrypt {
                     field: sanitized_field,
                     success: *success,

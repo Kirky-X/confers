@@ -2,12 +2,12 @@
 //!
 //! Generates JSON Schema and TypeScript type definitions from configuration structs.
 
+use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, Fields, Type};
-use darling::FromField;
+use syn::{Fields, Ident, Type};
 
-use crate::parse::{StructAttrs, FieldAttrs};
+use crate::parse::{FieldAttrs, StructAttrs};
 
 /// Generate JSON Schema for a configuration struct.
 pub fn generate_schema_impl(
@@ -71,12 +71,20 @@ fn generate_type_schema(ty: &Type) -> TokenStream {
     if type_str.contains("String") || type_str.contains("str") {
         return quote! { { "type": "string" } };
     }
-    if type_str.contains("i8") || type_str.contains("i16") || type_str.contains("i32")
-        || type_str.contains("i64") || type_str.contains("isize") {
+    if type_str.contains("i8")
+        || type_str.contains("i16")
+        || type_str.contains("i32")
+        || type_str.contains("i64")
+        || type_str.contains("isize")
+    {
         return quote! { { "type": "integer" } };
     }
-    if type_str.contains("u8") || type_str.contains("u16") || type_str.contains("u32")
-        || type_str.contains("u64") || type_str.contains("usize") {
+    if type_str.contains("u8")
+        || type_str.contains("u16")
+        || type_str.contains("u32")
+        || type_str.contains("u64")
+        || type_str.contains("usize")
+    {
         return quote! { { "type": "integer", "minimum": 0 } };
     }
     if type_str.contains("f32") || type_str.contains("f64") {

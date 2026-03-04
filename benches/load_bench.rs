@@ -2,8 +2,8 @@
 //!
 //! Measures cold load performance for configurations with varying field counts.
 
-use criterion::{criterion_group, criterion_main, Criterion};
 use confers::Source;
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::path::PathBuf;
 
 /// Generate a config with a specified number of fields for benchmarking.

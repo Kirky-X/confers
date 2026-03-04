@@ -1,17 +1,17 @@
 //! Code generation modules for the Config derive macro.
 
-mod load;
+mod clap;
 mod defaults;
-mod validate;
-mod schema;
+mod load;
 mod migration;
 mod modules;
-mod clap;
+mod schema;
+mod validate;
 
-pub use load::*;
+pub use clap::*;
 pub use defaults::*;
-pub use validate::*;
-pub use schema::*;
+pub use load::*;
 pub use migration::*;
 pub use modules::*;
-pub use clap::*;
+pub use schema::*;
+pub use validate::*;

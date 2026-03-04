@@ -51,7 +51,7 @@ fn test_snapshot_manager_default() {
 fn test_list_snapshots_empty() {
     let config = SnapshotConfig::new("/tmp/nonexistent-snapshots-test");
     let manager = SnapshotManager::new(config);
-    
+
     let snapshots = manager.list_snapshots().unwrap();
     assert!(snapshots.is_empty());
 }
@@ -60,7 +60,7 @@ fn test_list_snapshots_empty() {
 fn test_prune_empty_directory() {
     let config = SnapshotConfig::new("/tmp/nonexistent-snapshots-prune");
     let manager = SnapshotManager::new(config);
-    
+
     let removed = manager.prune_old_snapshots().unwrap();
     assert_eq!(removed, 0);
 }

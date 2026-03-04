@@ -134,16 +134,36 @@ fn main() -> Result<()> {
     let env_file = cli.env_file.clone();
 
     match cli.command {
-        Commands::Inspect { key, show_conflicts, format } => {
+        Commands::Inspect {
+            key,
+            show_conflicts,
+            format,
+        } => {
             cmd_inspect(&config_paths, &env_file, &key, show_conflicts, &format)?;
         }
         Commands::Validate { strict, format } => {
             cmd_validate(&config_paths, &env_file, strict, &format)?;
         }
-        Commands::Export { format, output, with_provenance, raw } => {
-            cmd_export(&config_paths, &env_file, &format, output, with_provenance, raw)?;
+        Commands::Export {
+            format,
+            output,
+            with_provenance,
+            raw,
+        } => {
+            cmd_export(
+                &config_paths,
+                &env_file,
+                &format,
+                output,
+                with_provenance,
+                raw,
+            )?;
         }
-        Commands::Diff { base, overlay, format: _ } => {
+        Commands::Diff {
+            base,
+            overlay,
+            format: _,
+        } => {
             cmd_diff(&base, &overlay)?;
         }
         Commands::Snapshot { action } => {
@@ -239,7 +259,12 @@ fn cmd_inspect(
 }
 
 /// Recursively print configuration values
-fn print_config_value(value: &serde_json::Value, prefix: &str, sources: &[String], _show_conflicts: bool) {
+fn print_config_value(
+    value: &serde_json::Value,
+    prefix: &str,
+    sources: &[String],
+    _show_conflicts: bool,
+) {
     match value {
         serde_json::Value::Object(map) => {
             for (key, val) in map {
@@ -409,11 +434,17 @@ fn check_types(obj: &serde_json::Map<String, serde_json::Value>, issues: &mut Ve
         if let Some(s) = value.as_str() {
             // Check if string looks like a number
             if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
-                issues.push(format!("Key '{}' has string value that looks like a number: {}", key, s));
+                issues.push(format!(
+                    "Key '{}' has string value that looks like a number: {}",
+                    key, s
+                ));
             }
             // Check for boolean strings
             if s == "true" || s == "false" {
-                issues.push(format!("Key '{}' has string value that looks like boolean: {}", key, s));
+                issues.push(format!(
+                    "Key '{}' has string value that looks like boolean: {}",
+                    key, s
+                ));
             }
         }
     }
@@ -429,8 +460,8 @@ fn cmd_export(
     _with_provenance: bool,
     _raw: bool,
 ) -> Result<()> {
-    use confers::ConfigBuilder;
     use chrono::Utc;
+    use confers::ConfigBuilder;
 
     // Build configuration
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
@@ -538,7 +569,10 @@ fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
         SnapshotCommands::Diff { latest, directory } => {
             cmd_snapshot_diff(latest, &directory)?;
         }
-        SnapshotCommands::Prune { older_than, directory } => {
+        SnapshotCommands::Prune {
+            older_than,
+            directory,
+        } => {
             cmd_snapshot_prune(&older_than, &directory)?;
         }
     }
@@ -558,7 +592,9 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
         .filter_map(|e| e.ok())
         .filter(|e| {
             let path = e.path();
-            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+            path.extension()
+                .map(|ext| ext == "json" || ext == "toml")
+                .unwrap_or(false)
         })
         .collect();
 
@@ -577,8 +613,12 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
     for entry in snapshots.iter().take(10) {
         let filename = entry.file_name();
         let path = entry.path();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
-        let modified = entry.metadata()
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown");
+        let modified = entry
+            .metadata()
             .and_then(|m| m.modified())
             .map(|t| {
                 let datetime: chrono::DateTime<chrono::Utc> = t.into();
@@ -605,7 +645,9 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
         .filter_map(|e| e.ok())
         .filter(|e| {
             let path = e.path();
-            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+            path.extension()
+                .map(|ext| ext == "json" || ext == "toml")
+                .unwrap_or(false)
         })
         .collect();
 
@@ -618,14 +660,20 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
 
     let first = snapshots.first().unwrap();
-    let second = snapshots.get(count - 1).unwrap_or(snapshots.get(1).unwrap());
+    let second = snapshots
+        .get(count - 1)
+        .unwrap_or(snapshots.get(1).unwrap());
 
     let content1 = std::fs::read_to_string(first.path())?;
     let content2 = std::fs::read_to_string(second.path())?;
 
     let diff = similar::TextDiff::from_lines(&content1, &content2);
 
-    println!("Diff between {} and {}", first.file_name().display(), second.file_name().display());
+    println!(
+        "Diff between {} and {}",
+        first.file_name().display(),
+        second.file_name().display()
+    );
     for change in diff.iter_all_changes() {
         print!("{}", change);
     }
@@ -643,7 +691,8 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     }
 
     // Parse duration (e.g., "30d" -> 30 days)
-    let days = older_than.trim_end_matches('d')
+    let days = older_than
+        .trim_end_matches('d')
         .trim_end_matches('D')
         .parse::<u64>()
         .unwrap_or(30);
@@ -654,7 +703,9 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         .filter_map(|e| e.ok())
         .filter(|e| {
             let path = e.path();
-            path.extension().map(|ext| ext == "json" || ext == "toml").unwrap_or(false)
+            path.extension()
+                .map(|ext| ext == "json" || ext == "toml")
+                .unwrap_or(false)
         })
         .collect();
 
@@ -671,6 +722,9 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         }
     }
 
-    println!("Pruned {} snapshot(s) older than {} days", removed_count, days);
+    println!(
+        "Pruned {} snapshot(s) older than {} days",
+        removed_count, days
+    );
     Ok(())
 }

@@ -21,7 +21,7 @@ jobs:
           components: rustfmt
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
 
       - name: Run merger fuzzer
         run: |

@@ -111,7 +111,10 @@ async fn test_consul_source_parse_config() {
     }
 
     // Cleanup - delete the test key
-    let _ = http_client.delete("http://127.0.0.1:8500/v1/kv/test-config").send().await;
+    let _ = http_client
+        .delete("http://127.0.0.1:8500/v1/kv/test-config")
+        .send()
+        .await;
 }
 
 /// Check if Consul is available.
@@ -123,7 +126,11 @@ async fn is_consul_available() -> bool {
         .build()
         .unwrap();
 
-    match http_client.get("http://127.0.0.1:8500/v1/status/leader").send().await {
+    match http_client
+        .get("http://127.0.0.1:8500/v1/status/leader")
+        .send()
+        .await
+    {
         Ok(resp) => resp.status().is_success(),
         Err(_) => false,
     }

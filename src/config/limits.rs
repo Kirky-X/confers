@@ -26,12 +26,12 @@ pub struct ConfigLimits {
 impl Default for ConfigLimits {
     fn default() -> Self {
         Self {
-            max_file_size: 10 * 1024 * 1024,      // 10 MB
-            max_total_size: 100 * 1024 * 1024,    // 100 MB
+            max_file_size: 10 * 1024 * 1024,   // 10 MB
+            max_total_size: 100 * 1024 * 1024, // 100 MB
             max_depth: 20,
             max_keys: 10_000,
             max_array_length: 10_000,
-            max_string_length: 1024 * 1024,       // 1 MB
+            max_string_length: 1024 * 1024, // 1 MB
             allowed_extensions: vec![
                 "toml".to_string(),
                 "json".to_string(),
@@ -39,7 +39,7 @@ impl Default for ConfigLimits {
                 "yml".to_string(),
                 "ini".to_string(),
             ],
-            allow_remote: false,  // Secure by default
+            allow_remote: false, // Secure by default
             max_sources: 50,
         }
     }
@@ -109,7 +109,11 @@ impl ConfigLimits {
     pub fn is_extension_allowed(&self, path: &std::path::Path) -> bool {
         path.extension()
             .and_then(|ext| ext.to_str())
-            .map(|ext| self.allowed_extensions.iter().any(|allowed| allowed.eq_ignore_ascii_case(ext)))
+            .map(|ext| {
+                self.allowed_extensions
+                    .iter()
+                    .any(|allowed| allowed.eq_ignore_ascii_case(ext))
+            })
             .unwrap_or(false)
     }
 
@@ -126,12 +130,12 @@ impl ConfigLimits {
     /// Create a strict limits configuration.
     pub fn strict() -> Self {
         Self {
-            max_file_size: 1024 * 1024,            // 1 MB
-            max_total_size: 10 * 1024 * 1024,      // 10 MB
+            max_file_size: 1024 * 1024,       // 1 MB
+            max_total_size: 10 * 1024 * 1024, // 10 MB
             max_depth: 10,
             max_keys: 1_000,
             max_array_length: 1_000,
-            max_string_length: 100 * 1024,         // 100 KB
+            max_string_length: 100 * 1024, // 100 KB
             allowed_extensions: vec!["toml".to_string(), "json".to_string()],
             allow_remote: false,
             max_sources: 10,
@@ -141,12 +145,12 @@ impl ConfigLimits {
     /// Create a permissive limits configuration.
     pub fn permissive() -> Self {
         Self {
-            max_file_size: 100 * 1024 * 1024,      // 100 MB
-            max_total_size: 1024 * 1024 * 1024,    // 1 GB
+            max_file_size: 100 * 1024 * 1024,   // 100 MB
+            max_total_size: 1024 * 1024 * 1024, // 1 GB
             max_depth: 50,
             max_keys: 100_000,
             max_array_length: 100_000,
-            max_string_length: 10 * 1024 * 1024,   // 10 MB
+            max_string_length: 10 * 1024 * 1024, // 10 MB
             allowed_extensions: vec![
                 "toml".to_string(),
                 "json".to_string(),
@@ -171,7 +175,7 @@ mod tests {
         assert_eq!(limits.max_file_size, 10 * 1024 * 1024);
         assert_eq!(limits.max_depth, 20);
         assert_eq!(limits.max_keys, 10_000);
-        assert!(!limits.allow_remote);  // Secure by default
+        assert!(!limits.allow_remote); // Secure by default
     }
 
     #[test]

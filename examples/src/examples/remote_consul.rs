@@ -18,11 +18,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================================");
 
     // Get configuration from environment or use defaults
-    let consul_address = std::env::var("CONSUL_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1:8500".to_string());
-    
-    let consul_prefix = std::env::var("CONSUL_PREFIX")
-        .unwrap_or_else(|_| "myapp".to_string());
+    let consul_address =
+        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "127.0.0.1:8500".to_string());
+
+    let consul_prefix = std::env::var("CONSUL_PREFIX").unwrap_or_else(|_| "myapp".to_string());
 
     println!("\nConsul Configuration:");
     println!("  Address: {}", consul_address);
@@ -30,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test connection to Consul
     println!("\nTesting Consul connection...");
-    
+
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         test_consul_connection(&consul_address).await;
@@ -40,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n========================================");
     println!("  Example completed!");
     println!("========================================");
-    
+
     Ok(())
 }
 
@@ -57,7 +56,7 @@ async fn test_consul_connection(address: &str) {
         Ok(resp) => {
             if resp.status().is_success() {
                 println!("  ✓ Consul connection successful!");
-                
+
                 // Try to read some values
                 match read_consul_kv(address, "myapp/config").await {
                     Ok(values) => {
@@ -88,7 +87,10 @@ async fn test_consul_connection(address: &str) {
     }
 }
 
-async fn read_consul_kv(address: &str, prefix: &str) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+async fn read_consul_kv(
+    address: &str,
+    prefix: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
     let url = if address.contains("://") {
         format!("{}/v1/kv/{}?recurse=true", address, prefix)
     } else {
@@ -97,7 +99,7 @@ async fn read_consul_kv(address: &str, prefix: &str) -> Result<Vec<(String, Stri
 
     let client = reqwest::Client::new();
     let resp = client.get(&url).send().await?;
-    
+
     if !resp.status().is_success() {
         return Ok(Vec::new());
     }
@@ -108,16 +110,18 @@ async fn read_consul_kv(address: &str, prefix: &str) -> Result<Vec<(String, Stri
     for item in kv_pairs {
         if let (Some(key), Some(value)) = (item.get("Key"), item.get("Value")) {
             let key_str = key.as_str().unwrap_or("");
-            let value_str = value.as_str()
+            let value_str = value
+                .as_str()
                 .and_then(|s| base64::decode(s).ok())
                 .and_then(|b| String::from_utf8(b).ok())
                 .unwrap_or_default();
-            
+
             // Remove prefix from key
-            let short_key = key_str.strip_prefix(&format!("{}/", prefix))
+            let short_key = key_str
+                .strip_prefix(&format!("{}/", prefix))
                 .unwrap_or(key_str)
                 .to_string();
-            
+
             results.push((short_key, value_str));
         }
     }

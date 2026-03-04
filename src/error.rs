@@ -18,14 +18,12 @@ static PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// Regex pattern for matching IP addresses
-static IP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap()
-});
+static IP_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap());
 
 /// Regex pattern for matching potential key material (long hex strings)
-static HEX_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap()
-});
+static HEX_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap());
 
 /// Precise location of a parse error in source file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -329,7 +327,13 @@ impl ConfigError {
                 let error_msg = format!("{}", error);
                 (field, "garde".to_string(), error_msg)
             })
-            .unwrap_or_else(|| ("unknown".to_string(), "garde".to_string(), message.to_string()));
+            .unwrap_or_else(|| {
+                (
+                    "unknown".to_string(),
+                    "garde".to_string(),
+                    message.to_string(),
+                )
+            });
 
         ConfigError::ValidationFailed {
             field,
@@ -339,7 +343,11 @@ impl ConfigError {
     }
 
     /// Create a validation error with custom details.
-    pub fn validation(field: impl Into<String>, rule: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn validation(
+        field: impl Into<String>,
+        rule: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         ConfigError::ValidationFailed {
             field: field.into(),
             rule: rule.into(),
@@ -373,7 +381,12 @@ impl ConfigError {
             ConfigError::FileNotFound { filename, .. } => {
                 format!("Configuration file '{}' not found", filename.display())
             }
-            ConfigError::ParseError { format, location, message, .. } => {
+            ConfigError::ParseError {
+                format,
+                location,
+                message,
+                ..
+            } => {
                 if let Some(loc) = location {
                     format!("Failed to parse {} at {}: {}", format, loc, message)
                 } else {
@@ -390,9 +403,14 @@ impl ConfigError {
                 "Remote configuration source is unavailable".to_string()
             }
             ConfigError::VersionMismatch { found, expected } => {
-                format!("Configuration version mismatch: found {}, expected {}", found, expected)
+                format!(
+                    "Configuration version mismatch: found {}, expected {}",
+                    found, expected
+                )
             }
-            ConfigError::MigrationFailed { from, to, reason, .. } => {
+            ConfigError::MigrationFailed {
+                from, to, reason, ..
+            } => {
                 format!("Migration from v{} to v{} failed: {}", from, to, reason)
             }
             ConfigError::ModuleNotFound { group, module } => {
@@ -420,7 +438,11 @@ impl ConfigError {
                 format!("Circular reference detected: {}", path)
             }
             ConfigError::MultiSource { source } => {
-                format!("Multiple sources failed: {}/{}", source.failed_count(), source.total_count())
+                format!(
+                    "Multiple sources failed: {}/{}",
+                    source.failed_count(),
+                    source.total_count()
+                )
             }
         }
     }
@@ -428,7 +450,7 @@ impl ConfigError {
     /// Get the error chain with sensitive data removed.
     pub fn sanitized_chain(&self) -> Vec<String> {
         let mut chain = vec![self.user_message()];
-        
+
         // Add source errors if present, but sanitize them
         match self {
             ConfigError::ParseError { source, .. } => {
@@ -443,7 +465,7 @@ impl ConfigError {
             }
             _ => {}
         }
-        
+
         chain
     }
 
@@ -463,15 +485,21 @@ fn sanitize_error_message(msg: &str) -> String {
     let mut result = msg.to_string();
 
     // Remove potential file paths (Unix and Windows style) using precompiled regex
-    result = PATH_RE.replace_all(&result, |caps: &regex::Captures| {
-        let full_path = &caps[0];
-        // Keep only the filename for debugging
-        if let Some(filename) = full_path.split('/').next_back().or_else(|| full_path.split('\\').next_back()) {
-            format!("<path>/{}", filename)
-        } else {
-            "<path>".to_string()
-        }
-    }).to_string();
+    result = PATH_RE
+        .replace_all(&result, |caps: &regex::Captures| {
+            let full_path = &caps[0];
+            // Keep only the filename for debugging
+            if let Some(filename) = full_path
+                .split('/')
+                .next_back()
+                .or_else(|| full_path.split('\\').next_back())
+            {
+                format!("<path>/{}", filename)
+            } else {
+                "<path>".to_string()
+            }
+        })
+        .to_string();
 
     // Remove potential IP addresses using precompiled regex
     result = IP_RE.replace_all(&result, "<ip>").to_string();
@@ -701,7 +729,8 @@ mod tests {
         let loc = ParseLocation::new("config.toml", 15, 8);
         assert_eq!(loc.to_string(), "config.toml:15:8");
 
-        let loc = ParseLocation::from_path(std::path::Path::new("/home/user/secret/config.toml"), 10, 5);
+        let loc =
+            ParseLocation::from_path(std::path::Path::new("/home/user/secret/config.toml"), 10, 5);
         assert_eq!(loc.source_name.as_ref(), "config.toml");
         assert_eq!(loc.line, 10);
         assert_eq!(loc.column, 5);
@@ -734,10 +763,13 @@ mod tests {
             5,
             vec![
                 (0, ConfigError::Timeout { duration_ms: 1000 }),
-                (2, ConfigError::RemoteUnavailable {
-                    error_type: "connection".to_string(),
-                    retryable: true,
-                }),
+                (
+                    2,
+                    ConfigError::RemoteUnavailable {
+                        error_type: "connection".to_string(),
+                        retryable: true,
+                    },
+                ),
             ],
         );
         assert_eq!(err.failed_count(), 2);
@@ -752,7 +784,10 @@ mod tests {
 
         let result: BuildResult<i32> = BuildResult::degraded(42, "remote source unavailable");
         assert!(result.degraded);
-        assert_eq!(result.degraded_reason, Some("remote source unavailable".to_string()));
+        assert_eq!(
+            result.degraded_reason,
+            Some("remote source unavailable".to_string())
+        );
     }
 
     #[test]
@@ -763,7 +798,7 @@ mod tests {
             filename: PathBuf::from("test"),
             source: None,
         };
-        
+
         // We can match known variants
         match &err {
             ConfigError::FileNotFound { filename, .. } => {

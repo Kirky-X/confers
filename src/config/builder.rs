@@ -20,8 +20,10 @@ use super::source::Source;
 
 /// Reload strategy for hot reload.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum ReloadStrategy {
     /// Immediate reload (default).
+    #[default]
     Immediate,
     /// Canary deployment with trial period.
     Canary {
@@ -39,11 +41,6 @@ pub enum ReloadStrategy {
     },
 }
 
-impl Default for ReloadStrategy {
-    fn default() -> Self {
-        Self::Immediate
-    }
-}
 
 /// Configuration for snapshots.
 #[derive(Debug, Clone)]
@@ -112,7 +109,7 @@ impl<T> ConfigBuilder<T> {
             chain_builder: SourceChainBuilder::new(),
             limits: ConfigLimits::default(),
             key_provider: None,
-            metrics: Arc::new(NoOpMetrics::default()),
+            metrics: Arc::new(NoOpMetrics),
             validate: true,
             reload_strategy: ReloadStrategy::default(),
             build_timeout: None,
@@ -259,15 +256,14 @@ where
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
-        
+
         // Add accumulated memory values if any
         if !self.accumulated_memory.is_empty() {
-            self.chain_builder = self.chain_builder.memory_with_priority(
-                self.accumulated_memory,
-                self.memory_priority,
-            );
+            self.chain_builder = self
+                .chain_builder
+                .memory_with_priority(self.accumulated_memory, self.memory_priority);
         }
-        
+
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
 
@@ -307,15 +303,14 @@ where
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
-        
+
         // Add accumulated memory values if any
         if !self.accumulated_memory.is_empty() {
-            self.chain_builder = self.chain_builder.memory_with_priority(
-                self.accumulated_memory,
-                self.memory_priority,
-            );
+            self.chain_builder = self
+                .chain_builder
+                .memory_with_priority(self.accumulated_memory, self.memory_priority);
         }
-        
+
         let chain = self.chain_builder.fail_fast(false).build();
         let merged = chain.collect()?;
 
@@ -381,9 +376,9 @@ where
         crate::watcher::WatcherGuard,
     )> {
         use std::collections::HashMap;
+        use std::sync::atomic;
         use tokio::spawn;
         use tokio::time::{interval, Duration};
-        use std::sync::atomic as atomic;
 
         // Collect file paths from the source chain (before building)
         let file_paths: Vec<PathBuf> = self
@@ -405,7 +400,8 @@ where
         if !file_paths.is_empty() {
             spawn(async move {
                 let mut ticker = interval(Duration::from_secs(1));
-                let mut last_modifications: HashMap<PathBuf, std::time::SystemTime> = HashMap::new();
+                let mut last_modifications: HashMap<PathBuf, std::time::SystemTime> =
+                    HashMap::new();
 
                 while running.load(atomic::Ordering::Relaxed) {
                     ticker.tick().await;
@@ -449,11 +445,9 @@ fn value_to_json(value: &AnnotatedValue) -> serde_json::Value {
         ConfigValue::Bool(b) => serde_json::Value::Bool(*b),
         ConfigValue::I64(i) => serde_json::Value::Number((*i).into()),
         ConfigValue::U64(u) => serde_json::Value::Number((*u).into()),
-        ConfigValue::F64(f) => {
-            serde_json::Number::from_f64(*f)
-                .map(serde_json::Value::Number)
-                .unwrap_or(serde_json::Value::Null)
-        }
+        ConfigValue::F64(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
         ConfigValue::String(s) => serde_json::Value::String(s.clone()),
         ConfigValue::Bytes(b) => {
             // Encode bytes as base64 when json feature is enabled
@@ -469,13 +463,11 @@ fn value_to_json(value: &AnnotatedValue) -> serde_json::Value {
         ConfigValue::Array(arr) => {
             serde_json::Value::Array(arr.iter().map(value_to_json).collect())
         }
-        ConfigValue::Map(map) => {
-            serde_json::Value::Object(
-                map.iter()
-                    .map(|(k, v)| (k.to_string(), value_to_json(v)))
-                    .collect(),
-            )
-        }
+        ConfigValue::Map(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.to_string(), value_to_json(v)))
+                .collect(),
+        ),
     }
 }
 
@@ -551,9 +543,10 @@ mod tests {
         let config = ConfigBuilder::<TestConfig>::new()
             .default("name", ConfigValue::string("default"))
             .default("port", ConfigValue::uint(80))
-            .memory(HashMap::from([
-                ("name".to_string(), ConfigValue::string("override")),
-            ]))
+            .memory(HashMap::from([(
+                "name".to_string(),
+                ConfigValue::string("override"),
+            )]))
             .build()
             .unwrap();
 

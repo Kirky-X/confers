@@ -42,7 +42,9 @@ impl ConfigChangeEvent {
 #[async_trait]
 pub trait ConfigBus: Send + Sync {
     async fn publish(&self, event: ConfigChangeEvent) -> ConfigResult<()>;
-    async fn subscribe(&self) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>>;
+    async fn subscribe(
+        &self,
+    ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>>;
 }
 
 /// In-memory configuration change event bus using tokio broadcast channel.
@@ -80,7 +82,9 @@ impl ConfigBus for InMemoryBus {
         Ok(())
     }
 
-    async fn subscribe(&self) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
+    async fn subscribe(
+        &self,
+    ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         let receiver = self.sender.subscribe();
         let stream = BroadcastStream::new(receiver).filter_map(|r| async move { r.ok() });
         Ok(Box::pin(stream))
@@ -139,12 +143,8 @@ mod tests {
         let bus = InMemoryBus::new();
         let mut events = bus.subscribe().await.unwrap();
 
-        let event = ConfigChangeEvent::new(
-            "instance-1",
-            "test",
-            vec!["key1".to_string()],
-            "checksum",
-        );
+        let event =
+            ConfigChangeEvent::new("instance-1", "test", vec!["key1".to_string()], "checksum");
         bus.publish(event.clone()).await.unwrap();
 
         let received = timeout(Duration::from_millis(100), events.next())

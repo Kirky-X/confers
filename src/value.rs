@@ -145,8 +145,10 @@ impl std::fmt::Display for SourceLocation {
 
 /// Core configuration value type.
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum ConfigValue {
     /// Null value
+    #[default]
     Null,
     /// Boolean value
     Bool(bool),
@@ -205,72 +207,72 @@ impl<'de> Deserialize<'de> for ConfigValue {
         D: serde::Deserializer<'de>,
     {
         use serde::de::{self, Visitor};
-        
+
         struct ConfigValueVisitor;
-        
+
         impl<'de> Visitor<'de> for ConfigValueVisitor {
             type Value = ConfigValue;
-            
+
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 f.write_str("a configuration value")
             }
-            
+
             fn visit_none<E>(self) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::Null)
             }
-            
+
             fn visit_unit<E>(self) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::Null)
             }
-            
+
             fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::Bool(v))
             }
-            
+
             fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::I64(v))
             }
-            
+
             fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::U64(v))
             }
-            
+
             fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::F64(v))
             }
-            
+
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::String(v.to_string()))
             }
-            
+
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
                 Ok(ConfigValue::String(v))
             }
-            
+
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: de::SeqAccess<'de>,
@@ -281,7 +283,7 @@ impl<'de> Deserialize<'de> for ConfigValue {
                 }
                 Ok(ConfigValue::Array(arr.into()))
             }
-            
+
             fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
             where
                 A: de::MapAccess<'de>,
@@ -293,7 +295,7 @@ impl<'de> Deserialize<'de> for ConfigValue {
                 Ok(ConfigValue::Map(Arc::new(m)))
             }
         }
-        
+
         deserializer.deserialize_any(ConfigValueVisitor)
     }
 }
@@ -450,11 +452,6 @@ impl ConfigValue {
     }
 }
 
-impl Default for ConfigValue {
-    fn default() -> Self {
-        ConfigValue::Null
-    }
-}
 
 impl From<bool> for ConfigValue {
     fn from(b: bool) -> Self {
@@ -701,7 +698,10 @@ impl AnnotatedValue {
     }
 
     /// Get all paths including this value (legacy method for compatibility).
-    #[deprecated(since = "0.3.0", note = "Use all_paths() instead - this method is identical")]
+    #[deprecated(
+        since = "0.3.0",
+        note = "Use all_paths() instead - this method is identical"
+    )]
     pub fn all_paths_including_self(&self) -> Vec<Arc<str>> {
         self.all_paths_internal(true)
     }
@@ -718,7 +718,11 @@ impl AnnotatedValue {
         };
         let mut stack: Vec<&ConfigValue> = vec![&self.inner];
         // Start traversal from inner value with current path
-        let start_path = if include_self { self.path.clone() } else { self.path.clone() };
+        let start_path = if include_self {
+            self.path.clone()
+        } else {
+            self.path.clone()
+        };
         let mut path_stack: Vec<Arc<str>> = vec![start_path];
 
         // Iterative traversal using explicit stack to avoid stack overflow
@@ -767,7 +771,9 @@ impl AnnotatedValue {
         mode: SerializeMode,
         sensitive_paths: &[&str],
     ) -> serde_json::Value {
-        let is_sensitive = sensitive_paths.iter().any(|p| self.path.as_ref().starts_with(p));
+        let is_sensitive = sensitive_paths
+            .iter()
+            .any(|p| self.path.as_ref().starts_with(p));
 
         if is_sensitive && mode == SerializeMode::Redacted {
             return serde_json::Value::String("[REDACTED]".to_string());
@@ -778,11 +784,9 @@ impl AnnotatedValue {
             ConfigValue::Bool(b) => serde_json::Value::Bool(*b),
             ConfigValue::I64(i) => serde_json::Value::Number((*i).into()),
             ConfigValue::U64(u) => serde_json::Value::Number((*u).into()),
-            ConfigValue::F64(f) => {
-                serde_json::Number::from_f64(*f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
-            }
+            ConfigValue::F64(f) => serde_json::Number::from_f64(*f)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null),
             ConfigValue::String(s) => serde_json::Value::String(s.clone()),
             ConfigValue::Bytes(b) => {
                 // Encode bytes as base64 for efficiency and compatibility
@@ -790,20 +794,16 @@ impl AnnotatedValue {
                 let encoded = base64::engine::general_purpose::STANDARD.encode(b);
                 serde_json::Value::String(encoded)
             }
-            ConfigValue::Array(arr) => {
-                serde_json::Value::Array(
-                    arr.iter()
-                        .map(|v| v.to_json_with_mode(mode, sensitive_paths))
-                        .collect(),
-                )
-            }
-            ConfigValue::Map(map) => {
-                serde_json::Value::Object(
-                    map.iter()
-                        .map(|(k, v)| (k.to_string(), v.to_json_with_mode(mode, sensitive_paths)))
-                        .collect(),
-                )
-            }
+            ConfigValue::Array(arr) => serde_json::Value::Array(
+                arr.iter()
+                    .map(|v| v.to_json_with_mode(mode, sensitive_paths))
+                    .collect(),
+            ),
+            ConfigValue::Map(map) => serde_json::Value::Object(
+                map.iter()
+                    .map(|(k, v)| (k.to_string(), v.to_json_with_mode(mode, sensitive_paths)))
+                    .collect(),
+            ),
         }
     }
 }
@@ -1027,6 +1027,9 @@ mod tests {
         assert_eq!(json, serde_json::Value::String("secret".to_string()));
 
         let json_redacted = val.to_json_with_mode(SerializeMode::Redacted, &["database.password"]);
-        assert_eq!(json_redacted, serde_json::Value::String("[REDACTED]".to_string()));
+        assert_eq!(
+            json_redacted,
+            serde_json::Value::String("[REDACTED]".to_string())
+        );
     }
 }

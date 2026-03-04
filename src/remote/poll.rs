@@ -11,8 +11,8 @@ use crate::value::{AnnotatedValue, SourceId};
 use async_trait::async_trait;
 use reqwest::Client;
 use std::net::IpAddr;
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::sync::{Mutex, RwLock};
 use std::time::Duration;
 
@@ -23,20 +23,20 @@ pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 /// Includes private networks, loopback, and link-local addresses.
 #[allow(dead_code)]
 const BLOCKED_IP_RANGES: &[&str] = &[
-    "127.0.0.0/8",      // Loopback
-    "10.0.0.0/8",       // Private
-    "172.16.0.0/12",    // Private
-    "192.168.0.0/16",   // Private
-    "169.254.0.0/16",   // Link-local
-    "0.0.0.0/8",        // Current network
-    "100.64.0.0/10",    // Carrier-grade NAT
-    "192.0.0.0/24",     // IETF Protocol assignments
-    "192.0.2.0/24",     // Documentation
-    "198.51.100.0/24",  // Documentation
-    "203.0.113.0/24",   // Documentation
-    "fc00::/7",         // IPv6 unique local
-    "fe80::/10",        // IPv6 link-local
-    "::1/128",          // IPv6 loopback
+    "127.0.0.0/8",     // Loopback
+    "10.0.0.0/8",      // Private
+    "172.16.0.0/12",   // Private
+    "192.168.0.0/16",  // Private
+    "169.254.0.0/16",  // Link-local
+    "0.0.0.0/8",       // Current network
+    "100.64.0.0/10",   // Carrier-grade NAT
+    "192.0.0.0/24",    // IETF Protocol assignments
+    "192.0.2.0/24",    // Documentation
+    "198.51.100.0/24", // Documentation
+    "203.0.113.0/24",  // Documentation
+    "fc00::/7",        // IPv6 unique local
+    "fe80::/10",       // IPv6 link-local
+    "::1/128",         // IPv6 loopback
 ];
 
 /// Check if an IP address is in a blocked range.
@@ -83,12 +83,11 @@ fn is_ip_blocked_v6(ip: std::net::Ipv6Addr) -> bool {
 
 /// Validate URL for security (SSRF protection).
 fn validate_url(url: &str) -> ConfigResult<()> {
-    let parsed = url::Url::parse(url)
-        .map_err(|_| ConfigError::InvalidValue {
-            key: "url".to_string(),
-            expected_type: "valid URL".to_string(),
-            message: "Invalid URL format".to_string(),
-        })?;
+    let parsed = url::Url::parse(url).map_err(|_| ConfigError::InvalidValue {
+        key: "url".to_string(),
+        expected_type: "valid URL".to_string(),
+        message: "Invalid URL format".to_string(),
+    })?;
 
     // Only allow HTTPS by default for security
     if parsed.scheme() != "https" {
@@ -110,7 +109,8 @@ fn validate_url(url: &str) -> ConfigResult<()> {
                     return Err(ConfigError::InvalidValue {
                         key: "url".to_string(),
                         expected_type: "public IP".to_string(),
-                        message: "Connection to private/internal IP addresses is not allowed".to_string(),
+                        message: "Connection to private/internal IP addresses is not allowed"
+                            .to_string(),
                     });
                 }
             }
@@ -119,7 +119,8 @@ fn validate_url(url: &str) -> ConfigResult<()> {
                     return Err(ConfigError::InvalidValue {
                         key: "url".to_string(),
                         expected_type: "public IP".to_string(),
-                        message: "Connection to private/internal IP addresses is not allowed".to_string(),
+                        message: "Connection to private/internal IP addresses is not allowed"
+                            .to_string(),
                     });
                 }
             }
@@ -233,8 +234,7 @@ impl HttpPolledSourceBuilder {
         let source_id = SourceId::new(format!("http:{}", url_arc));
 
         // Build HTTP client with TLS enabled by default
-        let mut client_builder = Client::builder()
-            .use_rustls_tls(); // Use rustls for TLS (secure by default)
+        let mut client_builder = Client::builder().use_rustls_tls(); // Use rustls for TLS (secure by default)
 
         if let Some(timeout) = self.timeout {
             client_builder = client_builder.timeout(timeout);
@@ -342,9 +342,9 @@ impl PolledSource for HttpPolledSource {
             })?;
 
         // Detect or use specified format
-        let format = self.format.unwrap_or_else(|| {
-            detect_format_from_content(&body).unwrap_or(Format::Json)
-        });
+        let format = self
+            .format
+            .unwrap_or_else(|| detect_format_from_content(&body).unwrap_or(Format::Json));
 
         // Parse the content
         let source = self.source_id.clone();
@@ -366,7 +366,11 @@ impl PolledSource for HttpPolledSource {
 }
 
 /// Parse content from a remote source.
-fn parse_remote_content(content: &str, format: Format, source: SourceId) -> ConfigResult<AnnotatedValue> {
+fn parse_remote_content(
+    content: &str,
+    format: Format,
+    source: SourceId,
+) -> ConfigResult<AnnotatedValue> {
     match format {
         Format::Toml => parse_toml_remote(content, source),
         Format::Json => parse_json_remote(content, source),
@@ -448,7 +452,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(source.poll_interval(), Some(Duration::from_secs(30)));
-        assert_eq!(source.source_id().as_str(), "http:https://example.com/config.json");
+        assert_eq!(
+            source.source_id().as_str(),
+            "http:https://example.com/config.json"
+        );
     }
 
     #[test]

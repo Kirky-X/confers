@@ -237,9 +237,7 @@ impl EtcdSource {
         let value = if config_map.is_empty() {
             crate::value::ConfigValue::Null
         } else {
-            crate::value::ConfigValue::map(
-                config_map.into_iter().collect()
-            )
+            crate::value::ConfigValue::map(config_map.into_iter().collect())
         };
 
         let result = AnnotatedValue::new(value, SourceId::new("etcd"), "");
@@ -262,22 +260,38 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
     match format {
         Format::Toml => {
             let table: toml::Table = toml::from_str(content).ok()?;
-            Some(crate::loader::parse_toml_table(&table, &SourceId::new("etcd"), ""))
+            Some(crate::loader::parse_toml_table(
+                &table,
+                &SourceId::new("etcd"),
+                "",
+            ))
         }
         Format::Json => {
             let v: serde_json::Value = serde_json::from_str(content).ok()?;
-            Some(crate::loader::parse_json_value(&v, &SourceId::new("etcd"), ""))
+            Some(crate::loader::parse_json_value(
+                &v,
+                &SourceId::new("etcd"),
+                "",
+            ))
         }
         Format::Yaml => {
             let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
-            Some(crate::loader::parse_yaml_value(&v, &SourceId::new("etcd"), ""))
+            Some(crate::loader::parse_yaml_value(
+                &v,
+                &SourceId::new("etcd"),
+                "",
+            ))
         }
         _ => None,
     }
 }
 
 /// Merge a key-value pair into a config map.
-fn merge_into_map(map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>, key: &str, value: AnnotatedValue) {
+fn merge_into_map(
+    map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>,
+    key: &str,
+    value: AnnotatedValue,
+) {
     map.insert(Arc::from(key.to_string()), value);
 }
 
@@ -311,7 +325,10 @@ mod tests {
     fn test_builder_chain() {
         let builder = EtcdSourceBuilder::new()
             .endpoint("etcd.example.com:2379")
-            .endpoints(vec!["etcd1.example.com:2379".to_string(), "etcd2.example.com:2379".to_string()])
+            .endpoints(vec![
+                "etcd1.example.com:2379".to_string(),
+                "etcd2.example.com:2379".to_string(),
+            ])
             .username("root")
             .password("secret")
             .prefix("my-app")

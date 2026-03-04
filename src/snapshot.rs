@@ -98,7 +98,7 @@ impl SnapshotManager {
                 let metadata = entry.metadata()?;
                 let created_at = metadata
                     .created()
-                    .map(|t| DateTime::from(t))
+                    .map(DateTime::from)
                     .unwrap_or_else(|_| Utc::now());
                 snapshots.push(SnapshotInfo {
                     path,
@@ -137,7 +137,7 @@ impl SnapshotManager {
     ) -> ConfigResult<PathBuf> {
         tokio::fs::create_dir_all(&self.config.dir)
             .await
-            .map_err(|e| crate::error::ConfigError::IoError(e))?;
+            .map_err(crate::error::ConfigError::IoError)?;
 
         let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
         let filename = format!("config-{}.{}", timestamp, self.config.format.ext());
@@ -155,13 +155,14 @@ impl SnapshotManager {
             SnapshotFormat::Json => {
                 #[cfg(feature = "json")]
                 {
-                    serde_json::to_string_pretty(&output)
-                        .map_err(|e| crate::error::ConfigError::ParseError {
+                    serde_json::to_string_pretty(&output).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
                             format: "json".to_string(),
                             message: e.to_string(),
                             location: None,
                             source: Some(Box::new(e)),
-                        })?
+                        }
+                    })?
                 }
                 #[cfg(not(feature = "json"))]
                 {
@@ -175,13 +176,14 @@ impl SnapshotManager {
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
                 {
-                    toml::to_string_pretty(&output)
-                        .map_err(|e| crate::error::ConfigError::ParseError {
+                    toml::to_string_pretty(&output).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
                             format: "toml".to_string(),
                             message: e.to_string(),
                             location: None,
                             source: Some(Box::new(e)),
-                        })?
+                        }
+                    })?
                 }
                 #[cfg(not(feature = "toml"))]
                 {
@@ -195,13 +197,14 @@ impl SnapshotManager {
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
                 {
-                    serde_yaml_ng::to_string(&output)
-                        .map_err(|e| crate::error::ConfigError::ParseError {
+                    serde_yaml_ng::to_string(&output).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
                             format: "yaml".to_string(),
                             message: e.to_string(),
                             location: None,
                             source: Some(Box::new(e)),
-                        })?
+                        }
+                    })?
                 }
                 #[cfg(not(feature = "yaml"))]
                 {
@@ -216,7 +219,7 @@ impl SnapshotManager {
 
         tokio::fs::write(&path, content)
             .await
-            .map_err(|e| crate::error::ConfigError::IoError(e))?;
+            .map_err(crate::error::ConfigError::IoError)?;
 
         self.prune_old_snapshots()?;
 
@@ -270,19 +273,20 @@ impl SnapshotManager {
     pub async fn load_snapshot(&self, path: &Path) -> ConfigResult<AnnotatedValue> {
         let content = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| crate::error::ConfigError::IoError(e))?;
+            .map_err(crate::error::ConfigError::IoError)?;
 
         let value: serde_json::Value = match self.config.format {
             SnapshotFormat::Json => {
                 #[cfg(feature = "json")]
                 {
-                    serde_json::from_str(&content)
-                        .map_err(|e| crate::error::ConfigError::ParseError {
+                    serde_json::from_str(&content).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
                             format: "json".to_string(),
                             message: e.to_string(),
                             location: None,
                             source: Some(Box::new(e)),
-                        })?
+                        }
+                    })?
                 }
                 #[cfg(not(feature = "json"))]
                 {
@@ -296,15 +300,15 @@ impl SnapshotManager {
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
                 {
-                    serde_json::to_value(
-                        toml::from_str::<serde_json::Value>(&content)
-                            .map_err(|e| crate::error::ConfigError::ParseError {
-                                format: "toml".to_string(),
-                                message: e.to_string(),
-                                location: None,
-                                source: Some(Box::new(e)),
-                            })?
-                    ).map_err(|e| crate::error::ConfigError::ParseError {
+                    serde_json::to_value(toml::from_str::<serde_json::Value>(&content).map_err(
+                        |e| crate::error::ConfigError::ParseError {
+                            format: "toml".to_string(),
+                            message: e.to_string(),
+                            location: None,
+                            source: Some(Box::new(e)),
+                        },
+                    )?)
+                    .map_err(|e| crate::error::ConfigError::ParseError {
                         format: "toml".to_string(),
                         message: e.to_string(),
                         location: None,
@@ -324,14 +328,16 @@ impl SnapshotManager {
                 #[cfg(feature = "yaml")]
                 {
                     serde_json::to_value(
-                        serde_yaml_ng::from_str::<serde_json::Value>(&content)
-                            .map_err(|e| crate::error::ConfigError::ParseError {
+                        serde_yaml_ng::from_str::<serde_json::Value>(&content).map_err(|e| {
+                            crate::error::ConfigError::ParseError {
                                 format: "yaml".to_string(),
                                 message: e.to_string(),
                                 location: None,
                                 source: Some(Box::new(e)),
-                            })?
-                    ).map_err(|e| crate::error::ConfigError::ParseError {
+                            }
+                        })?,
+                    )
+                    .map_err(|e| crate::error::ConfigError::ParseError {
                         format: "yaml".to_string(),
                         message: e.to_string(),
                         location: None,
@@ -357,13 +363,14 @@ impl SnapshotManager {
             value
         };
 
-        let annotated: AnnotatedValue = serde_json::from_value(clean_value)
-            .map_err(|e| crate::error::ConfigError::ParseError {
+        let annotated: AnnotatedValue = serde_json::from_value(clean_value).map_err(|e| {
+            crate::error::ConfigError::ParseError {
                 format: "json".to_string(),
                 message: e.to_string(),
                 location: None,
                 source: Some(Box::new(e)),
-            })?;
+            }
+        })?;
 
         Ok(annotated)
     }

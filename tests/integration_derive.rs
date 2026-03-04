@@ -7,7 +7,7 @@ use serde::Deserialize;
 struct SimpleConfig {
     #[config(default = "localhost".to_string())]
     host: String,
-    
+
     #[config(default = 8080u16)]
     port: u16,
 }
@@ -17,7 +17,7 @@ struct SimpleConfig {
 struct PrefixedConfig {
     #[config(default = "default-value".to_string())]
     name: String,
-    
+
     #[config(default = 3000u32)]
     timeout_ms: u32,
 }
@@ -26,7 +26,7 @@ struct PrefixedConfig {
 struct OptionalConfig {
     #[config(default = None::<String>)]
     optional_field: Option<String>,
-    
+
     #[config(default = Vec::<String>::new())]
     items: Vec<String>,
 }
@@ -50,11 +50,11 @@ fn test_simple_config_load() {
 fn test_simple_config_env_mapping() {
     let mapping = SimpleConfig::env_mapping();
     assert_eq!(mapping.len(), 2);
-    
+
     let host_mapping = mapping.iter().find(|(f, _, _)| f == "host").unwrap();
     assert_eq!(host_mapping.1, "host");
     assert_eq!(host_mapping.2, "HOST");
-    
+
     let port_mapping = mapping.iter().find(|(f, _, _)| f == "port").unwrap();
     assert_eq!(port_mapping.1, "port");
     assert_eq!(port_mapping.2, "PORT");
@@ -63,10 +63,10 @@ fn test_simple_config_env_mapping() {
 #[test]
 fn test_prefixed_config_env_mapping() {
     let mapping = PrefixedConfig::env_mapping();
-    
+
     let name_mapping = mapping.iter().find(|(f, _, _)| f == "name").unwrap();
     assert_eq!(name_mapping.2, "MYAPP_NAME");
-    
+
     let timeout_mapping = mapping.iter().find(|(f, _, _)| f == "timeout_ms").unwrap();
     assert_eq!(timeout_mapping.2, "MYAPP_TIMEOUT_MS");
 }

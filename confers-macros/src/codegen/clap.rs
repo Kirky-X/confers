@@ -2,12 +2,12 @@
 //!
 //! Generates ClapArgs struct and CLI argument support.
 
+use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, Fields};
-use darling::FromField;
+use syn::{Fields, Ident};
 
-use crate::parse::{StructAttrs, FieldAttrs};
+use crate::parse::{FieldAttrs, StructAttrs};
 
 /// Generate ClapArgs struct for CLI argument parsing.
 pub fn generate_clap_impl(
@@ -29,7 +29,9 @@ pub fn generate_clap_impl(
             }
 
             let field_name = field_attrs.effective_name();
-            let cli_name = field_attrs.name_clap_long.clone()
+            let cli_name = field_attrs
+                .name_clap_long
+                .clone()
                 .unwrap_or_else(|| field_name.replace('.', "-"));
 
             // Build arg attributes

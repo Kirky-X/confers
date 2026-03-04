@@ -99,11 +99,7 @@ fn demo_performance_comparison() -> Result<(), Box<dyn std::error::Error>> {
         let _read_guard = rwlock_field.read().unwrap();
     }
     let rwlock_time = start.elapsed();
-    tracing::info!(
-        "RwLock 读取 {} 次耗时: {:?}",
-        ITERATIONS,
-        rwlock_time
-    );
+    tracing::info!("RwLock 读取 {} 次耗时: {:?}", ITERATIONS, rwlock_time);
 
     let speedup = rwlock_time.as_nanos() as f64 / lock_free_time.as_nanos() as f64;
     tracing::info!("无锁读取比 RwLock 快 {:.2} 倍\n", speedup);

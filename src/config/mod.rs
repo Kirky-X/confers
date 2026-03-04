@@ -14,9 +14,7 @@ mod source;
 pub use builder::{config, ConfigBuilder, ReloadStrategy, SnapshotConfig};
 pub use chain::{SourceChain, SourceChainBuilder};
 pub use limits::ConfigLimits;
-pub use source::{
-    DefaultSource, EnvSource, FileSource, MemorySource, Source, SourceKind,
-};
+pub use source::{DefaultSource, EnvSource, FileSource, MemorySource, Source, SourceKind};
 
 // Re-export commonly used types
 #[doc(hidden)]

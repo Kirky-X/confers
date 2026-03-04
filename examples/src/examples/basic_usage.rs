@@ -144,9 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 加载配置 - 使用 load_sync() 自动从环境变量加载
     println!("\n正在加载配置...");
-    
-    let config = AppConfig::load_sync()
-        .map_err(|e| format!("配置加载失败: {:?}", e))?;
+
+    let config = AppConfig::load_sync().map_err(|e| format!("配置加载失败: {:?}", e))?;
 
     // 打印配置信息
     print_config(&config);

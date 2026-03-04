@@ -45,7 +45,7 @@ fn test_dynamic_field_callback_registration() {
 
     // Verify callback is registered
     assert_eq!(field.callback_count(), 1);
-    
+
     // Note: Cannot call field.update() from integration tests as it's pub(crate)
     // The internal unit tests in dynamic.rs cover the update notification
 }
@@ -76,7 +76,11 @@ fn test_callback_guard_drops_on_scope_exit() {
 
     {
         let _guard = field.on_change(|_val| {});
-        assert_eq!(field.callback_count(), 1, "Should have one callback registered");
+        assert_eq!(
+            field.callback_count(),
+            1,
+            "Should have one callback registered"
+        );
     }
 
     // After guard drops, callback should be removed
@@ -120,9 +124,7 @@ fn test_dynamic_field_builder_default() {
 #[test]
 fn test_dynamic_field_multiple_callbacks() {
     let field = DynamicField::new(0u32);
-    let results: Vec<Arc<AtomicUsize>> = (0..3)
-        .map(|_| Arc::new(AtomicUsize::new(0)))
-        .collect();
+    let results: Vec<Arc<AtomicUsize>> = (0..3).map(|_| Arc::new(AtomicUsize::new(0))).collect();
 
     // Store guards to prevent them from being dropped
     let mut guards = Vec::new();
@@ -163,8 +165,7 @@ async fn test_field_watcher_changed_for() {
     let mut watcher = confers::dynamic::FieldWatcher::new(rx, fields);
 
     // Update with different value
-    tx.send(Arc::new(TestConfig::new(200, 50)))
-    .unwrap();
+    tx.send(Arc::new(TestConfig::new(200, 50))).unwrap();
 
     let (config, changed) = watcher.changed_for().await;
 
@@ -236,7 +237,7 @@ fn test_dynamic_field_default() {
 #[tokio::test]
 async fn test_dynamic_field_async_callback() {
     use std::sync::atomic::{AtomicU32, Ordering};
-    
+
     let field = DynamicField::new(0u32);
     let received = Arc::new(AtomicU32::new(0));
     let received_clone = received.clone();
@@ -258,10 +259,10 @@ fn test_dynamic_field_multithread_callbacks() {
 
     let field = DynamicField::new(0u32);
     let field_arc = Arc::new(field);
-    
+
     // Store guards to keep them alive during test
     let guards_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    
+
     let handles: Vec<_> = (0..4)
         .map(|_i| {
             let field = field_arc.clone();
@@ -338,9 +339,6 @@ impl ConfigProvider for TestConfig {
     }
 
     fn keys(&self) -> Vec<String> {
-        vec![
-            "timeout_ms".to_string(),
-            "max_connections".to_string(),
-        ]
+        vec!["timeout_ms".to_string(), "max_connections".to_string()]
     }
 }

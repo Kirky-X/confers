@@ -2,12 +2,12 @@
 //!
 //! Generates Versioned trait implementation and migration_registry function.
 
+use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, Fields};
-use darling::FromField;
+use syn::{Fields, Ident};
 
-use crate::parse::{StructAttrs, FieldAttrs};
+use crate::parse::{FieldAttrs, StructAttrs};
 
 /// Generate Versioned implementation and migration registry for a config struct.
 pub fn generate_migration_impl(

@@ -3,20 +3,20 @@
 //! This crate provides the `#[derive(Config)]` macro for zero-boilerplate
 //! configuration loading.
 
+use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Data};
-use darling::FromDeriveInput;
+use syn::{parse_macro_input, Data, DeriveInput};
 
-mod parse;
 mod codegen;
+mod parse;
 
-use parse::{StructAttrs, FieldAttrs};
 use codegen::{
-    generate_defaults_impl, generate_load_impl, generate_validate_impl,
-    generate_schema_impl, generate_migration_impl, generate_modules_impl, generate_clap_impl
+    generate_clap_impl, generate_defaults_impl, generate_load_impl, generate_migration_impl,
+    generate_modules_impl, generate_schema_impl, generate_validate_impl,
 };
 use darling::FromField;
+use parse::{FieldAttrs, StructAttrs};
 
 /// Derive macro for configuration loading.
 ///

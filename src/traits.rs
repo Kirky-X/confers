@@ -73,38 +73,35 @@ pub trait ConfigProviderExt: ConfigProvider {
         T: std::str::FromStr + Default,
         T::Err: std::fmt::Display,
     {
-        let value = self.get_raw(key).ok_or_else(|| {
-            crate::error::ConfigError::InvalidValue {
+        let value = self
+            .get_raw(key)
+            .ok_or_else(|| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
                 expected_type: std::any::type_name::<T>().to_string(),
                 message: "key not found".to_string(),
-            }
-        })?;
+            })?;
 
-        let s = value.as_string().ok_or_else(|| {
-            crate::error::ConfigError::InvalidValue {
+        let s = value
+            .as_string()
+            .ok_or_else(|| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
                 expected_type: std::any::type_name::<T>().to_string(),
                 message: "value is not a string".to_string(),
-            }
-        })?;
+            })?;
 
-        s.parse::<T>().map_err(|e| {
-            crate::error::ConfigError::InvalidValue {
+        s.parse::<T>()
+            .map_err(|e| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
                 expected_type: std::any::type_name::<T>().to_string(),
                 message: e.to_string(),
-            }
-        })
+            })
     }
 
     /// Get multiple values efficiently.
     ///
     /// Returns a HashMap with the requested keys. Missing keys will have `None` values.
     fn get_many<'a>(&self, keys: &[&'a str]) -> HashMap<&'a str, Option<&AnnotatedValue>> {
-        keys.iter()
-            .map(|&k| (k, self.get_raw(k)))
-            .collect()
+        keys.iter().map(|&k| (k, self.get_raw(k))).collect()
     }
 
     /// Get a nested value by path segments.
@@ -122,8 +119,10 @@ impl<T: ConfigProvider + ?Sized> ConfigProviderExt for T {}
 
 /// Caching policy for key providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum KeyCachePolicy {
     /// Cache with time-to-live
+    #[default]
     Ttl,
     /// Cache indefinitely
     Forever,
@@ -131,11 +130,6 @@ pub enum KeyCachePolicy {
     Never,
 }
 
-impl Default for KeyCachePolicy {
-    fn default() -> Self {
-        Self::Ttl
-    }
-}
 
 /// Synchronous encryption key provider.
 ///
@@ -360,8 +354,8 @@ mod tests {
 
     #[test]
     fn test_typed_config_key() {
-        static DB_HOST: TypedConfigKey<String> = TypedConfigKey::new("database.host")
-            .with_description("Database hostname");
+        static DB_HOST: TypedConfigKey<String> =
+            TypedConfigKey::new("database.host").with_description("Database hostname");
 
         assert_eq!(DB_HOST.path(), "database.host");
         assert_eq!(DB_HOST.description(), Some("Database hostname"));

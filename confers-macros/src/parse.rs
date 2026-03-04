@@ -4,7 +4,7 @@
 
 use darling::{FromDeriveInput, FromField};
 use quote::quote;
-use syn::{Ident, Type, PathArguments, GenericArgument};
+use syn::{GenericArgument, Ident, PathArguments, Type};
 
 /// Parsed attributes from the struct level.
 #[derive(Debug, FromDeriveInput)]
@@ -256,9 +256,18 @@ mod tests {
 
     #[test]
     fn test_merge_strategy_from_str() {
-        assert_eq!(MergeStrategyKind::from_str("replace"), MergeStrategyKind::Replace);
+        assert_eq!(
+            MergeStrategyKind::from_str("replace"),
+            MergeStrategyKind::Replace
+        );
         assert_eq!(MergeStrategyKind::from_str("join"), MergeStrategyKind::Join);
-        assert_eq!(MergeStrategyKind::from_str("append"), MergeStrategyKind::Append);
-        assert_eq!(MergeStrategyKind::from_str("deep_merge"), MergeStrategyKind::DeepMerge);
+        assert_eq!(
+            MergeStrategyKind::from_str("append"),
+            MergeStrategyKind::Append
+        );
+        assert_eq!(
+            MergeStrategyKind::from_str("deep_merge"),
+            MergeStrategyKind::DeepMerge
+        );
     }
 }

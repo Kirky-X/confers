@@ -39,12 +39,7 @@ async fn test_in_memory_bus_publish_subscribe() {
     let mut events = bus.subscribe().await.unwrap();
     assert_eq!(bus.subscriber_count(), 1);
 
-    let event = ConfigChangeEvent::new(
-        "instance-1",
-        "test",
-        vec!["key1".to_string()],
-        "checksum",
-    );
+    let event = ConfigChangeEvent::new("instance-1", "test", vec!["key1".to_string()], "checksum");
     bus.publish(event.clone()).await.unwrap();
 
     let received = timeout(Duration::from_millis(100), events.next())

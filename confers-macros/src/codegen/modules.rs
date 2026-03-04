@@ -2,12 +2,12 @@
 //!
 //! Generates module_registry function for composable config groups.
 
+use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, Fields};
-use darling::FromField;
+use syn::{Fields, Ident};
 
-use crate::parse::{StructAttrs, FieldAttrs};
+use crate::parse::{FieldAttrs, StructAttrs};
 
 /// Generate module registry for config groups.
 pub fn generate_modules_impl(

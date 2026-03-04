@@ -1,11 +1,11 @@
 //! Load method generation for Config derive macro.
 
-use proc_macro2::TokenStream;
-use quote::{quote, format_ident};
-use syn::{Ident, Fields};
 use darling::FromField;
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
+use syn::{Fields, Ident};
 
-use crate::parse::{StructAttrs, FieldAttrs};
+use crate::parse::{FieldAttrs, StructAttrs};
 
 /// Generate the load methods for a struct.
 pub fn generate_load_impl(
@@ -31,7 +31,7 @@ pub fn generate_load_impl(
 
     // Generate load() method
     let load_impl = generate_load_method(struct_ident, attrs, &field_info);
-    
+
     // generate load_sync() method
     let load_sync_impl = generate_load_sync_method(struct_ident, attrs, &field_info);
 
@@ -56,7 +56,7 @@ fn generate_load_method(
     fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
 ) -> TokenStream {
     let env_prefix = attrs.effective_env_prefix();
-    
+
     // Generate default source setup
     let default_calls: Vec<TokenStream> = fields
         .iter()
@@ -64,7 +64,7 @@ fn generate_load_method(
         .map(|(_, _, f)| {
             let config_key = f.effective_name();
             let default_expr = f.default.as_ref().unwrap();
-            
+
             quote! {
                 builder = builder.default(#config_key.to_string(), {
                     let val: confers::ConfigValue = (#default_expr).into();
@@ -134,13 +134,13 @@ fn generate_load_method(
             /// Load configuration synchronously.
             pub fn load_sync() -> confers::ConfigResult<Self> {
                 let mut builder = confers::ConfigBuilder::<Self>::new();
-                
+
                 // Add defaults first (lowest priority)
                 #(#default_calls)*
-                
+
                 // Add environment variables (higher priority)
                 #(#env_calls)*
-                
+
                 builder.build()
             }
         }
@@ -154,7 +154,7 @@ fn generate_load_sync_method(
     fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
 ) -> TokenStream {
     let env_prefix = attrs.effective_env_prefix();
-    
+
     // Generate default source setup
     let default_calls: Vec<TokenStream> = fields
         .iter()
@@ -162,7 +162,7 @@ fn generate_load_sync_method(
         .map(|(_ident, _, f)| {
             let config_key = f.effective_name();
             let default_expr = f.default.as_ref().unwrap();
-            
+
             quote! {
                 builder = builder.default(#config_key.to_string(), {
                     let val: confers::ConfigValue = (#default_expr).into();
@@ -220,13 +220,13 @@ fn generate_load_sync_method(
             /// Build configuration with environment variables and defaults.
             pub fn build_config() -> confers::ConfigResult<Self> {
                 let mut builder = confers::ConfigBuilder::<Self>::new();
-                
+
                 // Add defaults first (lowest priority)
                 #(#default_calls)*
-                
+
                 // Add environment variables (higher priority)
                 #(#env_calls)*
-                
+
                 builder.build()
             }
         }
@@ -272,7 +272,7 @@ fn generate_env_mapping(
             let config_key = f.effective_name();
             let env_name = f.effective_env_name(env_prefix);
             let field_name = ident.to_string();
-            
+
             quote! {
                 (#field_name.to_string(), #config_key.to_string(), #env_name.to_string())
             }
@@ -303,7 +303,7 @@ pub fn generate_typed_keys(
         .map(|(ident, ty, f)| {
             let config_key = f.effective_name();
             let fn_name = format_ident!("key_{}", ident);
-            
+
             quote! {
                 /// Get a typed configuration key for this field.
                 pub fn #fn_name() -> confers::TypedConfigKey<#ty> {

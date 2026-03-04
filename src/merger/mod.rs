@@ -3,8 +3,8 @@
 //! This module provides various merge strategies for combining configuration values
 //! from multiple sources with different priorities.
 
-mod strategy;
 mod engine;
+mod strategy;
 
-pub use strategy::*;
 pub use engine::*;
+pub use strategy::*;

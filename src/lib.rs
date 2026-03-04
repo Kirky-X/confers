@@ -64,10 +64,10 @@ pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
 
 // Re-export derive macros
 pub use confers_macros::Config;
-pub use confers_macros::ConfigSchema;
+pub use confers_macros::ConfigClap;
 pub use confers_macros::ConfigMigration;
 pub use confers_macros::ConfigModules;
-pub use confers_macros::ConfigClap;
+pub use confers_macros::ConfigSchema;
 
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationResult, ValidationRule};
@@ -79,7 +79,9 @@ pub use interpolation::{
 };
 
 #[cfg(feature = "watch")]
-pub use watcher::{AdaptiveDebouncer, FsWatcher, MultiFsWatcher, WatcherConfig, WatcherConfigBuilder, WatcherGuard};
+pub use watcher::{
+    AdaptiveDebouncer, FsWatcher, MultiFsWatcher, WatcherConfig, WatcherConfigBuilder, WatcherGuard,
+};
 
 #[cfg(feature = "progressive-reload")]
 pub use watcher::{
@@ -88,7 +90,7 @@ pub use watcher::{
 
 #[cfg(feature = "encryption")]
 pub use secret::{
-    derive_field_key, crypto::CryptoError, SecretBytes, SecretString, XChaCha20Crypto,
+    crypto::CryptoError, derive_field_key, SecretBytes, SecretString, XChaCha20Crypto,
 };
 
 #[cfg(feature = "audit")]
@@ -109,7 +111,9 @@ pub use snapshot::{SnapshotFormat, SnapshotInfo, SnapshotManager, SnapshotOption
 pub use modules::{ModuleConfig, ModuleRegistry};
 
 #[cfg(feature = "context-aware")]
-pub use context::{ContextAwareField, ContextAwareFieldBuilder, ContextRule, ContextValue, EvaluationContext};
+pub use context::{
+    ContextAwareField, ContextAwareFieldBuilder, ContextRule, ContextValue, EvaluationContext,
+};
 
 #[cfg(feature = "config-bus")]
 pub use bus::{BusBuilder, ConfigBus, ConfigChangeEvent, InMemoryBus};
@@ -125,10 +129,10 @@ pub mod prelude {
     pub use crate::traits::{ConfigProvider, ConfigProviderExt, TypedConfigKey};
     pub use crate::value::{AnnotatedValue, ConfigValue};
     pub use crate::Config;
-    
+
     #[cfg(feature = "validation")]
     pub use crate::validator::Validate;
-    
+
     #[cfg(feature = "interpolation")]
     pub use crate::interpolation::{interpolate, InterpolationConfig};
 

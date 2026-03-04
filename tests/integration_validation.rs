@@ -31,7 +31,7 @@ fn test_validated_config_host_env_override() {
 
     let config = ValidatedConfig::load_sync().unwrap();
     assert_eq!(config.host, "example.com");
-    assert_eq!(config.port, 8080);  // Default port
+    assert_eq!(config.port, 8080); // Default port
 
     // Validate the overridden host value
     assert!(config.validate().is_ok());
@@ -100,7 +100,7 @@ fn test_validated_config_defaults() {
 struct ServerConfig {
     #[garde(length(min = 1))]
     name: String,
-    
+
     #[garde(range(min = 1, max = 65535))]
     port: u16,
 }
@@ -117,13 +117,12 @@ struct AppConfig {
 fn test_nested_validation() {
     let config = AppConfig::default();
     assert!(config.validate().is_ok());
-    
+
     // Test with valid override
     std::env::set_var("SERVER_HOST", "prod-server");
     let config = AppConfig::load_sync().unwrap();
     assert_eq!(config.server_host, "prod-server");
     assert!(config.validate().is_ok());
-    
+
     std::env::remove_var("SERVER_HOST");
 }
-

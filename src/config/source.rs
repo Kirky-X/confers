@@ -253,14 +253,13 @@ impl EnvSource {
         let path = Path::new(file_path);
 
         // Check for path traversal attempts
-        let canonical = std::fs::canonicalize(path)
-            .map_err(|_| ConfigError::FileNotFound {
-                filename: path.to_path_buf(),
-                source: Some(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "Cannot resolve file path",
-                )),
-            })?;
+        let canonical = std::fs::canonicalize(path).map_err(|_| ConfigError::FileNotFound {
+            filename: path.to_path_buf(),
+            source: Some(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Cannot resolve file path",
+            )),
+        })?;
 
         // Block access to sensitive paths
         let sensitive_prefixes = [
@@ -291,8 +290,13 @@ impl EnvSource {
 
         // Only allow specific extensions for security
         if let Some(ext) = canonical.extension() {
-            let allowed = ["txt", "json", "yaml", "yml", "toml", "ini", "env", "secret", "key", "pem", "crt"];
-            if !allowed.iter().any(|&e| ext.to_str().map_or(false, |s| s.eq_ignore_ascii_case(e))) {
+            let allowed = [
+                "txt", "json", "yaml", "yml", "toml", "ini", "env", "secret", "key", "pem", "crt",
+            ];
+            if !allowed
+                .iter()
+                .any(|&e| ext.to_str().is_some_and(|s| s.eq_ignore_ascii_case(e)))
+            {
                 return Err(ConfigError::InvalidValue {
                     key: "file_path".to_string(),
                     expected_type: "allowed extension".to_string(),

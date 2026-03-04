@@ -82,7 +82,8 @@ async fn test_etcd_source_parse_config() {
     let base_url = "http://127.0.0.1:2379/v3/kv/put";
 
     // Write host key
-    let host_resp = client.post(base_url)
+    let host_resp = client
+        .post(base_url)
         .json(&serde_json::json!({
             "key": "dGVzdC1jb25maWcvYXBwL2hvc3Q=",  // "test-config/app/host" in base64
             "value": "bG9jYWxob3N0"  // "localhost" in base64
@@ -96,7 +97,8 @@ async fn test_etcd_source_parse_config() {
     }
 
     // Write port key
-    let port_resp = client.post(base_url)
+    let port_resp = client
+        .post(base_url)
         .json(&serde_json::json!({
             "key": "dGVzdC1jb25maWcvYXBwL3BvcnQ=",  // "test-config/app/port" in base64
             "value": "ODA4MA=="  // "8080" in base64
@@ -132,7 +134,8 @@ async fn test_etcd_source_parse_config() {
     }
 
     // Cleanup - delete the test keys
-    let _ = client.post("http://127.0.0.1:2379/v3/kv/del")
+    let _ = client
+        .post("http://127.0.0.1:2379/v3/kv/del")
         .json(&serde_json::json!({
             "key": "dGVzdC1jb25maWc="
         }))
@@ -153,10 +156,12 @@ async fn test_etcd_source_json_config() {
     use reqwest::Client;
     let client = Client::new();
 
-    let json_key = "dGVzdC1jb25maWctanNvbg==";  // "test-config-json" in base64
-    let json_value = base64::engine::general_purpose::STANDARD.encode(r#"{"database": {"host": "db.example.com", "port": 5432}}"#);
+    let json_key = "dGVzdC1jb25maWctanNvbg=="; // "test-config-json" in base64
+    let json_value = base64::engine::general_purpose::STANDARD
+        .encode(r#"{"database": {"host": "db.example.com", "port": 5432}}"#);
 
-    let result = client.post("http://127.0.0.1:2379/v3/kv/put")
+    let result = client
+        .post("http://127.0.0.1:2379/v3/kv/put")
         .json(&serde_json::json!({
             "key": json_key,
             "value": json_value
@@ -190,7 +195,8 @@ async fn test_etcd_source_json_config() {
     }
 
     // Cleanup
-    let _ = client.post("http://127.0.0.1:2379/v3/kv/del")
+    let _ = client
+        .post("http://127.0.0.1:2379/v3/kv/del")
         .json(&serde_json::json!({
             "key": json_key
         }))

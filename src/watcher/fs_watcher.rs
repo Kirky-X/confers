@@ -94,7 +94,8 @@ impl FsWatcher {
 
     /// Stop the watcher.
     pub fn stop(&self) {
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Check if the watcher is running.
@@ -110,10 +111,7 @@ impl FsWatcher {
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
         use notify_debouncer_full::{
-            new_debouncer,
-            notify::EventKind,
-            notify::RecursiveMode,
-            DebounceEventResult,
+            new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
         };
 
         let path_owned = path.to_path_buf();
@@ -124,30 +122,26 @@ impl FsWatcher {
 
         // Spawn the debouncer in a blocking thread
         std::thread::spawn(move || {
-            let _debouncer = match new_debouncer(
-                Duration::from_millis(debounce_ms),
-                None,
-                move |result| {
+            match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
                     let _ = bridge_tx.send(result);
-                },
-            ) {
-                Ok(mut d) => {
-                    if let Err(e) = d.watch(&path_owned, RecursiveMode::Recursive) {
-                        tracing::error!("Failed to watch path {:?}: {:?}", path_owned, e);
+                }) {
+                    Ok(mut d) => {
+                        if let Err(e) = d.watch(&path_owned, RecursiveMode::Recursive) {
+                            tracing::error!("Failed to watch path {:?}: {:?}", path_owned, e);
+                            return;
+                        }
+                        tracing::info!("FsWatcher watching: {:?}", path_owned);
+
+                        // Keep the thread alive to process events
+                        while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
+                            std::thread::sleep(Duration::from_millis(50));
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to create debouncer: {:?}", e);
                         return;
                     }
-                    tracing::info!("FsWatcher watching: {:?}", path_owned);
-
-                    // Keep the thread alive to process events
-                    while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                        std::thread::sleep(Duration::from_millis(50));
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to create debouncer: {:?}", e);
-                    return;
-                }
-            };
+                };
         });
 
         // Process events in async context
@@ -157,7 +151,9 @@ impl FsWatcher {
                     if let Ok(events) = result {
                         for event in events {
                             match event.kind {
-                                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                                EventKind::Create(_)
+                                | EventKind::Modify(_)
+                                | EventKind::Remove(_) => {
                                     for event_path in &event.paths {
                                         if event_path.is_file() {
                                             let _ = tx.send(event_path.clone()).await;
@@ -220,7 +216,10 @@ impl MultiFsWatcher {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn new(paths: impl IntoIterator<Item = impl AsRef<Path>>, debounce_ms: u64) -> ConfigResult<Self> {
+    pub async fn new(
+        paths: impl IntoIterator<Item = impl AsRef<Path>>,
+        debounce_ms: u64,
+    ) -> ConfigResult<Self> {
         let watch_paths: HashSet<PathBuf> = paths
             .into_iter()
             .map(|p| p.as_ref().to_path_buf())
@@ -277,7 +276,8 @@ impl MultiFsWatcher {
 
     /// Stop the watcher.
     pub fn stop(&self) {
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Check if the watcher is running.
@@ -293,10 +293,7 @@ impl MultiFsWatcher {
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
         use notify_debouncer_full::{
-            new_debouncer,
-            notify::EventKind,
-            notify::RecursiveMode,
-            DebounceEventResult,
+            new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
         };
 
         let paths_clone = paths.clone();
@@ -307,19 +304,16 @@ impl MultiFsWatcher {
 
         // Spawn the debouncer in a blocking thread
         std::thread::spawn(move || {
-            let mut debouncer = match new_debouncer(
-                Duration::from_millis(debounce_ms),
-                None,
-                move |result| {
+            let mut debouncer =
+                match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
                     let _ = bridge_tx.send(result);
-                },
-            ) {
-                Ok(d) => d,
-                Err(e) => {
-                    tracing::error!("Failed to create debouncer: {:?}", e);
-                    return;
-                }
-            };
+                }) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::error!("Failed to create debouncer: {:?}", e);
+                        return;
+                    }
+                };
 
             for path in &paths_clone {
                 if path.is_dir() {
@@ -345,13 +339,14 @@ impl MultiFsWatcher {
                     if let Ok(events) = result {
                         for event in events {
                             match event.kind {
-                                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                                EventKind::Create(_)
+                                | EventKind::Modify(_)
+                                | EventKind::Remove(_) => {
                                     for event_path in &event.paths {
-                                        if event_path.is_file() {
-                                            if paths.contains(event_path) {
+                                        if event_path.is_file()
+                                            && paths.contains(event_path) {
                                                 let _ = tx.send(event_path.clone()).await;
                                             }
-                                        }
                                     }
                                 }
                                 _ => {}

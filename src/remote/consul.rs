@@ -181,7 +181,9 @@ impl ConsulSource {
         }
 
         // Make the request
-        let response = request.send().await
+        let response = request
+            .send()
+            .await
             .map_err(|e| ConfigError::InvalidValue {
                 key: "consul".to_string(),
                 expected_type: "Consul KV response".to_string(),
@@ -196,12 +198,15 @@ impl ConsulSource {
             });
         }
 
-        let kv_responses: Vec<KvResponse> = response.json().await
-            .map_err(|e| ConfigError::InvalidValue {
-                key: "consul".to_string(),
-                expected_type: "Consul KV response".to_string(),
-                message: format!("Failed to parse Consul response: {}", e),
-            })?;
+        let kv_responses: Vec<KvResponse> =
+            response
+                .json()
+                .await
+                .map_err(|e| ConfigError::InvalidValue {
+                    key: "consul".to_string(),
+                    expected_type: "Consul KV response".to_string(),
+                    message: format!("Failed to parse Consul response: {}", e),
+                })?;
 
         if kv_responses.is_empty() {
             // Return cached value if no changes
@@ -217,7 +222,8 @@ impl ConsulSource {
         }
 
         // Find the maximum index
-        let max_index = kv_responses.iter()
+        let max_index = kv_responses
+            .iter()
             .filter_map(|r| r.modify_index)
             .max()
             .unwrap_or(0);
@@ -250,7 +256,8 @@ impl ConsulSource {
                 } else {
                     // Remove prefix from key
                     if value.starts_with(&*self.prefix) {
-                        value.strip_prefix(&*self.prefix)
+                        value
+                            .strip_prefix(&*self.prefix)
                             .unwrap_or(value)
                             .trim_start_matches('/')
                             .to_string()
@@ -280,9 +287,7 @@ impl ConsulSource {
         let value = if config_map.is_empty() {
             crate::value::ConfigValue::Null
         } else {
-            crate::value::ConfigValue::map(
-                config_map.into_iter().collect()
-            )
+            crate::value::ConfigValue::map(config_map.into_iter().collect())
         };
 
         let result = AnnotatedValue::new(value, SourceId::new("consul"), "");
@@ -313,22 +318,38 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
     match format {
         Format::Toml => {
             let table: toml::Table = toml::from_str(content).ok()?;
-            Some(crate::loader::parse_toml_table(&table, &SourceId::new("consul"), ""))
+            Some(crate::loader::parse_toml_table(
+                &table,
+                &SourceId::new("consul"),
+                "",
+            ))
         }
         Format::Json => {
             let v: serde_json::Value = serde_json::from_str(content).ok()?;
-            Some(crate::loader::parse_json_value(&v, &SourceId::new("consul"), ""))
+            Some(crate::loader::parse_json_value(
+                &v,
+                &SourceId::new("consul"),
+                "",
+            ))
         }
         Format::Yaml => {
             let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
-            Some(crate::loader::parse_yaml_value(&v, &SourceId::new("consul"), ""))
+            Some(crate::loader::parse_yaml_value(
+                &v,
+                &SourceId::new("consul"),
+                "",
+            ))
         }
         _ => None,
     }
 }
 
 /// Merge a key-value pair into a config map.
-fn merge_into_map(map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>, key: &str, value: AnnotatedValue) {
+fn merge_into_map(
+    map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>,
+    key: &str,
+    value: AnnotatedValue,
+) {
     // For simplicity, use the full key as-is
     // A more complete implementation would handle nested keys
     map.insert(Arc::from(key), value);

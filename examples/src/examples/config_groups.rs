@@ -14,11 +14,7 @@
 //!   APP_ENV=prod cargo run --example config_groups # 通过环境变量指定
 //! =============================================================================
 
-use confers::{
-    config,
-    prelude::*,
-    ConfigBuilder, ConfigValue, SourceChainBuilder,
-};
+use confers::{config, prelude::*, ConfigBuilder, ConfigValue, SourceChainBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -283,7 +279,10 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
     println!("优先级演示结果:");
     println!("  name = {} (高优先级覆盖低优先级)", test_config.name);
     println!("  port = {} (高优先级覆盖低优先级)", test_config.port);
-    println!("  level = {} (高优先级未设置，保留低优先级)", test_config.level);
+    println!(
+        "  level = {} (高优先级未设置，保留低优先级)",
+        test_config.level
+    );
 
     Ok(())
 }
