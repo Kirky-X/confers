@@ -2,18 +2,13 @@
 //!
 //! This example demonstrates the comprehensive capabilities of confers.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 
 use confers::dynamic::DynamicField;
-use confers::secret::{derive_field_key, SecretKeyProvider, SecretString, XChaCha20Crypto};
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
-use confers::watcher::{FsWatcher, WatcherConfig};
+use confers::secret::{derive_field_key, SecretString, XChaCha20Crypto};
+use confers::watcher::WatcherConfig;
 use confers::Config;
-use serde::{Deserialize, Serialize};
-use tracing::{error, info, warn, Level};
+use serde::Deserialize;
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Config, Deserialize, Debug, Clone)]

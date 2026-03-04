@@ -4,8 +4,12 @@ use indexmap::IndexMap;
 use std::sync::Arc;
 use tracing::{info, warn};
 
+// These structs are used as type markers for migration examples
+#[allow(dead_code)]
 struct ConfigV1;
+#[allow(dead_code)]
 struct ConfigV2;
+#[allow(dead_code)]
 struct ConfigV3;
 
 impl Versioned for ConfigV1 {
@@ -179,9 +183,9 @@ fn demo_multi_step_migration() {
 fn demo_migration_on_reload() {
     info!("\n--- MigrationOnReload 示例 ---");
 
-    let always = MigrationOnReload::Always;
+    let _always = MigrationOnReload::Always;
     let on_change = MigrationOnReload::OnVersionChange;
-    let disabled = MigrationOnReload::Disabled;
+    let _disabled = MigrationOnReload::Disabled;
 
     info!("MigrationOnReload::Always: 每次重载都执行迁移");
     info!("MigrationOnReload::OnVersionChange: 仅版本变化时迁移 (默认)");

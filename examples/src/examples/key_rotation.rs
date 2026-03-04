@@ -11,6 +11,7 @@ struct EncryptedData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct KeyVersion {
     status: String,
     created_at: String,
@@ -19,6 +20,7 @@ struct KeyVersion {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 struct KeyManagement {
     current_version: String,
     master_key_id: String,
@@ -277,12 +279,12 @@ fn demonstrate_env_key_provider_with_version() {
 
             for version in versions.iter() {
                 let field_key =
-                    derive_field_key(key.as_slice().try_into().unwrap(), "test.field", version)
-                        .expect(&format!("派生 {} 密钥失败", version));
+                    derive_field_key(key.as_slice(), "test.field", version)
+                        .unwrap_or_else(|_| panic!("派生 {} 密钥失败", version));
 
                 let (nonce, ciphertext) = crypto
                     .encrypt(plaintext, &field_key)
-                    .expect(&format!("{} 加密失败", version));
+                    .unwrap_or_else(|_| panic!("{} 加密失败", version));
 
                 tracing::info!(
                     "版本 {} - Nonce: {:02x?}, Ciphertext: {:02x?}",
@@ -293,7 +295,7 @@ fn demonstrate_env_key_provider_with_version() {
 
                 let decrypted = crypto
                     .decrypt(&nonce, &ciphertext, &field_key)
-                    .expect(&format!("{} 解密失败", version));
+                    .unwrap_or_else(|_| panic!("{} 解密失败", version));
                 assert_eq!(decrypted, plaintext);
             }
 

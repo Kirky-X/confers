@@ -3,8 +3,7 @@
 //! This example demonstrates how to use confers to load remote configuration
 //! from Consul KV Store.
 
-use std::time::Duration;
-use tokio::time::sleep;
+use base64::Engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -112,7 +111,7 @@ async fn read_consul_kv(
             let key_str = key.as_str().unwrap_or("");
             let value_str = value
                 .as_str()
-                .and_then(|s| base64::decode(s).ok())
+                .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok())
                 .and_then(|b| String::from_utf8(b).ok())
                 .unwrap_or_default();
 

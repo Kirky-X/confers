@@ -14,7 +14,7 @@
 //!   APP_ENV=prod cargo run --example config_groups # 通过环境变量指定
 //! =============================================================================
 
-use confers::{config, prelude::*, ConfigBuilder, ConfigValue, SourceChainBuilder};
+use confers::{config, ConfigValue, SourceChainBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;

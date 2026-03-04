@@ -284,6 +284,7 @@ pub trait HealthCheck: Send + Sync {
 /// - 响应延迟不超过阈值
 /// - 内存使用在合理范围内
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MetricsBasedHealthCheck {
     /// 错误率阈值 (默认 5%)
     error_threshold: f64,
@@ -346,6 +347,7 @@ impl HealthCheck for MetricsBasedHealthCheck {
 /// 示例：自定义业务健康检查器
 ///
 /// 用户可以基于业务逻辑实现更复杂的健康检查
+#[derive(Default)]
 pub struct BusinessHealthCheck {
     /// 检查项列表
     checks: Vec<Box<dyn Fn() -> bool + Send + Sync>>,
@@ -353,7 +355,7 @@ pub struct BusinessHealthCheck {
 
 impl BusinessHealthCheck {
     /// 添加一个检查项
-    pub fn add_check<F>(&mut self, name: &'static str, check: F)
+    pub fn add_check<F>(&mut self, _name: &'static str, check: F)
     where
         F: Fn() -> bool + Send + Sync + 'static,
     {
@@ -361,11 +363,6 @@ impl BusinessHealthCheck {
     }
 }
 
-impl Default for BusinessHealthCheck {
-    fn default() -> Self {
-        Self { checks: Vec::new() }
-    }
-}
 
 impl HealthCheck for BusinessHealthCheck {
     fn check(&self, _context: &HealthCheckContext) -> HealthStatus {
