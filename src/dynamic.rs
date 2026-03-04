@@ -7,7 +7,7 @@
 //! Design advantages (benchmarking against Netflix Archaius DynamicProperty):
 //! - Field-level precision: Only notify when the specific field value actually changes
 //! - True lock-free reads: ArcSwap based on RCU mechanism, O(1) read operations
-//! - High concurrency callback registration: DashMap replaces Mutex<Vec>
+//! - High concurrency callback registration: DashMap replaces Mutex\<Vec\>
 //! - CallbackGuard: RAII-based callback lifecycle management
 
 use crate::traits::ConfigProvider;
@@ -28,7 +28,7 @@ type CallbackStorage<T> = Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send +
 /// Design advantages (against Netflix Archaius DynamicProperty):
 /// - Field-level precision: Only notify when the field's value actually changes
 /// - **True lock-free reads**: ArcSwap based on RCU mechanism, O(1) pure lock-free
-/// - High concurrency callback registration: DashMap replaces Mutex<Vec>
+/// - High concurrency callback registration: DashMap replaces Mutex\<Vec\>
 /// - CallbackGuard: RAII-based callback lifecycle management
 ///
 /// # Performance comparison
@@ -38,11 +38,11 @@ type CallbackStorage<T> = Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send +
 /// | `get()` read | Atomic CAS + cache line sync | Pure pointer read | **~10x throughput** |
 /// | `update()` write | Acquire write lock + clone | Atomic replace Arc | ~2x throughput |
 /// | Concurrent callback registration | Mutex contention | Lock-free DashMap | **~5x throughput** |
-/// | Memory overhead | Arc<T> + RwLock | Arc<T> | Reduce ~24 bytes |
+/// | Memory overhead | Arc\<T\> + RwLock | Arc\<T\> | Reduce ~24 bytes |
 pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     /// ArcSwap provides lock-free atomic replacement (similar to Linux RCU).
     value: ArcSwap<T>,
-    /// Callbacks storage with Arc<RwLock> for shared access.
+    /// Callbacks storage with Arc\<RwLock\> for shared access.
     callbacks: CallbackStorage<T>,
     next_id: AtomicU64,
 }

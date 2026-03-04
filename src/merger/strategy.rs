@@ -8,9 +8,9 @@ pub enum MergeStrategy {
     Replace,
     /// Join string values with a separator
     Join { separator: &'static str },
-    /// Append arrays: [low] + [high]
+    /// Append arrays: "low priority + high priority"
     Append,
-    /// Prepend arrays: [high] + [low]
+    /// Prepend arrays: "high priority + low priority"
     Prepend,
     /// Join and append: join strings, append arrays
     JoinAppend { separator: &'static str },
