@@ -51,7 +51,6 @@
 ---
 
 <!-- Hero Section -->
-<div align="center" style="padding: 32px; margin: 24px 0">
 
 ### 🎯 Zero-Boilerplate Configuration Management
 
@@ -76,8 +75,6 @@ pub struct AppConfig {
 // Configuration loads automatically from files, env vars, and CLI args
 let config = AppConfig::load()?;
 ```
-
-</div>
 
 ---
 
@@ -108,13 +105,9 @@ let config = AppConfig::load()?;
 
 ## <span id="features">✨ Features</span>
 
-<div align="center" style="margin: 24px 0">
-
 | 🎯 Core Features | ⚡ Optional Features |
 |:-----------------|:--------------------|
 | Always available | Enable as needed |
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -166,11 +159,7 @@ let config = AppConfig::load()?;
 
 **Note:** The `cli` feature automatically includes `derive`, `validation`, and `encryption` dependencies.
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎨 Feature Architecture
-
-</div>
 
 ```mermaid
 graph LR
@@ -246,8 +235,6 @@ graph LR
 </table>
 
 ### <span id="basic-usage">💡 Basic Usage</span>
-
-<div align="center" style="margin: 24px 0">
 
 #### 🎬 5-Minute Quick Start
 
@@ -355,11 +342,7 @@ debug = true
 
 </details>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎨 Three Usage Patterns
-
-</div>
 
 Confers provides three flexible usage patterns to suit different needs:
 
@@ -421,8 +404,6 @@ let service = MyService::new(shared_config);
 
 ## <span id="documentation">📚 Documentation</span>
 
-<div align="center" style="margin: 24px 0">
-
 <table style="width:100%; max-width: 800px">
 <tr>
 <td align="center" width="33%" style="padding: 16px">
@@ -454,8 +435,6 @@ let service = MyService::new(shared_config);
 </td>
 </tr>
 </table>
-
-</div>
 
 ### 📖 Additional Resources
 
@@ -519,11 +498,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## <span id="examples">💻 Examples</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 💡 Real-World Examples
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -599,21 +574,13 @@ fn advanced_example() -> anyhow::Result<()> {
 </tr>
 </table>
 
-<div align="center" style="margin: 24px 0">
-
 **[📂 Explore All Examples →](examples/)**
-
-</div>
 
 ---
 
 ## <span id="architecture">🏗️ Architecture</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🏗️ System Architecture
-
-</div>
 
 ```mermaid
 graph TB
@@ -669,11 +636,7 @@ graph TB
 
 ## <span id="configuration">⚙️ Configuration</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎛️ Configuration Options
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -741,13 +704,7 @@ cache_size = 1000
 
 ## <span id="testing">🧪 Testing</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎯 Test Coverage
-
-[![codecov](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
-
-</div>
 
 ```bash
 # 🧪 Run all tests
@@ -779,11 +736,7 @@ cargo test test_name
 
 ## <span id="performance">📊 Performance</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### ⚡ Benchmark Results
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -831,11 +784,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ## <span id="security">🔒 Security</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🛡️ Security Features
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -919,11 +868,7 @@ Please report security vulnerabilities to: **security@confers.example**
 
 ## <span id="roadmap">🗺️ Roadmap</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎯 Development Roadmap
-
-</div>
 
 ```mermaid
 gantt
@@ -975,13 +920,7 @@ gantt
 
 ## <span id="contributing">🤝 Contributing</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 💖 Thank You to All Contributors!
-
-<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1040,23 +979,13 @@ Want to contribute code?<br>
 
 ## <span id="license">📄 License</span>
 
-<div align="center" style="margin: 24px 0">
-
 This project is licensed under **MIT License**:
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
-
-</div>
 
 ---
 
 ## <span id="acknowledgments">🙏 Acknowledgments</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🌟 Built With Amazing Tools
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1105,8 +1034,6 @@ This project is licensed under **MIT License**:
 
 ## 📞 Contact & Support
 
-<div align="center" style="margin: 24px 0">
-
 <table style="width:100%; max-width: 600px">
 <tr>
 <td align="center" width="33%">
@@ -1139,21 +1066,15 @@ This project is licensed under **MIT License**:
 </tr>
 </table>
 
-</div>
-
 ---
 
 ## ⭐ Star History
 
-<div align="center">
-
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
-
-</div>
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px">
+
 
 ### 💝 Support This Project
 

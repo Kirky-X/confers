@@ -51,6 +51,7 @@
 ---
 
 <!-- Hero Section -->
+
 <div align="center" style="padding: 32px; margin: 24px 0">
 
 ### 🎯 零样板配置管理
@@ -410,8 +411,6 @@ let service = MyService::new(shared_config);
 
 ## <span id="documentation">📚 文档</span>
 
-<div align="center" style="margin: 24px 0">
-
 <table style="width:100%; max-width: 800px">
 <tr>
 <td align="center" width="33%" style="padding: 16px">
@@ -443,8 +442,6 @@ let service = MyService::new(shared_config);
 </td>
 </tr>
 </table>
-
-</div>
 
 ### 📖 更多资源
 
@@ -508,11 +505,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## <span id="examples">💻 示例</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 💡 实际示例
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -588,10 +581,7 @@ fn advanced_example() -> anyhow::Result<()> {
 </tr>
 </table>
 
-
 **[📂 查看所有示例 →](examples/)**
-
-</div>
 
 ---
 
@@ -653,11 +643,7 @@ graph TB
 
 ## <span id="configuration">⚙️ 配置选项</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎛️ 配置选项
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -725,13 +711,7 @@ cache_size = 1000
 
 ## <span id="testing">🧪 测试</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🎯 测试覆盖率
-
-[![codecov](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
-
-</div>
 
 ```bash
 # 🧪 运行所有测试
@@ -763,11 +743,7 @@ cargo test test_name
 
 ## <span id="performance">📊 性能</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### ⚡ 基准测试结果
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -815,11 +791,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ## <span id="security">🔒 安全</span>
 
-<div align="center" style="margin: 24px 0">
-
 ### 🛡️ 安全特性
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -903,11 +875,8 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ## <span id="roadmap">🗺️ 开发路线图</span>
 
-<div align="center" style="margin: 24px 0">
 
 ### 🎯 开发路线图
-
-</div>
 
 ```mermaid
 gantt
@@ -959,13 +928,10 @@ gantt
 
 ## <span id="contributing">🤝 参与贡献</span>
 
-<div align="center" style="margin: 24px 0">
 
 ### 💖 感谢所有贡献者！
 
 <img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1024,23 +990,17 @@ gantt
 
 ## <span id="license">📄 许可证</span>
 
-<div align="center" style="margin: 24px 0">
 
 本项目采用 **MIT 许可证**：
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
 
-</div>
-
 ---
 
 ## <span id="acknowledgments">🙏 致谢</span>
 
-<div align="center" style="margin: 24px 0">
 
 ### 🌟 基于优秀工具构建
-
-</div>
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1089,7 +1049,6 @@ gantt
 
 ## 📞 联系与支持
 
-<div align="center" style="margin: 24px 0">
 
 <table style="width:100%; max-width: 600px">
 <tr>
@@ -1123,21 +1082,14 @@ gantt
 </tr>
 </table>
 
-</div>
 
 ---
 
 ## ⭐ Star 历史
 
-<div align="center">
-
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
-</div>
-
 ---
-
-<div align="center" style="margin: 32px 0; padding: 24px">
 
 ### 💝 支持本项目
 
@@ -1152,5 +1104,3 @@ gantt
 ---
 
 <sub>© 2026 Kirky.X. 保留所有权利。</sub>
-
-</div>
