@@ -1,0 +1,20 @@
+[package]
+name = "confers-fuzz"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+confers = { path = "..", features = ["full"] }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "merger"
+path = "fuzz_targets/merger.rs"
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+
+[[bin]]
+name = "interpolation"
+path = "fuzz_targets/interpolation.rs"
