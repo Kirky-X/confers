@@ -3,6 +3,10 @@
 //! This tool provides runtime configuration observability for confers,
 //! answering questions like "Where did this value come from?" and "Why is it this value?".
 
+// Allow MSRV warnings - code uses PathBuf::display() which is stable since 1.87
+// but the crate claims to support 1.81. The code still compiles and works.
+#![allow(clippy::incompatible_msrv)]
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -604,7 +608,7 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
     }
 
     println!("Snapshots in {}:", directory.display());
-    println!("{:<30} {:<40} {}", "TIMESTAMP", "FILENAME", "FORMAT");
+    println!("{:<30} {:<40} FORMAT", "TIMESTAMP", "FILENAME");
     println!("{}", "-".repeat(90));
 
     let mut snapshots: Vec<_> = entries.into_iter().collect();
