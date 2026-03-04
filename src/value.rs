@@ -718,11 +718,7 @@ impl AnnotatedValue {
         };
         let mut stack: Vec<&ConfigValue> = vec![&self.inner];
         // Start traversal from inner value with current path
-        let start_path = if include_self {
-            self.path.clone()
-        } else {
-            self.path.clone()
-        };
+        let start_path = self.path.clone();
         let mut path_stack: Vec<Arc<str>> = vec![start_path];
 
         // Iterative traversal using explicit stack to avoid stack overflow
