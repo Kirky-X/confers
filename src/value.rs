@@ -864,6 +864,9 @@ pub struct ConflictReport {
 
 impl ConflictReport {
     /// Create a new conflict report.
+    ///
+    /// Note: Consider using the builder pattern via `Self::builder()` for better readability.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl Into<Arc<str>>,
         low_value: String,
@@ -884,6 +887,84 @@ impl ConflictReport {
             high_location,
             winner,
         }
+    }
+}
+
+/// Builder for creating ConflictReport instances.
+#[derive(Debug, Clone, Default)]
+pub struct ConflictReportBuilder {
+    path: Option<Arc<str>>,
+    low_value: Option<String>,
+    low_source: Option<SourceId>,
+    low_location: Option<SourceLocation>,
+    high_value: Option<String>,
+    high_source: Option<SourceId>,
+    high_location: Option<SourceLocation>,
+    winner: Option<ConflictWinner>,
+}
+
+impl ConflictReportBuilder {
+    /// Set the path of the conflicting value.
+    pub fn path(mut self, path: impl Into<Arc<str>>) -> Self {
+        self.path = Some(path.into());
+        self
+    }
+
+    /// Set the low priority value and its source.
+    pub fn low_value(mut self, value: String, source: SourceId) -> Self {
+        self.low_value = Some(value);
+        self.low_source = Some(source);
+        self
+    }
+
+    /// Set the low priority value location.
+    pub fn low_location(mut self, loc: SourceLocation) -> Self {
+        self.low_location = Some(loc);
+        self
+    }
+
+    /// Set the high priority value and its source.
+    pub fn high_value(mut self, value: String, source: SourceId) -> Self {
+        self.high_value = Some(value);
+        self.high_source = Some(source);
+        self
+    }
+
+    /// Set the high priority value location.
+    pub fn high_location(mut self, loc: SourceLocation) -> Self {
+        self.high_location = Some(loc);
+        self
+    }
+
+    /// Set which value won.
+    pub fn winner(mut self, winner: ConflictWinner) -> Self {
+        self.winner = Some(winner);
+        self
+    }
+
+    /// Build the ConflictReport.
+    ///
+    /// # Panics
+    ///
+    /// Panics if required fields (path, values, sources, winner) are not set.
+    pub fn build(self) -> ConflictReport {
+        ConflictReport::new(
+            self.path.expect("path required"),
+            self.low_value.expect("low_value required"),
+            self.low_source.expect("low_source required"),
+            self.low_location,
+            self.high_value.expect("high_value required"),
+            self.high_source.expect("high_source required"),
+            self.high_location,
+            self.winner.expect("winner required"),
+        )
+    }
+}
+
+impl ConflictReport {
+    /// Create a builder for ConflictReport.
+    pub fn builder() -> ConflictReportBuilder {
+        ConflictReportBuilder::default()
     }
 }
 
@@ -995,16 +1076,12 @@ mod tests {
 
     #[test]
     fn test_conflict_report() {
-        let report = ConflictReport::new(
-            "database.host",
-            "localhost".to_string(),
-            SourceId::new("file1"),
-            None,
-            "127.0.0.1".to_string(),
-            SourceId::new("file2"),
-            None,
-            ConflictWinner::High,
-        );
+        let report = ConflictReport::builder()
+            .path("database.host")
+            .low_value("localhost".to_string(), SourceId::new("file1"))
+            .high_value("127.0.0.1".to_string(), SourceId::new("file2"))
+            .winner(ConflictWinner::High)
+            .build();
 
         assert_eq!(report.path.as_ref(), "database.host");
         assert_eq!(report.winner, ConflictWinner::High);
