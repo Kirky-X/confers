@@ -964,14 +964,8 @@ gantt
 
 ### 📋 Planned
 
-- [ ] Configuration Diff Comparison
-- [ ] Configuration Version Management
-- [ ] Plugin System
-- [ ] More Remote Providers
 - [ ] Performance Optimization
-- [ ] Web UI Management Interface
-- [ ] Cloud-native Integration
-- [ ] Distributed Configuration Sync
+- [ ] Cloud-native Integration Enhancements
 
 </td>
 </tr>
