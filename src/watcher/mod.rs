@@ -1,12 +1,16 @@
 //! File system watcher for hot reload support.
 
 pub mod debounce;
+
+#[cfg(feature = "progressive-reload")]
 pub mod progressive;
 
 #[cfg(feature = "watch")]
 pub mod fs_watcher;
 
 pub use debounce::AdaptiveDebouncer;
+
+#[cfg(feature = "progressive-reload")]
 pub use progressive::{
     HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
     ReloadOutcome, ReloadStrategy,

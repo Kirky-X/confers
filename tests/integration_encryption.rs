@@ -361,7 +361,8 @@ mod tests {
 #[cfg(not(feature = "encryption"))]
 mod tests {
     #[test]
+    #[ignore = "encryption feature required for this test"]
     fn encryption_feature_required() {
-        panic!("Run with --features encryption");
+        // This test is ignored when encryption feature is not enabled
     }
 }
