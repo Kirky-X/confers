@@ -42,3 +42,4 @@ dev-v2.md
 
 # Docker
 docker-compose.test.yml
+.worktrees/
