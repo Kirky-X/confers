@@ -50,6 +50,9 @@ pub mod bus;
 #[cfg(feature = "typescript-schema")]
 pub mod schema;
 
+#[cfg(feature = "security")]
+pub mod security;
+
 #[cfg(feature = "remote")]
 pub mod remote;
 
