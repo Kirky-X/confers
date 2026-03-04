@@ -896,6 +896,160 @@ assert_eq!(decrypted, "my-secret-api-key");
 
 ---
 
+### 密钥管理
+
+`key` feature 提供完整的密钥生命周期管理，包括密钥创建、存储、轮换和撤销。
+
+#### KeyManager
+
+密钥生命周期管理的核心组件。
+
+```rust
+use confers::key::KeyManager;
+
+// 创建密钥管理器
+let master_key = [0u8; 32];
+let mut manager = KeyManager::new(master_key);
+
+// 创建新密钥
+let key = manager.create_key("database", Some("DB encryption key".to_string()))?;
+
+// 获取密钥
+let key_data = manager.get_key("database")?;
+
+// 列出所有密钥
+let keys = manager.list_keys();
+
+// 撤销密钥
+manager.revoke_key("database")?;
+```
+
+#### 方法
+
+| 方法 | 参数 | 返回值 | 描述 |
+|------|------|--------|------|
+| `new(master_key)` | `&[u8; 32]` | `Self` | 创建密钥管理器 |
+| `create_key(id, desc)` | `&str, Option<String>` | `Result<KeyBundle>` | 创建新密钥 |
+| `get_key(id)` | `&str` | `Option<&KeyBundle>` | 获取密钥 |
+| `list_keys()` | - | `Vec<KeyInfo>` | 列出所有密钥 |
+| `revoke_key(id)` | `&str` | `Result<()>` | 撤销密钥 |
+
+#### KeyRotationService
+
+自动密钥轮换服务。
+
+```rust
+use confers::key::{KeyRotationService, KeyRotationPolicy};
+use std::time::Duration;
+
+let policy = KeyRotationPolicy::default()
+    .with_max_age(Duration::from_secs(86400 * 90)); // 90天
+
+let service = KeyRotationService::new(manager, policy);
+service.check_and_rotate()?;
+```
+
+#### KeyStorage
+
+加密密钥持久化存储。
+
+```rust
+use confers::key::KeyStorage;
+
+let storage = KeyStorage::new("/path/to/keys")?;
+storage.save(&key_bundle)?;
+let loaded = storage.load("key_id")?;
+```
+
+---
+
+### 安全模块
+
+`security` feature 提供环境变量验证、错误脱敏和安全注入功能。
+
+#### EnvSecurityValidator
+
+环境变量安全验证器，防止注入攻击。
+
+```rust
+use confers::security::EnvSecurityValidator;
+
+let validator = EnvSecurityValidator::builder()
+    .allow_pattern(r"^[A-Z][A-Z0-9_]*$")
+    .block_pattern(r".*_SECRET$")
+    .block_pattern(r".*_PASSWORD$")
+    .build()?;
+
+// 验证单个变量
+validator.validate_var("APP_NAME")?;
+validator.validate_var("DB_PASSWORD")?; // Err: 包含 _SECRET
+
+// 验证所有环境变量
+validator.validate_all(std::env::vars())?;
+```
+
+#### ErrorSanitizer
+
+错误信息敏感数据脱敏。
+
+```rust
+use confers::security::ErrorSanitizer;
+
+let sanitizer = ErrorSanitizer::default();
+let clean_msg = sanitizer.sanitize(&error_msg);
+```
+
+#### ConfigInjector
+
+安全配置注入器。
+
+```rust
+use confers::security::ConfigInjector;
+
+let injector = ConfigInjector::new()
+    .with_validator(validator)
+    .inject(&config)?;
+```
+
+---
+
+### TypeScript Schema 生成
+
+`typescript-schema` feature 支持从 Rust 类型生成 TypeScript 定义。
+
+#### generate_typescript
+
+生成 TypeScript 类型定义。
+
+```rust
+use confers::schema::generate_typescript;
+
+#[derive(confers::Config)]
+pub struct AppConfig {
+    pub name: String,
+    pub port: u16,
+    pub debug: bool,
+}
+
+let ts = generate_typescript::<AppConfig>();
+println!("{}", ts);
+```
+
+**输出：**
+
+```typescript
+// Auto-generated from Rust
+export interface AppConfig {
+  name: string;
+  port: number;
+  debug: boolean;
+}
+```
+
+---
+
+### 配置差异比较
+
 ### 配置差异比较
 
 `DiffCommand` 提供配置文件的差异比较功能，支持多种输出格式。此功能需要启用 `cli` 特性。
