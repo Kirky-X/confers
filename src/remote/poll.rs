@@ -8,12 +8,13 @@
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::{detect_format_from_content, Format};
 use crate::value::{AnnotatedValue, SourceId};
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use reqwest::Client;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
-use std::sync::{Mutex, RwLock};
+use std::sync::RwLock;
 use std::time::Duration;
 
 /// Default poll interval when not specified (60 seconds).
@@ -165,14 +166,10 @@ pub struct HttpPolledSource {
     interval: Duration,
     client: Client,
     format: Option<Format>,
-    /// Cache generation counter (atomic) for ETag/Modified tracking
     cache_generation: AtomicU64,
-    /// Cached configuration value
     cached: RwLock<Option<AnnotatedValue>>,
-    /// ETag from last response (for conditional requests)
-    last_etag: Mutex<Option<String>>,
-    /// Last-Modified header from last response (for conditional requests)
-    last_modified: Mutex<Option<String>>,
+    last_etag: ArcSwap<Option<String>>,
+    last_modified: ArcSwap<Option<String>>,
     source_id: SourceId,
 }
 
@@ -254,8 +251,8 @@ impl HttpPolledSourceBuilder {
             format: self.format,
             cache_generation: AtomicU64::new(0),
             cached: RwLock::new(None),
-            last_etag: Mutex::new(None),
-            last_modified: Mutex::new(None),
+            last_etag: ArcSwap::new(Arc::new(None)),
+            last_modified: ArcSwap::new(Arc::new(None)),
             source_id,
         })
     }
@@ -274,20 +271,16 @@ impl PolledSource for HttpPolledSource {
     /// Uses ETag and Last-Modified headers for conditional requests.
     /// Returns cached value on 304 Not Modified responses.
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        // Build request with conditional headers
         let mut request = self.client.get(self.url.as_ref());
 
-        // Add ETag header if we have one
-        if let Some(ref etag) = *self.last_etag.lock().unwrap() {
+        if let Some(etag) = self.last_etag.load().as_ref() {
             request = request.header("If-None-Match", etag.as_str());
         }
 
-        // Add Last-Modified header if we have one
-        if let Some(ref modified) = *self.last_modified.lock().unwrap() {
+        if let Some(modified) = self.last_modified.load().as_ref() {
             request = request.header("If-Modified-Since", modified.as_str());
         }
 
-        // Send request
         let response = request
             .send()
             .await
@@ -298,19 +291,16 @@ impl PolledSource for HttpPolledSource {
 
         let status = response.status();
 
-        // Handle 304 Not Modified - return cached value
         if status == reqwest::StatusCode::NOT_MODIFIED {
             if let Some(cached) = self.cached.read().unwrap().as_ref() {
                 return Ok(cached.clone());
             }
-            // No cached value yet, treat as error
             return Err(ConfigError::RemoteUnavailable {
                 error_type: "NoCachedValue".to_string(),
                 retryable: false,
             });
         }
 
-        // Check for other error status codes
         if !status.is_success() {
             return Err(ConfigError::RemoteUnavailable {
                 error_type: format!("HTTP_{}", status.as_u16()),
@@ -318,21 +308,19 @@ impl PolledSource for HttpPolledSource {
             });
         }
 
-        // Update ETag if present
         if let Some(etag) = response.headers().get("etag") {
             if let Ok(etag_str) = etag.to_str() {
-                *self.last_etag.lock().unwrap() = Some(etag_str.to_string());
+                self.last_etag.store(Arc::new(Some(etag_str.to_string())));
             }
         }
 
-        // Update Last-Modified if present
         if let Some(modified) = response.headers().get("last-modified") {
             if let Ok(modified_str) = modified.to_str() {
-                *self.last_modified.lock().unwrap() = Some(modified_str.to_string());
+                self.last_modified
+                    .store(Arc::new(Some(modified_str.to_string())));
             }
         }
 
-        // Read response body
         let body = response
             .text()
             .await
@@ -341,16 +329,13 @@ impl PolledSource for HttpPolledSource {
                 retryable: is_retryable_error(&e),
             })?;
 
-        // Detect or use specified format
         let format = self
             .format
             .unwrap_or_else(|| detect_format_from_content(&body).unwrap_or(Format::Json));
 
-        // Parse the content
         let source = self.source_id.clone();
         let value = parse_remote_content(&body, format, source)?;
 
-        // Cache the value
         *self.cached.write().unwrap() = Some(value.clone());
 
         Ok(value)

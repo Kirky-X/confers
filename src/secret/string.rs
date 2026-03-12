@@ -1,16 +1,15 @@
 use std::fmt::Debug;
-use zeroize::Zeroize;
 
 #[derive(Clone, Default)]
 pub struct SecretString(String);
 
 impl Drop for SecretString {
     fn drop(&mut self) {
-        // Zeroize the internal string - use unsafe to get mutable reference
-        unsafe {
-            let s = self.0.as_mut_vec();
-            s.zeroize();
+        let bytes = unsafe { self.0.as_bytes_mut() };
+        for byte in bytes.iter_mut() {
+            unsafe { std::ptr::write_volatile(byte, 0) };
         }
+        self.0.clear();
     }
 }
 

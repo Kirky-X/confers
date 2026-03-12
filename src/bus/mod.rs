@@ -88,8 +88,13 @@ impl Default for InMemoryBus {
 #[async_trait]
 impl ConfigBus for InMemoryBus {
     async fn publish(&self, event: ConfigChangeEvent) -> ConfigResult<()> {
-        let _ = self.sender.send(event);
-        Ok(())
+        match self.sender.send(event) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                tracing::warn!("No active subscribers for config change event");
+                Ok(())
+            }
+        }
     }
 
     async fn subscribe(

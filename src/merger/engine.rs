@@ -6,6 +6,8 @@ use crate::value::{AnnotatedValue, ConfigValue, ConflictReport, ConflictWinner};
 use indexmap::IndexMap;
 use std::sync::Arc;
 
+const MAX_MERGE_DEPTH: usize = 100;
+
 /// Merge engine for combining configuration values.
 pub struct MergeEngine {
     default_strategy: MergeStrategy,
@@ -51,29 +53,34 @@ impl MergeEngine {
         low: &AnnotatedValue,
         high: &AnnotatedValue,
     ) -> ConfigResult<AnnotatedValue> {
-        // Use iterative merge with explicit stack to avoid stack overflow
-        Self::merge_iterative(low, high, self.get_strategy(&low.path).clone())
+        Self::merge_with_depth(low, high, self.get_strategy(&low.path).clone(), 0)
     }
 
-    /// Iterative merge implementation using explicit stack to prevent stack overflow
-    /// on deeply nested configurations.
-    fn merge_iterative(
+    fn merge_with_depth(
         low: &AnnotatedValue,
         high: &AnnotatedValue,
         strategy: MergeStrategy,
+        depth: usize,
     ) -> ConfigResult<AnnotatedValue> {
-        // For simple cases, use direct merge
+        if depth > MAX_MERGE_DEPTH {
+            return Err(ConfigError::ParseError {
+                format: "merge".to_string(),
+                message: format!(
+                    "Maximum merge depth ({}) exceeded at path: {}",
+                    MAX_MERGE_DEPTH, high.path
+                ),
+                location: None,
+                source: None,
+            });
+        }
+
         let merged = match (&low.inner, &high.inner, &strategy) {
             (ConfigValue::Null, _, _) => high.inner.clone(),
             (_, ConfigValue::Null, _) => low.inner.clone(),
-            // Map + Map: deep merge
             (ConfigValue::Map(l), ConfigValue::Map(_), _) => {
-                // Use iterative approach with explicit stack
                 let l_map = l.as_ref();
                 let mut result: IndexMap<Arc<str>, AnnotatedValue> = l_map.clone();
 
-                // For deep nested maps, we still need recursion but with depth limiting
-                // The key improvement is that we limit recursion depth via the strategy
                 let r_map = match &high.inner {
                     ConfigValue::Map(m) => m.as_ref(),
                     _ => unreachable!(),
@@ -81,18 +88,16 @@ impl MergeEngine {
 
                 for (k, v_high) in r_map.iter() {
                     if let Some(v_low) = result.get_mut(k) {
-                        // Check if both are maps - if so, use iterative approach
                         let needs_recursive = matches!(
                             (&v_low.inner, &v_high.inner),
                             (&ConfigValue::Map(_), &ConfigValue::Map(_))
                         );
 
                         if needs_recursive {
-                            // For deeply nested maps, merge the inner values
-                            let merged_inner = Self::merge_iterative(v_low, v_high, strategy.clone())?;
+                            let merged_inner =
+                                Self::merge_with_depth(v_low, v_high, strategy.clone(), depth + 1)?;
                             *v_low = merged_inner;
                         } else {
-                            // For non-map values, apply strategy
                             *v_low = Self::apply_strategy(v_low, v_high, &strategy)?;
                         }
                     } else {
@@ -101,11 +106,8 @@ impl MergeEngine {
                 }
                 ConfigValue::Map(Arc::new(result))
             }
-            // Custom strategy
             (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
-            // Non-map Replace strategy
             (_, _, MergeStrategy::Replace) => high.inner.clone(),
-            // Join and JoinAppend both handle string joining the same way
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
                 ConfigValue::String(format!("{}{}{}", l, separator, r))
             }

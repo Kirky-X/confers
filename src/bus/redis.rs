@@ -15,9 +15,21 @@ pub struct RedisConfigBus {
 }
 
 impl RedisConfigBus {
+    fn sanitize_url(url: &str) -> String {
+        if let Ok(parsed) = url::Url::parse(url) {
+            let host = parsed.host_str().unwrap_or("unknown");
+            let port = parsed.port().unwrap_or(6379);
+            format!("{}:{}", host, port)
+        } else {
+            "invalid_url".to_string()
+        }
+    }
+
     pub async fn connect(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
+        let safe_host = Self::sanitize_url(url);
+
         let client = redis::Client::open(url).map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: format!("redis_client: {}", e),
+            error_type: format!("redis_connection_failed: host={}, error={}", safe_host, e),
             retryable: true,
         })?;
 
@@ -111,12 +123,11 @@ async fn get_message(
 
     match result {
         Some(payload) => {
-            let event: ConfigChangeEvent = serde_json::from_slice(&payload).map_err(|e| {
-                ConfigError::SourceChainError {
+            let event: ConfigChangeEvent =
+                serde_json::from_slice(&payload).map_err(|e| ConfigError::SourceChainError {
                     message: format!("deserialize event: {}", e),
                     source_index: 0,
-                }
-            })?;
+                })?;
             Ok(Some(event))
         }
         None => Ok(None),

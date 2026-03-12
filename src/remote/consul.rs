@@ -86,9 +86,22 @@ impl ConsulSourceBuilder {
         self
     }
 
-    /// Skip TLS verification (for development).
+    /// Skip TLS verification (for development only).
+    ///
+    /// This option is only effective in debug builds.
+    /// In release builds, TLS verification is always enforced for security.
     pub fn tls_skip_verify(mut self, skip: bool) -> Self {
-        self.tls_skip_verify = skip;
+        #[cfg(debug_assertions)]
+        {
+            self.tls_skip_verify = skip;
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            if skip {
+                tracing::warn!("TLS verification skip is not allowed in release builds");
+            }
+            self.tls_skip_verify = false;
+        }
         self
     }
 
@@ -332,6 +345,7 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
                 "",
             ))
         }
+        #[cfg(feature = "yaml")]
         Format::Yaml => {
             let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
             Some(crate::loader::parse_yaml_value(
@@ -340,6 +354,8 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
                 "",
             ))
         }
+        #[cfg(not(feature = "yaml"))]
+        Format::Yaml => None,
         _ => None,
     }
 }

@@ -133,7 +133,18 @@ impl SecureString {
         let string = s.into();
         ALLOCATED_SECURE_STRINGS.fetch_add(1, Ordering::SeqCst);
 
-        let display_name = string.clone();
+        let display_name = match sensitivity {
+            SensitivityLevel::Critical => "[SENSITIVE]".to_string(),
+            SensitivityLevel::High => format!("[{} chars]", string.len()),
+            SensitivityLevel::Medium => {
+                if string.len() > 4 {
+                    format!("{}****", &string[..2])
+                } else {
+                    "[REDACTED]".to_string()
+                }
+            }
+            SensitivityLevel::Low => string.clone(),
+        };
         let data = string.into_bytes();
 
         Self {

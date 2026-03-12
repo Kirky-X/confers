@@ -36,12 +36,11 @@ impl FileKeyProvider {
             source: Some(e),
         })?;
 
-        let key_str = String::from_utf8(content)
-            .map_err(|_| ConfigError::InvalidValue {
-                key: self.path.to_string_lossy().to_string(),
-                expected_type: "utf8 string".to_string(),
-                message: "Key file contains non-UTF8 content".to_string(),
-            })?;
+        let key_str = String::from_utf8(content).map_err(|_| ConfigError::InvalidValue {
+            key: self.path.to_string_lossy().to_string(),
+            expected_type: "utf8 string".to_string(),
+            message: "Key file contains non-UTF8 content".to_string(),
+        })?;
 
         let key_str = key_str.trim();
 
@@ -124,14 +123,26 @@ pub struct VaultKeyProvider {
 
 #[cfg(feature = "remote")]
 impl VaultKeyProvider {
-    pub fn new(vault_addr: impl Into<String>, secret_path: impl Into<String>, secret_key: impl Into<String>) -> Self {
-        Self {
-            vault_addr: vault_addr.into(),
+    pub fn new(
+        vault_addr: impl Into<String>,
+        secret_path: impl Into<String>,
+        secret_key: impl Into<String>,
+    ) -> ConfigResult<Self> {
+        let addr = vault_addr.into();
+
+        if !addr.starts_with("https://") {
+            return Err(ConfigError::KeyError {
+                message: "Vault address must use HTTPS for security".to_string(),
+            });
+        }
+
+        Ok(Self {
+            vault_addr: addr,
             secret_path: secret_path.into(),
             secret_key: secret_key.into(),
             token: None,
             cache_policy: KeyCachePolicy::default(),
-        }
+        })
     }
 
     pub fn builder() -> VaultKeyProviderBuilder {
@@ -163,10 +174,14 @@ impl VaultKeyProvider {
 impl AsyncKeyProvider for VaultKeyProvider {
     async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
         let token = self.get_token()?;
-        
+
         let client = reqwest::Client::new();
-        let url = format!("{}/v1/{}", self.vault_addr.trim_end_matches('/'), self.secret_path);
-        
+        let url = format!(
+            "{}/v1/{}",
+            self.vault_addr.trim_end_matches('/'),
+            self.secret_path
+        );
+
         let response = client
             .get(&url)
             .header("X-Vault-Token", token)
@@ -184,12 +199,13 @@ impl AsyncKeyProvider for VaultKeyProvider {
             });
         }
 
-        let json: serde_json::Value = response.json().await.map_err(|e| ConfigError::ParseError {
-            format: "json".to_string(),
-            message: format!("Failed to parse Vault response: {}", e),
-            location: None,
-            source: None,
-        })?;
+        let json: serde_json::Value =
+            response.json().await.map_err(|e| ConfigError::ParseError {
+                format: "json".to_string(),
+                message: format!("Failed to parse Vault response: {}", e),
+                location: None,
+                source: None,
+            })?;
 
         let key_value = json
             .get("data")
@@ -270,6 +286,12 @@ impl VaultKeyProviderBuilder {
             message: "Vault address is required".to_string(),
         })?;
 
+        if !vault_addr.starts_with("https://") {
+            return Err(ConfigError::KeyError {
+                message: "Vault address must use HTTPS for security".to_string(),
+            });
+        }
+
         let secret_path = self.secret_path.ok_or(ConfigError::InvalidValue {
             key: "secret_path".to_string(),
             expected_type: "string".to_string(),
@@ -308,11 +330,13 @@ mod tests {
     #[test]
     fn test_file_key_provider() {
         let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(b"this-is-a-test-key-with-32-chars-minimum").unwrap();
-        
+        temp_file
+            .write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+
         let provider = FileKeyProvider::new(temp_file.path());
         let key = provider.get_key().unwrap();
-        
+
         assert_eq!(key.len(), 32);
         assert_eq!(provider.provider_type(), "file");
     }
@@ -320,14 +344,16 @@ mod tests {
     #[test]
     fn test_file_key_provider_builder() {
         let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write_all(b"this-is-a-test-key-with-32-chars-minimum").unwrap();
-        
+        temp_file
+            .write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+
         let provider = FileKeyProvider::builder()
             .path(temp_file.path())
             .cache_policy(KeyCachePolicy::Never)
             .build()
             .unwrap();
-        
+
         let key = provider.get_key().unwrap();
         assert_eq!(key.len(), 32);
     }
@@ -336,10 +362,10 @@ mod tests {
     fn test_file_key_provider_short_key() {
         let mut temp_file = NamedTempFile::new().unwrap();
         temp_file.write_all(b"short").unwrap();
-        
+
         let provider = FileKeyProvider::new(temp_file.path());
         let result = provider.get_key();
-        
+
         assert!(result.is_err());
     }
 }
