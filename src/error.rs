@@ -101,6 +101,14 @@ pub enum ErrorCode {
     KeyError = 1016,
     /// Circular reference detected
     CircularReference = 1017,
+    /// Concurrency conflict
+    ConcurrencyConflict = 1018,
+    /// Key rotation failed
+    KeyRotationFailed = 1019,
+    /// Watcher error
+    WatcherError = 1020,
+    /// Override blocked
+    OverrideBlocked = 1021,
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -123,6 +131,10 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::InterpolationError => write!(f, "INTERPOLATION_ERROR"),
             ErrorCode::KeyError => write!(f, "KEY_ERROR"),
             ErrorCode::CircularReference => write!(f, "CIRCULAR_REFERENCE"),
+            ErrorCode::ConcurrencyConflict => write!(f, "CONCURRENCY_CONFLICT"),
+            ErrorCode::KeyRotationFailed => write!(f, "KEY_ROTATION_FAILED"),
+            ErrorCode::WatcherError => write!(f, "WATCHER_ERROR"),
+            ErrorCode::OverrideBlocked => write!(f, "OVERRIDE_BLOCKED"),
         }
     }
 }
@@ -288,6 +300,50 @@ pub enum ConfigError {
         #[source]
         source: MultiSourceError,
     },
+
+    /// Concurrency conflict during configuration access.
+    #[error("Concurrency conflict on key '{key}': {message}")]
+    ConcurrencyConflict {
+        /// The key that had the conflict
+        key: String,
+        /// Conflict description
+        message: String,
+        /// Expected value type
+        expected_type: Option<String>,
+    },
+
+    /// Key rotation failed.
+    #[error("Key rotation failed from '{from_version}' to '{to_version}': {reason}")]
+    KeyRotationFailed {
+        /// Source key version
+        from_version: String,
+        /// Target key version
+        to_version: String,
+        /// Failure reason
+        reason: String,
+    },
+
+    /// Watcher error.
+    #[error("Configuration watcher error: {message}")]
+    WatcherError {
+        /// Error message
+        message: String,
+        /// Source path being watched
+        path: Option<PathBuf>,
+        /// Whether the error is recoverable
+        recoverable: bool,
+    },
+
+    /// Override blocked by protection rules.
+    #[error("Override blocked for key '{key}': {reason}")]
+    OverrideBlocked {
+        /// The key that was blocked
+        key: String,
+        /// Reason for blocking
+        reason: String,
+        /// Source attempting the override
+        override_source: Option<String>,
+    },
 }
 
 impl ConfigError {
@@ -312,6 +368,10 @@ impl ConfigError {
             ConfigError::KeyError { .. } => ErrorCode::KeyError,
             ConfigError::CircularReference { .. } => ErrorCode::CircularReference,
             ConfigError::MultiSource { .. } => ErrorCode::SourceChainError,
+            ConfigError::ConcurrencyConflict { .. } => ErrorCode::ConcurrencyConflict,
+            ConfigError::KeyRotationFailed { .. } => ErrorCode::KeyRotationFailed,
+            ConfigError::WatcherError { .. } => ErrorCode::WatcherError,
+            ConfigError::OverrideBlocked { .. } => ErrorCode::OverrideBlocked,
         }
     }
 
@@ -371,6 +431,8 @@ impl ConfigError {
                         | std::io::ErrorKind::WouldBlock
                 )
             }
+            ConfigError::WatcherError { recoverable, .. } => *recoverable,
+            ConfigError::ConcurrencyConflict { .. } => true,
             _ => false,
         }
     }
@@ -443,6 +505,38 @@ impl ConfigError {
                     source.failed_count(),
                     source.total_count()
                 )
+            }
+            ConfigError::ConcurrencyConflict { key, message, .. } => {
+                format!("Concurrency conflict on key '{}': {}", key, message)
+            }
+            ConfigError::KeyRotationFailed {
+                from_version,
+                to_version,
+                reason,
+            } => {
+                format!(
+                    "Key rotation failed from '{}' to '{}': {}",
+                    from_version, to_version, reason
+                )
+            }
+            ConfigError::WatcherError {
+                message,
+                path,
+                recoverable,
+            } => {
+                let path_str = path
+                    .as_ref()
+                    .map(|p| format!(" for '{}'", p.display()))
+                    .unwrap_or_default();
+                let recovery_str = if *recoverable { " (recoverable)" } else { "" };
+                format!("Watcher error{}: {}{}", path_str, message, recovery_str)
+            }
+            ConfigError::OverrideBlocked { key, reason, override_source } => {
+                let source_str = override_source
+                    .as_ref()
+                    .map(|s| format!(" from '{}'", s))
+                    .unwrap_or_default();
+                format!("Override blocked for key '{}'{}: {}", key, source_str, reason)
             }
         }
     }

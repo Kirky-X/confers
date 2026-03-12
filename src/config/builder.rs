@@ -9,6 +9,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "config-bus")]
+use crate::bus::ConfigBus;
+#[cfg(feature = "progressive-reload")]
+use crate::traits::ReloadHealthCheck;
 use crate::error::{BuildResult, BuildWarning, ConfigError, ConfigResult, WarningCode};
 use crate::merger::MergeStrategy;
 use crate::traits::{KeyProvider, MetricsBackend, NoOpMetrics};
@@ -90,6 +94,15 @@ pub struct ConfigBuilder<T> {
     accumulated_memory: HashMap<String, ConfigValue>,
     /// Memory source priority.
     memory_priority: u8,
+    /// Configuration bus for multi-instance sync.
+    #[cfg(feature = "config-bus")]
+    config_bus: Option<Arc<dyn ConfigBus>>,
+    /// Preload validators for pre-build validation.
+    #[cfg(feature = "progressive-reload")]
+    preload_validators: Vec<Arc<dyn ReloadHealthCheck>>,
+    /// Health check for reload operations.
+    #[cfg(feature = "progressive-reload")]
+    reload_health_check: Option<Arc<dyn ReloadHealthCheck>>,
     /// Type marker.
     _marker: PhantomData<T>,
 }
@@ -116,6 +129,12 @@ impl<T> ConfigBuilder<T> {
             accumulated_defaults: HashMap::new(),
             accumulated_memory: HashMap::new(),
             memory_priority: 50,
+            #[cfg(feature = "config-bus")]
+            config_bus: None,
+            #[cfg(feature = "progressive-reload")]
+            preload_validators: Vec::new(),
+            #[cfg(feature = "progressive-reload")]
+            reload_health_check: None,
             _marker: PhantomData,
         }
     }
@@ -240,6 +259,30 @@ impl<T> ConfigBuilder<T> {
         self.chain_builder = self.chain_builder.fail_fast(fail_fast);
         self
     }
+
+    /// Set the configuration bus for multi-instance synchronization.
+    #[cfg(feature = "config-bus")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "config-bus")))]
+    pub fn config_bus(mut self, bus: Arc<dyn ConfigBus>) -> Self {
+        self.config_bus = Some(bus);
+        self
+    }
+
+    /// Add a preload validator for pre-build validation.
+    #[cfg(feature = "progressive-reload")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "progressive-reload")))]
+    pub fn preload_validator(mut self, validator: Arc<dyn ReloadHealthCheck>) -> Self {
+        self.preload_validators.push(validator);
+        self
+    }
+
+    /// Set the health check for reload operations.
+    #[cfg(feature = "progressive-reload")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "progressive-reload")))]
+    pub fn reload_health_check(mut self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
+        self.reload_health_check = Some(health_check);
+        self
+    }
 }
 
 impl<T> ConfigBuilder<T>
@@ -249,13 +292,23 @@ where
     /// Build the configuration synchronously.
     ///
     /// This method collects all sources and merges them into a final configuration.
-    pub fn build(mut self) -> ConfigResult<T> {
-        // Add accumulated defaults if any
+    pub fn build(self) -> ConfigResult<T> {
+        self.do_build()
+    }
+
+    /// Build the configuration and return the annotated value with location information.
+    ///
+    /// This method returns the raw AnnotatedValue which contains source location
+    /// information (line and column numbers) for each value.
+    pub fn build_annotated(self) -> ConfigResult<AnnotatedValue> {
+        self.do_build_annotated()
+    }
+
+    fn do_build(mut self) -> ConfigResult<T> {
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
 
-        // Add accumulated memory values if any
         if !self.accumulated_memory.is_empty() {
             self.chain_builder = self
                 .chain_builder
@@ -265,7 +318,6 @@ where
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
 
-        // Convert to the target type
         let json = value_to_json(&merged);
         let config: T = serde_json::from_value(json).map_err(|e| ConfigError::InvalidValue {
             key: String::new(),
@@ -274,6 +326,23 @@ where
         })?;
 
         Ok(config)
+    }
+
+    fn do_build_annotated(mut self) -> ConfigResult<AnnotatedValue> {
+        if !self.accumulated_defaults.is_empty() {
+            self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
+        }
+
+        if !self.accumulated_memory.is_empty() {
+            self.chain_builder = self
+                .chain_builder
+                .memory_with_priority(self.accumulated_memory, self.memory_priority);
+        }
+
+        let chain = self.chain_builder.build();
+        let merged = chain.collect()?;
+
+        Ok(merged)
     }
 
     /// Build with a fallback configuration.

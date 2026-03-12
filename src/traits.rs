@@ -299,6 +299,53 @@ pub trait Versioned {
     const VERSION: u32;
 }
 
+/// Context-aware configuration provider.
+///
+/// This trait provides context-aware value resolution, allowing values
+/// to be dynamically computed based on runtime context (e.g., tenant, environment).
+#[cfg(feature = "context-aware")]
+#[cfg_attr(docsrs, doc(cfg(feature = "context-aware")))]
+pub trait ContextAwareProvider: Send + Sync {
+    /// The context type used for resolution.
+    type Context: Clone + Send + Sync;
+
+    /// Get a value with context.
+    fn get_with_context(&self, key: &str, context: &Self::Context) -> Option<AnnotatedValue>;
+
+    /// Get all keys that are context-dependent.
+    fn context_dependent_keys(&self) -> Vec<String>;
+
+    /// Check if a key requires context for resolution.
+    fn requires_context(&self, key: &str) -> bool;
+}
+
+/// Preload validator for configuration validation before build.
+///
+/// This trait allows validation hooks to run before the configuration
+/// is fully built, enabling early detection of configuration issues.
+#[cfg(feature = "progressive-reload")]
+#[cfg_attr(docsrs, doc(cfg(feature = "progressive-reload")))]
+#[async_trait::async_trait]
+pub trait AsyncPreloadValidator: Send + Sync {
+    /// Validate configuration before it is committed.
+    ///
+    /// Returns `Ok(())` if validation passes, or an error with details.
+    async fn validate(&self, config: &impl ConfigProvider) -> ConfigResult<()>;
+
+    /// Get the validator name for logging.
+    fn name(&self) -> &'static str;
+
+    /// Get the priority of this validator (lower = higher priority).
+    fn priority(&self) -> u8 {
+        100
+    }
+
+    /// Whether this validator can be skipped on error.
+    fn is_optional(&self) -> bool {
+        false
+    }
+}
+
 /// Type-safe configuration key.
 ///
 /// Binds a configuration path to a specific type for compile-time safety.
