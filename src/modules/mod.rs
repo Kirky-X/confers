@@ -470,13 +470,13 @@ impl ModuleRegistry {
         group_name: &str,
         prefix: Option<&str>,
     ) -> ConfigResult<bool> {
-        let module = self
-            .groups
-            .get_mut(group_name)
-            .ok_or_else(|| ConfigError::ModuleNotFound {
-                group: group_name.to_string(),
-                module: "env".to_string(),
-            })?;
+        let module =
+            self.groups
+                .get_mut(group_name)
+                .ok_or_else(|| ConfigError::ModuleNotFound {
+                    group: group_name.to_string(),
+                    module: "env".to_string(),
+                })?;
 
         let prefix_str = prefix.unwrap_or("");
         let env_key = format!("{}{}_PROFILE", prefix_str, group_name.to_uppercase());
@@ -517,12 +517,12 @@ impl ModuleRegistry {
     /// Returns `Ok(())` if all active profiles are valid, or an error with details.
     pub fn validate_active_profiles(&self) -> ConfigResult<()> {
         for (name, module) in &self.groups {
-            let path = module
-                .get_profile(&module.active_profile)
-                .ok_or_else(|| ConfigError::ModuleNotFound {
+            let path = module.get_profile(&module.active_profile).ok_or_else(|| {
+                ConfigError::ModuleNotFound {
                     group: name.to_string(),
                     module: module.active_profile.to_string(),
-                })?;
+                }
+            })?;
 
             if !path.exists() {
                 return Err(ConfigError::FileNotFound {

@@ -11,10 +11,10 @@ use std::time::Duration;
 
 #[cfg(feature = "config-bus")]
 use crate::bus::ConfigBus;
-#[cfg(feature = "progressive-reload")]
-use crate::traits::ReloadHealthCheck;
 use crate::error::{BuildResult, BuildWarning, ConfigError, ConfigResult, WarningCode};
 use crate::merger::MergeStrategy;
+#[cfg(feature = "progressive-reload")]
+use crate::traits::ReloadHealthCheck;
 use crate::traits::{KeyProvider, MetricsBackend, NoOpMetrics};
 use crate::value::{AnnotatedValue, ConfigValue};
 

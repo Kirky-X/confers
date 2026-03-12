@@ -51,9 +51,14 @@ impl PartialEq for MergeStrategy {
             (MergeStrategy::Join { separator: a }, MergeStrategy::Join { separator: b }) => a == b,
             (MergeStrategy::Append, MergeStrategy::Append) => true,
             (MergeStrategy::Prepend, MergeStrategy::Prepend) => true,
-            (MergeStrategy::JoinAppend { separator: a }, MergeStrategy::JoinAppend { separator: b }) => a == b,
+            (
+                MergeStrategy::JoinAppend { separator: a },
+                MergeStrategy::JoinAppend { separator: b },
+            ) => a == b,
             (MergeStrategy::DeepMerge, MergeStrategy::DeepMerge) => true,
-            (MergeStrategy::Custom { name: a, .. }, MergeStrategy::Custom { name: b, .. }) => a == b,
+            (MergeStrategy::Custom { name: a, .. }, MergeStrategy::Custom { name: b, .. }) => {
+                a == b
+            }
             _ => false,
         }
     }
