@@ -11,6 +11,16 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::error::ConfigResult;
 
+#[cfg(feature = "nats-bus")]
+mod nats;
+#[cfg(feature = "redis-bus")]
+mod redis;
+
+#[cfg(feature = "nats-bus")]
+pub use nats::{NatsBusBuilder, NatsConfigBus};
+#[cfg(feature = "redis-bus")]
+pub use redis::{RedisBusBuilder, RedisConfigBus};
+
 /// Configuration change event for multi-instance synchronization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigChangeEvent {
