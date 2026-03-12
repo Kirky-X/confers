@@ -40,11 +40,10 @@ impl MergeEngine {
         self
     }
 
-    pub fn get_strategy(&self, path: &str) -> MergeStrategy {
+    pub fn get_strategy(&self, path: &str) -> &MergeStrategy {
         self.field_strategies
             .get(path)
-            .copied()
-            .unwrap_or(self.default_strategy)
+            .unwrap_or(&self.default_strategy)
     }
 
     pub fn merge(
@@ -53,7 +52,7 @@ impl MergeEngine {
         high: &AnnotatedValue,
     ) -> ConfigResult<AnnotatedValue> {
         // Use iterative merge with explicit stack to avoid stack overflow
-        Self::merge_iterative(low, high, self.get_strategy(&low.path))
+        Self::merge_iterative(low, high, self.get_strategy(&low.path).clone())
     }
 
     /// Iterative merge implementation using explicit stack to prevent stack overflow
@@ -64,7 +63,7 @@ impl MergeEngine {
         strategy: MergeStrategy,
     ) -> ConfigResult<AnnotatedValue> {
         // For simple cases, use direct merge
-        let merged = match (&low.inner, &high.inner, strategy) {
+        let merged = match (&low.inner, &high.inner, &strategy) {
             (ConfigValue::Null, _, _) => high.inner.clone(),
             (_, ConfigValue::Null, _) => low.inner.clone(),
             // Map + Map: deep merge
@@ -90,11 +89,11 @@ impl MergeEngine {
 
                         if needs_recursive {
                             // For deeply nested maps, merge the inner values
-                            let merged_inner = Self::merge_iterative(v_low, v_high, strategy)?;
+                            let merged_inner = Self::merge_iterative(v_low, v_high, strategy.clone())?;
                             *v_low = merged_inner;
                         } else {
                             // For non-map values, apply strategy
-                            *v_low = Self::apply_strategy(v_low, v_high, strategy)?;
+                            *v_low = Self::apply_strategy(v_low, v_high, &strategy)?;
                         }
                     } else {
                         result.insert(k.clone(), v_high.clone());
@@ -102,6 +101,8 @@ impl MergeEngine {
                 }
                 ConfigValue::Map(Arc::new(result))
             }
+            // Custom strategy
+            (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
             // Non-map Replace strategy
             (_, _, MergeStrategy::Replace) => high.inner.clone(),
             // Join and JoinAppend both handle string joining the same way
@@ -137,9 +138,10 @@ impl MergeEngine {
     fn apply_strategy(
         low: &AnnotatedValue,
         high: &AnnotatedValue,
-        strategy: MergeStrategy,
+        strategy: &MergeStrategy,
     ) -> ConfigResult<AnnotatedValue> {
         let merged = match (&low.inner, &high.inner, strategy) {
+            (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
             (_, _, MergeStrategy::Replace) => high.inner.clone(),
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
                 ConfigValue::String(format!("{}{}{}", l, separator, r))
