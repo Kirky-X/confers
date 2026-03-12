@@ -531,12 +531,19 @@ impl ConfigError {
                 let recovery_str = if *recoverable { " (recoverable)" } else { "" };
                 format!("Watcher error{}: {}{}", path_str, message, recovery_str)
             }
-            ConfigError::OverrideBlocked { key, reason, override_source } => {
+            ConfigError::OverrideBlocked {
+                key,
+                reason,
+                override_source,
+            } => {
                 let source_str = override_source
                     .as_ref()
                     .map(|s| format!(" from '{}'", s))
                     .unwrap_or_default();
-                format!("Override blocked for key '{}'{}: {}", key, source_str, reason)
+                format!(
+                    "Override blocked for key '{}'{}: {}",
+                    key, source_str, reason
+                )
             }
         }
     }

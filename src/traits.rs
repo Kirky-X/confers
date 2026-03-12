@@ -186,11 +186,14 @@ impl Drop for ZeroizingBytes {
 // The Drop trait ensures sensitive data is zeroized on drop.
 // Note: Cloning ZeroizingBytes would leave copies in memory that cannot be zeroized.
 
-#[cfg(any(feature = "remote", feature = "config-bus"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "remote", feature = "config-bus"))))]
+#[cfg(any(feature = "remote", feature = "config-bus", feature = "encryption"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(feature = "remote", feature = "config-bus", feature = "encryption")))
+)]
 pub use async_traits::*;
 
-#[cfg(any(feature = "remote", feature = "config-bus"))]
+#[cfg(any(feature = "remote", feature = "config-bus", feature = "encryption"))]
 mod async_traits {
     use super::*;
     use std::time::Duration;
