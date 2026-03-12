@@ -54,6 +54,48 @@ impl StructAttrs {
     pub fn effective_profile_env(&self) -> &str {
         self.profile_env.as_deref().unwrap_or("APP_ENV")
     }
+
+    /// Validate struct attributes and return errors with helpful suggestions
+    pub fn validate(&self, input: &syn::DeriveInput) -> darling::Result<()> {
+        let mut errors = darling::Error::accumulator();
+
+        // Validate version if present
+        if let Some(version) = self.version {
+            if version == 0 {
+                errors.push(
+                    darling::Error::custom(
+                        "version must be a positive integer (1 or greater)"
+                    )
+                    .with_span(&input.ident)
+                );
+            }
+        }
+
+        // Validate env_prefix format
+        if let Some(ref prefix) = self.env_prefix {
+            if prefix.is_empty() {
+                errors.push(
+                    darling::Error::custom(
+                        "env_prefix cannot be empty. Use None or remove the attribute to use no prefix"
+                    )
+                    .with_span(&input.ident)
+                );
+            } else if prefix.contains(' ') {
+                errors.push(
+                    darling::Error::custom(
+                        format!(
+                            "env_prefix '{}' contains spaces. Use underscores instead: '{}'",
+                            prefix,
+                            prefix.replace(' ', "_")
+                        )
+                    )
+                    .with_span(&input.ident)
+                );
+            }
+        }
+
+        errors.finish()
+    }
 }
 
 /// Parsed attributes from a field.
@@ -144,6 +186,63 @@ impl FieldAttrs {
     /// Check if this field should be treated as sensitive
     pub fn is_sensitive_effective(&self) -> bool {
         self.sensitive || self.encrypt.is_some() || self.is_secret_string()
+    }
+
+    /// Validate field attributes and return errors with helpful suggestions
+    pub fn validate(&self, _field: &syn::Field) -> darling::Result<()> {
+        let mut errors = darling::Error::accumulator();
+
+        // Validate encrypt algorithm
+        if let Some(ref algo) = self.encrypt {
+            match algo.as_str() {
+                "xchacha20" | "aes256-gcm" => {}
+                _ => {
+                    let ident = self.ident.as_ref().unwrap();
+                    errors.push(
+                        darling::Error::custom(format!(
+                            "unsupported encryption algorithm '{}'\n\
+                             supported algorithms: \"xchacha20\", \"aes256-gcm\"",
+                            algo
+                        ))
+                        .with_span(ident)
+                    );
+                }
+            }
+        }
+
+        // Validate merge_strategy
+        if let Some(ref strategy) = self.merge_strategy {
+            let valid_strategies = vec![
+                "replace", "join", "append", "prepend", 
+                "join_append", "deep_merge"
+            ];
+            if !valid_strategies.contains(&strategy.as_str()) {
+                let ident = self.ident.as_ref().unwrap();
+                errors.push(
+                    darling::Error::custom(format!(
+                        "invalid merge strategy '{}'\n\
+                         valid strategies: {}",
+                        strategy,
+                        valid_strategies.join(", ")
+                    ))
+                    .with_span(ident)
+                );
+            }
+        }
+
+        // Validate sensitive field type
+        if self.sensitive && !self.is_secret_string() {
+            let ident = self.ident.as_ref().unwrap();
+            errors.push(
+                darling::Error::custom(format!(
+                    "sensitive field '{}' should use SecretString or SecretBytes type for security",
+                    ident
+                ))
+                .with_span(ident)
+            );
+        }
+
+        errors.finish()
     }
 }
 

@@ -124,6 +124,10 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let struct_attrs = StructAttrs::from_derive_input(input)
         .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
 
+    // Validate struct attributes
+    struct_attrs.validate(input)
+        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+
     // Get the struct identifier
     let struct_ident = &input.ident;
 
@@ -148,11 +152,16 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
         })
         .collect();
 
+    // Validate field attributes
+    for (ident, _ty, attrs) in &field_info {
+        attrs.validate(fields.iter().find(|f| f.ident.as_ref() == Some(ident)).unwrap())
+            .map_err(|e| syn::Error::new_spanned(ident, e.to_string()))?;
+    }
+
     // Generate code
     let defaults_impl = generate_defaults_impl(struct_ident, &field_info);
     let load_impl = generate_load_impl(struct_ident, &struct_attrs, fields);
     let validate_impl = generate_validate_impl(&struct_attrs, &field_info);
-
     Ok(quote! {
         #defaults_impl
         #load_impl
