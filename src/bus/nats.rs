@@ -17,12 +17,13 @@ pub struct NatsConfigBus {
 
 impl NatsConfigBus {
     pub async fn connect(url: &str, subject: impl Into<String>) -> ConfigResult<Self> {
-        let client = async_nats::connect(url)
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_connect: {}", e),
-                retryable: true,
-            })?;
+        let client =
+            async_nats::connect(url)
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: format!("nats_connect: {}", e),
+                    retryable: true,
+                })?;
 
         Ok(Self {
             client,
