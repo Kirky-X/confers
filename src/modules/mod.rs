@@ -389,6 +389,150 @@ impl ModuleRegistry {
     pub fn is_empty(&self) -> bool {
         self.groups.is_empty()
     }
+
+    /// Resolve module profiles from environment variables.
+    ///
+    /// This method allows runtime configuration of which profile to use for each group
+    /// via environment variables. The environment variable format is:
+    /// `{prefix}{GROUP_NAME}_PROFILE` (uppercase).
+    ///
+    /// # Arguments
+    ///
+    /// * `prefix` - Optional prefix for environment variables (e.g., "APP_")
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use confers::modules::ModuleRegistry;
+    /// use std::path::PathBuf;
+    ///
+    /// // Given environment variable APP_DATABASE_PROFILE=postgresql
+    /// std::env::set_var("APP_DATABASE_PROFILE", "postgresql");
+    ///
+    /// let mut registry = ModuleRegistry::new();
+    /// registry.register_group(
+    ///     "database",
+    ///     vec![
+    ///         ("mysql", PathBuf::from("conf/db/mysql.toml")),
+    ///         ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+    ///     ],
+    ///     Some("mysql"),
+    /// );
+    ///
+    /// registry.resolve_from_env(Some("APP_"));
+    /// // Active profile for "database" is now "postgresql"
+    ///
+    /// std::env::remove_var("APP_DATABASE_PROFILE");
+    /// ```
+    pub fn resolve_from_env(&mut self, prefix: Option<&str>) -> &mut Self {
+        let prefix_str = prefix.unwrap_or("");
+
+        for (name, module) in self.groups.iter_mut() {
+            let env_key = format!("{}{}_PROFILE", prefix_str, name.to_uppercase());
+
+            if let Ok(profile) = std::env::var(&env_key) {
+                if module.has_profile(&profile) {
+                    module.active_profile = Arc::from(profile);
+                    tracing::debug!(
+                        group = name.as_ref(),
+                        profile = module.active_profile.as_ref(),
+                        env_key = env_key,
+                        "Resolved module profile from environment"
+                    );
+                } else {
+                    tracing::warn!(
+                        group = name.as_ref(),
+                        requested = profile,
+                        available = ?module.profiles(),
+                        env_key = env_key,
+                        "Environment variable specifies non-existent profile, ignoring"
+                    );
+                }
+            }
+        }
+
+        self
+    }
+
+    /// Resolve a single module's profile from environment variable.
+    ///
+    /// # Arguments
+    ///
+    /// * `group_name` - The group name to resolve
+    /// * `prefix` - Optional prefix for environment variables
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the profile was changed, `Ok(false)` if no env var was set,
+    /// or an error if the group doesn't exist.
+    pub fn resolve_module_from_env(
+        &mut self,
+        group_name: &str,
+        prefix: Option<&str>,
+    ) -> ConfigResult<bool> {
+        let module = self
+            .groups
+            .get_mut(group_name)
+            .ok_or_else(|| ConfigError::ModuleNotFound {
+                group: group_name.to_string(),
+                module: "env".to_string(),
+            })?;
+
+        let prefix_str = prefix.unwrap_or("");
+        let env_key = format!("{}{}_PROFILE", prefix_str, group_name.to_uppercase());
+
+        if let Ok(profile) = std::env::var(&env_key) {
+            if module.has_profile(&profile) {
+                module.active_profile = Arc::from(profile);
+                return Ok(true);
+            } else {
+                tracing::warn!(
+                    group = group_name,
+                    requested = profile,
+                    available = ?module.profiles(),
+                    "Environment variable specifies non-existent profile"
+                );
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Get all active profiles as a map.
+    ///
+    /// # Returns
+    ///
+    /// A HashMap mapping group names to their active profile names.
+    pub fn active_profiles(&self) -> HashMap<Arc<str>, Arc<str>> {
+        self.groups
+            .iter()
+            .map(|(name, module)| (name.clone(), module.active_profile.clone()))
+            .collect()
+    }
+
+    /// Validate that all active profiles have valid file paths.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if all active profiles are valid, or an error with details.
+    pub fn validate_active_profiles(&self) -> ConfigResult<()> {
+        for (name, module) in &self.groups {
+            let path = module
+                .get_profile(&module.active_profile)
+                .ok_or_else(|| ConfigError::ModuleNotFound {
+                    group: name.to_string(),
+                    module: module.active_profile.to_string(),
+                })?;
+
+            if !path.exists() {
+                return Err(ConfigError::FileNotFound {
+                    filename: path.clone(),
+                    source: None,
+                });
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
