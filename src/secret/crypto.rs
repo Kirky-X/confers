@@ -1,7 +1,7 @@
 use chacha20poly1305::aead::rand_core::RngCore;
 use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
-    ChaCha20Poly1305, Nonce,
+    XChaCha20Poly1305, XNonce,
 };
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -14,7 +14,11 @@ pub enum CryptoError {
     DecryptionFailed,
     #[error("invalid key length")]
     InvalidKeyLength,
+    #[error("legacy decryption failed (AES-256-GCM)")]
+    LegacyDecryptionFailed,
 }
+
+pub const NONCE_SIZE: usize = 24;
 
 pub struct XChaCha20Crypto;
 
@@ -29,11 +33,11 @@ impl XChaCha20Crypto {
         }
 
         let cipher =
-            ChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::EncryptionFailed)?;
+            XChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::EncryptionFailed)?;
 
-        let mut nonce_bytes = [0u8; 12];
+        let mut nonce_bytes = [0u8; NONCE_SIZE];
         OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce = XNonce::from_slice(&nonce_bytes);
 
         let ciphertext = cipher
             .encrypt(nonce, plaintext)
@@ -52,10 +56,14 @@ impl XChaCha20Crypto {
             return Err(CryptoError::InvalidKeyLength);
         }
 
-        let cipher =
-            ChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::DecryptionFailed)?;
+        if nonce.len() != NONCE_SIZE {
+            return Err(CryptoError::DecryptionFailed);
+        }
 
-        let nonce = Nonce::from_slice(nonce);
+        let cipher =
+            XChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::DecryptionFailed)?;
+
+        let nonce = XNonce::from_slice(nonce);
 
         cipher
             .decrypt(nonce, ciphertext)
