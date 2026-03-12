@@ -68,9 +68,14 @@ impl KeyRegistry {
         KeyRegistryBuilder::new()
     }
 
-    pub fn register_key(&self, version: String, key: SecretBytes, is_primary: bool) -> Result<(), CryptoError> {
+    pub fn register_key(
+        &self,
+        version: String,
+        key: SecretBytes,
+        is_primary: bool,
+    ) -> Result<(), CryptoError> {
         let mut keys = self.keys.write().unwrap();
-        
+
         if is_primary {
             for (_, v) in keys.iter_mut() {
                 v.is_primary = false;
@@ -103,9 +108,13 @@ impl KeyRegistry {
         Ok(())
     }
 
-    pub fn rotate_to(&self, new_version: String, new_key: SecretBytes) -> Result<String, CryptoError> {
+    pub fn rotate_to(
+        &self,
+        new_version: String,
+        new_key: SecretBytes,
+    ) -> Result<String, CryptoError> {
         let old_primary = self.primary_version.read().unwrap().clone();
-        
+
         self.register_key(new_version.clone(), new_key, true)?;
 
         Ok(old_primary.unwrap_or_else(|| "none".to_string()))
@@ -141,7 +150,7 @@ impl KeyRegistry {
         ciphertext: &[u8],
     ) -> Result<(String, Vec<u8>), CryptoError> {
         use crate::secret::XChaCha20Crypto;
-        
+
         let crypto = XChaCha20Crypto::new();
         let keys = self.keys.read().unwrap();
 
@@ -167,15 +176,30 @@ impl KeyRegistry {
         for provider in self.providers.read().unwrap().iter() {
             if let Ok(key) = provider.get_key() {
                 let key_bytes = key.as_slice().to_vec();
-                let _ = self.register_key(version.to_string(), SecretBytes::new(key_bytes.clone()), false);
+                let _ = self.register_key(
+                    version.to_string(),
+                    SecretBytes::new(key_bytes.clone()),
+                    false,
+                );
                 return Ok(key_bytes);
             }
         }
 
-        for provider in self.async_providers.read().unwrap().iter() {
+        let async_providers: Vec<Arc<dyn AsyncKeyProvider>> = self
+            .async_providers
+            .read()
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect();
+        for provider in async_providers {
             if let Ok(key) = provider.get_key().await {
                 let key_bytes = key.as_slice().to_vec();
-                let _ = self.register_key(version.to_string(), SecretBytes::new(key_bytes.clone()), false);
+                let _ = self.register_key(
+                    version.to_string(),
+                    SecretBytes::new(key_bytes.clone()),
+                    false,
+                );
                 return Ok(key_bytes);
             }
         }
@@ -268,9 +292,11 @@ mod tests {
     fn test_register_and_get_key() {
         let registry = KeyRegistry::new(KeyRotationConfig::default());
         let key = vec![1u8; 32];
-        
-        registry.register_key("v1".to_string(), SecretBytes::new(key.clone()), true).unwrap();
-        
+
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(key.clone()), true)
+            .unwrap();
+
         let (version, retrieved) = registry.get_primary_key().unwrap();
         assert_eq!(version, "v1");
         assert_eq!(retrieved, key);
@@ -281,10 +307,14 @@ mod tests {
         let registry = KeyRegistry::new(KeyRotationConfig::default());
         let key1 = vec![1u8; 32];
         let key2 = vec![2u8; 32];
-        
-        registry.register_key("v1".to_string(), SecretBytes::new(key1), true).unwrap();
-        let old = registry.rotate_to("v2".to_string(), SecretBytes::new(key2)).unwrap();
-        
+
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(key1), true)
+            .unwrap();
+        let old = registry
+            .rotate_to("v2".to_string(), SecretBytes::new(key2))
+            .unwrap();
+
         assert_eq!(old, "v1");
         let (version, _) = registry.get_primary_key().unwrap();
         assert_eq!(version, "v2");
@@ -297,11 +327,17 @@ mod tests {
             ..Default::default()
         };
         let registry = KeyRegistry::new(config);
-        
-        registry.register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true).unwrap();
-        registry.register_key("v2".to_string(), SecretBytes::new(vec![2u8; 32]), false).unwrap();
-        registry.register_key("v3".to_string(), SecretBytes::new(vec![3u8; 32]), false).unwrap();
-        
+
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true)
+            .unwrap();
+        registry
+            .register_key("v2".to_string(), SecretBytes::new(vec![2u8; 32]), false)
+            .unwrap();
+        registry
+            .register_key("v3".to_string(), SecretBytes::new(vec![3u8; 32]), false)
+            .unwrap();
+
         assert_eq!(registry.version_count(), 2);
     }
 }
