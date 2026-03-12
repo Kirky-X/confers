@@ -3,8 +3,13 @@
 //! Uses darling for derive-aware attribute parsing with precise error spans.
 
 use darling::{FromDeriveInput, FromField};
-use quote::quote;
 use syn::{GenericArgument, Ident, PathArguments, Type};
+
+/// Maximum allowed length for environment variable prefix.
+const MAX_PREFIX_LENGTH: usize = 64;
+
+/// Maximum allowed length for names (app_name, etc.).
+const MAX_NAME_LENGTH: usize = 256;
 
 /// Parsed attributes from the struct level.
 #[derive(Debug, FromDeriveInput)]
@@ -44,52 +49,106 @@ pub struct StructAttrs {
 }
 
 impl StructAttrs {
-    /// Get the effective environment prefix
+    /// Get the effective environment prefix.
     pub fn effective_env_prefix(&self) -> &str {
         self.env_prefix.as_deref().unwrap_or("")
     }
 
-    /// Get the profile environment variable name
+    /// Get the effective profile environment variable name.
     #[allow(dead_code)]
     pub fn effective_profile_env(&self) -> &str {
         self.profile_env.as_deref().unwrap_or("APP_ENV")
     }
 
-    /// Validate struct attributes and return errors with helpful suggestions
+    /// Validate struct attributes.
+    ///
+    /// This method performs comprehensive validation of all struct-level attributes:
+    /// - Version must be positive (if specified)
+    /// - env_prefix must not be empty, must not exceed max length, and must only contain
+    ///   alphanumeric characters and underscores
+    /// - app_name must not be empty and must not exceed max length
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The derive input for error span reporting
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if all validations pass, or accumulates errors.
     pub fn validate(&self, input: &syn::DeriveInput) -> darling::Result<()> {
         let mut errors = darling::Error::accumulator();
 
-        // Validate version if present
+        // Validate version
         if let Some(version) = self.version {
             if version == 0 {
                 errors.push(
-                    darling::Error::custom(
-                        "version must be a positive integer (1 or greater)"
-                    )
-                    .with_span(&input.ident)
+                    darling::Error::custom("version must be a positive integer (1 or greater)")
+                        .with_span(&input.ident),
                 );
             }
         }
 
-        // Validate env_prefix format
+        // Validate env_prefix
         if let Some(ref prefix) = self.env_prefix {
+            // Length check
+            if prefix.len() > MAX_PREFIX_LENGTH {
+                errors.push(
+                    darling::Error::custom(format!(
+                        "env_prefix exceeds maximum length of {} characters (current: {})",
+                        MAX_PREFIX_LENGTH,
+                        prefix.len()
+                    ))
+                    .with_span(&input.ident),
+                );
+            }
+
+            // Empty check
             if prefix.is_empty() {
                 errors.push(
                     darling::Error::custom(
-                        "env_prefix cannot be empty. Use None or remove the attribute to use no prefix"
+                        "env_prefix cannot be empty. Remove the attribute to use no prefix",
                     )
-                    .with_span(&input.ident)
+                    .with_span(&input.ident),
                 );
-            } else if prefix.contains(' ') {
+            }
+
+            // Character whitelist check
+            if !prefix
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            {
                 errors.push(
                     darling::Error::custom(
-                        format!(
-                            "env_prefix '{}' contains spaces. Use underscores instead: '{}'",
-                            prefix,
-                            prefix.replace(' ', "_")
-                        )
+                        "env_prefix must only contain alphanumeric characters and underscores",
                     )
-                    .with_span(&input.ident)
+                    .with_span(&input.ident),
+                );
+            }
+
+            // Control character check
+            if prefix.chars().any(|c| c.is_control()) {
+                errors.push(
+                    darling::Error::custom("env_prefix cannot contain control characters")
+                        .with_span(&input.ident),
+                );
+            }
+        }
+
+        // Validate app_name
+        if let Some(ref app_name) = self.app_name {
+            if app_name.len() > MAX_NAME_LENGTH {
+                errors.push(
+                    darling::Error::custom(format!(
+                        "app_name exceeds maximum length of {} characters",
+                        MAX_NAME_LENGTH
+                    ))
+                    .with_span(&input.ident),
+                );
+            }
+
+            if app_name.is_empty() {
+                errors.push(
+                    darling::Error::custom("app_name cannot be empty").with_span(&input.ident),
                 );
             }
         }
@@ -204,7 +263,7 @@ impl FieldAttrs {
                              supported algorithms: \"xchacha20\", \"aes256-gcm\"",
                             algo
                         ))
-                        .with_span(ident)
+                        .with_span(ident),
                     );
                 }
             }
@@ -212,9 +271,13 @@ impl FieldAttrs {
 
         // Validate merge_strategy
         if let Some(ref strategy) = self.merge_strategy {
-            let valid_strategies = vec![
-                "replace", "join", "append", "prepend", 
-                "join_append", "deep_merge"
+            let valid_strategies = [
+                "replace",
+                "join",
+                "append",
+                "prepend",
+                "join_append",
+                "deep_merge",
             ];
             if !valid_strategies.contains(&strategy.as_str()) {
                 let ident = self.ident.as_ref().unwrap();
@@ -225,7 +288,7 @@ impl FieldAttrs {
                         strategy,
                         valid_strategies.join(", ")
                     ))
-                    .with_span(ident)
+                    .with_span(ident),
                 );
             }
         }
@@ -238,7 +301,7 @@ impl FieldAttrs {
                     "sensitive field '{}' should use SecretString or SecretBytes type for security",
                     ident
                 ))
-                .with_span(ident)
+                .with_span(ident),
             );
         }
 
@@ -246,10 +309,53 @@ impl FieldAttrs {
     }
 }
 
-/// Check if a type is SecretString or SecretBytes
-fn is_secret_type(ty: &Type) -> bool {
-    let type_str = quote!(#ty).to_string();
-    type_str.contains("SecretString") || type_str.contains("SecretBytes")
+/// Check if a type is SecretString or SecretBytes (optimized version)
+pub fn is_secret_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "SecretString" || segment.ident == "SecretBytes";
+        }
+    }
+    false
+}
+
+/// Type category for optimized type handling
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeCategory {
+    String,
+    Integer,
+    Float,
+    Boolean,
+    Option,
+    Vec,
+    Map,
+    Secret,
+    Custom,
+}
+
+impl TypeCategory {
+    /// Determine the category of a type (optimized version)
+    #[allow(dead_code)]
+    pub fn from_type(ty: &Type) -> Self {
+        if let Type::Path(type_path) = ty {
+            if let Some(segment) = type_path.path.segments.last() {
+                match segment.ident.to_string().as_str() {
+                    "String" | "str" => return Self::String,
+                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return Self::Integer,
+                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return Self::Integer,
+                    "f32" | "f64" => return Self::Float,
+                    "bool" => return Self::Boolean,
+                    "Option" => return Self::Option,
+                    "Vec" => return Self::Vec,
+                    "HashMap" | "BTreeMap" | "Map" => return Self::Map,
+                    "SecretString" | "SecretBytes" => return Self::Secret,
+                    _ => {}
+                }
+            }
+        }
+        Self::Custom
+    }
 }
 
 /// Check if a type is Option<T>

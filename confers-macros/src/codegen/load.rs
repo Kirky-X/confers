@@ -82,35 +82,33 @@ fn generate_load_method(
             let env_name = f.effective_env_name(env_prefix);
             let config_key = f.effective_name();
 
-            // Handle _FILE suffix for secrets
+            // Handle _FILE suffix for secrets with secure path validation
             if f.is_sensitive_effective() {
                 let file_env_name = format!("{}_FILE", env_name);
                 quote! {
                     // Check for _FILE suffix first (Docker/K8s secrets pattern)
-                    // Security: validate path to prevent directory traversal
+                    // Security: Use PathValidator to prevent directory traversal attacks
                     if let Ok(file_path) = std::env::var(#file_env_name) {
-                        let path = std::path::Path::new(&file_path);
-                        // Reject paths with parent directory references (directory traversal)
-                        if !file_path.contains("..") && !file_path.starts_with('/') {
-                            if let Ok(content) = std::fs::read_to_string(path) {
-                                let val = content.trim().to_string();
-                                builder = builder.memory(std::collections::HashMap::from([
-                                    (#config_key.to_string(), confers::ConfigValue::string(val)),
-                                ]));
+                        let validator = confers::security::PathValidator::new();
+                        match validator.validate_and_resolve(&file_path) {
+                            Ok(validated_path) => {
+                                if let Ok(content) = std::fs::read_to_string(&validated_path) {
+                                    let val = content.trim().to_string();
+                                    env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Invalid secret file path '{}': {}", file_path, e);
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
-                        builder = builder.memory(std::collections::HashMap::from([
-                            (#config_key.to_string(), confers::ConfigValue::string(val)),
-                        ]));
+                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                     }
                 }
             } else {
                 quote! {
                     if let Ok(val) = std::env::var(#env_name) {
-                        builder = builder.memory(std::collections::HashMap::from([
-                            (#config_key.to_string(), confers::ConfigValue::string(val)),
-                        ]));
+                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                     }
                 }
             }
@@ -139,7 +137,11 @@ fn generate_load_method(
                 #(#default_calls)*
 
                 // Add environment variables (higher priority)
+                let mut env_map = std::collections::HashMap::new();
                 #(#env_calls)*
+                if !env_map.is_empty() {
+                    builder = builder.memory(env_map);
+                }
 
                 builder.build()
             }
@@ -180,35 +182,33 @@ fn generate_load_sync_method(
             let env_name = f.effective_env_name(env_prefix);
             let config_key = f.effective_name();
 
-            // Handle _FILE suffix for secrets
+            // Handle _FILE suffix for secrets with secure path validation
             if f.is_sensitive_effective() {
                 let file_env_name = format!("{}_FILE", env_name);
                 quote! {
                     // Check for _FILE suffix first (Docker/K8s secrets pattern)
-                    // Security: validate path to prevent directory traversal
+                    // Security: Use PathValidator to prevent directory traversal attacks
                     if let Ok(file_path) = std::env::var(#file_env_name) {
-                        let path = std::path::Path::new(&file_path);
-                        // Reject paths with parent directory references (directory traversal)
-                        if !file_path.contains("..") && !file_path.starts_with('/') {
-                            if let Ok(content) = std::fs::read_to_string(path) {
-                                let val = content.trim().to_string();
-                                builder = builder.memory(std::collections::HashMap::from([
-                                    (#config_key.to_string(), confers::ConfigValue::string(val)),
-                                ]));
+                        let validator = confers::security::PathValidator::new();
+                        match validator.validate_and_resolve(&file_path) {
+                            Ok(validated_path) => {
+                                if let Ok(content) = std::fs::read_to_string(&validated_path) {
+                                    let val = content.trim().to_string();
+                                    env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Warning: Invalid secret file path '{}': {}", file_path, e);
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
-                        builder = builder.memory(std::collections::HashMap::from([
-                            (#config_key.to_string(), confers::ConfigValue::string(val)),
-                        ]));
+                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                     }
                 }
             } else {
                 quote! {
                     if let Ok(val) = std::env::var(#env_name) {
-                        builder = builder.memory(std::collections::HashMap::from([
-                            (#config_key.to_string(), confers::ConfigValue::string(val)),
-                        ]));
+                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                     }
                 }
             }
@@ -225,7 +225,11 @@ fn generate_load_sync_method(
                 #(#default_calls)*
 
                 // Add environment variables (higher priority)
+                let mut env_map = std::collections::HashMap::new();
                 #(#env_calls)*
+                if !env_map.is_empty() {
+                    builder = builder.memory(env_map);
+                }
 
                 builder.build()
             }

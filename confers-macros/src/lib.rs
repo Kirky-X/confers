@@ -1,7 +1,103 @@
 //! Procedural macros for the confers configuration library.
 //!
-//! This crate provides the `#[derive(Config)]` macro for zero-boilerplate
-//! configuration loading.
+//! This crate provides derive macros for zero-boilerplate configuration
+//! management with security-first design.
+//!
+//! # Features
+//!
+//! - **Security-first**: Path traversal protection, sensitive data handling
+//! - **Multiple sources**: Environment variables, files, defaults
+//! - **Type-safe**: Compile-time validation and strong typing
+//! - **Flexible**: Support for nested configs, migrations, and CLI args
+//! - **High Performance**: Optimized type resolution and code generation
+//!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use confers::Config;
+//! use serde::Deserialize;
+//!
+//! #[derive(Config, Deserialize, Debug)]
+//! #[config(env_prefix = "APP_")]
+//! struct AppConfig {
+//!     #[config(default = "localhost")]
+//!     host: String,
+//!     
+//!     #[config(default = 8080)]
+//!     port: u16,
+//!     
+//!     #[config(sensitive = true)]
+//!     api_key: Option<String>,
+//! }
+//!
+//! // Load configuration
+//! let config = AppConfig::load_sync().unwrap();
+//! println!("{:?}", config);
+//! ```
+//!
+//! # Security Features
+//!
+//! ## Sensitive Data Protection
+//!
+//! Sensitive fields are automatically protected:
+//!
+//! ```rust,ignore
+//! #[derive(Config, Deserialize)]
+//! struct Config {
+//!     #[config(sensitive = true)]
+//!     password: String,  // Automatically uses SecretString
+//!     
+//!     #[config(encrypt = "xchacha20")]
+//!     secret_key: String,  // Encrypted at rest
+//! }
+//! ```
+//!
+//! ## Path Traversal Protection
+//!
+//! File paths for secrets are validated to prevent directory traversal attacks:
+//!
+//! ```rust,ignore
+//! // These are blocked:
+//! // APP_KEY_FILE=../../../etc/passwd
+//! // APP_KEY_FILE=/etc/passwd
+//! // APP_KEY_FILE=%2e%2e/etc/passwd
+//! ```
+//!
+//! # Architecture
+//!
+//! The crate is organized into several modules:
+//!
+//! - `parse`: Attribute parsing and validation
+//! - `codegen`: Code generation for different features
+//!   - `security`: Security utilities (path validation, encryption)
+//!   - `defaults`: Default value generation
+//!   - `load`: Configuration loading methods
+//!   - `schema`: JSON Schema generation
+//!   - `clap`: CLI argument generation
+//!
+//! # Derive Macros
+//!
+//! ## `Config`
+//!
+//! Main derive macro for configuration loading.
+//!
+//! ## `ConfigSchema`
+//!
+//! Generate JSON Schema from configuration structs.
+//!
+//! ## `ConfigMigration`
+//!
+//! Support for configuration version migrations.
+//!
+//! ## `ConfigModules`
+//!
+//! Group configuration into logical modules.
+//!
+//! ## `ConfigClap`
+//!
+//! Generate CLI argument parsers using clap.
+
+#![forbid(unsafe_code)]
 
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
@@ -125,7 +221,8 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
         .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
 
     // Validate struct attributes
-    struct_attrs.validate(input)
+    struct_attrs
+        .validate(input)
         .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
 
     // Get the struct identifier
@@ -154,7 +251,13 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
 
     // Validate field attributes
     for (ident, _ty, attrs) in &field_info {
-        attrs.validate(fields.iter().find(|f| f.ident.as_ref() == Some(ident)).unwrap())
+        attrs
+            .validate(
+                fields
+                    .iter()
+                    .find(|f| f.ident.as_ref() == Some(ident))
+                    .unwrap(),
+            )
             .map_err(|e| syn::Error::new_spanned(ident, e.to_string()))?;
     }
 
