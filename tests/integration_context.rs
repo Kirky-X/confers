@@ -119,7 +119,7 @@ fn test_context_aware_field_multiple_rules() {
             |ctx: &EvaluationContext| {
                 ctx.attributes().get("plan") == Some(&ContextValue::String("pro".into()))
             },
-            1_073_741_8240u64,
+            10_737_418_240u64,
         )
         .when(
             |ctx: &EvaluationContext| {

@@ -2,6 +2,8 @@
 
 #![cfg(feature = "modules")]
 
+mod common;
+
 use confers::loader::LoaderConfig;
 use confers::modules::{ModuleConfig, ModuleRegistry};
 use std::path::PathBuf;

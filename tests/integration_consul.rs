@@ -9,6 +9,8 @@
 
 #![cfg(feature = "consul")]
 
+mod common;
+
 use std::time::Duration;
 
 use confers::remote::{ConsulSourceBuilder, PolledSource};
@@ -17,7 +19,7 @@ use confers::remote::{ConsulSourceBuilder, PolledSource};
 #[tokio::test]
 async fn test_consul_source_connect() {
     // Skip if Consul is not available
-    if !is_consul_available().await {
+    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Consul not available");
         return;
     }
@@ -47,7 +49,7 @@ async fn test_consul_source_connect() {
 /// Test Consul source with token authentication.
 #[tokio::test]
 async fn test_consul_source_with_token() {
-    if !is_consul_available().await {
+    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Consul not available");
         return;
     }
@@ -67,7 +69,7 @@ async fn test_consul_source_with_token() {
 /// Test Consul source configuration parsing.
 #[tokio::test]
 async fn test_consul_source_parse_config() {
-    if !is_consul_available().await {
+    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Consul not available");
         return;
     }
@@ -115,23 +117,4 @@ async fn test_consul_source_parse_config() {
         .delete("http://127.0.0.1:8500/v1/kv/test-config")
         .send()
         .await;
-}
-
-/// Check if Consul is available.
-async fn is_consul_available() -> bool {
-    use reqwest::Client as HttpClient;
-
-    let http_client = HttpClient::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap();
-
-    match http_client
-        .get("http://127.0.0.1:8500/v1/status/leader")
-        .send()
-        .await
-    {
-        Ok(resp) => resp.status().is_success(),
-        Err(_) => false,
-    }
 }

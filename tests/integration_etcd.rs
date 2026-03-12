@@ -9,6 +9,8 @@
 
 #![cfg(feature = "etcd")]
 
+mod common;
+
 use std::time::Duration;
 
 use confers::remote::{EtcdSourceBuilder, PolledSource};
@@ -17,7 +19,7 @@ use confers::remote::{EtcdSourceBuilder, PolledSource};
 #[tokio::test]
 async fn test_etcd_source_connect() {
     // Skip if Etcd is not available
-    if !is_etcd_available().await {
+    if !common::is_service_available("http://127.0.0.1:2379/health", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Etcd not available");
         return;
     }
@@ -48,7 +50,7 @@ async fn test_etcd_source_connect() {
 /// Test Etcd source with authentication.
 #[tokio::test]
 async fn test_etcd_source_with_auth() {
-    if !is_etcd_available().await {
+    if !common::is_service_available("http://127.0.0.1:2379/health", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Etcd not available");
         return;
     }
@@ -69,7 +71,7 @@ async fn test_etcd_source_with_auth() {
 /// Test Etcd source configuration parsing.
 #[tokio::test]
 async fn test_etcd_source_parse_config() {
-    if !is_etcd_available().await {
+    if !common::is_service_available("http://127.0.0.1:2379/health", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Etcd not available");
         return;
     }
@@ -146,7 +148,7 @@ async fn test_etcd_source_parse_config() {
 /// Test Etcd source with JSON configuration.
 #[tokio::test]
 async fn test_etcd_source_json_config() {
-    if !is_etcd_available().await {
+    if !common::is_service_available("http://127.0.0.1:2379/health", Duration::from_secs(2)).await {
         eprintln!("Skipping test: Etcd not available");
         return;
     }
@@ -202,17 +204,4 @@ async fn test_etcd_source_json_config() {
         }))
         .send()
         .await;
-}
-
-/// Check if Etcd is available.
-async fn is_etcd_available() -> bool {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap();
-
-    match client.get("http://127.0.0.1:2379/health").send().await {
-        Ok(resp) => resp.status().is_success(),
-        Err(_) => false,
-    }
 }

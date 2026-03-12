@@ -8,15 +8,56 @@ use std::time::Duration;
 
 use confers::watcher::{AdaptiveDebouncer, WatcherConfig, WatcherConfigBuilder, WatcherGuard};
 
+// ========================================
+// Test Constants with Documented Meanings
+// ========================================
+
+/// Default debounce window in milliseconds
+const DEFAULT_DEBOUNCE_MS: u64 = 200;
+/// Minimum time between reloads in milliseconds
+const DEFAULT_MIN_RELOAD_MS: u64 = 1000;
+/// Max consecutive failures before pause
+const DEFAULT_MAX_FAILURES: u32 = 5;
+/// Pause duration after max failures in milliseconds
+const DEFAULT_FAILURE_PAUSE_MS: u64 = 30000;
+
+/// Custom debounce window for builder tests
+const CUSTOM_DEBOUNCE_MS: u64 = 500;
+/// Custom minimum reload interval for builder tests
+const CUSTOM_MIN_RELOAD_MS: u64 = 2000;
+/// Custom max failures for builder tests
+const CUSTOM_MAX_FAILURES: u32 = 10;
+/// Custom failure pause duration for builder tests
+const CUSTOM_FAILURE_PAUSE_MS: u64 = 60000;
+
+// ========================================
+// Module Existence Tests (from integration_watch.rs)
+// ========================================
+
+#[test]
+fn test_watcher_module_exists() {
+    use confers::watcher::*;
+}
+
+#[cfg(feature = "progressive-reload")]
+#[test]
+fn test_progressive_reload_module_exists() {
+    use confers::watcher::progressive::*;
+}
+
+// ========================================
+// WatcherConfig Tests
+// ========================================
+
 /// Test that default WatcherConfig has correct values.
 #[test]
 fn test_watcher_config_default() {
     let config = WatcherConfig::default();
 
-    assert_eq!(config.debounce_ms, 200);
-    assert_eq!(config.min_reload_interval_ms, 1000);
-    assert_eq!(config.max_consecutive_failures, 5);
-    assert_eq!(config.failure_pause_ms, 30000);
+    assert_eq!(config.debounce_ms, DEFAULT_DEBOUNCE_MS);
+    assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS);
+    assert_eq!(config.max_consecutive_failures, DEFAULT_MAX_FAILURES);
+    assert_eq!(config.failure_pause_ms, DEFAULT_FAILURE_PAUSE_MS);
     assert_eq!(config.rollback_on_validation_failure, false);
 }
 
@@ -25,25 +66,25 @@ fn test_watcher_config_default() {
 fn test_watcher_config_new() {
     let config = WatcherConfig::new();
 
-    assert_eq!(config.debounce_ms, 200);
-    assert_eq!(config.min_reload_interval_ms, 1000);
+    assert_eq!(config.debounce_ms, DEFAULT_DEBOUNCE_MS);
+    assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS);
 }
 
 /// Test WatcherConfigBuilder builds correct config.
 #[test]
 fn test_watcher_config_builder() {
     let config = WatcherConfigBuilder::new()
-        .debounce_ms(500)
-        .min_reload_interval_ms(2000)
-        .max_consecutive_failures(10)
-        .failure_pause_ms(60000)
+        .debounce_ms(CUSTOM_DEBOUNCE_MS)
+        .min_reload_interval_ms(CUSTOM_MIN_RELOAD_MS)
+        .max_consecutive_failures(CUSTOM_MAX_FAILURES)
+        .failure_pause_ms(CUSTOM_FAILURE_PAUSE_MS)
         .rollback_on_validation_failure(true)
         .build();
 
-    assert_eq!(config.debounce_ms, 500);
-    assert_eq!(config.min_reload_interval_ms, 2000);
-    assert_eq!(config.max_consecutive_failures, 10);
-    assert_eq!(config.failure_pause_ms, 60000);
+    assert_eq!(config.debounce_ms, CUSTOM_DEBOUNCE_MS);
+    assert_eq!(config.min_reload_interval_ms, CUSTOM_MIN_RELOAD_MS);
+    assert_eq!(config.max_consecutive_failures, CUSTOM_MAX_FAILURES);
+    assert_eq!(config.failure_pause_ms, CUSTOM_FAILURE_PAUSE_MS);
     assert_eq!(config.rollback_on_validation_failure, true);
 }
 
@@ -51,45 +92,50 @@ fn test_watcher_config_builder() {
 #[test]
 fn test_watcher_config_builder_partial() {
     // Only set debounce_ms, others should use defaults
-    let config = WatcherConfigBuilder::new().debounce_ms(100).build();
+    const PARTIAL_DEBOUNCE_MS: u64 = 100;
+    let config = WatcherConfigBuilder::new().debounce_ms(PARTIAL_DEBOUNCE_MS).build();
 
-    assert_eq!(config.debounce_ms, 100);
-    assert_eq!(config.min_reload_interval_ms, 1000); // default
-    assert_eq!(config.max_consecutive_failures, 5); // default
+    assert_eq!(config.debounce_ms, PARTIAL_DEBOUNCE_MS);
+    assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS); // default
+    assert_eq!(config.max_consecutive_failures, DEFAULT_MAX_FAILURES); // default
 }
 
 /// Test WatcherConfig::with_debounce method.
 #[test]
 fn test_watcher_config_with_debounce() {
-    let config = WatcherConfig::new().with_debounce(300);
+    const WITH_DEBOUNCE_MS: u64 = 300;
+    let config = WatcherConfig::new().with_debounce(WITH_DEBOUNCE_MS);
 
-    assert_eq!(config.debounce_ms, 300);
+    assert_eq!(config.debounce_ms, WITH_DEBOUNCE_MS);
     // Other fields should remain as defaults
-    assert_eq!(config.min_reload_interval_ms, 1000);
+    assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS);
 }
 
 /// Test WatcherConfig::with_min_reload_interval method.
 #[test]
 fn test_watcher_config_with_min_reload_interval() {
-    let config = WatcherConfig::new().with_min_reload_interval(500);
+    const WITH_MIN_RELOAD_MS: u64 = 500;
+    let config = WatcherConfig::new().with_min_reload_interval(WITH_MIN_RELOAD_MS);
 
-    assert_eq!(config.min_reload_interval_ms, 500);
+    assert_eq!(config.min_reload_interval_ms, WITH_MIN_RELOAD_MS);
 }
 
 /// Test WatcherConfig::with_max_consecutive_failures method.
 #[test]
 fn test_watcher_config_with_max_failures() {
-    let config = WatcherConfig::new().with_max_consecutive_failures(3);
+    const WITH_MAX_FAILURES: u32 = 3;
+    let config = WatcherConfig::new().with_max_consecutive_failures(WITH_MAX_FAILURES);
 
-    assert_eq!(config.max_consecutive_failures, 3);
+    assert_eq!(config.max_consecutive_failures, WITH_MAX_FAILURES);
 }
 
 /// Test WatcherConfig::with_failure_pause method.
 #[test]
 fn test_watcher_config_with_failure_pause() {
-    let config = WatcherConfig::new().with_failure_pause(10000);
+    const WITH_FAILURE_PAUSE_MS: u64 = 10000;
+    let config = WatcherConfig::new().with_failure_pause(WITH_FAILURE_PAUSE_MS);
 
-    assert_eq!(config.failure_pause_ms, 10000);
+    assert_eq!(config.failure_pause_ms, WITH_FAILURE_PAUSE_MS);
 }
 
 /// Test WatcherConfig::with_rollback_on_validation_failure method.

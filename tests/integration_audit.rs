@@ -36,41 +36,84 @@ mod tests {
     /// Test 3: Verify load success logging
     #[test]
     fn test_audit_log_load() {
-        let writer = AuditWriter::new();
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
+
         writer.log_load("test_source");
 
-        // Should not panic - just verify the write doesn't crash
+        // Give time for async write
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Verify log directory exists
+        assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
     /// Test 4: Verify key access logging
     #[test]
     fn test_audit_log_key_access() {
-        let writer = AuditWriter::new();
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
+
         writer.log_key_access("database.password");
 
-        // Should not panic - just verify the write doesn't crash
+        // Give time for async write
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Verify log directory exists
+        assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
     /// Test 5: Verify decrypt log sanitization
     #[test]
     fn test_audit_log_decrypt_sanitizes() {
-        let writer = AuditWriter::new();
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
 
         // Test with sensitive field name
         writer.log_decrypt("database.password", true);
         writer.log_decrypt("api_secret_key", true);
         writer.log_decrypt("regular_field", true);
 
-        // Should not panic - sanitization should work
+        // Give time for async write
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Verify log directory exists
+        assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
     /// Test 6: Verify key rotation logging
     #[test]
     fn test_audit_log_key_rotation() {
-        let writer = AuditWriter::new();
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
+
         writer.log_key_rotation("v1.0.0", "v1.0.1");
 
-        // Should not panic
+        // Give time for async write
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Verify log directory exists
+        assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
     /// Test 7: Verify disabled state

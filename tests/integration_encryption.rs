@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo test --test integration_encryption --features encryption
 
-use std::fmt::Debug;
+mod common;
 
 #[cfg(feature = "encryption")]
 mod tests {
@@ -123,7 +123,7 @@ mod tests {
         // Encrypt
         let (nonce, ciphertext) = crypto.encrypt(plaintext, &key).expect("encryption failed");
 
-        assert_eq!(nonce.len(), 12);
+        assert_eq!(nonce.len(), 24); // XChaCha20 uses 24-byte (192-bit) nonce
         assert!(ciphertext.len() > plaintext.len()); // Includes auth tag
 
         // Decrypt
@@ -233,20 +233,16 @@ mod tests {
 
     #[test]
     fn test_env_key_provider() {
-        // Set environment variable for testing (exactly 32 bytes)
-        std::env::set_var("TEST_ENCRYPTION_KEY", "12345678901234567890123456789012");
+        common::with_env_var("TEST_ENCRYPTION_KEY", "12345678901234567890123456789012", || {
+            let provider = EnvKeyProvider::new("TEST_ENCRYPTION_KEY");
+            let result = provider.get_key();
 
-        let provider = EnvKeyProvider::new("TEST_ENCRYPTION_KEY");
-        let result = provider.get_key();
+            assert!(result.is_ok());
+            let key = result.unwrap();
+            assert_eq!(key.as_slice().len(), 32);
 
-        assert!(result.is_ok());
-        let key = result.unwrap();
-        assert_eq!(key.as_slice().len(), 32);
-
-        assert_eq!(provider.provider_type(), "env");
-
-        // Cleanup
-        std::env::remove_var("TEST_ENCRYPTION_KEY");
+            assert_eq!(provider.provider_type(), "env");
+        });
     }
 
     #[test]
@@ -262,34 +258,26 @@ mod tests {
 
     #[test]
     fn test_env_key_provider_too_short_key() {
-        // Set a short key
-        std::env::set_var("SHORT_KEY_TEST", "short");
+        common::with_env_var("SHORT_KEY_TEST", "short", || {
+            let provider = EnvKeyProvider::new("SHORT_KEY_TEST");
+            let result = provider.get_key();
 
-        let provider = EnvKeyProvider::new("SHORT_KEY_TEST");
-        let result = provider.get_key();
-
-        // Should fail because key is less than 32 bytes
-        assert!(matches!(result, Err(CryptoError::InvalidKeyLength)));
-
-        // Cleanup
-        std::env::remove_var("SHORT_KEY_TEST");
+            // Should fail because key is less than 32 bytes
+            assert!(matches!(result, Err(CryptoError::InvalidKeyLength)));
+        });
     }
 
     #[test]
     fn test_env_key_provider_builder() {
-        // Set environment variable
-        std::env::set_var("BUILDER_TEST_KEY", "builder_test_32_byte_key_for_test!!");
+        common::with_env_var("BUILDER_TEST_KEY", "builder_test_32_byte_key_for_test!!", || {
+            let provider = EnvKeyProvider::builder()
+                .env_var("BUILDER_TEST_KEY")
+                .build()
+                .expect("build should succeed");
 
-        let provider = EnvKeyProvider::builder()
-            .env_var("BUILDER_TEST_KEY")
-            .build()
-            .expect("build should succeed");
-
-        let result = provider.get_key();
-        assert!(result.is_ok());
-
-        // Cleanup
-        std::env::remove_var("BUILDER_TEST_KEY");
+            let result = provider.get_key();
+            assert!(result.is_ok());
+        });
     }
 
     #[test]
@@ -354,6 +342,54 @@ mod tests {
         // Verify debug still redacts
         let debug = format!("{:?}", secret);
         assert_eq!(debug, "[REDACTED]");
+    }
+
+    // ========================================
+    // Edge Case Tests
+    // ========================================
+
+    #[test]
+    fn test_encrypt_empty_data() {
+        let crypto = XChaCha20Crypto::new();
+        let key = [0u8; 32];
+
+        let (nonce, ciphertext) = crypto.encrypt(&[], &key).unwrap();
+        assert!(!ciphertext.is_empty());
+
+        let decrypted = crypto.decrypt(&nonce, &ciphertext, &key).unwrap();
+        assert!(decrypted.is_empty());
+    }
+
+    #[test]
+    fn test_encrypt_large_data() {
+        let crypto = XChaCha20Crypto::new();
+        let key = [0u8; 32];
+        let large_data = vec![42u8; 1_000_000]; // 1MB
+
+        let (nonce, ciphertext) = crypto.encrypt(&large_data, &key).unwrap();
+        let decrypted = crypto.decrypt(&nonce, &ciphertext, &key).unwrap();
+
+        assert_eq!(decrypted.len(), 1_000_000);
+    }
+
+    #[test]
+    fn test_encrypt_key_too_short() {
+        let crypto = XChaCha20Crypto::new();
+        let short_key = [0u8; 16]; // Only 16 bytes
+
+        let result = crypto.encrypt(&[1, 2, 3], &short_key);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encrypt_key_too_long() {
+        let crypto = XChaCha20Crypto::new();
+        let long_key = [0u8; 64]; // 64 bytes
+
+        let result = crypto.encrypt(&[1, 2, 3], &long_key);
+        // Should either error or truncate - implementation dependent
+        // Just verify it doesn't panic
+        let _ = result;
     }
 }
 

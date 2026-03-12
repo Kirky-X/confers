@@ -1,5 +1,7 @@
 //! Integration test for the Config derive macro.
 
+mod common;
+
 use confers::Config;
 use serde::Deserialize;
 
@@ -80,16 +82,16 @@ fn test_optional_config_default() {
 
 #[test]
 fn test_config_with_env_var() {
-    std::env::set_var("HOST", "env-host");
-    let config = SimpleConfig::load_sync().unwrap();
-    assert_eq!(config.host, "env-host");
-    std::env::remove_var("HOST");
+    common::with_env_var("HOST", "env-host", || {
+        let config = SimpleConfig::load_sync().unwrap();
+        assert_eq!(config.host, "env-host");
+    });
 }
 
 #[test]
 fn test_prefixed_config_with_env_var() {
-    std::env::set_var("MYAPP_NAME", "env-name");
-    let config = PrefixedConfig::load_sync().unwrap();
-    assert_eq!(config.name, "env-name");
-    std::env::remove_var("MYAPP_NAME");
+    common::with_env_var("MYAPP_NAME", "env-name", || {
+        let config = PrefixedConfig::load_sync().unwrap();
+        assert_eq!(config.name, "env-name");
+    });
 }

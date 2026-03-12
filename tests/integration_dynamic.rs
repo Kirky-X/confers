@@ -1,16 +1,16 @@
 //! Integration tests for dynamic field support.
 //!
 //! These tests verify the DynamicField and FieldWatcher implementations.
+//! Uses real configuration types with proper ConfigProvider implementation.
 
 #![cfg(feature = "dynamic")]
 
-use std::collections::HashMap;
+mod common;
+
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
-use confers::dynamic::{CallbackGuard, DynamicField, DynamicFieldBuilder};
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
+use confers::dynamic::{DynamicField, DynamicFieldBuilder};
 use confers::{ConfigProvider, ConfigProviderExt};
 
 // Test that DynamicField::new returns the initial value.
@@ -43,11 +43,7 @@ fn test_dynamic_field_callback_registration() {
         received_value_clone.store(val as usize, Ordering::SeqCst);
     });
 
-    // Verify callback is registered
     assert_eq!(field.callback_count(), 1);
-
-    // Note: Cannot call field.update() from integration tests as it's pub(crate)
-    // The internal unit tests in dynamic.rs cover the update notification
 }
 
 // Test that callback is NOT triggered when value doesn't change.
@@ -62,7 +58,6 @@ fn test_dynamic_field_callback_count_tracking() {
         call_count_clone.fetch_add(1, Ordering::SeqCst);
     });
 
-    // Verify callback is registered
     assert_eq!(field.callback_count(), 1);
 }
 
@@ -71,7 +66,6 @@ fn test_dynamic_field_callback_count_tracking() {
 fn test_callback_guard_drops_on_scope_exit() {
     let field = DynamicField::new(100u32);
 
-    // Initially no callbacks
     assert_eq!(field.callback_count(), 0);
 
     {
@@ -83,7 +77,6 @@ fn test_callback_guard_drops_on_scope_exit() {
         );
     }
 
-    // After guard drops, callback should be removed
     assert_eq!(
         field.callback_count(),
         0,
@@ -114,8 +107,6 @@ fn test_dynamic_field_builder() {
 #[test]
 fn test_dynamic_field_builder_default() {
     let builder: DynamicFieldBuilder<u64> = DynamicFieldBuilder::default();
-    // This won't compile because build() requires initial
-    // But we can verify the builder structure
     let field = builder.initial(100u64).build();
     assert_eq!(field.get(), 100);
 }
@@ -126,7 +117,6 @@ fn test_dynamic_field_multiple_callbacks() {
     let field = DynamicField::new(0u32);
     let results: Vec<Arc<AtomicUsize>> = (0..3).map(|_| Arc::new(AtomicUsize::new(0))).collect();
 
-    // Store guards to prevent them from being dropped
     let mut guards = Vec::new();
     for result in &results {
         let r = result.clone();
@@ -145,7 +135,7 @@ fn test_dynamic_field_multiple_callbacks() {
 fn test_field_watcher_creation() {
     use tokio::sync::watch;
 
-    let (_tx, rx) = watch::channel(Arc::new(TestConfig::default()));
+    let (_tx, rx) = watch::channel(Arc::new(common::TestConfig::default()));
     let fields = vec!["timeout_ms".into(), "max_connections".into()];
 
     let watcher = confers::dynamic::FieldWatcher::new(rx, fields.clone());
@@ -159,13 +149,12 @@ fn test_field_watcher_creation() {
 async fn test_field_watcher_changed_for() {
     use tokio::sync::watch;
 
-    let (tx, rx) = watch::channel(Arc::new(TestConfig::new(100, 50)));
+    let (tx, rx) = watch::channel(Arc::new(common::TestConfig::new(100, 50)));
 
     let fields = vec!["timeout_ms".into()];
     let mut watcher = confers::dynamic::FieldWatcher::new(rx, fields);
 
-    // Update with different value
-    tx.send(Arc::new(TestConfig::new(200, 50))).unwrap();
+    tx.send(Arc::new(common::TestConfig::new(200, 50))).unwrap();
 
     let (config, changed) = watcher.changed_for().await;
 
@@ -217,12 +206,10 @@ fn test_callback_guard_into_id() {
     let field = DynamicField::new(0u32);
     let guard = field.on_change(|_val| {});
 
-    // Before consuming, callback should exist
     assert_eq!(field.callback_count(), 1);
 
     let _id = guard.into_id();
 
-    // After consuming, callback should be removed
     assert_eq!(field.callback_count(), 0);
 }
 
@@ -242,13 +229,10 @@ async fn test_dynamic_field_async_callback() {
     let received = Arc::new(AtomicU32::new(0));
     let received_clone = received.clone();
 
-    // Note: We can't call update() from integration tests since it's pub(crate)
-    // But we can verify the callback mechanism works with Arc
     let _guard = field.on_change(move |&val| {
         received_clone.store(val, Ordering::SeqCst);
     });
 
-    // Verify registration
     assert_eq!(field.callback_count(), 1);
 }
 
@@ -260,7 +244,6 @@ fn test_dynamic_field_multithread_callbacks() {
     let field = DynamicField::new(0u32);
     let field_arc = Arc::new(field);
 
-    // Store guards to keep them alive during test
     let guards_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
 
     let handles: Vec<_> = (0..4)
@@ -276,7 +259,6 @@ fn test_dynamic_field_multithread_callbacks() {
         })
         .collect();
 
-    // Wait for all threads
     for handle in handles {
         handle.join().unwrap();
     }
@@ -284,61 +266,71 @@ fn test_dynamic_field_multithread_callbacks() {
     assert_eq!(field_arc.callback_count(), 4);
 }
 
-// === Helper types for FieldWatcher tests ===
+// Test: TestConfig ConfigProvider implementation works correctly
+#[test]
+fn test_real_config_provider() {
+    let config = common::TestConfig::new(500, 100);
 
-/// Test configuration provider for FieldWatcher tests.
-#[derive(Debug, Clone)]
-struct TestConfig {
-    timeout_ms: u32,
-    max_connections: usize,
-    // Store AnnotatedValue to avoid returning reference to temporary
-    timeout_value: AnnotatedValue,
-    connections_value: AnnotatedValue,
+    assert!(config.get_raw("timeout_ms").is_some());
+    assert!(config.get_raw("max_connections").is_some());
+    assert!(config.get_raw("database_host").is_some());
+    assert!(config.get_raw("database_port").is_some());
+    assert!(config.get_raw("nonexistent").is_none());
+
+    let keys = config.keys();
+    assert_eq!(keys.len(), 4);
+
+    assert_eq!(config.timeout_ms, 500);
+    assert_eq!(config.max_connections, 100);
+    assert_eq!(config.database_host, "localhost");
+    assert_eq!(config.database_port, 5432);
 }
 
-impl Default for TestConfig {
-    fn default() -> Self {
-        Self::new(0, 0)
-    }
+// Test: TestConfig with extended fields
+#[test]
+fn test_real_config_extended() {
+    let config = common::TestConfig::with_all(1000, 200, "db.example.com".to_string(), 3306);
+
+    assert_eq!(config.timeout_ms, 1000);
+    assert_eq!(config.max_connections, 200);
+    assert_eq!(config.database_host, "db.example.com");
+    assert_eq!(config.database_port, 3306);
+
+    let timeout_val = config.get_raw("timeout_ms").unwrap();
+    assert_eq!(timeout_val.inner.as_u64(), Some(1000));
 }
 
-impl TestConfig {
-    fn new(timeout_ms: u32, max_connections: usize) -> Self {
-        let timeout_value = AnnotatedValue {
-            inner: ConfigValue::from(timeout_ms),
-            source: SourceId::default(),
-            path: "timeout_ms".into(),
-            priority: 0,
-            version: 1,
-            location: None,
-        };
-        let connections_value = AnnotatedValue {
-            inner: ConfigValue::from(max_connections as i64),
-            source: SourceId::default(),
-            path: "max_connections".into(),
-            priority: 0,
-            version: 1,
-            location: None,
-        };
-        Self {
-            timeout_ms,
-            max_connections,
-            timeout_value,
-            connections_value,
-        }
-    }
+// Test: ConfigProviderExt methods work with TestConfig
+#[test]
+fn test_real_config_provider_ext() {
+    let config = common::TestConfig::new(300, 50);
+
+    assert_eq!(config.get_int("timeout_ms"), Some(300));
+    assert_eq!(config.get_int("max_connections"), Some(50));
+    assert!(config.has("timeout_ms"));
+    assert!(!config.has("nonexistent"));
 }
 
-impl ConfigProvider for TestConfig {
-    fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
-        match key {
-            "timeout_ms" => Some(&self.timeout_value),
-            "max_connections" => Some(&self.connections_value),
-            _ => None,
-        }
-    }
+// Test: DynamicField with TestConfig
+#[test]
+fn test_dynamic_field_with_real_config() {
+    let field = DynamicField::new(common::TestConfig::new(100, 10));
 
-    fn keys(&self) -> Vec<String> {
-        vec!["timeout_ms".to_string(), "max_connections".to_string()]
-    }
+    let config = field.get();
+    assert_eq!(config.timeout_ms, 100);
+    assert_eq!(config.max_connections, 10);
+}
+
+// Test: Callback with TestConfig
+#[test]
+fn test_callback_with_real_config() {
+    let field = DynamicField::new(common::TestConfig::default());
+    let received_timeout = Arc::new(AtomicUsize::new(0));
+    let received_timeout_clone = received_timeout.clone();
+
+    let _guard = field.on_change(move |config| {
+        received_timeout_clone.store(config.timeout_ms as usize, Ordering::SeqCst);
+    });
+
+    assert_eq!(field.callback_count(), 1);
 }
