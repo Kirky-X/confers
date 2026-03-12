@@ -21,6 +21,7 @@ toml = { workspace = true }
 serde_yaml_ng = { workspace = true }
 similar = "2"
 chrono = { workspace = true }
+indexmap = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

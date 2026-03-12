@@ -10,6 +10,9 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use std::sync::Arc;
+
+use confers::AnnotatedValue;
 
 /// Confers CLI - Configuration diagnostics and inspection tool
 #[derive(Parser, Debug)]
@@ -189,7 +192,7 @@ fn cmd_inspect(
 ) -> Result<()> {
     use confers::ConfigBuilder;
 
-    // Build configuration
+    // Build configuration with annotated values
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
     // Add config files
@@ -202,13 +205,13 @@ fn cmd_inspect(
     // Add env
     builder = builder.env();
 
-    // Build
-    let config = builder.build()?;
+    // Build annotated configuration
+    let annotated_config = builder.build_annotated()?;
 
     match format {
         "json" => {
             // JSON output
-            let json = serde_json::to_string_pretty(&config)?;
+            let json = serde_json::to_string_pretty(&annotated_config)?;
             println!("{}", json);
             return Ok(());
         }
@@ -224,8 +227,6 @@ fn cmd_inspect(
     println!();
 
     // Build source information map
-    // In a full implementation, we would track the source of each value
-    // For now, we use file paths as sources
     let sources: Vec<String> = config_paths
         .iter()
         .map(|p| p.to_string_lossy().to_string())
@@ -234,26 +235,28 @@ fn cmd_inspect(
     if keys.is_empty() {
         // Show all configuration keys
         println!("All configuration keys:");
-        println!("{:<35} {:<25} {:<20}", "KEY", "VALUE", "SOURCE");
-        println!("{}", "-".repeat(80));
+        println!("{:<35} {:<25} {:<20} {:<20}", "KEY", "VALUE", "SOURCE", "LOCATION");
+        println!("{}", "-".repeat(100));
 
         // Recursively print all keys
-        print_config_value(&config, "", &sources, show_conflicts);
+        print_config_value(&annotated_config, "", &sources, show_conflicts);
     } else {
         // Show requested keys
         println!("Requested keys:");
-        println!("{:<35} {:<25} {:<20}", "KEY", "VALUE", "SOURCE");
-        println!("{}", "-".repeat(80));
+        println!("{:<35} {:<25} {:<20} {:<20}", "KEY", "VALUE", "SOURCE", "LOCATION");
+        println!("{}", "-".repeat(100));
 
         for key in keys {
-            let value = find_value_by_key(&config, key);
+            let value = find_value_by_key(&annotated_config, key);
             match value {
                 Some(v) => {
-                    let value_str = format_value(v);
-                    println!("{:<35} {:<25} {:<20}", key, value_str, "config");
+                    let value_str = format_value(&v.inner);
+                    let source = v.source.as_str();
+                    let location = format_location(&v.location);
+                    println!("{:<35} {:<25} {:<20} {:<20}", key, value_str, source, location);
                 }
                 None => {
-                    println!("{:<35} {:<25} {:<20}", key, "[NOT FOUND]", "-");
+                    println!("{:<35} {:<25} {:<20} {:<20}", key, "[NOT FOUND]", "-", "-");
                 }
             }
         }
@@ -264,51 +267,61 @@ fn cmd_inspect(
 
 /// Recursively print configuration values
 fn print_config_value(
-    value: &serde_json::Value,
+    value: &AnnotatedValue,
     prefix: &str,
     sources: &[String],
     _show_conflicts: bool,
 ) {
-    match value {
-        serde_json::Value::Object(map) => {
-            for (key, val) in map {
+    match &value.inner {
+        confers::value::ConfigValue::Map(map) => {
+            for (key, val) in map.iter() {
                 let full_key = if prefix.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}.{}", prefix, key)
+                    Arc::from(format!("{}.{}", prefix, key))
                 };
 
-                match val {
-                    serde_json::Value::Object(_) => {
+                match &val.inner {
+                    confers::value::ConfigValue::Map(_) => {
                         // Nested object - recurse
                         print_config_value(val, &full_key, sources, _show_conflicts);
                     }
                     _ => {
                         // Leaf value - print it
-                        let value_str = format_value(val);
-                        let source = sources.first().map(|s| s.as_str()).unwrap_or("config");
-                        println!("{:<35} {:<25} {:<20}", full_key, value_str, source);
+                        let value_str = format_value(&val.inner);
+                        let source = val.source.as_str();
+                        let location = format_location(&val.location);
+                        println!("{:<35} {:<25} {:<20} {:<20}", full_key, value_str, source, location);
                     }
                 }
             }
         }
         _ => {
             // Top-level primitive
-            let value_str = format_value(value);
-            let source = sources.first().map(|s| s.as_str()).unwrap_or("config");
-            println!("{:<35} {:<25} {:<20}", prefix, value_str, source);
+            let value_str = format_value(&value.inner);
+            let source = value.source.as_str();
+            let location = format_location(&value.location);
+            println!("{:<35} {:<25} {:<20} {:<20}", prefix, value_str, source, location);
         }
     }
 }
 
+/// Format location information for display
+fn format_location(location: &Option<confers::value::SourceLocation>) -> String {
+    match location {
+        Some(loc) => format!("line {}, col {}", loc.line, loc.column),
+        None => "-".to_string(),
+    }
+}
+
 /// Find a value by dot-notation key
-fn find_value_by_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a AnnotatedValue> {
     let parts: Vec<&str> = key.split('.').collect();
     let mut current = value;
 
     for part in parts {
-        match current {
-            serde_json::Value::Object(map) => {
+        match &current.inner {
+            confers::value::ConfigValue::Map(map) => {
                 current = map.get(part)?;
             }
             _ => return None,
@@ -319,9 +332,9 @@ fn find_value_by_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a 
 }
 
 /// Format a value for display
-fn format_value(value: &serde_json::Value) -> String {
+fn format_value(value: &confers::value::ConfigValue) -> String {
     match value {
-        serde_json::Value::String(s) => {
+        confers::value::ConfigValue::String(s) => {
             // Truncate long strings
             if s.len() > 20 {
                 format!("\"{}...\"", &s[..17])
@@ -329,11 +342,14 @@ fn format_value(value: &serde_json::Value) -> String {
                 format!("\"{}\"", s)
             }
         }
-        serde_json::Value::Number(n) => n.to_string(),
-        serde_json::Value::Bool(b) => b.to_string(),
-        serde_json::Value::Null => "[null]".to_string(),
-        serde_json::Value::Array(arr) => format!("[array: {} items]", arr.len()),
-        serde_json::Value::Object(obj) => {
+        confers::value::ConfigValue::I64(n) => n.to_string(),
+        confers::value::ConfigValue::U64(n) => n.to_string(),
+        confers::value::ConfigValue::F64(n) => n.to_string(),
+        confers::value::ConfigValue::Bool(b) => b.to_string(),
+        confers::value::ConfigValue::Null => "[null]".to_string(),
+        confers::value::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
+        confers::value::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
+        confers::value::ConfigValue::Map(obj) => {
             let keys: Vec<_> = obj.keys().collect();
             format!("{{ {} keys }}", keys.len())
         }
@@ -365,18 +381,18 @@ fn cmd_validate(
 
     builder = builder.env();
 
-    match builder.build() {
-        Ok(config) => {
+    match builder.build_annotated() {
+        Ok(annotated_config) => {
             println!("✓ Configuration loaded successfully");
 
             // Basic validation: check for required keys and types
             let mut issues = Vec::new();
 
-            if let Some(obj) = config.as_object() {
+            if let confers::value::ConfigValue::Map(map) = &annotated_config.inner {
                 // Check for common required keys
-                check_required_keys(obj, &mut issues);
+                check_required_keys(map, &mut issues);
                 // Check for type consistency
-                check_types(obj, &mut issues);
+                check_types(map, &mut issues);
             }
 
             if !issues.is_empty() {
@@ -402,11 +418,11 @@ fn cmd_validate(
 }
 
 /// Check for required configuration keys
-fn check_required_keys(obj: &serde_json::Map<String, serde_json::Value>, issues: &mut Vec<String>) {
+fn check_required_keys(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
     // Check for server configuration
     if let Some(server) = obj.get("server") {
-        if let Some(server_obj) = server.as_object() {
-            if !server_obj.contains_key("host") && !server_obj.contains_key("port") {
+        if let confers::value::ConfigValue::Map(server_map) = &server.inner {
+            if !server_map.contains_key("host") && !server_map.contains_key("port") {
                 issues.push("Server configuration missing host/port".to_string());
             }
         }
@@ -414,28 +430,26 @@ fn check_required_keys(obj: &serde_json::Map<String, serde_json::Value>, issues:
 
     // Check for database configuration
     if let Some(db) = obj.get("database") {
-        if let Some(db_obj) = db.as_object() {
-            if !db_obj.contains_key("url") && !db_obj.contains_key("host") {
+        if let confers::value::ConfigValue::Map(db_map) = &db.inner {
+            if !db_map.contains_key("url") && !db_map.contains_key("host") {
                 issues.push("Database configuration missing connection details".to_string());
             }
         }
     }
 
     // Check for empty required sections
-    for key in obj.keys() {
-        if let Some(value) = obj.get(key) {
-            if matches!(value, serde_json::Value::Null) {
-                issues.push(format!("Configuration key '{}' has null value", key));
-            }
+    for (key, value) in obj.iter() {
+        if matches!(value.inner, confers::value::ConfigValue::Null) {
+            issues.push(format!("Configuration key '{}' has null value", key));
         }
     }
 }
 
 /// Check for type consistency issues
-fn check_types(obj: &serde_json::Map<String, serde_json::Value>, issues: &mut Vec<String>) {
+fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
     // Check for suspicious string values that might be numbers
-    for (key, value) in obj {
-        if let Some(s) = value.as_str() {
+    for (key, value) in obj.iter() {
+        if let confers::value::ConfigValue::String(s) = &value.inner {
             // Check if string looks like a number
             if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
                 issues.push(format!(
