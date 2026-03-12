@@ -274,6 +274,7 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
                 "",
             ))
         }
+        #[cfg(feature = "yaml")]
         Format::Yaml => {
             let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
             Some(crate::loader::parse_yaml_value(
@@ -282,6 +283,8 @@ fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
                 "",
             ))
         }
+        #[cfg(not(feature = "yaml"))]
+        Format::Yaml => None,
         _ => None,
     }
 }
