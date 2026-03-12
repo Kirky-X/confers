@@ -13,9 +13,9 @@ pub use rotation::{KeyRotationPolicy, KeyRotationService, RotationResult};
 #[cfg(feature = "encryption")]
 pub use storage::{ErrorSanitizer, KeyStorage, SanitizationLevel};
 
+use crate::error::ConfigError;
 #[cfg(feature = "encryption")]
 use crate::secret::XChaCha20Crypto;
-use crate::error::ConfigError;
 #[cfg(feature = "encryption")]
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -115,11 +115,7 @@ impl KeyBundle {
             })?;
 
         // 格式: nonce_base64:ciphertext_base64
-        let encrypted_key = format!(
-            "{}:{}",
-            BASE64.encode(&nonce),
-            BASE64.encode(&ciphertext)
-        );
+        let encrypted_key = format!("{}:{}", BASE64.encode(&nonce), BASE64.encode(&ciphertext));
 
         let key_id = format!("{}_{}", KEY_VERSION_PREFIX, version);
 
@@ -144,22 +140,22 @@ impl KeyBundle {
             });
         }
 
-        let nonce = BASE64.decode(parts[0]).map_err(|e| {
-            ConfigError::ParseError {
+        let nonce = BASE64
+            .decode(parts[0])
+            .map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
                 message: format!("Failed to decode nonce: {}", e),
                 location: None,
                 source: None,
-            }
-        })?;
-        let ciphertext = BASE64.decode(parts[1]).map_err(|e| {
-            ConfigError::ParseError {
+            })?;
+        let ciphertext = BASE64
+            .decode(parts[1])
+            .map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
                 message: format!("Failed to decode ciphertext: {}", e),
                 location: None,
                 source: None,
-            }
-        })?;
+            })?;
 
         let encryptor = XChaCha20Crypto::new();
         let plaintext = encryptor
@@ -172,12 +168,14 @@ impl KeyBundle {
             })?;
 
         let key_bytes = BASE64
-            .decode(String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
-                format: "key".to_string(),
-                message: format!("Invalid key bytes: {}", e),
-                location: None,
-                source: None,
-            })?)
+            .decode(
+                String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!("Invalid key bytes: {}", e),
+                    location: None,
+                    source: None,
+                })?,
+            )
             .map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
                 message: format!("Invalid key bytes: {}", e),

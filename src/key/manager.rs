@@ -144,14 +144,11 @@ impl KeyManager {
     ) -> Result<KeyVersion, ConfigError> {
         if self.key_rings.contains_key(&key_id) {
             return Err(ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!(
-                "Key ring '{}' already exists",
-                key_id
-            ),
-            location: None,
-            source: None,
-        });
+                format: "key".to_string(),
+                message: format!("Key ring '{}' already exists", key_id),
+                location: None,
+                source: None,
+            });
         }
 
         let key_ring = KeyRing::new(master_key, key_id.clone(), created_by)?;
@@ -212,14 +209,15 @@ impl KeyManager {
     ) -> Result<RotationResult, ConfigError> {
         let key_id = key_id.unwrap_or_else(|| self.default_key_id.clone());
 
-        let key_ring = self.key_rings.get_mut(&key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get_mut(&key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         let old_version = key_ring.current_version;
         let new_key = key_ring.rotate(master_key, created_by, description)?;
@@ -238,14 +236,15 @@ impl KeyManager {
     }
 
     pub fn get_key_info(&self, key_id: &str) -> Result<KeyInfo, ConfigError> {
-        let key_ring = self.key_rings.get(key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get(key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         Ok(KeyInfo {
             key_id: key_ring.key_id.clone(),
@@ -318,14 +317,15 @@ impl KeyManager {
         key_id: &str,
         interval_days: u32,
     ) -> Result<(), ConfigError> {
-        let schedule = self.schedules.get_mut(key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let schedule = self
+            .schedules
+            .get_mut(key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         schedule.rotation_interval_days = interval_days;
         schedule.next_rotation = schedule
@@ -342,14 +342,15 @@ impl KeyManager {
     ) -> Result<RotationPlan, ConfigError> {
         let key_id = key_id.unwrap_or_else(|| self.default_key_id.clone());
 
-        let key_ring = self.key_rings.get(&key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get(&key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         if target_version <= key_ring.current_version {
             return Err(ConfigError::ParseError {
@@ -372,27 +373,29 @@ impl KeyManager {
         key_id: &str,
         version: u32,
     ) -> Result<Option<&KeyBundle>, ConfigError> {
-        let key_ring = self.key_rings.get(key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get(key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         Ok(key_ring.get_key_by_version(version))
     }
 
     pub fn deprecate_version(&mut self, key_id: &str, version: u32) -> Result<(), ConfigError> {
-        let key_ring = self.key_rings.get_mut(key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get_mut(key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         if version == key_ring.current_version {
             return Err(ConfigError::ParseError {
@@ -412,14 +415,15 @@ impl KeyManager {
         key_id: &str,
         keep_versions: u32,
     ) -> Result<u32, ConfigError> {
-        let key_ring = self.key_rings.get_mut(key_id).ok_or_else(|| {
-            ConfigError::ParseError {
-    format: "key".to_string(),
-    message: format!("Key ring '{}' not found", key_id),
-    location: None,
-    source: None,
-}
-        })?;
+        let key_ring = self
+            .key_rings
+            .get_mut(key_id)
+            .ok_or_else(|| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Key ring '{}' not found", key_id),
+                location: None,
+                source: None,
+            })?;
 
         if key_ring.secondary_keys.len() <= keep_versions as usize {
             return Ok(0);
@@ -441,10 +445,7 @@ impl KeyManager {
         if !self.key_rings.contains_key(key_id) {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
-                message: format!(
-                    "Key ring '{}' not found",
-                    key_id
-                ),
+                message: format!("Key ring '{}' not found", key_id),
                 location: None,
                 source: None,
             });

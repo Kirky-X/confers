@@ -240,10 +240,7 @@ impl KeyRotationService {
             if key_ring.get_key_by_version(*version).is_none() {
                 return Err(ConfigError::ParseError {
                     format: "key".to_string(),
-                    message: format!(
-                        "Key version {} not found",
-                        version
-                    ),
+                    message: format!("Key version {} not found", version),
                     location: None,
                     source: None,
                 });
@@ -314,7 +311,8 @@ impl KeyRotationService {
         if inactive_versions.len() as u32 >= policy.max_versions.saturating_sub(1) {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
-                message: "Too many inactive key versions. Consider cleaning up old keys.".to_string(),
+                message: "Too many inactive key versions. Consider cleaning up old keys."
+                    .to_string(),
                 location: None,
                 source: None,
             });
