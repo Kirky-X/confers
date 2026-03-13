@@ -141,7 +141,10 @@ fn test_empty_string_validation() {
 
     let config = EmptyStringConfig::default();
     // Should fail validation with empty string
-    assert!(config.validate().is_err(), "Empty string should fail validation");
+    assert!(
+        config.validate().is_err(),
+        "Empty string should fail validation"
+    );
 }
 
 #[test]

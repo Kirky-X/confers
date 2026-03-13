@@ -19,7 +19,12 @@ use confers::remote::{ConsulSourceBuilder, PolledSource};
 #[tokio::test]
 async fn test_consul_source_connect() {
     // Skip if Consul is not available
-    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
+    if !common::is_service_available(
+        "http://127.0.0.1:8500/v1/status/leader",
+        Duration::from_secs(2),
+    )
+    .await
+    {
         eprintln!("Skipping test: Consul not available");
         return;
     }
@@ -49,7 +54,12 @@ async fn test_consul_source_connect() {
 /// Test Consul source with token authentication.
 #[tokio::test]
 async fn test_consul_source_with_token() {
-    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
+    if !common::is_service_available(
+        "http://127.0.0.1:8500/v1/status/leader",
+        Duration::from_secs(2),
+    )
+    .await
+    {
         eprintln!("Skipping test: Consul not available");
         return;
     }
@@ -69,7 +79,12 @@ async fn test_consul_source_with_token() {
 /// Test Consul source configuration parsing.
 #[tokio::test]
 async fn test_consul_source_parse_config() {
-    if !common::is_service_available("http://127.0.0.1:8500/v1/status/leader", Duration::from_secs(2)).await {
+    if !common::is_service_available(
+        "http://127.0.0.1:8500/v1/status/leader",
+        Duration::from_secs(2),
+    )
+    .await
+    {
         eprintln!("Skipping test: Consul not available");
         return;
     }

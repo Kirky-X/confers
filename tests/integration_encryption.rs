@@ -233,16 +233,20 @@ mod tests {
 
     #[test]
     fn test_env_key_provider() {
-        common::with_env_var("TEST_ENCRYPTION_KEY", "12345678901234567890123456789012", || {
-            let provider = EnvKeyProvider::new("TEST_ENCRYPTION_KEY");
-            let result = provider.get_key();
+        common::with_env_var(
+            "TEST_ENCRYPTION_KEY",
+            "12345678901234567890123456789012",
+            || {
+                let provider = EnvKeyProvider::new("TEST_ENCRYPTION_KEY");
+                let result = provider.get_key();
 
-            assert!(result.is_ok());
-            let key = result.unwrap();
-            assert_eq!(key.as_slice().len(), 32);
+                assert!(result.is_ok());
+                let key = result.unwrap();
+                assert_eq!(key.as_slice().len(), 32);
 
-            assert_eq!(provider.provider_type(), "env");
-        });
+                assert_eq!(provider.provider_type(), "env");
+            },
+        );
     }
 
     #[test]
@@ -269,15 +273,19 @@ mod tests {
 
     #[test]
     fn test_env_key_provider_builder() {
-        common::with_env_var("BUILDER_TEST_KEY", "builder_test_32_byte_key_for_test!!", || {
-            let provider = EnvKeyProvider::builder()
-                .env_var("BUILDER_TEST_KEY")
-                .build()
-                .expect("build should succeed");
+        common::with_env_var(
+            "BUILDER_TEST_KEY",
+            "builder_test_32_byte_key_for_test!!",
+            || {
+                let provider = EnvKeyProvider::builder()
+                    .env_var("BUILDER_TEST_KEY")
+                    .build()
+                    .expect("build should succeed");
 
-            let result = provider.get_key();
-            assert!(result.is_ok());
-        });
+                let result = provider.get_key();
+                assert!(result.is_ok());
+            },
+        );
     }
 
     #[test]

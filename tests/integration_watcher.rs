@@ -93,7 +93,9 @@ fn test_watcher_config_builder() {
 fn test_watcher_config_builder_partial() {
     // Only set debounce_ms, others should use defaults
     const PARTIAL_DEBOUNCE_MS: u64 = 100;
-    let config = WatcherConfigBuilder::new().debounce_ms(PARTIAL_DEBOUNCE_MS).build();
+    let config = WatcherConfigBuilder::new()
+        .debounce_ms(PARTIAL_DEBOUNCE_MS)
+        .build();
 
     assert_eq!(config.debounce_ms, PARTIAL_DEBOUNCE_MS);
     assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS); // default

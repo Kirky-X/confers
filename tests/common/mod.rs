@@ -132,10 +132,7 @@ impl ConfigProvider for TestConfig {
 /// Etcd or Consul to be running.
 #[cfg(feature = "remote")]
 pub async fn is_service_available(url: &str, timeout: Duration) -> bool {
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .build()
-        .unwrap();
+    let client = reqwest::Client::builder().timeout(timeout).build().unwrap();
 
     match client.get(url).send().await {
         Ok(resp) => resp.status().is_success(),
