@@ -6,6 +6,7 @@
 # IDE
 .idea/
 .vscode/
+.trae/
 *.swp
 *.swo
 *~
@@ -39,6 +40,8 @@ temp/
 
 # Development files
 dev-v2.md
+docs/adr/
+spec/
 
 # Docker
 docker-compose.test.yml

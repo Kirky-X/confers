@@ -155,11 +155,11 @@ context-aware = []
 modules = []
 
 # Feature presets
-recommended = ["toml", "env", "validation"]
+recommended = ["toml", "env", "validation", "json"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "profile", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "profile", "metrics", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot"]
 full = ["toml", "json", "yaml", "env", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
-minimal = ["env"]
+minimal = ["env", "json"]
 distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "metrics", "audit"]
 etcd-client = ["dep:etcd-client"]
 consul-client = ["dep:consul-client"]

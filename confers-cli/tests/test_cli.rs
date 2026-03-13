@@ -3,11 +3,20 @@
 use std::fs;
 use std::io::Write;
 use tempfile::TempDir;
+use serial_test::serial;
 
 fn run_confers(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("cargo");
     cmd.args(&["run", "-p", "confers-cli", "--"]);
     cmd.args(args);
+    cmd
+}
+
+fn run_confers_with_cwd(args: &[&str], cwd: &std::path::Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new("cargo");
+    cmd.args(&["run", "-p", "confers-cli", "--"]);
+    cmd.args(args);
+    cmd.current_dir(cwd);
     cmd
 }
 
@@ -20,6 +29,7 @@ fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path
 }
 
 #[test]
+#[serial]
 fn test_cli_compiles() {
     let output = std::process::Command::new("cargo")
         .args(&["build", "-p", "confers-cli"])
@@ -34,6 +44,7 @@ fn test_cli_compiles() {
 }
 
 #[test]
+#[serial]
 fn test_inspect_command() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -50,7 +61,7 @@ port = 8080
 "#,
     );
 
-    let output = run_confers(&["-c", config_path.to_str().unwrap(), "inspect"])
+    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "inspect"])
         .output()
         .expect("Failed to run inspect command");
 
@@ -68,6 +79,7 @@ port = 8080
 }
 
 #[test]
+#[serial]
 fn test_inspect_json_output() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -79,7 +91,7 @@ name = "json-test"
 "#,
     );
 
-    let output = run_confers(&["-c", config_path.to_str().unwrap(), "inspect", "-f", "json"])
+    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "inspect", "-f", "json"])
         .output()
         .expect("Failed to run inspect command");
 
@@ -97,6 +109,7 @@ name = "json-test"
 }
 
 #[test]
+#[serial]
 fn test_validate_command() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -108,7 +121,7 @@ name = "validate-test"
 "#,
     );
 
-    let output = run_confers(&["-c", config_path.to_str().unwrap(), "validate"])
+    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "validate"])
         .output()
         .expect("Failed to run validate command");
 
@@ -126,6 +139,7 @@ name = "validate-test"
 }
 
 #[test]
+#[serial]
 fn test_validate_json_output() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -157,6 +171,7 @@ name = "validate-json-test"
 }
 
 #[test]
+#[serial]
 fn test_export_command_json() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -168,7 +183,7 @@ name = "export-test"
 "#,
     );
 
-    let output = run_confers(&["-c", config_path.to_str().unwrap(), "export", "-f", "json"])
+    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "export", "-f", "json"])
         .output()
         .expect("Failed to run export command");
 
@@ -186,6 +201,7 @@ name = "export-test"
 }
 
 #[test]
+#[serial]
 fn test_export_command_toml() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -197,7 +213,7 @@ name = "export-toml-test"
 "#,
     );
 
-    let output = run_confers(&["-c", config_path.to_str().unwrap(), "export", "-f", "toml"])
+    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "export", "-f", "toml"])
         .output()
         .expect("Failed to run export command");
 
@@ -215,6 +231,7 @@ name = "export-toml-test"
 }
 
 #[test]
+#[serial]
 fn test_export_with_provenance() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -251,6 +268,7 @@ name = "provenance-test"
 }
 
 #[test]
+#[serial]
 fn test_export_to_file() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_test_config(
@@ -287,6 +305,7 @@ name = "file-export-test"
 }
 
 #[test]
+#[serial]
 fn test_diff_command() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let base_path = create_test_config(
@@ -332,6 +351,7 @@ version = "2.0.0"
 }
 
 #[test]
+#[serial]
 fn test_diff_json_output() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let base_path = create_test_config(
@@ -377,6 +397,7 @@ name = "overlay"
 }
 
 #[test]
+#[serial]
 fn test_diff_identical_configs() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let config_content = r#"
@@ -406,6 +427,7 @@ name = "same"
 }
 
 #[test]
+#[serial]
 fn test_snapshot_list_empty() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let empty_dir = dir.path().join("snapshots");
@@ -430,6 +452,7 @@ fn test_snapshot_list_empty() {
 }
 
 #[test]
+#[serial]
 fn test_env_file_loading() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let env_path = create_test_config(
@@ -466,6 +489,7 @@ name = "env-test"
 }
 
 #[test]
+#[serial]
 fn test_help_flag() {
     let output = run_confers(&["--help"])
         .output()
@@ -490,6 +514,7 @@ fn test_help_flag() {
 }
 
 #[test]
+#[serial]
 fn test_version_flag() {
     let output = run_confers(&["--version"])
         .output()

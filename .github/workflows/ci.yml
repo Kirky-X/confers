@@ -4,11 +4,50 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    branches: [main, master]
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check default features
+        run: cargo check
+      - name: Check full features
+        run: cargo check --features full
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["default", "recommended", "full"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --features ${{ matrix.features }}
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy
+        run: cargo clippy --features full -- -D warnings
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -20,36 +59,38 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run tests
-        run: cargo test --all-features
-
-  doc:
+  docs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Build documentation
-        run: cargo doc --all-features --no-deps
+        run: cargo doc --features full --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Run security audit
+        run: cargo audit
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.81.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Check MSRV
+        run: cargo check --features full
 
   coverage:
     name: Coverage
@@ -59,55 +100,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Generate coverage report
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
-      - name: Upload coverage to Codecov
+        run: cargo install cargo-llvm-cov
+      - name: Generate coverage
+        run: cargo llvm-cov --features full --lcov --output-path lcov.info
+      - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           files: lcov.info
           fail_ci_if_error: false
-
-  msrv:
-    name: MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get MSRV from Cargo.toml
-        run: |
-          MSRV=$(grep -m1 'rust-version' Cargo.toml | grep -oP '\d+\.\d+')
-          echo "MSRV=$MSRV" >> $GITHUB_ENV
-      - uses: dtolnay/rust-toolchain@${{ env.MSRV }}
-      - name: Check MSRV
-        run: cargo check --all-features
-
-  deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses:EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check advisories
-
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  examples:
-    name: Build Examples
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build examples
-        run: cargo build --examples --all-features

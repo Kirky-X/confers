@@ -109,8 +109,8 @@ pub(crate) fn reset_secure_string_counters() {
 /// // 安全比较 (恒定时间)
 /// assert!(secret.compare("password123").is_ok());
 ///
-/// // 获取显示名称（用于日志）
-/// assert_eq!(secret.display_name(), "password123");
+/// // 获取显示名称（用于日志）- Critical 级别返回 [SENSITIVE]
+/// assert_eq!(secret.display_name(), "[SENSITIVE]");
 /// ```
 #[derive(Eq)]
 pub struct SecureString {

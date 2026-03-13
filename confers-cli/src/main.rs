@@ -59,7 +59,7 @@ fn load_env_file(path: &PathBuf) -> Result<()> {
 #[command(version)]
 struct Cli {
     /// Configuration file(s) to load
-    #[arg(short, long, default_value = "./config.toml")]
+    #[arg(short, long)]
     config: Vec<PathBuf>,
 
     /// Additional environment file
@@ -233,7 +233,7 @@ fn cmd_inspect(
 
     for config_path in config_paths {
         if config_path.exists() {
-            builder = builder.file(config_path.to_string_lossy().as_ref());
+            builder = builder.file(config_path.clone());
         }
     }
 
@@ -402,7 +402,7 @@ fn cmd_validate(config_paths: &[PathBuf], strict: bool, format: &str) -> Result<
 
     for config_path in config_paths {
         if config_path.exists() {
-            builder = builder.file(config_path.to_string_lossy().as_ref());
+            builder = builder.file(config_path.clone());
         }
     }
 
@@ -547,7 +547,7 @@ fn cmd_export(
 
         for config_path in config_paths {
             if config_path.exists() {
-                builder = builder.file(config_path.to_string_lossy().as_ref());
+                builder = builder.file(config_path.clone());
             }
         }
 
@@ -585,7 +585,7 @@ fn cmd_export(
 
         for config_path in config_paths {
             if config_path.exists() {
-                builder = builder.file(config_path.to_string_lossy().as_ref());
+                builder = builder.file(config_path.clone());
             }
         }
 

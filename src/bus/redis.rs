@@ -3,7 +3,7 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use futures_util::{Stream, StreamExt};
+use futures_util::Stream;
 use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
