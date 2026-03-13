@@ -403,6 +403,8 @@ pub enum EnvSecurityError {
     CommandInjection { pattern: String },
     /// Invalid field name in mapping
     InvalidFieldName { field_name: String },
+    /// Invalid value format
+    InvalidValueFormat { reason: String },
 }
 
 impl std::fmt::Display for EnvSecurityError {
@@ -468,6 +470,9 @@ impl std::fmt::Display for EnvSecurityError {
                     "Invalid field name in environment mapping: '{}'",
                     field_name
                 )
+            }
+            EnvSecurityError::InvalidValueFormat { reason } => {
+                write!(f, "Invalid value format: {}", reason)
             }
         }
     }

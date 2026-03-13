@@ -690,6 +690,15 @@ impl AnnotatedValue {
         self.inner.is_array()
     }
 
+    /// Check if the value is empty (null or empty string).
+    pub fn is_empty(&self) -> bool {
+        match &self.inner {
+            ConfigValue::Null => true,
+            ConfigValue::String(s) => s.is_empty(),
+            _ => false,
+        }
+    }
+
     /// Get all configuration paths from this value (including self).
     pub fn all_paths(&self) -> Vec<Arc<str>> {
         self.all_paths_internal(true)
