@@ -21,6 +21,7 @@ use reqwest;
 /// This struct implements `ConfigProvider` and can be used in tests that need
 /// a realistic configuration object with proper trait implementations.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct TestConfig {
     pub timeout_ms: u32,
     pub max_connections: usize,
@@ -42,16 +43,19 @@ impl TestConfig {
     }
 
     /// Creates a TestConfig with only timeout specified.
+    #[allow(dead_code)]
     pub fn with_timeout(timeout_ms: u32) -> Self {
         Self::new(timeout_ms, 0)
     }
 
     /// Creates a TestConfig with only max_connections specified.
+    #[allow(dead_code)]
     pub fn with_connections(max_connections: usize) -> Self {
         Self::new(0, max_connections)
     }
 
     /// Creates a TestConfig with random values for fuzzing tests.
+    #[allow(dead_code)]
     pub fn random() -> Self {
         use std::collections::hash_map::RandomState;
         use std::hash::{BuildHasher, Hasher};

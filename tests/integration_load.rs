@@ -4,7 +4,6 @@ mod common;
 
 use confers::value::ConfigValue;
 use confers::ConfigBuilder;
-use confers::*;
 
 mod tests {
     use super::*;

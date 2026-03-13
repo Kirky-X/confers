@@ -1,10 +1,12 @@
 //! Integration tests for the Migration module.
 
+#[cfg(feature = "migration")]
 use confers::value::{AnnotatedValue, ConfigValue, SourceId};
 
 #[cfg(feature = "migration")]
 use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};
 
+#[cfg(feature = "migration")]
 fn create_test_value() -> AnnotatedValue {
     AnnotatedValue::new(ConfigValue::string("test"), SourceId::new("memory"), "test")
 }
