@@ -1,3 +1,11 @@
+//! 动态字段示例 - 运行时配置更新
+//!
+//! 本示例展示如何使用 DynamicField 实现运行时配置更新：
+//! - 无锁读取优化
+//! - 回调通知机制
+//! - Guard 自动清理
+//! - 性能对比演示
+
 use confers::dynamic::DynamicField;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

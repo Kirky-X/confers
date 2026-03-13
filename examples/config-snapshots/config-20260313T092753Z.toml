@@ -1,0 +1,18 @@
+environment = "development"
+name = "myapp"
+version = "1.0.0"
+
+[database]
+max_connections = 0
+timeout_seconds = 0
+url = ""
+
+[features]
+beta_api = false
+new_ui = false
+realtime_notification = false
+
+[server]
+host = "127.0.0.1"
+port = 3000
+workers = 4

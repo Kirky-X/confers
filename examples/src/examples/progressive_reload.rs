@@ -363,7 +363,6 @@ impl BusinessHealthCheck {
     }
 }
 
-
 impl HealthCheck for BusinessHealthCheck {
     fn check(&self, _context: &HealthCheckContext) -> HealthStatus {
         // 执行业务检查
@@ -499,8 +498,9 @@ impl ProgressiveReloader {
                     let mut retry = self.retry_count.write().await;
                     *retry += 1;
 
-                    if *retry > 3 {
-                        error!("重试次数过多，停止重载");
+                    let max_retries = self.config.read().await.reload.rollback.max_retries;
+                    if *retry > max_retries {
+                        error!("重试次数超过最大限制 {}，停止重载", max_retries);
                         // 执行回滚
                         if self.enable_rollback {
                             self.rollback().await?;
@@ -749,8 +749,8 @@ async fn main() -> Result<()> {
     info!("  渐进式重载示例程序启动");
     info!("========================================");
 
-    // 读取配置文件
-    let config_content = std::fs::read_to_string("config/config.toml")?;
+    // 读取配置文件 (使用异步 I/O)
+    let config_content = tokio::fs::read_to_string("config/config.toml").await?;
     let config: AppConfig = toml::from_str(&config_content)?;
 
     info!("配置文件加载成功:");

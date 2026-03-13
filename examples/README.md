@@ -8,18 +8,21 @@
 
 ```
 examples/
-├── Cargo.toml              # 项目配置（含 10 个 [[bin]] targets）
+├── Cargo.toml              # 项目配置（含 13 个 [[bin]] targets）
 ├── src/
 │   ├── examples/           # 示例源码
 │   │   ├── basic_usage.rs
 │   │   ├── hot_reload.rs
 │   │   ├── remote_consul.rs
+│   │   ├── remote_etcd.rs
 │   │   ├── encryption.rs
 │   │   ├── key_rotation.rs
 │   │   ├── migration.rs
 │   │   ├── dynamic_fields.rs
 │   │   ├── config_groups.rs
 │   │   ├── progressive_reload.rs
+│   │   ├── config_bus.rs
+│   │   ├── snapshot.rs
 │   │   └── full_stack.rs
 │   └── main.rs            # 默认入口（显示帮助信息）
 └── config/                # 配置文件目录
@@ -35,6 +38,8 @@ cd examples
 cargo run --bin basic_usage
 cargo run --bin hot_reload
 cargo run --bin encryption
+cargo run --bin config_bus
+cargo run --bin snapshot
 
 # 或者使用快捷脚本
 ./run_example.sh basic_usage
@@ -45,18 +50,21 @@ cargo run --bin encryption
 
 ## 示例列表
 
-| 示例 | 功能描述 | 所需 Features |
-|------|---------|--------------|
-| basic_usage | 基础配置加载和使用 | toml, env |
-| hot_reload | 热重载功能演示 | toml, watch |
-| remote_consul | Consul 远程配置源使用 | toml, consul |
-| encryption | 敏感字段加密功能 | toml, encryption |
-| key_rotation | 密钥轮换功能 | toml, encryption |
-| migration | 配置版本迁移 | toml, migration |
-| dynamic_fields | DynamicField 动态字段功能 | toml, dynamic |
-| config_groups | 配置组功能 | toml |
-| progressive_reload | 渐进式重载功能 | toml, progressive-reload |
-| full_stack | 完整功能栈综合示例 | full |
+| 示例 | 功能描述 | 所需 Features | ADR |
+|------|---------|--------------|-----|
+| basic_usage | 基础配置加载和使用 | toml, env | - |
+| hot_reload | 热重载功能演示 | toml, watch | ADR-013 |
+| remote_consul | Consul 远程配置源使用 | toml, consul | ADR-005 |
+| remote_etcd | etcd 远程配置源使用 | toml, remote | ADR-005, ADR-037 |
+| encryption | 敏感字段加密功能 | toml, encryption | ADR-006 |
+| key_rotation | 密钥轮换功能 | toml, encryption | ADR-015 |
+| migration | 配置版本迁移 | toml, migration | ADR-027 |
+| dynamic_fields | DynamicField 动态字段功能 | toml, dynamic | ADR-031 |
+| config_groups | 配置组功能 | toml | ADR-034 |
+| progressive_reload | 渐进式重载功能 | toml, progressive-reload | ADR-036 |
+| config_bus | ConfigBus 多实例广播 | toml, config-bus | ADR-035 |
+| snapshot | 配置快照持久化 | toml, snapshot | ADR-033 |
+| full_stack | 完整功能栈综合示例 | full | - |
 
 ## 示例说明
 
@@ -80,6 +88,13 @@ cargo run --bin encryption
 - 从 Consul KV 读取配置
 - 定期轮询更新
 - 认证和 TLS 配置
+
+### remote_etcd
+展示如何从 etcd 加载配置：
+- etcd v3 API 连接
+- TLS 安全连接
+- 配置监听和自动更新
+- 租约和 TTL 管理
 
 ### encryption
 展示敏感字段加密：
@@ -123,6 +138,21 @@ cargo run --bin encryption
 - 健康检查
 - 自动回滚
 
+### config_bus
+演示 ConfigBus 多实例广播：
+- NATS 消息总线集成
+- Redis Pub/Sub 集成
+- 配置变更事件广播
+- 多实例配置一致性保证
+
+### snapshot
+演示配置快照持久化：
+- 配置快照自动保存
+- 快照时间戳命名
+- 敏感字段脱敏
+- 快照历史管理
+- 快照对比和回溯
+
 ### full_stack
 综合示例，展示所有功能：
 - 多源配置
@@ -139,9 +169,9 @@ cargo run --bin encryption
 
 ```
 examples/
-├── Cargo.toml              # workspace + 10 个 [[bin]] targets
+├── Cargo.toml              # workspace + 13 个 [[bin]] targets
 ├── src/
-│   ├── examples/           # 示例源码（10 个 .rs 文件）
+│   ├── examples/           # 示例源码（13 个 .rs 文件）
 │   │   ├── basic_usage.rs
 │   │   ├── hot_reload.rs
 │   │   └── ...
@@ -160,6 +190,41 @@ confers = { path = "..", features = ["full"] }
 
 Features 按示例分组启用，可以在 Cargo.toml 中查看具体配置。
 
+## 外部服务
+
+部分示例需要外部服务支持：
+
+### Consul
+```bash
+# 启动 Consul
+docker run -d --name consul -p 8500:8500 consul:latest
+
+# 设置环境变量
+export CONSUL_ADDRESS=http://127.0.0.1:8500
+```
+
+### etcd
+```bash
+# 启动 etcd
+docker run -d --name etcd -p 2379:2379 -p 2380:2380 \
+  quay.io/coreos/etcd:v3.5 /usr/local/bin/etcd \
+  --name s1 --data-dir /etcd-data \
+  --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://0.0.0.0:2379
+
+# 设置环境变量
+export ETCD_ENDPOINTS=http://127.0.0.1:2379
+```
+
+### NATS
+```bash
+# 启动 NATS
+docker run -d --name nats -p 4222:4222 nats:latest
+
+# 设置环境变量
+export NATS_URL=nats://127.0.0.1:4222
+```
+
 ## 最佳实践
 
 1. **统一管理**：所有示例在一个项目中，便于编译和测试
@@ -167,12 +232,14 @@ Features 按示例分组启用，可以在 Cargo.toml 中查看具体配置。
 3. **详细注释**：代码中包含详细的功能说明
 4. **错误处理**：展示正确的错误处理方式
 5. **日志输出**：使用 tracing 展示运行状态
+6. **ADR 引用**：每个示例标注对应的设计决策记录
 
 ## 扩展阅读
 
 - [Confers API 文档](https://docs.rs/confers)
 - [项目主 README](../README.md)
 - [开发指南](../dev-v2.md)
+- [ADR 文档](../docs/adr/)
 
 ## 贡献
 
@@ -182,3 +249,5 @@ Features 按示例分组启用，可以在 Cargo.toml 中查看具体配置。
 2. 代码注释清晰
 3. 遵循 Rust 最佳实践
 4. 通过 `cargo clippy` 和 `cargo fmt` 检查
+5. 在 README.md 中添加示例说明
+6. 标注对应的 ADR 编号

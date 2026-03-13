@@ -2,7 +2,6 @@
 //!
 //! This example demonstrates the comprehensive capabilities of confers.
 
-
 use confers::dynamic::DynamicField;
 use confers::secret::{derive_field_key, SecretString, XChaCha20Crypto};
 use confers::watcher::WatcherConfig;

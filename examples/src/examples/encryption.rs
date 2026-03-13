@@ -43,9 +43,12 @@ fn main() {
     println!("  Encryption Example - Sensitive Data Protection");
     println!("========================================");
 
-    // Set environment variable as encryption key (production should use more secure methods)
-    // Key must be 32 bytes
-    std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012");
+    // ⚠️ WARNING: This is a DEMO key. NEVER use hardcoded keys in production!
+    // For production, use secure key management (e.g., HashiCorp Vault, AWS KMS)
+    // Key must be 32 bytes for XChaCha20-Poly1305
+    let demo_key = "12345678901234567890123456789012";
+    std::env::set_var("APP_ENCRYPTION_KEY", demo_key);
+    tracing::warn!("⚠️ Using DEMO encryption key - DO NOT use in production!");
 
     // Example 1: Basic SecretString usage
     demonstrate_secret_string();

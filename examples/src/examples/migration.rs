@@ -1,3 +1,11 @@
+//! 配置版本迁移示例 - 版本升级与数据迁移
+//!
+//! 本示例展示如何实现配置版本迁移：
+//! - `Versioned` trait 实现
+//! - 迁移注册表使用
+//! - 版本升级策略
+//! - 热重载时的自动迁移
+
 use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};
 use confers::value::{AnnotatedValue, ConfigValue, SourceId};
 use indexmap::IndexMap;

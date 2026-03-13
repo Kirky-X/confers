@@ -1,3 +1,11 @@
+//! 密钥轮转示例 - 加密密钥的安全轮转
+//!
+//! 本示例展示如何实现加密密钥的安全轮转：
+//! - 两阶段轮转策略
+//! - 旧密钥解密支持
+//! - 检查点恢复机制
+//! - 零停机轮转
+
 use confers::secret::{derive_field_key, EnvKeyProvider, SecretKeyProvider, XChaCha20Crypto};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -278,9 +286,8 @@ fn demonstrate_env_key_provider_with_version() {
             let versions = ["v1", "v2", "v3"];
 
             for version in versions.iter() {
-                let field_key =
-                    derive_field_key(key.as_slice(), "test.field", version)
-                        .unwrap_or_else(|_| panic!("派生 {} 密钥失败", version));
+                let field_key = derive_field_key(key.as_slice(), "test.field", version)
+                    .unwrap_or_else(|_| panic!("派生 {} 密钥失败", version));
 
                 let (nonce, ciphertext) = crypto
                     .encrypt(plaintext, &field_key)

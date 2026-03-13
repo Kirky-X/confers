@@ -46,11 +46,24 @@ path = "src/examples/progressive_reload.rs"
 name = "full_stack"
 path = "src/examples/full_stack.rs"
 
+[[bin]]
+name = "config_bus"
+path = "src/examples/config_bus.rs"
+
+[[bin]]
+name = "snapshot"
+path = "src/examples/snapshot.rs"
+
+[[bin]]
+name = "remote_etcd"
+path = "src/examples/remote_etcd.rs"
+
 [dependencies]
 confers = { path = "..", features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = "0.1"
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = { workspace = true }
@@ -58,6 +71,13 @@ reqwest = { version = "0.12", features = ["json"] }
 base64 = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
+chrono = { workspace = true }
+regex = "1"
+futures = "0.3"
+async-nats = "0.37"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+serde_yaml_ng = "0.10"
+sha2 = "0.10"
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
 notify = "7.0"
