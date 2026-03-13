@@ -26,7 +26,7 @@
   </a>
   <!-- Rust Version -->
   <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust 1.75+" style="display:inline; margin:0 4px">
+    <img src="https://img.shields.io/badge/rust-1.81+-orange.svg" alt="Rust 1.81+" style="display:inline; margin:0 4px">
   </a>
   <!-- Coverage -->
   <a href="https://codecov.io/gh/Kirky-X/confers">
@@ -58,7 +58,7 @@
 
 Confers 提供**声明式方法**进行配置管理：
 
-| ✨ 类型安全 | 🔄 自动重载 | 🔐 AES-256 加密 | 🌐 远程配置源 |
+| ✨ 类型安全 | 🔄 自动重载 | 🔐 XChaCha20-Poly1305 加密 | 🌐 远程配置源 |
 |:-------------:|:--------------:|:---------------------:|:-----------------:|
 | 编译时检查 | 热重载支持 | 敏感数据保护 | etcd、Consul、HTTP |
 
@@ -136,15 +136,12 @@ let config = AppConfig::load_sync()?;
 | 🔍 | **配置验证** | 内置验证器集成（`validation` 功能） |
 | 📊 | **Schema 生成** | 自动生成 JSON Schema（`schema` 功能） |
 | 🚀 | **文件监控与热重载** | 实时文件监控（`watch` 功能） |
-| 🔐 | **配置加密** | AES-256 加密存储（`encryption` 功能） |
+| 🔐 | **配置加密** | XChaCha20-Poly1305 加密存储（`encryption` 功能） |
 | 🌐 | **远程配置** | 支持 etcd、Consul、HTTP（`remote` 功能） |
 | 📦 | **审计日志** | 记录访问和变更历史（`audit` 功能） |
 | ⚡ | **并行验证** | 大型配置的并行验证（`parallel` 功能） |
 | 📈 | **系统监控** | 内存使用监控（`monitoring` 功能） |
 | 🔧 | **配置对比** | 多种输出格式的配置比较 |
-| 🎨 | **交互式向导** | 通过 CLI 生成配置模板 |
-| 🛡️ | **安全增强** | Nonce 重用检测、SSRF 防护 |
-| 🧩 | **HOCON 格式** | 支持 Typesafe Config 格式 |
 | 🔑 | **密钥管理** | 内置密钥生成和轮换 |
 
 </td>
@@ -155,13 +152,13 @@ let config = AppConfig::load_sync()?;
 
 | 预设 | 包含功能 | 使用场景 |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | 最小化配置加载（无验证、无 CLI） |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`、`validation` | **推荐大多数应用程序使用** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`、`validation`、`cli`、`schema`、`audit`、`monitoring`、`tracing` | 开发环境，包含所有工具 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`、`validation`、`watch`、`encryption`、`remote`、`monitoring`、`tracing` | 生产环境配置 |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | 最小化配置加载（无验证、无 CLI） |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 完整功能集 |
 
-**注意：** `cli` 功能会自动包含 `derive`、`validation` 和 `encryption` 依赖。
+**注意：** `cli` 功能会自动包含 `validation` 和 `encryption` 依赖。
 
 
 ### 🎨 功能架构
@@ -172,7 +169,7 @@ graph LR
     A[<b>配置源</b><br/>📁 文件 • 🌐 环境变量 • 💻 CLI] --> B[<b>ConfigLoader</b><br/>🔧 核心引擎]
     B --> C[<b>验证</b><br/>✅ 类型和业务规则]
     B --> D[<b>Schema</b><br/>📄 JSON Schema 生成]
-    B --> E[<b>加密</b><br/>🔐 AES-256-GCM]
+    B --> E[<b>加密</b><br/>🔐 XChaCha20-Poly1305]
     B --> F[<b>审计</b><br/>📋 访问日志]
     B --> G[<b>监控</b><br/>📊 内存监控]
     C --> H[<b>应用配置</b><br/>🚀 可直接使用]
@@ -201,8 +198,8 @@ graph LR
 | 安装方式 | 配置方式 | 使用场景 |
 |-------------------|---------------|----------|
 | **默认** | `confers = "0.3.0"` | 包含 `toml`、`json`、`env`（默认特性） |
-| **最小化** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | 仅环境变量 |
-| **推荐** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + 验证 |
+| **最小化** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
+| **推荐** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
 | **CLI 工具** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI 包含验证和加密 |
 | **完整** | `confers = { version = "0.3.0", features = ["full"] }` | 所有功能 |
 
@@ -252,15 +249,13 @@ graph LR
 
 | 命令 | 必需功能 | 可选功能 | 描述 |
 |---------|------------------|------------------|-------------|
-| `generate` | `cli`（包含：`derive`、`validation`、`encryption`） | `schema` | 生成配置模板 |
-| `validate` | `cli`（包含：`derive`、`validation`、`encryption`） | `schema` | 验证配置文件 |
-| `diff` | `cli`（包含：`derive`、`validation`、`encryption`） | - | 比较配置文件 |
-| `encrypt` | `cli`（包含：`derive`、`validation`、`encryption`） | - | 加密配置值 |
-| `key` | `cli`（包含：`derive`、`validation`、`encryption`） | - | 管理加密密钥 |
-| `wizard` | `cli`（包含：`derive`、`validation`、`encryption`） | - | 交互式配置向导 |
-| `completions` | `cli`（包含：`derive`、`validation`、`encryption`） | - | 生成 Shell 补全 |
+| `inspect` | `cli` | - | 查看配置键及来源 |
+| `validate` | `cli` | - | 验证配置文件 |
+| `diff` | `cli` | - | 比较配置文件 |
+| `export` | `cli` | - | 导出合并后的配置 |
+| `snapshot` | `cli` | `snapshot` | 管理配置快照 |
 
-**注意**：`cli` 功能为方便起见自动包含 `derive`、`validation` 和 `encryption`。
+**注意**：`cli` 功能为方便起见自动包含 `validation` 和 `encryption`。
 
 </td>
 </tr>
@@ -404,12 +399,12 @@ let config = AppConfig::load_sync()?;
 更好地控制配置来源：
 
 ```rust
-use confers::core::ConfersConfigBuilder;
+use confers::{ConfigBuilder, ConfigProviderExt};
 
-let config = ConfersConfigBuilder::new()
-    .with_file("config.toml")
-    .with_file("local.toml")  // 更高优先级
-    .with_env_prefix("APP_")
+let config = ConfigBuilder::<serde_json::Value>::new()
+    .file("config.toml")
+    .file("local.toml")  // 更高优先级
+    .env()
     .build()?;
 
 let name = config.get_string("app.name");
@@ -422,14 +417,21 @@ let port = config.get_int("app.port");
 
 ```rust
 use std::sync::Arc;
-use confers::core::{ConfersConfig, FileConfersConfig};
+use confers::{ConfigBuilder, ConfigProviderExt};
 
-// 使用 trait 对象进行依赖注入
-let shared_config: Arc<dyn ConfersConfig> = Arc::new(
-    FileConfersConfig::new("config.toml")?
-);
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct MyConfig {
+    pub name: String,
+    pub port: u16,
+}
 
-// 可在运行时替换
+let config = ConfigBuilder::<MyConfig>::new()
+    .file("config.toml")
+    .env()
+    .build()?;
+
+let shared_config = Arc::new(config);
+
 let service = MyService::new(shared_config);
 ```
 
@@ -585,7 +587,7 @@ graph TB
     subgraph Processing ["🔨 处理层"]
         F[✅ 验证<br/>类型和业务规则]
         G[📄 Schema 生成]
-        H[🔐 加密<br/>AES-256-GCM]
+        H[🔐 加密<br/>XChaCha20-Poly1305]
         I[📋 审计日志]
         J[👁️ 文件监控]
         K[📊 内存监控]
@@ -615,7 +617,7 @@ graph TB
 | **文件监控** | 实时监控并热重载 | ✅ 稳定 |
 | **远程配置** | etcd、Consul、HTTP 支持 | 🚧 测试版 |
 | **审计日志** | 记录访问和变更历史 | ✅ 稳定 |
-| **加密存储** | AES-256 加密存储 | ✅ 稳定 |
+| **加密存储** | XChaCha20-Poly1305 加密存储 | ✅ 稳定 |
 | **配置对比** | 多种输出格式 | ✅ 稳定 |
 | **交互式向导** | 模板生成 | ✅ 稳定 |
 
@@ -806,7 +808,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 | 措施 | 描述 | API 参考 |
 |---------|-------------|---------------|
 | ✅ **内存保护** | 使用 zeroization 自动安全清理 | `SecureString`、`zeroize` crate |
-| ✅ **侧信道保护** | 常量时间加密操作 | AES-256-GCM 加密 |
+| ✅ **侧信道保护** | 常量时间加密操作 | XChaCha20-Poly1305 加密 |
 | ✅ **输入验证** | 全面的输入清理 | `ConfigValidator`、`InputValidator` |
 | ✅ **审计日志** | 完整的操作追踪 | `AuditConfig`、审计追踪 |
 | ✅ **SSRF 防护** | 服务端请求伪造防护 | `validate_remote_url()` |

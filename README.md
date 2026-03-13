@@ -26,7 +26,7 @@
   </a>
   <!-- Rust Version -->
   <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust 1.75+" style="display:inline; margin:0 4px">
+    <img src="https://img.shields.io/badge/rust-1.81+-orange.svg" alt="Rust 1.81+" style="display:inline; margin:0 4px">
   </a>
   <!-- Coverage -->
   <a href="https://codecov.io/gh/Kirky-X/confers">
@@ -56,7 +56,7 @@
 
 Confers provides a **declarative approach** to configuration management with:
 
-| ✨ Type Safety | 🔄 Auto Reload | 🔐 AES-256 Encryption | 🌐 Remote Sources |
+| ✨ Type Safety | 🔄 Auto Reload | 🔐 XChaCha20-Poly1305 Encryption | 🌐 Remote Sources |
 |:-------------:|:--------------:|:---------------------:|:-----------------:|
 | Compile-time checks | Hot reload support | Sensitive data protection | etcd, Consul, HTTP |
 
@@ -132,7 +132,7 @@ let config = AppConfig::load_sync()?;
 | 🔍 | **Configuration Validation** | Built-in validator integration (`validation` feature) |
 | 📊 | **Schema Generation** | Auto-generate JSON Schema (`schema` feature) |
 | 🚀 | **File Watching & Hot Reload** | Real-time file monitoring (`watch` feature) |
-| 🔐 | **Configuration Encryption** | AES-256 encrypted storage (`encryption` feature) |
+| 🔐 | **Configuration Encryption** | XChaCha20-Poly1305 encrypted storage (`encryption` feature) |
 | 🌐 | **Remote Configuration** | etcd, Consul, HTTP support (`remote` feature) |
 | 📦 | **Audit Logging** | Record access & change history (`audit` feature) |
 | ⚡ | **Parallel Validation** | Parallel validation for large configs (`parallel` feature) |
@@ -140,7 +140,6 @@ let config = AppConfig::load_sync()?;
 | 🔧 | **Configuration Diff** | Compare configs with multiple output formats |
 | 🎨 | **Interactive Wizard** | Generate config templates via CLI |
 | 🛡️ | **Security Enhancements** | Nonce reuse detection, SSRF protection |
-| 🧩 | **HOCON Format** | Support for Typesafe Config format |
 | 🔑 | **Key Management** | Built-in key generation and rotation |
 
 </td>
@@ -151,8 +150,8 @@ let config = AppConfig::load_sync()?;
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env` | Environment variables only |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `env`, `validation` | **Recommended for most applications** |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables only |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **Recommended for most applications** |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
 | <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | Distributed systems |
@@ -167,7 +166,7 @@ graph LR
     A[<b>Configuration Sources</b><br/>📁 Files • 🌐 Env • 💻 CLI] --> B[<b>ConfigLoader</b><br/>🔧 Core Engine]
     B --> C[<b>Validation</b><br/>✅ Type & Business Rules]
     B --> D[<b>Schema</b><br/>📄 JSON Schema Gen]
-    B --> E[<b>Encryption</b><br/>🔐 AES-256-GCM]
+    B --> E[<b>Encryption</b><br/>🔐 XChaCha20-Poly1305]
     B --> F[<b>Audit</b><br/>📋 Access Logs]
     B --> G[<b>Monitoring</b><br/>📊 Memory Watch]
     C --> H[<b>Application Config</b><br/>🚀 Ready to Use]
@@ -196,7 +195,7 @@ graph LR
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
 | **Default** | `confers = "0.3.0"` | Includes `toml`, `json`, `env` (default features) |
-| **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables only |
+| **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables + JSON only |
 | **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation |
 | **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI with validation and encryption |
 | **Full** | `confers = { version = "0.3.0", features = ["full"] }` | All features |
@@ -247,13 +246,8 @@ graph LR
 
 | Command | Required Features | Optional Features | Description |
 |---------|------------------|------------------|-------------|
-| `generate` | `cli` | `schema` | Generate configuration templates |
-| `validate` | `cli` | `schema` | Validate configuration files |
+| `validate` | `cli` | - | Validate configuration files |
 | `diff` | `cli` | - | Compare configuration files |
-| `encrypt` | `cli` | - | Encrypt configuration values |
-| `key` | `cli` | - | Manage encryption keys |
-| `wizard` | `cli` | - | Interactive configuration wizard |
-| `completions` | `cli` | - | Generate shell completions |
 
 **Note**: The `cli` feature provides command-line tools for configuration management.
 
@@ -398,12 +392,12 @@ let config = AppConfig::load_sync()?;
 For more control over configuration sources:
 
 ```rust
-use confers::core::ConfersConfigBuilder;
+use confers::{ConfigBuilder, ConfigProviderExt};
 
-let config = ConfersConfigBuilder::new()
-    .with_file("config.toml")
-    .with_file("local.toml")  // Higher priority
-    .with_env_prefix("APP_")
+let config = ConfigBuilder::<serde_json::Value>::new()
+    .file("config.toml")
+    .file("local.toml")  // Higher priority
+    .env()
     .build()?;
 
 let name = config.get_string("app.name");
@@ -416,14 +410,21 @@ For integration into frameworks and runtime flexibility:
 
 ```rust
 use std::sync::Arc;
-use confers::core::{ConfersConfig, FileConfersConfig};
+use confers::{ConfigBuilder, ConfigProviderExt};
 
-// Use trait object for dependency injection
-let shared_config: Arc<dyn ConfersConfig> = Arc::new(
-    FileConfersConfig::new("config.toml")?
-);
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct MyConfig {
+    pub name: String,
+    pub port: u16,
+}
 
-// Can be swapped at runtime
+let config = ConfigBuilder::<MyConfig>::new()
+    .file("config.toml")
+    .env()
+    .build()?;
+
+let shared_config = Arc::new(config);
+
 let service = MyService::new(shared_config);
 ```
 
@@ -477,31 +478,35 @@ let service = MyService::new(shared_config);
 
 ## 🔧 CLI Tool
 
-Confers provides a standalone command-line tool `confers-cli` for configuration management:
+Confers provides a standalone command-line tool `confers` for configuration management:
 
 ### Install CLI Tool
 
 ```bash
-cargo install confers-cli
+cargo install confers
 ```
 
 ### Basic Commands
 
 ```bash
 # View help
-confers-cli --help
+confers --help
 
-# Generate configuration template
-confers-cli generate --struct "AppConfig" --output config.toml
+# Inspect configuration - list all keys with their sources
+confers config.toml inspect
 
 # Validate configuration file
-confers-cli validate config.toml
+confers config.toml validate
 
 # Compare configuration files
-confers-cli diff config1.toml config2.toml
+confers diff --base config1.toml --overlay config2.toml
 
-# Encrypt configuration values
-confers-cli encrypt "secret_value" --key-file secret.key
+# Export merged configuration
+confers config.toml export --format json
+
+# Manage configuration snapshots
+confers config.toml snapshot list
+confers config.toml snapshot diff --latest 2
 ```
 
 **Note**: The CLI tool requires the `cli` feature to be enabled.
@@ -610,7 +615,7 @@ graph TB
     subgraph Processing ["🔨 Processing Layer"]
         F[✅ Validation<br/>Type & Business Rules]
         G[📄 Schema Generation]
-        H[🔐 Encryption<br/>AES-256-GCM]
+        H[🔐 Encryption<br/>XChaCha20-Poly1305]
         I[📋 Audit Logging]
         J[👁️ File Watching]
         K[📊 Memory Monitoring]
@@ -640,7 +645,7 @@ graph TB
 | **File Watching** | Real-time monitoring with hot reload | ✅ Stable |
 | **Remote Configuration** | etcd, Consul, HTTP support | 🚧 Beta |
 | **Audit Logging** | Record access and change history | ✅ Stable |
-| **Encrypted Storage** | AES-256 encrypted storage | ✅ Stable |
+| **Encrypted Storage** | XChaCha20-Poly1305 encrypted storage | ✅ Stable |
 | **Configuration Diff** | Multiple output formats | ✅ Stable |
 | **Interactive Wizard** | Template generation | ✅ Stable |
 
@@ -831,7 +836,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 | Measure | Description | API Reference |
 |---------|-------------|---------------|
 | ✅ **Memory Protection** | Automatic secure cleanup with zeroization | `SecureString`, `zeroize` crate |
-| ✅ **Side-channel Protection** | Constant-time cryptographic operations | AES-256-GCM encryption |
+| ✅ **Side-channel Protection** | Constant-time cryptographic operations | XChaCha20-Poly1305 encryption |
 | ✅ **Input Validation** | Comprehensive input sanitization | `ConfigValidator`, `InputValidator` |
 | ✅ **Audit Logging** | Full operation tracking | `AuditConfig`, audit trails |
 | ✅ **SSRF Protection** | Server-Side Request Forgery prevention | `validate_remote_url()` |
