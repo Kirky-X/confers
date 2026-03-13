@@ -140,8 +140,8 @@ impl ConsulConfig {
 
     /// Build HTTP client with configuration
     pub fn build_client(&self) -> Result<reqwest::Client, Box<dyn std::error::Error>> {
-        let mut builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(self.timeout_seconds));
+        let mut builder =
+            reqwest::Client::builder().timeout(Duration::from_secs(self.timeout_seconds));
 
         // Configure TLS if provided
         if let Some(ref tls) = self.tls {
@@ -223,8 +223,12 @@ impl TlsConfig {
         {
             // mTLS requires native-tls or rustls-tls with specific features
             // This is a placeholder showing the configuration pattern
-            info!("TLS: Client certificate authentication configured (requires native-tls feature)");
-            info!("TLS: For production mTLS, use a custom TLS connector or enable native-tls feature");
+            info!(
+                "TLS: Client certificate authentication configured (requires native-tls feature)"
+            );
+            info!(
+                "TLS: For production mTLS, use a custom TLS connector or enable native-tls feature"
+            );
         }
 
         // Set server name for SNI
@@ -237,7 +241,7 @@ impl TlsConfig {
         if self.danger_accept_invalid_certs {
             #[cfg(not(debug_assertions))]
             panic!("SECURITY: danger_accept_invalid_certs must not be used in release builds!");
-            
+
             #[cfg(debug_assertions)]
             {
                 builder = builder.danger_accept_invalid_certs(true);
@@ -288,7 +292,10 @@ impl ConsulClient {
 
         if response.status().is_success() {
             let leader = response.text().await?;
-            info!("✓ Consul connection successful, leader: {}", leader.trim_matches('"'));
+            info!(
+                "✓ Consul connection successful, leader: {}",
+                leader.trim_matches('"')
+            );
             Ok(true)
         } else {
             warn!("✗ Consul returned status: {}", response.status());
@@ -361,7 +368,11 @@ impl ConsulClient {
     }
 
     /// Write a key-value pair
-    pub async fn write_key(&self, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn write_key(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/v1/kv/{}", self.config.address, key);
         info!("Writing key to Consul: {}", key);
 
@@ -433,7 +444,11 @@ impl ConsulClient {
     }
 
     /// Set nested value in JSON map
-    fn set_nested_value(map: &mut serde_json::Map<String, serde_json::Value>, parts: &[&str], value: &str) {
+    fn set_nested_value(
+        map: &mut serde_json::Map<String, serde_json::Value>,
+        parts: &[&str],
+        value: &str,
+    ) {
         if parts.is_empty() {
             return;
         }
@@ -515,8 +530,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn demo_basic_connection() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== Demo 1: Basic Connection ===\n");
 
-    let address = std::env::var("CONSUL_ADDRESS")
-        .unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
+    let address =
+        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
 
     let config = ConsulConfig::new(&address);
     let client = ConsulClient::new(config)?;
@@ -598,8 +613,7 @@ async fn demo_tls_configuration() -> Result<(), Box<dyn std::error::Error>> {
     info!("   }}");
 
     // Create client with TLS
-    let config = ConsulConfig::new("https://consul.example.com:8501")
-        .with_tls(tls_config);
+    let config = ConsulConfig::new("https://consul.example.com:8501").with_tls(tls_config);
 
     info!("\nConsulConfig with TLS:");
     info!("  address: {}", config.address);
@@ -638,12 +652,14 @@ async fn demo_acl_authentication() -> Result<(), Box<dyn std::error::Error>> {
     info!("");
     info!("4. Use token in client:");
 
-    let config = ConsulConfig::new("http://127.0.0.1:8500")
-        .with_token("your-acl-token-here");
+    let config = ConsulConfig::new("http://127.0.0.1:8500").with_token("your-acl-token-here");
 
     info!("   ConsulConfig {{");
     info!("     address: {}", config.address);
-    info!("     token: {:?}...", &config.token.as_ref().map(|t| &t[..8]).unwrap_or(&"None"));
+    info!(
+        "     token: {:?}...",
+        &config.token.as_ref().map(|t| &t[..8]).unwrap_or(&"None")
+    );
     info!("   }}");
 
     info!("\nACL best practices:");
@@ -660,8 +676,8 @@ async fn demo_acl_authentication() -> Result<(), Box<dyn std::error::Error>> {
 async fn demo_config_management() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== Demo 4: Configuration Management ===\n");
 
-    let address = std::env::var("CONSUL_ADDRESS")
-        .unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
+    let address =
+        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
 
     let config = ConsulConfig::new(&address);
     let client = ConsulClient::new(config)?;
@@ -670,10 +686,16 @@ async fn demo_config_management() -> Result<(), Box<dyn std::error::Error>> {
     info!("Writing sample configuration...");
     client.write_key("myapp/config/name", "myapp").await?;
     client.write_key("myapp/config/version", "1.0.0").await?;
-    client.write_key("myapp/config/server/host", "0.0.0.0").await?;
+    client
+        .write_key("myapp/config/server/host", "0.0.0.0")
+        .await?;
     client.write_key("myapp/config/server/port", "8080").await?;
-    client.write_key("myapp/config/database/url", "postgresql://localhost/mydb").await?;
-    client.write_key("myapp/config/database/max_connections", "20").await?;
+    client
+        .write_key("myapp/config/database/url", "postgresql://localhost/mydb")
+        .await?;
+    client
+        .write_key("myapp/config/database/max_connections", "20")
+        .await?;
 
     // Read configuration
     info!("\nReading configuration...");
@@ -697,7 +719,9 @@ async fn demo_config_management() -> Result<(), Box<dyn std::error::Error>> {
     client.delete_key("myapp/config/server/host").await?;
     client.delete_key("myapp/config/server/port").await?;
     client.delete_key("myapp/config/database/url").await?;
-    client.delete_key("myapp/config/database/max_connections").await?;
+    client
+        .delete_key("myapp/config/database/max_connections")
+        .await?;
 
     info!("✓ Cleanup complete");
 

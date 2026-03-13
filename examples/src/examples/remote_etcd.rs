@@ -256,14 +256,32 @@ impl EtcdConfigSource {
         // 示例配置值
         config_map.insert(format!("{}/name", self.prefix), "myapp".to_string());
         config_map.insert(format!("{}/version", self.prefix), "1.0.0".to_string());
-        config_map.insert(format!("{}/environment", self.prefix), "production".to_string());
-        config_map.insert(format!("{}/server/host", self.prefix), "0.0.0.0".to_string());
+        config_map.insert(
+            format!("{}/environment", self.prefix),
+            "production".to_string(),
+        );
+        config_map.insert(
+            format!("{}/server/host", self.prefix),
+            "0.0.0.0".to_string(),
+        );
         config_map.insert(format!("{}/server/port", self.prefix), "8080".to_string());
         config_map.insert(format!("{}/server/workers", self.prefix), "8".to_string());
-        config_map.insert(format!("{}/database/url", self.prefix), "postgresql://localhost/mydb".to_string());
-        config_map.insert(format!("{}/database/max_connections", self.prefix), "20".to_string());
-        config_map.insert(format!("{}/features/new_ui", self.prefix), "true".to_string());
-        config_map.insert(format!("{}/features/beta_api", self.prefix), "false".to_string());
+        config_map.insert(
+            format!("{}/database/url", self.prefix),
+            "postgresql://localhost/mydb".to_string(),
+        );
+        config_map.insert(
+            format!("{}/database/max_connections", self.prefix),
+            "20".to_string(),
+        );
+        config_map.insert(
+            format!("{}/features/new_ui", self.prefix),
+            "true".to_string(),
+        );
+        config_map.insert(
+            format!("{}/features/beta_api", self.prefix),
+            "false".to_string(),
+        );
 
         // 更新缓存
         *self.cache.write().await = config_map.clone();
@@ -272,7 +290,9 @@ impl EtcdConfigSource {
     }
 
     /// 解析配置到结构体
-    pub async fn load<T: for<'de> Deserialize<'de>>(&self) -> Result<T, Box<dyn std::error::Error>> {
+    pub async fn load<T: for<'de> Deserialize<'de>>(
+        &self,
+    ) -> Result<T, Box<dyn std::error::Error>> {
         let config_map = self.read_config().await?;
 
         // 将扁平的键值对转换为嵌套结构
@@ -290,7 +310,9 @@ impl EtcdConfigSource {
 
         for (key, value) in map {
             // 移除前缀
-            let key = key.strip_prefix(&format!("{}/", self.prefix)).unwrap_or(key);
+            let key = key
+                .strip_prefix(&format!("{}/", self.prefix))
+                .unwrap_or(key);
 
             // 解析嵌套路径
             let parts: Vec<&str> = key.split('/').collect();
@@ -301,7 +323,11 @@ impl EtcdConfigSource {
     }
 
     /// 设置嵌套值
-    fn set_nested_value(map: &mut serde_json::Map<String, serde_json::Value>, parts: &[&str], value: &str) {
+    fn set_nested_value(
+        map: &mut serde_json::Map<String, serde_json::Value>,
+        parts: &[&str],
+        value: &str,
+    ) {
         if parts.is_empty() {
             return;
         }
@@ -324,7 +350,8 @@ impl EtcdConfigSource {
 
             map.insert(parts[0].to_string(), json_value);
         } else {
-            let nested = map.entry(parts[0].to_string())
+            let nested = map
+                .entry(parts[0].to_string())
                 .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
 
             if let serde_json::Value::Object(ref mut nested_map) = nested {
@@ -358,7 +385,11 @@ impl EtcdConfigSource {
     /// 写入配置值
     ///
     /// 将配置值写入 etcd
-    pub async fn write_config(&self, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn write_config(
+        &self,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let full_key = format!("{}/{}", self.prefix, key);
 
         info!("写入配置: {} = {}", full_key, value);
@@ -381,7 +412,10 @@ impl EtcdConfigSource {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let full_key = format!("{}/{}", self.prefix, key);
 
-        info!("写入配置（租约 TTL={}s）: {} = {}", ttl_seconds, full_key, value);
+        info!(
+            "写入配置（租约 TTL={}s）: {} = {}",
+            ttl_seconds, full_key, value
+        );
 
         // 实际实现：
         // 1. 创建租约：LeaseGrantRequest { TTL: ttl_seconds }
@@ -396,7 +430,9 @@ impl EtcdConfigSource {
                 cache.write().await.remove(&key_clone);
                 info!("租约过期，配置已删除: {}", key_clone);
                 Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
-            }.await {
+            }
+            .await
+            {
                 tracing::error!("租约清理任务失败: {}", e);
             }
         });
@@ -547,7 +583,10 @@ async fn demo_basic_connection() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n解析后的配置:");
     info!("  应用: {} v{}", app_config.name, app_config.version);
     info!("  环境: {}", app_config.environment);
-    info!("  服务器: {}:{}", app_config.server.host, app_config.server.port);
+    info!(
+        "  服务器: {}:{}",
+        app_config.server.host, app_config.server.port
+    );
     info!("  数据库: {}", app_config.database.url);
 
     Ok(())
@@ -585,9 +624,14 @@ async fn demo_tls_config() -> Result<(), Box<dyn std::error::Error>> {
 
     // TLS 配置示例
     let tls_config = TlsConfig {
-        ca_cert: "-----BEGIN CERTIFICATE-----\n... CA 证书内容 ...\n-----END CERTIFICATE-----".to_string(),
-        client_cert: "-----BEGIN CERTIFICATE-----\n... 客户端证书内容 ...\n-----END CERTIFICATE-----".to_string(),
-        client_key: "-----BEGIN PRIVATE KEY-----\n... 客户端私钥内容 ...\n-----END PRIVATE KEY-----".to_string(),
+        ca_cert: "-----BEGIN CERTIFICATE-----\n... CA 证书内容 ...\n-----END CERTIFICATE-----"
+            .to_string(),
+        client_cert:
+            "-----BEGIN CERTIFICATE-----\n... 客户端证书内容 ...\n-----END CERTIFICATE-----"
+                .to_string(),
+        client_key:
+            "-----BEGIN PRIVATE KEY-----\n... 客户端私钥内容 ...\n-----END PRIVATE KEY-----"
+                .to_string(),
         server_name: "etcd.example.com".to_string(),
     };
 

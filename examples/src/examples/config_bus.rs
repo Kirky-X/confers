@@ -262,19 +262,19 @@ impl NatsConfigBus {
 
     /// 发布事件
     async fn publish(&self, event: ConfigChangeEvent) -> confers::ConfigResult<()> {
-        let client = self.client.as_ref().ok_or_else(|| {
-            confers::ConfigError::RemoteUnavailable {
-                error_type: "NATS client not connected".to_string(),
-                retryable: false,
-            }
-        })?;
+        let client =
+            self.client
+                .as_ref()
+                .ok_or_else(|| confers::ConfigError::RemoteUnavailable {
+                    error_type: "NATS client not connected".to_string(),
+                    retryable: false,
+                })?;
 
-        let payload = serde_json::to_vec(&event).map_err(|e| {
-            confers::ConfigError::RemoteUnavailable {
+        let payload =
+            serde_json::to_vec(&event).map_err(|e| confers::ConfigError::RemoteUnavailable {
                 error_type: format!("serialize: {}", e),
                 retryable: false,
-            }
-        })?;
+            })?;
 
         client
             .publish(self.subject.clone(), payload.into())
@@ -294,12 +294,13 @@ impl NatsConfigBus {
 
     /// 订阅事件
     async fn subscribe(&self) -> confers::ConfigResult<ConfigEventStream> {
-        let client = self.client.as_ref().ok_or_else(|| {
-            confers::ConfigError::RemoteUnavailable {
-                error_type: "NATS client not connected".to_string(),
-                retryable: false,
-            }
-        })?;
+        let client =
+            self.client
+                .as_ref()
+                .ok_or_else(|| confers::ConfigError::RemoteUnavailable {
+                    error_type: "NATS client not connected".to_string(),
+                    retryable: false,
+                })?;
 
         let subscriber = client.subscribe(self.subject.clone()).await.map_err(|e| {
             confers::ConfigError::RemoteUnavailable {
@@ -352,19 +353,18 @@ impl RedisConfigBus {
     pub async fn connect(&mut self, url: &str) -> confers::ConfigResult<()> {
         info!("正在连接 Redis 服务器: {}", url);
 
-        let client = redis::Client::open(url).map_err(|e| {
-            confers::ConfigError::RemoteUnavailable {
+        let client =
+            redis::Client::open(url).map_err(|e| confers::ConfigError::RemoteUnavailable {
                 error_type: format!("redis_client: {}", e),
                 retryable: false,
-            }
-        })?;
+            })?;
 
-        let manager = redis::aio::ConnectionManager::new(client).await.map_err(|e| {
-            confers::ConfigError::RemoteUnavailable {
+        let manager = redis::aio::ConnectionManager::new(client)
+            .await
+            .map_err(|e| confers::ConfigError::RemoteUnavailable {
                 error_type: format!("redis_connect: {}", e),
                 retryable: true,
-            }
-        })?;
+            })?;
 
         self.connection_manager = Some(Arc::new(manager));
         info!("Redis 连接成功");
@@ -381,12 +381,11 @@ impl RedisConfigBus {
             }
         })?;
 
-        let payload = serde_json::to_string(&event).map_err(|e| {
-            confers::ConfigError::RemoteUnavailable {
+        let payload =
+            serde_json::to_string(&event).map_err(|e| confers::ConfigError::RemoteUnavailable {
                 error_type: format!("serialize: {}", e),
                 retryable: false,
-            }
-        })?;
+            })?;
 
         let mut conn = manager.as_ref().clone();
         redis::cmd("PUBLISH")
@@ -447,12 +446,12 @@ impl InMemoryConfigBus {
 impl InMemoryConfigBus {
     /// 发布事件
     async fn publish(&self, event: ConfigChangeEvent) -> confers::ConfigResult<()> {
-        self.sender.send(event).map_err(|e| {
-            confers::ConfigError::RemoteUnavailable {
+        self.sender
+            .send(event)
+            .map_err(|e| confers::ConfigError::RemoteUnavailable {
                 error_type: format!("broadcast: {}", e),
                 retryable: false,
-            }
-        })?;
+            })?;
 
         Ok(())
     }
@@ -501,11 +500,16 @@ impl<T: Clone + Send + Sync + 'static> ConfigManager<T> {
     }
 
     /// 更新配置并广播变更
-    pub async fn update_config(&self, new_config: T, changed_keys: Vec<String>) -> confers::ConfigResult<()> {
+    pub async fn update_config(
+        &self,
+        new_config: T,
+        changed_keys: Vec<String>,
+    ) -> confers::ConfigResult<()> {
         *self.config.write().await = new_config.clone();
 
         // 使用简单的校验和：基于时间戳和变更键
-        let checksum_input = format!("{}:{:?}:{}", 
+        let checksum_input = format!(
+            "{}:{:?}:{}",
             chrono::Utc::now().timestamp(),
             changed_keys,
             self.instance_id
@@ -514,12 +518,8 @@ impl<T: Clone + Send + Sync + 'static> ConfigManager<T> {
         hasher.update(checksum_input.as_bytes());
         let checksum = format!("{:x}", hasher.finalize());
 
-        let event = ConfigChangeEvent::new(
-            &self.instance_id,
-            "manual_update",
-            changed_keys,
-            &checksum,
-        );
+        let event =
+            ConfigChangeEvent::new(&self.instance_id, "manual_update", changed_keys, &checksum);
 
         self.bus.publish(event).await?;
 
@@ -611,7 +611,10 @@ async fn demo_in_memory_bus() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     if let Some(received) = tokio::time::timeout(Duration::from_secs(1), stream.next()).await? {
-        info!("✓ 收到事件: instance={}, source={}", received.instance_id, received.source);
+        info!(
+            "✓ 收到事件: instance={}, source={}",
+            received.instance_id, received.source
+        );
     }
 
     Ok(())
@@ -621,7 +624,8 @@ async fn demo_in_memory_bus() -> Result<(), Box<dyn std::error::Error>> {
 async fn demo_nats_bus() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== 演示 2: NATS ConfigBus ===\n");
 
-    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
+    let nats_url =
+        std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
 
     let mut nats_bus = NatsConfigBus::new("instance-1", "config.updates");
 
@@ -641,7 +645,10 @@ async fn demo_nats_bus() -> Result<(), Box<dyn std::error::Error>> {
             info!("✓ 事件已发布到 NATS");
         }
         Err(e) => {
-            warn!("NATS 连接失败（这是正常的，如果没有运行 NATS 服务器）: {}", e);
+            warn!(
+                "NATS 连接失败（这是正常的，如果没有运行 NATS 服务器）: {}",
+                e
+            );
             info!("提示: 运行 'docker run -d --name nats -p 4222:4222 nats:latest' 启动 NATS");
         }
     }
@@ -669,15 +676,24 @@ async fn demo_config_manager() -> Result<(), Box<dyn std::error::Error>> {
     new_config.features.new_ui = true;
 
     manager
-        .update_config(new_config, vec!["environment".to_string(), "features.new_ui".to_string()])
+        .update_config(
+            new_config,
+            vec!["environment".to_string(), "features.new_ui".to_string()],
+        )
         .await?;
 
     if let Some(event) = tokio::time::timeout(Duration::from_secs(1), stream.next()).await? {
-        info!("✓ 收到配置变更广播: instance={}, changed_keys={:?}", event.instance_id, event.changed_keys);
+        info!(
+            "✓ 收到配置变更广播: instance={}, changed_keys={:?}",
+            event.instance_id, event.changed_keys
+        );
     }
 
     let updated = manager.get_config().await;
-    info!("更新后配置: env={}, new_ui={}", updated.environment, updated.features.new_ui);
+    info!(
+        "更新后配置: env={}, new_ui={}",
+        updated.environment, updated.features.new_ui
+    );
 
     info!("✓ 配置管理器演示完成");
 

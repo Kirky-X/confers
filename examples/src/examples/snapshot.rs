@@ -350,7 +350,11 @@ impl SnapshotManager {
     }
 
     /// 脱敏敏感字段
-    async fn redact_sensitive_fields(&self, value: &mut serde_json::Value, sensitive_paths: &[String]) {
+    async fn redact_sensitive_fields(
+        &self,
+        value: &mut serde_json::Value,
+        sensitive_paths: &[String],
+    ) {
         for path in sensitive_paths {
             if let Some(field) = Self::get_nested_value_mut(value, path) {
                 *field = serde_json::Value::String("[REDACTED]".to_string());
@@ -359,7 +363,10 @@ impl SnapshotManager {
     }
 
     /// 获取嵌套值的可变引用
-    fn get_nested_value_mut<'a>(value: &'a mut serde_json::Value, path: &str) -> Option<&'a mut serde_json::Value> {
+    fn get_nested_value_mut<'a>(
+        value: &'a mut serde_json::Value,
+        path: &str,
+    ) -> Option<&'a mut serde_json::Value> {
         let parts: Vec<&str> = path.split('.').collect();
         let mut current = value;
 
@@ -404,21 +411,12 @@ impl SnapshotManager {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("toml");
 
         match SnapshotFormat::from_ext(ext) {
-            Some(SnapshotFormat::Toml) => {
-                toml::from_str(&content).map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-                })
-            }
-            Some(SnapshotFormat::Json) => {
-                serde_json::from_str(&content).map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-                })
-            }
-            Some(SnapshotFormat::Yaml) => {
-                serde_yaml_ng::from_str(&content).map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-                })
-            }
+            Some(SnapshotFormat::Toml) => toml::from_str(&content)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+            Some(SnapshotFormat::Json) => serde_json::from_str(&content)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+            Some(SnapshotFormat::Yaml) => serde_yaml_ng::from_str(&content)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
             None => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Unsupported snapshot format: {}", ext),
@@ -452,13 +450,11 @@ impl SnapshotManager {
         let config1: T = self.load(filename1).await?;
         let config2: T = self.load(filename2).await?;
 
-        let json1 = serde_json::to_value(&config1).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-        })?;
+        let json1 = serde_json::to_value(&config1)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
-        let json2 = serde_json::to_value(&config2).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-        })?;
+        let json2 = serde_json::to_value(&config2)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
         Ok(ConfigDiff::compare(&json1, &json2))
     }
@@ -600,7 +596,10 @@ impl ConfigDiff {
         if !self.changed.is_empty() {
             println!("修改字段:");
             for field in &self.changed {
-                println!("  ~ {}: {:?} -> {:?}", field.path, field.old_value, field.new_value);
+                println!(
+                    "  ~ {}: {:?} -> {:?}",
+                    field.path, field.old_value, field.new_value
+                );
             }
         }
     }
@@ -675,7 +674,10 @@ async fn demo_basic_snapshot() -> Result<(), Box<dyn std::error::Error>> {
     info!("✓ 快照已保存: {:?}", path);
 
     let content = tokio::fs::read_to_string(&path).await?;
-    info!("快照内容预览:\n{}", content.lines().take(10).collect::<Vec<_>>().join("\n"));
+    info!(
+        "快照内容预览:\n{}",
+        content.lines().take(10).collect::<Vec<_>>().join("\n")
+    );
 
     Ok(())
 }
@@ -807,8 +809,12 @@ async fn demo_sensitive_redaction() -> Result<(), Box<dyn std::error::Error>> {
 
     let manager = SnapshotManager::new(SnapshotConfig::new("config-snapshots"));
 
-    manager.add_sensitive_path("database.password".to_string()).await;
-    manager.add_sensitive_path("api_keys.secret_key".to_string()).await;
+    manager
+        .add_sensitive_path("database.password".to_string())
+        .await;
+    manager
+        .add_sensitive_path("api_keys.secret_key".to_string())
+        .await;
 
     let path = manager.save(&config).await?;
     let content = tokio::fs::read_to_string(&path).await?;
@@ -829,10 +835,8 @@ async fn demo_sensitive_redaction() -> Result<(), Box<dyn std::error::Error>> {
 async fn demo_snapshot_cleanup() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== 演示 5: 快照清理 ===\n");
 
-    let manager = SnapshotManager::new(
-        SnapshotConfig::new("config-snapshots")
-            .with_max_snapshots(5),
-    );
+    let manager =
+        SnapshotManager::new(SnapshotConfig::new("config-snapshots").with_max_snapshots(5));
 
     let config = AppConfig::default();
 
@@ -844,7 +848,10 @@ async fn demo_snapshot_cleanup() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let entries = manager.list().await?;
-    info!("创建 8 个快照后，保留 {} 个（max_snapshots=5）", entries.len());
+    info!(
+        "创建 8 个快照后，保留 {} 个（max_snapshots=5）",
+        entries.len()
+    );
 
     for entry in &entries {
         info!("  {}", entry.filename);
