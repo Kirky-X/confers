@@ -18,7 +18,7 @@ fn bench_dynamic_field_trigger(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
     let field = DynamicField::new(42u32);
-    
+
     // Pre-register a callback to simulate real-world usage
     field.on_change(|_: &u32| {});
 
@@ -34,7 +34,7 @@ fn bench_dynamic_field_trigger_multiple(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
     let field = DynamicField::new(42u32);
-    
+
     // Pre-register multiple callbacks to simulate real-world usage with multiple listeners
     field.on_change(|_: &u32| {});
     field.on_change(|_: &u32| {});

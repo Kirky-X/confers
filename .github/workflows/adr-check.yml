@@ -6,17 +6,22 @@ on:
       - 'src/**/*.rs'
       - 'docs/adr/*.md'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Check ADR References
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Check ADR references in code
         run: |
           # Find all ADR references in source code
-          ADR_REFS=$(grep -roh "ADR-[0-9]\+" src/ --include="*.rs" 2>/dev/null | sort -u || true)
+          ADR_REFS=$(grep -rohE "ADR-[0-9]+" src/ --include="*.rs" 2>/dev/null | sort -u || true)
 
           if [ -z "$ADR_REFS" ]; then
             echo "No ADR references found in code"
@@ -27,7 +32,7 @@ jobs:
 
           # Check each ADR reference exists
           for adr in $ADR_REFS; do
-            adr_num=$(echo $adr | grep -oP '\d+')
+            adr_num=$(echo $adr | grep -oE '[0-9]+')
             if [ ! -f "docs/adr/ADR-${adr_num}"*.md ]; then
               echo "ERROR: $adr referenced but not found in docs/adr/"
               ls docs/adr/ | grep "ADR-${adr_num}" || true
@@ -39,14 +44,22 @@ jobs:
 
       - name: Check ADR count in dev.md
         run: |
-          if [ -f "dev-v2.md" ]; then
-            ADR_COUNT=$(grep -c "ADR-" dev-v2.md || true)
-            echo "Found $ADR_COUNT ADR references in dev-v2.md"
+          # Check for any dev*.md files
+          DEV_FILES=$(ls dev*.md 2>/dev/null || true)
+
+          if [ -z "$DEV_FILES" ]; then
+            echo "No dev*.md files found, skipping ADR count check"
+            exit 0
+          fi
+
+          for dev_file in $DEV_FILES; do
+            ADR_COUNT=$(grep -c "ADR-" "$dev_file" || true)
+            echo "Found $ADR_COUNT ADR references in $dev_file"
 
             DOC_ADR_COUNT=$(ls docs/adr/ADR-*.md 2>/dev/null | wc -l || echo "0")
             echo "Found $DOC_ADR_COUNT ADR documents"
 
             if [ "$ADR_COUNT" -gt 0 ] && [ "$DOC_ADR_COUNT" -eq 0 ]; then
-              echo "WARNING: dev-v2.md references ADRs but docs/adr/ is empty"
+              echo "WARNING: $dev_file references ADRs but docs/adr/ is empty"
             fi
-          fi
+          done

@@ -42,9 +42,7 @@ fn bench_merge_shallow(c: &mut Criterion) {
             let override_val = create_nested_config(1, size, "override");
             let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
 
-            b.iter(|| {
-                engine.merge(black_box(&base), black_box(&override_val))
-            });
+            b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
         });
     }
 
@@ -61,9 +59,7 @@ fn bench_merge_deep(c: &mut Criterion) {
             let override_val = create_nested_config(depth, 10, "override");
             let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
 
-            b.iter(|| {
-                engine.merge(black_box(&base), black_box(&override_val))
-            });
+            b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
         });
     }
 
@@ -79,23 +75,18 @@ fn bench_merge_strategies(c: &mut Criterion) {
 
     group.bench_function("replace", |b| {
         let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
-        b.iter(|| {
-            engine.merge(black_box(&base), black_box(&override_val))
-        });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
     group.bench_function("deep_merge", |b| {
         let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
-        b.iter(|| {
-            engine.merge(black_box(&base), black_box(&override_val))
-        });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
     group.bench_function("join", |b| {
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Join { separator: "," });
-        b.iter(|| {
-            engine.merge(black_box(&base), black_box(&override_val))
-        });
+        let engine =
+            MergeEngine::new().with_default_strategy(MergeStrategy::Join { separator: "," });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
     group.finish();
@@ -123,9 +114,7 @@ fn bench_incremental_merge(c: &mut Criterion) {
         );
         let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
 
-        b.iter(|| {
-            engine.merge(black_box(&base), black_box(&override_val))
-        });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
     group.bench_function("batch_update_10", |b| {
@@ -148,9 +137,7 @@ fn bench_incremental_merge(c: &mut Criterion) {
         );
         let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
 
-        b.iter(|| {
-            engine.merge(black_box(&base), black_box(&override_val))
-        });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
     group.finish();

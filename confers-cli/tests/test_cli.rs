@@ -1,9 +1,9 @@
 //! Integration tests for confers-cli
 
+use serial_test::serial;
 use std::fs;
 use std::io::Write;
 use tempfile::TempDir;
-use serial_test::serial;
 
 fn run_confers(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("cargo");
@@ -91,9 +91,15 @@ name = "json-test"
 "#,
     );
 
-    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "inspect", "-f", "json"])
-        .output()
-        .expect("Failed to run inspect command");
+    let output = run_confers(&[
+        "-c",
+        &config_path.to_str().unwrap(),
+        "inspect",
+        "-f",
+        "json",
+    ])
+    .output()
+    .expect("Failed to run inspect command");
 
     assert!(
         output.status.success(),

@@ -118,11 +118,9 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
                 poisoned.into_inner()
             }
         };
-        callbacks
-            .values()
-            .for_each(|callback| {
-                callback(new_val_ref);
-            });
+        callbacks.values().for_each(|callback| {
+            callback(new_val_ref);
+        });
     }
 
     pub fn callback_count(&self) -> usize {

@@ -5,6 +5,10 @@ on:
     - cron: '0 2 * * 0'  # Weekly at 2 AM UTC on Sunday
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -26,17 +30,20 @@ jobs:
       - name: Run merger fuzzer
         run: |
           cargo +nightly fuzz run merger -- -max_total_time=300 -artifact_prefix=artifacts/
-        continue-on-error: true
+        env:
+          FUZZ_NEW_CRASHES_ONLY: "1"
 
       - name: Run parser fuzzer
         run: |
           cargo +nightly fuzz run parser -- -max_total_time=300 -artifact_prefix=artifacts/
-        continue-on-error: true
+        env:
+          FUZZ_NEW_CRASHES_ONLY: "1"
 
       - name: Run interpolation fuzzer
         run: |
           cargo +nightly fuzz run interpolation -- -max_total_time=300 -artifact_prefix=artifacts/
-        continue-on-error: true
+        env:
+          FUZZ_NEW_CRASHES_ONLY: "1"
 
       - name: Upload crash artifacts
         uses: actions/upload-artifact@v4

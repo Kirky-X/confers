@@ -244,7 +244,7 @@ impl EnvSource {
         if file_path.is_empty() {
             return Ok(());
         }
-        
+
         let path = Path::new(file_path);
 
         // Check for path traversal attempts
