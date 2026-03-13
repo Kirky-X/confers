@@ -14,6 +14,44 @@ use std::sync::Arc;
 
 use confers::AnnotatedValue;
 
+const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
+
+/// Load environment variables from a .env file
+fn load_env_file(path: &PathBuf) -> Result<()> {
+    if !path.exists() {
+        anyhow::bail!("Environment file not found: {}", path.display());
+    }
+
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read env file: {}", path.display()))?;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+
+            let value = if (value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\''))
+            {
+                &value[1..value.len() - 1]
+            } else {
+                value
+            };
+
+            if std::env::var(key).is_err() {
+                unsafe { std::env::set_var(key, value) };
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Confers CLI - Configuration diagnostics and inspection tool
 #[derive(Parser, Debug)]
 #[command(name = "confers")]
@@ -96,6 +134,10 @@ enum Commands {
         /// Output format (text, json)
         #[arg(short, long, default_value = "text")]
         format: String,
+
+        /// Sanitize sensitive values in output
+        #[arg(long, default_value = "true")]
+        sanitize: bool,
     },
 
     /// Manage configuration snapshots
@@ -136,9 +178,11 @@ enum SnapshotCommands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Extract fields we need before matching on command
+    if let Some(env_file) = &cli.env_file {
+        load_env_file(env_file)?;
+    }
+
     let config_paths = cli.config.clone();
-    let env_file = cli.env_file.clone();
 
     match cli.command {
         Commands::Inspect {
@@ -146,10 +190,10 @@ fn main() -> Result<()> {
             show_conflicts,
             format,
         } => {
-            cmd_inspect(&config_paths, &env_file, &key, show_conflicts, &format)?;
+            cmd_inspect(&config_paths, &key, show_conflicts, &format)?;
         }
         Commands::Validate { strict, format } => {
-            cmd_validate(&config_paths, &env_file, strict, &format)?;
+            cmd_validate(&config_paths, strict, &format)?;
         }
         Commands::Export {
             format,
@@ -159,7 +203,6 @@ fn main() -> Result<()> {
         } => {
             cmd_export(
                 &config_paths,
-                &env_file,
                 &format,
                 output,
                 with_provenance,
@@ -169,9 +212,10 @@ fn main() -> Result<()> {
         Commands::Diff {
             base,
             overlay,
-            format: _,
+            format,
+            sanitize,
         } => {
-            cmd_diff(&base, &overlay)?;
+            cmd_diff(&base, &overlay, &format, sanitize)?;
         }
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
@@ -185,27 +229,22 @@ fn main() -> Result<()> {
 #[allow(dead_code)]
 fn cmd_inspect(
     config_paths: &[PathBuf],
-    _env_file: &Option<PathBuf>,
     keys: &[String],
     show_conflicts: bool,
     format: &str,
 ) -> Result<()> {
     use confers::ConfigBuilder;
 
-    // Build configuration with annotated values
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
-    // Add config files
     for config_path in config_paths {
         if config_path.exists() {
             builder = builder.file(config_path.to_string_lossy().as_ref());
         }
     }
 
-    // Add env
     builder = builder.env();
 
-    // Build annotated configuration
     let annotated_config = builder.build_annotated()?;
 
     match format {
@@ -226,24 +265,22 @@ fn cmd_inspect(
     println!("Loaded {} configuration source(s)", config_paths.len());
     println!();
 
-    // Build source information map
-    let sources: Vec<String> = config_paths
-        .iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-
     if keys.is_empty() {
-        // Show all configuration keys
         println!("All configuration keys:");
-        println!("{:<35} {:<25} {:<20} {:<20}", "KEY", "VALUE", "SOURCE", "LOCATION");
+        println!(
+            "{:<35} {:<25} {:<20} {:<20}",
+            "KEY", "VALUE", "SOURCE", "LOCATION"
+        );
         println!("{}", "-".repeat(100));
 
-        // Recursively print all keys
-        print_config_value(&annotated_config, "", &sources, show_conflicts);
+        print_config_value(&annotated_config, "", show_conflicts);
     } else {
         // Show requested keys
         println!("Requested keys:");
-        println!("{:<35} {:<25} {:<20} {:<20}", "KEY", "VALUE", "SOURCE", "LOCATION");
+        println!(
+            "{:<35} {:<25} {:<20} {:<20}",
+            "KEY", "VALUE", "SOURCE", "LOCATION"
+        );
         println!("{}", "-".repeat(100));
 
         for key in keys {
@@ -253,7 +290,10 @@ fn cmd_inspect(
                     let value_str = format_value(&v.inner);
                     let source = v.source.as_str();
                     let location = format_location(&v.location);
-                    println!("{:<35} {:<25} {:<20} {:<20}", key, value_str, source, location);
+                    println!(
+                        "{:<35} {:<25} {:<20} {:<20}",
+                        key, value_str, source, location
+                    );
                 }
                 None => {
                     println!("{:<35} {:<25} {:<20} {:<20}", key, "[NOT FOUND]", "-", "-");
@@ -269,8 +309,7 @@ fn cmd_inspect(
 fn print_config_value(
     value: &AnnotatedValue,
     prefix: &str,
-    sources: &[String],
-    _show_conflicts: bool,
+    show_conflicts: bool,
 ) {
     match &value.inner {
         confers::value::ConfigValue::Map(map) => {
@@ -283,25 +322,33 @@ fn print_config_value(
 
                 match &val.inner {
                     confers::value::ConfigValue::Map(_) => {
-                        // Nested object - recurse
-                        print_config_value(val, &full_key, sources, _show_conflicts);
+                        print_config_value(val, &full_key, show_conflicts);
                     }
                     _ => {
-                        // Leaf value - print it
                         let value_str = format_value(&val.inner);
                         let source = val.source.as_str();
                         let location = format_location(&val.location);
-                        println!("{:<35} {:<25} {:<20} {:<20}", full_key, value_str, source, location);
+                        let conflict_marker = if show_conflicts && val.priority > 0 {
+                            " *"
+                        } else {
+                            ""
+                        };
+                        println!(
+                            "{:<35} {:<25} {:<20} {:<20}{}",
+                            full_key, value_str, source, location, conflict_marker
+                        );
                     }
                 }
             }
         }
         _ => {
-            // Top-level primitive
             let value_str = format_value(&value.inner);
             let source = value.source.as_str();
             let location = format_location(&value.location);
-            println!("{:<35} {:<25} {:<20} {:<20}", prefix, value_str, source, location);
+            println!(
+                "{:<35} {:<25} {:<20} {:<20}",
+                prefix, value_str, source, location
+            );
         }
     }
 }
@@ -360,17 +407,11 @@ fn format_value(value: &confers::value::ConfigValue) -> String {
 #[allow(dead_code)]
 fn cmd_validate(
     config_paths: &[PathBuf],
-    _env_file: &Option<PathBuf>,
     strict: bool,
-    _format: &str,
+    format: &str,
 ) -> Result<()> {
     use confers::ConfigBuilder;
 
-    println!("Configuration Validation");
-    println!("=======================");
-    println!();
-
-    // Build configuration
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
     for config_path in config_paths {
@@ -383,33 +424,59 @@ fn cmd_validate(
 
     match builder.build_annotated() {
         Ok(annotated_config) => {
-            println!("✓ Configuration loaded successfully");
-
-            // Basic validation: check for required keys and types
             let mut issues = Vec::new();
 
             if let confers::value::ConfigValue::Map(map) = &annotated_config.inner {
-                // Check for common required keys
                 check_required_keys(map, &mut issues);
-                // Check for type consistency
                 check_types(map, &mut issues);
             }
 
-            if !issues.is_empty() {
-                println!("\n✗ Found {} validation issue(s):", issues.len());
-                for issue in &issues {
-                    println!("  - {}", issue);
+            match format {
+                "json" => {
+                    let result = serde_json::json!({
+                        "valid": issues.is_empty(),
+                        "issues": issues,
+                        "config_path": config_paths.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>()
+                    });
+                    println!("{}", serde_json::to_string_pretty(&result)?);
                 }
+                _ => {
+                    println!("Configuration Validation");
+                    println!("=======================");
+                    println!();
+                    println!("✓ Configuration loaded successfully");
 
-                if strict {
-                    anyhow::bail!("Validation failed with {} issue(s)", issues.len());
+                    if !issues.is_empty() {
+                        println!("\n✗ Found {} validation issue(s):", issues.len());
+                        for issue in &issues {
+                            println!("  - {}", issue);
+                        }
+
+                        if strict {
+                            anyhow::bail!("Validation failed with {} issue(s)", issues.len());
+                        }
+                    } else {
+                        println!("✓ All validation checks passed");
+                    }
                 }
-            } else {
-                println!("✓ All validation checks passed");
             }
         }
         Err(e) => {
-            println!("✗ Configuration error: {}", e);
+            match format {
+                "json" => {
+                    let result = serde_json::json!({
+                        "valid": false,
+                        "error": e.to_string()
+                    });
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                }
+                _ => {
+                    println!("Configuration Validation");
+                    println!("=======================");
+                    println!();
+                    println!("✗ Configuration error: {}", e);
+                }
+            }
             anyhow::bail!("Validation failed");
         }
     }
@@ -418,7 +485,10 @@ fn cmd_validate(
 }
 
 /// Check for required configuration keys
-fn check_required_keys(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
+fn check_required_keys(
+    obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>,
+    issues: &mut Vec<String>,
+) {
     // Check for server configuration
     if let Some(server) = obj.get("server") {
         if let confers::value::ConfigValue::Map(server_map) = &server.inner {
@@ -472,72 +542,113 @@ fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut 
 #[allow(dead_code)]
 fn cmd_export(
     config_paths: &[PathBuf],
-    _env_file: &Option<PathBuf>,
     format: &str,
     output: Option<PathBuf>,
-    _with_provenance: bool,
-    _raw: bool,
+    with_provenance: bool,
+    raw: bool,
 ) -> Result<()> {
     use chrono::Utc;
     use confers::ConfigBuilder;
 
-    // Build configuration
-    let mut builder = ConfigBuilder::<serde_json::Value>::new();
-
-    for config_path in config_paths {
-        if config_path.exists() {
-            builder = builder.file(config_path.to_string_lossy().as_ref());
-        }
+    if raw {
+        eprintln!("⚠️  警告: 使用 --raw 选项将导出未脱敏的敏感数据！");
+        eprintln!("   请确保输出目标安全，避免泄露密码、密钥等敏感信息。");
+        eprintln!();
     }
 
-    builder = builder.env();
+    if with_provenance {
+        let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
-    let config = builder.build()?;
+        for config_path in config_paths {
+            if config_path.exists() {
+                builder = builder.file(config_path.to_string_lossy().as_ref());
+            }
+        }
 
-    // Determine output
-    let output_path: Option<PathBuf> = if let Some(output_path) = &output {
-        if output_path.is_dir() {
-            let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-            let filename = format!("config-{}.json", timestamp);
-            Some(output_path.join(filename))
+        builder = builder.env();
+
+        let annotated_config = builder.build_annotated()?;
+
+        let output_path: Option<PathBuf> = if let Some(output_path) = &output {
+            if output_path.is_dir() {
+                let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                let filename = format!("config-annotated-{}.json", timestamp);
+                Some(output_path.join(filename))
+            } else {
+                Some(output_path.clone())
+            }
         } else {
-            Some(output_path.clone())
+            None
+        };
+
+        let formatted = match format {
+            "json" => serde_json::to_string_pretty(&annotated_config)?,
+            "toml" => toml::to_string_pretty(&annotated_config)?,
+            "yaml" => serde_yaml_ng::to_string(&annotated_config)?,
+            _ => anyhow::bail!("Unsupported format: {}", format),
+        };
+
+        if let Some(path) = output_path {
+            std::fs::write(&path, formatted)?;
+            println!("Exported annotated configuration to: {}", path.display());
+        } else {
+            println!("{}", formatted);
         }
     } else {
-        None
-    };
+        let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
-    // Format output
-    let formatted = match format {
-        "json" => serde_json::to_string_pretty(&config)?,
-        "toml" => toml::to_string_pretty(&config)?,
-        "yaml" => serde_yaml_ng::to_string(&config)?,
-        _ => anyhow::bail!("Unsupported format: {}", format),
-    };
+        for config_path in config_paths {
+            if config_path.exists() {
+                builder = builder.file(config_path.to_string_lossy().as_ref());
+            }
+        }
 
-    if let Some(path) = output_path {
-        std::fs::write(&path, formatted)?;
-        println!("Exported configuration to: {}", path.display());
-    } else {
-        println!("{}", formatted);
+        builder = builder.env();
+
+        let config = builder.build()?;
+
+        let output_path: Option<PathBuf> = if let Some(output_path) = &output {
+            if output_path.is_dir() {
+                let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                let filename = format!("config-{}.json", timestamp);
+                Some(output_path.join(filename))
+            } else {
+                Some(output_path.clone())
+            }
+        } else {
+            None
+        };
+
+        let formatted = match format {
+            "json" => serde_json::to_string_pretty(&config)?,
+            "toml" => toml::to_string_pretty(&config)?,
+            "yaml" => serde_yaml_ng::to_string(&config)?,
+            _ => anyhow::bail!("Unsupported format: {}", format),
+        };
+
+        if let Some(path) = output_path {
+            std::fs::write(&path, formatted)?;
+            println!("Exported configuration to: {}", path.display());
+        } else {
+            println!("{}", formatted);
+        }
     }
 
     Ok(())
 }
 
 /// Diff two configurations
-fn cmd_diff(base: &PathBuf, overlay: &PathBuf) -> Result<()> {
+fn cmd_diff(base: &PathBuf, overlay: &PathBuf, format: &str, sanitize: bool) -> Result<()> {
     use confers::loader;
 
     println!("Configuration Diff");
     println!("=================");
     println!();
 
-    // Load base configuration
     let base_content = std::fs::read_to_string(base)
         .with_context(|| format!("Failed to read base config: {}", base.display()))?;
 
-    let _base_value = loader::parse_content(
+    let base_value = loader::parse_content(
         &base_content,
         loader::detect_format_from_path(base)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for base config"))?,
@@ -545,11 +656,10 @@ fn cmd_diff(base: &PathBuf, overlay: &PathBuf) -> Result<()> {
         Some(base),
     )?;
 
-    // Load overlay configuration
     let overlay_content = std::fs::read_to_string(overlay)
         .with_context(|| format!("Failed to read overlay config: {}", overlay.display()))?;
 
-    let _overlay_value = loader::parse_content(
+    let overlay_value = loader::parse_content(
         &overlay_content,
         loader::detect_format_from_path(overlay)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for overlay config"))?,
@@ -560,18 +670,43 @@ fn cmd_diff(base: &PathBuf, overlay: &PathBuf) -> Result<()> {
     println!("{} vs {}", base.display(), overlay.display());
     println!();
 
-    // Simple comparison
     if base_content == overlay_content {
         println!("Configurations are identical");
-    } else {
-        println!("Configurations differ");
-        println!("\nBase ({}):", base.display());
-        for (i, line) in base_content.lines().take(20).enumerate() {
-            println!("{:3}: {}", i + 1, line);
+        return Ok(());
+    }
+
+    match format {
+        "json" => {
+            let diff_result = serde_json::json!({
+                "base": {
+                    "file": base.to_string_lossy(),
+                    "value": base_value
+                },
+                "overlay": {
+                    "file": overlay.to_string_lossy(),
+                    "value": overlay_value
+                },
+                "identical": false,
+                "sanitize": sanitize
+            });
+            println!("{}", serde_json::to_string_pretty(&diff_result)?);
         }
-        println!("\nOverlay ({}):", overlay.display());
-        for (i, line) in overlay_content.lines().take(20).enumerate() {
-            println!("{:3}: {}", i + 1, line);
+        _ => {
+            println!("Configurations differ");
+            println!("\nBase ({}):", base.display());
+            for (i, line) in base_content.lines().take(20).enumerate() {
+                println!("{:3}: {}", i + 1, line);
+            }
+            println!("\nOverlay ({}):", overlay.display());
+            for (i, line) in overlay_content.lines().take(20).enumerate() {
+                println!("{:3}: {}", i + 1, line);
+            }
+
+            let diff = similar::TextDiff::from_lines(&base_content, &overlay_content);
+            println!("\nUnified Diff:");
+            for change in diff.iter_all_changes() {
+                print!("{}", change);
+            }
         }
     }
 
@@ -628,7 +763,7 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
     let mut snapshots: Vec<_> = entries.into_iter().collect();
     snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
 
-    for entry in snapshots.iter().take(10) {
+    for entry in snapshots.iter().take(DEFAULT_SNAPSHOT_DISPLAY_LIMIT) {
         let filename = entry.file_name();
         let path = entry.path();
         let ext = path
@@ -677,10 +812,13 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     let mut snapshots: Vec<_> = entries.into_iter().collect();
     snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
 
-    let first = snapshots.first().unwrap();
+    let first = snapshots
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("No snapshots found after sorting"))?;
     let second = snapshots
         .get(count - 1)
-        .unwrap_or(snapshots.get(1).unwrap());
+        .or_else(|| snapshots.get(1))
+        .ok_or_else(|| anyhow::anyhow!("Not enough snapshots to compare"))?;
 
     let content1 = std::fs::read_to_string(first.path())?;
     let content2 = std::fs::read_to_string(second.path())?;

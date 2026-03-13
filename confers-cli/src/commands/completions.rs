@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use crate::error::ConfigError;
+use confers::ConfigError;
 use clap::CommandFactory;
 use clap_complete::{generate, Shell};
 use std::io;
