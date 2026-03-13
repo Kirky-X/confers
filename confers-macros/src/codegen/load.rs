@@ -98,7 +98,7 @@ fn generate_load_method(
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Warning: Invalid secret file path '{}': {}", file_path, e);
+                                eprintln!("Warning: Invalid secret file path detected, skipping file source");
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
@@ -198,7 +198,7 @@ fn generate_load_sync_method(
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Warning: Invalid secret file path '{}': {}", file_path, e);
+                                eprintln!("Warning: Invalid secret file path detected, skipping file source");
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {

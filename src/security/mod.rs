@@ -288,8 +288,17 @@ impl EnvSecurityValidator {
     /// Validate an environment variable value
     pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
         // Skip validation for encrypted values
+        // Note: This allows values starting with "enc:" to bypass validation.
+        // Users must ensure encrypted values are properly formatted and come from trusted sources.
+        // The validation is skipped because encrypted values are assumed to be safe after decryption.
         if self.config.allow_encrypted_values && value.starts_with("enc:") {
-            return Ok(());
+            // Additional validation: ensure the encrypted value has valid format
+            if value.len() > 4 {
+                return Ok(());
+            }
+            return Err(EnvSecurityError::InvalidValueFormat {
+                reason: "Encrypted value too short".to_string(),
+            });
         }
 
         // Early return if blocked patterns check is disabled

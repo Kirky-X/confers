@@ -221,6 +221,8 @@ impl InputValidator {
             Regex::new(r"\.\.[/\\]").unwrap(),      // ../ or ..\
             Regex::new(r"[/\\]\.\.[/\\]").unwrap(), // /../ or \..\
             // SQL 注入检测
+            // 注意：这是纵深防御措施，主要的 SQL 注入防护应在数据库层通过参数化查询实现
+            // 此处检测用于在配置层捕获明显的注入尝试，作为额外安全层
             Regex::new(r"(?i)(;?\s*(drop|delete|update|insert|alter|create)\b)").unwrap(),
             Regex::new(r"(?i)(union\s+select\b)").unwrap(),
             Regex::new(r"(?i)'+\s*(or|and)\b").unwrap(),

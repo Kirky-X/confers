@@ -44,7 +44,7 @@ fn load_env_file(path: &PathBuf) -> Result<()> {
             };
 
             if std::env::var(key).is_err() {
-                unsafe { std::env::set_var(key, value) };
+                std::env::set_var(key, value);
             }
         }
     }
