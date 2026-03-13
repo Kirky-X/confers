@@ -25,7 +25,11 @@ fn create_nested_config(depth: usize, width: usize, path: &str) -> AnnotatedValu
         let value = create_nested_config(depth - 1, width, &child_path);
         map.insert(Arc::from(key), value);
     }
-    AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("bench"), path)
+    AnnotatedValue::new(
+        ConfigValue::Map(Arc::new(map)),
+        SourceId::new("bench"),
+        path,
+    )
 }
 
 fn bench_merge_shallow(c: &mut Criterion) {
@@ -86,7 +90,8 @@ fn bench_merge_strategies(c: &mut Criterion) {
 
     group.bench_function("join", |b| {
         b.iter(|| {
-            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Join { separator: "," });
+            let engine =
+                MergeEngine::new().with_default_strategy(MergeStrategy::Join { separator: "," });
             engine.merge(black_box(&base), black_box(&override_val))
         });
     });

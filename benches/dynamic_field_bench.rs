@@ -30,7 +30,11 @@ fn bench_dynamic_field_register(c: &mut Criterion) {
 fn bench_dynamic_field_disabled(_c: &mut Criterion) {}
 
 #[cfg(feature = "dynamic")]
-criterion_group!(benches, bench_dynamic_field_get, bench_dynamic_field_register);
+criterion_group!(
+    benches,
+    bench_dynamic_field_get,
+    bench_dynamic_field_register
+);
 
 #[cfg(not(feature = "dynamic"))]
 criterion_group!(benches, bench_dynamic_field_disabled);
