@@ -237,6 +237,8 @@ impl EnvSource {
     }
 
     /// Validate file path for security (prevent path traversal).
+    /// Note: This method is reserved for future use with file-based secret loading.
+    #[allow(dead_code)]
     fn validate_file_path(&self, file_path: &str) -> ConfigResult<()> {
         // Skip empty file paths
         if file_path.is_empty() {
