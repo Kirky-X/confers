@@ -1,134 +1,134 @@
-# Confers Config 宏完整使用指南
+# Confers Config Macro Complete Usage Guide
 
-## 概述
+## Overview
 
-`#[derive(Config)]` 是 Confers 库的核心宏，它为 Rust 结构体自动生成完整的配置管理功能。该宏位于 `macros/src/lib.rs`，结合 `codegen.rs` 和 `parse.rs` 实现代码生成。
+`#[derive(Config)]` is the core macro of the Confers library. It automatically generates complete configuration management functionality for Rust structs. This macro is located in `macros/src/lib.rs` and implements code generation through `codegen.rs` and `parse.rs`.
 
 ---
 
-## 一、结构体级别属性
+## 1. Struct-Level Attributes
 
-### 1.1 启用验证
+### 1.1 Enable Validation
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]  // 启用配置验证
+#[config(validate)]  // Enable configuration validation
 pub struct AppConfig {
     pub name: String,
     pub port: u16,
 }
 ```
 
-**效果**：
-- 自动实现 `validator::Validate` trait
-- 调用 `config.validate()` 时会验证所有字段
+**Effects**:
+- Automatically implements the `validator::Validate` trait
+- Validates all fields when `config.validate()` is called
 
 ---
 
-### 1.2 环境变量前缀
+### 1.2 Environment Variable Prefix
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(env_prefix = "APP_")]  // 读取 APP_NAME, APP_PORT 等
+#[config(env_prefix = "APP_")]  // Reads APP_NAME, APP_PORT, etc.
 pub struct AppConfig {
     pub name: String,
     pub port: u16,
 }
 ```
 
-**效果**：
-- 环境变量读取时添加前缀
-- 例如：`APP_NAME=myapp` 会映射到 `name` 字段
+**Effects**:
+- Adds a prefix when reading environment variables
+- Example: `APP_NAME=myapp` maps to the `name` field
 
 ---
 
-### 1.3 应用名称
+### 1.3 Application Name
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(app_name = "myapp")]  // 配置目录名称
+#[config(app_name = "myapp")]  // Configuration directory name
 pub struct AppConfig {
     pub name: String,
 }
 ```
 
-**效果**：
-- 指定搜索配置文件时的目录名称
-- 会搜索 `~/.config/myapp/`、`/etc/myapp/` 等路径
+**Effects**:
+- Specifies the directory name when searching for configuration files
+- Searches paths like `~/.config/myapp/`, `/etc/myapp/`, etc.
 
 ---
 
-### 1.4 严格模式
+### 1.4 Strict Mode
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(strict = true)]  // CLI 参数解析错误时退出
+#[config(strict = true)]  // Exit on CLI argument parsing errors
 pub struct AppConfig {
     pub name: String,
 }
 ```
 
-**效果**：
-- CLI 参数解析失败时返回错误
-- 非严格模式下会忽略错误
+**Effects**:
+- Returns an error when CLI argument parsing fails
+- Non-strict mode ignores errors
 
 ---
 
-### 1.5 文件监控（热重载）
+### 1.5 File Watching (Hot Reload)
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(watch = true)]  // 启用文件监控
+#[config(watch = true)]  // Enable file watching
 pub struct AppConfig {
     #[config(default = 8080)]
     pub port: u16,
 }
 ```
 
-**效果**：
-- 需要启用 `watch` 特性
-- 可使用 `load_with_watcher()` 方法获取 watcher
+**Effects**:
+- Requires the `watch` feature to be enabled
+- Use `ConfigBuilder::build_with_watcher()` to get a watcher
 
 ---
 
-### 1.6 格式检测模式
+### 1.6 Configuration Version
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(format_detection = "ByContent")]  // 按内容检测
+#[config(version = 2)]  // Configuration version for migrations
 pub struct AppConfig {
     pub name: String,
 }
 ```
 
-**可选值**：
-- `ByContent`：根据文件内容检测
-- `ByExtension`：根据扩展名检测
+**Effects**:
+- Used with configuration migrations
+- Enables version tracking for schema evolution
 
 ---
 
-### 1.7 审计日志
+### 1.7 Profile Overlay
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(audit_log = true)]  // 启用审计日志
-#[config(audit_log_path = "/var/log/config.log")]  // 审计日志路径
+#[config(profile)]  // Enable profile overlay
+#[config(profile_env = "APP_ENV")]  // Profile environment variable
 pub struct AppConfig {
     pub name: String,
 }
 ```
 
-**效果**：
-- 需要启用 `audit` 特性
-- 记录配置加载过程到指定文件
+**Effects**:
+- Enables loading profile-specific configuration files
+- Profile determined by `profile_env` environment variable
 
 ---
 
-## 二、字段级别属性
+## 2. Field-Level Attributes
 
-### 2.1 默认值
+### 2.1 Default Values
 
-**方式一：新语法（推荐）**
+**Method 1: New Syntax (Recommended)**
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct AppConfig {
@@ -146,7 +146,7 @@ pub struct AppConfig {
 }
 ```
 
-**方式二：字符串类型旧语法**
+**Method 2: Old Syntax for String Types**
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct AppConfig {
@@ -155,62 +155,62 @@ pub struct AppConfig {
 }
 ```
 
-**效果**：
-- 当配置文件中没有该字段时使用默认值
-- 自动实现 `Default` trait
+**Effects**:
+- Uses default value when the field is missing from the configuration file
+- Automatically implements the `Default` trait
 
 ---
 
-### 2.2 字段描述
+### 2.2 Field Description
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct AppConfig {
-    #[config(description = "服务器端口号")]
+    #[config(description = "Server port number")]
     pub port: u16,
     
-    #[config(description = "数据库连接URL")]
+    #[config(description = "Database connection URL")]
     pub database_url: String,
 }
 ```
 
-**效果**：
-- 生成 CLI 帮助信息
-- 用于 JSON Schema 生成
+**Effects**:
+- Generates CLI help information
+- Used for JSON Schema generation
 
 ---
 
-### 2.3 配置名称映射
+### 2.3 Configuration Name Mapping
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct AppConfig {
-    #[config(name = "app_name")]  // 配置文件中使用 app_name
+    #[config(name = "app_name")]  // Use app_name in configuration file
     pub name: String,
 }
 ```
 
-**效果**：
-- 字段名为 `name`，但配置键为 `app_name`
+**Effects**:
+- Field name is `name`, but configuration key is `app_name`
 
 ---
 
-### 2.4 环境变量名称映射
+### 2.4 Environment Variable Name Mapping
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP")]
 pub struct AppConfig {
-    #[config(name_env = "CUSTOM_PORT")]  // 读取 APP_CUSTOM_PORT
+    #[config(name_env = "CUSTOM_PORT")]  // Reads APP_CUSTOM_PORT
     pub port: u16,
 }
 ```
 
-**优先级**：`name_env` > 自动推导
+**Priority**: `name_env` > Auto-derived
 
 ---
 
-### 2.5 CLI 参数名称
+### 2.5 CLI Argument Names
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -223,64 +223,59 @@ pub struct AppConfig {
 }
 ```
 
-**效果**：
-- CLI 参数：`--server-port` 或 `-p`
+**Effects**:
+- CLI arguments: `--server-port` or `-p`
 
 ---
 
-### 2.6 验证规则
+### 2.6 Validation Rules
 
-**范围验证**
+Confers uses the `garde` validation library. To enable validation, derive `garde::Validate` and add validation attributes to fields:
+
+**Range Validation**
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+use confers::Config;
+use garde::Validate;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(validate)]
 pub struct AppConfig {
-    #[config(validate = "range(min = 1, max = 65535)")]
+    #[garde(range(min = 1, max = 65535))]
     pub port: u16,
     
-    #[config(validate = "range(min = 0, max = 100)")]
+    #[garde(range(min = 0, max = 100))]
     pub rate: i32,
 }
 ```
 
-**长度验证**
+**Length Validation**
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(validate)]
 pub struct AppConfig {
-    #[config(validate = "length(min = 3, max = 50)")]
+    #[garde(length(min = 3, max = 50))]
     pub username: String,
 }
 ```
 
-**内置验证器**
+**Built-in Validators**
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(validate)]
 pub struct AppConfig {
-    #[config(validate = "email")]
+    #[garde(email)]
     pub email: String,
     
-    #[config(validate = "url")]
+    #[garde(url)]
     pub website: String,
 }
 ```
 
-**自定义验证器**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct AppConfig {
-    #[config(validate = "custom:my_validator")]
-    pub field: String,
-}
-
-// 需要实现对应的验证函数
-```
+**Note:** The `#[config(validate)]` attribute enables validation during build, but the actual validation rules are specified using `#[garde(...)]` attributes from the `garde` crate.
 
 ---
 
-### 2.7 敏感字段
+### 2.7 Sensitive Fields
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -293,13 +288,13 @@ pub struct AppConfig {
 }
 ```
 
-**效果**：
-- 审计日志中自动掩码处理
-- 不会明文输出敏感信息
+**Effects**:
+- Automatically masked in audit logs
+- Sensitive information is not output in plain text
 
 ---
 
-### 2.8 扁平化字段
+### 2.8 Flattened Fields
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -317,11 +312,11 @@ pub struct AppConfig {
 }
 ```
 
-**效果**：
-- 嵌套结构的字段会被提升到顶层
-- 支持 `database.host` 和 `database_host` 两种访问方式
+**Effects**:
+- Fields of nested structures are promoted to the top level
+- Supports both `database.host` and `database_host` access methods
 
-**与 serde 集成**
+**Integration with serde**
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NestedConfig {
@@ -337,7 +332,7 @@ pub struct InnerConfig {
 
 ---
 
-### 2.9 跳过字段
+### 2.9 Skip Fields
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -345,82 +340,184 @@ pub struct AppConfig {
     pub name: String,
     
     #[config(skip)]
-    pub temp_field: String,  // 不会从配置加载
+    pub temp_field: String,  // Will not be loaded from configuration
 }
 ```
 
-**效果**：
-- 该字段不会从配置文件加载
-- 使用结构体默认值
+**Effects**:
+- This field will not be loaded from the configuration file
+- Uses the struct's default value
 
 ---
 
-## 三、综合示例
+### 2.10 Encrypted Fields
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct AppConfig {
+    #[config(encrypt = "xchacha20")]
+    pub database_password: String,
+    
+    #[config(encrypt = "xchacha20")]
+    pub api_key: String,
+}
+```
+
+**Effects**:
+- Field value is automatically decrypted when loaded
+- Requires the `encryption` feature to be enabled
+- Uses XChaCha20-Poly1305 encryption algorithm
+
+---
+
+### 2.11 Interpolation
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct AppConfig {
+    #[config(interpolate)]
+    pub database_url: String,  // Supports ${VAR} syntax
+}
+```
+
+**Effects**:
+- Enables variable interpolation for this field
+- Supports `${VAR}` and `${VAR:-default}` syntax
+- Requires the `interpolation` feature
+
+---
+
+### 2.12 Merge Strategy
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct AppConfig {
+    #[config(merge_strategy = "append")]
+    pub hosts: Vec<String>,
+    
+    #[config(merge_strategy = "deep_merge")]
+    pub settings: HashMap<String, String>,
+}
+```
+
+**Available Strategies**:
+- `replace`: Replace existing value (default)
+- `append`: Append to arrays
+- `prepend`: Prepend to arrays
+- `join`: Join array values
+- `deep_merge`: Deep merge maps
+
+---
+
+### 2.13 Dynamic Fields
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct AppConfig {
+    #[config(dynamic)]
+    pub feature_flags: HashMap<String, bool>,
+}
+```
+
+**Effects**:
+- Generates a `DynamicField` handle for runtime updates
+- Requires the `dynamic` feature
+- Enables hot-reloadable configuration sections
+
+---
+
+### 2.14 Module Groups
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+pub struct AppConfig {
+    #[config(module_group = "database")]
+    pub db_host: String,
+    
+    #[config(module_group = "database")]
+    pub db_port: u16,
+}
+```
+
+**Effects**:
+- Groups related fields for modular configuration
+- Enables module-level reload and validation
+- Requires the `modules` feature
+
+---
+
+## 3. Comprehensive Example
 
 ```rust
 use confers::Config;
+use garde::Validate;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(
-    validate,                                    // 启用验证
-    env_prefix = "APP_",                         // 环境变量前缀
-    app_name = "myapp",                         // 应用名称
-    strict = false,                              // 非严格模式
-    watch = false,                               // 不监控文件变化
-    format_detection = "ByExtension",          // 按扩展名检测格式
-    audit_log = false,                           // 不启用审计
+    validate,                                    // Enable validation
+    env_prefix = "APP_",                         // Environment variable prefix
+    app_name = "myapp",                         // Application name
+    strict = false,                              // Non-strict mode
+    watch = false,                               // Don't watch file changes
+    version = 1,                                 // Configuration version
 )]
 pub struct AppConfig {
-    // ============ 基础类型 ============
-    #[config(description = "应用名称")]
+    // ============ Basic Types ============
+    #[config(description = "Application name")]
     pub name: String,
     
-    #[config(default = 8080, description = "服务端口")]
+    #[config(default = 8080, description = "Server port")]
     pub port: u16,
     
-    #[config(default = false, description = "调试模式")]
+    #[config(default = false, description = "Debug mode")]
     pub debug: bool,
     
-    // ============ 字符串类型 ============
-    #[config(default = "\"localhost\".to_string()", description = "服务器主机")]
+    // ============ String Types ============
+    #[config(default = "\"localhost\".to_string()", description = "Server host")]
     pub host: String,
     
-    // ============ 验证规则 ============
-    #[config(
-        validate = "range(min = 1, max = 65535)",
-        description = "端口范围"
-    )]
+    // ============ Validation Rules (using garde) ============
+    #[garde(range(min = 1, max = 65535))]
+    #[config(description = "Admin port")]
     pub admin_port: u16,
     
-    #[config(
-        validate = "length(min = 3, max = 100)",
-        description = "用户名长度"
-    )]
+    #[garde(length(min = 3, max = 100))]
+    #[config(description = "Username")]
     pub username: String,
     
-    #[config(validate = "email", description = "邮箱地址")]
+    #[garde(email)]
+    #[config(description = "Email address")]
     pub email: String,
     
-    #[config(validate = "url", description = "网站URL")]
+    #[garde(url)]
+    #[config(description = "Website URL")]
     pub website: String,
     
-    // ============ 敏感字段 ============
-    #[config(sensitive = true, description = "数据库密码")]
+    // ============ Sensitive Fields ============
+    #[config(sensitive = true, description = "Database password")]
     pub db_password: String,
     
-    #[config(sensitive = true, description = "API密钥")]
+    #[config(sensitive = true, description = "API key")]
     pub api_key: String,
     
-    // ============ 自定义映射 ============
-    #[config(name_env = "CUSTOM_DATABASE_URL", description = "数据库连接")]
+    // ============ Encrypted Fields ============
+    #[config(encrypt = "xchacha20", description = "Secret token")]
+    pub secret_token: String,
+    
+    // ============ Interpolation ============
+    #[config(interpolate, description = "Database URL")]
     pub database_url: String,
     
-    // ============ 嵌套配置 ============
-    #[config(flatten, description = "数据库配置")]
+    // ============ Custom Mapping ============
+    #[config(name_env = "CUSTOM_DATABASE_URL", description = "Custom database URL")]
+    pub custom_db_url: String,
+    
+    // ============ Nested Configuration ============
+    #[config(flatten, description = "Database configuration")]
     pub database: DatabaseConfig,
     
-    // ============ 跳过字段 ============
+    // ============ Skip Fields ============
     #[config(skip)]
     pub runtime_data: String,
 }
@@ -435,70 +532,72 @@ pub struct DatabaseConfig {
 
 ---
 
-## 四、自动生成的方法
+## 4. Auto-Generated Methods
 
-使用 `#[derive(Config)]` 宏后，结构体会自动获得以下方法：
+After using the `#[derive(Config)]` macro, the struct automatically gains the following methods:
 
-### 4.1 加载方法
+### 4.1 Configuration Builder
 
 ```rust
-// 异步加载
-let config = AppConfig::load()?;
+use confers::ConfigBuilder;
 
-// 同步加载
-let config = AppConfig::load_sync()?;
+// Basic loading with ConfigBuilder
+let config = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .env()
+    .build()?;
 
-// 带观察者的加载
-let (config, watcher) = AppConfig::load_with_watcher()?;
+// With environment prefix
+let config = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .env_prefix("APP_")
+    .build()?;
 
-// 从指定文件加载
-let loader = AppConfig::load_file("config.toml");
-let config = loader.load()?;
-
-// 使用自定义 CLI 参数
-let config = AppConfig::load_from_args(vec!["--name", "test"])?;
+// With hot reload (requires watch feature)
+let (rx, guard) = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .watch(true)
+    .build_with_watcher().await?;
 ```
 
-### 4.2 配置加载器
+### 4.2 Helper Functions
 
 ```rust
-let loader = AppConfig::new_loader();
-let loader = AppConfig::load_with_strict(true);
+// Convenient config() function
+let config = confers::config::<AppConfig>()
+    .file("config.toml")
+    .env()
+    .build()?;
 ```
 
-### 4.3 Schema 生成
+### 4.3 Schema Generation
 
 ```rust
-// 生成 JSON Schema
+// Generate JSON Schema (requires schema feature)
+// Note: Requires deriving ConfigSchema
 let schema = AppConfig::json_schema();
 
-// 生成 TypeScript 类型
-let ts_schema = AppConfig::typescript_schema();
-
-// 导出到文件
-AppConfig::export_schema("schema.json")?;
+// Generate TypeScript types (requires typescript-schema feature)
+let ts_type = AppConfig::typescript_type();
 ```
 
-### 4.4 其他方法
+### 4.4 Other Methods
 
 ```rust
-// 转换为 Map
-let map = config.to_map();
-
-// 获取默认值
+// Get default values
 let default = AppConfig::default();
 
-// 配置映射
-let env_map = AppConfig::env_mapping();
+// Access configuration values
+let value = config.some_field;
 ```
 
 ---
 
-## 五、完整使用示例
+## 5. Complete Usage Examples
 
-### 5.1 基础使用
+### 5.1 Basic Usage
 
-**定义配置结构体**
+**Define Configuration Struct**
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
@@ -517,17 +616,22 @@ pub struct ServerConfig {
 }
 ```
 
-**创建配置文件 `config.toml`**
+**Create Configuration File `config.toml`**
 ```toml
 host = "0.0.0.0"
 port = 9000
 enabled = false
 ```
 
-**使用配置**
+**Use Configuration**
 ```rust
+use confers::ConfigBuilder;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ServerConfig::load()?;
+    let config = ConfigBuilder::<ServerConfig>::new()
+        .file("config.toml")
+        .env_prefix("APP_")
+        .build()?;
     
     println!("Host: {}", config.host);
     println!("Port: {}", config.port);
@@ -537,14 +641,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-**环境变量覆盖**
+**Environment Variable Override**
 ```bash
 export APP_PORT=3000
 export APP_ENABLED=true
 cargo run
 ```
 
-### 5.2 敏感配置加密
+### 5.2 Sensitive Configuration Encryption
 
 ```rust
 use confers::Config;
@@ -555,19 +659,18 @@ pub struct SecureConfig {
     #[config(sensitive = true)]
     pub password: String,
     
-    #[config(sensitive = true)]
+    #[config(encrypt = "xchacha20")]
     pub api_secret: String,
 }
 ```
 
-**加密值格式**：
-```
-password = "enc:AES256GCM:base64nonce:base64ciphertext"
-```
+**Encryption uses XChaCha20-Poly1305 algorithm. Store nonce alongside ciphertext.**
 
-### 5.3 热重载
+### 5.3 Hot Reload
 
 ```rust
+use confers::ConfigBuilder;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -577,19 +680,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pub port: u16,
     }
     
-    let (config, watcher) = HotReloadConfig::load_with_watcher().await?;
+    let (rx, guard) = ConfigBuilder::<HotReloadConfig>::new()
+        .file("config.toml")
+        .watch(true)
+        .build_with_watcher().await?;
     
-    if let Some(mut w) = watcher {
-        tokio::spawn(async move {
-            loop {
-                if let Ok(_) = w.rx.recv() {
-                    println!("配置文件已变更，重新加载配置...");
-                }
-            }
-        });
-    }
+    let config = rx.borrow().clone();
+    println!("Initial port: {}", config.port);
     
-    // 应用运行...
+    // Application running...
+    // When config file changes, rx will receive updates
     
     Ok(())
 }
@@ -597,147 +697,175 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-## 六、属性汇总表
+## 6. Attribute Summary Table
 
-| 属性 | 位置 | 作用 |
-|------|------|------|
-| `validate` | 结构体 | 启用配置验证 |
-| `env_prefix` | 结构体 | 环境变量前缀 |
-| `app_name` | 结构体 | 应用名称（配置目录） |
-| `strict` | 结构体 | 严格模式 |
-| `watch` | 结构体 | 启用文件监控 |
-| `format_detection` | 结构体 | 格式检测模式 |
-| `audit_log` | 结构体 | 启用审计日志 |
-| `audit_log_path` | 结构体 | 审计日志路径 |
-| `default` | 字段 | 默认值 |
-| `description` | 字段 | 字段描述 |
-| `name` | 字段 | 配置键名 |
-| `name_env` | 字段 | 环境变量名 |
-| `name_clap_long` | 字段 | CLI 长参数名 |
-| `name_clap_short` | 字段 | CLI 短参数名 |
-| `validate` | 字段 | 验证规则 |
-| `custom_validate` | 字段 | 自定义验证 |
-| `sensitive` | 字段 | 敏感字段标记 |
-| `flatten` | 字段 | 扁平化嵌套配置 |
-| `skip` | 字段 | 跳过该字段 |
+### Struct-Level Attributes
+
+| Attribute | Purpose |
+|-----------|---------|
+| `validate` | Enable configuration validation (requires garde::Validate derive) |
+| `env_prefix` | Environment variable prefix |
+| `app_name` | Application name (config directory) |
+| `strict` | Strict mode for CLI parsing |
+| `watch` | Enable file watching |
+| `version` | Configuration version for migrations |
+| `profile` | Enable profile overlay |
+| `profile_env` | Profile environment variable name |
+
+### Field-Level Attributes
+
+| Attribute | Purpose |
+|-----------|---------|
+| `default` | Default value expression |
+| `description` | Field description for documentation |
+| `name` | Configuration key name override |
+| `name_env` | Environment variable name override |
+| `name_clap_long` | CLI long argument name |
+| `name_clap_short` | CLI short argument character |
+| `sensitive` | Mark field as sensitive (hidden in logs) |
+| `encrypt` | Encryption algorithm (e.g., "xchacha20") |
+| `flatten` | Flatten nested configuration |
+| `skip` | Skip this field during loading |
+| `interpolate` | Enable variable interpolation |
+| `merge_strategy` | Merge strategy for multi-source |
+| `dynamic` | Generate DynamicField handle |
+| `module_group` | Group for modular configuration |
 
 ---
 
-## 七、验证规则详解
+## 7. Validation with Garde
 
-### 7.1 range 验证
+Validation is handled by the `garde` crate. Derive `garde::Validate` and use `#[garde(...)]` attributes:
+
+### 7.1 Range Validation
 
 ```rust
-#[config(validate = "range(min = 1, max = 65535)")]
+#[garde(range(min = 1, max = 65535))]
 pub port: u16,
 ```
 
-支持的数据类型：
+Supported data types:
 - u8, u16, u32, u64, u128, usize
 - i8, i16, i32, i64, i128, isize
 - f32, f64
 
-### 7.2 length 验证
+### 7.2 Length Validation
 
 ```rust
-#[config(validate = "length(min = 0, max = 100)")]
+#[garde(length(min = 0, max = 100))]
 pub username: String,
 ```
 
-支持：
-- 字符串长度
-- 数组长度
+Supports:
+- String length
+- Array length
 
-### 7.3 内置验证器
+### 7.3 Built-in Validators
 
-**email 验证**
+**email validation**
 ```rust
-#[config(validate = "email")]
+#[garde(email)]
 pub email: String,
 ```
 
-**url 验证**
+**url validation**
 ```rust
-#[config(validate = "url")]
+#[garde(url)]
 pub website: String,
 ```
 
-### 7.4 自定义验证
-
+**pattern validation**
 ```rust
-#[config(validate = "custom:my_function")]
-pub field: String,
+#[garde(pattern(r"^[A-Z]{2}\d{6}$"))]
+pub id_code: String,
 ```
 
-需要在代码中实现对应的验证函数。
+### 7.4 Custom Validation
+
+```rust
+#[garde(custom(my_validator))]
+pub field: String,
+
+fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
+    if value.contains("invalid") {
+        return Err(garde::Error::new("value contains invalid content"));
+    }
+    Ok(())
+}
+```
 
 ---
 
-## 八、特性依赖
+## 8. Feature Dependencies
 
-| 属性/方法 | 需要特性 |
-|-----------|----------|
+| Attribute/Method | Required Feature |
+|------------------|------------------|
 | `#[config(validate)]` | `validation` |
 | `#[config(watch = true)]` | `watch` |
-| `#[config(audit_log = true)]` | `audit` |
-| `AppConfig::json_schema()` | `schema` |
-| `AppConfig::typescript_schema()` | `schema` |
-| CLI 参数支持 | `cli` |
-| 加密支持 | `encryption` |
-| 远程配置 | `remote` |
+| `json_schema()` | `schema` |
+| `typescript_type()` | `typescript-schema` |
+| CLI argument support | `cli` |
+| Encryption support | `encryption` |
+| Remote configuration | `remote` |
+| Interpolation | `interpolation` |
+| Dynamic fields | `dynamic` |
+| Module groups | `modules` |
 
 ---
 
-## 九、最佳实践
+## 9. Best Practices
 
-### 9.1 推荐配置
+### 9.1 Recommended Configuration
 
 ```toml
 # Cargo.toml
 [dependencies]
 confers = { version = "0.2", features = ["recommended"] }
+garde = { version = "0.18", features = ["derive"] }
 ```
 
-`recommended` 特性包含：`derive`, `validation`
+The `recommended` feature includes: `toml`, `json`, `env`, `validation`
 
-### 9.2 开发环境配置
+### 9.2 Development Environment Configuration
 
 ```toml
 # Cargo.toml
 [dependencies]
 confers = { version = "0.2", features = ["dev"] }
+garde = { version = "0.18", features = ["derive"] }
 ```
 
-`dev` 特性包含：`derive`, `validation`, `cli`, `schema`, `audit`, `monitoring`, `tracing`
+The `dev` feature includes most features for development convenience.
 
-### 9.3 生产环境配置
+### 9.3 Production Environment Configuration
 
 ```toml
 # Cargo.toml
 [dependencies]
 confers = { version = "0.2", features = ["production"] }
+garde = { version = "0.18", features = ["derive"] }] }
 ```
 
-`production` 特性包含：`derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing`
+The `production` feature includes: `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing`
 
 ---
 
-## 十、故障排除
+## 10. Troubleshooting
 
-### 10.1 常见问题
+### 10.1 Common Issues
 
-**Q: 配置值没有正确加载？**
-A: 检查环境变量前缀是否正确，确认配置文件格式是否匹配。
+**Q: Configuration values not loading correctly?**
+A: Check if the environment variable prefix is correct, and confirm the configuration file format matches.
 
-**Q: 验证失败但不知道原因？**
-A: 使用 `strict = true` 模式查看详细错误信息。
+**Q: Validation failed but don't know why?**
+A: Use `strict = true` mode to see detailed error messages.
 
-**Q: 敏感字段在日志中泄露？**
-A: 确保使用 `sensitive = true` 属性标记敏感字段。
+**Q: Sensitive fields leaked in logs?**
+A: Make sure to mark sensitive fields with `sensitive = true` attribute.
 
-**Q: 热重载不生效？**
-A: 确保启用了 `watch` 特性，并且使用了 `load_with_watcher()` 方法。
+**Q: Hot reload not working?**
+A: Ensure the `watch` feature is enabled and you're using the `load_with_watcher()` method.
 
 ---
 
-*本文档基于 Confers v0.2.2 版本编写*
+*This document is based on Confers v0.3.0*

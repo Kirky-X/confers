@@ -3,44 +3,44 @@
 
 <img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
-# 📘 API 参考文档
+# 📘 API Reference Documentation
 
-[🏠 首页](../README.md) • [📖 用户指南](USER_GUIDE.md)
+[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md)
 
 ---
 
 </div>
 
-## 📋 目录
+## 📋 Table of Contents
 
 <details open style="padding:16px">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (click to expand)</summary>
 
-- [概述](#概述)
-- [核心 API](#核心-api)
-  - [配置加载器](#配置加载器)
-  - [密钥管理](#密钥管理)
-  - [加密功能](#加密功能)
-  - [配置差异比较](#配置差异比较)
-  - [架构生成](#架构生成)
-- [错误处理](#错误处理)
-- [类型定义](#类型定义)
-- [示例](#示例)
-- [最佳实践](#最佳实践)
-- [高级功能](#高级功能)
-- [性能优化](#性能优化)
-- [安全注意事项](#安全注意事项)
-- [故障排除](#故障排除)
+- [Overview](#overview)
+- [Core API](#core-api)
+  - [Configuration Loader](#configuration-loader)
+  - [Key Management](#key-management)
+  - [Encryption Functions](#encryption-functions)
+  - [Configuration Diff Comparison](#configuration-diff-comparison)
+  - [Schema Generation](#schema-generation)
+- [Error Handling](#error-handling)
+- [Type Definitions](#type-definitions)
+- [Examples](#examples)
+- [Best Practices](#best-practices)
+- [Advanced Features](#advanced-features)
+- [Performance Optimization](#performance-optimization)
+- [Security Considerations](#security-considerations)
+- [Troubleshooting](#troubleshooting)
 
 </details>
 
 ---
 
-## 概述
+## Overview
 
 <div align="center" style="margin: 24px 0">
 
-### 🎯 API 设计原则
+### 🎯 API Design Principles
 
 </div>
 
@@ -48,117 +48,119 @@
 <tr>
 <td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/easy.png" width="48" height="48"><br>
-<b style="color:#166534">简洁</b><br>
-<span style="color:#166534">直观易用</span>
+<b style="color:#166534">Simple</b><br>
+<span style="color:#166534">Intuitive and easy to use</span>
 </td>
 <td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
-<b style="color:#1E40AF">安全</b><br>
-<span style="color:#1E40AF">默认类型安全</span>
+<b style="color:#1E40AF">Secure</b><br>
+<span style="color:#1E40AF">Type-safe by default</span>
 </td>
 <td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/module.png" width="48" height="48"><br>
-<b style="color:#92400E">可组合</b><br>
-<span style="color:#92400E">轻松构建复杂工作流</span>
+<b style="color:#92400E">Composable</b><br>
+<span style="color:#92400E">Build complex workflows easily</span>
 </td>
 <td align="center" width="25%" style="padding: 16px">
 <img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
-<b style="color:#5B21B6">完善文档</b><br>
-<span style="color:#5B21B6">全面的文档支持</span>
+<b style="color:#5B21B6">Well Documented</b><br>
+<span style="color:#5B21B6">Comprehensive documentation support</span>
 </td>
 </tr>
 </table>
 
-### 📦 特性说明
+### 📦 Feature Description
 
 <div style="padding:16px; margin: 16px 0">
 
-confers 提供了灵活的特性配置，允许用户根据需求选择需要的功能：
+confers provides flexible feature configuration, allowing users to select the functionality they need:
 
-**特性预设：**
+**Feature Presets:**
 
-| 预设 | 特性 | 使用场景 |
-|------|------|----------|
-| <span style="color:#166534">minimal</span> | `env` | 最小依赖（仅环境变量） |
-| <span style="color:#1E40AF">recommended</span> | `toml` + `env` + `validation` | 推荐大多数应用 |
-| <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `profile` + `watch` + `migration` + `snapshot` + `dynamic` | 开发配置 |
-| <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `profile` + `metrics` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | 生产配置 |
-| <span style="color:#5B21B6">full</span> | 所有特性 | 完整功能集 |
+| Preset | Features | Use Case |
+|--------|----------|----------|
+| <span style="color:#166534">minimal</span> | `env` | Minimal dependencies (environment variables only) |
+| <span style="color:#1E40AF">recommended</span> | `toml` + `env` + `validation` | Recommended for most applications |
+| <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `profile` + `watch` + `migration` + `snapshot` + `dynamic` | Development configuration |
+| <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `profile` + `metrics` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | Production configuration |
+| <span style="color:#5B21B6">full</span> | All features | Complete feature set |
 
-**单独特性：**
+**Individual Features:**
 
-| 特性 | 描述 | 默认 |
-|------|------|------|
-| **格式支持** |||
-| `toml` | TOML 格式支持 | ✅ |
-| `json` | JSON 格式支持 | ✅ |
-| `yaml` | YAML 格式支持 | ❌ |
-| `ini` | INI 格式支持 | ❌ |
-| `env` | 环境变量支持 | ✅ |
-| **核心功能** |||
-| `validation` | 配置验证 (garde) | ✅ |
-| `watch` | 文件监控与热重载 | ❌ |
-| `encryption` | XChaCha20 加密 | ❌ |
-| `cli` | 命令行集成 | ❌ |
-| `schema` | JSON Schema 生成 | ❌ |
-| `typescript-schema` | TypeScript 类型生成 | ❌ |
-| `parallel` | 并行验证 | ❌ |
-| **安全** |||
-| `security` | 安全模块 | ❌ |
-| `key` | 密钥管理系统 | ❌ |
-| **高级功能** |||
-| `audit` | 审计日志 | ❌ |
-| `metrics` | 指标收集 | ❌ |
-| `dynamic` | 动态字段 | ❌ |
-| `progressive-reload` | 渐进式部署 | ❌ |
-| `migration` | 配置迁移 | ❌ |
-| `snapshot` | 快照回滚 | ❌ |
-| `profile` | 环境配置 | ❌ |
-| `interpolation` | 变量插值 | ❌ |
-| `tracing` | 分布式追踪 | ❌ |
-| **远程源** |||
-| `remote` | HTTP 轮询 | ❌ |
-| `etcd` | Etcd 集成 | ❌ |
-| `consul` | Consul 集成 | ❌ |
-| `cache-redis` | Redis 缓存 | ❌ |
-| **其他** |||
-| `config-bus` | 配置事件总线 | ❌ |
-| `context-aware` | 上下文感知配置 | ❌ |
-| `modules` | 模块化配置 | ❌ |
+| Feature | Description | Default |
+|---------|-------------|---------|
+| **Format Support** |||
+| `toml` | TOML format support | ✅ |
+| `json` | JSON format support | ✅ |
+| `yaml` | YAML format support | ❌ |
+| `ini` | INI format support | ❌ |
+| `env` | Environment variable support | ✅ |
+| **Core Features** |||
+| `validation` | Configuration validation (garde) | ✅ |
+| `watch` | File monitoring and hot reload | ❌ |
+| `encryption` | XChaCha20 encryption | ❌ |
+| `cli` | Command-line integration | ❌ |
+| `schema` | JSON Schema generation | ❌ |
+| `typescript-schema` | TypeScript type generation | ❌ |
+| `parallel` | Parallel validation | ❌ |
+| **Security** |||
+| `security` | Security module | ❌ |
+| `key` | Key management system | ❌ |
+| **Advanced Features** |||
+| `audit` | Audit logging | ❌ |
+| `metrics` | Metrics collection | ❌ |
+| `dynamic` | Dynamic fields | ❌ |
+| `progressive-reload` | Progressive deployment | ❌ |
+| `migration` | Configuration migration | ❌ |
+| `snapshot` | Snapshot rollback | ❌ |
+| `profile` | Environment configuration | ❌ |
+| `interpolation` | Variable interpolation | ❌ |
+| `tracing` | Distributed tracing | ❌ |
+| **Remote Sources** |||
+| `remote` | HTTP polling | ❌ |
+| `etcd` | Etcd integration | ❌ |
+| `consul` | Consul integration | ❌ |
+| `cache-redis` | Redis cache | ❌ |
+| **Others** |||
+| `config-bus` | Configuration event bus | ❌ |
+| `context-aware` | Context-aware configuration | ❌ |
+| `modules` | Modular configuration | ❌ |
 
-</div>> 💡 **提示**: 本 API 文档假设已启用 `full` 特性。如果使用其他特性组合，某些 API 可能不可用。
+</div>
+
+> 💡 **Tip**: This API documentation assumes the `full` feature is enabled. With other feature combinations, some APIs may not be available.
 
 ---
 
-## 核心 API
+## Core API
 
-### 配置加载器
+### Configuration Builder
 
-`ConfigLoader<T>` 是从多个来源加载和合并配置的核心组件，支持文件、环境变量、远程源等多种配置来源的智能合并。
+`ConfigBuilder<T>` is the core component for loading and merging configuration from multiple sources, supporting intelligent merging of files, environment variables, remote sources, and other configuration sources.
 
 <div align="center" style="margin: 24px 0">
 
-#### 🏗️ ConfigLoader 架构
+#### 🏗️ ConfigBuilder Architecture
 
 </div>
 
 ```mermaid
 graph TB
-    subgraph Sources ["📥 配置来源"]
-        A[📁 配置文件]
-        B[🌐 环境变量]
-        C[💻 CLI 参数]
-        D[☁️ 远程源]
+    subgraph Sources ["📥 Configuration Sources"]
+        A[📁 Config Files]
+        B[🌐 Environment Variables]
+        C[💻 CLI Arguments]
+        D[☁️ Remote Sources]
     end
     
-    subgraph Loader ["🔧 ConfigLoader"]
-        E[⚡ 智能合并]
-        F[✅ 验证]
-        G[🔄 热重载]
+    subgraph Loader ["🔧 ConfigBuilder"]
+        E[⚡ Smart Merging]
+        F[✅ Validation]
+        G[🔄 Hot Reload]
     end
     
-    subgraph Output ["📤 输出"]
-        H[🚀 类型安全配置]
+    subgraph Output ["📤 Output"]
+        H[🚀 Type-Safe Configuration]
     end
     
     Sources --> Loader
@@ -169,369 +171,240 @@ graph TB
     style Output fill:#DCFCE7,stroke:#166534
 ```
 
-#### 创建与配置
+#### Creation and Configuration
 
-##### `ConfigLoader::new()`
+##### `ConfigBuilder::new()`
 
-创建新的配置加载器实例。
+Create a new configuration builder instance.
 
 ```rust
 pub fn new() -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new();
+let builder = ConfigBuilder::<AppConfig>::new();
 ```
 
-**注意：** `ConfigLoader` 实现了 `Default` trait，`new()` 方法返回一个具有合理默认值的实例（默认启用环境变量、内存限制为 512MB、配置文件大小限制为 10MB）。
+**Note:** `ConfigBuilder` implements the `Default` trait. The `new()` method returns an instance with sensible defaults.
 
-##### `with_defaults(defaults: T)`
+##### `defaults(defaults: HashMap<String, ConfigValue>)`
 
-设置默认配置值，当其他来源未提供时会使用默认值。
+Set default configuration values, which will be used when other sources don't provide them.
 
 ```rust
-pub fn with_defaults(mut self, defaults: T) -> Self
+pub fn defaults(mut self, defaults: HashMap<String, ConfigValue>) -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_defaults(AppConfig {
-        port: 8080,
-        host: "localhost".to_string(),
-    });
+use std::collections::HashMap;
+use confers::ConfigValue;
+
+let mut defaults = HashMap::new();
+defaults.insert("port".to_string(), ConfigValue::uint(8080));
+defaults.insert("host".to_string(), ConfigValue::string("localhost"));
+
+let builder = ConfigBuilder::<AppConfig>::new()
+    .defaults(defaults);
 ```
 
-**注意：** 默认值具有最低优先级，会被其他配置源覆盖。
+**Note:** Default values have the lowest priority and will be overridden by other configuration sources.
 
-##### `with_file(path: impl AsRef<Path>)`
+##### `file(path: impl Into<PathBuf>)`
 
-添加显式配置文件，支持多个配置文件，优先级按添加顺序递增。
+Add an explicit configuration file. Multiple configuration files are supported, with priority increasing in the order they are added.
 
 ```rust
-pub fn with_file(mut self, path: impl AsRef<Path>) -> Self
+pub fn file(mut self, path: impl Into<PathBuf>) -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_file("config/base.toml")
-    .with_file("config/development.toml");
+let builder = ConfigBuilder::<AppConfig>::new()
+    .file("config/base.toml")
+    .file("config/development.toml");
 ```
 
-**注意：** 文件按添加顺序加载，后添加的文件优先级更高。所有文件都会经过大小检查，以防止加载过大的配置文件（受 `with_max_config_size` 限制）。
+**Note:** Files are loaded in the order they are added, with later files having higher priority.
 
-##### `with_files(paths: Vec<impl AsRef<Path>>)`
+##### `file_optional(path: impl Into<PathBuf>)`
 
-批量添加多个配置文件。
+Add an optional configuration file. If the file doesn't exist, it will be silently skipped.
 
 ```rust
-pub fn with_files(mut self, paths: Vec<impl AsRef<Path>>) -> Self
+pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self
 ```
 
-##### `with_app_name(name: impl Into<String>)`
-
-设置应用程序名称，用于标准配置文件位置（例如 `/etc/<app_name>/config.toml` 或 `~/.config/<app_name>/config.toml`）。
+**Example:**
 
 ```rust
-pub fn with_app_name(mut self, name: impl Into<String>) -> Self
+let builder = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .file_optional("config.local.toml"); // May not exist
 ```
 
-**示例：**
+##### `env()`
+
+Add an environment source. Environment variables will be loaded and mapped to configuration fields.
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_app_name("myapp");
+pub fn env(mut self) -> Self
 ```
 
-##### `with_env(enabled: bool)`
-
-启用或禁用从环境变量加载。
+**Example:**
 
 ```rust
-pub fn with_env(mut self, enabled: bool) -> Self
+let builder = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .env();
 ```
 
-##### `with_env_prefix(prefix: impl Into<String>)`
+##### `env_prefix(prefix: impl Into<String>)`
 
-设置环境变量前缀（例如 `APP_PORT` 对应配置字段 `port`）。
+Add an environment source with a prefix. Only environment variables starting with the prefix will be loaded.
 
 ```rust
-pub fn with_env_prefix(mut self, prefix: impl Into<String>) -> Self
+pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_env(true)
-    .with_env_prefix("APP");
+let builder = ConfigBuilder::<AppConfig>::new()
+    .env_prefix("APP");
+// Loads APP_PORT, APP_HOST, etc.
 ```
 
-**注意：** 环境变量优先级高于配置文件，但低于 CLI 参数。
-
-##### `with_strict(strict: bool)`
-
-启用或禁用严格模式，在严格模式下任何配置错误都会导致加载失败。
+**Example:**
 
 ```rust
-pub fn with_strict(mut self, strict: bool) -> Self
+let builder = ConfigBuilder::<AppConfig>::new()
+    .env()
+    .env_prefix("APP");
 ```
 
-##### `with_watch(enabled: bool)`
+**Note:** Environment variables have higher priority than configuration files, but lower than memory sources.
 
-启用或禁用文件监视以实现自动配置重新加载，当配置文件发生变化时自动重新加载。
+##### `watch(enabled: bool)`
+
+Enable or disable file watching for automatic configuration reloading. Configuration will be automatically reloaded when configuration files change.
 
 ```rust
-pub fn with_watch(mut self, watch: bool) -> Self
+pub fn watch(mut self, watch: bool) -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_file("config.toml")
-    .with_watch(true);
+let builder = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .watch(true);
 ```
 
-**注意：** 启用文件监控需要 `watch` 特性。
+**Note:** Enabling file watching requires the `watch` feature.
 
-##### `with_format_detection(mode: impl Into<String>)`
+##### `fail_fast(enabled: bool)`
 
-设置格式检测模式，支持 `ByContent`（内容检测）和 `ByExtension`（扩展名检测）两种模式。
+Enable or disable fail-fast mode. In fail-fast mode, any configuration error will immediately stop the build process.
 
 ```rust
-pub fn with_format_detection(mut self, mode: impl Into<String>) -> Self
+pub fn fail_fast(mut self, fail_fast: bool) -> Self
 ```
 
-**示例：**
+##### `validate(enabled: bool)`
+
+Enable or disable validation on load.
 
 ```rust
-let loader = ConfigLoader::<AppConfig>::new()
-    .with_format_detection("ByContent");
+pub fn validate(mut self, validate: bool) -> Self
 ```
 
-**注意：** 格式检测模式支持 `"ByContent"`（通过内容检测）、`"ByExtension"`（通过扩展名检测）或 `"Auto"`（智能检测）。
+##### `limits(limits: ConfigLimits)`
 
-##### `with_sanitizer(sanitizer: impl Fn(T) -> Result<T, ConfigError> + Send + Sync + 'static)`
-
-设置自定义的清理函数，用于在配置加载后对配置值进行清理和验证。
+Set configuration limits for resource management.
 
 ```rust
-pub fn with_sanitizer(
-    mut self,
-    sanitizer: impl Fn(T) -> Result<T, ConfigError> + Send + Sync + 'static,
-) -> Self
+pub fn limits(mut self, limits: ConfigLimits) -> Self
 ```
 
-##### `with_cli_provider(provider: CliConfigProvider)`
+##### `strategy(strategy: MergeStrategy)`
 
-设置 CLI 配置提供者，允许通过命令行参数覆盖配置。
+Set the merge strategy for combining configuration sources.
 
 ```rust
-pub fn with_cli_provider(mut self, provider: CliConfigProvider) -> Self
+pub fn strategy(mut self, strategy: MergeStrategy) -> Self
 ```
 
-##### `with_memory_limit(limit_mb: usize)`
-
-设置内存限制（MB），当内存使用超过限制时会触发警告。
-
-**默认值：** 512 MB
-
-```rust
-pub fn with_memory_limit(mut self, limit_mb: usize) -> Self
-```
-
-**注意：** 当设置的内存限制大于0且小于100MB时，系统会发出警告，因为这可能太低而影响生产环境的正常运行。
-
-##### `with_max_config_size(size_mb: usize)`
-
-设置配置文件的最大大小限制（MB），防止加载过大的配置文件导致内存问题或DoS攻击。
-
-**默认值：** 10 MB
-
-```rust
-pub fn with_max_config_size(mut self, size_mb: usize) -> Self
-```
-
-**注意：** 设置为0表示禁用大小限制。此限制适用于每个单独的配置文件。
-
-#### 远程配置
+#### Remote Configuration
 
 <div style="padding:16px; margin: 16px 0">
 
-⚠️ **注意**: 以下方法需要启用 `remote` 特性。
+⚠️ **Note**: Remote configuration requires enabling the `remote` feature. Use the `source()` method to add remote configuration sources.
 
 </div>
 
-##### `with_remote_config(url: impl Into<String>)`
+##### `source(source: Box<dyn Source>)`
 
-启用远程配置源，设置远程配置服务器的 URL。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_config(mut self, url: impl Into<String>) -> Self
-```
-
-##### `remote(url: impl Into<String>)`
-
-`with_remote_config` 的别名方法。
+Add a custom configuration source. This is the unified method for adding remote sources.
 
 ```rust
-#[cfg(feature = "remote")]
-pub fn remote(self, url: impl Into<String>) -> Self
+pub fn source(mut self, source: Box<dyn Source>) -> Self
 ```
 
-##### `with_remote_auth(username: impl Into<String>, password: impl Into<String>)`
-
-配置远程认证的用户名和密码。
+**Example - HTTP Remote Source:**
 
 ```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_auth(
-    mut self,
-    username: impl Into<String>,
-    password: impl Into<String>,
-) -> Self
+use confers::source::HttpSource;
+
+let http_source = HttpSource::new("https://config-server.example.com/app-config")
+    .with_timeout(Duration::from_secs(30));
+
+let config = ConfigBuilder::<AppConfig>::new()
+    .source(Box::new(http_source))
+    .build()?;
 ```
 
-##### `with_remote_token(token: impl Into<String>)`
-
-配置远程认证的 Bearer Token。
+**Example - Etcd Source:**
 
 ```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_token(mut self, token: impl Into<String>) -> Self
+use confers::source::EtcdSource;
+
+let etcd_source = EtcdSource::new("localhost:2379")
+    .with_prefix("/myapp/config");
+
+let config = ConfigBuilder::<AppConfig>::new()
+    .source(Box::new(etcd_source))
+    .build()?;
 ```
 
-##### `with_remote_tls(ca_cert: impl AsRef<Path>, client_cert: Option<impl AsRef<Path>>, client_key: Option<impl AsRef<Path>>)`
-
-配置远程连接的 TLS 证书。
+**Example - Consul Source:**
 
 ```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_tls(
-    mut self,
-    ca_cert: impl AsRef<Path>,
-    client_cert: Option<impl AsRef<Path>>,
-    client_key: Option<impl AsRef<Path>>,
-) -> Self
+use confers::source::ConsulSource;
+
+let consul_source = ConsulSource::new("localhost:8500")
+    .with_prefix("myapp/config");
+
+let config = ConfigBuilder::<AppConfig>::new()
+    .source(Box::new(consul_source))
+    .build()?;
 ```
 
-##### `with_remote_timeout(timeout: impl Into<String>)`
-
-设置远程配置请求的超时时间。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_timeout(mut self, timeout: impl Into<String>) -> Self
-```
-
-##### `with_remote_fallback(fallback: bool)`
-
-设置是否允许在远程配置加载失败时回退到本地配置。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_fallback(mut self, fallback: bool) -> Self
-```
-
-##### `with_etcd(provider: EtcdConfigProvider)`
-
-设置 etcd 配置提供者。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_etcd(mut self, provider: EtcdConfigProvider) -> Self
-```
-
-##### `with_consul(provider: ConsulConfigProvider)`
-
-设置 Consul 配置提供者。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_consul(mut self, provider: ConsulConfigProvider) -> Self
-```
-
-##### `with_remote_username(username: impl Into<String>)`
-
-设置远程配置的用户名。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_username(mut self, username: impl Into<String>) -> Self
-```
-
-##### `with_remote_password(password: impl Into<String>)`
-
-设置远程配置的密码。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_password(mut self, password: impl Into<String>) -> Self
-```
-
-##### `with_remote_ca_cert(path: impl Into<PathBuf>)`
-
-配置远程连接的 CA 证书。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_ca_cert(mut self, path: impl Into<PathBuf>) -> Self
-```
-
-##### `with_remote_client_cert(path: impl Into<PathBuf>)`
-
-配置远程连接的客户端证书。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_client_cert(mut self, path: impl Into<PathBuf>) -> Self
-```
-
-##### `with_remote_client_key(path: impl Into<PathBuf>)`
-
-配置远程连接的客户端密钥。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn with_remote_client_key(mut self, path: impl Into<PathBuf>) -> Self
-```
-
-##### `remote_username(username: impl Into<String>)`
-
-`with_remote_username` 的别名方法。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn remote_username(self, username: impl Into<String>) -> Self
-```
-
-##### `remote_password(password: impl Into<String>)`
-
-`with_remote_password` 的别名方法。
-
-```rust
-#[cfg(feature = "remote")]
-pub fn remote_password(self, password: impl Into<String>) -> Self
-```
-
-#### 审计功能
+#### Audit Features
 
 <div style="padding:16px; margin: 16px 0">
 
-📝 **提示**: 以下方法需要启用 `audit` 特性。
+📝 **Tip**: The following methods require enabling the `audit` feature.
 
 </div>
 
 ##### `with_audit(enabled: bool)`
 
-启用或禁用配置加载的审计日志记录。
+Enable or disable audit logging for configuration loading.
 
 ```rust
 #[cfg(feature = "audit")]
@@ -540,7 +413,7 @@ pub fn with_audit(mut self, enabled: bool) -> Self
 
 ##### `with_audit_file(path: impl Into<String>)`
 
-配置审计日志文件的路径。
+Configure the path for the audit log file.
 
 ```rust
 #[cfg(feature = "audit")]
@@ -549,7 +422,7 @@ pub fn with_audit_file(mut self, path: impl Into<String>) -> Self
 
 ##### `with_audit_log(enabled: bool)`
 
-启用或禁用审计日志记录。
+Enable or disable audit logging.
 
 ```rust
 #[cfg(feature = "audit")]
@@ -558,115 +431,126 @@ pub fn with_audit_log(mut self, enabled: bool) -> Self
 
 ##### `with_audit_log_path(path: impl Into<String>)`
 
-配置审计日志文件的路径并启用审计功能。
+Configure the audit log file path and enable auditing.
 
 ```rust
 #[cfg(feature = "audit")]
 pub fn with_audit_log_path(mut self, path: impl Into<String>) -> Self
 ```
 
-#### 加载方法
+#### Building Methods
 
-##### `load()`
+##### `build()`
 
-异步加载配置，合并所有已配置的配置源。
-
-```rust
-pub async fn load(&self) -> Result<T, ConfigError>
-```
-
-**示例：**
+Build the configuration synchronously, merging all configured sources.
 
 ```rust
-let config = loader.load().await?;
+pub fn build(self) -> ConfigResult<T>
 ```
 
-##### `load_sync_with_audit()`
-
-同步加载配置并支持审计日志（需要 `audit` 特性）。
+**Example:**
 
 ```rust
-#[cfg(feature = "audit")]
-pub fn load_sync_with_audit(&self) -> Result<T, ConfigError>
+let config = builder.build()?;
 ```
 
-##### `load_sync()`
+##### `build_with_fallback(fallback: T)`
 
-同步加载配置，不支持审计日志（基础功能）。
+Build with a fallback configuration. If the build fails, returns the fallback configuration.
 
 ```rust
-pub fn load_sync(&self) -> Result<T, ConfigError>
+pub fn build_with_fallback(self, fallback: T) -> BuildResult<T>
 ```
 
-##### `load_sync_with_watcher()`
+**Example:**
 
-同步加载配置并返回配置监视器，支持配置热重载（需要 `watch` 特性）。
+```rust
+let result = builder.build_with_fallback(AppConfig::default());
+if result.degraded {
+    println!("Using fallback: {:?}", result.degraded_reason);
+}
+```
+
+##### `build_resilient()`
+
+Build resiliently, collecting warnings instead of failing.
+
+```rust
+pub fn build_resilient(self) -> ConfigResult<BuildResult<T>>
+```
+
+##### `build_with_watcher()` (async)
+
+Build with hot reload support. Returns a receiver for configuration updates and a watcher guard. Requires `watch` feature.
 
 ```rust
 #[cfg(feature = "watch")]
-pub fn load_sync_with_watcher(&self) -> Result<(T, Option<ConfigWatcher>), ConfigError>
+pub async fn build_with_watcher(
+    self,
+) -> ConfigResult<(
+    tokio::sync::watch::Receiver<Arc<T>>,
+    WatcherGuard,
+)>
 ```
 
-##### `load_with_watcher()`
-
-异步加载配置并返回配置监视器，支持配置热重载（需要 `watch` 特性）。
+**Example:**
 
 ```rust
-#[cfg(feature = "watch")]
-pub async fn load_with_watcher(&self) -> Result<(T, Option<ConfigWatcher>), ConfigError>
+let (mut rx, _guard) = builder.build_with_watcher().await?;
+let config = rx.borrow().clone();
 ```
 
-#### 格式检测
+#### Format Detection
 
-##### `detect_format(path: &Path) -> Option<FileFormat>`
+##### `detect_format_from_content(content: &str) -> Option<Format>`
 
-根据文件内容智能检测配置格式。
+Intelligently detect configuration format based on file content.
 
 ```rust
-pub fn detect_format(path: &Path) -> Option<FileFormat>
+pub fn detect_format_from_content(content: &str) -> Option<Format>
 ```
 
-**支持检测的格式：** JSON、YAML、TOML、INI
+**Supported Detection Formats:** JSON, YAML, TOML, INI
 
-##### `detect_format_by_extension(path: &Path) -> Option<FileFormat>`
+##### `detect_format_from_path(path: &Path) -> Option<Format>`
 
-根据文件扩展名检测配置格式。
+Detect configuration format based on file extension.
 
 ```rust
-pub fn detect_format_by_extension(path: &Path) -> Option<FileFormat>
+pub fn detect_format_from_path(path: &Path) -> Option<Format>
 ```
 
 ---
 
-### 密钥管理
+### Key Management
 
-`KeyManager` 提供加密密钥的综合管理，包括轮换、版本控制和密钥存储。此功能需要启用 `encryption` 特性。
+`KeyManager` provides comprehensive management of encryption keys, including rotation, versioning, and key storage. This feature requires enabling the `encryption` feature.
 
 <div align="center" style="margin: 24px 0">
 
-#### 🔐 密钥管理架构
+#### 🔐 Key Management Architecture
 
 </div>
 
 ```mermaid
 graph TB
-    subgraph Storage ["📦 密钥存储"]
-        A[🔑 密钥环]
-        B[📋 版本历史]
-        C[🛡️ 元数据]
+    subgraph Storage ["📦 Key Storage"]
+        A[🔑 Keyring]
+        B[📋 Version History]
+        C[🛡️ Metadata]
     end
     
     subgraph Manager ["🔧 KeyManager"]
-        D[🔄 轮换管理]
-        E[✅ 版本控制]
-        F[🔒 安全存储]
+        D[🔄 Rotation Management]
+        E[✅ Version Control]
+        F[🔒 Secure Storage]
     end
     
-    subgraph Operations ["⚡ 操作"]
-        G[创建]
-        H[轮换]
-        I[获取]
-        J[删除]
+    subgraph Operations ["⚡ Operations"]
+        G[Create]
+        H[Rotate]
+        I[Get]
+        J[Delete]
     end
     
     Storage --> Manager
@@ -677,17 +561,17 @@ graph TB
     style Operations fill:#DCFCE7,stroke:#166534
 ```
 
-#### 创建与管理
+#### Creation and Management
 
 ##### `KeyManager::new(storage_path: PathBuf)`
 
-使用指定存储路径创建新的密钥管理器。
+Create a new key manager with the specified storage path.
 
 ```rust
 pub fn new(storage_path: PathBuf) -> Result<Self, ConfigError>
 ```
 
-**示例：**
+**Example:**
 
 ```rust
 use std::path::PathBuf;
@@ -697,7 +581,7 @@ let km = KeyManager::new(PathBuf::from("./keys"))?;
 
 ##### `initialize(master_key: &[u8; 32], key_id: String, created_by: String)`
 
-使用主密钥初始化新的密钥环。
+Initialize a new keyring with the master key.
 
 ```rust
 pub fn initialize(
@@ -708,22 +592,22 @@ pub fn initialize(
 ) -> Result<KeyVersion, ConfigError>
 ```
 
-**参数说明：**
+**Parameter Description:**
 
-| 参数 | 描述 |
-|------|------|
-| `master_key` | 32字节的主密钥，用于加密密钥存储 |
-| `key_id` | 密钥环的唯一标识符 |
-| `created_by` | 创建者标识，用于审计追踪 |
+| Parameter | Description |
+|-----------|-------------|
+| `master_key` | 32-byte master key used to encrypt key storage |
+| `key_id` | Unique identifier for the keyring |
+| `created_by` | Creator identifier for audit trail |
 
-**示例：**
+**Example:**
 
 ```rust
 use confers::key::KeyManager;
 use std::path::PathBuf;
 
 let mut km = KeyManager::new(PathBuf::from("./secure_keys"))?;
-let master_key = [0u8; 32]; // 从安全位置获取
+let master_key = [0u8; 32]; // Get from secure location
 let version = km.initialize(
     &master_key,
     "production".to_string(),
@@ -733,7 +617,7 @@ let version = km.initialize(
 
 ##### `rotate_key(master_key: &[u8; 32], key_id: Option<String>, created_by: String, description: Option<String>)`
 
-将密钥环轮换到新版本，支持密钥轮换以满足安全合规要求。
+Rotate the keyring to a new version, supporting key rotation for security compliance.
 
 ```rust
 pub fn rotate_key(
@@ -745,24 +629,24 @@ pub fn rotate_key(
 ) -> Result<RotationResult, ConfigError>
 ```
 
-**返回值：** `RotationResult` 包含轮换前后的版本信息和是否需要重新加密。
+**Return Value:** `RotationResult` contains pre and post rotation version information and whether re-encryption is needed.
 
-**示例：**
+**Example:**
 
 ```rust
 let result = km.rotate_key(
     &master_key,
     Some("production".to_string()),
     "security-team".to_string(),
-    Some("定期密钥轮换".to_string(),
+    Some("Scheduled key rotation".to_string())
 )?;
 
-println!("密钥版本从 {} 轮换到 {}", result.previous_version, result.new_version);
+println!("Key rotated from version {} to {}", result.previous_version, result.new_version);
 ```
 
 ##### `get_key_info(key_id: &str)`
 
-获取特定密钥的元数据和版本信息。
+Get metadata and version information for a specific key.
 
 ```rust
 pub fn get_key_info(&self, key_id: &str) -> Result<KeyInfo, ConfigError>
@@ -770,7 +654,7 @@ pub fn get_key_info(&self, key_id: &str) -> Result<KeyInfo, ConfigError>
 
 ##### `get_active_key_version(key_id: &str, version: u32) -> Result<Vec<u8>, ConfigError>`
 
-获取指定密钥版本的原始密钥数据。
+Get raw key data for a specific key version.
 
 ```rust
 pub fn get_active_key_version(&self, key_id: &str, version: u32) -> Result<Vec<u8>, ConfigError>
@@ -778,7 +662,7 @@ pub fn get_active_key_version(&self, key_id: &str, version: u32) -> Result<Vec<u
 
 ##### `list_key_ids() -> Result<Vec<String>, ConfigError>`
 
-列出所有已管理的密钥 ID。
+List all managed key IDs.
 
 ```rust
 pub fn list_key_ids(&self) -> Result<Vec<String>, ConfigError>
@@ -786,7 +670,7 @@ pub fn list_key_ids(&self) -> Result<Vec<String>, ConfigError>
 
 ##### `delete_key_ring(key_id: &str, master_key: &[u8; 32]) -> Result<(), ConfigError>`
 
-删除指定的密钥环。
+Delete the specified keyring.
 
 ```rust
 pub fn delete_key_ring(&mut self, key_id: &str, master_key: &[u8; 32]) -> Result<(), ConfigError>
@@ -794,156 +678,162 @@ pub fn delete_key_ring(&mut self, key_id: &str, master_key: &[u8; 32]) -> Result
 
 ---
 
-### 加密功能
+### Encryption Functions
 
-`ConfigEncryption` 实现 AES-256-GCM 加密以保护敏感配置值，提供前向安全性的加密保护。此功能需要启用 `encryption` 特性。
+`XChaCha20Crypto` implements XChaCha20-Poly1305 encryption to protect sensitive configuration values, providing authenticated encryption with associated data (AEAD). This feature requires enabling the `encryption` feature.
 
 <div align="center" style="margin: 24px 0">
 
-#### 🔐 加密流程
+#### 🔐 Encryption Flow
 
 </div>
 
 ```mermaid
 graph LR
-    A[📝 明文] --> B[🔐 AES-256-GCM 加密]
-    B --> C[📦 格式化输出<br/>enc:AES256GCM:nonce:ciphertext]
-    C --> D[💾 存储或传输]
-    D --> E[🔓 解密]
-    E --> F[✅ 恢复明文]
-    
+    A[📝 Plaintext] --> B[🔐 XChaCha20-Poly1305 Encryption]
+    B --> C[📦 Output<br/>nonce + ciphertext]
+    C --> D[💾 Store or Transmit]
+    D --> E[🔓 Decrypt]
+    E --> F[✅ Recover Plaintext]
+
     style B fill:#FEF3C7,stroke:#92400E
     style E fill:#DCFCE7,stroke:#166534
 ```
 
-#### 创建
+#### Creation
 
-##### `ConfigEncryption::new(key_bytes: [u8; 32])`
+##### `XChaCha20Crypto::new()`
 
-使用 32 字节密钥创建新的加密器。
+Create a new encryptor instance.
 
 ```rust
-pub fn new(key_bytes: [u8; 32]) -> Self
+pub fn new() -> Self
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-use confers::encryption::ConfigEncryption;
+use confers::XChaCha20Crypto;
 
-let key = [0u8; 32]; // 应使用安全的随机密钥
-let encryption = ConfigEncryption::new(key);
+let crypto = XChaCha20Crypto::new();
 ```
 
-##### `ConfigEncryption::from_env()`
+#### Encryption/Decryption Operations
 
-使用 `CONFERS_ENCRYPTION_KEY` 环境变量创建加密器，密钥应为 Base64 编码。
+##### `encrypt(plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), CryptoError>`
+
+Encrypt bytes with a 32-byte key. Returns a tuple of `(nonce, ciphertext)`.
+
+**Features:**
+
+- Uses XChaCha20-Poly1305 algorithm (extended nonce variant of ChaCha20)
+- Generates a random 96-bit nonce for each encryption
+- Provides authenticated encryption with integrity verification
 
 ```rust
-pub fn from_env() -> Result<Self, ConfigError>
+pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), CryptoError>
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let encryption = ConfigEncryption::from_env()?;
+let key = [0u8; 32]; // Should use a secure random key
+let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
 ```
 
-#### 加解密操作
+##### `decrypt(nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError>`
 
-##### `encrypt(plaintext: &str) -> Result<String, ConfigError>`
+Decrypt bytes with the nonce, ciphertext, and 32-byte key.
 
-加密字符串值。返回格式化字符串：`enc:AES256GCM:<nonce_base64>:<ciphertext_base64>`。
+**Features:**
 
-**特点：**
-
-- 使用 AES-256-GCM 算法，提供加密和完整性验证
-- 每次加密生成随机的 96 位 nonce
-- 密文格式：前缀标识 + Base64 编码的 nonce + Base64 编码的密文
+- Requires the same nonce used during encryption
+- Verifies Poly1305 authentication tag, tampering detection will trigger an error
 
 ```rust
-pub fn encrypt(&self, plaintext: &str) -> Result<String, ConfigError>
+pub fn decrypt(&self, nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError>
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let encrypted = encryption.encrypt("my-secret-api-key")?;
-println!("加密结果: {}", encrypted);
-// 输出: enc:AES256GCM:abc123...:xyz789...
+let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
+assert_eq!(decrypted, b"my-secret-api-key");
 ```
 
-##### `decrypt(encrypted_value: &str) -> Result<String, ConfigError>`
+#### Key Derivation
 
-解密格式化的加密字符串。
+##### `derive_field_key(master_key: &[u8], field_path: &str, key_version: &str) -> Result<[u8; 32], CryptoError>`
 
-**特点：**
-
-- 自动识别 `enc:AES256GCM:` 前缀
-- 支持向后兼容未经加密的纯文本值
-- 验证 GCM 认证标签，篡改检测会触发错误
+Derive a field-specific encryption key from a master key using HKDF-SHA256.
 
 ```rust
-pub fn decrypt(&self, encrypted_value: &str) -> Result<String, ConfigError>
+pub fn derive_field_key(
+    master_key: &[u8],
+    field_path: &str,
+    key_version: &str,
+) -> Result<[u8; 32], CryptoError>
 ```
 
-**示例：**
+**Example:**
 
 ```rust
-let decrypted = encryption.decrypt(&encrypted)?;
-assert_eq!(decrypted, "my-secret-api-key");
+use confers::derive_field_key;
+
+let master_key = [0u8; 32];
+let field_key = derive_field_key(&master_key, "database.password", "v1")?;
 ```
 
 ---
 
-### 密钥管理
+### Key Management
 
-`key` feature 提供完整的密钥生命周期管理，包括密钥创建、存储、轮换和撤销。
+The `key` feature provides complete key lifecycle management, including key creation, storage, rotation, and revocation.
 
 #### KeyManager
 
-密钥生命周期管理的核心组件。
+The core component for key lifecycle management.
 
 ```rust
 use confers::key::KeyManager;
 
-// 创建密钥管理器
+// Create key manager
 let master_key = [0u8; 32];
 let mut manager = KeyManager::new(master_key);
 
-// 创建新密钥
+// Create new key
 let key = manager.create_key("database", Some("DB encryption key".to_string()))?;
 
-// 获取密钥
+// Get key
 let key_data = manager.get_key("database")?;
 
-// 列出所有密钥
+// List all keys
 let keys = manager.list_keys();
 
-// 撤销密钥
+// Revoke key
 manager.revoke_key("database")?;
 ```
 
-#### 方法
+#### Methods
 
-| 方法 | 参数 | 返回值 | 描述 |
-|------|------|--------|------|
-| `new(master_key)` | `&[u8; 32]` | `Self` | 创建密钥管理器 |
-| `create_key(id, desc)` | `&str, Option<String>` | `Result<KeyBundle>` | 创建新密钥 |
-| `get_key(id)` | `&str` | `Option<&KeyBundle>` | 获取密钥 |
-| `list_keys()` | - | `Vec<KeyInfo>` | 列出所有密钥 |
-| `revoke_key(id)` | `&str` | `Result<()>` | 撤销密钥 |
+| Method | Parameters | Return Value | Description |
+|--------|------------|--------------|-------------|
+| `new(master_key)` | `&[u8; 32]` | `Self` | Create key manager |
+| `create_key(id, desc)` | `&str, Option<String>` | `Result<KeyBundle>` | Create new key |
+| `get_key(id)` | `&str` | `Option<&KeyBundle>` | Get key |
+| `list_keys()` | - | `Vec<KeyInfo>` | List all keys |
+| `revoke_key(id)` | `&str` | `Result<()>` | Revoke key |
 
 #### KeyRotationService
 
-自动密钥轮换服务。
+Automatic key rotation service.
 
 ```rust
 use confers::key::{KeyRotationService, KeyRotationPolicy};
 use std::time::Duration;
 
 let policy = KeyRotationPolicy::default()
-    .with_max_age(Duration::from_secs(86400 * 90)); // 90天
+    .with_max_age(Duration::from_secs(86400 * 90)); // 90 days
 
 let service = KeyRotationService::new(manager, policy);
 service.check_and_rotate()?;
@@ -951,7 +841,7 @@ service.check_and_rotate()?;
 
 #### KeyStorage
 
-加密密钥持久化存储。
+Encrypted key persistence storage.
 
 ```rust
 use confers::key::KeyStorage;
@@ -963,13 +853,13 @@ let loaded = storage.load("key_id")?;
 
 ---
 
-### 安全模块
+### Security Module
 
-`security` feature 提供环境变量验证、错误脱敏和安全注入功能。
+The `security` feature provides environment variable validation, error sanitization, and secure injection capabilities.
 
 #### EnvSecurityValidator
 
-环境变量安全验证器，防止注入攻击。
+Environment variable security validator, prevents injection attacks.
 
 ```rust
 use confers::security::EnvSecurityValidator;
@@ -980,17 +870,17 @@ let validator = EnvSecurityValidator::builder()
     .block_pattern(r".*_PASSWORD$")
     .build()?;
 
-// 验证单个变量
+// Validate single variable
 validator.validate_var("APP_NAME")?;
-validator.validate_var("DB_PASSWORD")?; // Err: 包含 _SECRET
+validator.validate_var("DB_PASSWORD")?; // Err: contains _SECRET
 
-// 验证所有环境变量
+// Validate all environment variables
 validator.validate_all(std::env::vars())?;
 ```
 
 #### ErrorSanitizer
 
-错误信息敏感数据脱敏。
+Error message sensitive data sanitization.
 
 ```rust
 use confers::security::ErrorSanitizer;
@@ -1001,7 +891,7 @@ let clean_msg = sanitizer.sanitize(&error_msg);
 
 #### ConfigInjector
 
-安全配置注入器。
+Secure configuration injector.
 
 ```rust
 use confers::security::ConfigInjector;
@@ -1013,13 +903,13 @@ let injector = ConfigInjector::new()
 
 ---
 
-### TypeScript Schema 生成
+### TypeScript Schema Generation
 
-`typescript-schema` feature 支持从 Rust 类型生成 TypeScript 定义。
+The `typescript-schema` feature supports generating TypeScript definitions from Rust types.
 
 #### generate_typescript
 
-生成 TypeScript 类型定义。
+Generate TypeScript type definitions.
 
 ```rust
 use confers::schema::generate_typescript;
@@ -1035,7 +925,7 @@ let ts = generate_typescript::<AppConfig>();
 println!("{}", ts);
 ```
 
-**输出：**
+**Output:**
 
 ```typescript
 // Auto-generated from Rust
@@ -1048,73 +938,11 @@ export interface AppConfig {
 
 ---
 
-### 配置差异比较
+### Schema Generation
 
-### 配置差异比较
+Configuration structures can generate JSON Schema through the `schemars` crate. Requires enabling the `schema` feature.
 
-`DiffCommand` 提供配置文件的差异比较功能，支持多种输出格式。此功能需要启用 `cli` 特性。
-
-<div align="center" style="margin: 24px 0">
-
-#### 📊 差异比较格式
-
-</div>
-
-| 格式 | 说明 | 使用场景 |
-|------|------|----------|
-| `Unified` | 统一格式，Git diff 默认格式 | 代码审查、版本对比 |
-| `Context` | 上下文格式，显示变更周围的上下文 | 详细分析变更影响 |
-| `Normal` | 普通格式，简洁的变更列表 | 快速概览差异 |
-| `SideBySide` | 并排格式，左右对照显示 | 对比复杂的配置结构 |
-| `Strict` | 严格格式，无颜色和 ANSI 转义 | CI/CD 自动化脚本 |
-
-#### `DiffCommand::execute`
-
-执行配置差异比较。
-
-```rust
-pub fn execute(file1: &str, file2: &str, options: DiffOptions) -> Result<(), ConfigError>
-```
-
-**示例：**
-
-```rust
-use confers::commands::{DiffCommand, DiffOptions, DiffFormat};
-
-let options = DiffOptions {
-    format: DiffFormat::Unified,
-    context_lines: 5,
-    show_line_numbers: true,
-    ..Default::default()
-};
-
-DiffCommand::execute("config/dev.toml", "config/prod.toml", options)?;
-```
-
-#### `DiffOptions`
-
-差异比较的可配置选项：
-
-```rust
-pub struct DiffOptions {
-    pub format: DiffFormat,              // 差异格式
-    pub context_lines: usize,            // 上下文行数
-    pub show_line_numbers: bool,         // 显示行号
-    pub ignore_whitespace: bool,         // 忽略空白差异
-    pub case_insensitive: bool,          // 忽略大小写
-    pub strict: bool,                    // 严格模式（无颜色）
-}
-```
-
----
-
-### Schema 生成
-
-#### `ConfigLoader` 中的 Schema 生成支持
-
-配置结构可以通过 `schemars` crate 生成 JSON Schema。需要启用 `schema` 特性。
-
-要生成 Schema，配置结构需要派生 `JsonSchema` trait：
+To generate a Schema, the configuration structure needs to derive the `JsonSchema` trait:
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1129,43 +957,84 @@ pub struct AppConfig {
 }
 ```
 
-生成的 Schema 可用于验证配置格式或生成文档。
+The generated Schema can be used to validate configuration format or generate documentation.
 
 ---
 
-### ConfersConfig Trait
+### ConfigProvider Trait
 
-`ConfersConfig` 是统一配置接口，提供了类型安全的配置访问方法，支持多种配置源的抽象访问。
+`ConfigProvider` is the core trait for configuration access, providing the fundamental interface for accessing configuration values. All configuration providers must implement this trait.
 
 <div align="center" style="margin: 24px 0">
 
-#### 🔌 统一配置接口
+#### 🔌 Configuration Provider Interface
 
 </div>
 
-#### Trait 定义
+#### Trait Definition
 
 ```rust
-pub trait ConfersConfig: Send + Sync {
-    fn get_string(&self, key: &str) -> Option<String>;
-    fn get_int(&self, key: &str) -> Option<i64>;
-    fn get_u64(&self, key: &str) -> Option<u64>;
-    fn get_bool(&self, key: &str) -> Option<bool>;
-    fn get_float(&self, key: &str) -> Option<f64>;
-    fn get_strings(&self, key: &str) -> Option<Vec<String>>;
-    fn get_section(&self, key: &str) -> Option<Arc<dyn ConfersConfig>>;
-    fn contains(&self, key: &str) -> bool;
-    fn to_map(&self) -> HashMap<String, Value>;
+pub trait ConfigProvider: Send + Sync {
+    fn get_raw(&self, key: &str) -> Option<&AnnotatedValue>;
+    fn keys(&self) -> Vec<String>;
+    fn has(&self, key: &str) bool { ... }
 }
 ```
 
-#### 方法说明
+#### Method Description
+
+##### `get_raw(&self, key: &str) -> Option<&AnnotatedValue>`
+
+Get a raw annotated value by key. Returns `None` if the key does not exist.
+
+```rust
+fn get_raw(&self, key: &str) -> Option<&AnnotatedValue>
+```
+
+##### `keys(&self) -> Vec<String>`
+
+Get all configuration keys in dot-notation format (e.g., "database.host").
+
+```rust
+fn keys(&self) -> Vec<String>
+```
+
+##### `has(&self, key: &str) -> bool`
+
+Check if a key exists.
+
+```rust
+fn has(&self, key: &str) -> bool
+```
+
+---
+
+### ConfigProviderExt Trait
+
+`ConfigProviderExt` is an extension trait with convenience methods for type-safe accessors. It provides default implementations for all `ConfigProvider` types.
+
+#### Trait Definition
+
+```rust
+pub trait ConfigProviderExt: ConfigProvider {
+    fn get_string(&self, key: &str) -> Option<String>;
+    fn get_int(&self, key: &str) -> Option<i64>;
+    fn get_uint(&self, key: &str) -> Option<u64>;
+    fn get_float(&self, key: &str) -> Option<f64>;
+    fn get_bool(&self, key: &str) -> Option<bool>;
+    fn get_typed<T>(&self, key: &str) -> ConfigResult<T>;
+    fn get_many<'a>(&self, keys: &[&'a str]) -> HashMap<&'a str, Option<&AnnotatedValue>>;
+    fn get_by_path(&self, path: &[&str]) -> Option<&AnnotatedValue>;
+}
+```
+
+#### Method Description
 
 ##### `get_string(&self, key: &str) -> Option<String>`
 
-获取字符串类型的配置值。
+Get string type configuration value.
 
-**示例：**
+**Example:**
 
 ```rust
 let name = config.get_string("app.name");
@@ -1174,24 +1043,24 @@ assert_eq!(name, Some("my-app".to_string()));
 
 ##### `get_int(&self, key: &str) -> Option<i64>`
 
-获取整数类型的配置值。
+Get integer type configuration value.
 
-**示例：**
+**Example:**
 
 ```rust
 let port = config.get_int("server.port");
 assert_eq!(port, Some(8080));
 ```
 
-##### `get_u64(&self, key: &str) -> Option<u64>`
+##### `get_uint(&self, key: &str) -> Option<u64>`
 
-获取无符号整数类型的配置值。
+Get unsigned integer type configuration value.
 
 ##### `get_bool(&self, key: &str) -> Option<bool>`
 
-获取布尔类型的配置值。
+Get boolean type configuration value.
 
-**示例：**
+**Example:**
 
 ```rust
 let debug = config.get_bool("app.debug");
@@ -1200,560 +1069,117 @@ assert_eq!(debug, Some(true));
 
 ##### `get_float(&self, key: &str) -> Option<f64>`
 
-获取浮点数类型的配置值。
+Get floating-point type configuration value.
 
-##### `get_strings(&self, key: &str) -> Option<Vec<String>>`
+##### `get_typed<T>(&self, key: &str) -> ConfigResult<T>`
 
-获取字符串数组类型的配置值。
-
-**示例：**
+Get a typed value by key. Returns an error if the value cannot be converted.
 
 ```rust
-let hosts = config.get_strings("server.hosts");
-assert_eq!(hosts, Some(vec!["host1".to_string(), "host2".to_string()]));
+fn get_typed<T>(&self, key: &str) -> ConfigResult<T>
+where
+    T: std::str::FromStr + Default,
+    T::Err: std::fmt::Display
 ```
 
-##### `get_section(&self, key: &str) -> Option<Arc<dyn ConfersConfig>>`
+##### `get_many<'a>(&self, keys: &[&'a str]) -> HashMap<&'a str, Option<&AnnotatedValue>>`
 
-获取嵌套配置部分，返回另一个 `ConfersConfig` 实例。
-
-**示例：**
-
-```rust
-let db_config = config.get_section("database").unwrap();
-let url = db_config.get_string("url");
-```
-
-##### `contains(&self, key: &str) -> bool`
-
-检查配置中是否存在指定的键。
-
-##### `to_map(&self) -> HashMap<String, Value>`
-
-将配置转换为 HashMap 格式。
-
-#### 默认实现
-
-`HashMap<String, Value>` 已实现 `ConfersConfig` trait：
-
-```rust
-use serde_json::{json, Value};
-use std::collections::HashMap;
-
-let mut config = HashMap::new();
-config.insert("app.name".to_string(), json!("my-app"));
-config.insert("app.port".to_string(), json!(8080));
-
-let name = config.get_string("app.name");
-let port = config.get_int("app.port");
-```
+Get multiple values efficiently. Missing keys will have `None` values.
 
 ---
 
-### ConfersConfigBuilder
+### KeyProvider Trait
 
-`ConfersConfigBuilder` 提供链式 API 用于构建配置对象，支持多种配置源和配置合并。
-
-<div align="center" style="margin: 24px 0">
-
-#### 🔨 配置构建器
-
-</div>
-
-#### 创建配置构建器
-
-##### `ConfersConfigBuilder::new()`
-
-创建新的配置构建器实例。
+`KeyProvider` is a synchronous encryption key provider trait. Implementations provide encryption keys for sensitive field encryption.
 
 ```rust
-pub fn new() -> Self
-```
-
-**示例：**
-
-```rust
-use confers::core::ConfersConfigBuilder;
-
-let builder = ConfersConfigBuilder::new();
-```
-
-##### `ConfersConfigBuilder::from_standard_locations()`
-
-从标准位置查找配置文件并创建构建器。
-
-**查找顺序：**
-1. 当前目录的 `config.toml`
-2. 当前目录的 `config.yaml`
-3. 当前目录的 `config.json`
-4. 当前目录的 `app.toml`
-5. 当前目录的 `app.yaml`
-6. 当前目录的 `app.json`
-
-```rust
-pub fn from_standard_locations() -> Result<Self, ConfigError>
-```
-
-#### 配置源管理
-
-##### `with_file(&mut self, path: impl AsRef<Path>) -> Self`
-
-添加配置文件，支持多个文件，后添加的文件优先级更高。
-
-```rust
-pub fn with_file(mut self, path: impl AsRef<Path>) -> Self
-```
-
-**示例：**
-
-```rust
-let config = ConfersConfigBuilder::new()
-    .with_file("config/base.toml")
-    .with_file("config/development.toml")  // 优先级更高
-    .build()?;
-```
-
-##### `with_files(&mut self, paths: Vec<impl AsRef<Path>>) -> Self`
-
-批量添加多个配置文件。
-
-```rust
-pub fn with_files(mut self, paths: Vec<impl AsRef<Path>>) -> Self
-```
-
-##### `with_env_prefix(&mut self, prefix: &str) -> Self`
-
-设置环境变量前缀。
-
-```rust
-pub fn with_env_prefix(mut self, prefix: &str) -> Self
-```
-
-**示例：**
-
-```rust
-let config = ConfersConfigBuilder::new()
-    .with_file("config.toml")
-    .with_env_prefix("APP_")
-    .build()?;
-```
-
-##### `with_env_separator(&mut self, separator: &str) -> Self`
-
-设置环境变量分隔符，默认为下划线 `_`。
-
-```rust
-pub fn with_env_separator(mut self, separator: &str) -> Self
-```
-
-#### 远程配置
-
-##### `with_remote_url(&mut self, url: &str) -> Self`
-
-设置远程配置 URL。
-
-```rust
-pub fn with_remote_url(mut self, url: &str) -> Self
-```
-
-**示例：**
-
-```rust
-let config = ConfersConfigBuilder::new()
-    .with_remote_url("http://config.example.com/api/config")
-    .build()?;
-```
-
-##### `with_remote_token(&mut self, token: &str) -> Self`
-
-设置远程配置认证 Token。
-
-```rust
-pub fn with_remote_token(mut self, token: &str) -> Self
-```
-
-##### `with_remote_timeout(&mut self, timeout_ms: u64) -> Self`
-
-设置远程配置超时时间（毫秒）。
-
-```rust
-pub fn with_remote_timeout(mut self, timeout_ms: u64) -> Self
-```
-
-#### 其他配置
-
-##### `with_format(&mut self, format: FileFormat) -> Self`
-
-设置配置文件格式。
-
-```rust
-pub fn with_format(mut self, format: FileFormat) -> Self
-```
-
-#### 构建配置
-
-##### `build(&self) -> Result<Arc<dyn ConfersConfig>, ConfigError>`
-
-构建配置对象，返回 `Arc<dyn ConfersConfig>`。
-
-```rust
-pub fn build(self) -> Result<Arc<dyn ConfersConfig>, ConfigError>
-```
-
-**示例：**
-
-```rust
-let config: Arc<dyn ConfersConfig> = ConfersConfigBuilder::new()
-    .with_file("config.toml")
-    .with_env_prefix("APP_")
-    .build()?;
-
-let name = config.get_string("app.name");
-let port = config.get_int("app.port");
-```
-
----
-
-### StructConfigBuilder
-
-`StructConfigBuilder` 是针对具体结构体的配置构建器，可以直接将配置解析为指定的结构体类型。
-
-<div align="center" style="margin: 24px 0">
-
-#### 🎯 结构体配置构建器
-
-</div>
-
-#### 创建结构体构建器
-
-##### `StructConfigBuilder::<T>::new()`
-
-创建新的结构体配置构建器。
-
-```rust
-pub fn new() -> Self
-```
-
-**类型参数：**
-- `T` - 目标配置结构体（需要实现 `serde::de::DeserializeOwned`）
-
-**示例：**
-
-```rust
-use serde::{Deserialize, Serialize};
-use confers::core::StructConfigBuilder;
-
-#[derive(Debug, Deserialize, Serialize)]
-struct AppConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-let builder = StructConfigBuilder::<AppConfig>::new();
-```
-
-#### 配置源管理
-
-与 `ConfersConfigBuilder` 相同的方法：
-- `with_file()`
-- `with_files()`
-- `with_env_prefix()`
-- `with_env_separator()`
-- `with_remote_url()`
-- `with_remote_token()`
-- `with_remote_timeout()`
-
-#### 构建结构体
-
-##### `build(&self) -> Result<T, ConfigError>`
-
-构建并解析为指定的结构体类型。
-
-```rust
-pub fn build(self) -> Result<T, ConfigError>
-```
-
-**示例：**
-
-```rust
-use serde::{Deserialize, Serialize};
-use confers::core::StructConfigBuilder;
-
-#[derive(Debug, Deserialize, Serialize)]
-struct AppConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-let config: AppConfig = StructConfigBuilder::<AppConfig>::new()
-    .with_file("config.toml")
-    .with_env_prefix("APP_")
-    .build()?;
-
-println!("App name: {}", config.name);
-println!("Port: {}", config.port);
-```
-
----
-
-### FileConfersConfig
-
-`FileConfersConfig` 是文件配置的实现，支持多种配置格式和自动格式检测。
-
-<div align="center" style="margin: 24px 0">
-
-#### 📁 文件配置实现
-
-</div>
-
-#### 创建文件配置
-
-##### `FileConfersConfig::new(path: impl AsRef<Path>)`
-
-从指定路径创建文件配置，自动检测格式。
-
-```rust
-pub fn new(path: impl AsRef<Path>) -> Result<Self, ConfigError>
-```
-
-**示例：**
-
-```rust
-use confers::core::FileConfersConfig;
-
-let config = FileConfersConfig::new("config.toml")?;
-```
-
-##### `FileConfersConfig::with_format(path: impl AsRef<Path>, format: FileFormat)`
-
-从指定路径创建文件配置，使用指定的格式。
-
-```rust
-pub fn with_format(path: impl AsRef<Path>, format: FileFormat) -> Result<Self, ConfigError>
-```
-
-**示例：**
-
-```rust
-use confers::core::FileConfersConfig;
-use confers::utils::FileFormat;
-
-let config = FileConfersConfig::with_format("config.txt", FileFormat::Json)?;
-```
-
-#### 重新加载
-
-##### `reload(&mut self) -> Result<(), ConfigError>`
-
-重新加载配置文件，更新配置值。
-
-```rust
-pub fn reload(&mut self) -> Result<(), ConfigError>
-```
-
-**示例：**
-
-```rust
-config.reload()?;
-```
-
-#### 获取路径
-
-##### `path(&self) -> &Path`
-
-获取配置文件路径。
-
-```rust
-pub fn path(&self) -> &Path
-```
-
----
-
-### EnvConfersConfig
-
-`EnvConfersConfig` 是环境变量配置的实现，支持前缀和自定义分隔符。
-
-<div align="center" style="margin: 24px 0">
-
-#### 🌐 环境变量配置实现
-
-</div>
-
-#### 创建环境变量配置
-
-##### `EnvConfersConfig::new()`
-
-创建新的环境变量配置实例，无前缀。
-
-```rust
-pub fn new() -> Self
-```
-
-##### `EnvConfersConfig::with_prefix(prefix: &str)`
-
-创建带有指定前缀的环境变量配置实例。
-
-```rust
-pub fn with_prefix(prefix: &str) -> Self
-```
-
-**示例：**
-
-```rust
-use confers::core::EnvConfersConfig;
-
-// 无前缀，直接读取环境变量
-let config = EnvConfersConfig::new();
-
-// 带前缀，读取 APP_ 开头的环境变量
-let config = EnvConfersConfig::with_prefix("APP_");
-```
-
-#### 配置分隔符
-
-##### `separator(&mut self, sep: &str) -> Self`
-
-设置环境变量分隔符，默认为下划线 `_`。
-
-```rust
-pub fn separator(mut self, sep: &str) -> Self
-```
-
-**示例：**
-
-```rust
-// 使用双下划线作为分隔符
-// APP__DB__URL -> db.url
-let config = EnvConfersConfig::with_prefix("APP_")
-    .separator("__");
-```
-
----
-
-### MergedConfersConfig
-
-`MergedConfersConfig` 是多源配置合并的实现，支持多个配置源按优先级合并。
-
-<div align="center" style="margin: 24px 0">
-
-#### 🔀 多源配置合并
-
-</div>
-
-#### 创建合并配置
-
-##### `MergedConfersConfig::new()`
-
-创建空的合并配置实例。
-
-```rust
-pub fn new() -> Self
-```
-
-##### `MergedConfersConfig::default()`
-
-使用默认值创建合并配置实例。
-
-```rust
-impl Default for MergedConfersConfig {
-    fn default() -> Self
+pub trait KeyProvider: Send + Sync {
+    fn get_key(&self) -> ConfigResult<ZeroizingBytes>;
+    fn provider_type(&self) -> &'static str;
+    fn cache_policy(&self) -> KeyCachePolicy { ... }
 }
 ```
 
-#### 添加配置源
-
-##### `add_source(&mut self, source: Arc<dyn ConfersConfig>) -> Self`
-
-添加一个配置源，后添加的源优先级更高。
+#### KeyCachePolicy
 
 ```rust
-pub fn add_source(mut self, source: Arc<dyn ConfersConfig>) -> Self
-```
-
-**示例：**
-
-```rust
-use confers::core::{FileConfersConfig, EnvConfersConfig, MergedConfersConfig};
-use std::sync::Arc;
-
-let file_config: Arc<dyn ConfersConfig> = Arc::new(
-    FileConfersConfig::new("config.toml")?
-);
-let env_config: Arc<dyn ConfersConfig> = Arc::new(
-    EnvConfersConfig::with_prefix("APP_")
-);
-
-let merged = MergedConfersConfig::new()
-    .add_source(file_config)     // 优先级 1
-    .add_source(env_config)      // 优先级 2（覆盖文件配置）
-    .build();
-
-// 环境变量值会覆盖文件配置值
-```
-
-#### 构建合并配置
-
-##### `build(&self) -> Arc<dyn ConfersConfig>`
-
-构建最终的合并配置。
-
-```rust
-pub fn build(self) -> Arc<dyn ConfersConfig>
+pub enum KeyCachePolicy {
+    Ttl,      // Cache with time-to-live (default)
+    Forever,  // Cache indefinitely
+    Never,    // Never cache
+}
 ```
 
 ---
 
-## 错误处理
+### TypedConfigKey
+
+Type-safe configuration key that binds a configuration path to a specific type for compile-time safety.
+
+```rust
+pub struct TypedConfigKey<T> {
+    path: &'static str,
+    description: Option<&'static str>,
+}
+
+impl<T> TypedConfigKey<T> {
+    pub const fn new(path: &'static str) -> Self;
+    pub const fn with_description(mut self, description: &'static str) -> Self;
+    pub fn path(&self) -> &'static str;
+    pub fn description(&self) -> Option<&'static str>;
+}
+```
+
+**Example:**
+
+```rust
+use confers::TypedConfigKey;
+
+static DB_HOST: TypedConfigKey<String> =
+    TypedConfigKey::new("database.host")
+        .with_description("Database hostname");
+
+static DB_PORT: TypedConfigKey<u16> =
+    TypedConfigKey::new("database.port");
+```
+
+---
+
+## Error Handling
 
 ### `ConfigError`
 
-操作过程中遇到的常见错误变体。
+Common error variants encountered during operations.
 
 <div style="padding:16px; margin: 16px 0">
 
-| 变体 | 描述 | 处理建议 |
-|-------------------------|--------------------------------------------------------------|----------|
-| `FileNotFound { path: PathBuf }` | 在指定路径未找到配置文件 | 检查文件路径是否正确，确认文件存在 |
-| `FormatDetectionFailed(String)` | 检测文件格式失败（TOML、JSON、YAML、INI）| 检查文件内容格式是否正确 |
-| `ParseError(String)` | 解析配置内容时出错 | 检查配置文件语法，确保格式正确 |
-| `ValidationError(String)` | 配置未通过验证检查 | 查看详细验证错误，修正配置值 |
-| `KeyNotFound { key_id: String }` | 未找到请求的密钥 ID | 检查密钥 ID 是否正确 |
-| `KeyRotationFailed(String)` | 密钥轮换过程中发生错误 | 检查主密钥是否正确 |
-| `KeyStorageError(String)` | 密钥存储错误 | 检查密钥存储配置和权限 |
-| `MemoryLimitExceeded { current: usize, limit: usize }` | 当前内存使用量超过配置的限制 | 增加内存限制或优化配置结构 |
-| `RemoteError(String)` | 从远程源加载配置时出错（etcd、http、consul）| 检查远程服务可用性和网络连接 |
-| `IoError(String)` | IO 操作错误 | 检查文件权限和磁盘空间 |
-| `SerializationError(String)` | 序列化/反序列化错误 | 检查数据结构是否匹配 |
-| `ConfigTooLarge { path: PathBuf, size_mb: usize, limit_mb: usize }` | 配置文件大小超过限制 | 增加配置文件大小限制或优化配置文件 |
-| `KeyError(String)` | 密钥相关错误 | 检查密钥配置和访问权限 |
-| `KeyVersionMismatch { expected: u32, actual: u32 }` | 密钥版本不匹配 | 检查密钥版本和兼容性 |
-| `KeyChecksumMismatch` | 密钥校验和不匹配 | 检查密钥完整性 |
-| `KeyExpired { key_id: String, version: u32 }` | 密钥已过期 | 更新或轮换密钥 |
-| `KeyDeprecated { key_id: String, version: u32 }` | 密钥已弃用 | 使用新版本密钥 |
-| `InvalidMasterKey(String)` | 无效的主密钥 | 检查主密钥是否正确 |
-| `KeyPolicyError(String)` | 密钥策略错误 | 检查密钥策略配置 |
-| `EnvSecurityError(String)` | 环境变量安全验证失败 | 检查环境变量安全性 |
-| `EncryptionError(String)` | 加密错误 | 检查加密配置和密钥 |
-| `DecryptionError(String)` | 解密错误 | 检查加密配置和密钥 |
-| `Other(String)` | 其他错误 | 检查详细错误信息 |
+| Variant | Description | Handling Suggestion |
+|---------|-------------|---------------------|
+| `FileNotFound { filename: PathBuf, source: Option<std::io::Error> }` | Configuration file not found | Check if file path is correct |
+| `ParseError { format: String, message: String, location: Option<ParseLocation>, source: Option<Box<dyn Error>> }` | Error parsing configuration | Check configuration file syntax |
+| `InvalidValue { key: String, expected_type: String, message: String }` | Invalid value for key | Check value type and format |
+| `SizeLimitExceeded { actual: usize, limit: usize }` | File size exceeds limit | Increase size limit or optimize file |
+| `IoError(std::io::Error)` | IO operation error | Check file permissions and disk space |
+| `MergeConflict { path: String, message: String }` | Merge conflict between sources | Check source priorities |
+| `MissingRequiredKey { key: String }` | Required key not found | Ensure all required keys are provided |
 
 </div>
 
 ---
 
-## 类型定义
+## Type Definitions
 
-### 密钥相关类型
+### Key Related Types
 
 #### `KeyVersion`
 
 ```rust
 pub struct KeyVersion {
-    pub id: String,           // 密钥版本唯一标识
-    pub version: u32,         // 版本号
-    pub created_at: u64,      // 创建时间戳
-    pub status: KeyStatus,    // 密钥状态
-    pub algorithm: String,    // 加密算法
+    pub id: String,           // Key version unique identifier
+    pub version: u32,         // Version number
+    pub created_at: u64,      // Creation timestamp
+    pub status: KeyStatus,    // Key status
+    pub algorithm: String,    // Encryption algorithm
 }
 ```
 
@@ -1761,9 +1187,9 @@ pub struct KeyVersion {
 
 ```rust
 pub enum KeyStatus {
-    Active,       // 活跃，可用于加解密
-    Deprecated,   // 已废弃，仅用于解密历史数据
-    Compromised,  // 已泄露，应立即轮换
+    Active,       // Active, can be used for encryption and decryption
+    Deprecated,   // Deprecated, only for decrypting historical data
+    Compromised,  // Compromised, should be rotated immediately
 }
 ```
 
@@ -1771,13 +1197,13 @@ pub enum KeyStatus {
 
 ```rust
 pub struct KeyInfo {
-    pub key_id: String,           // 密钥环 ID
-    pub current_version: u32,     // 当前活跃版本
-    pub total_versions: usize,    // 总版本数
-    pub active_versions: usize,   // 活跃版本数
-    pub deprecated_versions: usize, // 已废弃版本数
-    pub created_at: u64,          // 创建时间戳
-    pub last_rotated_at: Option<u64>, // 最后轮换时间
+    pub key_id: String,           // Keyring ID
+    pub current_version: u32,     // Current active version
+    pub total_versions: usize,    // Total versions
+    pub active_versions: usize,   // Active versions
+    pub deprecated_versions: usize, // Deprecated versions
+    pub created_at: u64,          // Creation timestamp
+    pub last_rotated_at: Option<u64>, // Last rotation time
 }
 ```
 
@@ -1785,22 +1211,22 @@ pub struct KeyInfo {
 
 ```rust
 pub struct RotationResult {
-    pub key_id: String,           // 密钥环 ID
-    pub previous_version: u32,    // 轮换前版本
-    pub new_version: u32,         // 轮换后版本
-    pub rotated_at: u64,          // 轮换时间戳
-    pub reencryption_required: bool, // 是否需要重新加密
+    pub key_id: String,           // Keyring ID
+    pub previous_version: u32,    // Pre-rotation version
+    pub new_version: u32,         // Post-rotation version
+    pub rotated_at: u64,          // Rotation timestamp
+    pub reencryption_required: bool, // Whether re-encryption is needed
 }
 ```
 
 ---
 
-## 示例
+## Examples
 
-### 基本配置加载
+### Basic Configuration Loading
 
 ```rust
-use confers::ConfigLoader;
+use confers::ConfigBuilder;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
@@ -1810,22 +1236,20 @@ struct AppConfig {
     debug: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let loader = ConfigLoader::<AppConfig>::new()
-        .with_app_name("myapp")
-        .with_file("config.toml")
-        .with_env(true)
-        .with_env_prefix("MYAPP");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ConfigBuilder::<AppConfig>::new()
+        .file("config.toml")
+        .env()
+        .env_prefix("MYAPP")
+        .build()?;
 
-    let config = loader.load().await?;
-    println!("数据库: {}", config.database_url);
-    println!("端口: {}", config.port);
+    println!("Database: {}", config.database_url);
+    println!("Port: {}", config.port);
     Ok(())
 }
 ```
 
-### 密钥轮换
+### Key Rotation
 
 ```rust
 use confers::key::manager::KeyManager;
@@ -1833,25 +1257,27 @@ use std::path::PathBuf;
 
 fn rotate_keys() -> Result<(), Box<dyn std::error::Error>> {
     let mut km = KeyManager::new(PathBuf::from("./keys"))?;
-    let master_key = load_master_key()?; // 从安全存储加载主密钥
+    let master_key = load_master_key()?; // Load master key from secure storage
     
     let result = km.rotate_key(
         &master_key,
         Some("production".to_string()),
         "security-team".to_string(),
-        Some("计划轮换".to_string())
+        Some("Scheduled rotation".to_string())
     )?;
     
-    println!("密钥版本从 {} 轮换到 {}", result.previous_version, result.new_version);
+    println!("Key version rotated from {} to {}", result.previous_version, result.new_version);
     Ok(())
 }
 ```
 
-### 多源配置合并
+### Multi-Source Configuration Merging
 
 ```rust
-use confers::ConfigLoader;
+use confers::ConfigBuilder;
+use confers::ConfigValue;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 struct ServerConfig {
@@ -1860,63 +1286,68 @@ struct ServerConfig {
     workers: usize,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ConfigLoader::<ServerConfig>::new()
-        .with_defaults(ServerConfig {
-            host: "127.0.0.1".to_string(),
-            port: 8080,
-            workers: 4,
-        })
-        .with_file("server.toml")
-        .with_env(true)
-        .load()
-        .await?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut defaults = HashMap::new();
+    defaults.insert("host".to_string(), ConfigValue::string("127.0.0.1"));
+    defaults.insert("port".to_string(), ConfigValue::int(8080));
+    defaults.insert("workers".to_string(), ConfigValue::uint(4));
 
-    println!("服务器在 {}:{} 运行", config.host, config.port);
+    let config = ConfigBuilder::<ServerConfig>::new()
+        .defaults(defaults)
+        .file("server.toml")
+        .env()
+        .build()?;
+
+    println!("Server running at {}:{}", config.host, config.port);
     Ok(())
 }
 ```
 
-### 配置加密
+### Configuration Encryption
 
 ```rust
-use confers::encryption::ConfigEncryption;
+use confers::XChaCha20Crypto;
 
 fn encrypt_sensitive_data() -> Result<(), Box<dyn std::error::Error>> {
-    let encryption = ConfigEncryption::from_env()?;
-    
-    let secret = "my-super-secret-api-key";
-    let encrypted = encryption.encrypt(secret)?;
-    
-    println!("加密后的值: {}", encrypted);
-    println!("格式: {}", encrypted.split(':').next().unwrap());
-    
-    let decrypted = encryption.decrypt(&encrypted)?;
+    let crypto = XChaCha20Crypto::new();
+    let key = load_encryption_key()?; // 32-byte key
+
+    let secret = b"my-super-secret-api-key";
+    let (nonce, ciphertext) = crypto.encrypt(secret, &key)?;
+
+    println!("Encrypted {} bytes", ciphertext.len());
+
+    let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
     assert_eq!(decrypted, secret);
-    
+
     Ok(())
 }
 ```
 
-### 配置差异比较
+### Configuration Validation
 
 ```rust
-use confers::commands::{DiffCommand, DiffOptions, DiffFormat};
+use confers::ConfigBuilder;
+use garde::Validate;
 
-fn compare_configs() -> Result<(), Box<dyn std::error::Error>> {
-    let options = DiffOptions {
-        format: DiffFormat::SideBySide,
-        context_lines: 5,
-        show_line_numbers: true,
-        ignore_whitespace: false,
-        case_insensitive: false,
-        strict: false,
-    };
+#[derive(Debug, Deserialize, Validate)]
+struct ServerConfig {
+    #[garde(length(min = 1))]
+    host: String,
 
-    DiffCommand::execute(
-        "config/development.toml",
-        "config/production.toml",
+    #[garde(range(min = 1, max = 65535))]
+    port: u16,
+}
+
+fn validate_config() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ConfigBuilder::<ServerConfig>::new()
+        .file("server.toml")
+        .build()?;
+
+    config.validate()?; // Uses garde validation
+    println!("Configuration is valid");
+    Ok(())
+}
         options,
     )?;
 
@@ -1926,13 +1357,13 @@ fn compare_configs() -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### 配置验证
+### Configuration Validation
 
 <div style="padding:16px; margin: 16px 0">
 
-始终使用 serde 的验证特性来确保配置的有效性：
+Always use serde's validation features to ensure configuration validity:
 
 </div>
 
@@ -1969,11 +1400,11 @@ fn default_timeout() -> Duration {
 }
 ```
 
-### 密钥管理安全
+### Key Management Security
 
 <div style="padding:16px; margin: 16px 0">
 
-⚠️ 生产环境中务必安全地管理密钥：
+⚠️ In production environments, be sure to manage keys securely:
 
 </div>
 
@@ -1982,7 +1413,7 @@ use confers::key::manager::KeyManager;
 use std::path::PathBuf;
 
 fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
-    // 从环境变量或安全存储获取主密钥
+    // Get master key from environment variable or secure storage
     let master_key = std::env::var("MASTER_KEY")
         .map(|s| {
             let mut key = [0u8; 32];
@@ -1993,14 +1424,14 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
     
     let mut km = KeyManager::new(PathBuf::from("/etc/confers/keys"))?;
     
-    // 初始化密钥环
+    // Initialize keyring
     km.initialize(
         &master_key,
         "production".to_string(),
         "security-team".to_string(),
     )?;
     
-    // 定期轮换密钥（建议每 90 天）
+    // Rotate keys regularly (recommended every 90 days)
     let rotation_result = km.rotate_key(
         &master_key,
         Some("production".to_string()),
@@ -2008,7 +1439,7 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
         Some("Scheduled rotation".to_string()),
     )?;
     
-    println!("密钥已从版本 {} 轮换到 {}", 
+    println!("Key rotated from version {} to {}", 
         rotation_result.previous_version, 
         rotation_result.new_version);
     
@@ -2016,57 +1447,62 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### 热重载配置
+### Hot Reload Configuration
 
-使用文件监视实现配置热重载：
+Use file watching to implement configuration hot reload:
 
 ```rust
-use confers::ConfigLoader;
+use confers::ConfigBuilder;
 use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (config, watcher) = AppConfig::new_loader()
-        .with_file("config.toml")
-        .load_sync_with_watcher()?;
-    
-    println!("初始配置已加载: {:?}", config);
+    let (mut rx, _guard) = ConfigBuilder::<AppConfig>::new()
+        .file("config.toml")
+        .watch(true)
+        .build_with_watcher()
+        .await?;
 
-    // 监听配置变化
+    let config = rx.borrow().clone();
+    println!("Initial configuration loaded: {:?}", config);
+
+    // Listen for configuration changes
     loop {
         tokio::time::sleep(Duration::from_secs(60)).await;
-        // watcher 会自动检测文件变化并触发重新加载
-        println!("配置监控中，版本已更新");
+        let updated = rx.borrow().clone();
+        println!("Configuration monitoring active");
     }
 }
 ```
 
-**注意：** 热重载功能需要启用 `watch` 特性。
+**Note:** Hot reload functionality requires enabling the `watch` feature.
 
-### 敏感数据加密
+### Sensitive Data Encryption
 
-对敏感配置值进行加密处理：
+Encrypt sensitive configuration values:
 
 ```rust
-use confers::encryption::ConfigEncryption;
+use confers::XChaCha20Crypto;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct Secrets {
-    #[config(sensitive = true)]
+    #[config(encrypt)]
     api_key: String,
-    
-    #[config(sensitive = true)]
+
+    #[config(encrypt)]
     database_password: String,
 }
 
-fn load_secrets() -> Result<Secrets, Box<dyn std::error::Error>> {
-    let encryption = ConfigEncryption::from_env()?;
-    
-    let encrypted_key = load_encrypted_key()?;
-    let api_key = encryption.decrypt(&encrypted_key)?;
-    
-    Ok(Secrets {
+fn decrypt_secrets() -> Result<(), Box<dyn std::error::Error>> {
+    let crypto = XChaCha20Crypto::new();
+    let key = load_encryption_key()?; // 32-byte key
+
+    let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
+    let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
+
+    Ok(())
+}
         api_key,
         database_password: "decrypted-password".to_string(),
     })
@@ -2075,14 +1511,14 @@ fn load_secrets() -> Result<Secrets, Box<dyn std::error::Error>> {
 
 ---
 
-## 高级功能
+## Advanced Features
 
-### 自定义格式解析器
+### Custom Format Parser
 
-对于标准库不支持的配置格式，可以实现自定义解析器：
+For configuration formats not supported by the standard library, you can implement custom parsers:
 
 ```rust
-use confers::{ConfigLoader, ConfigError};
+use confers::{ConfigBuilder, ConfigError};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -2094,93 +1530,95 @@ struct CustomConfig {
 fn load_custom_config() -> Result<CustomConfig, ConfigError> {
     let content = std::fs::read_to_string("config.custom")?;
     let config: CustomConfig = toml::from_str(&content)
-        .map_err(ConfigError::ParseError)?;
+        .map_err(|e| ConfigError::ParseError {
+            format: "custom".into(),
+            message: e.to_string(),
+            location: None,
+            source: Some(Box::new(e)),
+        })?;
     Ok(config)
 }
 ```
 
-### 配置回滚
+### Configuration Rollback
 
-使用版本历史实现配置回滚：
+Use version history to implement configuration rollback:
 
 ```rust
-use confers::ConfigLoader;
+use confers::ConfigBuilder;
 use std::path::PathBuf;
 
-async fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
+fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
     let config_dir = PathBuf::from("/etc/myapp");
-    
+
     let versions = std::fs::read_dir(config_dir.join("history"))?
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
         .filter(|p| p.extension().map(|e| e == "toml").unwrap_or(false))
         .collect::<Vec<_>>();
 
-    if versions.len()>= 2 {
+    if versions.len() >= 2 {
         let previous_version = &versions[versions.len() - 2];
-        
-        let config = ConfigLoader::<AppConfig>::new()
-            .with_file(previous_version)
-            .load()
-            .await?;
 
-        println!("已回滚到之前的配置版本");
+        let config = ConfigBuilder::<AppConfig>::new()
+            .file(previous_version)
+            .build()?;
+
+        println!("Rolled back to previous configuration version");
         return Ok(());
     }
 
-    Err("没有足够的版本历史用于回滚".into())
+    Err("Not enough version history for rollback".into())
 }
 ```
 
 ---
 
-## 性能优化
+## Performance Optimization
 
-### 异步加载
+### Asynchronous Loading
 
 <div style="padding:16px; margin: 16px 0">
 
-💡 **提示**: 对于大型配置或远程配置源，始终使用异步加载：
+💡 **Tip**: For large configurations or remote configuration sources, always use asynchronous loading:
 
 </div>
 
 ```rust
-use confers::ConfigLoader;
+use confers::ConfigBuilder;
 
-async fn load_config_efficiently() -> Result<(), Box<dyn std::error::Error>> {
+fn load_config_efficiently() -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
-    
-    let config = ConfigLoader::<AppConfig>::new()
-        .with_file("config.toml")
-        .with_env(true)
-        .load()
-        .await?;
-    
+
+    let config = ConfigBuilder::<AppConfig>::new()
+        .file("config.toml")
+        .env()
+        .build()?;
+
     let elapsed = start.elapsed();
-    println!("配置加载耗时: {:?}", elapsed);
-    
+    println!("Configuration loading time: {:?}", elapsed);
+
     Ok(())
 }
 ```
 
-### 配置缓存
+### Configuration Caching
 
-对于频繁访问的配置，使用内存缓存：
+For frequently accessed configurations, use memory caching:
 
 ```rust
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use confers::ConfigBuilder;
 
 struct CachedConfig {
     cache: Arc<RwLock<Option<AppConfig>>>,
-    loader: ConfigLoader<AppConfig>,
 }
 
 impl CachedConfig {
-    fn new(loader: ConfigLoader<AppConfig>) -> Self {
+    fn new() -> Self {
         Self {
             cache: Arc::new(RwLock::new(None)),
-            loader,
         }
     }
 
@@ -2192,8 +1630,11 @@ impl CachedConfig {
             }
         }
 
-        let config = self.loader.load().await?;
-        
+        let config = ConfigBuilder::<AppConfig>::new()
+            .file("config.toml")
+            .env()
+            .build()?;
+
         {
             let mut writer = self.cache.write().await;
             *writer = Some(config.clone());
@@ -2206,99 +1647,103 @@ impl CachedConfig {
 
 ---
 
-## 安全注意事项
+## Security Considerations
 
 <div align="center" style="margin: 24px 0">
 
-### 🔒 安全最佳实践
+### 🔒 Security Best Practices
 
 </div>
 
-#### 敏感数据处理
+#### Sensitive Data Handling
 
 <div style="padding:16px; margin: 16px 0">
 
-**如何识别敏感字段：**
+**How to identify sensitive fields:**
 
-- 密码、API 密钥、访问令牌
-- 数据库连接字符串
-- 私钥、证书
-- 个人身份信息（PII）
+- Passwords, API keys, access tokens
+- Database connection strings
+- Private keys, certificates
+- Personally identifiable information (PII)
 
-**如何加密敏感数据：**
+**How to encrypt sensitive data:**
 
 ```rust
-use confers::encryption::ConfigEncryption;
+use confers::XChaCha20Crypto;
 
-// 从环境变量获取加密密钥（推荐）
-let encryption = ConfigEncryption::from_env()?;
+// Create encryptor
+let crypto = XChaCha20Crypto::new();
 
-// 加密敏感值
-let encrypted = encryption.encrypt("my-secret-api-key")?;
-println!("加密后的值: {}", encrypted);
+// Generate or load a 32-byte key
+let key = load_encryption_key()?;
 
-// 解密敏感值
-let decrypted = encryption.decrypt(&encrypted)?;
-assert_eq!(decrypted, "my-secret-api-key");
+// Encrypt sensitive value
+let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
+println!("Encrypted {} bytes", ciphertext.len());
+
+// Decrypt sensitive value
+let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
+assert_eq!(decrypted, b"my-secret-api-key");
 ```
 
-**⚠️ 安全提示：**
+**⚠️ Security Tips:**
 
-- 🔴 **密钥管理**：加密密钥必须安全存储，绝不能提交到版本控制系统
-- 🔴 **密钥轮换**：生产环境建议定期轮换密钥
-- 🔴 **密钥长度**：密钥必须恰好 32 字节（256 位）用于 AES-256-GCM
-- 🔴 **密钥存储**：考虑使用密钥管理服务（如 AWS Secrets Manager、HashiCorp Vault）
+- 🔴 **Key Management**: Encryption keys must be stored securely and never committed to version control systems
+- 🔴 **Key Rotation**: Regular key rotation is recommended for production environments
+- 🔴 **Key Length**: Keys must be exactly 32 bytes (256 bits) for XChaCha20-Poly1305
+- 🔴 **Nonce Storage**: Store nonce alongside ciphertext for decryption
 
 </div>
 
-#### 密钥管理
+#### Key Management
 
-**如何生成安全的密钥：**
+**How to generate secure keys:**
 
 ```rust
 use rand::Rng;
 
-// 生成安全的随机密钥
+// Generate secure random key
 let mut key = [0u8; 32];
 let mut rng = rand::thread_rng();
 rng.fill(&mut key);
 
-// 使用密钥
-let encryption = ConfigEncryption::new(key);
+// Use with XChaCha20Crypto
+let crypto = XChaCha20Crypto::new();
+let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 ```
 
-**如何轮换密钥：**
+**How to rotate keys:**
 
 ```rust
 use confers::key::manager::KeyManager;
 use std::path::PathBuf;
 
 let mut km = KeyManager::new(PathBuf::from("./keys"))?;
-let master_key = load_master_key()?; // 从安全存储加载主密钥
+let master_key = load_master_key()?; // Load master key from secure storage
 
-// 轮换密钥
+// Rotate key
 let result = km.rotate_key(
     &master_key,
     Some("production".to_string()),
     "security-team".to_string(),
-    Some("定期密钥轮换".to_string())
+    Some("Scheduled key rotation".to_string())
 )?;
 
-println!("密钥版本从 {} 轮换到 {}", result.previous_version, result.new_version);
+println!("Key version rotated from {} to {}", result.previous_version, result.new_version);
 ```
 
-**⚠️ 安全提示：**
+**⚠️ Security Tips:**
 
-- 🔴 **密钥存储**：使用硬件安全模块（HSM）或密钥管理服务
-- 🔴 **密钥轮换**：建议每 90 天轮换一次密钥
-- 🔴 **密钥备份**：安全备份密钥，确保可以恢复
-- 🔴 **密钥泄露应急处理**：如果密钥泄露，立即轮换并通知相关团队
+- 🔴 **Key Storage**: Use Hardware Security Modules (HSM) or Key Management Services
+- 🔴 **Key Rotation**: Recommend rotating keys every 90 days
+- 🔴 **Key Backup**: Securely backup keys, ensure recovery is possible
+- 🔴 **Key Leak Emergency Handling**: If a key is leaked, rotate immediately and notify relevant teams
 
 </div>
 
-#### 审计日志配置
+#### Audit Log Configuration
 
-**如何启用审计日志：**
+**How to enable audit logging:**
 
 ```rust
 use confers::audit::{AuditLogWriter, RotationConfig};
@@ -2310,7 +1755,7 @@ let rotation_config = RotationConfig {
     compress_archived: true,
 };
 
-let integrity_key = [0u8; 32]; // 从安全存储获取
+let integrity_key = [0u8; 32]; // Get from secure storage
 let writer = AuditLogWriter::new(
     PathBuf::from("/var/log/audit.log"),
     rotation_config,
@@ -2318,77 +1763,78 @@ let writer = AuditLogWriter::new(
 )?;
 ```
 
-**⚠️ 安全提示：**
+**⚠️ Security Tips:**
 
-- 🔴 **日志完整性**：审计日志使用 HMAC 签名保护完整性
-- 🔴 **日志访问控制**：限制审计日志文件访问权限（仅 root/管理员）
-- 🔴 **日志归档**：定期归档审计日志，防止日志文件过大
-- 🔴 **日志监控**：监控审计日志访问记录，检测异常访问
+- 🔴 **Log Integrity**: Audit logs use HMAC signatures to protect integrity
+- 🔴 **Log Access Control**: Restrict audit log file access permissions (root/admin only)
+- 🔴 **Log Archival**: Regularly archive audit logs to prevent log files from becoming too large
+- 🔴 **Log Monitoring**: Monitor audit log access records, detect anomalous access
 
 </div>
 
-#### 生产环境安全配置
+#### Production Environment Security Configuration
 
-**环境变量安全配置：**
+**Environment variable security configuration:**
 
 ```bash
-# 使用环境变量存储敏感信息
+# Use environment variables to store sensitive information
 export APP_DATABASE_URL="postgres://user:password@localhost/db"
 export APP_API_KEY="your-api-key"
 export CONFERS_ENCRYPTION_KEY="base64-encoded-key"
 ```
 
-**远程配置安全配置：**
+**Remote configuration security configuration:**
 
 ```rust
-let config = ConfigLoader::<AppConfig>::new()
-    .with_remote_config("https://config.example.com")
-    .with_remote_token("your-access-token")
-    .with_remote_tls(
-        PathBuf::from("/etc/ssl/certs/ca.pem"),
-        Some(PathBuf::from("/etc/ssl/certs/client.pem")),
-        Some(PathBuf::from("/etc/ssl/keys/client.key"))
-    )
-    .load()
-    .await?;
+// Remote configuration requires using the remote source directly
+use confers::remote::HttpPolledSourceBuilder;
+
+let remote_source = HttpPolledSourceBuilder::new()
+    .url("https://config.example.com")
+    .token("your-access-token")
+    .build()?;
+
+let config = ConfigBuilder::<AppConfig>::new()
+    .source(Box::new(remote_source))
+    .build()?;
 ```
 
-**⚠️ 安全提示：**
+**⚠️ Security Tips:**
 
-- 🔴 **TLS 配置**：始终使用 TLS 加密远程配置传输
-- 🔴 **访问控制**：限制远程配置服务的访问权限
-- 🔴 **最小权限原则**：仅授予必要的权限
-- 🔴 **安全审查**：定期审查生产环境配置
+- 🔴 **TLS Configuration**: Always use TLS encryption for remote configuration transmission
+- 🔴 **Access Control**: Restrict access permissions to remote configuration services
+- 🔴 **Principle of Least Privilege**: Grant only necessary permissions
+- 🔴 **Security Audit**: Regularly audit production environment configuration
 
 </div>
 
-#### API 方法安全标注
+#### API Method Security Annotations
 
-**加密 API：**
+**Encryption API:**
 
 ```rust
-/// 加密敏感配置值
+/// Encrypt sensitive configuration value
 ///
 /// # Security Notes
 ///
 /// - ⚠️ **Key Management**: The encryption key must be stored securely and never committed to version control
 /// - ⚠️ **Key Rotation**: Regular key rotation is recommended for production environments
-/// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for AES-256-GCM
-/// - ⚠️ **Key Storage**: Consider using a secrets manager (e.g., AWS Secrets Manager, HashiCorp Vault)
+/// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for XChaCha20-Poly1305
+/// - ⚠️ **Nonce Storage**: Store the nonce alongside the ciphertext for decryption
 ///
 /// # Example
 ///
 /// ```rust
-/// let encryption = ConfigEncryption::new(secure_key);
-/// let encrypted = encryption.encrypt("sensitive-data")?;
+/// let crypto = XChaCha20Crypto::new();
+/// let (nonce, ciphertext) = crypto.encrypt(b"sensitive-data", &key)?;
 /// ```
-pub fn encrypt(&self, plaintext: &str) -> Result<String, ConfigError>
+pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), CryptoError>
 ```
 
-**密钥管理 API：**
+**Key Management API:**
 
 ```rust
-/// 初始化新的密钥环
+/// Initialize new keyring
 ///
 /// # Security Notes
 ///
@@ -2414,10 +1860,10 @@ pub fn initialize(
 ) -> Result<KeyVersion, ConfigError>
 ```
 
-**审计日志 API：**
+**Audit Log API:**
 
 ```rust
-/// 记录配置加载到审计日志
+/// Log configuration loading to audit log
 ///
 /// # Security Notes
 ///
@@ -2438,10 +1884,10 @@ pub fn log_to_file<T>(
 ) -> Result<(), ConfigError>
 ```
 
-**配置验证 API：**
+**Configuration Validation API:**
 
 ```rust
-/// 验证配置范围
+/// Validate configuration range
 ///
 /// # Security Notes
 ///
@@ -2461,26 +1907,26 @@ pub fn validate(&self, config: &Value) -> Result<(), ValidationError>
 
 ---
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
 <div style="padding:16px; margin: 16px 0">
 
-| 问题 | 解决方案 |
-|------|----------|
-| **Q: 配置文件未找到？** | 检查文件路径是否正确，确保使用绝对路径或相对于工作目录的路径。建议使用 `with_app_name()` 让库自动查找标准位置。 |
-| **Q: 环境变量未生效？** | 确认已调用 `with_env(true)`，并检查环境变量名称是否使用正确的前缀。例如，配置字段 `port` 对应的环境变量名为 `<PREFIX>_PORT`。 |
-| **Q: 加密解密失败？** | 确保使用相同的密钥进行加密和解密，检查 `CONFERS_ENCRYPTION_KEY` 环境变量是否正确设置且格式为有效的 Base64 编码。 |
-| **Q: 配置验证失败？** | 查看详细的验证错误信息，确保配置值满足所有验证约束。检查字段类型是否匹配。 |
-| **Q: 远程配置加载超时？** | 检查网络连接和远程服务可用性，考虑增加超时时间 `with_remote_timeout("60s")`。 |
-| **Q: 内存使用过高？** | 使用 `with_memory_limit()` 设置内存限制，优化配置文件大小，避免在配置中存储大型二进制数据。 |
+| Issue | Solution |
+|-------|----------|
+| **Q: Configuration file not found?** | Check if the file path is correct, make sure to use absolute path or path relative to working directory. Recommend using `with_app_name()` to let the library automatically search standard locations. |
+| **Q: Environment variables not working?** | Confirm `with_env(true)` has been called, and check if environment variable names use the correct prefix. For example, configuration field `port` corresponds to environment variable name `<PREFIX>_PORT`. |
+| **Q: Encryption/decryption failed?** | Make sure to use the same key for encryption and decryption, check if `CONFERS_ENCRYPTION_KEY` environment variable is correctly set and format is valid Base64 encoding. |
+| **Q: Configuration validation failed?** | View detailed validation error messages, ensure configuration values meet all validation constraints. Check if field types match. |
+| **Q: Remote configuration loading timeout?** | Check network connection and remote service availability, configure timeout when creating the source: `HttpSource::new(url).with_timeout(Duration::from_secs(60))`. |
+| **Q: Memory usage too high?** | Use `with_memory_limit()` to set memory limit, optimize configuration file size, avoid storing large binary data in configuration. |
 
 </div>
 
-### 日志调试
+### Debug Logging
 
-启用详细日志以进行调试：
+Enable verbose logging for debugging:
 
 ```rust
 use env_logger;
@@ -2493,7 +1939,7 @@ fn setup_logging() {
 }
 ```
 
-运行程序时设置日志级别：
+Set log level when running the program:
 
 ```bash
 RUST_LOG=confers=debug ./myapp
@@ -2501,44 +1947,44 @@ RUST_LOG=confers=debug ./myapp
 
 ---
 
-## Cargo 特性
+## Cargo Features
 
-| 特性 | 描述 | 默认启用 |
-|------|------|----------|
-| `derive` | 配置结构体的 derive 宏 | 是 |
-| `validation` | 配置验证支持 | 否 |
-| `watch` | 文件监视和热重载 | 否 |
-| `audit` | 配置加载审计日志 | 否 |
-| `schema` | JSON Schema 生成 | 否 |
-| `parallel` | 并行验证 | 否 |
-| `monitoring` | 系统监控 | 否 |
-| `remote` | 远程配置（etcd、Consul、HTTP） | 否 |
-| `encryption` | 配置加密功能 | 否 |
-| `cli` | 命令行工具 | 否 |
-| `full` | 启用所有功能 | 否 |
+| Feature | Description | Default |
+|---------|-------------|---------|
+| `derive` | Derive macro for configuration structs | Yes |
+| `validation` | Configuration validation support | No |
+| `watch` | File monitoring and hot reload | No |
+| `audit` | Configuration loading audit log | No |
+| `schema` | JSON Schema generation | No |
+| `parallel` | Parallel validation | No |
+| `monitoring` | System monitoring | No |
+| `remote` | Remote configuration (etcd, Consul, HTTP) | No |
+| `encryption` | Configuration encryption functionality | No |
+| `cli` | Command-line tool | No |
+| `full` | Enable all features | No |
 
-**特性预设：**
+**Feature Presets:**
 
-| 预设 | 包含特性 | 使用场景 |
-|------|----------|----------|
-| `minimal` | `derive` | 仅配置加载（最小依赖） |
-| `recommended` | `derive`, `validation` | 配置加载 + 验证（推荐大多数应用） |
-| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | 开发配置 |
-| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | 生产配置 |
-| `full` | 所有特性 | 完整功能集 |
+| Preset | Included Features | Use Case |
+|--------|-------------------|----------|
+| `minimal` | `derive` | Configuration loading only (minimal dependencies) |
+| `recommended` | `derive`, `validation` | Configuration loading + validation (recommended for most applications) |
+| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development configuration |
+| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production configuration |
+| `full` | All features | Complete feature set |
 
 ---
 
 <div align="center" style="margin: 32px 0; padding: 24px">
 
-### 💝 感谢使用 Confers！
+### 💝 Thank You for Using Confers!
 
-如有问题或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
+If you have questions or suggestions, please visit the [GitHub Repository](https://github.com/Kirky-X/confers).
 
-**[🏠 返回首页](../README.md)** • **[📖 用户指南](USER_GUIDE.md)**
+**[🏠 Back to Home](../README.md)** • **[📖 User Guide](USER_GUIDE.md)**
 
-由 Kirky.X 用 ❤️ 制作
+Made with ❤️ by Kirky.X
 
-**[⬆ 返回顶部](#top)**
+**[⬆ Back to Top](#top)**
 
 </div>

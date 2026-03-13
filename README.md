@@ -73,7 +73,7 @@ pub struct AppConfig {
 }
 
 // Configuration loads automatically from files, env vars, and CLI args
-let config = AppConfig::load()?;
+let config = AppConfig::load_sync()?;
 ```
 
 ---
@@ -151,13 +151,14 @@ let config = AppConfig::load()?;
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `derive` | Minimal config loading (no validation, no CLI) |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `derive`, `validation` | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring`, `tracing` | Development with all tools |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing` | Production-ready configuration |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env` | Environment variables only |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `env`, `validation` | **Recommended for most applications** |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | Distributed systems |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | All features | Complete feature set |
 
-**Note:** The `cli` feature automatically includes `derive`, `validation`, and `encryption` dependencies.
+**Note:** Default features include `toml`, `json`, `env`. The `cli` feature automatically includes `validation` and `encryption` dependencies.
 
 ### 🎨 Feature Architecture
 
@@ -194,41 +195,67 @@ graph LR
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.2.2"` | Includes only `derive` (minimal config loading) |
-| **Minimal** | `confers = { version = "0.2.2", default-features = false, features = ["minimal"] }` | Only config loading (same as default) |
-| **Recommended** | `confers = { version = "0.2.2", default-features = false, features = ["recommended"] }` | Config + validation |
-| **CLI with Tools** | `confers = { version = "0.2.2", features = ["cli"] }` | CLI with validation and encryption |
-| **Full** | `confers = { version = "0.2.2", features = ["full"] }` | All features |
+| **Default** | `confers = "0.3.0"` | Includes `toml`, `json`, `env` (default features) |
+| **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables only |
+| **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation |
+| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI with validation and encryption |
+| **Full** | `confers = { version = "0.3.0", features = ["full"] }` | All features |
 
 **Individual Features:**
 
 | Feature | Description | Default |
 |---------|-------------|---------|
-| `derive` | Derive macros for config structs | ✅ |
-| `validation` | Config validation support | ❌ |
-| `cli` | Command-line interface tools | ❌ |
+| **Format Support** |||
+| `toml` | TOML format support | ✅ |
+| `json` | JSON format support | ✅ |
+| `yaml` | YAML format support | ❌ |
+| `ini` | INI format support | ❌ |
+| `env` | Environment variable support | ✅ |
+| **Core Features** |||
+| `validation` | Configuration validation (garde) | ❌ |
 | `watch` | File watching and hot reload | ❌ |
-| `audit` | Audit logging | ❌ |
+| `encryption` | XChaCha20-Poly1305 encryption | ❌ |
+| `cli` | Command-line tool | ❌ |
 | `schema` | JSON Schema generation | ❌ |
 | `parallel` | Parallel validation | ❌ |
-| `monitoring` | System monitoring | ❌ |
-| `remote` | Remote config (etcd, consul, http, vault) | ❌ |
-| `encryption` | Config encryption | ❌ |
-| `hocon` | HOCON format support | ❌ |
+| **Advanced Features** |||
+| `audit` | Audit logging | ❌ |
+| `metrics` | Metrics collection | ❌ |
+| `dynamic` | Dynamic fields | ❌ |
+| `progressive-reload` | Progressive reload | ❌ |
+| `migration` | Configuration migration | ❌ |
+| `snapshot` | Snapshot rollback | ❌ |
+| `profile` | Environment configuration | ❌ |
+| `interpolation` | Variable interpolation | ❌ |
+| `tracing` | Distributed tracing | ❌ |
+| **Remote Sources** |||
+| `remote` | HTTP polling | ❌ |
+| `etcd` | Etcd integration | ❌ |
+| `consul` | Consul integration | ❌ |
+| `cache-redis` | Redis cache | ❌ |
+| **Message Bus** |||
+| `config-bus` | Configuration event bus | ❌ |
+| `nats-bus` | NATS message bus | ❌ |
+| `redis-bus` | Redis message bus | ❌ |
+| **Others** |||
+| `security` | Security module | ❌ |
+| `key` | Key management system | ❌ |
+| `modules` | Modular configuration | ❌ |
+| `context-aware` | Context-aware configuration | ❌ |
 
 ### 🔧 CLI Command Feature Dependencies
 
 | Command | Required Features | Optional Features | Description |
 |---------|------------------|------------------|-------------|
-| `generate` | `cli` (includes: `derive`, `validation`, `encryption`) | `schema` | Generate configuration templates |
-| `validate` | `cli` (includes: `derive`, `validation`, `encryption`) | `schema` | Validate configuration files |
-| `diff` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Compare configuration files |
-| `encrypt` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Encrypt configuration values |
-| `key` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Manage encryption keys |
-| `wizard` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Interactive configuration wizard |
-| `completions` | `cli` (includes: `derive`, `validation`, `encryption`) | - | Generate shell completions |
+| `generate` | `cli` | `schema` | Generate configuration templates |
+| `validate` | `cli` | `schema` | Validate configuration files |
+| `diff` | `cli` | - | Compare configuration files |
+| `encrypt` | `cli` | - | Encrypt configuration values |
+| `key` | `cli` | - | Manage encryption keys |
+| `wizard` | `cli` | - | Interactive configuration wizard |
+| `completions` | `cli` | - | Generate shell completions |
 
-**Note**: The `cli` feature automatically includes `derive`, `validation`, and `encryption` for convenience.
+**Note**: The `cli` feature provides command-line tools for configuration management.
 
 </td>
 </tr>
@@ -238,7 +265,7 @@ graph LR
 
 #### 🎬 5-Minute Quick Start
 
-**Required Features**: `derive`, `validation` (use: `features = ["recommended"]`)
+**Required Features**: `toml`, `env`, `validation` (use: `features = ["recommended"]`)
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -281,7 +308,7 @@ debug = true
 
 ```rust
 fn main() -> anyhow::Result<()> {
-    let config = AppConfig::load()?;
+    let config = AppConfig::load_sync()?;
     println!("✅ Loaded: {:?}", config);
     Ok(())
 }
@@ -328,7 +355,7 @@ debug = true
     std::fs::write("config.toml", config_content)?;
 
     // Load configuration
-    let config = AppConfig::load()?;
+    let config = AppConfig::load_sync()?;
 
     // Print configuration
     println!("🎉 Configuration loaded successfully!");
@@ -363,7 +390,7 @@ pub struct AppConfig {
 }
 
 // One-line configuration loading
-let config = AppConfig::load()?;
+let config = AppConfig::load_sync()?;
 ```
 
 #### 2️⃣ Builder Mode
@@ -448,51 +475,36 @@ let service = MyService::new(shared_config);
 
 ---
 
-## 🔌 Library Integration
+## 🔧 CLI Tool
 
-Confers provides a unified `ConfersCli` API for easy integration into other Rust projects.
+Confers provides a standalone command-line tool `confers-cli` for configuration management:
 
-### Quick Start
+### Install CLI Tool
 
-```toml
-[dependencies]
-confers = { version = "0.2.2", features = ["cli"] }
+```bash
+cargo install confers-cli
 ```
 
-```rust
-use confers::ConfersCli;
+### Basic Commands
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Generate configuration template
-    ConfersCli::generate(Some("config.toml"), "full")?;
-    
-    // Validate configuration
-    ConfersCli::validate("config.toml", "full")?;
-    
-    // Compare configurations
-    ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
-    
-    // Encrypt values
-    let encrypted = ConfersCli::encrypt("secret", None)?;
-    
-    Ok(())
-}
+```bash
+# View help
+confers-cli --help
+
+# Generate configuration template
+confers-cli generate --struct "AppConfig" --output config.toml
+
+# Validate configuration file
+confers-cli validate config.toml
+
+# Compare configuration files
+confers-cli diff config1.toml config2.toml
+
+# Encrypt configuration values
+confers-cli encrypt "secret_value" --key-file secret.key
 ```
 
-### Available Methods
-
-| Method | Description | Example |
-|--------|-------------|----------|
-| `generate(output, level)` | Generate config templates | `ConfersCli::generate(Some("app.toml"), "minimal")?` |
-| `validate(config, level)` | Validate config files | `ConfersCli::validate("app.toml", "full")?` |
-| `diff(file1, file2, format)` | Compare configs | `ConfersCli::diff("old.toml", "new.toml", Some("side-by-side"))?` |
-| `encrypt(value, key)` | Encrypt values | `ConfersCli::encrypt("secret", None)?` |
-| `wizard(non_interactive)` | Interactive setup | `ConfersCli::wizard(false)?` |
-| `completions(shell)` | Generate completions | `ConfersCli::completions("bash")?` |
-| `key(subcommand)` | Key management | `ConfersCli::key(&KeySubcommand::Generate)?` |
-| `schema(struct_name, output)` | Generate JSON Schema | `ConfersCli::schema("AppConfig", Some("schema.json"))?` |
-
-**[📚 Complete Integration Guide →](docs/LIBRARY_INTEGRATION.md)**
+**Note**: The CLI tool requires the `cli` feature to be enabled.
 
 ---
 
@@ -518,7 +530,7 @@ pub struct BasicConfig {
 }
 
 fn basic_example() -> anyhow::Result<()> {
-    let config = BasicConfig::load()?;
+    let config = BasicConfig::load_sync()?;
     println!("✅ Name: {}, Port: {}", config.name, config.port);
     Ok(())
 }
@@ -555,7 +567,7 @@ pub struct AdvancedConfig {
 }
 
 fn advanced_example() -> anyhow::Result<()> {
-    let config = AdvancedConfig::load()?;
+    let config = AdvancedConfig::load_sync()?;
     println!("🚀 Server: {}:{}", config.host, config.port);
     Ok(())
 }

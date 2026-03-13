@@ -75,7 +75,7 @@ pub struct AppConfig {
 }
 
 // 配置自动从文件、环境变量和命令行参数加载
-let config = AppConfig::load()?;
+let config = AppConfig::load_sync()?;
 ```
 
 </div>
@@ -200,27 +200,53 @@ graph LR
 
 | 安装方式 | 配置方式 | 使用场景 |
 |-------------------|---------------|----------|
-| **默认** | `confers = "0.2.2"` | 仅包含 `derive`（最小化配置加载） |
-| **最小化** | `confers = { version = "0.2.2", default-features = false, features = ["minimal"] }` | 仅配置加载（与默认相同） |
-| **推荐** | `confers = { version = "0.2.2", default-features = false, features = ["recommended"] }` | 配置 + 验证 |
-| **CLI 工具** | `confers = { version = "0.2.2", features = ["cli"] }` | CLI 包含验证和加密 |
-| **完整** | `confers = { version = "0.2.2", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.3.0"` | 包含 `toml`、`json`、`env`（默认特性） |
+| **最小化** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | 仅环境变量 |
+| **推荐** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + 验证 |
+| **CLI 工具** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI 包含验证和加密 |
+| **完整** | `confers = { version = "0.3.0", features = ["full"] }` | 所有功能 |
 
 **单独功能说明：**
 
 | 功能 | 描述 | 默认启用 |
 |---------|-------------|---------|
-| `derive` | 配置结构体的派生宏 | ✅ |
-| `validation` | 配置验证支持 | ❌ |
-| `cli` | 命令行界面工具 | ❌ |
+| **格式支持** |||
+| `toml` | TOML 格式支持 | ✅ |
+| `json` | JSON 格式支持 | ✅ |
+| `yaml` | YAML 格式支持 | ❌ |
+| `ini` | INI 格式支持 | ❌ |
+| `env` | 环境变量支持 | ✅ |
+| **核心功能** |||
+| `validation` | 配置验证（garde） | ❌ |
 | `watch` | 文件监控和热重载 | ❌ |
-| `audit` | 审计日志 | ❌ |
+| `encryption` | XChaCha20-Poly1305 加密 | ❌ |
+| `cli` | 命令行工具 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
 | `parallel` | 并行验证 | ❌ |
-| `monitoring` | 系统监控 | ❌ |
-| `remote` | 远程配置（etcd、consul、http、vault） | ❌ |
-| `encryption` | 配置加密 | ❌ |
-| `hocon` | HOCON 格式支持 | ❌ |
+| **高级功能** |||
+| `audit` | 审计日志 | ❌ |
+| `metrics` | 指标收集 | ❌ |
+| `dynamic` | 动态字段 | ❌ |
+| `progressive-reload` | 渐进式重载 | ❌ |
+| `migration` | 配置迁移 | ❌ |
+| `snapshot` | 快照回滚 | ❌ |
+| `profile` | 环境配置 | ❌ |
+| `interpolation` | 变量插值 | ❌ |
+| `tracing` | 分布式追踪 | ❌ |
+| **远程源** |||
+| `remote` | HTTP 轮询 | ❌ |
+| `etcd` | Etcd 集成 | ❌ |
+| `consul` | Consul 集成 | ❌ |
+| `cache-redis` | Redis 缓存 | ❌ |
+| **消息总线** |||
+| `config-bus` | 配置事件总线 | ❌ |
+| `nats-bus` | NATS 消息总线 | ❌ |
+| `redis-bus` | Redis 消息总线 | ❌ |
+| **其他** |||
+| `security` | 安全模块 | ❌ |
+| `key` | 密钥管理系统 | ❌ |
+| `modules` | 模块化配置 | ❌ |
+| `context-aware` | 上下文感知配置 | ❌ |
 
 ### 🔧 CLI 命令功能依赖
 
@@ -245,7 +271,7 @@ graph LR
 
 #### 🎬 5 分钟快速入门
 
-**必需功能**：`derive`、`validation`（使用：`features = ["recommended"]`）
+**必需功能**：`toml`、`env`、`validation`（使用：`features = ["recommended"]`）
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -288,7 +314,7 @@ debug = true
 
 ```rust
 fn main() -> anyhow::Result<()> {
-    let config = AppConfig::load()?;
+    let config = AppConfig::load_sync()?;
     println!("✅ 已加载: {:?}", config);
     Ok(())
 }
@@ -335,7 +361,7 @@ debug = true
     std::fs::write("config.toml", config_content)?;
 
     // 加载配置
-    let config = AppConfig::load()?;
+    let config = AppConfig::load_sync()?;
 
     // 打印配置
     println!("🎉 配置加载成功！");
@@ -370,7 +396,7 @@ pub struct AppConfig {
 }
 
 // 一行代码加载配置
-let config = AppConfig::load()?;
+let config = AppConfig::load_sync()?;
 ```
 
 #### 2️⃣ 构建器模式
@@ -455,52 +481,6 @@ let service = MyService::new(shared_config);
 
 ---
 
-## 🔌 库集成
-
-Confers 提供统一的 `ConfersCli` API，便于集成到其他 Rust 项目中。
-
-### 快速开始
-
-```toml
-[dependencies]
-confers = { version = "0.2.2", features = ["cli"] }
-```
-
-```rust
-use confers::ConfersCli;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 生成配置模板
-    ConfersCli::generate(Some("config.toml"), "full")?;
-
-    // 验证配置
-    ConfersCli::validate("config.toml", "full")?;
-
-    // 比较配置
-    ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
-
-    // 加密值
-    let encrypted = ConfersCli::encrypt("secret", None)?;
-
-    Ok(())
-}
-```
-
-### 可用方法
-
-| 方法 | 描述 | 示例 |
-|--------|-------------|----------|
-| `generate(output, level)` | 生成配置模板 | `ConfersCli::generate(Some("app.toml"), "minimal")?` |
-| `validate(config, level)` | 验证配置文件 | `ConfersCli::validate("app.toml", "full")?` |
-| `diff(file1, file2, format)` | 比较配置 | `ConfersCli::diff("old.toml", "new.toml", Some("side-by-side"))?` |
-| `encrypt(value, key)` | 加密值 | `ConfersCli::encrypt("secret", None)?` |
-| `wizard(non_interactive)` | 交互式设置 | `ConfersCli::wizard(false)?` |
-| `completions(shell)` | 生成补全 | `ConfersCli::completions("bash")?` |
-| `key(subcommand)` | 密钥管理 | `ConfersCli::key(&KeySubcommand::Generate)?` |
-| `schema(struct_name, output)` | 生成 JSON Schema | `ConfersCli::schema("AppConfig", Some("schema.json"))?` |
-
-**[📚 完整集成指南 →](docs/LIBRARY_INTEGRATION.md)**
-
 ---
 
 ## <span id="examples">💻 示例</span>
@@ -525,7 +505,7 @@ pub struct BasicConfig {
 }
 
 fn basic_example() -> anyhow::Result<()> {
-    let config = BasicConfig::load()?;
+    let config = BasicConfig::load_sync()?;
     println!("✅ 名称: {}, 端口: {}", config.name, config.port);
     Ok(())
 }
@@ -562,7 +542,7 @@ pub struct AdvancedConfig {
 }
 
 fn advanced_example() -> anyhow::Result<()> {
-    let config = AdvancedConfig::load()?;
+    let config = AdvancedConfig::load_sync()?;
     println!("🚀 服务器: {}:{}", config.host, config.port);
     Ok(())
 }
