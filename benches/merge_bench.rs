@@ -1,7 +1,6 @@
 //! Merge benchmark for confers configuration library.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use std::sync::Arc;
 
 /// Benchmark: ConfigValue String construction
 fn bench_config_value_string(c: &mut Criterion) {

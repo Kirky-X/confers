@@ -2,7 +2,6 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-/// Benchmark: DynamicField get operation
 #[cfg(feature = "dynamic")]
 fn bench_dynamic_field_get(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
@@ -14,7 +13,6 @@ fn bench_dynamic_field_get(c: &mut Criterion) {
     });
 }
 
-/// Benchmark: DynamicField on_change callback registration
 #[cfg(feature = "dynamic")]
 fn bench_dynamic_field_register(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
@@ -28,17 +26,13 @@ fn bench_dynamic_field_register(c: &mut Criterion) {
     });
 }
 
-/// Placeholder benchmarks when dynamic feature is not enabled
 #[cfg(not(feature = "dynamic"))]
 fn bench_dynamic_field_disabled(_c: &mut Criterion) {}
 
-criterion_group!(
-    benches,
-    #[cfg(feature = "dynamic")]
-    bench_dynamic_field_get,
-    #[cfg(feature = "dynamic")]
-    bench_dynamic_field_register,
-    #[cfg(not(feature = "dynamic"))]
-    bench_dynamic_field_disabled
-);
+#[cfg(feature = "dynamic")]
+criterion_group!(benches, bench_dynamic_field_get, bench_dynamic_field_register);
+
+#[cfg(not(feature = "dynamic"))]
+criterion_group!(benches, bench_dynamic_field_disabled);
+
 criterion_main!(benches);

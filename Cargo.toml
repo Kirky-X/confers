@@ -14,6 +14,8 @@ categories = ["config", "development-tools::build-tools"]
 
 [dependencies]
 arc-swap = { version = "1.8", optional = true }
+async-nats = { version = "0.40", optional = true }
+async-stream = { version = "0.3", optional = true }
 async-trait = { version = "0.1", optional = true }
 base64 = "0.22"
 chacha20poly1305 = { version = "0.10", optional = true }
@@ -111,7 +113,7 @@ security = ["encryption", "dep:hex"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 tracing = []
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap"]
-encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize"]
+encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio"]
 cli = ["dep:clap"]
 schema = ["dep:schemars"]
 metrics = ["dep:metrics"]
@@ -124,16 +126,27 @@ profile = []
 interpolation = []
 hot-reload = ["watch"]
 
+# Preload validation
+preload-validator = ["dep:async-trait", "dep:tokio"]
+
+# Poll sources
+poll = ["remote", "dep:reqwest"]
+
+# Vault integration
+vault = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
+
 # Remote sources
 remote = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
 
 # Remote SDK integrations
-etcd = ["dep:etcd-client", "dep:tokio", "dep:async-trait", "toml", "json", "yaml"]
-consul = ["dep:consul-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "toml", "json", "yaml"]
+etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "toml", "json", "yaml"]
+consul = ["remote", "dep:consul-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "toml", "json", "yaml"]
 cache-redis = ["dep:redis", "dep:tokio", "dep:async-trait", "dep:tokio-stream"]
 
 # Message bus
 config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream"]
+nats-bus = ["config-bus", "dep:async-nats"]
+redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 
 # Context-aware
 context-aware = []
@@ -145,12 +158,11 @@ modules = []
 recommended = ["toml", "env", "validation"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "profile", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "profile", "metrics", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot"]
-full = ["toml", "json", "yaml", "env", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis"]
+full = ["toml", "json", "yaml", "env", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
 minimal = ["env"]
 distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "metrics", "audit"]
 etcd-client = ["dep:etcd-client"]
 consul-client = ["dep:consul-client"]
-redis = ["dep:redis"]
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["async_tokio"] }
@@ -172,3 +184,19 @@ opt-level = 0
 
 [profile.dev.package]
 confers = { opt-level = 2 }
+
+[[bench]]
+name = "merge_bench"
+harness = false
+
+[[bench]]
+name = "incremental_merge_bench"
+harness = false
+
+[[bench]]
+name = "load_bench"
+harness = false
+
+[[bench]]
+name = "dynamic_field_bench"
+harness = false
