@@ -7,52 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2026-03-04
 
-### 🎉 新增功能
+### 🎉 Added
 
-#### TypeScript Schema 生成
-- 添加 `typescript-schema` feature
-- 支持从 Rust 类型生成 TypeScript 类型定义
+#### TypeScript Schema Generation
+- Added `typescript-schema` feature
+- Support for generating TypeScript type definitions from Rust types
 - API: `confers::schema::generate_typescript::<T>()`
 
-#### 密钥管理系统 (key feature)
-- `KeyManager`: 密钥生命周期管理
-- `KeyStorage`: 加密密钥存储（XChaCha20）
-- `KeyRotationService`: 自动密钥轮换
-- 密钥元数据和版本管理
+#### Key Management System (key feature)
+- `KeyManager`: Key lifecycle management
+- `KeyStorage`: Encrypted key storage (XChaCha20)
+- `KeyRotationService`: Automatic key rotation
+- Key metadata and version management
 
-#### 安全模块 (security feature)
-- `EnvSecurityValidator`: 环境变量安全验证
-- `ErrorSanitizer`: 错误信息敏感数据脱敏
-- `ConfigInjector`: 安全配置注入
-- `SecureString`: 自动清零的安全字符串
+#### Security Module (security feature)
+- `EnvSecurityValidator`: Environment variable security validation
+- `ErrorSanitizer`: Sensitive data redaction in error messages
+- `ConfigInjector`: Secure configuration injection
+- `SecureString`: Auto-zeroing secure string
 
-#### CLI 增强命令
-- `confers generate`: 配置模板生成
-- `confers wizard`: 交互式配置向导
-- `confers completions`: Shell 补全生成
+#### CLI Enhanced Commands
+- `confers generate`: Configuration template generation
+- `confers wizard`: Interactive configuration wizard
+- `confers completions`: Shell completion generation
 
-#### 并行验证
-- 添加 `parallel` feature (rayon)
-- 大型配置验证性能提升
+#### Parallel Validation
+- Added `parallel` feature (rayon)
+- Improved validation performance for large configurations
 
-### 🔧 改进
-- 更新特性预设定义 (minimal, recommended, dev, production, full, distributed)
-- 优化 XChaCha20 加密性能
-- 改进错误信息可读性
+### 🔧 Improved
+- Updated feature preset definitions (minimal, recommended, dev, production, full, distributed)
+- Optimized XChaCha20 encryption performance
+- Improved error message readability
+- **Documentation sync with codebase**:
+  - Updated version number from 0.2.2 to 0.3.0 across all docs
+  - Fixed API method names: `load()` → `load_sync()`
+  - Removed non-existent `ConfersCli` API references
+  - Removed non-existent remote builder methods (`with_remote_config`, etc.)
+  - Replaced with `source()` method examples for remote config
+  - Updated feature flags list to match Cargo.toml
+  - Added missing features documentation (config-bus, progressive-reload, metrics, etc.)
 
-### 🐛 修复
-- 修复 `progressive-reload` feature gating (缺少 `async_trait`)
-- 修复 `encryption` feature 测试 panic
+### 🐛 Fixed
+- Fixed `progressive-reload` feature gating (missing `async_trait`)
+- Fixed `encryption` feature test panic
 
-### 🔒 安全
-- 密钥管理使用 HKDF 密钥派生
-- 环境变量注入防护增强
-- 添加路径遍历保护
+### 🔒 Security
+- Key management uses HKDF key derivation
+- Enhanced environment variable injection protection
+- Added path traversal protection
 
-### 📊 统计
-- 新增文件: 17
-- 新增代码: 6,855 行
-- 新增 features: 4 (typescript-schema, security, key, parallel)
+### 📊 Statistics
+- New files: 17
+- New code: 6,855 lines
+- New features: 4 (typescript-schema, security, key, parallel)
 
 ## [0.2.2] - 2026-01-25
 
@@ -121,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - **Internal Implementation Protection**: Privatized sensitive fields in `RemoteConfig` and `ConfigLoader` to prevent accidental exposure.
-- **Sensitive Data Isolation**: Replaced `String` with `Arc<SecureString>` for sensitive fields (`password`, `token`, `bearer_token`) in `HttpProvider` and `RemoteConfig`.
+- **Sensitive Data Isolation**: Replaced `String` with `Arc<Secure String>` for sensitive fields (`password`, `token`, `bearer_token`) in `HttpProvider` and `RemoteConfig`.
 - **Access Control**: Introduced secure Builder patterns for `EnvironmentValidationConfig` and `RemoteConfig`, enforcing secure construction via `with_auth_secure` and `with_bearer_token_secure`.
 - **SSRF Protection**: Enhanced `HttpProvider` to validate URLs in all loading methods (`load`, `load_sync`), preventing potential SSRF attacks even if internal state is mutated.
 - **Leakage Prevention**: Fixed potential sensitive data leakage in HTTP provider by correctly handling `SecureString` during request authentication (avoiding masked output).
