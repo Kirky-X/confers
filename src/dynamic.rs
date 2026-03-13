@@ -91,7 +91,13 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     pub fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard<T> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         {
-            let mut callbacks = self.callbacks.write().unwrap();
+            let mut callbacks = match self.callbacks.write() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    eprintln!("Warning: Lock poisoned, recovering...");
+                    poisoned.into_inner()
+                }
+            };
             callbacks.insert(id, Box::new(f));
         }
         CallbackGuard {
@@ -105,9 +111,14 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     pub fn update(&self, new_val: T) {
         self.value.store(Arc::new(new_val.clone()));
         let new_val_ref = &new_val;
-        self.callbacks
-            .read()
-            .unwrap()
+        let callbacks = match self.callbacks.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Warning: Lock poisoned, recovering...");
+                poisoned.into_inner()
+            }
+        };
+        callbacks
             .values()
             .for_each(|callback| {
                 callback(new_val_ref);
@@ -141,8 +152,18 @@ pub struct CallbackGuard<T: Clone + Send + Sync + 'static> {
 
 impl<T: Clone + Send + Sync + 'static> Drop for CallbackGuard<T> {
     fn drop(&mut self) {
-        let mut callbacks = self.callbacks.write().unwrap();
-        callbacks.remove(&self.id);
+        // In Drop, we can't return errors, but we can handle poisoned locks gracefully
+        // by using into_inner() to recover the data even if another thread panicked
+        match self.callbacks.write() {
+            Ok(mut callbacks) => {
+                callbacks.remove(&self.id);
+            }
+            Err(poisoned) => {
+                // Recover the data and remove the entry
+                let mut callbacks = poisoned.into_inner();
+                callbacks.remove(&self.id);
+            }
+        }
     }
 }
 

@@ -256,15 +256,16 @@ impl FieldAttrs {
             match algo.as_str() {
                 "xchacha20" | "aes256-gcm" => {}
                 _ => {
-                    let ident = self.ident.as_ref().unwrap();
-                    errors.push(
-                        darling::Error::custom(format!(
-                            "unsupported encryption algorithm '{}'\n\
-                             supported algorithms: \"xchacha20\", \"aes256-gcm\"",
-                            algo
-                        ))
-                        .with_span(ident),
-                    );
+                    if let Some(ident) = self.ident.as_ref() {
+                        errors.push(
+                            darling::Error::custom(format!(
+                                "unsupported encryption algorithm '{}'\n\
+                                 supported algorithms: \"xchacha20\", \"aes256-gcm\"",
+                                algo
+                            ))
+                            .with_span(ident),
+                        );
+                    }
                 }
             }
         }
@@ -280,29 +281,31 @@ impl FieldAttrs {
                 "deep_merge",
             ];
             if !valid_strategies.contains(&strategy.as_str()) {
-                let ident = self.ident.as_ref().unwrap();
-                errors.push(
-                    darling::Error::custom(format!(
-                        "invalid merge strategy '{}'\n\
-                         valid strategies: {}",
-                        strategy,
-                        valid_strategies.join(", ")
-                    ))
-                    .with_span(ident),
-                );
+                if let Some(ident) = self.ident.as_ref() {
+                    errors.push(
+                        darling::Error::custom(format!(
+                            "invalid merge strategy '{}'\n\
+                             valid strategies: {}",
+                            strategy,
+                            valid_strategies.join(", ")
+                        ))
+                        .with_span(ident),
+                    );
+                }
             }
         }
 
         // Validate sensitive field type
         if self.sensitive && !self.is_secret_string() {
-            let ident = self.ident.as_ref().unwrap();
-            errors.push(
-                darling::Error::custom(format!(
-                    "sensitive field '{}' should use SecretString or SecretBytes type for security",
-                    ident
-                ))
-                .with_span(ident),
-            );
+            if let Some(ident) = self.ident.as_ref() {
+                errors.push(
+                    darling::Error::custom(format!(
+                        "sensitive field '{}' should use SecretString or SecretBytes type for security",
+                        ident
+                    ))
+                    .with_span(ident),
+                );
+            }
         }
 
         errors.finish()
