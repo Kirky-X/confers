@@ -10,8 +10,6 @@
 //! - High concurrency callback registration: DashMap replaces Mutex\<Vec\>
 //! - CallbackGuard: RAII-based callback lifecycle management
 
-use crate::traits::ConfigProvider;
-use crate::value::ConfigValue;
 use arc_swap::ArcSwap;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -193,6 +191,8 @@ impl<T: Clone + Send + Sync + 'static> Default for DynamicFieldBuilder<T> {
 #[cfg(feature = "watch")]
 mod watcher {
     use super::*;
+    use crate::traits::ConfigProvider;
+    use crate::value::ConfigValue;
     use tokio::sync::watch;
 
     /// Field-level change observer.
@@ -271,7 +271,6 @@ pub use watcher::FieldWatcher;
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc as StdArc;
 
     #[test]
     fn test_dynamic_field_get_returns_initial() {
@@ -297,7 +296,6 @@ mod tests {
     #[test]
     fn test_callback_guard_drops_on_scope_exit() {
         let field = DynamicField::new(100u32);
-        let count = Arc::new(AtomicUsize::new(field.callback_count()));
 
         {
             let _guard = field.on_change(|_val| {});
@@ -355,7 +353,7 @@ mod tests {
     fn test_callback_guard_into_id() {
         let field = DynamicField::new(0u32);
         let guard = field.on_change(|_val| {});
-        let id = guard.into_id();
+        let _id = guard.into_id();
         // After consuming guard, callback should be removed
         assert_eq!(field.callback_count(), 0);
     }
