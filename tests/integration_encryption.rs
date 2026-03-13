@@ -112,13 +112,16 @@ mod tests {
 
     // ========================================
     // XChaCha20Crypto Tests
+    // Note: These tests use fixed keys for functional testing purposes.
+    // In production, always use cryptographically secure random keys.
     // ========================================
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         let crypto = XChaCha20Crypto::new();
         let plaintext = b"Hello, World! This is a secret message.";
-        let key = [0u8; 32]; // 32-byte key
+        // Fixed key for functional testing - production should use random keys
+        let key = [0u8; 32];
 
         // Encrypt
         let (nonce, ciphertext) = crypto.encrypt(plaintext, &key).expect("encryption failed");

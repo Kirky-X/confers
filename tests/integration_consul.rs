@@ -119,8 +119,8 @@ async fn test_consul_source_parse_config() {
         Ok(config) => {
             // Verify we got some config
             println!("Got config: {:?}", config);
-            // Just verify it doesn't panic
-            assert!(true);
+            // Verify the config contains expected keys
+            assert!(!config.is_empty(), "Config should not be empty");
         }
         Err(e) => {
             println!("Error: {:?}", e);

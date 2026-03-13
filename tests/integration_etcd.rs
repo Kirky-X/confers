@@ -127,8 +127,8 @@ async fn test_etcd_source_parse_config() {
         Ok(config) => {
             // Verify we got some config
             println!("Got config: {:?}", config);
-            // Just verify it doesn't panic
-            assert!(true);
+            // Verify the config contains expected keys
+            assert!(!config.is_empty(), "Config should not be empty");
         }
         Err(e) => {
             println!("Error: {:?}", e);
@@ -189,7 +189,8 @@ async fn test_etcd_source_json_config() {
     match result {
         Ok(config) => {
             println!("Got JSON config: {:?}", config);
-            assert!(true);
+            // Verify the config contains expected keys
+            assert!(!config.is_empty(), "Config should not be empty");
         }
         Err(e) => {
             println!("Error: {:?}", e);
