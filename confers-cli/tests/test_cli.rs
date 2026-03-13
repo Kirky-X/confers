@@ -14,7 +14,8 @@ fn run_confers(args: &[&str]) -> std::process::Command {
 fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path::PathBuf {
     let path = dir.path().join(filename);
     let mut file = fs::File::create(&path).expect("Failed to create test config");
-    file.write_all(content.as_bytes()).expect("Failed to write test config");
+    file.write_all(content.as_bytes())
+        .expect("Failed to write test config");
     path
 }
 
@@ -49,17 +50,21 @@ port = 8080
 "#,
     );
 
-    let output = run_confers(&[
-        "-c",
-        config_path.to_str().unwrap(),
-        "inspect",
-    ])
-    .output()
-    .expect("Failed to run inspect command");
+    let output = run_confers(&["-c", config_path.to_str().unwrap(), "inspect"])
+        .output()
+        .expect("Failed to run inspect command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Configuration Inspection") || stdout.contains("app"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("Configuration Inspection") || stdout.contains("app"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -74,19 +79,21 @@ name = "json-test"
 "#,
     );
 
-    let output = run_confers(&[
-        "-c",
-        config_path.to_str().unwrap(),
-        "inspect",
-        "-f",
-        "json",
-    ])
-    .output()
-    .expect("Failed to run inspect command");
+    let output = run_confers(&["-c", config_path.to_str().unwrap(), "inspect", "-f", "json"])
+        .output()
+        .expect("Failed to run inspect command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("inner") || stdout.contains("app"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("inner") || stdout.contains("app"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -101,17 +108,21 @@ name = "validate-test"
 "#,
     );
 
-    let output = run_confers(&[
-        "-c",
-        config_path.to_str().unwrap(),
-        "validate",
-    ])
-    .output()
-    .expect("Failed to run validate command");
+    let output = run_confers(&["-c", config_path.to_str().unwrap(), "validate"])
+        .output()
+        .expect("Failed to run validate command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Validation") || stdout.contains("valid"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("Validation") || stdout.contains("valid"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -136,7 +147,11 @@ name = "validate-json-test"
     .output()
     .expect("Failed to run validate command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("valid"), "Output: {}", stdout);
 }
@@ -153,19 +168,21 @@ name = "export-test"
 "#,
     );
 
-    let output = run_confers(&[
-        "-c",
-        config_path.to_str().unwrap(),
-        "export",
-        "-f",
-        "json",
-    ])
-    .output()
-    .expect("Failed to run export command");
+    let output = run_confers(&["-c", config_path.to_str().unwrap(), "export", "-f", "json"])
+        .output()
+        .expect("Failed to run export command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("app") || stdout.contains("name"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("app") || stdout.contains("name"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -180,19 +197,21 @@ name = "export-toml-test"
 "#,
     );
 
-    let output = run_confers(&[
-        "-c",
-        config_path.to_str().unwrap(),
-        "export",
-        "-f",
-        "toml",
-    ])
-    .output()
-    .expect("Failed to run export command");
+    let output = run_confers(&["-c", config_path.to_str().unwrap(), "export", "-f", "toml"])
+        .output()
+        .expect("Failed to run export command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("app") || stdout.contains("name"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("app") || stdout.contains("name"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -218,9 +237,17 @@ name = "provenance-test"
     .output()
     .expect("Failed to run export command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("source") || stdout.contains("priority"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("source") || stdout.contains("priority"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -248,7 +275,11 @@ name = "file-export-test"
     .output()
     .expect("Failed to run export command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output_path.exists(), "Output file not created");
 
     let content = fs::read_to_string(&output_path).expect("Failed to read output file");
@@ -287,9 +318,17 @@ version = "2.0.0"
     .output()
     .expect("Failed to run diff command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Diff") || stdout.contains("differ"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("Diff") || stdout.contains("differ"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -324,9 +363,17 @@ name = "overlay"
     .output()
     .expect("Failed to run diff command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("base") && stdout.contains("overlay"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("base") && stdout.contains("overlay"),
+        "Output: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -349,7 +396,11 @@ name = "same"
     .output()
     .expect("Failed to run diff command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("identical"), "Output: {}", stdout);
 }
@@ -369,7 +420,11 @@ fn test_snapshot_list_empty() {
     .output()
     .expect("Failed to run snapshot list command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("No snapshots found"), "Output: {}", stdout);
 }
@@ -403,7 +458,11 @@ name = "env-test"
     .output()
     .expect("Failed to run with env file");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -412,9 +471,17 @@ fn test_help_flag() {
         .output()
         .expect("Failed to run help command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Configuration diagnostics tool"), "Output: {}", stdout);
+    assert!(
+        stdout.contains("Configuration diagnostics tool"),
+        "Output: {}",
+        stdout
+    );
     assert!(stdout.contains("inspect"), "Output: {}", stdout);
     assert!(stdout.contains("validate"), "Output: {}", stdout);
     assert!(stdout.contains("export"), "Output: {}", stdout);
@@ -428,7 +495,11 @@ fn test_version_flag() {
         .output()
         .expect("Failed to run version command");
 
-    assert!(output.status.success(), "Command failed: {:?}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "Command failed: {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("confers"), "Output: {}", stdout);
 }

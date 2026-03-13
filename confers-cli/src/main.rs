@@ -201,13 +201,7 @@ fn main() -> Result<()> {
             with_provenance,
             raw,
         } => {
-            cmd_export(
-                &config_paths,
-                &format,
-                output,
-                with_provenance,
-                raw,
-            )?;
+            cmd_export(&config_paths, &format, output, with_provenance, raw)?;
         }
         Commands::Diff {
             base,
@@ -306,11 +300,7 @@ fn cmd_inspect(
 }
 
 /// Recursively print configuration values
-fn print_config_value(
-    value: &AnnotatedValue,
-    prefix: &str,
-    show_conflicts: bool,
-) {
+fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool) {
     match &value.inner {
         confers::value::ConfigValue::Map(map) => {
             for (key, val) in map.iter() {
@@ -405,11 +395,7 @@ fn format_value(value: &confers::value::ConfigValue) -> String {
 
 /// Validate configuration against schema
 #[allow(dead_code)]
-fn cmd_validate(
-    config_paths: &[PathBuf],
-    strict: bool,
-    format: &str,
-) -> Result<()> {
+fn cmd_validate(config_paths: &[PathBuf], strict: bool, format: &str) -> Result<()> {
     use confers::ConfigBuilder;
 
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
