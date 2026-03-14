@@ -11,15 +11,15 @@
 //! - CallbackGuard: RAII-based callback lifecycle management
 
 use arc_swap::ArcSwap;
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 /// Callback ID type for tracking registered callbacks.
 type CallbackId = u64;
 
-/// Callback storage for dynamic field change notifications.
-type CallbackStorage<T> = Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>>;
+/// Callback storage for dynamic field change notifications using DashMap for high concurrency.
+type CallbackStorage<T> = Arc<DashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>;
 
 /// Field-level dynamic property handle.
 ///
@@ -40,7 +40,7 @@ type CallbackStorage<T> = Arc<RwLock<HashMap<CallbackId, Box<dyn Fn(&T) + Send +
 pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     /// ArcSwap provides lock-free atomic replacement (similar to Linux RCU).
     value: ArcSwap<T>,
-    /// Callbacks storage with Arc\<RwLock\> for shared access.
+    /// Callbacks storage with DashMap for high-concurrency access.
     callbacks: CallbackStorage<T>,
     next_id: AtomicU64,
 }
@@ -50,12 +50,12 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     pub fn new(initial: T) -> Self {
         Self {
             value: ArcSwap::from_pointee(initial),
-            callbacks: Arc::new(RwLock::new(HashMap::new())),
+            callbacks: Arc::new(DashMap::new()),
             next_id: AtomicU64::new(0),
         }
     }
 
-    /// Lock-free read (O(1), no synchronization overhead.
+    /// Lock-free read (O(1), no synchronization overhead).
     #[inline]
     pub fn get(&self) -> T {
         use std::ops::Deref;
@@ -90,16 +90,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// ```
     pub fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard<T> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        {
-            let mut callbacks = match self.callbacks.write() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    eprintln!("Warning: Lock poisoned, recovering...");
-                    poisoned.into_inner()
-                }
-            };
-            callbacks.insert(id, Box::new(f));
-        }
+        self.callbacks.insert(id, Box::new(f));
         CallbackGuard {
             id,
             callbacks: Arc::clone(&self.callbacks),
@@ -107,29 +98,28 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
         }
     }
 
-    /// 更新值并触发所有回调
+    /// Update value and trigger all callbacks.
     pub fn update(&self, new_val: T) {
         self.value.store(Arc::new(new_val.clone()));
-        let new_val_ref = &new_val;
-        let callbacks = match self.callbacks.read() {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                eprintln!("Warning: Lock poisoned, recovering...");
-                poisoned.into_inner()
-            }
-        };
-        callbacks.values().for_each(|callback| {
-            callback(new_val_ref);
-        });
+        for entry in self.callbacks.iter() {
+            let callback: &(dyn Fn(&T) + Send + Sync) = entry.value();
+            callback(&new_val);
+        }
     }
 
     pub fn callback_count(&self) -> usize {
-        self.callbacks.read().unwrap().len()
+        self.callbacks.len()
     }
 
     /// Creates a builder for constructing DynamicField with optional configuration.
     pub fn builder() -> DynamicFieldBuilder<T> {
         DynamicFieldBuilder { initial: None }
+    }
+
+    /// Subscribe to changes (deprecated, use `on_change` instead).
+    #[deprecated(since = "0.3.0", note = "Use `on_change` instead")]
+    pub fn subscribe(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard<T> {
+        self.on_change(f)
     }
 }
 
@@ -150,18 +140,7 @@ pub struct CallbackGuard<T: Clone + Send + Sync + 'static> {
 
 impl<T: Clone + Send + Sync + 'static> Drop for CallbackGuard<T> {
     fn drop(&mut self) {
-        // In Drop, we can't return errors, but we can handle poisoned locks gracefully
-        // by using into_inner() to recover the data even if another thread panicked
-        match self.callbacks.write() {
-            Ok(mut callbacks) => {
-                callbacks.remove(&self.id);
-            }
-            Err(poisoned) => {
-                // Recover the data and remove the entry
-                let mut callbacks = poisoned.into_inner();
-                callbacks.remove(&self.id);
-            }
-        }
+        self.callbacks.remove(&self.id);
     }
 }
 
@@ -171,7 +150,6 @@ impl<T: Clone + Send + Sync + 'static> CallbackGuard<T> {
     /// This is useful when you want to manually manage the callback lifecycle
     /// but still benefit from RAII cleanup.
     pub fn into_id(self) -> CallbackId {
-        // Note: callbacks will be dropped, removing the entry
         self.id
     }
 }
@@ -212,6 +190,7 @@ mod watcher {
     use super::*;
     use crate::traits::ConfigProvider;
     use crate::value::ConfigValue;
+    use std::collections::HashMap;
     use tokio::sync::watch;
 
     /// Field-level change observer.

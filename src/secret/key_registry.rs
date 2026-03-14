@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use std::sync::RwLock;
 
-use crate::secret::{CryptoError, SecretBytes};
+use crate::secret::{zeroizing_bytes, CryptoError, SecretBytes, ZeroizingBytes};
 use crate::traits::{AsyncKeyProvider, KeyProvider};
 
 #[derive(Debug)]
@@ -120,7 +120,7 @@ impl KeyRegistry {
         Ok(old_primary.unwrap_or_else(|| "none".to_string()))
     }
 
-    pub fn get_primary_key(&self) -> Result<(String, Vec<u8>), CryptoError> {
+    pub fn get_primary_key(&self) -> Result<(String, ZeroizingBytes), CryptoError> {
         let version = self
             .primary_version
             .read()
@@ -131,13 +131,16 @@ impl KeyRegistry {
         let keys = self.keys.read().unwrap();
         let key_version = keys.get(&version).ok_or(CryptoError::InvalidKeyLength)?;
 
-        Ok((version.clone(), key_version.key.as_slice().to_vec()))
+        Ok((
+            version.clone(),
+            zeroizing_bytes(key_version.key.as_slice().to_vec()),
+        ))
     }
 
-    pub fn get_key(&self, version: &str) -> Result<Vec<u8>, CryptoError> {
+    pub fn get_key(&self, version: &str) -> Result<ZeroizingBytes, CryptoError> {
         let keys = self.keys.read().unwrap();
         let key_version = keys.get(version).ok_or(CryptoError::InvalidKeyLength)?;
-        Ok(key_version.key.as_slice().to_vec())
+        Ok(zeroizing_bytes(key_version.key.as_slice().to_vec()))
     }
 
     pub fn get_all_versions(&self) -> Vec<String> {
@@ -299,7 +302,7 @@ mod tests {
 
         let (version, retrieved) = registry.get_primary_key().unwrap();
         assert_eq!(version, "v1");
-        assert_eq!(retrieved, key);
+        assert_eq!(&*retrieved, &key);
     }
 
     #[test]

@@ -386,6 +386,26 @@ impl crate::remote::PolledSource for ConsulSource {
     }
 }
 
+#[async_trait]
+impl crate::config::source::AsyncSource for ConsulSource {
+    async fn load(&self) -> ConfigResult<AnnotatedValue> {
+        self.poll_internal().await
+    }
+
+    fn source_id(&self) -> &SourceId {
+        static SOURCE_ID: std::sync::OnceLock<SourceId> = std::sync::OnceLock::new();
+        SOURCE_ID.get_or_init(|| SourceId::new("consul"))
+    }
+
+    fn priority(&self) -> u8 {
+        50
+    }
+
+    fn name(&self) -> &str {
+        "consul"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

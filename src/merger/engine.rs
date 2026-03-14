@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 const MAX_MERGE_DEPTH: usize = 100;
 
-/// Merge engine for combining configuration values.
 pub struct MergeEngine {
     default_strategy: MergeStrategy,
     field_strategies: IndexMap<Arc<str>, MergeStrategy>,
@@ -62,49 +61,13 @@ impl MergeEngine {
         strategy: MergeStrategy,
         depth: usize,
     ) -> ConfigResult<AnnotatedValue> {
-        if depth > MAX_MERGE_DEPTH {
-            return Err(ConfigError::ParseError {
-                format: "merge".to_string(),
-                message: format!(
-                    "Maximum merge depth ({}) exceeded at path: {}",
-                    MAX_MERGE_DEPTH, high.path
-                ),
-                location: None,
-                source: None,
-            });
-        }
+        check_merge_depth(depth, &high.path)?;
 
         let merged = match (&low.inner, &high.inner, &strategy) {
             (ConfigValue::Null, _, _) => high.inner.clone(),
             (_, ConfigValue::Null, _) => low.inner.clone(),
-            (ConfigValue::Map(l), ConfigValue::Map(_), _) => {
-                let l_map = l.as_ref();
-                let mut result: IndexMap<Arc<str>, AnnotatedValue> = l_map.clone();
-
-                let r_map = match &high.inner {
-                    ConfigValue::Map(m) => m.as_ref(),
-                    _ => unreachable!(),
-                };
-
-                for (k, v_high) in r_map.iter() {
-                    if let Some(v_low) = result.get_mut(k) {
-                        let needs_recursive = matches!(
-                            (&v_low.inner, &v_high.inner),
-                            (&ConfigValue::Map(_), &ConfigValue::Map(_))
-                        );
-
-                        if needs_recursive {
-                            let merged_inner =
-                                Self::merge_with_depth(v_low, v_high, strategy.clone(), depth + 1)?;
-                            *v_low = merged_inner;
-                        } else {
-                            *v_low = Self::apply_strategy(v_low, v_high, &strategy)?;
-                        }
-                    } else {
-                        result.insert(k.clone(), v_high.clone());
-                    }
-                }
-                ConfigValue::Map(Arc::new(result))
+            (ConfigValue::Map(l), ConfigValue::Map(r), _) => {
+                merge_maps_with_cow(l, r, &strategy, depth)?
             }
             (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
             (_, _, MergeStrategy::Replace) => high.inner.clone(),
@@ -126,51 +89,8 @@ impl MergeEngine {
             }
             _ => high.inner.clone(),
         };
-        Ok(AnnotatedValue {
-            inner: merged,
-            source: high.source.clone(),
-            path: high.path.clone(),
-            priority: high.priority.max(low.priority),
-            version: high.version.max(low.version) + 1,
-            location: high.location.clone().or(low.location.clone()),
-        })
-    }
 
-    /// Apply merge strategy to leaf values (non-map).
-    fn apply_strategy(
-        low: &AnnotatedValue,
-        high: &AnnotatedValue,
-        strategy: &MergeStrategy,
-    ) -> ConfigResult<AnnotatedValue> {
-        let merged = match (&low.inner, &high.inner, strategy) {
-            (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
-            (_, _, MergeStrategy::Replace) => high.inner.clone(),
-            (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
-                ConfigValue::String(format!("{}{}{}", l, separator, r))
-            }
-            (
-                ConfigValue::String(l),
-                ConfigValue::String(r),
-                MergeStrategy::JoinAppend { separator },
-            ) => ConfigValue::String(format!("{}{}{}", l, separator, r)),
-            (
-                ConfigValue::Array(l),
-                ConfigValue::Array(r),
-                MergeStrategy::Append | MergeStrategy::JoinAppend { .. },
-            ) => ConfigValue::Array(l.iter().chain(r.iter()).cloned().collect()),
-            (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Prepend) => {
-                ConfigValue::Array(r.iter().chain(l.iter()).cloned().collect())
-            }
-            _ => high.inner.clone(),
-        };
-        Ok(AnnotatedValue {
-            inner: merged,
-            source: high.source.clone(),
-            path: high.path.clone(),
-            priority: high.priority.max(low.priority),
-            version: high.version.max(low.version) + 1,
-            location: high.location.clone().or(low.location.clone()),
-        })
+        Ok(build_annotated_value(merged, high, low))
     }
 
     pub fn report_conflict(
@@ -195,6 +115,128 @@ impl MergeEngine {
                 ConflictWinner::Low
             },
         })
+    }
+}
+
+#[inline]
+fn check_merge_depth(depth: usize, path: &Arc<str>) -> ConfigResult<()> {
+    if depth > MAX_MERGE_DEPTH {
+        return Err(ConfigError::ParseError {
+            format: "merge".to_string(),
+            message: format!(
+                "Maximum merge depth ({}) exceeded at path: {}",
+                MAX_MERGE_DEPTH, path
+            ),
+            location: None,
+            source: None,
+        });
+    }
+    Ok(())
+}
+
+#[inline]
+fn build_annotated_value(
+    merged: ConfigValue,
+    high: &AnnotatedValue,
+    low: &AnnotatedValue,
+) -> AnnotatedValue {
+    AnnotatedValue {
+        inner: merged,
+        source: high.source.clone(),
+        path: high.path.clone(),
+        priority: high.priority.max(low.priority),
+        version: high.version.max(low.version) + 1,
+        location: high.location.clone().or(low.location.clone()),
+    }
+}
+
+fn merge_maps_with_cow(
+    low_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
+    high_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
+    strategy: &MergeStrategy,
+    depth: usize,
+) -> ConfigResult<ConfigValue> {
+    let low = low_map.as_ref();
+    let high = high_map.as_ref();
+
+    let mut modifications: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();
+    let mut has_modifications = false;
+
+    for (k, v_high) in high.iter() {
+        if let Some(v_low) = low.get(k) {
+            let needs_recursive = matches!(
+                (&v_low.inner, &v_high.inner),
+                (ConfigValue::Map(_), ConfigValue::Map(_))
+            );
+
+            if needs_recursive {
+                let merged_inner =
+                    MergeEngine::merge_with_depth(v_low, v_high, strategy.clone(), depth + 1)?;
+                if merged_inner.inner != v_low.inner {
+                    modifications.push((k.clone(), merged_inner));
+                    has_modifications = true;
+                }
+            } else {
+                let merged = apply_leaf_strategy(&v_low.inner, &v_high.inner, strategy);
+                if merged != v_low.inner {
+                    modifications.push((
+                        k.clone(),
+                        AnnotatedValue {
+                            inner: merged,
+                            source: v_high.source.clone(),
+                            path: v_high.path.clone(),
+                            priority: v_high.priority.max(v_low.priority),
+                            version: v_high.version.max(v_low.version) + 1,
+                            location: v_high.location.clone().or(v_low.location.clone()),
+                        },
+                    ));
+                    has_modifications = true;
+                }
+            }
+        } else {
+            modifications.push((k.clone(), v_high.clone()));
+            has_modifications = true;
+        }
+    }
+
+    if !has_modifications {
+        return Ok(ConfigValue::Map(Arc::clone(low_map)));
+    }
+
+    let mut result = low.clone();
+    for (k, v) in modifications {
+        result.insert(k, v);
+    }
+
+    Ok(ConfigValue::Map(Arc::new(result)))
+}
+
+#[inline]
+fn apply_leaf_strategy(
+    low: &ConfigValue,
+    high: &ConfigValue,
+    strategy: &MergeStrategy,
+) -> ConfigValue {
+    match (low, high, strategy) {
+        (_, _, MergeStrategy::Replace) => high.clone(),
+        (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
+            ConfigValue::String(format!("{}{}{}", l, separator, r))
+        }
+        (
+            ConfigValue::String(l),
+            ConfigValue::String(r),
+            MergeStrategy::JoinAppend { separator },
+        ) => ConfigValue::String(format!("{}{}{}", l, separator, r)),
+        (
+            ConfigValue::Array(l),
+            ConfigValue::Array(r),
+            MergeStrategy::Append | MergeStrategy::JoinAppend { .. },
+        ) => ConfigValue::Array(l.iter().chain(r.iter()).cloned().collect()),
+        (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Prepend) => {
+            ConfigValue::Array(r.iter().chain(l.iter()).cloned().collect())
+        }
+        (_, _, MergeStrategy::Custom { func, .. }) => func(low, high),
+        _ => high.clone(),
     }
 }
 
@@ -273,5 +315,30 @@ mod tests {
             e.report_conflict(&l, &h).unwrap().winner,
             ConflictWinner::High
         );
+    }
+
+    #[test]
+    fn test_cow_no_modification() {
+        let e = MergeEngine::new();
+        let inner = IndexMap::from_iter(vec![(
+            Arc::from("key"),
+            AnnotatedValue::new(
+                ConfigValue::String("value".into()),
+                SourceId::new("s"),
+                "key",
+            ),
+        )]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(inner.clone())),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(IndexMap::new())),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        assert!(matches!(result.inner, ConfigValue::Map(_)));
     }
 }

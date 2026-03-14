@@ -2,8 +2,8 @@
 
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
 use confers::loader::{parse_content, Format};
+use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     // Skip empty or very short inputs

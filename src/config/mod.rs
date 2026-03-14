@@ -9,7 +9,7 @@
 mod builder;
 mod chain;
 mod limits;
-mod source;
+pub mod source;
 
 pub use builder::{config, ConfigBuilder, ReloadStrategy, SnapshotConfig};
 pub use chain::{SourceChain, SourceChainBuilder};
@@ -19,3 +19,6 @@ pub use source::{DefaultSource, EnvSource, FileSource, MemorySource, Source, Sou
 // Re-export commonly used types
 #[doc(hidden)]
 pub use crate::value::ConfigValue;
+
+#[cfg(feature = "remote")]
+pub use source::AsyncSource;

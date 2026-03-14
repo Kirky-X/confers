@@ -6,8 +6,10 @@
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::{detect_format_from_content, Format};
 use crate::value::{AnnotatedValue, SourceId};
+use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use etcd_client::{Client, ConnectOptions};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -119,8 +121,8 @@ impl EtcdSourceBuilder {
             prefix: Arc::from(self.prefix),
             format: self.format,
             interval: self.interval.unwrap_or(DEFAULT_ETCD_POLL_INTERVAL),
-            last_revision: Arc::new(tokio::sync::Mutex::new(0i64)),
-            cached_value: Arc::new(tokio::sync::RwLock::new(None)),
+            last_revision: AtomicI64::new(0),
+            cached_value: ArcSwap::new(Arc::new(None)),
         })
     }
 }
@@ -138,8 +140,8 @@ pub struct EtcdSource {
     prefix: Arc<str>,
     format: Option<Format>,
     interval: Duration,
-    last_revision: Arc<tokio::sync::Mutex<i64>>,
-    cached_value: Arc<tokio::sync::RwLock<Option<AnnotatedValue>>>,
+    last_revision: AtomicI64,
+    cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
 }
 
 impl EtcdSource {
@@ -175,24 +177,19 @@ impl EtcdSource {
 
         // Check if we have cached value and revision hasn't changed
         if current_revision > 0 {
-            let last_rev = {
-                let guard = self.last_revision.lock().await;
-                *guard
-            };
+            let last_rev = self.last_revision.load(Ordering::Acquire);
 
             if last_rev == current_revision {
                 // No changes, return cached value
-                let cached = self.cached_value.read().await;
-                if let Some(ref value) = *cached {
-                    return Ok(value.clone());
+                let cached = self.cached_value.load();
+                if let Some(ref value) = **cached {
+                    return Ok((**value).clone());
                 }
             }
 
             // Update revision
-            {
-                let mut guard = self.last_revision.lock().await;
-                *guard = current_revision;
-            }
+            self.last_revision
+                .store(current_revision, Ordering::Release);
         }
 
         // Build config from KV pairs
@@ -243,10 +240,8 @@ impl EtcdSource {
         let result = AnnotatedValue::new(value, SourceId::new("etcd"), "");
 
         // Cache the result
-        {
-            let mut cached = self.cached_value.write().await;
-            *cached = Some(result.clone());
-        }
+        self.cached_value
+            .store(Arc::new(Some(Arc::new(result.clone()))));
 
         Ok(result)
     }
@@ -310,6 +305,26 @@ impl crate::remote::PolledSource for EtcdSource {
 
     fn source_id(&self) -> SourceId {
         Self::source_id(self)
+    }
+}
+
+#[async_trait]
+impl crate::config::source::AsyncSource for EtcdSource {
+    async fn load(&self) -> ConfigResult<AnnotatedValue> {
+        self.poll_internal().await
+    }
+
+    fn source_id(&self) -> &SourceId {
+        static SOURCE_ID: std::sync::OnceLock<SourceId> = std::sync::OnceLock::new();
+        SOURCE_ID.get_or_init(|| SourceId::new("etcd"))
+    }
+
+    fn priority(&self) -> u8 {
+        50
+    }
+
+    fn name(&self) -> &str {
+        "etcd"
     }
 }
 

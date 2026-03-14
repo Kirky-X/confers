@@ -7,9 +7,11 @@
 //! - Retryable error classification
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::LazyLock;
 use thiserror::Error;
+
+// Re-export SourceLocation as ParseLocation for backward compatibility
+pub use crate::value::SourceLocation as ParseLocation;
 
 // Precompiled regex patterns for sanitization (avoid recompiling on each call)
 /// Regex pattern for matching file paths (Unix and Windows style)
@@ -24,44 +26,6 @@ static IP_RE: LazyLock<regex::Regex> =
 /// Regex pattern for matching potential key material (long hex strings)
 static HEX_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap());
-
-/// Precise location of a parse error in source file.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseLocation {
-    /// Source file name (without full path for privacy)
-    pub source_name: Arc<str>,
-    /// Line number (1-based)
-    pub line: usize,
-    /// Column number (1-based)
-    pub column: usize,
-}
-
-impl std::fmt::Display for ParseLocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}:{}", self.source_name, self.line, self.column)
-    }
-}
-
-impl ParseLocation {
-    /// Create a new parse location.
-    pub fn new(source_name: impl Into<Arc<str>>, line: usize, column: usize) -> Self {
-        Self {
-            source_name: source_name.into(),
-            line,
-            column,
-        }
-    }
-
-    /// Create from a full path, extracting only the filename for privacy.
-    pub fn from_path(path: &std::path::Path, line: usize, column: usize) -> Self {
-        let source_name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        Self::new(source_name, line, column)
-    }
-}
 
 /// Stable numeric error codes for programmatic handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

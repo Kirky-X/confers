@@ -7,6 +7,38 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+const ENC_PREFIX: &str = "enc:";
+
+pub(crate) fn is_encrypted_value(value: &str) -> bool {
+    value.starts_with(ENC_PREFIX) && value.len() > ENC_PREFIX.len()
+}
+
+pub(crate) fn validate_encrypted_format(value: &str) -> Result<(), EnvSecurityError> {
+    if !value.starts_with(ENC_PREFIX) {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Missing 'enc:' prefix".to_string(),
+        });
+    }
+
+    let encrypted_content = &value[ENC_PREFIX.len()..];
+    if encrypted_content.is_empty() {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Empty encrypted content".to_string(),
+        });
+    }
+
+    if !encrypted_content
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+    {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Invalid characters in encrypted content (expected base64)".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
 pub(crate) fn compile_pattern(pattern: &str) -> Result<Regex, EnvSecurityError> {
     Regex::new(pattern).map_err(|e| EnvSecurityError::InvalidRegex {
         pattern: pattern.to_string(),
@@ -287,18 +319,9 @@ impl EnvSecurityValidator {
 
     /// Validate an environment variable value
     pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
-        // Skip validation for encrypted values
-        // Note: This allows values starting with "enc:" to bypass validation.
-        // Users must ensure encrypted values are properly formatted and come from trusted sources.
-        // The validation is skipped because encrypted values are assumed to be safe after decryption.
-        if self.config.allow_encrypted_values && value.starts_with("enc:") {
-            // Additional validation: ensure the encrypted value has valid format
-            if value.len() > 4 {
-                return Ok(());
-            }
-            return Err(EnvSecurityError::InvalidValueFormat {
-                reason: "Encrypted value too short".to_string(),
-            });
+        if self.config.allow_encrypted_values && is_encrypted_value(value) {
+            validate_encrypted_format(value)?;
+            return Ok(());
         }
 
         // Early return if blocked patterns check is disabled

@@ -2,8 +2,8 @@
 
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
 use confers::{AnnotatedValue, ConfigValue, MergeStrategy, SourceId};
+use libfuzzer_sys::fuzz_target;
 use std::sync::Arc;
 
 /// Generate a random-ish ConfigValue from input bytes.
@@ -37,7 +37,10 @@ fn create_annotated(data: &[u8]) -> Option<AnnotatedValue> {
 }
 
 fuzz_target!(|data: &[u8]| {
-    if let (Some(low), Some(high)) = (create_annotated(data), create_annotated(&data[data.len()/2..])) {
+    if let (Some(low), Some(high)) = (
+        create_annotated(data),
+        create_annotated(&data[data.len() / 2..]),
+    ) {
         // Test Replace strategy
         let _ = confers::merger::merge(&low, &high, MergeStrategy::Replace);
 

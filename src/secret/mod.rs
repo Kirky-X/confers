@@ -10,6 +10,8 @@ pub mod key_registry;
 pub mod providers;
 #[cfg(feature = "encryption")]
 pub mod string;
+#[cfg(feature = "encryption")]
+pub mod zeroizing;
 
 #[cfg(feature = "encryption")]
 pub use bytes::SecretBytes;
@@ -27,3 +29,5 @@ pub use providers::{FileKeyProvider, FileKeyProviderBuilder};
 pub use providers::{VaultKeyProvider, VaultKeyProviderBuilder};
 #[cfg(feature = "encryption")]
 pub use string::SecretString;
+#[cfg(feature = "encryption")]
+pub use zeroizing::{zeroizing_bytes, ZeroizingBytes};

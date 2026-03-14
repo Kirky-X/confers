@@ -1,29 +1,26 @@
 use std::fmt::Debug;
+use zeroize::{Zeroize, Zeroizing};
 
-#[derive(Clone, Default)]
-pub struct SecretString(String);
+#[derive(Clone)]
+pub struct SecretString(Zeroizing<String>);
 
-impl Drop for SecretString {
-    fn drop(&mut self) {
-        let bytes = unsafe { self.0.as_bytes_mut() };
-        for byte in bytes.iter_mut() {
-            unsafe { std::ptr::write_volatile(byte, 0) };
-        }
-        self.0.clear();
+impl Default for SecretString {
+    fn default() -> Self {
+        Self::new(String::new())
     }
 }
 
 impl SecretString {
     pub fn new(s: impl Into<String>) -> Self {
-        Self(s.into())
+        Self(Zeroizing::new(s.into()))
     }
 
     pub fn expose(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 
     pub fn expose_clone(&self) -> String {
-        self.0.clone()
+        self.0.to_string()
     }
 }
 
@@ -37,6 +34,12 @@ impl std::ops::Deref for SecretString {
     type Target = str;
 
     fn deref(&self) -> &str {
-        &self.0
+        self.0.as_str()
+    }
+}
+
+impl Zeroize for SecretString {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }

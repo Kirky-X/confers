@@ -44,26 +44,8 @@ pub enum ReloadStrategy {
     },
 }
 
-/// Configuration for snapshots.
-#[derive(Debug, Clone)]
-pub struct SnapshotConfig {
-    /// Directory for snapshots.
-    pub dir: PathBuf,
-    /// Maximum number of snapshots to keep.
-    pub max_snapshots: usize,
-    /// Whether to include provenance information.
-    pub include_provenance: bool,
-}
-
-impl Default for SnapshotConfig {
-    fn default() -> Self {
-        Self {
-            dir: PathBuf::from("config-snapshots"),
-            max_snapshots: 30,
-            include_provenance: true,
-        }
-    }
-}
+/// Re-export SnapshotConfig from snapshot module.
+pub use crate::snapshot::SnapshotConfig;
 
 /// Builder for creating configuration instances.
 ///

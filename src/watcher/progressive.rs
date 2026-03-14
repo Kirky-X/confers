@@ -44,20 +44,21 @@ pub trait ReloadHealthCheck: Send + Sync {
     async fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
 }
 
-pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
+struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     current: ArcSwap<T>,
     candidate: ArcSwap<Option<Arc<T>>>,
     strategy: ReloadStrategy,
     health_check: Option<Arc<dyn ReloadHealthCheck>>,
 }
 
+pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
+    inner: Arc<ProgressiveReloaderInner<T>>,
+}
+
 impl<T: Clone + Send + Sync + 'static> Clone for ProgressiveReloader<T> {
     fn clone(&self) -> Self {
         Self {
-            current: ArcSwap::new(self.current.load_full()),
-            candidate: ArcSwap::new(Arc::new(None)),
-            strategy: self.strategy.clone(),
-            health_check: self.health_check.clone(),
+            inner: Arc::clone(&self.inner),
         }
     }
 }
@@ -65,10 +66,12 @@ impl<T: Clone + Send + Sync + 'static> Clone for ProgressiveReloader<T> {
 impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     pub fn new(initial: Arc<T>, strategy: ReloadStrategy) -> Self {
         Self {
-            current: ArcSwap::new(initial),
-            candidate: ArcSwap::new(Arc::new(None)),
-            strategy,
-            health_check: None,
+            inner: Arc::new(ProgressiveReloaderInner {
+                current: ArcSwap::new(initial),
+                candidate: ArcSwap::new(Arc::new(None)),
+                strategy,
+                health_check: None,
+            }),
         }
     }
 
@@ -78,10 +81,12 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         health_check: Option<Arc<dyn ReloadHealthCheck>>,
     ) -> Self {
         Self {
-            current: ArcSwap::new(initial),
-            candidate: ArcSwap::new(Arc::new(None)),
-            strategy,
-            health_check,
+            inner: Arc::new(ProgressiveReloaderInner {
+                current: ArcSwap::new(initial),
+                candidate: ArcSwap::new(Arc::new(None)),
+                strategy,
+                health_check,
+            }),
         }
     }
 
@@ -91,11 +96,13 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
 
     #[inline]
     pub fn current(&self) -> Arc<T> {
-        self.current.load_full()
+        self.inner.current.load_full()
     }
 
     pub fn with_health_check(mut self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
-        self.health_check = Some(health_check);
+        Arc::get_mut(&mut self.inner)
+            .expect("Cannot modify shared ProgressiveReloader")
+            .health_check = Some(health_check);
         self
     }
 
@@ -104,9 +111,9 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         new_config: Arc<T>,
         provider: Arc<dyn ConfigProvider>,
     ) -> ConfigResult<ReloadOutcome> {
-        match &self.strategy {
+        match &self.inner.strategy {
             ReloadStrategy::Immediate => {
-                self.current.store(new_config);
+                self.inner.current.store(new_config);
                 Ok(ReloadOutcome::Committed)
             }
             ReloadStrategy::Canary {
@@ -130,15 +137,17 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         poll_interval: Duration,
         provider: Arc<dyn ConfigProvider>,
     ) -> ConfigResult<ReloadOutcome> {
-        self.candidate.store(Arc::new(Some(new_config.clone())));
+        self.inner
+            .candidate
+            .store(Arc::new(Some(new_config.clone())));
         let deadline = Instant::now() + trial_duration;
 
         while Instant::now() < deadline {
             tokio::time::sleep(poll_interval).await;
-            if let Some(hc) = &self.health_check {
+            if let Some(hc) = &self.inner.health_check {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
-                        self.candidate.store(Arc::new(None));
+                        self.inner.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack { reason });
                     }
                     HealthStatus::Degraded { reason } => {
@@ -149,8 +158,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             }
         }
 
-        self.current.store(new_config);
-        self.candidate.store(Arc::new(None));
+        self.inner.current.store(new_config);
+        self.inner.candidate.store(Arc::new(None));
         Ok(ReloadOutcome::Committed)
     }
 
@@ -161,14 +170,16 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         interval: Duration,
         provider: Arc<dyn ConfigProvider>,
     ) -> ConfigResult<ReloadOutcome> {
-        self.candidate.store(Arc::new(Some(new_config.clone())));
+        self.inner
+            .candidate
+            .store(Arc::new(Some(new_config.clone())));
 
         for step in 0..steps {
             tokio::time::sleep(interval).await;
-            if let Some(hc) = &self.health_check {
+            if let Some(hc) = &self.inner.health_check {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
-                        self.candidate.store(Arc::new(None));
+                        self.inner.candidate.store(Arc::new(None));
                         return Err(ConfigError::ReloadRolledBack {
                             reason: format!("Linear step {} failed: {}", step + 1, reason),
                         });
@@ -181,8 +192,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             }
         }
 
-        self.current.store(new_config);
-        self.candidate.store(Arc::new(None));
+        self.inner.current.store(new_config);
+        self.inner.candidate.store(Arc::new(None));
         Ok(ReloadOutcome::Committed)
     }
 }
@@ -261,6 +272,15 @@ mod tests {
             .initial(Arc::new(1i32))
             .build();
         assert_eq!(*reloader.current(), 1);
+    }
+
+    #[test]
+    fn test_clone_preserves_shared_state() {
+        let reloader = ProgressiveReloader::new(Arc::new(42i32), ReloadStrategy::Immediate);
+        let cloned = reloader.clone();
+
+        // Both should share the same state
+        assert_eq!(*cloned.current(), 42);
     }
 
     #[tokio::test]
