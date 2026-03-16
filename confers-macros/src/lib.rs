@@ -56,7 +56,7 @@
 //!
 //! File paths for secrets are validated to prevent directory traversal attacks:
 //!
-//! ```rust,ignore
+//! ```text
 //! // These are blocked:
 //! // APP_KEY_FILE=../../../etc/passwd
 //! // APP_KEY_FILE=/etc/passwd
