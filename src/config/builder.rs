@@ -45,6 +45,7 @@ pub enum ReloadStrategy {
 }
 
 /// Re-export SnapshotConfig from snapshot module.
+#[cfg(feature = "snapshot")]
 pub use crate::snapshot::SnapshotConfig;
 
 /// Builder for creating configuration instances.
@@ -67,6 +68,7 @@ pub struct ConfigBuilder<T> {
     /// Build timeout.
     build_timeout: Option<Duration>,
     /// Snapshot configuration.
+    #[cfg(feature = "snapshot")]
     snapshot_config: Option<SnapshotConfig>,
     /// Whether to enable hot reload.
     watch: bool,
@@ -106,6 +108,7 @@ impl<T> ConfigBuilder<T> {
             validate: true,
             reload_strategy: ReloadStrategy::default(),
             build_timeout: None,
+            #[cfg(feature = "snapshot")]
             snapshot_config: None,
             watch: false,
             accumulated_defaults: HashMap::new(),
@@ -225,6 +228,8 @@ impl<T> ConfigBuilder<T> {
     }
 
     /// Enable snapshot configuration.
+    #[cfg(feature = "snapshot")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "snapshot")))]
     pub fn with_snapshot(mut self, config: SnapshotConfig) -> Self {
         self.snapshot_config = Some(config);
         self
@@ -616,6 +621,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "snapshot")]
     fn test_snapshot_config_default() {
         let config = SnapshotConfig::default();
         assert_eq!(config.max_snapshots, 30);
