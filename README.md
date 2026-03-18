@@ -180,6 +180,85 @@ graph LR
     style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
 ```
 
+### 📋 Feature Matrix
+
+| Feature | Default | Description | Stability |
+|:--------|:-------:|:------------|:----------|
+| **Format Support** ||||
+| `toml` | ✅ | TOML configuration files | Stable |
+| `json` | ✅ | JSON configuration files | Stable |
+| `yaml` | ❌ | YAML configuration files | Stable |
+| `ini` | ❌ | INI configuration files | Stable |
+| `env` | ✅ | Environment variable support | Stable |
+| **Core Features** ||||
+| `validation` | ❌ | Configuration validation (garde) | Stable |
+| `watch` | ❌ | File watching and hot reload | Stable |
+| `encryption` | ❌ | XChaCha20-Poly1305 encryption | Stable |
+| `cli` | ❌ | CLI tool with commands | Stable |
+| `schema` | ❌ | JSON Schema generation | Stable |
+| `parallel` | ❌ | Parallel validation (rayon) | Stable |
+| `typescript-schema` | ❌ | TypeScript type generation | Stable |
+| **Advanced Features** ||||
+| `audit` | ❌ | Audit logging | Stable |
+| `metrics` | ❌ | Metrics collection | Stable |
+| `dynamic` | ❌ | Dynamic fields | Stable |
+| `progressive-reload` | ❌ | Canary/linear rollout | Stable |
+| `migration` | ❌ | Configuration migration | Stable |
+| `snapshot` | ❌ | Snapshot rollback | Stable |
+| `profile` | ❌ | Environment profiles | Stable |
+| `interpolation` | ❌ | Variable interpolation | Stable |
+| `hot-reload` | ❌ | Hot reload (alias for watch) | Stable |
+| **Remote Sources** ||||
+| `remote` | ❌ | HTTP polling | Beta |
+| `etcd` | ❌ | Etcd v3 integration | Beta |
+| `consul` | ❌ | Consul integration | Beta |
+| `cache-redis` | ❌ | Redis cache | Beta |
+| **Message Bus** ||||
+| `config-bus` | ❌ | Config event bus | Stable |
+| `nats-bus` | ❌ | NATS integration | Stable |
+| `redis-bus` | ❌ | Redis Pub/Sub | Stable |
+| **Security** ||||
+| `security` | ❌ | Security module (env validation, error sanitization) | Stable |
+| `key` | ❌ | Key management and rotation | Stable |
+| **Context & Modules** ||||
+| `context-aware` | ❌ | Tenant-aware configuration | Stable |
+| `modules` | ❌ | Modular configuration | Stable |
+| **Infrastructure** ||||
+| `preload-validator` | ❌ | Async preload validator | Stable |
+| `poll` | ❌ | HTTP polling | Stable |
+| `vault` | ❌ | Vault integration | Beta |
+| `tracing` | ❌ | Distributed tracing | Stable |
+
+### 🗂️ Examples Directory
+
+Complete, runnable examples demonstrating all major features. All examples can be found in the [`examples/`](examples/) directory.
+
+| Example | File | Features | Description |
+|:--------|:-----|:---------|:------------|
+| **basic_usage** | `examples/src/examples/basic_usage.rs` | `toml`, `env` | Basic configuration loading from TOML and environment variables |
+| **hot_reload** | `examples/src/examples/hot_reload.rs` | `watch` | Real-time file monitoring with automatic reload |
+| **encryption** | `examples/src/examples/encryption.rs` | `encryption` | Sensitive field encryption with XChaCha20-Poly1305 |
+| **key_rotation** | `examples/src/examples/key_rotation.rs` | `key` | Key lifecycle management and rotation |
+| **migration** | `examples/src/examples/migration.rs` | `migration` | Configuration version migration |
+| **dynamic_fields** | `examples/src/examples/dynamic_fields.rs` | `dynamic` | Lock-free dynamic field updates with callbacks |
+| **config_groups** | `examples/src/examples/config_groups.rs` | `modules` | Modular configuration groups |
+| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout |
+| **config_bus** | `examples/src/examples/config_bus.rs` | `config-bus` | Multi-instance config broadcast via NATS/Redis |
+| **snapshot** | `examples/src/examples/snapshot.rs` | `snapshot` | Configuration snapshots with diff and rollback |
+| **remote_consul** | `examples/src/examples/remote_consul.rs` | `consul` | Remote config from HashiCorp Consul |
+| **remote_etcd** | `examples/src/examples/remote_etcd.rs` | `etcd` | Remote config from etcd v3 |
+| **full_stack** | `examples/src/examples/full_stack.rs` | `full` | Complete feature showcase |
+
+```bash
+# Run any example from the examples directory
+cd examples && cargo run --bin basic_usage
+cd examples && cargo run --bin encryption
+cd examples && cargo run --bin full_stack
+
+# Verify all examples compile
+cd examples && ./verify_examples.sh
+```
+
 ---
 
 ## <span id="quick-start">🚀 Quick Start</span>

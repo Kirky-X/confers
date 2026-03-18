@@ -188,6 +188,7 @@ confers = { opt-level = 2 }
 [[bench]]
 name = "merge_bench"
 harness = false
+required-features = ["interpolation"]
 
 [[bench]]
 name = "incremental_merge_bench"
@@ -200,7 +201,24 @@ harness = false
 [[bench]]
 name = "dynamic_field_bench"
 harness = false
+required-features = ["dynamic"]
 
 [[bench]]
 name = "concurrent_access_bench"
 harness = false
+required-features = ["dynamic"]
+
+[[bench]]
+name = "interpolation_bench"
+harness = false
+required-features = ["interpolation"]
+
+[[bench]]
+name = "value_path_bench"
+harness = false
+required-features = ["interpolation"]
+
+[[bench]]
+name = "cow_efficiency_bench"
+harness = false
+path = "benches/cow_efficiency_bench.rs"

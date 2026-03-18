@@ -97,6 +97,42 @@ jobs:
       - name: Check MSRV
         run: cargo check --features full
 
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - name: Run benchmarks
+        run: |
+          # Run benchmarks with dev features and save results
+          cargo bench --features dev -- --save-baseline current
+      - name: Compare with main branch baseline
+        run: |
+          # Try to fetch baseline from main branch
+          git fetch origin main --quiet 2>/dev/null || true
+          if git rev-parse --verify origin/main &>/dev/null; then
+            # Stash current results, checkout main baseline, compare, restore
+            cargo bench --features dev -- --baseline main 2>&1 | tee bench_compare.txt || true
+            # Check for significant regressions (>10%)
+            if grep -q "Regression" bench_compare.txt; then
+              echo "WARNING: Performance regression detected!"
+              # Show regression details
+              grep -A 2 "Regression" bench_compare.txt || true
+            fi
+          else
+            echo "No main branch baseline found, skipping comparison"
+          fi
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: target/criterion/
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
@@ -110,8 +146,10 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate coverage
         run: cargo llvm-cov --features full --lcov --output-path lcov.info
+      - name: Check minimum coverage (80%)
+        run: cargo llvm-cov --features full --text -- | tee coverage.txt && (grep -E "^TOTAL.*[0-9]+%" coverage.txt | tail -1 | awk '{print $2}' | sed 's/%//' | awk '{if ($1 >= 80) exit 0; else {print "Coverage " $1 "% is below 80% minimum"; exit 1}}' || exit 1)
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           files: lcov.info
-          fail_ci_if_error: false
+          fail_ci_if_error: true

@@ -7,6 +7,8 @@
 .idea/
 .vscode/
 .trae/
+.claude/
+openspec/
 *.swp
 *.swo
 *~
@@ -27,6 +29,7 @@ coverage/
 # Docs build
 docs/_book/
 docs/site/
+docs/archive/
 
 # Examples build
 examples/target/
