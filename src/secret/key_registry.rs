@@ -1,3 +1,34 @@
+//! Key registry for managing encryption key versions and rotation.
+//!
+//! This module provides thread-safe key storage with support for:
+//! - Multiple key versions
+//! - Primary key designation
+//! - Key rotation with grace periods
+//! - Provider-based key fetching
+//!
+//! # RwLock Error Handling
+//!
+//! This implementation uses `RwLock` for thread-safe access to key storage.
+//! While `RwLock` poisoning is rare, it can occur if a thread panics while holding
+//! the lock. In such cases, the lock enters a "poisoned" state.
+//!
+//! This implementation uses `expect()` with descriptive messages for RwLock operations.
+//! If a panic occurs, the error message will clearly indicate which lock was poisoned,
+//! making debugging easier.
+//!
+//! # Recovery from Poisoned Locks
+//!
+//! If a RwLock is poisoned:
+//! 1. The panic message will indicate which lock was affected
+//! 2. The application should be restarted
+//! 3. On restart, a fresh `KeyRegistry` will be created with no poisoned state
+//! 4. Keys can be re-registered from providers or persistent storage
+//!
+//! To prevent lock poisoning in production:
+//! - Ensure all key operations complete without panicking
+//! - Use proper error handling instead of panicking in callbacks
+//! - Consider wrapping operations in `catch_unwind` for async contexts
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -74,13 +105,22 @@ impl KeyRegistry {
         key: SecretBytes,
         is_primary: bool,
     ) -> Result<(), CryptoError> {
-        let mut keys = self.keys.write().unwrap();
+        // RwLock may poison if a previous holder panicked while holding the lock.
+        // Using expect() provides a descriptive message for debugging.
+        let mut keys = self
+            .keys
+            .write()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
 
         if is_primary {
             for (_, v) in keys.iter_mut() {
                 v.is_primary = false;
             }
-            *self.primary_version.write().unwrap() = Some(version.clone());
+            *self
+                .primary_version
+                .write()
+                .expect("KeyRegistry primary_version lock poisoned: previous holder panicked") =
+                Some(version.clone());
         }
 
         keys.insert(
@@ -113,7 +153,11 @@ impl KeyRegistry {
         new_version: String,
         new_key: SecretBytes,
     ) -> Result<String, CryptoError> {
-        let old_primary = self.primary_version.read().unwrap().clone();
+        let old_primary = self
+            .primary_version
+            .read()
+            .expect("KeyRegistry primary_version lock poisoned: previous holder panicked")
+            .clone();
 
         self.register_key(new_version.clone(), new_key, true)?;
 
@@ -124,12 +168,15 @@ impl KeyRegistry {
         let version = self
             .primary_version
             .read()
-            .unwrap()
+            .expect("KeyRegistry primary_version lock poisoned: previous holder panicked")
             .clone()
-            .ok_or(CryptoError::InvalidKeyLength)?;
+            .ok_or(CryptoError::InvalidKeyLength(0))?;
 
-        let keys = self.keys.read().unwrap();
-        let key_version = keys.get(&version).ok_or(CryptoError::InvalidKeyLength)?;
+        let keys = self
+            .keys
+            .read()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let key_version = keys.get(&version).ok_or(CryptoError::InvalidKeyLength(0))?;
 
         Ok((
             version.clone(),
@@ -138,13 +185,21 @@ impl KeyRegistry {
     }
 
     pub fn get_key(&self, version: &str) -> Result<ZeroizingBytes, CryptoError> {
-        let keys = self.keys.read().unwrap();
-        let key_version = keys.get(version).ok_or(CryptoError::InvalidKeyLength)?;
+        let keys = self
+            .keys
+            .read()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let key_version = keys.get(version).ok_or(CryptoError::InvalidKeyLength(0))?;
         Ok(zeroizing_bytes(key_version.key.as_slice().to_vec()))
     }
 
     pub fn get_all_versions(&self) -> Vec<String> {
-        self.keys.read().unwrap().keys().cloned().collect()
+        self.keys
+            .read()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked")
+            .keys()
+            .cloned()
+            .collect()
     }
 
     pub fn try_decrypt_with_all_keys(
@@ -155,7 +210,10 @@ impl KeyRegistry {
         use crate::secret::XChaCha20Crypto;
 
         let crypto = XChaCha20Crypto::new();
-        let keys = self.keys.read().unwrap();
+        let keys = self
+            .keys
+            .read()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
 
         for (version, key_version) in keys.iter() {
             let key_bytes = key_version.key.as_slice();
@@ -168,15 +226,26 @@ impl KeyRegistry {
     }
 
     pub fn add_provider(&self, provider: Arc<dyn KeyProvider>) {
-        self.providers.write().unwrap().push(provider);
+        self.providers
+            .write()
+            .expect("KeyRegistry providers lock poisoned: previous holder panicked")
+            .push(provider);
     }
 
     pub fn add_async_provider(&self, provider: Arc<dyn AsyncKeyProvider>) {
-        self.async_providers.write().unwrap().push(provider);
+        self.async_providers
+            .write()
+            .expect("KeyRegistry async_providers lock poisoned: previous holder panicked")
+            .push(provider);
     }
 
     pub async fn fetch_and_register(&self, version: &str) -> Result<Vec<u8>, CryptoError> {
-        for provider in self.providers.read().unwrap().iter() {
+        for provider in self
+            .providers
+            .read()
+            .expect("KeyRegistry providers lock poisoned: previous holder panicked")
+            .iter()
+        {
             if let Ok(key) = provider.get_key() {
                 let key_bytes = key.as_slice().to_vec();
                 let _ = self.register_key(
@@ -191,7 +260,7 @@ impl KeyRegistry {
         let async_providers: Vec<Arc<dyn AsyncKeyProvider>> = self
             .async_providers
             .read()
-            .unwrap()
+            .expect("KeyRegistry async_providers lock poisoned: previous holder panicked")
             .iter()
             .cloned()
             .collect();
@@ -207,11 +276,14 @@ impl KeyRegistry {
             }
         }
 
-        Err(CryptoError::InvalidKeyLength)
+        Err(CryptoError::InvalidKeyLength(0))
     }
 
     pub fn version_count(&self) -> usize {
-        self.keys.read().unwrap().len()
+        self.keys
+            .read()
+            .expect("KeyRegistry keys lock poisoned: previous holder panicked")
+            .len()
     }
 }
 
@@ -342,5 +414,128 @@ mod tests {
             .unwrap();
 
         assert_eq!(registry.version_count(), 2);
+    }
+
+    #[test]
+    fn test_get_all_versions() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true)
+            .unwrap();
+        registry
+            .register_key("v2".to_string(), SecretBytes::new(vec![2u8; 32]), false)
+            .unwrap();
+
+        let versions = registry.get_all_versions();
+        assert_eq!(versions.len(), 2);
+        assert!(versions.contains(&"v1".to_string()));
+        assert!(versions.contains(&"v2".to_string()));
+    }
+
+    #[test]
+    fn test_get_key_by_version() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let key = vec![42u8; 32];
+
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(key.clone()), true)
+            .unwrap();
+
+        let retrieved = registry.get_key("v1").unwrap();
+        assert_eq!(&*retrieved, &key);
+
+        // Non-existent version should fail
+        let result = registry.get_key("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_decrypt_with_all_keys() {
+        use crate::secret::XChaCha20Crypto;
+
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let crypto = XChaCha20Crypto::new();
+
+        // Register first key
+        let key1 = vec![1u8; 32];
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(key1.clone()), true)
+            .unwrap();
+
+        // Encrypt with key1
+        let plaintext = b"secret message";
+        let (nonce, ciphertext) = crypto.encrypt(plaintext, &key1).unwrap();
+
+        // Try to decrypt with registry
+        let result = registry.try_decrypt_with_all_keys(&nonce, &ciphertext);
+        assert!(result.is_ok());
+
+        let (version, decrypted) = result.unwrap();
+        assert_eq!(version, "v1");
+        assert_eq!(&decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_key_registry_thread_safety() {
+        use std::sync::Arc;
+        use std::thread;
+
+        // Use a config with enough capacity for all test keys
+        let mut config = KeyRotationConfig::default();
+        config.max_key_versions = 15;
+        let registry = Arc::new(KeyRegistry::new(config));
+        let mut handles = vec![];
+
+        // Spawn multiple threads to register keys concurrently
+        for i in 0..10 {
+            let reg = Arc::clone(&registry);
+            let handle = thread::spawn(move || {
+                let key = vec![i as u8; 32];
+                reg.register_key(
+                    format!("v{}", i),
+                    SecretBytes::new(key),
+                    i == 0, // First one is primary
+                )
+                .unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Verify all keys were registered
+        assert_eq!(registry.version_count(), 10);
+
+        // Verify primary key exists
+        let result = registry.get_primary_key();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_add_provider() {
+        use crate::error::ConfigResult;
+        use crate::traits::KeyProvider;
+        use crate::traits::ZeroizingBytes;
+
+        struct DummyProvider;
+        impl KeyProvider for DummyProvider {
+            fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                Ok(ZeroizingBytes::new(vec![0u8; 32]))
+            }
+
+            fn provider_type(&self) -> &'static str {
+                "test-dummy"
+            }
+        }
+
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        registry.add_provider(Arc::new(DummyProvider));
+
+        // Provider was added (no panic means success)
+        assert!(true);
     }
 }

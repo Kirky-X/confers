@@ -502,8 +502,42 @@ impl TlsConfig {
 }
 
 // =============================================================================
-// 主程序
+// 安全凭证管理
 // =============================================================================
+//
+// 安全最佳实践:
+// - 绝不将凭证硬编码在源代码中
+// - 生产环境使用环境变量或安全的密钥管理服务（如 HashiCorp Vault）
+// - 敏感信息不应出现在日志或错误消息中
+// - 建议使用 TLS 加密传输凭证
+//
+// 环境变量说明:
+// - ETCD_USER: etcd 认证用户名
+// - ETCD_PASSWORD: etcd 认证密码
+// - ETCD_ENDPOINTS: etcd 服务器端点（逗号分隔）
+//
+// 示例运行方式:
+//   ETCD_USER=admin ETCD_PASSWORD=secret cargo run --example remote_etcd
+//
+
+/// 从环境变量获取认证凭证
+///
+/// # Panics
+/// 如果环境变量未设置则程序会 panic，建议在生产环境中使用妥善的错误处理
+fn get_auth_credentials() -> (String, String) {
+    (
+        std::env::var("ETCD_USER").unwrap_or_else(|_| {
+            eprintln!("错误: ETCD_USER 环境变量未设置");
+            eprintln!("提示: 运行前请设置 ETCD_USER 和 ETCD_PASSWORD");
+            panic!("ETCD_USER must be set for authenticated etcd connections")
+        }),
+        std::env::var("ETCD_PASSWORD").unwrap_or_else(|_| {
+            eprintln!("错误: ETCD_PASSWORD 环境变量未设置");
+            eprintln!("提示: 运行前请设置 ETCD_USER 和 ETCD_PASSWORD");
+            panic!("ETCD_PASSWORD must be set for authenticated etcd connections")
+        }),
+    )
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -642,13 +676,15 @@ async fn demo_tls_config() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 创建带 TLS 的 etcd 配置
+    // 安全凭证从环境变量读取，不使用硬编码值
+    let (username, password) = get_auth_credentials();
     let etcd_config = EtcdConfig::new(vec!["https://etcd.example.com:2379".to_string()])
         .with_tls(
             "/path/to/ca.crt",
             "/path/to/client.crt",
             "/path/to/client.key",
         )
-        .with_auth("admin", "secret");
+        .with_auth(&username, &password);
 
     info!("\nTLS 配置:");
     info!("  端点: {:?}", etcd_config.endpoints);
@@ -703,4 +739,170 @@ async fn demo_config_watching() -> Result<(), Box<dyn std::error::Error>> {
     info!("  4. 添加变更事件的审计日志");
 
     Ok(())
+}
+
+// =============================================================================
+// 单元测试
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 测试 EtcdConfig 的 with_auth 方法
+    #[test]
+    fn test_etcd_config_with_auth() {
+        let config = EtcdConfig::default();
+        assert!(config.username.is_none());
+        assert!(config.password.is_none());
+
+        let config = config.with_auth("testuser", "testpass");
+        assert_eq!(config.username, Some("testuser".to_string()));
+        assert_eq!(config.password, Some("testpass".to_string()));
+    }
+
+    /// 测试 EtcdConfig 的 with_tls 方法
+    #[test]
+    fn test_etcd_config_with_tls() {
+        let config = EtcdConfig::new(vec!["https://etcd.example.com:2379".to_string()]).with_tls(
+            "/path/to/ca.crt",
+            "/path/to/client.crt",
+            "/path/to/client.key",
+        );
+
+        assert!(config.tls_enabled);
+        assert_eq!(config.ca_cert_path, Some("/path/to/ca.crt".to_string()));
+        assert_eq!(
+            config.client_cert_path,
+            Some("/path/to/client.crt".to_string())
+        );
+        assert_eq!(
+            config.client_key_path,
+            Some("/path/to/client.key".to_string())
+        );
+    }
+
+    /// 测试 TlsConfig 验证功能
+    #[test]
+    fn test_tls_config_validation() {
+        // 空的 CA 证书应该验证失败
+        let tls_config = TlsConfig {
+            ca_cert: String::new(),
+            client_cert: "cert".to_string(),
+            client_key: "key".to_string(),
+            server_name: "server".to_string(),
+        };
+        assert!(tls_config.validate().is_err());
+
+        // 空的客户端证书应该验证失败
+        let tls_config = TlsConfig {
+            ca_cert: "ca".to_string(),
+            client_cert: String::new(),
+            client_key: "key".to_string(),
+            server_name: "server".to_string(),
+        };
+        assert!(tls_config.validate().is_err());
+
+        // 完整的有效配置应该验证成功
+        let tls_config = TlsConfig {
+            ca_cert: "valid_ca_cert".to_string(),
+            client_cert: "valid_client_cert".to_string(),
+            client_key: "valid_client_key".to_string(),
+            server_name: "valid_server_name".to_string(),
+        };
+        assert!(tls_config.validate().is_ok());
+    }
+
+    /// 测试 TlsConfig::from_files 方法
+    #[test]
+    fn test_tls_config_from_files_nonexistent() {
+        // 测试不存在的文件会返回错误
+        let result = TlsConfig::from_files(
+            "/nonexistent/path/ca.crt",
+            "/nonexistent/path/client.crt",
+            "/nonexistent/path/client.key",
+            "server.example.com",
+        );
+        assert!(result.is_err());
+    }
+
+    /// 测试 EtcdConfigSource 配置解析
+    #[test]
+    fn test_etcd_config_source_creation() {
+        let config = EtcdConfig::new(vec!["http://127.0.0.1:2379".to_string()]);
+        let source = EtcdConfigSource::new(config, "test/prefix");
+
+        // 验证源创建成功
+        assert_eq!(source.prefix, "test/prefix");
+    }
+
+    /// 测试环境变量凭证获取函数
+    #[test]
+    fn test_get_auth_credentials_missing_env() {
+        // 清除可能存在的环境变量
+        std::env::remove_var("ETCD_USER");
+        std::env::remove_var("ETCD_PASSWORD");
+
+        // 缺少环境变量应该导致 panic
+        let result = std::panic::catch_unwind(|| get_auth_credentials());
+
+        assert!(
+            result.is_err(),
+            "Should panic when environment variables are missing"
+        );
+    }
+
+    /// 测试环境变量凭证获取函数（设置环境变量后）
+    #[test]
+    fn test_get_auth_credentials_with_env() {
+        // 设置测试环境变量
+        std::env::set_var("ETCD_USER", "test_admin");
+        std::env::set_var("ETCD_PASSWORD", "test_secret_password");
+
+        let (username, password) = get_auth_credentials();
+
+        assert_eq!(username, "test_admin");
+        assert_eq!(password, "test_secret_password");
+
+        // 清理
+        std::env::remove_var("ETCD_USER");
+        std::env::remove_var("ETCD_PASSWORD");
+    }
+
+    /// 测试 AppConfig 反序列化
+    #[test]
+    fn test_app_config_deserialization() {
+        let json = serde_json::json!({
+            "name": "test-app",
+            "version": "1.0.0",
+            "environment": "test",
+            "server": {
+                "host": "localhost",
+                "port": 8080,
+                "workers": 4
+            },
+            "database": {
+                "url": "postgresql://localhost/testdb",
+                "max_connections": 10,
+                "timeout_seconds": 30
+            },
+            "features": {
+                "new_ui": true,
+                "beta_api": false,
+                "realtime_notification": true
+            }
+        });
+
+        let config: AppConfig = serde_json::from_value(json).unwrap();
+
+        assert_eq!(config.name, "test-app");
+        assert_eq!(config.version, "1.0.0");
+        assert_eq!(config.environment, "test");
+        assert_eq!(config.server.host, "localhost");
+        assert_eq!(config.server.port, 8080);
+        assert_eq!(config.database.url, "postgresql://localhost/testdb");
+        assert!(config.features.new_ui);
+        assert!(!config.features.beta_api);
+        assert!(config.features.realtime_notification);
+    }
 }
