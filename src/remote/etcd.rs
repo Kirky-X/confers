@@ -152,12 +152,14 @@ impl EtcdSource {
 
     /// Poll etcd for configuration.
     async fn poll_internal(&self) -> ConfigResult<AnnotatedValue> {
+        use etcd_client::GetOptions;
+
         let client = self.client.clone();
         let mut kv_client = client.kv_client();
 
         // Get all keys with the prefix
         let get_response = kv_client
-            .get(self.prefix.as_ref(), None)
+            .get(self.prefix.as_ref(), Some(GetOptions::new().with_prefix()))
             .await
             .map_err(|e| ConfigError::InvalidValue {
                 key: "etcd".to_string(),
