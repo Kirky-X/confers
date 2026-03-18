@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **SECURITY.md**: Comprehensive security policy document with vulnerability reporting process, security features documentation, best practices guide, and security audit process
+- **ADR-041**: Async trait stabilization strategy - evaluating migration from `async-trait` crate to native `async fn in traits`
+- **ADR-042**: Source registry mechanism - unified `SourceProvider` trait and `SourceRegistry` for extensible data source registration
+- **ADR-043**: Error type simplification strategy - layered error architecture with simplified public API
+- **ADR-044**: Test coverage targets (80%) - per-module coverage requirements and CI integration
+- **ADR-045**: API versioning strategy - semver enforcement, deprecation process, and breaking change policy
+
+### Documentation
+- **README.md**: Added comprehensive feature matrix table and examples directory section with direct links to all 13 runnable examples
+- **CONTRIBUTING.md**: Added explicit code coverage requirements (>= 80%) and updated testing guidelines to align with ADR-044
+
+### Security
+- Security documentation now covers all encryption, input validation, SSRF protection, audit logging, and key management features
+
+---
+
 ## [0.3.0] - 2026-03-04
 
 ### 🎉 Added

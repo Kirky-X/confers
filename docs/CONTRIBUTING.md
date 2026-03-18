@@ -402,16 +402,38 @@ graph TD
 
 ### Coverage Requirements
 
-- **New code coverage**: ≥ 80%
-- **Core business logic**: 100% coverage
+Per [ADR-044](adr/ADR-044-test-coverage-targets.md), the following coverage targets are enforced:
+
+| Module | Target | Critical Requirements |
+|:-------|:------:|:---------------------|
+| Core (loader, merger, value) | >= 90% | Includes boundary conditions |
+| Encryption | >= 90% | All attack paths must be tested |
+| Validation | >= 85% | All rule types covered |
+| Migration | >= 85% | Upgrade and downgrade paths |
+| Snapshot | >= 85% | Consistency guarantees |
+| Other modules | >= 80% | Overall average |
+| **Overall target** | **>= 80%** | All code average |
+
+**Coverage verification commands:**
 
 ```bash
+# Generate coverage report (HTML)
+cargo llvm-cov --all-features --open
+
+# Generate LCOV format for CI integration
+cargo llvm-cov --all-features --lcov --output-path lcov.info
+
 # Run all tests
 cargo test --all-features
 
-# Generate coverage report
-cargo llvm-cov --html
+# Quick coverage check
+cargo llvm-cov --all-features --summary-only
 ```
+
+**CI enforcement:**
+- Codecov is integrated via GitHub Actions
+- PRs failing below the 80% threshold will be blocked
+- Coverage reports are generated on every PR
 
 ---
 
