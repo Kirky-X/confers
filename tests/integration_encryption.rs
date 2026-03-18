@@ -186,7 +186,17 @@ mod tests {
         // Key too short
         let short_key = [0u8; 16];
         let result = crypto.encrypt(plaintext, &short_key);
-        assert!(matches!(result, Err(CryptoError::InvalidKeyLength)));
+        assert!(matches!(result, Err(CryptoError::InvalidKeyLength(16))));
+
+        // Key too long
+        let long_key = [0u8; 64];
+        let result = crypto.encrypt(plaintext, &long_key);
+        assert!(matches!(result, Err(CryptoError::InvalidKeyLength(64))));
+
+        // Exactly 32 bytes should work
+        let valid_key = [0u8; 32];
+        let result = crypto.encrypt(plaintext, &valid_key);
+        assert!(result.is_ok());
     }
 
     // ========================================
@@ -270,7 +280,27 @@ mod tests {
             let result = provider.get_key();
 
             // Should fail because key is less than 32 bytes
-            assert!(matches!(result, Err(CryptoError::InvalidKeyLength)));
+            assert!(matches!(result, Err(CryptoError::InvalidKeyLength(5))));
+        });
+    }
+
+    #[test]
+    fn test_env_key_provider_exact_length() {
+        // 32 byte key - exactly correct
+        common::with_env_var("EXACT_KEY_TEST", "12345678901234567890123456789012", || {
+            let provider = EnvKeyProvider::new("EXACT_KEY_TEST");
+            let result = provider.get_key();
+            assert!(result.is_ok());
+        });
+    }
+
+    #[test]
+    fn test_env_key_provider_too_long_key() {
+        // 33 byte key - too long
+        common::with_env_var("LONG_KEY_TEST", "123456789012345678901234567890123", || {
+            let provider = EnvKeyProvider::new("LONG_KEY_TEST");
+            let result = provider.get_key();
+            assert!(matches!(result, Err(CryptoError::InvalidKeyLength(33))));
         });
     }
 
@@ -278,7 +308,7 @@ mod tests {
     fn test_env_key_provider_builder() {
         common::with_env_var(
             "BUILDER_TEST_KEY",
-            "builder_test_32_byte_key_for_test!!",
+            "12345678901234567890123456789012",
             || {
                 let provider = EnvKeyProvider::builder()
                     .env_var("BUILDER_TEST_KEY")
@@ -299,12 +329,12 @@ mod tests {
 
         let result = EnvKeyProvider::builder().env_var(var_name).build();
 
-        // Build succeeds but get_key should fail when env var doesn't exist
-        assert!(result.is_ok());
-
-        let provider = result.unwrap();
-        let key_result = provider.get_key();
-        assert!(key_result.is_err());
+        // Build should fail when env var doesn't exist
+        assert!(
+            result.is_err(),
+            "Builder should fail when env var doesn't exist: {:?}",
+            result
+        );
     }
 
     #[test]
