@@ -24,7 +24,7 @@ fn bench_dynamic_field_trigger(c: &mut Criterion) {
 
     c.bench_function("dynamic_field_trigger", |b| {
         b.iter(|| {
-            field.set(43);
+            field.update(43);
         });
     });
 }
@@ -42,7 +42,7 @@ fn bench_dynamic_field_trigger_multiple(c: &mut Criterion) {
 
     c.bench_function("dynamic_field_trigger_multiple", |b| {
         b.iter(|| {
-            field.set(43);
+            field.update(43);
         });
     });
 }
