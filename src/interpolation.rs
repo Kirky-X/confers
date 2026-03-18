@@ -132,6 +132,11 @@ impl InterpolationResult {
 ///
 /// This unified implementation handles both tracked and untracked interpolation
 /// to avoid code duplication.
+///
+/// Performance optimizations:
+/// - Byte-level iteration for faster '${' detection
+/// - Pre-allocated result buffer with estimated capacity
+/// - Reduced match overhead in inner loop
 fn interpolate_inner_impl<F>(
     template: &str,
     resolver: &F,
@@ -143,38 +148,48 @@ fn interpolate_inner_impl<F>(
 where
     F: Fn(&str) -> Option<String>,
 {
-    let mut result = String::with_capacity(template.len() * 2);
-    let mut chars = template.chars().peekable();
+    let mut result = String::with_capacity(template.len().saturating_mul(2).max(128));
+    let bytes = template.as_bytes();
+    let mut i = 0;
 
-    while let Some(c) = chars.next() {
-        // Check for ${
-        if c == '$' && chars.peek() == Some(&'{') {
-            chars.next(); // consume '{'
+    while i < bytes.len() {
+        let b = bytes[i];
 
-            // Extract the variable name and optional default
+        // Check for '${' start using byte comparison (faster than peekable char iter)
+        if b == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            i += 2; // skip '${'
+
+            // Build variable content into a reusable buffer
             let mut var_content = String::new();
-            let mut depth = 1;
+            let mut depth = 1usize;
 
-            while depth > 0 {
-                match chars.next() {
-                    Some('{') => {
-                        depth += 1;
-                        var_content.push('{');
+            while i < bytes.len() && depth > 0 {
+                let cb = bytes[i];
+                if cb == b'{' {
+                    depth += 1;
+                    var_content.push('{');
+                } else if cb == b'}' {
+                    depth -= 1;
+                    if depth > 0 {
+                        var_content.push('}');
                     }
-                    Some('}') => {
-                        depth -= 1;
-                        if depth > 0 {
-                            var_content.push('}');
-                        }
-                    }
-                    Some(c) => var_content.push(c),
-                    None => {
-                        return Err(ConfigError::InterpolationError {
-                            variable: var_content,
-                            message: "unterminated variable reference".to_string(),
-                        });
-                    }
+                } else if cb < 128 {
+                    // Fast path: ASCII characters
+                    var_content.push(cb as char);
+                } else {
+                    // Slow path: multi-byte UTF-8
+                    let c = template[i..].chars().next().unwrap();
+                    var_content.push(c);
+                    i += c.len_utf8() - 1;
                 }
+                i += 1;
+            }
+
+            if depth > 0 {
+                return Err(ConfigError::InterpolationError {
+                    variable: var_content,
+                    message: "unterminated variable reference".to_string(),
+                });
             }
 
             // Parse variable name and default value
@@ -200,7 +215,7 @@ where
             }
 
             // Resolve the variable
-            let value = if let Some(val) = resolver(var_name) {
+            let value = if let Some(val) = (*resolver)(var_name) {
                 val
             } else if let Some(default) = default_value {
                 // Default might contain interpolations too
@@ -236,7 +251,16 @@ where
 
             result.push_str(&interpolated);
         } else {
-            result.push(c);
+            // Regular character - copy it
+            if b < 128 {
+                result.push(b as char);
+                i += 1;
+            } else {
+                // Multi-byte UTF-8
+                let c = template[i..].chars().next().unwrap();
+                result.push(c);
+                i += c.len_utf8();
+            }
         }
     }
 

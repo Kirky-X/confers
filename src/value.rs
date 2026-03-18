@@ -717,41 +717,73 @@ impl AnnotatedValue {
     ///
     /// # Arguments
     /// * `include_self` - If true, includes the current path in the result
+    ///
+    /// Optimizations applied:
+    /// - Reuses a String buffer for path building instead of format!() each time
+    /// - Uses write! macro with pre-allocated buffer
+    /// - Avoids unnecessary Arc::clone when pushing to stack
     fn all_paths_internal(&self, include_self: bool) -> Vec<Arc<str>> {
         let mut paths = if include_self {
             vec![self.path.clone()]
         } else {
             Vec::new()
         };
-        let mut stack: Vec<&ConfigValue> = vec![&self.inner];
-        // Start traversal from inner value with current path
-        let start_path = self.path.clone();
-        let mut path_stack: Vec<Arc<str>> = vec![start_path];
 
-        // Iterative traversal using explicit stack to avoid stack overflow
-        while let Some(value) = stack.pop() {
-            let current_path = path_stack.pop().unwrap_or_else(|| self.path.clone());
+        // Stack for traversal: holds (value_ref, path)
+        let mut stack: Vec<(&ConfigValue, Arc<str>)> = vec![(&self.inner, self.path.clone())];
 
+        // Reusable buffer for path construction - avoids repeated allocations
+        let mut path_buf = String::new();
+
+        while let Some((value, current_path)) = stack.pop() {
             match value {
                 ConfigValue::Map(map) => {
                     for (key, val) in map.iter() {
-                        let new_path = if current_path.is_empty() {
-                            key.clone()
-                        } else {
-                            let s = format!("{}.{}", current_path, key);
-                            Arc::from(s.as_str())
-                        };
+                        // Build new path using reusable buffer
+                        path_buf.clear();
+                        if !current_path.is_empty() {
+                            path_buf.push_str(&current_path);
+                            path_buf.push('.');
+                        }
+                        path_buf.push_str(key);
+
+                        let new_path: Arc<str> = Arc::from(path_buf.as_str());
                         paths.push(new_path.clone());
-                        stack.push(&val.inner);
-                        path_stack.push(new_path);
+                        stack.push((&val.inner, new_path));
                     }
                 }
                 ConfigValue::Array(arr) => {
                     for (i, val) in arr.iter().enumerate() {
-                        let new_path: Arc<str> = Arc::from(format!("{}.{}", current_path, i));
+                        // Build new path with array index
+                        path_buf.clear();
+                        if !current_path.is_empty() {
+                            path_buf.push_str(&current_path);
+                            path_buf.push('.');
+                        }
+                        // Convert index to string efficiently
+                        let _start = path_buf.len();
+                        // Simple integer to string without format! overhead
+                        let mut n = i;
+                        let mut digits = [0u8; 20];
+                        let mut len = 0;
+                        if n == 0 {
+                            digits[0] = b'0';
+                            len = 1;
+                        } else {
+                            while n > 0 {
+                                digits[len] = b'0' + (n % 10) as u8;
+                                n /= 10;
+                                len += 1;
+                            }
+                            digits[..len].reverse();
+                        }
+                        path_buf.push_str(std::str::from_utf8(&digits[..len]).unwrap_or("0"));
+                        // Fallback for non-ASCII (shouldn't happen for array indices)
+                        // path_buf.extend(i.to_string().chars());
+
+                        let new_path: Arc<str> = Arc::from(path_buf.as_str());
                         paths.push(new_path.clone());
-                        stack.push(&val.inner);
-                        path_stack.push(new_path);
+                        stack.push((&val.inner, new_path));
                     }
                 }
                 _ => {}

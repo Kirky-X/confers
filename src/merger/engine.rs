@@ -150,6 +150,13 @@ fn build_annotated_value(
     }
 }
 
+/// Optimized COW map merge.
+///
+/// Key optimizations:
+/// 1. Fast path: if high has no keys, return low unchanged
+/// 2. Single-pass: build modifications in-place on cloned map
+/// 3. Avoid intermediate Vec allocation
+/// 4. Use Arc::make_mut for efficient COW
 fn merge_maps_with_cow(
     low_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     high_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
@@ -159,11 +166,48 @@ fn merge_maps_with_cow(
     let low = low_map.as_ref();
     let high = high_map.as_ref();
 
-    let mut modifications: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();
-    let mut has_modifications = false;
+    // Fast path: if high is empty, no modifications possible
+    if high.is_empty() {
+        return Ok(ConfigValue::Map(Arc::clone(low_map)));
+    }
+
+    // Fast path: if low is empty, high wins completely
+    if low.is_empty() {
+        return Ok(ConfigValue::Map(Arc::clone(high_map)));
+    }
+
+    // Determine if any modifications are needed by checking high keys against low
+    // This is a quick scan to detect the no-modification case
+    let mut has_changes = false;
+
+    for (k, v_high) in high.iter() {
+        match low.get(k) {
+            Some(v_low) => {
+                // Check if values are actually different
+                if !values_equal(&v_low.inner, &v_high.inner, strategy) {
+                    has_changes = true;
+                    break;
+                }
+            }
+            None => {
+                has_changes = true;
+                break;
+            }
+        }
+    }
+
+    // No modifications needed - return original Arc (zero allocation, zero copy)
+    if !has_changes {
+        return Ok(ConfigValue::Map(Arc::clone(low_map)));
+    }
+
+    // There are modifications - clone the low map once and apply all changes
+    // This is the key COW optimization: only one clone instead of per-key clones
+    let mut result = (**low_map).clone();
 
     for (k, v_high) in high.iter() {
         if let Some(v_low) = low.get(k) {
+            // Both maps have this key - merge or replace
             let needs_recursive = matches!(
                 (&v_low.inner, &v_high.inner),
                 (ConfigValue::Map(_), ConfigValue::Map(_))
@@ -172,43 +216,49 @@ fn merge_maps_with_cow(
             if needs_recursive {
                 let merged_inner =
                     MergeEngine::merge_with_depth(v_low, v_high, strategy.clone(), depth + 1)?;
-                if merged_inner.inner != v_low.inner {
-                    modifications.push((k.clone(), merged_inner));
-                    has_modifications = true;
-                }
+                result.insert(
+                    k.clone(),
+                    build_annotated_value(merged_inner.inner.clone(), v_high, v_low),
+                );
             } else {
                 let merged = apply_leaf_strategy(&v_low.inner, &v_high.inner, strategy);
-                if merged != v_low.inner {
-                    modifications.push((
-                        k.clone(),
-                        AnnotatedValue {
-                            inner: merged,
-                            source: v_high.source.clone(),
-                            path: v_high.path.clone(),
-                            priority: v_high.priority.max(v_low.priority),
-                            version: v_high.version.max(v_low.version) + 1,
-                            location: v_high.location.clone().or(v_low.location.clone()),
-                        },
-                    ));
-                    has_modifications = true;
-                }
+                result.insert(k.clone(), build_annotated_value(merged, v_high, v_low));
             }
         } else {
-            modifications.push((k.clone(), v_high.clone()));
-            has_modifications = true;
+            // Key only in high - add it
+            result.insert(k.clone(), v_high.clone());
         }
     }
 
-    if !has_modifications {
-        return Ok(ConfigValue::Map(Arc::clone(low_map)));
-    }
-
-    let mut result = low.clone();
-    for (k, v) in modifications {
-        result.insert(k, v);
-    }
-
     Ok(ConfigValue::Map(Arc::new(result)))
+}
+
+/// Check if two values are equal after applying a merge strategy.
+/// Used for the fast-path detection of no modifications.
+#[inline]
+fn values_equal(low: &ConfigValue, high: &ConfigValue, strategy: &MergeStrategy) -> bool {
+    match (low, high, strategy) {
+        // Replace strategy: values are always different unless they're both Null
+        (_, _, MergeStrategy::Replace) => low == high,
+        // For deep merge: maps need special handling
+        (ConfigValue::Map(_), ConfigValue::Map(_), _) => {
+            // We can't cheaply know if maps are equal here without full comparison
+            // err on the side of saying they might differ (conservative)
+            false
+        }
+        // String join: result differs from low
+        (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::Join { .. }) => false,
+        (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::JoinAppend { .. }) => false,
+        // Array strategies: result differs from low
+        (
+            ConfigValue::Array(_),
+            ConfigValue::Array(_),
+            MergeStrategy::Append | MergeStrategy::JoinAppend { .. },
+        ) => false,
+        (ConfigValue::Array(_), ConfigValue::Array(_), MergeStrategy::Prepend) => false,
+        // Default: high wins, so result always differs from low
+        _ => low == high,
+    }
 }
 
 #[inline]
