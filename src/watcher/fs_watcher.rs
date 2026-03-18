@@ -20,11 +20,19 @@ pub struct FsWatcher {
     /// Path being watched
     watch_path: Arc<PathBuf>,
     /// Receiver for debounced file events
-    rx: mpsc::Receiver<PathBuf>,
-    /// Handle to the watcher task
-    task_handle: tokio::task::JoinHandle<()>,
+    rx: Option<mpsc::Receiver<PathBuf>>,
+    /// Sender for closing the channel
+    tx: Option<mpsc::Sender<PathBuf>>,
+    /// Handle to the watcher thread
+    watcher_thread: Option<std::thread::JoinHandle<()>>,
     /// Running flag
     running: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for FsWatcher {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 impl FsWatcher {
@@ -66,16 +74,18 @@ impl FsWatcher {
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let path_clone = Arc::clone(&watch_path);
         let running_clone = Arc::clone(&running);
+        let tx_for_thread = tx.clone();
 
-        // Spawn watcher task
-        let task_handle = tokio::spawn(async move {
-            Self::watch_task(&path_clone, debounce_ms, tx, running_clone).await;
+        // Spawn the watcher in a dedicated thread (not tokio task)
+        let watcher_thread = std::thread::spawn(move || {
+            Self::run_watcher(&path_clone, debounce_ms, tx_for_thread, running_clone);
         });
 
         Ok(Self {
             watch_path,
-            rx,
-            task_handle,
+            rx: Some(rx),
+            tx: Some(tx),
+            watcher_thread: Some(watcher_thread),
             running,
         })
     }
@@ -84,7 +94,11 @@ impl FsWatcher {
     ///
     /// Returns `Some(path)` when a file change is detected, `None` if the watcher is stopped.
     pub async fn recv(&mut self) -> Option<PathBuf> {
-        self.rx.recv().await
+        if let Some(ref mut rx) = self.rx {
+            rx.recv().await
+        } else {
+            None
+        }
     }
 
     /// Get the path being watched.
@@ -93,9 +107,24 @@ impl FsWatcher {
     }
 
     /// Stop the watcher.
-    pub fn stop(&self) {
+    pub fn stop(&mut self) {
+        if !self.running.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+
         self.running
             .store(false, std::sync::atomic::Ordering::SeqCst);
+
+        // Drop the sender to close the channel, which will cause recv() to return None
+        self.tx.take();
+
+        // Wait for the watcher thread to finish
+        if let Some(handle) = self.watcher_thread.take() {
+            let _ = handle.join();
+        }
+
+        // Close the receiver
+        self.rx.take();
     }
 
     /// Check if the watcher is running.
@@ -103,8 +132,8 @@ impl FsWatcher {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Internal watcher task that integrates with notify-debouncer-full.
-    async fn watch_task(
+    /// Internal watcher function that runs in a dedicated thread.
+    fn run_watcher(
         path: &Path,
         debounce_ms: u64,
         tx: mpsc::Sender<PathBuf>,
@@ -114,36 +143,30 @@ impl FsWatcher {
             new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
         };
 
-        let path_owned = path.to_path_buf();
-        let running_sync = Arc::clone(&running);
-
-        // Create a bridge channel
+        // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        // Spawn the debouncer in a blocking thread
-        std::thread::spawn(move || {
+        // Create the debouncer
+        let mut debouncer =
             match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
                 let _ = bridge_tx.send(result);
             }) {
-                Ok(mut d) => {
-                    if let Err(e) = d.watch(&path_owned, RecursiveMode::Recursive) {
-                        tracing::error!("Failed to watch path {:?}: {:?}", path_owned, e);
-                        return;
-                    }
-                    tracing::info!("FsWatcher watching: {:?}", path_owned);
-
-                    // Keep the thread alive to process events
-                    while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                        std::thread::sleep(Duration::from_millis(50));
-                    }
-                }
+                Ok(d) => d,
                 Err(e) => {
                     tracing::error!("Failed to create debouncer: {:?}", e);
+                    return;
                 }
-            }
-        });
+            };
 
-        // Process events in async context
+        // Start watching
+        if let Err(e) = debouncer.watch(path, RecursiveMode::Recursive) {
+            tracing::error!("Failed to watch path {:?}: {:?}", path, e);
+            return;
+        }
+
+        tracing::info!("FsWatcher watching: {:?}", path);
+
+        // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
             match bridge_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(result) => {
@@ -155,7 +178,21 @@ impl FsWatcher {
                                 | EventKind::Remove(_) => {
                                     for event_path in &event.paths {
                                         if event_path.is_file() {
-                                            let _ = tx.send(event_path.clone()).await;
+                                            // Try to send, but don't block if channel is closed
+                                            match tx.try_send(event_path.clone()) {
+                                                Ok(_) => {}
+                                                Err(mpsc::error::TrySendError::Full(_)) => {
+                                                    // Channel full, skip this event
+                                                }
+                                                Err(mpsc::error::TrySendError::Closed(_)) => {
+                                                    // Channel closed, exit
+                                                    running.store(
+                                                        false,
+                                                        std::sync::atomic::Ordering::SeqCst,
+                                                    );
+                                                    return;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -165,7 +202,7 @@ impl FsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    tracing::warn!("Bridge channel disconnected");
+                    tracing::debug!("Bridge channel disconnected");
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -173,6 +210,10 @@ impl FsWatcher {
                 }
             }
         }
+
+        // Explicitly stop the debouncer
+        drop(debouncer);
+        tracing::debug!("FsWatcher stopped");
     }
 }
 
@@ -184,11 +225,19 @@ pub struct MultiFsWatcher {
     /// Paths being watched
     watch_paths: Arc<HashSet<PathBuf>>,
     /// Receiver for debounced file events
-    rx: mpsc::Receiver<PathBuf>,
-    /// Handle to the watcher task
-    task_handle: tokio::task::JoinHandle<()>,
+    rx: Option<mpsc::Receiver<PathBuf>>,
+    /// Sender for closing the channel
+    tx: Option<mpsc::Sender<PathBuf>>,
+    /// Handle to the watcher thread
+    watcher_thread: Option<std::thread::JoinHandle<()>>,
     /// Running flag
     running: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for MultiFsWatcher {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
 impl MultiFsWatcher {
@@ -246,17 +295,19 @@ impl MultiFsWatcher {
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let paths_arc = Arc::new(watch_paths);
         let running_clone = Arc::clone(&running);
-        let paths_clone = Arc::clone(&paths_arc);
+        let paths_for_thread = Arc::clone(&paths_arc);
+        let tx_for_thread = tx.clone();
 
-        // Spawn watcher task
-        let task_handle = tokio::spawn(async move {
-            Self::watch_task(&paths_clone, debounce_ms, tx, running_clone).await;
+        // Spawn the watcher in a dedicated thread (not tokio task)
+        let watcher_thread = std::thread::spawn(move || {
+            Self::run_watcher(&paths_for_thread, debounce_ms, tx_for_thread, running_clone);
         });
 
         Ok(Self {
             watch_paths: paths_arc,
-            rx,
-            task_handle,
+            rx: Some(rx),
+            tx: Some(tx),
+            watcher_thread: Some(watcher_thread),
             running,
         })
     }
@@ -265,7 +316,11 @@ impl MultiFsWatcher {
     ///
     /// Returns `Some(path)` when a file change is detected, `None` if the watcher is stopped.
     pub async fn recv(&mut self) -> Option<PathBuf> {
-        self.rx.recv().await
+        if let Some(ref mut rx) = self.rx {
+            rx.recv().await
+        } else {
+            None
+        }
     }
 
     /// Get all paths being watched.
@@ -274,9 +329,24 @@ impl MultiFsWatcher {
     }
 
     /// Stop the watcher.
-    pub fn stop(&self) {
+    pub fn stop(&mut self) {
+        if !self.running.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+
         self.running
             .store(false, std::sync::atomic::Ordering::SeqCst);
+
+        // Drop the sender to close the channel, which will cause recv() to return None
+        self.tx.take();
+
+        // Wait for the watcher thread to finish
+        if let Some(handle) = self.watcher_thread.take() {
+            let _ = handle.join();
+        }
+
+        // Close the receiver
+        self.rx.take();
     }
 
     /// Check if the watcher is running.
@@ -284,8 +354,8 @@ impl MultiFsWatcher {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Internal watcher task that integrates with notify-debouncer-full.
-    async fn watch_task(
+    /// Internal watcher function that runs in a dedicated thread.
+    fn run_watcher(
         paths: &HashSet<PathBuf>,
         debounce_ms: u64,
         tx: mpsc::Sender<PathBuf>,
@@ -295,43 +365,35 @@ impl MultiFsWatcher {
             new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
         };
 
-        let paths_clone = paths.clone();
-        let running_sync = Arc::clone(&running);
-
-        // Create a bridge channel
+        // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        // Spawn the debouncer in a blocking thread
-        std::thread::spawn(move || {
-            let mut debouncer =
-                match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
-                    let _ = bridge_tx.send(result);
-                }) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        tracing::error!("Failed to create debouncer: {:?}", e);
-                        return;
-                    }
-                };
+        // Create the debouncer
+        let mut debouncer =
+            match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
+                let _ = bridge_tx.send(result);
+            }) {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::error!("Failed to create debouncer: {:?}", e);
+                    return;
+                }
+            };
 
-            for path in &paths_clone {
-                if path.is_dir() {
-                    let _ = debouncer.watch(path.as_path(), RecursiveMode::Recursive);
-                } else if path.is_file() {
-                    if let Some(parent) = path.parent() {
-                        let _ = debouncer.watch(parent, RecursiveMode::Recursive);
-                    }
+        // Watch all paths
+        for path in paths {
+            if path.is_dir() {
+                let _ = debouncer.watch(path.as_path(), RecursiveMode::Recursive);
+            } else if path.is_file() {
+                if let Some(parent) = path.parent() {
+                    let _ = debouncer.watch(parent, RecursiveMode::Recursive);
                 }
             }
+        }
 
-            tracing::info!("MultiFsWatcher watching {} paths", paths_clone.len());
+        tracing::info!("MultiFsWatcher watching {} paths", paths.len());
 
-            while running_sync.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(50));
-            }
-        });
-
-        // Process events in async context
+        // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
             match bridge_rx.recv_timeout(Duration::from_millis(50)) {
                 Ok(result) => {
@@ -343,7 +405,21 @@ impl MultiFsWatcher {
                                 | EventKind::Remove(_) => {
                                     for event_path in &event.paths {
                                         if event_path.is_file() && paths.contains(event_path) {
-                                            let _ = tx.send(event_path.clone()).await;
+                                            // Try to send, but don't block if channel is closed
+                                            match tx.try_send(event_path.clone()) {
+                                                Ok(_) => {}
+                                                Err(mpsc::error::TrySendError::Full(_)) => {
+                                                    // Channel full, skip this event
+                                                }
+                                                Err(mpsc::error::TrySendError::Closed(_)) => {
+                                                    // Channel closed, exit
+                                                    running.store(
+                                                        false,
+                                                        std::sync::atomic::Ordering::SeqCst,
+                                                    );
+                                                    return;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -353,7 +429,7 @@ impl MultiFsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    tracing::warn!("Bridge channel disconnected");
+                    tracing::debug!("Bridge channel disconnected");
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -361,5 +437,9 @@ impl MultiFsWatcher {
                 }
             }
         }
+
+        // Explicitly stop the debouncer
+        drop(debouncer);
+        tracing::debug!("MultiFsWatcher stopped");
     }
 }
