@@ -25,6 +25,7 @@ Cargo.lock
 # Test
 coverage/
 *.profraw
+lcov.info
 
 # Docs build
 docs/_book/
