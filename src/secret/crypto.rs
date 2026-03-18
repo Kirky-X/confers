@@ -12,8 +12,8 @@ pub enum CryptoError {
     EncryptionFailed,
     #[error("decryption failed")]
     DecryptionFailed,
-    #[error("invalid key length")]
-    InvalidKeyLength,
+    #[error("invalid key length: expected exactly 32 bytes for XChaCha20-Poly1305, got {0} bytes")]
+    InvalidKeyLength(usize),
     #[error("legacy decryption failed (AES-256-GCM)")]
     LegacyDecryptionFailed,
 }
@@ -29,7 +29,7 @@ impl XChaCha20Crypto {
 
     pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), CryptoError> {
         if key.len() != 32 {
-            return Err(CryptoError::InvalidKeyLength);
+            return Err(CryptoError::InvalidKeyLength(key.len()));
         }
 
         let cipher =
@@ -53,7 +53,7 @@ impl XChaCha20Crypto {
         key: &[u8],
     ) -> Result<Vec<u8>, CryptoError> {
         if key.len() != 32 {
-            return Err(CryptoError::InvalidKeyLength);
+            return Err(CryptoError::InvalidKeyLength(key.len()));
         }
 
         if nonce.len() != NONCE_SIZE {
@@ -87,7 +87,7 @@ pub fn derive_field_key(
     let mut field_key = [0u8; 32];
 
     hk.expand(info.as_bytes(), &mut field_key)
-        .map_err(|_| CryptoError::InvalidKeyLength)?;
+        .map_err(|_| CryptoError::InvalidKeyLength(32))?;
 
     Ok(field_key)
 }

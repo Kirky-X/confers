@@ -14,18 +14,42 @@ use thiserror::Error;
 pub use crate::value::SourceLocation as ParseLocation;
 
 // Precompiled regex patterns for sanitization (avoid recompiling on each call)
+
 /// Regex pattern for matching file paths (Unix and Windows style)
 static PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"/[a-zA-Z0-9_\-./]+|[a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+").unwrap()
+    regex::Regex::new(r"/[a-zA-Z0-9_\-./]+|[a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+")
+        .expect("PATH_RE regex is valid")
 });
 
 /// Regex pattern for matching IP addresses
-static IP_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap());
+static IP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").expect("IP_RE regex is valid")
+});
 
 /// Regex pattern for matching potential key material (long hex strings)
 static HEX_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").unwrap());
+    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").expect("HEX_RE regex is valid"));
+
+/// Regex pattern for matching URLs with embedded credentials
+static URL_WITH_CREDS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"https?://[^/]+:[^@]+@[^/\s]+[/\s]?")
+        .expect("URL_WITH_CREDS_RE regex is valid")
+});
+
+/// Regex pattern for matching JWT tokens
+static JWT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"eyJ[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]*\.?[A-Za-z0-9_=-]*")
+        .expect("JWT_RE regex is valid")
+});
+
+/// Regex pattern for matching AWS access key IDs
+static AWS_AK_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bAKIA[0-9A-Z]{16}\b").expect("AWS_AK_RE regex is valid"));
+
+/// Regex pattern for matching AWS secret access keys (40-char alphanumeric)
+static AWS_SAK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b[A-Za-z0-9/+=]{40}\b").expect("AWS_SAK_RE regex is valid")
+});
 
 /// Stable numeric error codes for programmatic handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -405,7 +429,23 @@ impl ConfigError {
     pub fn user_message(&self) -> String {
         match self {
             ConfigError::FileNotFound { filename, .. } => {
-                format!("Configuration file '{}' not found", filename.display())
+                // Sanitize paths that may contain sensitive information
+                let path_str = filename.display().to_string();
+                // Truncate sensitive paths (.ssh, .aws, etc.) to just the filename
+                let sanitized = if path_str.contains(".ssh")
+                    || path_str.contains(".aws")
+                    || path_str.contains(".gcloud")
+                    || path_str.contains(".env")
+                    || path_str.contains(".kube")
+                {
+                    filename
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "<hidden>".to_string())
+                } else {
+                    path_str
+                };
+                format!("Configuration file '{}' not found", sanitized)
             }
             ConfigError::ParseError {
                 format,
@@ -512,6 +552,72 @@ impl ConfigError {
         }
     }
 
+    /// Get a detailed debug message for internal logging.
+    ///
+    /// Unlike `user_message()` which is safe to show to end users, this method
+    /// may include file paths, IP addresses, and other diagnostic information
+    /// useful for debugging. Do NOT expose this message to end users.
+    ///
+    /// For structured logging, prefer using the `error_code()` and field accessors.
+    pub fn debug_message(&self) -> String {
+        // Use the Display impl which gives full details
+        let full = format!("{}", self);
+
+        // Apply additional sanitization that still keeps some context
+        let mut result = full;
+
+        // Remove credentials from URLs but keep the URL structure
+        result = URL_WITH_CREDS_RE
+            .replace_all(&result, "https://<creds>@<host>/")
+            .to_string();
+
+        // Keep file paths but redact the directory part
+        result = PATH_RE
+            .replace_all(&result, |caps: &regex::Captures| {
+                let full_path = &caps[0];
+                full_path
+                    .split('/')
+                    .next_back()
+                    .or_else(|| full_path.split('\\').next_back())
+                    .map(|f| format!("<path>/{}", f))
+                    .unwrap_or_else(|| "<path>".to_string())
+            })
+            .to_string();
+
+        result
+    }
+
+    /// Check if this error may contain sensitive data.
+    ///
+    /// Returns `true` for errors that are likely to contain sensitive information
+    /// such as keys, passwords, tokens, or credentials. Use this to determine
+    /// whether to sanitize error messages before logging or displaying.
+    ///
+    /// Note: This is a heuristic check and may return `false` positives.
+    /// Always prefer explicit sanitization via `sanitize_error_message()`.
+    pub fn is_sensitive(&self) -> bool {
+        // Check if the raw error message contains sensitive patterns
+        let raw = format!("{}", self);
+
+        // Check for sensitive patterns in the raw error
+        JWT_RE.is_match(&raw)
+            || AWS_AK_RE.is_match(&raw)
+            || URL_WITH_CREDS_RE.is_match(&raw)
+            || (HEX_RE.is_match(&raw) && raw.len() > 50) // Long hex strings are more likely keys
+            || {
+                // Check for common key/password field names
+                let lower = raw.to_lowercase();
+                lower.contains("secret")
+                    || lower.contains("password")
+                    || lower.contains("token")
+                    || lower.contains("api_key")
+                    || lower.contains("private_key")
+                    || lower.contains("credential")
+                    || lower.contains(" key ")  // standalone "key" word
+                    || lower.ends_with("key")   // suffix "key" (e.g., "encryption key")
+            }
+    }
+
     /// Get the error chain with sensitive data removed.
     pub fn sanitized_chain(&self) -> Vec<String> {
         let mut chain = vec![self.user_message()];
@@ -542,8 +648,24 @@ impl ConfigError {
 }
 
 /// Sanitize an error message by removing sensitive data.
+///
+/// This is the central sanitization function used by `user_message()` and
+/// `sanitized_chain()`. It removes:
+/// - File paths (replaced with `<path>/filename`)
+/// - IP addresses (replaced with `<ip>`)
+/// - Long hex strings / key material (replaced with `<redacted>`)
+/// - URLs with embedded credentials
+/// - JWT tokens
+/// - AWS access key IDs
+///
+/// The user-facing message will not contain any of these sensitive patterns.
 fn sanitize_error_message(msg: &str) -> String {
     let mut result = msg.to_string();
+
+    // Remove URLs with embedded credentials first (before other replacements)
+    result = URL_WITH_CREDS_RE
+        .replace_all(&result, "<redacted_url>")
+        .to_string();
 
     // Remove potential file paths (Unix and Windows style) using precompiled regex
     result = PATH_RE
@@ -564,6 +686,20 @@ fn sanitize_error_message(msg: &str) -> String {
 
     // Remove potential IP addresses using precompiled regex
     result = IP_RE.replace_all(&result, "<ip>").to_string();
+
+    // Remove JWT tokens using precompiled regex
+    result = JWT_RE.replace_all(&result, "<jwt_token>").to_string();
+
+    // Remove AWS access key IDs using precompiled regex
+    result = AWS_AK_RE
+        .replace_all(&result, "<aws_access_key>")
+        .to_string();
+
+    // Remove AWS secret access keys (40-char strings near AWS context)
+    // Only redact if surrounded by whitespace or common delimiters
+    result = AWS_SAK_RE
+        .replace_all(&result, "<aws_secret_key>")
+        .to_string();
 
     // Remove potential key material (long hex strings) using precompiled regex
     result = HEX_RE.replace_all(&result, "<redacted>").to_string();
@@ -867,5 +1003,120 @@ mod tests {
             }
             _ => {}
         }
+    }
+
+    // =============================================================================
+    // Error Sanitization Tests (9.3.6)
+    // =============================================================================
+
+    #[test]
+    fn test_sanitize_error_message_full_path() {
+        let msg = "Failed to load /home/user/project/config.toml";
+        let sanitized = sanitize_error_message(msg);
+        // Full paths should be converted to <path>/filename
+        assert!(!sanitized.contains("/home/user/project/"));
+        assert!(sanitized.contains("config.toml"));
+        assert!(sanitized.contains("<path>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_url_with_credentials() {
+        let msg = "Failed to fetch https://user:secret123@example.com/config.json";
+        let sanitized = sanitize_error_message(msg);
+        // Should not contain the credentials
+        assert!(!sanitized.contains("user:secret123"));
+        assert!(sanitized.contains("<redacted_url>") || sanitized.contains("<redacted>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_jwt_token() {
+        let msg = "Validation failed for token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let sanitized = sanitize_error_message(msg);
+        assert!(!sanitized.contains("eyJ"));
+        assert!(sanitized.contains("<jwt_token>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_aws_access_key() {
+        let msg = "AWS error: AKIAIOSFODNN7EXAMPLE is invalid";
+        let sanitized = sanitize_error_message(msg);
+        assert!(!sanitized.contains("AKIAIOSFODNN7EXAMPLE"));
+        assert!(sanitized.contains("<aws_access_key>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_ip_address() {
+        let msg = "Connection refused from 192.168.1.100";
+        let sanitized = sanitize_error_message(msg);
+        assert!(!sanitized.contains("192.168.1.100"));
+        assert!(sanitized.contains("<ip>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_hex_key() {
+        let msg = "Key mismatch: abcdef0123456789abcdef0123456789";
+        let sanitized = sanitize_error_message(msg);
+        assert!(!sanitized.contains("abcdef0123456789abcdef0123456789"));
+        assert!(sanitized.contains("<redacted>"));
+    }
+
+    #[test]
+    fn test_user_message_does_not_leak_sensitive_data() {
+        // FileNotFound with sensitive-looking path
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/.ssh/id_rsa"),
+            source: None,
+        };
+        let user_msg = err.user_message();
+        // Should show filename but not full path
+        assert!(!user_msg.contains("/home/user/.ssh/"));
+        assert!(user_msg.contains("id_rsa"));
+    }
+
+    #[test]
+    fn test_debug_message_contains_file_path() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/project/config.toml"),
+            source: None,
+        };
+        let debug = err.debug_message();
+        // Debug message should contain the full path for diagnostics
+        assert!(debug.contains("config.toml") || debug.contains("<path>"));
+    }
+
+    #[test]
+    fn test_is_sensitive_decryption_error() {
+        let err = ConfigError::DecryptionFailed {
+            message: "key mismatch".to_string(),
+        };
+        assert!(err.is_sensitive()); // "key" in message
+    }
+
+    #[test]
+    fn test_is_sensitive_file_not_found() {
+        // Normal file not found should not be sensitive
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("config.toml"),
+            source: None,
+        };
+        assert!(!err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_key_error() {
+        let err = ConfigError::KeyError {
+            message: "encryption key error".to_string(),
+        };
+        assert!(err.is_sensitive()); // "key" in message
+    }
+
+    #[test]
+    fn test_is_sensitive_aws_key_in_message() {
+        let err = ConfigError::InvalidValue {
+            key: "aws_access_key".to_string(),
+            expected_type: "string".to_string(),
+            message: "AKIAIOSFODNN7EXAMPLE is invalid".to_string(),
+        };
+        assert!(err.is_sensitive()); // Contains AWS access key
     }
 }

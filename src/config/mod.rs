@@ -11,9 +11,9 @@ mod chain;
 mod limits;
 pub mod source;
 
-pub use builder::{config, ConfigBuilder, ReloadStrategy};
 #[cfg(feature = "snapshot")]
 pub use builder::SnapshotConfig;
+pub use builder::{config, ConfigBuilder, ReloadStrategy};
 pub use chain::{SourceChain, SourceChainBuilder};
 pub use limits::ConfigLimits;
 pub use source::{DefaultSource, EnvSource, FileSource, MemorySource, Source, SourceKind};

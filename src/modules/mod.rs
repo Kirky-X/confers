@@ -809,9 +809,17 @@ mod tests {
 
         registry.register_group("database", vec![("mysql", mysql_path)], Some("mysql"));
 
-        let result = registry.load_module("database", "mysql", &LoaderConfig::default());
+        // Disable symlink checking, allow absolute paths, and clear allowed dirs for temp directory paths
+        let config = LoaderConfig::new()
+            .no_symlink_check()
+            .allow_absolute()
+            .allowed_dirs(Vec::<PathBuf>::new());
+        let result = registry.load_module("database", "mysql", &config);
 
-        assert!(result.is_ok());
+        if let Err(ref e) = result {
+            eprintln!("Error loading module: {:?}", e);
+        }
+        assert!(result.is_ok(), "Module load should succeed");
         let value = result.unwrap();
         // Check that the value contains the expected key
         if let ConfigValue::Map(m) = &value.inner {

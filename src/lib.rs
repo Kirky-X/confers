@@ -9,6 +9,7 @@
 
 pub mod config;
 pub mod error;
+pub mod format;
 pub mod loader;
 pub mod merger;
 pub mod parser;
@@ -60,12 +61,12 @@ pub mod key;
 #[cfg(feature = "remote")]
 pub mod remote;
 
+#[cfg(feature = "snapshot")]
+pub use config::SnapshotConfig;
 pub use config::{
     config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
     ReloadStrategy, Source, SourceChain, SourceChainBuilder, SourceKind,
 };
-#[cfg(feature = "snapshot")]
-pub use config::SnapshotConfig;
 pub use error::{BuildResult, BuildWarning, ConfigError, ConfigResult, ErrorCode, ParseLocation};
 pub use loader::{
     detect_format_from_content, detect_format_from_path, load_file, parse_content, Format,
