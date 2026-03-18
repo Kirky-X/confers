@@ -58,6 +58,22 @@ path = "src/examples/snapshot.rs"
 name = "remote_etcd"
 path = "src/examples/remote_etcd.rs"
 
+[[bin]]
+name = "validation"
+path = "src/examples/validation.rs"
+
+[[bin]]
+name = "cli_integration"
+path = "src/examples/cli_integration.rs"
+
+[[bin]]
+name = "json_schema"
+path = "src/examples/json_schema.rs"
+
+[[bin]]
+name = "metrics"
+path = "src/examples/metrics.rs"
+
 [dependencies]
 confers = { path = "..", features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
@@ -78,6 +94,7 @@ async-nats = "0.37"
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 serde_yaml_ng = "0.10"
 sha2 = "0.10"
+garde = { version = "0.22", features = ["derive", "email", "url", "regex"] }
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
 notify = "7.0"
