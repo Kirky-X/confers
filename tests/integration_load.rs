@@ -4,6 +4,29 @@ mod common;
 
 use confers::value::ConfigValue;
 use confers::ConfigBuilder;
+use std::io::Write;
+
+fn create_local_temp_config(
+    content: &str,
+    extension: &str,
+) -> (tempfile::NamedTempFile, std::path::PathBuf) {
+    let current_dir = std::env::current_dir().unwrap();
+    let ext = extension.trim_start_matches('.');
+    let mut file = tempfile::Builder::new()
+        .suffix(&format!(".{}", ext))
+        .tempfile_in(&current_dir)
+        .unwrap();
+    file.write_all(content.as_bytes()).unwrap();
+    file.flush().unwrap();
+
+    let absolute_path = file.path().to_path_buf();
+    let relative_path = absolute_path
+        .strip_prefix(&current_dir)
+        .unwrap_or(&absolute_path)
+        .to_path_buf();
+
+    (file, relative_path)
+}
 
 mod tests {
     use super::*;
@@ -11,7 +34,7 @@ mod tests {
     #[test]
     fn test_load_file_not_found() {
         let result: Result<serde_json::Value, _> = ConfigBuilder::new()
-            .file("/nonexistent/path/config.toml")
+            .file("nonexistent_path_config.toml")
             .build();
 
         assert!(result.is_err());
@@ -23,9 +46,9 @@ mod tests {
 [invalid
 missing_bracket = true
 "#;
-        let file = common::create_temp_config(content, ".toml");
+        let (_file, path) = create_local_temp_config(content, ".toml");
 
-        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(file.path()).build();
+        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
         assert!(result.is_err());
     }
@@ -33,9 +56,9 @@ missing_bracket = true
     #[test]
     fn test_load_invalid_json() {
         let content = r#"{"invalid": json}"#;
-        let file = common::create_temp_config(content, ".json");
+        let (_file, path) = create_local_temp_config(content, ".json");
 
-        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(file.path()).build();
+        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
         assert!(result.is_err());
     }
@@ -61,9 +84,9 @@ missing_bracket = true
     #[test]
     fn test_load_empty_file() {
         let content = "";
-        let file = common::create_temp_config(content, ".toml");
+        let (_file, path) = create_local_temp_config(content, ".toml");
 
-        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(file.path()).build();
+        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
         // Empty file should parse as null or empty object
         // Allow either success or error for empty file
@@ -78,10 +101,13 @@ missing_bracket = true
         let toml_content = r#"
 key = "value"
 "#;
-        let file = common::create_temp_config(toml_content, ".toml");
+        let (_file, path) = create_local_temp_config(toml_content, ".toml");
 
-        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(file.path()).build();
+        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
+        if let Err(e) = &result {
+            eprintln!("Error: {:?}", e);
+        }
         assert!(result.is_ok());
         let config = result.unwrap();
         assert_eq!(config["key"], "value");
@@ -92,10 +118,13 @@ key = "value"
         let content = r#"
 servers = ["localhost:8080", "localhost:8081", "localhost:8082"]
 "#;
-        let file = common::create_temp_config(content, ".toml");
+        let (_file, path) = create_local_temp_config(content, ".toml");
 
-        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(file.path()).build();
+        let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
+        if let Err(e) = &result {
+            eprintln!("Error: {:?}", e);
+        }
         assert!(result.is_ok());
         let config = result.unwrap();
         assert!(config["servers"].is_array());

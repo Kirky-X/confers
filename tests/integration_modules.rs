@@ -6,7 +6,21 @@ mod common;
 
 use confers::loader::LoaderConfig;
 use confers::modules::{ModuleConfig, ModuleRegistry};
+use std::io::Write;
 use std::path::PathBuf;
+
+fn create_local_temp_dir() -> tempfile::TempDir {
+    let current_dir = std::env::current_dir().unwrap();
+    tempfile::TempDir::new_in(&current_dir).unwrap()
+}
+
+fn get_relative_path(absolute_path: &std::path::Path) -> PathBuf {
+    let current_dir = std::env::current_dir().unwrap();
+    absolute_path
+        .strip_prefix(&current_dir)
+        .unwrap_or(absolute_path)
+        .to_path_buf()
+}
 
 // ============================================================================
 // ModuleConfig Tests
@@ -293,15 +307,12 @@ fn test_load_module_not_found_profile() {
 
 #[test]
 fn test_load_module_file_not_found() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = create_local_temp_dir();
 
     let mut registry = ModuleRegistry::new();
 
-    registry.register_group(
-        "database",
-        vec![("mysql", temp_dir.path().join("nonexistent.toml"))],
-        Some("mysql"),
-    );
+    let relative_path = get_relative_path(&temp_dir.path().join("nonexistent.toml"));
+    registry.register_group("database", vec![("mysql", relative_path)], Some("mysql"));
 
     let result = registry.load_module("database", "mysql", &LoaderConfig::default());
 
@@ -310,14 +321,15 @@ fn test_load_module_file_not_found() {
 
 #[test]
 fn test_load_module_success_toml() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = create_local_temp_dir();
 
     let mysql_path = temp_dir.path().join("mysql.toml");
     std::fs::write(&mysql_path, "host = \"localhost\"\nport = 3306\n").unwrap();
 
     let mut registry = ModuleRegistry::new();
 
-    registry.register_group("database", vec![("mysql", mysql_path)], Some("mysql"));
+    let relative_path = get_relative_path(&mysql_path);
+    registry.register_group("database", vec![("mysql", relative_path)], Some("mysql"));
 
     let result = registry.load_module("database", "mysql", &LoaderConfig::default());
 
@@ -332,14 +344,15 @@ fn test_load_module_success_toml() {
 
 #[test]
 fn test_load_module_success_json() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = create_local_temp_dir();
 
     let config_path = temp_dir.path().join("config.json");
     std::fs::write(&config_path, "{\"host\": \"localhost\", \"port\": 8080}").unwrap();
 
     let mut registry = ModuleRegistry::new();
 
-    registry.register_group("app", vec![("dev", config_path)], Some("dev"));
+    let relative_path = get_relative_path(&config_path);
+    registry.register_group("app", vec![("dev", relative_path)], Some("dev"));
 
     let result = registry.load_module("app", "dev", &LoaderConfig::default());
 
@@ -368,7 +381,7 @@ fn test_load_active_not_found() {
 
 #[test]
 fn test_load_active_success() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = create_local_temp_dir();
 
     let mysql_path = temp_dir.path().join("mysql.toml");
     std::fs::write(&mysql_path, "host = \"localhost\"\nport = 3306\n").unwrap();
@@ -378,9 +391,14 @@ fn test_load_active_success() {
 
     let mut registry = ModuleRegistry::new();
 
+    let mysql_relative = get_relative_path(&mysql_path);
+    let postgresql_relative = get_relative_path(&postgresql_path);
     registry.register_group(
         "database",
-        vec![("mysql", mysql_path), ("postgresql", postgresql_path)],
+        vec![
+            ("mysql", mysql_relative),
+            ("postgresql", postgresql_relative),
+        ],
         Some("mysql"),
     );
 
@@ -427,7 +445,7 @@ fn test_registry_chaining() {
 
 #[test]
 fn test_multiple_groups_load() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = create_local_temp_dir();
 
     let mysql_path = temp_dir.path().join("mysql.toml");
     std::fs::write(&mysql_path, "host = \"localhost\"").unwrap();
@@ -437,9 +455,12 @@ fn test_multiple_groups_load() {
 
     let mut registry = ModuleRegistry::new();
 
-    registry.register_group("database", vec![("mysql", mysql_path)], Some("mysql"));
+    let mysql_relative = get_relative_path(&mysql_path);
+    let redis_relative = get_relative_path(&redis_path);
 
-    registry.register_group("cache", vec![("redis", redis_path)], Some("redis"));
+    registry.register_group("database", vec![("mysql", mysql_relative)], Some("mysql"));
+
+    registry.register_group("cache", vec![("redis", redis_relative)], Some("redis"));
 
     // Load database
     let db_result = registry.load_module("database", "mysql", &LoaderConfig::default());
