@@ -134,13 +134,13 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(default = "default_value")]
     pub name: String,
-    
+
     #[config(default = 8080)]
     pub port: u32,
-    
+
     #[config(default = 3.14)]
     pub rate: f64,
-    
+
     #[config(default = true)]
     pub debug: bool,
 }
@@ -168,7 +168,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(description = "Server port number")]
     pub port: u16,
-    
+
     #[config(description = "Database connection URL")]
     pub database_url: String,
 }
@@ -217,7 +217,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(name_clap_long = "server-port")]
     pub port: u16,
-    
+
     #[config(name_clap_short = 'p')]
     pub port2: u16,
 }
@@ -242,7 +242,7 @@ use garde::Validate;
 pub struct AppConfig {
     #[garde(range(min = 1, max = 65535))]
     pub port: u16,
-    
+
     #[garde(range(min = 0, max = 100))]
     pub rate: i32,
 }
@@ -265,7 +265,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[garde(email)]
     pub email: String,
-    
+
     #[garde(url)]
     pub website: String,
 }
@@ -282,7 +282,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(sensitive = true)]
     pub password: String,
-    
+
     #[config(sensitive = true)]
     pub api_key: String,
 }
@@ -307,7 +307,7 @@ pub struct DatabaseConfig {
 pub struct AppConfig {
     #[config(flatten)]
     pub database: DatabaseConfig,
-    
+
     pub app_name: String,
 }
 ```
@@ -338,7 +338,7 @@ pub struct InnerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct AppConfig {
     pub name: String,
-    
+
     #[config(skip)]
     pub temp_field: String,  // Will not be loaded from configuration
 }
@@ -357,7 +357,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(encrypt = "xchacha20")]
     pub database_password: String,
-    
+
     #[config(encrypt = "xchacha20")]
     pub api_key: String,
 }
@@ -394,7 +394,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(merge_strategy = "append")]
     pub hosts: Vec<String>,
-    
+
     #[config(merge_strategy = "deep_merge")]
     pub settings: HashMap<String, String>,
 }
@@ -433,7 +433,7 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(module_group = "database")]
     pub db_host: String,
-    
+
     #[config(module_group = "database")]
     pub db_port: u16,
 }
@@ -466,57 +466,57 @@ pub struct AppConfig {
     // ============ Basic Types ============
     #[config(description = "Application name")]
     pub name: String,
-    
+
     #[config(default = 8080, description = "Server port")]
     pub port: u16,
-    
+
     #[config(default = false, description = "Debug mode")]
     pub debug: bool,
-    
+
     // ============ String Types ============
     #[config(default = "\"localhost\".to_string()", description = "Server host")]
     pub host: String,
-    
+
     // ============ Validation Rules (using garde) ============
     #[garde(range(min = 1, max = 65535))]
     #[config(description = "Admin port")]
     pub admin_port: u16,
-    
+
     #[garde(length(min = 3, max = 100))]
     #[config(description = "Username")]
     pub username: String,
-    
+
     #[garde(email)]
     #[config(description = "Email address")]
     pub email: String,
-    
+
     #[garde(url)]
     #[config(description = "Website URL")]
     pub website: String,
-    
+
     // ============ Sensitive Fields ============
     #[config(sensitive = true, description = "Database password")]
     pub db_password: String,
-    
+
     #[config(sensitive = true, description = "API key")]
     pub api_key: String,
-    
+
     // ============ Encrypted Fields ============
     #[config(encrypt = "xchacha20", description = "Secret token")]
     pub secret_token: String,
-    
+
     // ============ Interpolation ============
     #[config(interpolate, description = "Database URL")]
     pub database_url: String,
-    
+
     // ============ Custom Mapping ============
     #[config(name_env = "CUSTOM_DATABASE_URL", description = "Custom database URL")]
     pub custom_db_url: String,
-    
+
     // ============ Nested Configuration ============
     #[config(flatten, description = "Database configuration")]
     pub database: DatabaseConfig,
-    
+
     // ============ Skip Fields ============
     #[config(skip)]
     pub runtime_data: String,
@@ -607,10 +607,10 @@ use serde::{Deserialize, Serialize};
 #[config(env_prefix = "APP_")]
 pub struct ServerConfig {
     pub host: String,
-    
+
     #[config(default = 8080)]
     pub port: u16,
-    
+
     #[config(default = true)]
     pub enabled: bool,
 }
@@ -632,11 +632,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .file("config.toml")
         .env_prefix("APP_")
         .build()?;
-    
+
     println!("Host: {}", config.host);
     println!("Port: {}", config.port);
     println!("Enabled: {}", config.enabled);
-    
+
     Ok(())
 }
 ```
@@ -658,7 +658,7 @@ use serde::{Deserialize, Serialize};
 pub struct SecureConfig {
     #[config(sensitive = true)]
     pub password: String,
-    
+
     #[config(encrypt = "xchacha20")]
     pub api_secret: String,
 }
@@ -679,18 +679,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[config(default = 8080)]
         pub port: u16,
     }
-    
+
     let (rx, guard) = ConfigBuilder::<HotReloadConfig>::new()
         .file("config.toml")
         .watch(true)
         .build_with_watcher().await?;
-    
+
     let config = rx.borrow().clone();
     println!("Initial port: {}", config.port);
-    
+
     // Application running...
     // When config file changes, rx will receive updates
-    
+
     Ok(())
 }
 ```
@@ -820,8 +820,8 @@ fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.2", features = ["recommended"] }
-garde = { version = "0.18", features = ["derive"] }
+confers = { version = "0.3", features = ["recommended"] }
+garde = { version = "0.22", features = ["derive"] }
 ```
 
 The `recommended` feature includes: `toml`, `json`, `env`, `validation`
@@ -831,8 +831,8 @@ The `recommended` feature includes: `toml`, `json`, `env`, `validation`
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.2", features = ["dev"] }
-garde = { version = "0.18", features = ["derive"] }
+confers = { version = "0.3", features = ["dev"] }
+garde = { version = "0.22", features = ["derive"] }
 ```
 
 The `dev` feature includes most features for development convenience.
@@ -842,8 +842,8 @@ The `dev` feature includes most features for development convenience.
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.2", features = ["production"] }
-garde = { version = "0.18", features = ["derive"] }] }
+confers = { version = "0.3", features = ["production"] }
+garde = { version = "0.22", features = ["derive"] }
 ```
 
 The `production` feature includes: `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing`

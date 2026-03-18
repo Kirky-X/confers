@@ -153,7 +153,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-confers = "0.2.0"
+confers = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -166,7 +166,7 @@ cargo add confers serde --features serde/derive
 **Optional Features:**
 
 ```toml
-confers = { version = "0.1", features = ["watch", "remote", "cli"] }
+confers = { version = "0.3.0", features = ["watch", "remote", "cli"] }
 ```
 
 **Verification:**
@@ -303,7 +303,7 @@ struct AppConfig {
 fn main() -> anyhow::Result<()> {
     // 2. Load configuration from default sources
     let config = AppConfig::load_sync()?;
-    
+
     println!("Host: {}, Port: {}", config.host, config.port);
     Ok(())
 }
@@ -322,13 +322,12 @@ fn main() -> anyhow::Result<()> {
 | JSON | Universal format |
 | YAML | Human-readable |
 | INI | Simple format |
-| HOCON | Typesafe configuration format |
 
 **Supported Sources:**
 
 | ✅ Source | Description |
 |:---------:|:------------|
-| File | Auto-detects `config.{toml,json,yaml,ini,hocon}` |
+| File | Auto-detects `config.{toml,json,yaml,ini}` |
 | Environment Variables | Supports custom prefixes |
 | CLI Arguments | Integrates with `clap` |
 | Remote | Etcd, Consul, HTTP |
@@ -361,7 +360,7 @@ use serde::{Deserialize, Serialize};
 struct AppConfig {
     #[garde(length(min = 1))]
     host: String,
-    
+
     #[garde(range(min = 1024, max = 65535))]
     port: u16,
 }

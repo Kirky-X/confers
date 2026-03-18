@@ -179,7 +179,7 @@ use serde::{Deserialize, Serialize};
 struct AppConfig {
     #[config(default = 8080)]
     port: u16,
-    
+
     #[config(default = "\"localhost\".to_string()")]
     host: String,
 }
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .file("config.toml")
         .env_prefix("APP_")
         .build()?;
-    
+
     println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
@@ -203,7 +203,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         .watch(true)
         .build_with_watcher()
         .await?;
-    
+
     println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
@@ -234,21 +234,21 @@ graph TB
         C[💻 CLI Arguments]
         D[☁️ Remote Sources<br/>Etcd, Consul, HTTP]
     end
-    
+
     subgraph Priority ["📊 Priority (High→Low)"]
         P1["💻 CLI Arguments<br/>Highest Priority"]
         P2["🌐 Environment Variables"]
         P3["📁 Config Files"]
         P4["🔧 Default Values<br/>Lowest Priority"]
     end
-    
+
     subgraph Result ["📤 Result"]
         R[🚀 Type-Safe Configuration]
     end
-    
+
     Sources --> Priority
     Priority --> R
-    
+
     style Sources fill:#DBEAFE,stroke:#1E40AF
     style Priority fill:#FEF3C7,stroke:#92400E
     style Result fill:#DCFCE7,stroke:#166534
@@ -626,10 +626,10 @@ struct DatabaseConfig {
 struct MyConfig {
     #[config(default = "100")]
     timeout_ms: u64,
-    
+
     // Nested struct
     db: DatabaseConfig,
-    
+
     #[config(sensitive = true)] // Will be masked in audit logs
     api_key: String,
 }
@@ -689,7 +689,7 @@ use garde::Validate;
 struct MyConfig {
     #[garde(range(min = 1, max = 65535))]
     port: u16,
-    
+
     #[garde(email)]
     admin_email: String,
 }
@@ -881,10 +881,10 @@ struct SecureConfig {
     // Mark sensitive fields, audit logs will automatically mask them
     #[config(sensitive = true)]
     database_password: String,
-    
+
     #[config(sensitive = true)]
     api_key: String,
-    
+
     // Non-sensitive field
     server_name: String,
 }
@@ -951,8 +951,8 @@ let rotation_result = key_manager.rotate_key(
     Some("Scheduled rotation".to_string())
 )?;
 
-println!("Key rotated from version {} to {}", 
-    rotation_result.previous_version, 
+println!("Key rotated from version {} to {}",
+    rotation_result.previous_version,
     rotation_result.new_version);
 ```
 
@@ -1021,7 +1021,6 @@ let config = ConfigBuilder::<MyConfig>::new()
 
 // For remote configuration, use remote feature with HttpPolledSource
 // See examples/remote_consul.rs for complete examples
-```;
 ```
 
 **Remote Configuration Security Best Practices:**
@@ -1051,8 +1050,8 @@ let mut engine = ValidationEngine::new();
 
 // Add range validator
 engine.add_validator(Box::new(RangeFieldValidator::new(
-    "port", 
-    Some(1024.0), 
+    "port",
+    Some(1024.0),
     Some(65535.0)
 )));
 

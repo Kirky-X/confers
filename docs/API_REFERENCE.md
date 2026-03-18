@@ -96,7 +96,7 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `ini` | INI format support | ❌ |
 | `env` | Environment variable support | ✅ |
 | **Core Features** |||
-| `validation` | Configuration validation (garde) | ✅ |
+| `validation` | Configuration validation (garde) | ❌ |
 | `watch` | File monitoring and hot reload | ❌ |
 | `encryption` | XChaCha20 encryption | ❌ |
 | `cli` | Command-line integration | ❌ |
@@ -152,20 +152,20 @@ graph TB
         C[💻 CLI Arguments]
         D[☁️ Remote Sources]
     end
-    
+
     subgraph Loader ["🔧 ConfigBuilder"]
         E[⚡ Smart Merging]
         F[✅ Validation]
         G[🔄 Hot Reload]
     end
-    
+
     subgraph Output ["📤 Output"]
         H[🚀 Type-Safe Configuration]
     end
-    
+
     Sources --> Loader
     Loader --> Output
-    
+
     style Sources fill:#DBEAFE,stroke:#1E40AF
     style Loader fill:#FEF3C7,stroke:#92400E
     style Output fill:#DCFCE7,stroke:#166534
@@ -539,23 +539,23 @@ graph TB
         B[📋 Version History]
         C[🛡️ Metadata]
     end
-    
+
     subgraph Manager ["🔧 KeyManager"]
         D[🔄 Rotation Management]
         E[✅ Version Control]
         F[🔒 Secure Storage]
     end
-    
+
     subgraph Operations ["⚡ Operations"]
         G[Create]
         H[Rotate]
         I[Get]
         J[Delete]
     end
-    
+
     Storage --> Manager
     Manager --> Operations
-    
+
     style Storage fill:#FEF3C7,stroke:#92400E
     style Manager fill:#DBEAFE,stroke:#1E40AF
     style Operations fill:#DCFCE7,stroke:#166534
@@ -1258,14 +1258,14 @@ use std::path::PathBuf;
 fn rotate_keys() -> Result<(), Box<dyn std::error::Error>> {
     let mut km = KeyManager::new(PathBuf::from("./keys"))?;
     let master_key = load_master_key()?; // Load master key from secure storage
-    
+
     let result = km.rotate_key(
         &master_key,
         Some("production".to_string()),
         "security-team".to_string(),
         Some("Scheduled rotation".to_string())
     )?;
-    
+
     println!("Key version rotated from {} to {}", result.previous_version, result.new_version);
     Ok(())
 }
@@ -1348,11 +1348,6 @@ fn validate_config() -> Result<(), Box<dyn std::error::Error>> {
     println!("Configuration is valid");
     Ok(())
 }
-        options,
-    )?;
-
-    Ok(())
-}
 ```
 
 ---
@@ -1377,11 +1372,11 @@ use chrono::Duration;
 struct DatabaseConfig {
     #[serde(default = "default_url")]
     url: String,
-    
+
     #[serde(default = "default_pool_size")]
     #[serde(validate(range(min = 1, max = 100)))]
     pool_size: usize,
-    
+
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[serde(default = "default_timeout")]
     timeout: Duration,
@@ -1421,16 +1416,16 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
             key.copy_from_slice(&key_bytes[..32.min(key_bytes.len())]);
             key
         })?;
-    
+
     let mut km = KeyManager::new(PathBuf::from("/etc/confers/keys"))?;
-    
+
     // Initialize keyring
     km.initialize(
         &master_key,
         "production".to_string(),
         "security-team".to_string(),
     )?;
-    
+
     // Rotate keys regularly (recommended every 90 days)
     let rotation_result = km.rotate_key(
         &master_key,
@@ -1438,11 +1433,11 @@ fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
         "security-team".to_string(),
         Some("Scheduled rotation".to_string()),
     )?;
-    
-    println!("Key rotated from version {} to {}", 
-        rotation_result.previous_version, 
+
+    println!("Key rotated from version {} to {}",
+        rotation_result.previous_version,
         rotation_result.new_version);
-    
+
     Ok(())
 }
 ```
@@ -1502,10 +1497,6 @@ fn decrypt_secrets() -> Result<(), Box<dyn std::error::Error>> {
     let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
 
     Ok(())
-}
-        api_key,
-        database_password: "decrypted-password".to_string(),
-    })
 }
 ```
 
@@ -1778,9 +1769,9 @@ let writer = AuditLogWriter::new(
 
 ```bash
 # Use environment variables to store sensitive information
-export APP_DATABASE_URL="postgres://user:password@localhost/db"
-export APP_API_KEY="your-api-key"
-export CONFERS_ENCRYPTION_KEY="base64-encoded-key"
+export APP_DATABASE_URL="postgres://user:password@localhost/db"  # pragma: allowlist secret
+export APP_API_KEY="your-api-key"  # pragma: allowlist secret
+export CONFERS_ENCRYPTION_KEY="base64-encoded-key"  # pragma: allowlist secret
 ```
 
 **Remote configuration security configuration:**
