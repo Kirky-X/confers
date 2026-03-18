@@ -13,11 +13,11 @@
 //! # Example
 //!
 //! ```
-//! use confers::format::{FormatConverter, Format};
+//! use confers::format::{FormatConverter, Format, converter_for};
 //!
 //! let content = r#"{"name":"test","port":8080}"#;
-//! let format = Format::Json;
-//! let result = format.parse(content, confers::value::SourceId::new("test"));
+//! let converter = converter_for(Format::Json).expect("JSON converter should exist");
+//! let result = converter.parse(content, confers::value::SourceId::new("test"), None);
 //! assert!(result.is_ok());
 //! ```
 
