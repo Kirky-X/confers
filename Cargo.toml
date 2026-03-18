@@ -139,8 +139,8 @@ vault = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
 remote = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
 
 # Remote SDK integrations
-etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "toml", "json", "yaml"]
-consul = ["remote", "dep:consul-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "toml", "json", "yaml"]
+etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
+consul = ["remote", "dep:consul-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 cache-redis = ["dep:redis", "dep:tokio", "dep:async-trait", "dep:tokio-stream"]
 
 # Message bus
