@@ -422,7 +422,7 @@ confers --help
 ### Command Reference
 
 ```bash
-confers 0.2.0
+confers 0.3.0
 A powerful Rust configuration management library
 
 USAGE:

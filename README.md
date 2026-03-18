@@ -150,7 +150,7 @@ let config = AppConfig::load_sync()?;
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables only |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables + JSON |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **Recommended for most applications** |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |

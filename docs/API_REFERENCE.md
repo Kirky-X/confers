@@ -79,8 +79,8 @@ confers provides flexible feature configuration, allowing users to select the fu
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534">minimal</span> | `env` | Minimal dependencies (environment variables only) |
-| <span style="color:#1E40AF">recommended</span> | `toml` + `env` + `validation` | Recommended for most applications |
+| <span style="color:#166534">minimal</span> | `env` + `json` | Minimal dependencies (environment variables + JSON) |
+| <span style="color:#1E40AF">recommended</span> | `toml` + `json` + `env` + `validation` | Recommended for most applications |
 | <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `profile` + `watch` + `migration` + `snapshot` + `dynamic` | Development configuration |
 | <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `profile` + `metrics` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | Production configuration |
 | <span style="color:#5B21B6">full</span> | All features | Complete feature set |

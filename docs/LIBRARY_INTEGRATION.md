@@ -10,7 +10,7 @@ Add confers to your `Cargo.toml` with the `cli` feature enabled:
 
 ```toml
 [dependencies]
-confers = { version = "0.2.0", features = ["cli"] }
+confers = { version = "0.3.0", features = ["cli"] }
 ```
 
 ### 2. Basic Usage
@@ -231,7 +231,7 @@ The library integration requires the `cli` feature, but you can enable additiona
 ```toml
 [dependencies]
 confers = { 
-    version = "0.2.0", 
+    version = "0.3.0", 
     features = [
         "cli",           # Required for ConfersCli
         "validation",    # For config validation
@@ -278,7 +278,7 @@ If you get "feature not enabled" errors, make sure you have the `cli` feature in
 
 ```toml
 [dependencies]
-confers = { version = "0.2.0", features = ["cli"] }
+confers = { version = "0.3.0", features = ["cli"] }
 ```
 
 ### Encryption Key Issues

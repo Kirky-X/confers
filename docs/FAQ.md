@@ -197,7 +197,7 @@ fn main() {
 
 | Preset | Description | Use Case |
 |:------:|:------------|:---------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | Environment variables only | Only need basic config loading |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | Environment variables + JSON | Only need basic config loading |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | TOML + JSON + Env + Validation | Most applications (recommended) |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | Development config (with tracing) | Development and debugging |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | Production config (with encryption) | Production environments |
