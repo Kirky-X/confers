@@ -14,11 +14,10 @@
 //!   # 在另一个终端启动 Prometheus 并抓取指标:
 //   # prometheus --config.file=prometheus.yml
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 // =============================================================================
 // 配置结构定义

@@ -285,9 +285,7 @@ impl ValidationEngine {
             ));
         }
 
-        if port > 65535 {
-            return Err("端口号不能超过 65535".to_string());
-        }
+        // Note: port > 65535 check is unnecessary since u16 max is 65535
 
         Ok(())
     }
