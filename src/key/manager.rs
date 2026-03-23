@@ -97,7 +97,11 @@ impl KeyManager {
         self.default_key_id = key_id.clone();
 
         Ok(KeyVersion {
-            id: format!("{}_{}", key_id, crate::key::CONFERS_KEY_VERSION),
+            id: format!(
+                "{}_{}",
+                key_id,
+                crate::key::KeyFormatVersion::CURRENT.as_str()
+            ),
             version: CURRENT_KEY_VERSION,
             created_at: now_timestamp(),
             status: KeyStatus::Active,
@@ -165,7 +169,11 @@ impl KeyManager {
         self.schedules.insert(key_id.clone(), schedule);
 
         Ok(KeyVersion {
-            id: format!("{}_{}", key_id, crate::key::CONFERS_KEY_VERSION),
+            id: format!(
+                "{}_{}",
+                key_id,
+                crate::key::KeyFormatVersion::CURRENT.as_str()
+            ),
             version: CURRENT_KEY_VERSION,
             created_at: now_timestamp(),
             status: KeyStatus::Active,
