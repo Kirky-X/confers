@@ -8,6 +8,7 @@
 .vscode/
 .trae/
 .claude/
+.qoder/
 openspec/
 *.swp
 *.swo
