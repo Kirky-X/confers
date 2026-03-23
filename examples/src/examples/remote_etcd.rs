@@ -25,8 +25,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{error, info, warn};
 
 // =============================================================================
 // 配置结构定义
@@ -541,16 +540,16 @@ fn get_auth_credentials() -> (String, String) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化日志
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
         .with_target(false)
         .with_thread_ids(true)
         .with_file(true)
         .with_line_number(true)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("设置日志失败");
+        .init();
 
     info!("========================================");
     info!("  etcd 远程配置源示例");

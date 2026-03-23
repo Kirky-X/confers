@@ -165,7 +165,11 @@ impl ValidationReport {
                 // 从路径中提取字段名作为错误类型
                 // 使用 path 的 Display 表示，然后提取最后一个字段名
                 let path_str = path.to_string();
-                let error_type = path_str.split('.').last().unwrap_or(&path_str).to_string();
+                let error_type = path_str
+                    .split('.')
+                    .next_back()
+                    .unwrap_or(&path_str)
+                    .to_string();
 
                 ValidationErrorDetail {
                     path: path_str,

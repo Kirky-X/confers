@@ -228,22 +228,16 @@ pub struct HelpGenerator;
 impl HelpGenerator {
     /// 为配置结构生成帮助文本
     pub fn generate_for_config<T: 'static>() -> String {
-        let mut lines = Vec::new();
-
-        lines.push("Configuration Parameters:".to_string());
-        lines.push(String::new());
-
-        // 使用反射获取字段信息
-        // 注意：这里使用硬编码的字段列表作为演示
-        // 实际实现会通过 derive 宏自动生成
-
-        lines.push("  --host <ADDR>        服务器监听地址 (default: 127.0.0.1)".to_string());
-        lines.push("  --port <PORT>        服务器监听端口 (default: 8080)".to_string());
-        lines.push("  --workers <N>         工作线程数 (default: 4)".to_string());
-        lines.push("  --log-level <LEVEL>  日志级别 (default: info)".to_string());
-        lines.push("  --debug <BOOL>       启用调试模式 (default: false)".to_string());
-
-        lines.join("\n")
+        [
+            "Configuration Parameters:",
+            "",
+            "  --host <ADDR>        服务器监听地址 (default: 127.0.0.1)",
+            "  --port <PORT>        服务器监听端口 (default: 8080)",
+            "  --workers <N>         工作线程数 (default: 4)",
+            "  --log-level <LEVEL>  日志级别 (default: info)",
+            "  --debug <BOOL>       启用调试模式 (default: false)",
+        ]
+        .join("\n")
     }
 
     /// 生成完整的帮助文本

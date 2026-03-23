@@ -19,6 +19,10 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+/// Type alias for complex metric data storage to reduce type complexity
+type MetricDataKey = (String, Vec<(String, String)>);
+type MetricDataStore = HashMap<MetricDataKey, (f64, u64)>;
+
 // =============================================================================
 // 配置结构定义
 // =============================================================================
@@ -148,11 +152,7 @@ impl MetricsCollector {
                 .fetch_add(delta as u64, Ordering::Relaxed);
         } else {
             let current = self.server.connections.load(Ordering::Relaxed);
-            let new_val = if current > (-delta) as u64 {
-                current - (-delta) as u64
-            } else {
-                0
-            };
+            let new_val = current.saturating_sub((-delta) as u64);
             self.server.connections.store(new_val, Ordering::Relaxed);
         }
     }
@@ -294,7 +294,7 @@ pub struct MetricsSummary {
 #[derive(Debug, Clone, Default)]
 pub struct CustomMetrics {
     /// 指标数据: (name, labels) -> (value, timestamp)
-    data: Arc<std::sync::Mutex<HashMap<(String, Vec<(String, String)>), (f64, u64)>>>,
+    data: Arc<std::sync::Mutex<MetricDataStore>>,
 
     /// 指标元数据
     metadata: Arc<std::sync::Mutex<HashMap<String, MetricMetadata>>>,
@@ -363,7 +363,7 @@ impl CustomMetrics {
                 )
             };
 
-            let safe_name: String = name.replace('.', "_").replace('-', "_");
+            let safe_name: String = name.replace(['.', '-'], "_");
             output.push_str(&format!("# HELP {} Custom metric\n", safe_name));
             output.push_str(&format!("# TYPE {} gauge\n", safe_name));
             output.push_str(&format!("{}{} {}\n", safe_name, labels_str, value));
@@ -471,7 +471,7 @@ fn demo_basic_metrics() {
     let collector = MetricsCollector::new();
 
     // 模拟请求
-    let requests = vec![
+    let requests = [
         (50, false),
         (120, false),
         (80, false),
@@ -566,7 +566,7 @@ fn demo_config_metrics() {
     let collector = MetricsCollector::new();
 
     // 模拟多次配置加载
-    let load_results = vec![
+    let load_results = [
         (true, Some(1)),
         (true, Some(2)),
         (false, None),

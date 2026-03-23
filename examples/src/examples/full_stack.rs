@@ -7,8 +7,7 @@ use confers::secret::{derive_field_key, SecretString, XChaCha20Crypto};
 use confers::watcher::WatcherConfig;
 use confers::Config;
 use serde::Deserialize;
-use tracing::{info, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing::info;
 
 #[derive(Config, Deserialize, Debug, Clone)]
 pub struct AppConfig {
@@ -33,15 +32,16 @@ pub struct AppConfig {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
         .with_target(false)
         .with_thread_ids(false)
         .with_file(true)
         .with_line_number(true)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set log subscriber");
+        .init();
 
     info!("============================================================");
     info!("Full Stack - Complete Feature Set Example");

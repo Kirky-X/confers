@@ -25,8 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{error, info, warn};
 
 // =============================================================================
 // Configuration Structures
@@ -491,16 +490,16 @@ impl ConsulClient {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
         .with_target(false)
         .with_thread_ids(true)
         .with_file(true)
         .with_line_number(true)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set log subscriber");
+        .init();
 
     info!("========================================");
     info!("  Remote Consul Configuration Example");
@@ -658,7 +657,7 @@ async fn demo_acl_authentication() -> Result<(), Box<dyn std::error::Error>> {
     info!("     address: {}", config.address);
     info!(
         "     token: {:?}...",
-        &config.token.as_ref().map(|t| &t[..8]).unwrap_or(&"None")
+        &config.token.as_ref().map(|t| &t[..8]).unwrap_or("None")
     );
     info!("   }}");
 

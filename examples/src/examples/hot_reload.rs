@@ -11,8 +11,7 @@ use std::time::Duration;
 
 use confers::watcher::{FsWatcher, WatcherConfig};
 use serde::Deserialize;
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Deserialize)]
 struct AppConfig {
@@ -68,15 +67,16 @@ impl AppConfig {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
         .with_target(false)
         .with_thread_ids(false)
         .with_file(true)
         .with_line_number(true)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("设置日志追踪器失败");
+        .init();
 
     info!("=== 热重载示例程序启动 ===");
 
