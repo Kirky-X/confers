@@ -47,13 +47,17 @@ const CUSTOM_FAILURE_PAUSE_MS: u64 = 60000;
 // ========================================
 
 #[test]
+#[allow(unused_imports)]
 fn test_watcher_module_exists() {
+    // Just verify the watcher module types are accessible
     use confers::watcher::*;
 }
 
 #[cfg(feature = "progressive-reload")]
 #[test]
+#[allow(unused_imports)]
 fn test_progressive_reload_module_exists() {
+    // Just verify the progressive reload module types are accessible
     use confers::watcher::progressive::*;
 }
 
@@ -610,6 +614,7 @@ mod progressive_tests {
         }
     }
 
+    #[allow(dead_code)]
     struct AlwaysDegradedCheck;
     #[async_trait]
     impl ReloadHealthCheck for AlwaysDegradedCheck {

@@ -135,6 +135,7 @@ impl ConfigProvider for TestConfig {
 /// This is used by integration tests that require external services like
 /// Etcd or Consul to be running.
 #[cfg(feature = "remote")]
+#[allow(dead_code)]
 pub async fn is_service_available(url: &str, timeout: Duration) -> bool {
     let client = reqwest::Client::builder().timeout(timeout).build().unwrap();
 

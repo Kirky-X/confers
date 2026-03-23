@@ -6,7 +6,6 @@ mod common;
 
 use confers::loader::LoaderConfig;
 use confers::modules::{ModuleConfig, ModuleRegistry};
-use std::io::Write;
 use std::path::PathBuf;
 
 fn create_local_temp_dir() -> tempfile::TempDir {

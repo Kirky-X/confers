@@ -24,8 +24,10 @@ use confers::value::{AnnotatedValue, ConfigValue, SourceId};
 
 /// Test that snapshot module types are accessible.
 #[test]
+#[allow(unused_imports)]
 fn test_snapshot_module_access() {
     use confers::snapshot::*;
+    // Just verify the module types are accessible
 }
 
 // ========================================
@@ -413,7 +415,7 @@ async fn test_manual_prune() {
     let manager = SnapshotManager::new(config);
 
     // Create some snapshots
-    for i in 0..10 {
+    for _i in 0..10 {
         let value = create_test_value();
         let _ = manager.save(&value, &[]).await;
     }
@@ -427,8 +429,8 @@ async fn test_manual_prune() {
     let manager = SnapshotManager::new(config);
 
     // Prune and verify some were removed (exact number may vary)
-    let removed = manager.prune_old_snapshots().unwrap();
-    assert!(removed >= 0); // Just verify prune works without error
+    let _removed = manager.prune_old_snapshots().unwrap();
+    // Just verify prune works without error
 }
 
 // ========================================
@@ -641,7 +643,7 @@ async fn test_snapshot_list_ordering() {
     let manager = SnapshotManager::new(config);
 
     // Create snapshots with slight delays
-    for i in 0..3 {
+    for _i in 0..3 {
         tokio::time::sleep(Duration::from_millis(10)).await;
         let value = create_test_value();
         let _ = manager.save(&value, &[]).await;

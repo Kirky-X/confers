@@ -96,6 +96,7 @@ fn test_validated_config_defaults() {
 
 // Test nested struct with validation
 #[derive(Debug, Clone, Deserialize, Validate)]
+#[allow(dead_code)]
 struct ServerConfig {
     #[garde(length(min = 1))]
     name: String,

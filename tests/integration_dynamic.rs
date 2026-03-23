@@ -167,8 +167,6 @@ async fn test_field_watcher_changed_for() {
 #[tokio::test]
 #[cfg(feature = "watch")]
 async fn test_field_watcher_no_trigger_if_field_unchanged() {
-    use tokio::sync::watch;
-
     // Skip this test - FieldWatcher implementation has edge cases with empty baseline
     // The core functionality is tested in test_field_watcher_changed_for
 }

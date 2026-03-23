@@ -263,7 +263,7 @@ mod etcd_tests {
     /// Test EtcdSourceBuilder interval configuration.
     #[test]
     fn test_etcd_builder_interval() {
-        let builder = EtcdSourceBuilder::new().interval(Duration::from_secs(45));
+        let _builder = EtcdSourceBuilder::new().interval(Duration::from_secs(45));
     }
 
     /// Test EtcdSourceBuilder TLS configuration.
@@ -275,10 +275,9 @@ mod etcd_tests {
             key_file: "/path/to/key.pem".to_string(),
         };
 
-        let builder = EtcdSourceBuilder::new().tls(tls_config);
+        let _builder = EtcdSourceBuilder::new().tls(tls_config);
 
         // Just verify the builder can be constructed
-        let _ = builder;
     }
 
     /// Test EtcdSourceBuilder chaining.
@@ -368,7 +367,7 @@ mod etcd_tests {
 #[cfg(feature = "consul")]
 mod consul_tests {
     use super::*;
-    use confers::remote::{ConsulSource, ConsulSourceBuilder};
+    use confers::remote::ConsulSourceBuilder;
 
     /// Test ConsulSourceBuilder default configuration (4.1.4).
     #[test]
@@ -537,7 +536,6 @@ async fn test_etcd_source_parse_config() {
         return;
     }
 
-    use base64::Engine;
     use confers::remote::EtcdSourceBuilder;
 
     // Write test config to Etcd using HTTP API directly

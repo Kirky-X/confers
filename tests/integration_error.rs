@@ -8,6 +8,7 @@
 //! - Type mismatch errors
 
 #![cfg(all(feature = "validation", feature = "interpolation"))]
+#![allow(dead_code)]
 
 mod common;
 
@@ -195,7 +196,6 @@ fn test_parse_error_from_path() {
 /// Test configuration validation failure (4.2.2).
 #[test]
 fn test_config_validation_failure() {
-    use confers::Config;
     use garde::Validate;
     use serde::Deserialize;
 
