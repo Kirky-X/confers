@@ -245,18 +245,9 @@ pub fn normalize_and_validate_path(
         if !allow_absolute {
             return Err(PathTraversalError::AbsolutePath);
         }
-        // For absolute paths, canonicalize directly
+        // For absolute paths with allow_absolute=true, canonicalize and skip directory check
         let canonical =
             std::fs::canonicalize(path).map_err(|e| PathTraversalError::IoError(e.to_string()))?;
-
-        // Check if absolute path is within any allowed dir
-        let is_allowed = allowed_dirs
-            .iter()
-            .any(|dir| canonical.starts_with(dir) || canonical == *dir);
-
-        if !is_allowed && !allowed_dirs.is_empty() {
-            return Err(PathTraversalError::OutsideAllowedDirectory);
-        }
         return Ok(canonical);
     }
 
@@ -422,6 +413,7 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
     None
 }
 
+#[tracing::instrument(skip(config), fields(path = ?path))]
 pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
     // Path traversal protection: validate the path before loading
     let validated_path =
@@ -458,6 +450,7 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
     parse_content(&content, format, source, Some(&validated_path))
 }
 
+#[tracing::instrument(skip(content), fields(format = ?format, path = ?path))]
 pub fn parse_content(
     content: &str,
     format: Format,

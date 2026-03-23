@@ -247,6 +247,15 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
+    /// Allow absolute paths for file sources (use with caution, mainly for testing).
+    ///
+    /// By default, absolute paths are not allowed for security reasons.
+    /// This method relaxes that restriction for testing scenarios.
+    pub fn allow_absolute_paths(mut self) -> Self {
+        self.chain_builder = self.chain_builder.allow_absolute_paths();
+        self
+    }
+
     /// Set the configuration bus for multi-instance synchronization.
     #[cfg(feature = "config-bus")]
     #[cfg_attr(docsrs, doc(cfg(feature = "config-bus")))]
@@ -279,6 +288,7 @@ where
     /// Build the configuration synchronously.
     ///
     /// This method collects all sources and merges them into a final configuration.
+    #[tracing::instrument(skip(self))]
     pub fn build(self) -> ConfigResult<T> {
         self.do_build()
     }
@@ -287,6 +297,7 @@ where
     ///
     /// This method returns the raw AnnotatedValue which contains source location
     /// information (line and column numbers) for each value.
+    #[tracing::instrument(skip(self))]
     pub fn build_annotated(self) -> ConfigResult<AnnotatedValue> {
         self.do_build_annotated()
     }

@@ -12,14 +12,6 @@ fn run_confers(args: &[&str]) -> std::process::Command {
     cmd
 }
 
-fn run_confers_with_cwd(args: &[&str], cwd: &std::path::Path) -> std::process::Command {
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.args(&["run", "-p", "confers-cli", "--"]);
-    cmd.args(args);
-    cmd.current_dir(cwd);
-    cmd
-}
-
 fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path::PathBuf {
     let path = dir.path().join(filename);
     let mut file = fs::File::create(&path).expect("Failed to create test config");
@@ -61,9 +53,14 @@ port = 8080
 "#,
     );
 
-    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "inspect"])
-        .output()
-        .expect("Failed to run inspect command");
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "-c",
+        &config_path.to_str().unwrap(),
+        "inspect",
+    ])
+    .output()
+    .expect("Failed to run inspect command");
 
     assert!(
         output.status.success(),
@@ -92,6 +89,7 @@ name = "json-test"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "-c",
         &config_path.to_str().unwrap(),
         "inspect",
@@ -127,9 +125,14 @@ name = "validate-test"
 "#,
     );
 
-    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "validate"])
-        .output()
-        .expect("Failed to run validate command");
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "-c",
+        &config_path.to_str().unwrap(),
+        "validate",
+    ])
+    .output()
+    .expect("Failed to run validate command");
 
     assert!(
         output.status.success(),
@@ -158,6 +161,7 @@ name = "validate-json-test"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "-c",
         config_path.to_str().unwrap(),
         "validate",
@@ -189,9 +193,16 @@ name = "export-test"
 "#,
     );
 
-    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "export", "-f", "json"])
-        .output()
-        .expect("Failed to run export command");
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "-c",
+        &config_path.to_str().unwrap(),
+        "export",
+        "-f",
+        "json",
+    ])
+    .output()
+    .expect("Failed to run export command");
 
     assert!(
         output.status.success(),
@@ -219,9 +230,16 @@ name = "export-toml-test"
 "#,
     );
 
-    let output = run_confers(&["-c", &config_path.to_str().unwrap(), "export", "-f", "toml"])
-        .output()
-        .expect("Failed to run export command");
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "-c",
+        &config_path.to_str().unwrap(),
+        "export",
+        "-f",
+        "toml",
+    ])
+    .output()
+    .expect("Failed to run export command");
 
     assert!(
         output.status.success(),
@@ -250,6 +268,7 @@ name = "provenance-test"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "-c",
         config_path.to_str().unwrap(),
         "export",
@@ -288,6 +307,7 @@ name = "file-export-test"
     let output_path = dir.path().join("output.json");
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "-c",
         config_path.to_str().unwrap(),
         "export",
@@ -478,6 +498,7 @@ name = "env-test"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "--env-file",
         env_path.to_str().unwrap(),
         "-c",

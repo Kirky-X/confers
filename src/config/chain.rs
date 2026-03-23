@@ -186,6 +186,8 @@ impl SourceChain {
 /// Builder for creating source chains with a fluent API.
 pub struct SourceChainBuilder {
     chain: SourceChain,
+    /// Whether to allow absolute paths for file sources.
+    allow_absolute_paths: bool,
 }
 
 impl Default for SourceChainBuilder {
@@ -199,6 +201,7 @@ impl SourceChainBuilder {
     pub fn new() -> Self {
         Self {
             chain: SourceChain::new(),
+            allow_absolute_paths: false,
         }
     }
 
@@ -211,13 +214,27 @@ impl SourceChainBuilder {
     /// Add a file source.
     pub fn file(self, path: impl Into<std::path::PathBuf>) -> Self {
         use super::source::FileSource;
-        self.source(Box::new(FileSource::new(path)))
+        let mut source = FileSource::new(path);
+        if self.allow_absolute_paths {
+            source = source.allow_absolute_paths();
+        }
+        self.source(Box::new(source))
     }
 
     /// Add an optional file source.
     pub fn file_optional(self, path: impl Into<std::path::PathBuf>) -> Self {
         use super::source::FileSource;
-        self.source(Box::new(FileSource::new(path).optional()))
+        let mut source = FileSource::new(path).optional();
+        if self.allow_absolute_paths {
+            source = source.allow_absolute_paths();
+        }
+        self.source(Box::new(source))
+    }
+
+    /// Allow absolute paths for file sources (use with caution, mainly for testing).
+    pub fn allow_absolute_paths(mut self) -> Self {
+        self.allow_absolute_paths = true;
+        self
     }
 
     /// Add an environment source.

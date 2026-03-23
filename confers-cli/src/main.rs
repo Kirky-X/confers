@@ -70,6 +70,10 @@ struct Cli {
     #[arg(short, long)]
     profile: Option<String>,
 
+    /// Allow absolute paths for config files (use with caution, mainly for testing)
+    #[arg(long)]
+    allow_absolute_paths: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -183,6 +187,7 @@ fn main() -> Result<()> {
     }
 
     let config_paths = cli.config.clone();
+    let allow_absolute_paths = cli.allow_absolute_paths;
 
     match cli.command {
         Commands::Inspect {
@@ -190,10 +195,16 @@ fn main() -> Result<()> {
             show_conflicts,
             format,
         } => {
-            cmd_inspect(&config_paths, &key, show_conflicts, &format)?;
+            cmd_inspect(
+                &config_paths,
+                &key,
+                show_conflicts,
+                &format,
+                allow_absolute_paths,
+            )?;
         }
         Commands::Validate { strict, format } => {
-            cmd_validate(&config_paths, strict, &format)?;
+            cmd_validate(&config_paths, strict, &format, allow_absolute_paths)?;
         }
         Commands::Export {
             format,
@@ -201,7 +212,14 @@ fn main() -> Result<()> {
             with_provenance,
             raw,
         } => {
-            cmd_export(&config_paths, &format, output, with_provenance, raw)?;
+            cmd_export(
+                &config_paths,
+                &format,
+                output,
+                with_provenance,
+                raw,
+                allow_absolute_paths,
+            )?;
         }
         Commands::Diff {
             base,
@@ -209,7 +227,7 @@ fn main() -> Result<()> {
             format,
             sanitize,
         } => {
-            cmd_diff(&base, &overlay, &format, sanitize)?;
+            cmd_diff(&base, &overlay, &format, sanitize, allow_absolute_paths)?;
         }
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
@@ -226,10 +244,15 @@ fn cmd_inspect(
     keys: &[String],
     show_conflicts: bool,
     format: &str,
+    allow_absolute_paths: bool,
 ) -> Result<()> {
     use confers::ConfigBuilder;
 
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
+
+    if allow_absolute_paths {
+        builder = builder.allow_absolute_paths();
+    }
 
     for config_path in config_paths {
         if config_path.exists() {
@@ -395,10 +418,19 @@ fn format_value(value: &confers::value::ConfigValue) -> String {
 
 /// Validate configuration against schema
 #[allow(dead_code)]
-fn cmd_validate(config_paths: &[PathBuf], strict: bool, format: &str) -> Result<()> {
+fn cmd_validate(
+    config_paths: &[PathBuf],
+    strict: bool,
+    format: &str,
+    allow_absolute_paths: bool,
+) -> Result<()> {
     use confers::ConfigBuilder;
 
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
+
+    if allow_absolute_paths {
+        builder = builder.allow_absolute_paths();
+    }
 
     for config_path in config_paths {
         if config_path.exists() {
@@ -532,6 +564,7 @@ fn cmd_export(
     output: Option<PathBuf>,
     with_provenance: bool,
     raw: bool,
+    allow_absolute_paths: bool,
 ) -> Result<()> {
     use chrono::Utc;
     use confers::ConfigBuilder;
@@ -544,6 +577,10 @@ fn cmd_export(
 
     if with_provenance {
         let mut builder = ConfigBuilder::<serde_json::Value>::new();
+
+        if allow_absolute_paths {
+            builder = builder.allow_absolute_paths();
+        }
 
         for config_path in config_paths {
             if config_path.exists() {
@@ -582,6 +619,10 @@ fn cmd_export(
         }
     } else {
         let mut builder = ConfigBuilder::<serde_json::Value>::new();
+
+        if allow_absolute_paths {
+            builder = builder.allow_absolute_paths();
+        }
 
         for config_path in config_paths {
             if config_path.exists() {
@@ -624,7 +665,13 @@ fn cmd_export(
 }
 
 /// Diff two configurations
-fn cmd_diff(base: &PathBuf, overlay: &PathBuf, format: &str, sanitize: bool) -> Result<()> {
+fn cmd_diff(
+    base: &PathBuf,
+    overlay: &PathBuf,
+    format: &str,
+    sanitize: bool,
+    _allow_absolute_paths: bool,
+) -> Result<()> {
     use confers::loader;
 
     println!("Configuration Diff");

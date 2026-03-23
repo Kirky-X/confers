@@ -94,6 +94,8 @@ pub struct FileSource {
     optional: bool,
     /// Source ID for tracking.
     source_id: SourceId,
+    /// Loader configuration for security settings.
+    loader_config: loader::LoaderConfig,
 }
 
 impl FileSource {
@@ -107,6 +109,7 @@ impl FileSource {
             priority: 0,
             optional: false,
             source_id,
+            loader_config: loader::LoaderConfig::default(),
         }
     }
 
@@ -125,6 +128,18 @@ impl FileSource {
     /// Make this source optional.
     pub fn optional(mut self) -> Self {
         self.optional = true;
+        self
+    }
+
+    /// Allow absolute paths (use with caution, mainly for testing).
+    pub fn allow_absolute_paths(mut self) -> Self {
+        self.loader_config = self.loader_config.allow_absolute();
+        self
+    }
+
+    /// Set custom loader configuration.
+    pub fn with_loader_config(mut self, config: loader::LoaderConfig) -> Self {
+        self.loader_config = config;
         self
     }
 
@@ -150,8 +165,7 @@ impl Source for FileSource {
             });
         }
 
-        let config = loader::LoaderConfig::default();
-        loader::load_file(&self.path, &config).map(|v| v.with_priority(self.priority))
+        loader::load_file(&self.path, &self.loader_config).map(|v| v.with_priority(self.priority))
     }
 
     fn priority(&self) -> u8 {
