@@ -115,7 +115,6 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `snapshot` | Snapshot rollback | ❌ |
 | `profile` | Environment configuration | ❌ |
 | `interpolation` | Variable interpolation | ❌ |
-| `tracing` | Distributed tracing | ❌ |
 | **Remote Sources** |||
 | `remote` | HTTP polling | ❌ |
 | `etcd` | Etcd integration | ❌ |

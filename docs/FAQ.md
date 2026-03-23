@@ -199,7 +199,7 @@ fn main() {
 |:------:|:------------|:---------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | Environment variables + JSON | Only need basic config loading |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | TOML + JSON + Env + Validation | Most applications (recommended) |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | Development config (with tracing) | Development and debugging |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | Development config (with watch, snapshot) | Development and debugging |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | Production config (with encryption) | Production environments |
 | <span style="color:#5B21B6; padding:4px 8px">distributed</span> | Distributed systems config | Microservices and distributed systems |
 | <span style="color:#166534; padding:4px 8px">full</span> | All features | Need complete functionality |

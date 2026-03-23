@@ -846,7 +846,7 @@ confers = { version = "0.3", features = ["production"] }
 garde = { version = "0.22", features = ["derive"] }
 ```
 
-The `production` feature includes: `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring`, `tracing`
+The `production` feature includes: `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`
 
 ---
 

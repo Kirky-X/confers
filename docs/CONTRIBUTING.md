@@ -205,7 +205,6 @@ This project uses feature flags to enable different functionalities. During deve
 - `snapshot`: Snapshot rollback
 - `profile`: Environment configuration
 - `interpolation`: Variable interpolation
-- `tracing`: Distributed tracing
 
 **Remote sources:**
 - `remote`: HTTP polling

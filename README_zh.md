@@ -229,7 +229,6 @@ graph LR
 | `snapshot` | 快照回滚 | ❌ |
 | `profile` | 环境配置 | ❌ |
 | `interpolation` | 变量插值 | ❌ |
-| `tracing` | 分布式追踪 | ❌ |
 | **远程源** |||
 | `remote` | HTTP 轮询 | ❌ |
 | `etcd` | Etcd 集成 | ❌ |

@@ -227,7 +227,6 @@ graph LR
 | `preload-validator` | ❌ | Async preload validator | Stable |
 | `poll` | ❌ | HTTP polling | Stable |
 | `vault` | ❌ | Vault integration | Beta |
-| `tracing` | ❌ | Distributed tracing | Stable |
 
 ### 🗂️ Examples Directory
 
@@ -305,7 +304,6 @@ cd examples && ./verify_examples.sh
 | `snapshot` | Snapshot rollback | ❌ |
 | `profile` | Environment configuration | ❌ |
 | `interpolation` | Variable interpolation | ❌ |
-| `tracing` | Distributed tracing | ❌ |
 | **Remote Sources** |||
 | `remote` | HTTP polling | ❌ |
 | `etcd` | Etcd integration | ❌ |
