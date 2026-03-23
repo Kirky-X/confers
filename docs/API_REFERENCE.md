@@ -357,9 +357,10 @@ pub fn source(mut self, source: Box<dyn Source>) -> Self
 **Example - HTTP Remote Source:**
 
 ```rust
-use confers::source::HttpSource;
+use confers::remote::HttpPolledSourceBuilder;
 
-let http_source = HttpSource::new("https://config-server.example.com/app-config")
+let http_source = HttpPolledSourceBuilder::new()
+    .url("https://config-server.example.com/app-config")
     .with_timeout(Duration::from_secs(30));
 
 let config = ConfigBuilder::<AppConfig>::new()
@@ -370,26 +371,28 @@ let config = ConfigBuilder::<AppConfig>::new()
 **Example - Etcd Source:**
 
 ```rust
-use confers::source::EtcdSource;
+use confers::remote::EtcdSourceBuilder;
 
-let etcd_source = EtcdSource::new("localhost:2379")
-    .with_prefix("/myapp/config");
+let etcd_source = EtcdSourceBuilder::new()
+    .endpoints(vec!["localhost:2379"])
+    .prefix("/myapp/config");
 
 let config = ConfigBuilder::<AppConfig>::new()
-    .source(Box::new(etcd_source))
+    .source(Box::new(etcd_source.build()))
     .build()?;
 ```
 
 **Example - Consul Source:**
 
 ```rust
-use confers::source::ConsulSource;
+use confers::remote::ConsulSourceBuilder;
 
-let consul_source = ConsulSource::new("localhost:8500")
-    .with_prefix("myapp/config");
+let consul_source = ConsulSourceBuilder::new()
+    .address("localhost:8500")
+    .prefix("myapp/config");
 
 let config = ConfigBuilder::<AppConfig>::new()
-    .source(Box::new(consul_source))
+    .source(Box::new(consul_source.build()))
     .build()?;
 ```
 
@@ -795,33 +798,44 @@ The core component for key lifecycle management.
 
 ```rust
 use confers::key::KeyManager;
+use std::path::PathBuf;
 
-// Create key manager
-let master_key = [0u8; 32];
-let mut manager = KeyManager::new(master_key);
+// Create key manager with storage path
+let master_key = [0u8; 32]; // Get from secure location
+let mut manager = KeyManager::new(PathBuf::from("./keys"))?;
 
-// Create new key
-let key = manager.create_key("database", Some("DB encryption key".to_string()))?;
+// Initialize a new key ring
+let version = manager.initialize(
+    &master_key,
+    "production".to_string(),
+    "security-team".to_string()
+)?;
 
-// Get key
-let key_data = manager.get_key("database")?;
+// Generate a new key
+let key = manager.generate_key()?;
 
 // List all keys
 let keys = manager.list_keys();
 
-// Revoke key
-manager.revoke_key("database")?;
+// Rotate key
+let result = manager.rotate_key(
+    &master_key,
+    Some("production".to_string()),
+    "security-team".to_string(),
+    Some("Scheduled rotation".to_string())
+)?;
 ```
 
 #### Methods
 
 | Method | Parameters | Return Value | Description |
 |--------|------------|--------------|-------------|
-| `new(master_key)` | `&[u8; 32]` | `Self` | Create key manager |
-| `create_key(id, desc)` | `&str, Option<String>` | `Result<KeyBundle>` | Create new key |
-| `get_key(id)` | `&str` | `Option<&KeyBundle>` | Get key |
-| `list_keys()` | - | `Vec<KeyInfo>` | List all keys |
-| `revoke_key(id)` | `&str` | `Result<()>` | Revoke key |
+| `new(storage_path)` | `PathBuf` | `Result<Self>` | Create key manager |
+| `initialize(master_key, key_id, created_by)` | `&[u8; 32], String, String` | `Result<KeyVersion>` | Initialize a new key ring |
+| `generate_key()` | - | `Result<[u8; 32]>` | Generate a new random key |
+| `rotate_key(master_key, key_id, created_by, description)` | see below | `Result<RotationResult>` | Rotate key to new version |
+| `list_keys()` | - | `Vec<KeyInfo>` | List all key rings |
+| `get_key_info(key_id)` | `&str` | `Result<KeyInfo>` | Get key ring metadata |
 
 #### KeyRotationService
 
@@ -1869,21 +1883,26 @@ println!("Key version rotated from {} to {}", result.previous_version, result.ne
 **How to enable audit logging:**
 
 ```rust
-use confers::audit::{AuditLogWriter, RotationConfig};
+use confers::audit::{AuditWriter, AuditConfig};
+use std::path::PathBuf;
 
-let rotation_config = RotationConfig {
-    max_size_mb: 100,
-    max_age_days: 30,
-    max_files: 10,
-    compress_archived: true,
-};
+// Create audit configuration
+let audit_config = AuditConfig::builder()
+    .log_dir(PathBuf::from("/var/log/confers"))
+    .enabled(true)
+    .durable_wal(true)
+    .build();
 
-let integrity_key = [0u8; 32]; // Get from secure storage
-let writer = AuditLogWriter::new(
-    PathBuf::from("/var/log/audit.log"),
-    rotation_config,
-    integrity_key
-)?;
+// Create audit writer
+let writer = AuditWriter::builder()
+    .log_dir(PathBuf::from("/var/log/confers"))
+    .enabled(true)
+    .build();
+
+// Log audit events
+writer.log_load("config.toml");
+writer.log_key_access("database_password");
+writer.log_decrypt("api_key", true);
 ```
 
 **⚠️ Security Tips:**
@@ -1986,7 +2005,7 @@ pub fn initialize(
 **Audit Log API:**
 
 ```rust
-/// Log configuration loading to audit log
+/// Log configuration loading event
 ///
 /// # Security Notes
 ///
@@ -1998,19 +2017,23 @@ pub fn initialize(
 /// # Example
 ///
 /// ```rust
-/// AuditLogger::log_to_file(&config, PathBuf::from("/var/log/audit.log"), None)?;
+/// use confers::audit::{AuditWriter, AuditConfig};
+/// use std::path::PathBuf;
+///
+/// let writer = AuditWriter::builder()
+///     .log_dir(PathBuf::from("/var/log/confers"))
+///     .enabled(true)
+///     .build();
+///
+/// writer.log_load("config.toml");
 /// ```
-pub fn log_to_file<T>(
-    config: &T,
-    path: &Path,
-    validation_error: Option<&str>,
-) -> Result<(), ConfigError>
+pub fn log_load(&self, source: &str)
 ```
 
 **Configuration Validation API:**
 
 ```rust
-/// Validate configuration range
+/// Configuration validation using garde derive macro
 ///
 /// # Security Notes
 ///
@@ -2022,10 +2045,22 @@ pub fn log_to_file<T>(
 /// # Example
 ///
 /// ```rust
-/// let validator = RangeFieldValidator::new("port", Some(1024.0), Some(65535.0));
-/// validator.validate(&config)?;
+/// use confers::{Config, Validate};
+/// use garde::Validate;
+///
+/// #[derive(Config, Validate)]
+/// #[config(validate)]
+/// struct ServerConfig {
+///     #[garde(range(min = 1, max = 65535))]
+///     port: u16,
+/// }
+///
+/// let config = ConfigBuilder::<ServerConfig>::new()
+///     .file("config.toml")
+///     .validate(true)
+///     .build()?;
 /// ```
-pub fn validate(&self, config: &Value) -> Result<(), ValidationError>
+pub fn validate(&self) -> Result<(), garde::Report>
 ```
 
 ---

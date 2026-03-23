@@ -128,7 +128,7 @@ Add `confers` to your `Cargo.toml`:
 |-------------------|---------------|----------|
 | **Default** | `confers = "0.3.0"` | Includes toml, json, env |
 | **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables only |
-| **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation |
+| **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
 | **Full** | `confers = { version = "0.3.0", features = ["full"] }` | All features |
 
 **Available Feature Presets:**
@@ -204,6 +204,8 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         .build_with_watcher()
         .await?;
 
+    // Get initial config from the watch receiver
+    let config = rx.borrow().clone();
     println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
@@ -975,23 +977,21 @@ Configure audit logging to track all configuration loading and modification oper
 </div>
 
 ```rust
-use confers::audit::{AuditLogger, AuditConfig};
+use confers::audit::{AuditWriter, AuditConfig};
 use std::path::PathBuf;
 
-// Create audit configuration
-let audit_config = AuditConfig {
-    validation_error: Some("Invalid configuration".to_string()),
-    config_source: Some("config.toml".to_string()),
-    load_duration: Some(100),
-    ..Default::default()
-};
+// Create audit writer with builder pattern
+let audit_writer = AuditWriter::builder()
+    .log_dir(PathBuf::from("/var/log/confers"))
+    .enabled(true)
+    .build();
 
-// Log configuration loading
-AuditLogger::log_to_file_with_source(
-    &config,
-    &PathBuf::from("/var/log/confers/audit.log"),
-    audit_config
-)?;
+// Log configuration loading events
+audit_writer.log_load("config.toml");
+
+// Log sensitive operations
+audit_writer.log_key_access("database_password");
+audit_writer.log_decrypt("api_key", true);
 ```
 
 **Audit Logging Best Practices:**
@@ -1042,30 +1042,33 @@ Use validators to ensure configuration values are within expected ranges.
 </div>
 
 ```rust
-use confers::validator::{ValidationEngine, RangeFieldValidator};
-use serde_json::json;
+use confers::{Config, Validate};
+use serde::Deserialize;
+use garde::Validate;
 
-// Create validation engine
-let mut engine = ValidationEngine::new();
+// Define validation rules using garde derive macro
+#[derive(Config, Deserialize, Validate)]
+#[config(validate)]  // Enable automatic validation during config loading
+struct ValidatedConfig {
+    #[garde(range(min = 1, max = 65535))]
+    port: u16,
 
-// Add range validator
-engine.add_validator(Box::new(RangeFieldValidator::new(
-    "port",
-    Some(1024.0),
-    Some(65535.0)
-)));
+    #[garde(length(min = 1, max = 253))]
+    host: String,
 
-// Validate configuration
-let config = json!({"port": 8080});
-match engine.validate(&config) {
-    Ok(()) => println!("Configuration validation passed"),
-    Err(errors) => {
-        eprintln!("Configuration validation failed:");
-        for error in errors {
-            eprintln!("  - {}", error.message);
-        }
-    }
+    #[garde(email)]
+    admin_email: Option<String>,
 }
+
+// Validation is automatically performed during config loading
+// If validation fails, ConfigError::ValidationError is returned
+let config = ConfigBuilder::<ValidatedConfig>::new()
+    .file("config.toml")
+    .validate(true)
+    .build()?;
+```
+
+**Note:** Add `garde = { version = "0.22", features = ["derive", "email", "url", "regex"] }` to your dependencies.
 ```
 
 **Configuration Validation Best Practices:**

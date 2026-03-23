@@ -810,7 +810,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 | ✅ **侧信道保护** | 常量时间加密操作 | XChaCha20-Poly1305 加密 |
 | ✅ **输入验证** | 全面的输入清理 | `ConfigValidator`、`InputValidator` |
 | ✅ **审计日志** | 完整的操作追踪 | `AuditConfig`、审计追踪 |
-| ✅ **SSRF 防护** | 服务端请求伪造防护 | `validate_remote_url()` |
+| ✅ **SSRF 防护** | 内置的服务端请求伪造防护 | `HttpPolledSource`、`is_ip_blocked()` |
 | ✅ **敏感数据检测** | 自动检测敏感字段 | `SensitiveDataDetector` |
 | ✅ **错误信息清理** | 从错误消息中移除敏感信息 | `ErrorSanitizer`、`SecureLogger` |
 | ✅ **Nonce 重用检测** | 防止加密 nonce 重用 | 内置于加密模块 |
@@ -824,8 +824,12 @@ let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
 
 // 输入验证
 use confers::security::ConfigValidator;
-let validator = ConfigValidator::new();
-let result = validator.validate_input(user_input);
+let validator = ConfigValidator::builder()
+    .max_string_length(1024)
+    .strict_mode()
+    .build();
+let data: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+let result = validator.validate(&data);
 
 // 错误信息清理
 use confers::security::ErrorSanitizer;

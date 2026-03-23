@@ -174,7 +174,7 @@ graph LR
     E --> H
     F --> H
     G --> H
-    
+
     style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
     style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
     style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
@@ -246,6 +246,10 @@ Complete, runnable examples demonstrating all major features. All examples can b
 | **snapshot** | `examples/src/examples/snapshot.rs` | `snapshot` | Configuration snapshots with diff and rollback |
 | **remote_consul** | `examples/src/examples/remote_consul.rs` | `consul` | Remote config from HashiCorp Consul |
 | **remote_etcd** | `examples/src/examples/remote_etcd.rs` | `etcd` | Remote config from etcd v3 |
+| **validation** | `examples/src/examples/validation.rs` | `validation` | Configuration validation with garde |
+| **json_schema** | `examples/src/examples/json_schema.rs` | `schema` | JSON Schema and TypeScript type generation |
+| **metrics** | `examples/src/examples/metrics.rs` | `metrics` | Metrics collection and monitoring |
+| **cli_integration** | `examples/src/examples/cli_integration.rs` | `cli` | CLI tool integration and usage |
 | **full_stack** | `examples/src/examples/full_stack.rs` | `full` | Complete feature showcase |
 
 ```bash
@@ -684,11 +688,11 @@ graph TB
         C[💻 CLI Arguments]
         D[☁️ Remote Sources<br/>etcd, Consul, HTTP]
     end
-    
+
     subgraph Core ["🔧 Core Engine"]
         E[⚡ ConfigLoader<br/>Multi-source Merge]
     end
-    
+
     subgraph Processing ["🔨 Processing Layer"]
         F[✅ Validation<br/>Type & Business Rules]
         G[📄 Schema Generation]
@@ -697,15 +701,15 @@ graph TB
         J[👁️ File Watching]
         K[📊 Memory Monitoring]
     end
-    
+
     subgraph Output ["📤 Application"]
         L[🚀 Application Configuration<br/>Type-Safe & Validated]
     end
-    
+
     Sources --> Core
     Core --> Processing
     Processing --> Output
-    
+
     style Sources fill:#DBEAFE,stroke:#1E40AF
     style Core fill:#FEF3C7,stroke:#92400E
     style Processing fill:#EDE9FE,stroke:#5B21B6
@@ -916,7 +920,7 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 | ✅ **Side-channel Protection** | Constant-time cryptographic operations | XChaCha20-Poly1305 encryption |
 | ✅ **Input Validation** | Comprehensive input sanitization | `ConfigValidator`, `InputValidator` |
 | ✅ **Audit Logging** | Full operation tracking | `AuditConfig`, audit trails |
-| ✅ **SSRF Protection** | Server-Side Request Forgery prevention | `validate_remote_url()` |
+| ✅ **SSRF Protection** | Built-in Server-Side Request Forgery prevention | `HttpPolledSource`, `is_ip_blocked()` |
 | ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields | `SensitiveDataDetector` |
 | ✅ **Error Sanitization** | Remove sensitive info from error messages | `ErrorSanitizer`, `SecureLogger` |
 | ✅ **Nonce Reuse Detection** | Prevent cryptographic nonce reuse | Built into encryption module |
@@ -930,8 +934,12 @@ let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
 
 // Input validation
 use confers::security::ConfigValidator;
-let validator = ConfigValidator::new();
-let result = validator.validate_input(user_input);
+let validator = ConfigValidator::builder()
+    .max_string_length(1024)
+    .strict_mode()
+    .build();
+let data: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+let result = validator.validate(&data);
 
 // Error sanitization
 use confers::security::ErrorSanitizer;
