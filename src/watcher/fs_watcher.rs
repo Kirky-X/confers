@@ -59,6 +59,7 @@ impl FsWatcher {
     ///     Ok(())
     /// }
     /// ```
+    #[tracing::instrument(skip(path), fields(path = ?path.as_ref()))]
     pub async fn new(path: impl AsRef<Path>, debounce_ms: u64) -> ConfigResult<Self> {
         let watch_path = Arc::new(path.as_ref().to_path_buf());
 

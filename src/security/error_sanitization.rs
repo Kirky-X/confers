@@ -337,7 +337,6 @@ impl SecureLogger {
         let sanitized = self.sanitizer.sanitize(message);
         let _log_entry = format!("[{}] {}", level.as_str(), sanitized);
 
-        #[cfg(feature = "tracing")]
         match level {
             LogLevel::Error => tracing::error!("{}", _log_entry),
             LogLevel::Warn => tracing::warn!("{}", _log_entry),

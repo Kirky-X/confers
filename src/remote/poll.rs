@@ -797,7 +797,7 @@ mod tests {
     fn test_validate_url_accepts_public_ips() {
         // These should NOT block on IP check alone (though DNS resolution may fail)
         // We test with an IP that won't resolve
-        let result = validate_url("https://8.8.8.8/config.json", &[]);
+        let _result = validate_url("https://8.8.8.8/config.json", &[]);
         // Should not be blocked by SSRF check (8.8.8.8 is public)
         // The DNS resolution will fail for the IP-as-hostname case
         // but that's a different error
@@ -827,7 +827,7 @@ mod tests {
     #[test]
     fn test_validate_url_whitelist_no_match() {
         // Non-whitelisted domain should be checked (and will fail DNS in test)
-        let result = validate_url(
+        let _result = validate_url(
             "https://untrusted.example.com/config.json",
             &["trusted.example.com".to_string()],
         );
