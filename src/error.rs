@@ -95,8 +95,8 @@ pub enum ErrorCode {
     KeyRotationFailed = 1019,
     /// Watcher error
     WatcherError = 1020,
-    /// Override blocked
     OverrideBlocked = 1021,
+    LockPoisoned = 1022,
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -123,6 +123,7 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::KeyRotationFailed => write!(f, "KEY_ROTATION_FAILED"),
             ErrorCode::WatcherError => write!(f, "WATCHER_ERROR"),
             ErrorCode::OverrideBlocked => write!(f, "OVERRIDE_BLOCKED"),
+            ErrorCode::LockPoisoned => write!(f, "LOCK_POISONED"),
         }
     }
 }
@@ -281,6 +282,9 @@ pub enum ConfigError {
         path: String,
     },
 
+    #[error("Lock poisoned for resource '{resource}'")]
+    LockPoisoned { resource: String },
+
     /// Multi-source error.
     #[error("Multiple sources failed")]
     MultiSource {
@@ -355,6 +359,7 @@ impl ConfigError {
             ConfigError::InterpolationError { .. } => ErrorCode::InterpolationError,
             ConfigError::KeyError { .. } => ErrorCode::KeyError,
             ConfigError::CircularReference { .. } => ErrorCode::CircularReference,
+            ConfigError::LockPoisoned { .. } => ErrorCode::LockPoisoned,
             ConfigError::MultiSource { .. } => ErrorCode::SourceChainError,
             ConfigError::ConcurrencyConflict { .. } => ErrorCode::ConcurrencyConflict,
             ConfigError::KeyRotationFailed { .. } => ErrorCode::KeyRotationFailed,
@@ -502,6 +507,9 @@ impl ConfigError {
             ConfigError::KeyError { .. } => "Encryption key error".to_string(),
             ConfigError::CircularReference { path } => {
                 format!("Circular reference detected: {}", path)
+            }
+            ConfigError::LockPoisoned { resource } => {
+                format!("Lock poisoned for resource '{}'", resource)
             }
             ConfigError::MultiSource { source } => {
                 format!(
@@ -1021,7 +1029,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_error_message_url_with_credentials() {
-        let msg = "Failed to fetch https://user:secret123@example.com/config.json";
+        let msg = "Failed to fetch https://user:secret123@example.com/config.json"; // pragma: allowlist secret
         let sanitized = sanitize_error_message(msg);
         // Should not contain the credentials
         assert!(!sanitized.contains("user:secret123"));
@@ -1030,7 +1038,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_error_message_jwt_token() {
-        let msg = "Validation failed for token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let msg = "Validation failed for token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"; // pragma: allowlist secret
         let sanitized = sanitize_error_message(msg);
         assert!(!sanitized.contains("eyJ"));
         assert!(sanitized.contains("<jwt_token>"));
@@ -1038,7 +1046,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_error_message_aws_access_key() {
-        let msg = "AWS error: AKIAIOSFODNN7EXAMPLE is invalid";
+        let msg = "AWS error: AKIAIOSFODNN7EXAMPLE is invalid"; // pragma: allowlist secret
         let sanitized = sanitize_error_message(msg);
         assert!(!sanitized.contains("AKIAIOSFODNN7EXAMPLE"));
         assert!(sanitized.contains("<aws_access_key>"));
@@ -1115,7 +1123,7 @@ mod tests {
         let err = ConfigError::InvalidValue {
             key: "aws_access_key".to_string(),
             expected_type: "string".to_string(),
-            message: "AKIAIOSFODNN7EXAMPLE is invalid".to_string(),
+            message: "AKIAIOSFODNN7EXAMPLE is invalid".to_string(), // pragma: allowlist secret
         };
         assert!(err.is_sensitive()); // Contains AWS access key
     }

@@ -171,7 +171,12 @@ impl ConsulSource {
 
         // Get the current index
         let current_index = {
-            let guard = self.last_index.lock().unwrap();
+            let guard = self
+                .last_index
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_last_index".to_string(),
+                })?;
             *guard
         };
 
@@ -223,7 +228,12 @@ impl ConsulSource {
 
         if kv_responses.is_empty() {
             // Return cached value if no changes
-            let cached = self.cached_value.read().unwrap();
+            let cached = self
+                .cached_value
+                .read()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_cached_value".to_string(),
+                })?;
             if let Some(ref value) = *cached {
                 return Ok(value.clone());
             }
@@ -243,7 +253,12 @@ impl ConsulSource {
 
         // Update index if changed
         if max_index > current_index {
-            let mut guard = self.last_index.lock().unwrap();
+            let mut guard = self
+                .last_index
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_last_index".to_string(),
+                })?;
             *guard = max_index;
         }
 
@@ -307,7 +322,12 @@ impl ConsulSource {
 
         // Cache the result
         {
-            let mut cached = self.cached_value.write().unwrap();
+            let mut cached = self
+                .cached_value
+                .write()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_cached_value".to_string(),
+                })?;
             *cached = Some(result.clone());
         }
 
