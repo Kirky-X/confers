@@ -28,6 +28,10 @@ coverage/
 *.profraw
 lcov.info
 
+# Generated files (from examples)
+config-schema.json
+config-types.ts
+
 # Docs build
 docs/_book/
 docs/site/
