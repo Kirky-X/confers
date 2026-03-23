@@ -13,8 +13,8 @@ keywords = ["config", "configuration", "settings", "env"]
 categories = ["config", "development-tools::build-tools"]
 
 [dependencies]
-arc-swap = { version = "1.8", optional = true }
-async-nats = { version = "0.40", optional = true }
+arc-swap = { version = "1.9", optional = true }
+async-nats = { version = "0.46", optional = true }
 async-stream = { version = "0.3", optional = true }
 async-trait = { version = "0.1", optional = true }
 base64 = "0.22"
@@ -42,7 +42,7 @@ regex = "1.11"
 anyhow = "1"
 tokio = { version = "1", features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.0", features = ["preserve_order"], optional = true }
-tracing = "0.1"
+tracing = { version = "0.1", features = ["attributes"] }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.18", features = ["tls"], optional = true }
@@ -111,7 +111,6 @@ parallel = ["dep:rayon"]
 typescript-schema = ["dep:schemars"]
 security = ["encryption", "dep:hex"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
-tracing = []
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio"]
 cli = ["dep:clap"]
