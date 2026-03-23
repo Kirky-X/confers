@@ -3,6 +3,9 @@ name = "confers-fuzz"
 version = "0.0.0"
 edition = "2021"
 
+[package.metadata]
+cargo-fuzz = true
+
 [dependencies]
 confers = { path = "..", features = ["full"] }
 libfuzzer-sys = "0.4"

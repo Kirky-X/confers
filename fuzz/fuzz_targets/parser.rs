@@ -1,28 +1,25 @@
-//! Fuzz target for parser - tests TOML/JSON/YAML parsing with random inputs.
-
 #![no_main]
 
-use confers::loader::{parse_content, Format};
+use confers::{parse_content, Format, SourceId};
 use libfuzzer_sys::fuzz_target;
+use std::path::Path;
 
 fuzz_target!(|data: &[u8]| {
-    // Skip empty or very short inputs
     if data.len() < 2 {
         return;
     }
 
-    // Try parsing as TOML
+    let source = SourceId::new("fuzz");
+
     if let Ok(s) = std::str::from_utf8(data) {
-        let _ = parse_content(s, Format::Toml);
+        let _ = parse_content(s, Format::Toml, source.clone(), None::<&Path>);
     }
 
-    // Try parsing as JSON
     if let Ok(s) = std::str::from_utf8(data) {
-        let _ = parse_content(s, Format::Json);
+        let _ = parse_content(s, Format::Json, source.clone(), None::<&Path>);
     }
 
-    // Try parsing as YAML
     if let Ok(s) = std::str::from_utf8(data) {
-        let _ = parse_content(s, Format::Yaml);
+        let _ = parse_content(s, Format::Yaml, source, None::<&Path>);
     }
 });
