@@ -55,11 +55,11 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct ModuleConfig {
     /// The name of this module/group.
-    pub name: Arc<str>,
+    name: Arc<str>,
     /// Available profile paths as (profile_name, path).
-    pub paths: Vec<(Arc<str>, PathBuf)>,
+    paths: Vec<(Arc<str>, PathBuf)>,
     /// The currently active profile for this module.
-    pub active_profile: Arc<str>,
+    active_profile: Arc<str>,
 }
 
 impl ModuleConfig {
@@ -83,6 +83,33 @@ impl ModuleConfig {
         }
     }
 
+    /// Get the module name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn name_arc(&self) -> Arc<str> {
+        self.name.clone()
+    }
+
+    /// Get the active profile name.
+    pub fn active_profile(&self) -> &str {
+        &self.active_profile
+    }
+
+    pub(crate) fn active_profile_arc(&self) -> Arc<str> {
+        self.active_profile.clone()
+    }
+
+    /// Get list of available profiles.
+    pub fn profiles(&self) -> Vec<Arc<str>> {
+        self.paths.iter().map(|(n, _)| n.clone()).collect()
+    }
+
+    pub fn profile_count(&self) -> usize {
+        self.paths.len()
+    }
+
     /// Get a profile path by name.
     pub fn get_profile(&self, profile: &str) -> Option<&PathBuf> {
         self.paths
@@ -96,9 +123,30 @@ impl ModuleConfig {
         self.paths.iter().any(|(name, _)| name.as_ref() == profile)
     }
 
-    /// Get list of available profiles.
-    pub fn profiles(&self) -> Vec<Arc<str>> {
-        self.paths.iter().map(|(n, _)| n.clone()).collect()
+    pub fn set_active_profile(&mut self, profile: &str) -> Result<(), ConfigError> {
+        if !self.has_profile(profile) {
+            return Err(ConfigError::ModuleNotFound {
+                group: self.name.to_string(),
+                module: profile.to_string(),
+            });
+        }
+        self.active_profile = Arc::from(profile);
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn add_profile(&mut self, name: &str, path: PathBuf) {
+        self.paths.push((Arc::from(name), path));
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn remove_profile(&mut self, name: &str) -> bool {
+        if let Some(pos) = self.paths.iter().position(|(n, _)| n.as_ref() == name) {
+            self.paths.remove(pos);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -180,7 +228,7 @@ impl ModuleRegistry {
         default: Option<&str>,
     ) -> &mut Self {
         let config = ModuleConfig::new(name, profiles, default);
-        self.groups.insert(config.name.clone(), config);
+        self.groups.insert(config.name_arc(), config);
         self
     }
 
@@ -260,7 +308,7 @@ impl ModuleRegistry {
                 module: "active".to_string(),
             })?;
 
-        self.load_module(name, &module.active_profile, config)
+        self.load_module(name, module.active_profile(), config)
     }
 
     /// List all registered group names.
@@ -354,7 +402,7 @@ impl ModuleRegistry {
             });
         }
 
-        module.active_profile = Arc::from(profile);
+        module.set_active_profile(profile)?;
         Ok(())
     }
 
@@ -432,10 +480,10 @@ impl ModuleRegistry {
 
             if let Ok(profile) = std::env::var(&env_key) {
                 if module.has_profile(&profile) {
-                    module.active_profile = Arc::from(profile);
+                    module.set_active_profile(&profile).ok();
                     tracing::debug!(
                         group = name.as_ref(),
-                        profile = module.active_profile.as_ref(),
+                        profile = module.active_profile(),
                         env_key = env_key,
                         "Resolved module profile from environment"
                     );
@@ -483,7 +531,7 @@ impl ModuleRegistry {
 
         if let Ok(profile) = std::env::var(&env_key) {
             if module.has_profile(&profile) {
-                module.active_profile = Arc::from(profile);
+                module.set_active_profile(&profile).ok();
                 return Ok(true);
             } else {
                 tracing::warn!(
@@ -506,7 +554,7 @@ impl ModuleRegistry {
     pub fn active_profiles(&self) -> HashMap<Arc<str>, Arc<str>> {
         self.groups
             .iter()
-            .map(|(name, module)| (name.clone(), module.active_profile.clone()))
+            .map(|(name, module)| (name.clone(), module.active_profile_arc()))
             .collect()
     }
 
@@ -517,10 +565,10 @@ impl ModuleRegistry {
     /// Returns `Ok(())` if all active profiles are valid, or an error with details.
     pub fn validate_active_profiles(&self) -> ConfigResult<()> {
         for (name, module) in &self.groups {
-            let path = module.get_profile(&module.active_profile).ok_or_else(|| {
+            let path = module.get_profile(module.active_profile()).ok_or_else(|| {
                 ConfigError::ModuleNotFound {
                     group: name.to_string(),
-                    module: module.active_profile.to_string(),
+                    module: module.active_profile().to_string(),
                 }
             })?;
 
@@ -734,7 +782,7 @@ mod tests {
             ],
             Some("postgresql"),
         );
-        assert_eq!(config.active_profile.as_ref(), "postgresql");
+        assert_eq!(config.active_profile(), "postgresql");
 
         // Without default - should use first
         let config = ModuleConfig::new(
@@ -745,7 +793,7 @@ mod tests {
             ],
             None,
         );
-        assert_eq!(config.active_profile.as_ref(), "mysql");
+        assert_eq!(config.active_profile(), "mysql");
     }
 
     #[test]
@@ -853,8 +901,8 @@ mod tests {
         assert!(config.is_some());
 
         let config = config.unwrap();
-        assert_eq!(config.name.as_ref(), "database");
-        assert_eq!(config.active_profile.as_ref(), "mysql");
+        assert_eq!(config.name(), "database");
+        assert_eq!(config.active_profile(), "mysql");
 
         let nonexistent = registry.get("nonexistent");
         assert!(nonexistent.is_none());

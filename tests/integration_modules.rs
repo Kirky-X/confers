@@ -37,9 +37,9 @@ fn test_module_config_new() {
         Some("mysql"),
     );
 
-    assert_eq!(config.name.as_ref(), "database");
-    assert_eq!(config.active_profile.as_ref(), "mysql");
-    assert_eq!(config.paths.len(), 2);
+    assert_eq!(config.name(), "database");
+    assert_eq!(config.active_profile(), "mysql");
+    assert_eq!(config.profile_count(), 2);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn test_module_config_default_profile_with_default() {
         ],
         Some("postgresql"),
     );
-    assert_eq!(config.active_profile.as_ref(), "postgresql");
+    assert_eq!(config.active_profile(), "postgresql");
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn test_module_config_default_profile_without_default() {
         None,
     );
     // Should use first profile as default
-    assert_eq!(config.active_profile.as_ref(), "mysql");
+    assert_eq!(config.active_profile(), "mysql");
 }
 
 // ============================================================================
@@ -264,8 +264,8 @@ fn test_get_module_config() {
     assert!(config.is_some());
 
     let config = config.unwrap();
-    assert_eq!(config.name.as_ref(), "database");
-    assert_eq!(config.active_profile.as_ref(), "mysql");
+    assert_eq!(config.name(), "database");
+    assert_eq!(config.active_profile(), "mysql");
 
     let nonexistent = registry.get("nonexistent");
     assert!(nonexistent.is_none());

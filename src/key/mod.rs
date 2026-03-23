@@ -7,11 +7,13 @@ mod manager;
 mod rotation;
 #[cfg(feature = "encryption")]
 mod storage;
+mod version;
 
 pub use manager::{KeyInfo, KeyManager, KeyVersion};
 pub use rotation::{KeyRotationPolicy, KeyRotationService, RotationResult};
 #[cfg(feature = "encryption")]
 pub use storage::{ErrorSanitizer, KeyStorage, SanitizationLevel};
+pub use version::KeyFormatVersion;
 
 use crate::error::ConfigError;
 #[cfg(feature = "encryption")]

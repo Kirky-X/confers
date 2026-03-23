@@ -3,24 +3,25 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+mod prefix;
+pub use prefix::EncryptionPrefix;
+
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const ENC_PREFIX: &str = "enc:";
-
 pub(crate) fn is_encrypted_value(value: &str) -> bool {
-    value.starts_with(ENC_PREFIX) && value.len() > ENC_PREFIX.len()
+    EncryptionPrefix::Enc.is_prefixed(value) && value.len() > EncryptionPrefix::Enc.as_str().len()
 }
 
 pub(crate) fn validate_encrypted_format(value: &str) -> Result<(), EnvSecurityError> {
-    if !value.starts_with(ENC_PREFIX) {
+    if !EncryptionPrefix::Enc.is_prefixed(value) {
         return Err(EnvSecurityError::InvalidValueFormat {
             reason: "Missing 'enc:' prefix".to_string(),
         });
     }
 
-    let encrypted_content = &value[ENC_PREFIX.len()..];
+    let encrypted_content = EncryptionPrefix::Enc.strip(value).unwrap_or("");
     if encrypted_content.is_empty() {
         return Err(EnvSecurityError::InvalidValueFormat {
             reason: "Empty encrypted content".to_string(),
@@ -702,7 +703,7 @@ mod tests {
         let encrypted_value = "enc:ABC123XYZ789";
         assert!(validator.validate_env_value(encrypted_value).is_ok());
 
-        let secret_with_encrypted = "MY_SECRET";
+        let secret_with_encrypted = "MY_SECRET"; // pragma: allowlist secret
         assert!(validator
             .validate_env_name(secret_with_encrypted, Some(encrypted_value))
             .is_ok());
