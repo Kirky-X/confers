@@ -903,6 +903,137 @@ let injector = ConfigInjector::new()
 
 ---
 
+### Modules (Config Groups)
+
+The `modules` feature provides support for composable configuration groups, allowing runtime selection of configuration module combinations. This is useful for managing multiple environment configurations (e.g., database: mysql/postgresql, cache: redis/memory).
+
+#### ModuleConfig
+
+A configuration module containing profile paths and active profile.
+
+```rust
+use confers::modules::ModuleConfig;
+use std::path::PathBuf;
+
+let config = ModuleConfig::new(
+    "database",
+    vec![
+        ("mysql", PathBuf::from("conf/db/mysql.toml")),
+        ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+    ],
+    Some("mysql"),
+);
+```
+
+#### ModuleConfig Methods
+
+| Method | Parameters | Return Value | Description |
+|--------|------------|--------------|-------------|
+| `new(name, paths, default)` | `&str, Vec<(&str, PathBuf)>, Option<&str>` | `Self` | Create a new module config |
+| `name()` | - | `&str` | Get the module name |
+| `active_profile()` | - | `&str` | Get the active profile name |
+| `profiles()` | - | `Vec<Arc<str>>` | Get list of available profiles |
+| `profile_count()` | - | `usize` | Get the number of profiles |
+| `get_profile(profile)` | `&str` | `Option<&PathBuf>` | Get a profile path by name |
+| `has_profile(profile)` | `&str` | `bool` | Check if a profile exists |
+| `set_active_profile(profile)` | `&str` | `Result<(), ConfigError>` | Set the active profile (validated) |
+
+**Example:**
+
+```rust
+use confers::modules::ModuleConfig;
+use std::path::PathBuf;
+
+let mut config = ModuleConfig::new(
+    "database",
+    vec![
+        ("mysql", PathBuf::from("conf/db/mysql.toml")),
+        ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+    ],
+    Some("mysql"),
+);
+
+// Access module info
+assert_eq!(config.name(), "database");
+assert_eq!(config.active_profile(), "mysql");
+assert_eq!(config.profile_count(), 2);
+
+// Switch profile
+config.set_active_profile("postgresql")?;
+assert_eq!(config.active_profile(), "postgresql");
+```
+
+#### ModuleRegistry
+
+Registry for managing configuration groups (modules).
+
+```rust
+use confers::modules::ModuleRegistry;
+use std::path::PathBuf;
+
+let mut registry = ModuleRegistry::new();
+```
+
+#### ModuleRegistry Methods
+
+| Method | Parameters | Return Value | Description |
+|--------|------------|--------------|-------------|
+| `new()` | - | `Self` | Create a new empty module registry |
+| `with_capacity(capacity)` | `usize` | `Self` | Create with pre-allocated capacity |
+| `register_group(name, profiles, default)` | `&str, Vec<(&str, PathBuf)>, Option<&str>` | - | Register a new configuration group |
+| `get(name)` | `&str` | `Option<&ModuleConfig>` | Get a module config by name |
+| `set_active_profile(name, profile)` | `&str, &str` | `Result<(), ConfigError>` | Set active profile for a group |
+| `get_active_profile(name)` | `&str` | `Option<Arc<str>>` | Get active profile name for a group |
+| `active_profiles()` | - | `HashMap<Arc<str>, Arc<str>>` | Get all active profiles |
+| `load_module(name, profile, config)` | `&str, &str, &LoaderConfig` | `Result<AnnotatedValue, ConfigError>` | Load a module with specific profile |
+| `load_active(name, config)` | `&str, &LoaderConfig` | `Result<AnnotatedValue, ConfigError>` | Load using active profile |
+| `list_groups()` | - | `Vec<Arc<str>>` | List all registered group names |
+| `resolve_from_env(prefix)` | `Option<&str>` | `&mut Self` | Resolve profiles from environment variables |
+| `validate_active_profiles()` | - | `Result<(), ConfigError>` | Validate all active profiles have valid paths |
+
+**Example:**
+
+```rust
+use confers::modules::ModuleRegistry;
+use confers::loader::LoaderConfig;
+use std::path::PathBuf;
+
+let mut registry = ModuleRegistry::new();
+
+// Register configuration groups
+registry.register_group(
+    "database",
+    vec![
+        ("mysql", PathBuf::from("conf/db/mysql.toml")),
+        ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+    ],
+    Some("mysql"),
+);
+
+registry.register_group(
+    "cache",
+    vec![
+        ("redis", PathBuf::from("conf/cache/redis.toml")),
+        ("memory", PathBuf::from("conf/cache/memory.toml")),
+    ],
+    Some("redis"),
+);
+
+// Load module with specific profile
+let config = registry.load_module("database", "postgresql", &LoaderConfig::default())?;
+
+// Or load using active profile
+let config = registry.load_active("database", &LoaderConfig::default())?;
+
+// Switch profile
+registry.set_active_profile("database", "mysql")?;
+
+// Resolve from environment variable (e.g., DATABASE_PROFILE=postgresql)
+registry.resolve_from_env(Some(""));
+```
+
+---
+
 ### TypeScript Schema Generation
 
 The `typescript-schema` feature supports generating TypeScript definitions from Rust types.
@@ -1162,6 +1293,8 @@ Common error variants encountered during operations.
 | `IoError(std::io::Error)` | IO operation error | Check file permissions and disk space |
 | `MergeConflict { path: String, message: String }` | Merge conflict between sources | Check source priorities |
 | `MissingRequiredKey { key: String }` | Required key not found | Ensure all required keys are provided |
+| `LockPoisoned { resource: String }` | Mutex/RwLock poisoned due to panic | Retry operation or restart service |
+| `ModuleNotFound { group: String, module: String }` | Module or profile not found | Check module/profile name |
 
 </div>
 
