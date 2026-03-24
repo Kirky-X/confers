@@ -12,7 +12,6 @@ pub mod error;
 pub mod format;
 pub mod loader;
 pub mod merger;
-pub mod parser;
 pub mod traits;
 pub mod value;
 
