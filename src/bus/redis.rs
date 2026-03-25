@@ -53,7 +53,7 @@ impl ConfigBus for RedisConfigBus {
     async fn publish(&self, event: ConfigChangeEvent) -> ConfigResult<()> {
         let mut conn = self
             .client
-            .get_multiplexed_tokio_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
                 error_type: format!("redis_connection: {}", e),
@@ -105,7 +105,7 @@ async fn get_message(
     channel: &str,
 ) -> ConfigResult<Option<ConfigChangeEvent>> {
     let mut conn = client
-        .get_multiplexed_tokio_connection()
+        .get_multiplexed_async_connection()
         .await
         .map_err(|e| ConfigError::RemoteUnavailable {
             error_type: format!("redis_connection: {}", e),

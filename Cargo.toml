@@ -27,9 +27,9 @@ dashmap = { version = "6.1", optional = true }
 garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
 hkdf = { version = "0.12", optional = true }
-indexmap = { version = "2.11", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde"] }
 metrics = { version = "0.24", optional = true }
-notify-debouncer-full = { version = "0.6", optional = true }
+notify-debouncer-full = { version = "0.7", optional = true }
 reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", optional = true }
 secrecy = { version = "0.10", features = ["serde"], optional = true }
@@ -40,16 +40,16 @@ sha2 = { version = "0.10", optional = true }
 thiserror = "2.0"
 regex = "1.11"
 anyhow = "1"
-tokio = { version = "1", features = ["rt", "sync", "time", "fs"], optional = true }
-toml = { version = "1.0", features = ["preserve_order"], optional = true }
+tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
+toml = { version = "1.1", features = ["preserve_order"], optional = true }
 tracing = { version = "0.1", features = ["attributes"] }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.18", features = ["tls"], optional = true }
 consul-client = { version = "0.1.0-alpha.0", optional = true }
-redis = { version = "0.32", features = ["tokio-comp"], optional = true }
+redis = { version = "1.1", features = ["tokio-comp"], optional = true }
 url = "2.5"
-rayon = { version = "1.10", optional = true }
+rayon = { version = "1.11", optional = true }
 hex = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
 
@@ -76,24 +76,28 @@ base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"] }
 compact_str = { version = "0.9", features = ["serde"] }
-darling = "0.20"
-indexmap = { version = "2.11", features = ["serde"] }
+darling = "0.23"
+futures = "0.3"
+indexmap = { version = "2.13", features = ["serde"] }
 proc-macro2 = "1"
-proptest = "1.8"
+proptest = "1.11"
 quote = "1"
 regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_spanned = "1.1"
 serde_yaml_ng = "0.10"
 similar = "2"
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
-tokio = { version = "1", features = ["rt", "sync", "time", "fs"] }
-toml = { version = "1.0", features = ["preserve_order"] }
+tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"] }
+tokio-stream = "0.1"
+toml = { version = "1.1", features = ["preserve_order"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-trybuild = "1"
+trybuild = "1.0"
+serial_test = "3"
 
 [features]
 default = ["toml", "json", "env"]
@@ -165,9 +169,9 @@ consul-client = ["dep:consul-client"]
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["async_tokio"] }
-proptest = "1.8"
-tempfile = "3.27"
-tokio = { version = "1", features = ["full", "test-util"] }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [profile.release]
 opt-level = 3

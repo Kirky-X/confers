@@ -307,7 +307,26 @@ impl ConsulClient {
         &self,
         prefix: &str,
     ) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
-        let url = format!("{}/v1/kv/{}?recurse=true", self.config.address, prefix);
+        let mut url = format!("{}/v1/kv/{}?recurse=true", self.config.address, prefix);
+
+        // Add datacenter if configured
+        if let Some(ref dc) = self.config.datacenter {
+            if url.contains('?') {
+                url.push_str(&format!("&dc={}", dc));
+            } else {
+                url.push_str(&format!("?dc={}", dc));
+            }
+        }
+
+        // Add namespace if configured
+        if let Some(ref ns) = self.config.namespace {
+            if url.contains('?') {
+                url.push_str(&format!("&ns={}", ns));
+            } else {
+                url.push_str(&format!("?ns={}", ns));
+            }
+        }
+
         info!("Reading Consul KV prefix: {}", prefix);
 
         let mut request = self.client.get(&url);
@@ -315,16 +334,6 @@ impl ConsulClient {
         // Add ACL token if configured
         if let Some(ref token) = self.config.token {
             request = request.header("X-Consul-Token", token);
-        }
-
-        // Add datacenter if configured
-        if let Some(ref dc) = self.config.datacenter {
-            request = request.query(&[("dc", dc)]);
-        }
-
-        // Add namespace if configured
-        if let Some(ref ns) = self.config.namespace {
-            request = request.query(&[("ns", ns)]);
         }
 
         let response = request.send().await?;
