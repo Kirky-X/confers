@@ -356,6 +356,10 @@ impl std::fmt::Display for Format {
     }
 }
 
+/// Detect configuration format from file path extension.
+///
+/// Returns `Some(Format)` if the extension matches a known format,
+/// or `None` if the format cannot be determined.
 pub fn detect_format_from_path(path: &Path) -> Option<Format> {
     match path.extension()?.to_str()?.to_lowercase().as_str() {
         "toml" => Some(Format::Toml),
@@ -366,6 +370,13 @@ pub fn detect_format_from_path(path: &Path) -> Option<Format> {
     }
 }
 
+/// Detect configuration format from file content.
+///
+/// Uses heuristic analysis of the content to determine the format.
+/// Checks for format-specific patterns like JSON braces, YAML markers,
+/// TOML key-value syntax, and INI section headers.
+///
+/// Returns `Some(Format)` if detected, or `None` if unknown.
 pub fn detect_format_from_content(content: &str) -> Option<Format> {
     let trimmed = content.trim_start();
     let first_char = trimmed.chars().next()?;
@@ -413,6 +424,17 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
     None
 }
 
+/// Load and parse a configuration file from disk.
+///
+/// Applies path traversal protection and size limits before parsing.
+/// Uses content-based format detection if not specified in the path.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Path traversal attempt is detected
+/// - File size exceeds the configured limit
+/// - File cannot be read or parsed
 pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
     // Path traversal protection: validate the path before loading
     let validated_path =

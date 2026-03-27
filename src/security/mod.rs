@@ -10,10 +10,18 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+/// Check if a value appears to be encrypted (has "enc:" prefix with content).
+///
+/// Used to identify values that should bypass normal validation rules,
+/// as encrypted values contain safely-encoded content.
 pub(crate) fn is_encrypted_value(value: &str) -> bool {
     EncryptionPrefix::Enc.is_prefixed(value) && value.len() > EncryptionPrefix::Enc.as_str().len()
 }
 
+/// Validate the format of an encrypted value.
+///
+/// Checks for proper "enc:" prefix and valid base64-encoded content.
+/// Returns an error if the format is invalid.
 pub(crate) fn validate_encrypted_format(value: &str) -> Result<(), EnvSecurityError> {
     if !EncryptionPrefix::Enc.is_prefixed(value) {
         return Err(EnvSecurityError::InvalidValueFormat {
@@ -40,6 +48,7 @@ pub(crate) fn validate_encrypted_format(value: &str) -> Result<(), EnvSecurityEr
     Ok(())
 }
 
+/// Compile a regex pattern, returning an error if the pattern is invalid.
 pub(crate) fn compile_pattern(pattern: &str) -> Result<Regex, EnvSecurityError> {
     Regex::new(pattern).map_err(|e| EnvSecurityError::InvalidRegex {
         pattern: pattern.to_string(),
@@ -47,6 +56,10 @@ pub(crate) fn compile_pattern(pattern: &str) -> Result<Regex, EnvSecurityError> 
     })
 }
 
+/// Get the list of allowed patterns for environment variable names.
+///
+/// Returns a lazily-initialized static vector of compiled regex patterns.
+/// Patterns define valid naming conventions (e.g., uppercase with underscores).
 pub(crate) fn get_allowed_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
     static ALLOWED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
     match ALLOWED_PATTERNS.get_or_init(|| {
@@ -63,6 +76,10 @@ pub(crate) fn get_allowed_patterns() -> Result<&'static Vec<Regex>, EnvSecurityE
     }
 }
 
+/// Get the list of blocked patterns for environment variable names.
+///
+/// Returns a lazily-initialized static vector of compiled regex patterns.
+/// Names matching these patterns are rejected (e.g., PATH, HOME, SECRET_*).
 pub(crate) fn get_blocked_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
     static BLOCKED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
     match BLOCKED_PATTERNS.get_or_init(|| {
@@ -87,6 +104,10 @@ pub(crate) fn get_blocked_patterns() -> Result<&'static Vec<Regex>, EnvSecurityE
     }
 }
 
+/// Get the string representations of allowed pattern rules.
+///
+/// Returns static references to the raw pattern strings for error messages
+/// and documentation purposes.
 pub(crate) fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
     static ALLOWED_PATTERNS_STR: OnceLock<Vec<&'static str>> = OnceLock::new();
     ALLOWED_PATTERNS_STR.get_or_init(|| {
@@ -98,6 +119,10 @@ pub(crate) fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
     })
 }
 
+/// Get the list of dangerous patterns that should be rejected in values.
+///
+/// Returns static references to patterns that indicate potential command
+/// injection or shell expansion attempts (e.g., `;`, `$`, `|`).
 pub(crate) fn get_dangerous_patterns() -> &'static Vec<&'static str> {
     static DANGEROUS_PATTERNS: OnceLock<Vec<&'static str>> = OnceLock::new();
     DANGEROUS_PATTERNS.get_or_init(|| {

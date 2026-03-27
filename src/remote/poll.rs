@@ -30,26 +30,6 @@ use std::time::Duration;
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Blocked IP ranges for SSRF protection.
-/// Includes private networks, loopback, and link-local addresses.
-#[allow(dead_code)]
-const BLOCKED_IP_RANGES: &[&str] = &[
-    "127.0.0.0/8",     // Loopback
-    "10.0.0.0/8",      // Private
-    "172.16.0.0/12",   // Private
-    "192.168.0.0/16",  // Private
-    "169.254.0.0/16",  // Link-local
-    "0.0.0.0/8",       // Current network
-    "100.64.0.0/10",   // Carrier-grade NAT
-    "192.0.0.0/24",    // IETF Protocol assignments
-    "192.0.2.0/24",    // Documentation
-    "198.51.100.0/24", // Documentation
-    "203.0.113.0/24",  // Documentation
-    "fc00::/7",        // IPv6 unique local
-    "fe80::/10",       // IPv6 link-local
-    "::1/128",         // IPv6 loopback
-];
-
 /// Check if an IP address is in a blocked range.
 pub fn is_ip_blocked(ip: IpAddr) -> bool {
     // Block IPv4-mapped IPv6 addresses (::ffff:0:0/96)
@@ -559,15 +539,7 @@ fn parse_remote_content(
 
 /// Check if a reqwest error is likely retryable.
 fn is_retryable_error(error: &reqwest::Error) -> bool {
-    if error.is_timeout() || error.is_connect() {
-        return true;
-    }
-    if let Some(url) = error.url() {
-        if url.host_str() == Some("localhost") || url.host_str() == Some("127.0.0.1") {
-            return true;
-        }
-    }
-    false
+    error.is_timeout() || error.is_connect()
 }
 
 // =============================================================================
