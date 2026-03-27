@@ -226,3 +226,8 @@ required-features = ["interpolation"]
 name = "cow_efficiency_bench"
 harness = false
 path = "benches/cow_efficiency_bench.rs"
+
+[[bin]]
+name = "confers"
+path = "src/cli/main.rs"
+required-features = ["cli"]

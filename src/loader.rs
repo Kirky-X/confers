@@ -754,7 +754,7 @@ pub fn parse_yaml_value(
 pub fn parse_ini(
     content: &str,
     source: SourceId,
-    path: Option<&Path>,
+    _path: Option<&Path>,
 ) -> ConfigResult<AnnotatedValue> {
     let mut sections: indexmap::IndexMap<String, indexmap::IndexMap<String, String>> =
         indexmap::IndexMap::new();
