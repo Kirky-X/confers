@@ -22,10 +22,10 @@
 //! struct AppConfig {
 //!     #[config(default = "localhost")]
 //!     host: String,
-//!     
+//!
 //!     #[config(default = 8080)]
 //!     port: u16,
-//!     
+//!
 //!     #[config(sensitive = true)]
 //!     api_key: Option<String>,
 //! }
@@ -46,7 +46,7 @@
 //! struct Config {
 //!     #[config(sensitive = true)]
 //!     password: String,  // Automatically uses SecretString
-//!     
+//!
 //!     #[config(encrypt = "xchacha20")]
 //!     secret_key: String,  // Encrypted at rest
 //! }
