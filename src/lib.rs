@@ -48,6 +48,9 @@ pub mod context;
 #[cfg(feature = "config-bus")]
 pub mod bus;
 
+#[cfg(feature = "cli")]
+pub mod cli;
+
 #[cfg(feature = "typescript-schema")]
 pub mod schema;
 

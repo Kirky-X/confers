@@ -3,8 +3,6 @@
 //! This tool provides runtime configuration observability for confers,
 //! answering questions like "Where did this value come from?" and "Why is it this value?".
 
-// Allow MSRV warnings - code uses PathBuf::display() which is stable since 1.87
-// but the crate claims to support 1.81. The code still compiles and works.
 #![allow(clippy::incompatible_msrv)]
 
 use anyhow::{Context, Result};
@@ -12,12 +10,12 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use confers::AnnotatedValue;
+use crate::AnnotatedValue;
 
 const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
 
 /// Load environment variables from a .env file
-fn load_env_file(path: &PathBuf) -> Result<()> {
+pub fn load_env_file(path: &PathBuf) -> Result<()> {
     if !path.exists() {
         anyhow::bail!("Environment file not found: {}", path.display());
     }
@@ -179,7 +177,8 @@ enum SnapshotCommands {
     },
 }
 
-fn main() -> Result<()> {
+/// Run the CLI entry point
+pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     if let Some(env_file) = &cli.env_file {
@@ -246,7 +245,7 @@ fn cmd_inspect(
     format: &str,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use confers::ConfigBuilder;
+    use crate::ConfigBuilder;
 
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
@@ -325,7 +324,7 @@ fn cmd_inspect(
 /// Recursively print configuration values
 fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool) {
     match &value.inner {
-        confers::value::ConfigValue::Map(map) => {
+        crate::value::ConfigValue::Map(map) => {
             for (key, val) in map.iter() {
                 let full_key = if prefix.is_empty() {
                     key.clone()
@@ -334,7 +333,7 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
                 };
 
                 match &val.inner {
-                    confers::value::ConfigValue::Map(_) => {
+                    crate::value::ConfigValue::Map(_) => {
                         print_config_value(val, &full_key, show_conflicts);
                     }
                     _ => {
@@ -367,7 +366,7 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
 }
 
 /// Format location information for display
-fn format_location(location: &Option<confers::value::SourceLocation>) -> String {
+fn format_location(location: &Option<crate::value::SourceLocation>) -> String {
     match location {
         Some(loc) => format!("line {}, col {}", loc.line, loc.column),
         None => "-".to_string(),
@@ -381,7 +380,7 @@ fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a Ann
 
     for part in parts {
         match &current.inner {
-            confers::value::ConfigValue::Map(map) => {
+            crate::value::ConfigValue::Map(map) => {
                 current = map.get(part)?;
             }
             _ => return None,
@@ -392,9 +391,9 @@ fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a Ann
 }
 
 /// Format a value for display
-fn format_value(value: &confers::value::ConfigValue) -> String {
+fn format_value(value: &crate::value::ConfigValue) -> String {
     match value {
-        confers::value::ConfigValue::String(s) => {
+        crate::value::ConfigValue::String(s) => {
             // Truncate long strings
             if s.len() > 20 {
                 format!("\"{}...\"", &s[..17])
@@ -402,14 +401,14 @@ fn format_value(value: &confers::value::ConfigValue) -> String {
                 format!("\"{}\"", s)
             }
         }
-        confers::value::ConfigValue::I64(n) => n.to_string(),
-        confers::value::ConfigValue::U64(n) => n.to_string(),
-        confers::value::ConfigValue::F64(n) => n.to_string(),
-        confers::value::ConfigValue::Bool(b) => b.to_string(),
-        confers::value::ConfigValue::Null => "[null]".to_string(),
-        confers::value::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
-        confers::value::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
-        confers::value::ConfigValue::Map(obj) => {
+        crate::value::ConfigValue::I64(n) => n.to_string(),
+        crate::value::ConfigValue::U64(n) => n.to_string(),
+        crate::value::ConfigValue::F64(n) => n.to_string(),
+        crate::value::ConfigValue::Bool(b) => b.to_string(),
+        crate::value::ConfigValue::Null => "[null]".to_string(),
+        crate::value::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
+        crate::value::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
+        crate::value::ConfigValue::Map(obj) => {
             let keys: Vec<_> = obj.keys().collect();
             format!("{{ {} keys }}", keys.len())
         }
@@ -424,7 +423,7 @@ fn cmd_validate(
     format: &str,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use confers::ConfigBuilder;
+    use crate::ConfigBuilder;
 
     let mut builder = ConfigBuilder::<serde_json::Value>::new();
 
@@ -444,7 +443,7 @@ fn cmd_validate(
         Ok(annotated_config) => {
             let mut issues = Vec::new();
 
-            if let confers::value::ConfigValue::Map(map) = &annotated_config.inner {
+            if let crate::value::ConfigValue::Map(map) = &annotated_config.inner {
                 check_required_keys(map, &mut issues);
                 check_types(map, &mut issues);
             }
@@ -509,7 +508,7 @@ fn check_required_keys(
 ) {
     // Check for server configuration
     if let Some(server) = obj.get("server") {
-        if let confers::value::ConfigValue::Map(server_map) = &server.inner {
+        if let crate::value::ConfigValue::Map(server_map) = &server.inner {
             if !server_map.contains_key("host") && !server_map.contains_key("port") {
                 issues.push("Server configuration missing host/port".to_string());
             }
@@ -518,7 +517,7 @@ fn check_required_keys(
 
     // Check for database configuration
     if let Some(db) = obj.get("database") {
-        if let confers::value::ConfigValue::Map(db_map) = &db.inner {
+        if let crate::value::ConfigValue::Map(db_map) = &db.inner {
             if !db_map.contains_key("url") && !db_map.contains_key("host") {
                 issues.push("Database configuration missing connection details".to_string());
             }
@@ -527,7 +526,7 @@ fn check_required_keys(
 
     // Check for empty required sections
     for (key, value) in obj.iter() {
-        if matches!(value.inner, confers::value::ConfigValue::Null) {
+        if matches!(value.inner, crate::value::ConfigValue::Null) {
             issues.push(format!("Configuration key '{}' has null value", key));
         }
     }
@@ -537,7 +536,7 @@ fn check_required_keys(
 fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
     // Check for suspicious string values that might be numbers
     for (key, value) in obj.iter() {
-        if let confers::value::ConfigValue::String(s) = &value.inner {
+        if let crate::value::ConfigValue::String(s) = &value.inner {
             // Check if string looks like a number
             if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
                 issues.push(format!(
@@ -566,8 +565,8 @@ fn cmd_export(
     raw: bool,
     allow_absolute_paths: bool,
 ) -> Result<()> {
+    use crate::ConfigBuilder;
     use chrono::Utc;
-    use confers::ConfigBuilder;
 
     if raw {
         eprintln!("⚠️  警告: 使用 --raw 选项将导出未脱敏的敏感数据！");
@@ -672,7 +671,7 @@ fn cmd_diff(
     sanitize: bool,
     _allow_absolute_paths: bool,
 ) -> Result<()> {
-    use confers::loader;
+    use crate::loader;
 
     println!("Configuration Diff");
     println!("=================");
@@ -685,7 +684,7 @@ fn cmd_diff(
         &base_content,
         loader::detect_format_from_path(base)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for base config"))?,
-        confers::value::SourceId::new(base.to_string_lossy().as_ref()),
+        crate::value::SourceId::new(base.to_string_lossy().as_ref()),
         Some(base),
     )?;
 
@@ -696,7 +695,7 @@ fn cmd_diff(
         &overlay_content,
         loader::detect_format_from_path(overlay)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for overlay config"))?,
-        confers::value::SourceId::new(overlay.to_string_lossy().as_ref()),
+        crate::value::SourceId::new(overlay.to_string_lossy().as_ref()),
         Some(overlay),
     )?;
 

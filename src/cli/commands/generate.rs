@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use confers::ConfigError;
+use crate::ConfigError;
 use serde::Serialize;
 use std::fs;
 
@@ -121,7 +121,7 @@ impl GenerateCommand {
             match format.to_lowercase().as_str() {
                 "json" => serde_json::to_string_pretty(&value)
                     .map_err(|e| ConfigError::SerializationError(e.to_string()))?,
-                "yaml" | "yml" => serde_yaml::to_string(&value)
+                "yaml" | "yml" => serde_yaml_ng::to_string(&value)
                     .map_err(|e| ConfigError::SerializationError(e.to_string()))?,
                 "ini" => {
                     // Check if the value is flat enough for INI

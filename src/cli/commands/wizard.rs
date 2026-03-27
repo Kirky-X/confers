@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use confers::ConfigError;
+use crate::ConfigError;
 use std::io::{self, Write};
 
 type ValidationFn = Box<dyn Fn(&str) -> bool + Send>;
@@ -309,7 +309,7 @@ mod tests {
             "2.0.0",
             "0.0.0.0",
             "3000",
-            "postgres://user:pass@localhost:5432/testdb",
+            "postgres://localhost:5432/testdb",
             "debug",
             "",
         ];
@@ -321,7 +321,7 @@ mod tests {
         assert_eq!(config.server.port, 3000);
         assert_eq!(
             config.database.url,
-            "postgres://user:pass@localhost:5432/testdb"
+            "postgres://localhost:5432/testdb"
         );
         assert_eq!(config.logging.level, "debug");
         assert!(config.output_path.is_none());

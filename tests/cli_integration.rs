@@ -1,5 +1,7 @@
 //! Integration tests for confers-cli
 
+#![cfg(feature = "cli")]
+
 use serial_test::serial;
 use std::fs;
 use std::io::Write;
@@ -7,7 +9,7 @@ use tempfile::TempDir;
 
 fn run_confers(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("cargo");
-    cmd.args(&["run", "-p", "confers-cli", "--"]);
+    cmd.args(&["run", "--features", "cli", "--"]);
     cmd.args(args);
     cmd
 }
@@ -24,7 +26,7 @@ fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path
 #[serial]
 fn test_cli_compiles() {
     let output = std::process::Command::new("cargo")
-        .args(&["build", "-p", "confers-cli"])
+        .args(&["build", "--features", "cli"])
         .output()
         .expect("Failed to execute cargo build");
 
