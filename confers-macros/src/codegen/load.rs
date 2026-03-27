@@ -97,8 +97,8 @@ fn generate_load_method(
                                     env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                                 }
                             }
-                            Err(e) => {
-                                eprintln!("Warning: Invalid secret file path detected, skipping file source");
+                            Err(_) => {
+                                // Silently skip invalid secret file paths
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
@@ -197,8 +197,8 @@ fn generate_load_sync_method(
                                     env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
                                 }
                             }
-                            Err(e) => {
-                                eprintln!("Warning: Invalid secret file path detected, skipping file source");
+                            Err(_) => {
+                                // Silently skip invalid secret file paths
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
