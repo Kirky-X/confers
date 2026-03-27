@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/**/*.rs'
+      - 'macros/src/**/*.rs'
       - 'docs/adr/*.md'
 
 concurrency:
@@ -21,7 +22,7 @@ jobs:
       - name: Check ADR references in code
         run: |
           # Find all ADR references in source code
-          ADR_REFS=$(grep -rohE "ADR-[0-9]+" src/ --include="*.rs" 2>/dev/null | sort -u || true)
+          ADR_REFS=$(grep -rohE "ADR-[0-9]+" src/ macros/src/ --include="*.rs" 2>/dev/null | sort -u || true)
 
           if [ -z "$ADR_REFS" ]; then
             echo "No ADR references found in code"
