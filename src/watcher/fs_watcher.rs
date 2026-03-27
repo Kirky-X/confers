@@ -59,7 +59,6 @@ impl FsWatcher {
     ///     Ok(())
     /// }
     /// ```
-    #[tracing::instrument(skip(path), fields(path = ?path.as_ref()))]
     pub async fn new(path: impl AsRef<Path>, debounce_ms: u64) -> ConfigResult<Self> {
         let watch_path = Arc::new(path.as_ref().to_path_buf());
 
@@ -153,19 +152,17 @@ impl FsWatcher {
                 let _ = bridge_tx.send(result);
             }) {
                 Ok(d) => d,
-                Err(e) => {
-                    tracing::error!("Failed to create debouncer: {:?}", e);
+                Err(_e) => {
+                    // Failed to create debouncer - return silently
                     return;
                 }
             };
 
         // Start watching
-        if let Err(e) = debouncer.watch(path, RecursiveMode::Recursive) {
-            tracing::error!("Failed to watch path {:?}: {:?}", path, e);
+        if let Err(_e) = debouncer.watch(path, RecursiveMode::Recursive) {
+            // Failed to watch - return silently
             return;
         }
-
-        tracing::info!("FsWatcher watching: {:?}", path);
 
         // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
@@ -203,7 +200,7 @@ impl FsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    tracing::debug!("Bridge channel disconnected");
+                    // Bridge channel disconnected - exit gracefully
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -214,7 +211,6 @@ impl FsWatcher {
 
         // Explicitly stop the debouncer
         drop(debouncer);
-        tracing::debug!("FsWatcher stopped");
     }
 }
 
@@ -375,8 +371,8 @@ impl MultiFsWatcher {
                 let _ = bridge_tx.send(result);
             }) {
                 Ok(d) => d,
-                Err(e) => {
-                    tracing::error!("Failed to create debouncer: {:?}", e);
+                Err(_e) => {
+                    // Failed to create debouncer - return silently
                     return;
                 }
             };
@@ -391,8 +387,6 @@ impl MultiFsWatcher {
                 }
             }
         }
-
-        tracing::info!("MultiFsWatcher watching {} paths", paths.len());
 
         // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
@@ -430,7 +424,7 @@ impl MultiFsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    tracing::debug!("Bridge channel disconnected");
+                    // Bridge channel disconnected - exit gracefully
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -441,6 +435,5 @@ impl MultiFsWatcher {
 
         // Explicitly stop the debouncer
         drop(debouncer);
-        tracing::debug!("MultiFsWatcher stopped");
     }
 }

@@ -481,21 +481,8 @@ impl ModuleRegistry {
             if let Ok(profile) = std::env::var(&env_key) {
                 if module.has_profile(&profile) {
                     module.set_active_profile(&profile).ok();
-                    tracing::debug!(
-                        group = name.as_ref(),
-                        profile = module.active_profile(),
-                        env_key = env_key,
-                        "Resolved module profile from environment"
-                    );
-                } else {
-                    tracing::warn!(
-                        group = name.as_ref(),
-                        requested = profile,
-                        available = ?module.profiles(),
-                        env_key = env_key,
-                        "Environment variable specifies non-existent profile, ignoring"
-                    );
                 }
+                // Silently ignore non-existent profile - not an error condition
             }
         }
 
@@ -533,14 +520,8 @@ impl ModuleRegistry {
             if module.has_profile(&profile) {
                 module.set_active_profile(&profile).ok();
                 return Ok(true);
-            } else {
-                tracing::warn!(
-                    group = group_name,
-                    requested = profile,
-                    available = ?module.profiles(),
-                    "Environment variable specifies non-existent profile"
-                );
             }
+            // Silently ignore non-existent profile - not an error condition
         }
 
         Ok(false)

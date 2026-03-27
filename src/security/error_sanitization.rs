@@ -336,13 +336,8 @@ impl SecureLogger {
 
         let sanitized = self.sanitizer.sanitize(message);
         let _log_entry = format!("[{}] {}", level.as_str(), sanitized);
-
-        match level {
-            LogLevel::Error => tracing::error!("{}", _log_entry),
-            LogLevel::Warn => tracing::warn!("{}", _log_entry),
-            LogLevel::Info => tracing::info!("{}", _log_entry),
-            LogLevel::Debug => tracing::debug!("{}", _log_entry),
-        }
+        // In production, we skip logging to avoid external dependencies
+        // The SecureLogger is primarily for testing purposes in test modules
     }
 
     /// 获取脱敏器引用

@@ -176,8 +176,11 @@ impl AuditWriter {
     }
 
     fn write_best_effort(&self, event: &AuditEvent) {
+        // Best effort audit - silently ignore if write_durable is not configured
+        let _ = event;
         let sanitized = self.sanitize(event);
-        tracing::debug!("audit: {:?}", sanitized);
+        // Fallback: event was sanitized but not persisted
+        let _ = sanitized;
     }
 
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {

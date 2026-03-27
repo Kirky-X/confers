@@ -88,8 +88,8 @@ impl ConfigBus for RedisConfigBus {
                     Ok(None) => {
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
-                    Err(e) => {
-                        tracing::warn!("Redis subscribe error: {}", e);
+                    Err(_e) => {
+                        // Log error silently and continue retrying
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     }
                 }

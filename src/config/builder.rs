@@ -288,7 +288,6 @@ where
     /// Build the configuration synchronously.
     ///
     /// This method collects all sources and merges them into a final configuration.
-    #[tracing::instrument(skip(self))]
     pub fn build(self) -> ConfigResult<T> {
         self.do_build()
     }
@@ -297,7 +296,6 @@ where
     ///
     /// This method returns the raw AnnotatedValue which contains source location
     /// information (line and column numbers) for each value.
-    #[tracing::instrument(skip(self))]
     pub fn build_annotated(self) -> ConfigResult<AnnotatedValue> {
         self.do_build_annotated()
     }
@@ -493,7 +491,7 @@ where
                         // access to the original sources. This is a known limitation.
                         // For proper hot reload, users should call build() again manually
                         // when they detect file changes through their own watcher.
-                        tracing::warn!("File change detected, but automatic rebuild requires manual build() call");
+                        // Silently continue - caller should check for file changes
                     }
                 }
             });

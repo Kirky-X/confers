@@ -413,7 +413,6 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
     None
 }
 
-#[tracing::instrument(skip(config), fields(path = ?path))]
 pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
     // Path traversal protection: validate the path before loading
     let validated_path =
@@ -450,7 +449,6 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
     parse_content(&content, format, source, Some(&validated_path))
 }
 
-#[tracing::instrument(skip(content), fields(format = ?format, path = ?path))]
 pub fn parse_content(
     content: &str,
     format: Format,
@@ -793,16 +791,7 @@ pub fn parse_ini(
         invalid_lines.push((line_num + 1, line.to_string(), "invalid INI syntax"));
     }
 
-    // Log warnings for invalid lines if any were found
-    if !invalid_lines.is_empty() {
-        tracing::warn!(
-            "INI parsing found {} potentially invalid line(s) in {:?}: {:?}",
-            invalid_lines.len(),
-            path.map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| source.as_str().to_string()),
-            invalid_lines.iter().take(5).collect::<Vec<_>>()
-        );
-    }
+    // INI parsing completed - invalid lines were tracked but not logged in production
 
     // Build the map manually to avoid closure borrow issues
     let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();

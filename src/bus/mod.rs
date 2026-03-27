@@ -91,7 +91,7 @@ impl ConfigBus for InMemoryBus {
         match self.sender.send(event) {
             Ok(_) => Ok(()),
             Err(_) => {
-                tracing::warn!("No active subscribers for config change event");
+                // No active subscribers - this is not an error, just silently ignore
                 Ok(())
             }
         }

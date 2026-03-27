@@ -134,8 +134,8 @@ impl ConfigBus for NatsConfigBus {
                         return Some(event);
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("NATS message error: {}", e);
+                Err(_e) => {
+                    // Silently ignore message errors and continue
                 }
             }
             None

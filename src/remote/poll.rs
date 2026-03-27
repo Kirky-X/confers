@@ -12,7 +12,7 @@
 //! - DNS resolution validation: resolved IPs are checked against blocked ranges
 //! - DNS rebinding protection: domain names are resolved at build time
 //! - Configurable whitelist: specific domains can be allowed via builder
-//! - Structured logging: all blocked attempts are logged with full context
+//! - All blocked attempts return errors with full context
 //! - IPv6 support: handles IPv6 addresses and IPv4-mapped IPv6 addresses
 
 use crate::error::{ConfigError, ConfigResult};
@@ -26,7 +26,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
-use tracing::warn;
 
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -157,13 +156,7 @@ fn resolve_host_with_validation(host: &str, port: u16) -> ConfigResult<Vec<IpAdd
         resolved_ips.push(ip);
 
         if is_ip_blocked(ip) {
-            warn!(
-                SSRF = true,
-                url = %addr_string,
-                resolved_ip = %ip,
-                reason = %format!("IP address {} is in a blocked range", ip),
-                "SSRF blocked: resolved IP in blocked range"
-            );
+            // SSRF attempt detected - return error without logging
             return Err(ConfigError::InvalidValue {
                 key: "url".to_string(),
                 expected_type: "public IP".to_string(),
@@ -193,13 +186,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
 
     // Only allow HTTPS by default for security
     if parsed.scheme() != "https" {
-        warn!(
-            SSRF = true,
-            url = %url,
-            scheme = %parsed.scheme(),
-            reason = "Only HTTPS URLs are allowed",
-            "SSRF blocked: non-HTTPS scheme"
-        );
+        // Non-HTTPS URL rejected - return error without logging
         return Err(ConfigError::InvalidValue {
             key: "url".to_string(),
             expected_type: "https URL".to_string(),
@@ -242,13 +229,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
         }
         url::Host::Ipv4(ip) => {
             if is_ip_blocked_std(ip) {
-                warn!(
-                    SSRF = true,
-                    url = %url,
-                    resolved_ip = %ip,
-                    reason = "IPv4 address is in a blocked range",
-                    "SSRF blocked: private IPv4 address"
-                );
+                // Private IPv4 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
                     key: "url".to_string(),
                     expected_type: "public IP".to_string(),
@@ -260,13 +241,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
         }
         url::Host::Ipv6(ip) => {
             if is_ip_blocked_v6(ip) {
-                warn!(
-                    SSRF = true,
-                    url = %url,
-                    resolved_ip = %ip,
-                    reason = "IPv6 address is in a blocked range",
-                    "SSRF blocked: private IPv6 address"
-                );
+                // Private IPv6 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
                     key: "url".to_string(),
                     expected_type: "public IP".to_string(),

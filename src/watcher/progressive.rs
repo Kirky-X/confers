@@ -151,7 +151,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                         return Err(ConfigError::ReloadRolledBack { reason });
                     }
                     HealthStatus::Degraded { reason } => {
-                        tracing::warn!("Canary degraded: {}", reason);
+                        // Canary degraded but not critical - continue monitoring
+                        let _ = reason;
                     }
                     HealthStatus::Healthy => {}
                 }
@@ -185,7 +186,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                         });
                     }
                     HealthStatus::Degraded { reason } => {
-                        tracing::warn!("Linear step {} degraded: {}", step + 1, reason);
+                        // Linear step degraded but not critical - continue to next step
+                        let _ = reason;
                     }
                     HealthStatus::Healthy => {}
                 }

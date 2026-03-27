@@ -324,7 +324,8 @@ impl ZeroizeOnDrop for SecureString {}
 
 impl Clone for SecureString {
     fn clone(&self) -> Self {
-        tracing::warn!("Cloning SecureString - this may leak sensitive data");
+        // Note: Cloning SecureString is generally discouraged but allowed
+        // for backward compatibility
 
         Self {
             data: self.data.clone(),

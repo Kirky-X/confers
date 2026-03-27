@@ -741,11 +741,7 @@ mod ini_converter {
             }
 
             if !invalid_lines.is_empty() {
-                tracing::warn!(
-                    "INI parsing found {} potentially invalid line(s): {:?}",
-                    invalid_lines.len(),
-                    invalid_lines.iter().take(5).collect::<Vec<_>>()
-                );
+                // INI parsing issues found but continuing with valid lines only
             }
 
             let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();

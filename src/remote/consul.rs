@@ -98,7 +98,7 @@ impl ConsulSourceBuilder {
         #[cfg(not(debug_assertions))]
         {
             if skip {
-                tracing::warn!("TLS verification skip is not allowed in release builds");
+                // TLS skip not allowed in release - silently ignored
             }
             self.tls_skip_verify = false;
         }
