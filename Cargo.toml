@@ -22,7 +22,7 @@ chacha20poly1305 = { version = "0.10", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 compact_str = { version = "0.9", features = ["serde"] }
-confers-macros = { version = "0.3.0", path = "confers-macros" }
+macros = { version = "0.3.0", path = "macros" }
 dashmap = { version = "6.1", optional = true }
 garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
@@ -53,7 +53,7 @@ hex = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
 
 [workspace]
-members = ["confers-macros", "confers-cli", "examples", "fuzz"]
+members = ["macros", "confers-cli", "examples", "fuzz"]
 resolver = "2"
 
 [workspace.package]
