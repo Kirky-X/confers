@@ -3,51 +3,23 @@
 //! Measures the efficiency of the merger's copy-on-write implementation.
 
 use confers::merger::{MergeEngine, MergeStrategy};
-use confers::value::{AnnotatedValue, ConfigValue};
-use confers::SourceId;
+use confers::value::ConfigValue;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use std::sync::Arc;
 
-/// Helper to create a simple AnnotatedValue.
-fn av(value: ConfigValue, path: &str) -> AnnotatedValue {
-    AnnotatedValue::new(value, SourceId::new("bench"), path)
-}
-
-/// Create a large map with many keys for merge testing.
-fn create_large_map(key_count: usize) -> ConfigValue {
-    let mut map = indexmap::IndexMap::new();
-    for i in 0..key_count {
-        map.insert(
-            Arc::from(format!("key_{}", i)),
-            av(
-                ConfigValue::String(format!("value_{}", i)),
-                &format!("k{}", i),
-            ),
-        );
-    }
-    ConfigValue::Map(Arc::new(map))
-}
+mod common;
+use common::{av, create_large_map, create_override_map};
 
 /// Create a map with only a few keys for targeted updates.
 fn create_small_map(key_count: usize) -> ConfigValue {
-    let mut map = indexmap::IndexMap::new();
-    for i in 0..key_count {
-        map.insert(
-            Arc::from(format!("key_{}", i)),
-            av(
-                ConfigValue::String(format!("updated_{}", i)),
-                &format!("k{}", i),
-            ),
-        );
-    }
-    ConfigValue::Map(Arc::new(map))
+    create_override_map(key_count)
 }
 
 /// Benchmark: No modifications - should use COW fast path (return original Arc)
 fn bench_cow_no_modification(c: &mut Criterion) {
     let engine = MergeEngine::new();
-    let large = av(create_large_map(1000), "root");
+    let large = av(create_large_map(1000, "value"), "root");
 
     c.bench_function("cow_no_modification_1000", |b| {
         b.iter(|| engine.merge(black_box(&large), black_box(&large)));
@@ -57,7 +29,7 @@ fn bench_cow_no_modification(c: &mut Criterion) {
 /// Benchmark: Single key modification out of 1000
 fn bench_cow_single_modification(c: &mut Criterion) {
     let engine = MergeEngine::new();
-    let large = av(create_large_map(1000), "root");
+    let large = av(create_large_map(1000, "value"), "root");
 
     // Override only key_0
     let mut override_map = indexmap::IndexMap::new();
@@ -75,7 +47,7 @@ fn bench_cow_single_modification(c: &mut Criterion) {
 /// Benchmark: Ten key modifications out of 1000
 fn bench_cow_ten_modifications(c: &mut Criterion) {
     let engine = MergeEngine::new();
-    let large = av(create_large_map(1000), "root");
+    let large = av(create_large_map(1000, "value"), "root");
 
     let mut override_map = indexmap::IndexMap::new();
     for i in 0..10 {
@@ -98,8 +70,8 @@ fn bench_cow_ten_modifications(c: &mut Criterion) {
 fn bench_cow_no_overlap(c: &mut Criterion) {
     let engine = MergeEngine::new();
 
-    let map_a = create_large_map(500);
-    let _map_b = create_large_map(500);
+    let map_a = create_large_map(500, "value");
+    let _map_b = create_large_map(500, "value");
     let a = av(map_a, "root");
     let b = av(
         ConfigValue::Map(Arc::new({
@@ -126,7 +98,7 @@ fn bench_cow_no_overlap(c: &mut Criterion) {
 /// Benchmark: Replace strategy - always replaces (no COW benefit)
 fn bench_replace_strategy(c: &mut Criterion) {
     let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
-    let large = av(create_large_map(1000), "root");
+    let large = av(create_large_map(1000, "value"), "root");
     let small = av(create_small_map(1), "root");
 
     c.bench_function("replace_strategy_1000", |b| {
@@ -166,7 +138,7 @@ fn bench_cow_deep_merge(c: &mut Criterion) {
 /// Benchmark: Compare merged result identity (is it the same Arc?)
 fn bench_cow_identity_check(c: &mut Criterion) {
     let engine = MergeEngine::new();
-    let large = av(create_large_map(1000), "root");
+    let large = av(create_large_map(1000, "value"), "root");
 
     // Merging with itself should return the SAME Arc (COW optimization)
     c.bench_function("cow_identity_check", |b| {

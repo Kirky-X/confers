@@ -9,28 +9,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use std::sync::Arc;
 
-fn create_nested_config(depth: usize, width: usize, path: &str) -> AnnotatedValue {
-    if depth == 0 {
-        return AnnotatedValue::new(
-            ConfigValue::String("value".to_string()),
-            SourceId::new("bench"),
-            path,
-        );
-    }
-
-    let mut map = indexmap::IndexMap::new();
-    for i in 0..width {
-        let key = format!("key_{}", i);
-        let child_path = format!("{}.{}", path, key);
-        let value = create_nested_config(depth - 1, width, &child_path);
-        map.insert(Arc::from(key), value);
-    }
-    AnnotatedValue::new(
-        ConfigValue::Map(Arc::new(map)),
-        SourceId::new("bench"),
-        path,
-    )
-}
+mod common;
+use common::create_nested_config;
 
 fn bench_merge_shallow(c: &mut Criterion) {
     let mut group = c.benchmark_group("merge_shallow");
