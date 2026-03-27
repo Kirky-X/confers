@@ -647,7 +647,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml",
- "tracing",
  "url",
  "zeroize",
 ]

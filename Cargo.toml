@@ -42,7 +42,6 @@ regex = "1.11"
 anyhow = "1"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.1", features = ["preserve_order"], optional = true }
-tracing = { version = "0.1", features = ["attributes"] }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.18", features = ["tls"], optional = true }
