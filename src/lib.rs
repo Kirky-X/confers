@@ -10,15 +10,16 @@
 //! # Quick Start
 //!
 //! ```no_run
-//! use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter};
+//! use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create in-memory config (for testing)
 //! let config = new_in_memory();
 //!
 //! // Use the config
-//! config.set("key", "value".into()).await?;
-//! let value = config.get_string("key").await?;
+//! let value = AnnotatedValue::new(ConfigValue::string("value"), SourceId::default(), "key");
+//! config.set("key", value).await?;
+//! let str_value = config.get_string("key").await?;
 //!
 //! // Lifecycle methods
 //! config.health_check().await?;
@@ -189,14 +190,15 @@ pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 /// # Example
 ///
 /// ```rust
-/// use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter};
+/// use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
 ///
 /// # async fn example() -> Result<(), confers::ConfersError> {
 /// let config = new_in_memory();
 ///
-/// config.set("key", "value".into()).await?;
-/// let value = config.get_string("key").await?;
-/// assert_eq!(value, Some("value".to_string()));
+/// let value = AnnotatedValue::new(ConfigValue::string("value"), SourceId::default(), "key");
+/// config.set("key", value).await?;
+/// let str_value = config.get_string("key").await?;
+/// assert_eq!(str_value, Some("value".to_string()));
 /// # Ok(())
 /// # }
 /// ```
