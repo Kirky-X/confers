@@ -1,19 +1,48 @@
 //! Confers - Production-ready Rust configuration library.
 //!
-//! A zero-boilerplate configuration library with:
+//! A zero-boilerplate configuration library following BrickArchitecture:
 //! - Derive macro driven configuration loading
 //! - Multi-source with priority chain
 //! - Hot reload with progressive deployment
 //! - Encryption for sensitive fields
 //! - Type-safe configuration keys
+//!
+//! # Quick Start
+//!
+//! ```no_run
+//! use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create in-memory config (for testing)
+//! let config = new_in_memory();
+//!
+//! // Use the config
+//! let value = AnnotatedValue::new(ConfigValue::string("value"), SourceId::default(), "key");
+//! config.set("key", value).await?;
+//! let str_value = config.get_string("key").await?;
+//!
+//! // Lifecycle methods
+//! config.health_check().await?;
+//! config.shutdown().await;
+//! # Ok(())
+//! # }
+//! ```
+
+// ============== Public Modules ==============
 
 pub mod config;
 pub mod error;
 pub mod format;
+pub mod interface;
 pub mod loader;
 pub mod merger;
 pub mod traits;
 pub mod value;
+
+// Internal implementation (not exposed)
+mod impl_;
+
+// ============== Feature-gated Public Modules ==============
 
 #[cfg(feature = "validation")]
 pub mod validator;
@@ -63,19 +92,32 @@ pub mod key;
 #[cfg(feature = "remote")]
 pub mod remote;
 
+// ============== Core Re-exports ==============
+
 #[cfg(feature = "snapshot")]
 pub use config::SnapshotConfig;
 pub use config::{
     config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
     ReloadStrategy, Source, SourceChain, SourceChainBuilder, SourceKind,
 };
-pub use error::{BuildResult, BuildWarning, ConfigError, ConfigResult, ErrorCode, ParseLocation};
+
+// Error types (BrickArchitecture compliant)
+pub use error::{
+    BuildResult, BuildWarning, ConfersError, ConfersResult, ConfigError, ConfigResult, ErrorCode,
+    ParseLocation,
+};
+
+// Interface traits (BrickArchitecture)
+pub use interface::{ConfigConnector, ConfigReader, ConfigWriter};
+
+// Public types
+pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
+
 pub use loader::{
     detect_format_from_content, detect_format_from_path, load_file, parse_content, Format,
     LoaderConfig,
 };
 pub use traits::{ConfigProvider, ConfigProviderExt, KeyProvider, TypedConfigKey};
-pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
 
 // Re-export derive macros
 pub use macros::Config;
@@ -83,6 +125,8 @@ pub use macros::ConfigClap;
 pub use macros::ConfigMigration;
 pub use macros::ConfigModules;
 pub use macros::ConfigSchema;
+
+// ============== Feature-gated Re-exports ==============
 
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationResult, ValidationRule};
@@ -136,10 +180,54 @@ pub use bus::{BusBuilder, ConfigBus, ConfigChangeEvent, InMemoryBus};
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 
+// ============== Factory Functions (BrickArchitecture) ==============
+
+/// Create an in-memory configuration store.
+///
+/// This is the simplest way to create a configuration instance,
+/// ideal for testing and prototyping.
+///
+/// # Example
+///
+/// ```rust
+/// use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
+///
+/// # async fn example() -> Result<(), confers::ConfersError> {
+/// let config = new_in_memory();
+///
+/// let value = AnnotatedValue::new(ConfigValue::string("value"), SourceId::default(), "key");
+/// config.set("key", value).await?;
+/// let str_value = config.get_string("key").await?;
+/// assert_eq!(str_value, Some("value".to_string()));
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_in_memory() -> impl ConfigConnector {
+    impl_::memory::InMemoryConfig::new()
+}
+
+/// Create an in-memory config with custom capacity.
+///
+/// # Example
+///
+/// ```rust
+/// use confers::{new_in_memory_with_capacity, ConfigConnector};
+///
+/// let config = new_in_memory_with_capacity(1000);
+/// ```
+pub fn new_in_memory_with_capacity(max_capacity: u64) -> impl ConfigConnector {
+    impl_::memory::InMemoryConfigBuilder::default()
+        .max_capacity(max_capacity)
+        .build()
+}
+
+// ============== Prelude ==============
+
 /// Prelude for common imports.
 pub mod prelude {
     pub use crate::config::{config, ConfigBuilder, ConfigLimits};
     pub use crate::error::{BuildResult, ConfigError, ConfigResult, ErrorCode};
+    pub use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
     pub use crate::loader::{Format, LoaderConfig};
     pub use crate::traits::{ConfigProvider, ConfigProviderExt, TypedConfigKey};
     pub use crate::value::{AnnotatedValue, ConfigValue};
