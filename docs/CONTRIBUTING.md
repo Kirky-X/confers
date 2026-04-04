@@ -263,7 +263,7 @@ graph LR
     J --> K{Review Passed?}
     K -->|Needs Changes| C
     K -->|Yes| L[Merged!]
-    
+
     style A fill:#DBEAFE,stroke:#1E40AF
     style L fill:#DCFCE7,stroke:#166534
 ```
@@ -272,13 +272,13 @@ graph LR
 
 #### 1️⃣ Create Branch
 
-Branches should be created based on the `develop` branch.
+Branches should be created based on the `main` branch.
 
 ```bash
-# Sync upstream develop branch
+# Sync upstream main branch
 git fetch upstream
-git checkout develop
-git merge upstream/develop
+git checkout main
+git merge upstream/main
 
 # Create feature branch
 git checkout -b feature/TICKET-ID-description
@@ -339,6 +339,70 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 git commit -m "feat(auth): add JWT token refresh mechanism"
 ```
 
+#### 4️⃣ Merge and Cleanup (Mandatory)
+
+After completing development or bug fixes, you **MUST** follow this mandatory process to merge back and clean up:
+
+**Step 1: Pre-merge Quality Checks**
+
+Before merging, ensure all quality checks pass:
+
+```bash
+# Ensure code formatting
+cargo fmt
+
+# Run Clippy static analysis (zero warnings required)
+cargo clippy -- -D warnings
+
+# Run all tests with all features enabled
+cargo test --all-features
+```
+
+**All checks must pass before proceeding to merge.**
+
+**Step 2: Merge to Main Branch**
+
+```bash
+# Switch to main branch
+git checkout main
+
+# Sync with upstream
+git fetch upstream
+git merge upstream/main
+
+# Merge your feature/bugfix branch
+git merge --no-ff feature/TICKET-ID-description
+
+# Resolve any conflicts if necessary
+# After resolving conflicts, run quality checks again
+cargo fmt && cargo clippy -- -D warnings && cargo test --all-features
+
+# Push merged changes
+git push origin main
+```
+
+**Step 3: Clean Up Completed Branches**
+
+After successful merge, **you MUST clean up**:
+
+```bash
+# Delete local branch
+git branch -d feature/TICKET-ID-description
+
+# Delete remote branch (if pushed)
+git push origin --delete feature/TICKET-ID-description
+
+# If using git worktree, remove it
+git worktree remove /path/to/worktree
+```
+
+**Important Notes:**
+- ✅ Always delete branches after successful merge to keep repository clean
+- ✅ Never leave completed branches lingering in the repository
+- ✅ If merge fails, fix issues and re-run quality checks before retrying
+- ✅ For worktree-based development, always remove worktree after merge
+- ❌ Do NOT skip cleanup - accumulated branches clutter the repository
+
 ---
 
 ## Coding Standards
@@ -385,7 +449,7 @@ git commit -m "feat(auth): add JWT token refresh mechanism"
 graph TD
     A[Unit Tests] --> B[Integration Tests]
     B --> C[E2E Tests]
-    
+
     style A fill:#DCFCE7,stroke:#166534
     style B fill:#DBEAFE,stroke:#1E40AF
     style C fill:#FEF3C7,stroke:#92400E

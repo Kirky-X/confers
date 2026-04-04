@@ -1,0 +1,799 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
+mod prefix;
+pub use prefix::EncryptionPrefix;
+
+use regex::Regex;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+/// Check if a value appears to be encrypted (has "enc:" prefix with content).
+///
+/// Used to identify values that should bypass normal validation rules,
+/// as encrypted values contain safely-encoded content.
+pub(crate) fn is_encrypted_value(value: &str) -> bool {
+    EncryptionPrefix::Enc.is_prefixed(value) && value.len() > EncryptionPrefix::Enc.as_str().len()
+}
+
+/// Validate the format of an encrypted value.
+///
+/// Checks for proper "enc:" prefix and valid base64-encoded content.
+/// Returns an error if the format is invalid.
+pub(crate) fn validate_encrypted_format(value: &str) -> Result<(), EnvSecurityError> {
+    if !EncryptionPrefix::Enc.is_prefixed(value) {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Missing 'enc:' prefix".to_string(),
+        });
+    }
+
+    let encrypted_content = EncryptionPrefix::Enc.strip(value).unwrap_or("");
+    if encrypted_content.is_empty() {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Empty encrypted content".to_string(),
+        });
+    }
+
+    if !encrypted_content
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+    {
+        return Err(EnvSecurityError::InvalidValueFormat {
+            reason: "Invalid characters in encrypted content (expected base64)".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Compile a regex pattern, returning an error if the pattern is invalid.
+pub(crate) fn compile_pattern(pattern: &str) -> Result<Regex, EnvSecurityError> {
+    Regex::new(pattern).map_err(|e| EnvSecurityError::InvalidRegex {
+        pattern: pattern.to_string(),
+        error: e.to_string(),
+    })
+}
+
+/// Get the list of allowed patterns for environment variable names.
+///
+/// Returns a lazily-initialized static vector of compiled regex patterns.
+/// Patterns define valid naming conventions (e.g., uppercase with underscores).
+pub(crate) fn get_allowed_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
+    static ALLOWED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
+    match ALLOWED_PATTERNS.get_or_init(|| {
+        vec![
+            compile_pattern(r"^[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
+            compile_pattern(r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$"),
+        ]
+        .into_iter()
+        .collect()
+    }) {
+        Ok(patterns) => Ok(patterns),
+        Err(e) => Err(e.clone()),
+    }
+}
+
+/// Get the list of blocked patterns for environment variable names.
+///
+/// Returns a lazily-initialized static vector of compiled regex patterns.
+/// Names matching these patterns are rejected (e.g., PATH, HOME, SECRET_*).
+pub(crate) fn get_blocked_patterns() -> Result<&'static Vec<Regex>, EnvSecurityError> {
+    static BLOCKED_PATTERNS: OnceLock<Result<Vec<Regex>, EnvSecurityError>> = OnceLock::new();
+    match BLOCKED_PATTERNS.get_or_init(|| {
+        vec![
+            compile_pattern(r"(?i)^(PATH|LD_LIBRARY_PATH|LD_PRELOAD)$"),
+            compile_pattern(r"(?i)^(SHELL|HOME|USER|LOGNAME)$"),
+            compile_pattern(r"(?i)^(PWD|OLDPWD)$"),
+            compile_pattern(r"(?i)^(MAIL|MAILCHECK)$"),
+            compile_pattern(r"(?i)^(TERM|TERMCAP)$"),
+            compile_pattern(r"(?i)^(DISPLAY|XAUTHORITY)$"),
+            compile_pattern(r"(?i)^(SSH_AUTH_SOCK|SSH_AGENT_PID)$"),
+            compile_pattern(r"(?i)^(DOCKER_HOST|KUBECONFIG)$"),
+            compile_pattern(r"(?i).*(_SECRET|_PASSWORD|_TOKEN|_KEY|_PRIVATE)$"),
+            compile_pattern(r".*[;<>&|`$].*"),
+            compile_pattern(r"^BASH_FUNC_.*"),
+        ]
+        .into_iter()
+        .collect()
+    }) {
+        Ok(patterns) => Ok(patterns),
+        Err(e) => Err(e.clone()),
+    }
+}
+
+/// Get the string representations of allowed pattern rules.
+///
+/// Returns static references to the raw pattern strings for error messages
+/// and documentation purposes.
+pub(crate) fn get_allowed_pattern_strings() -> &'static Vec<&'static str> {
+    static ALLOWED_PATTERNS_STR: OnceLock<Vec<&'static str>> = OnceLock::new();
+    ALLOWED_PATTERNS_STR.get_or_init(|| {
+        vec![
+            r"^[A-Z][A-Z0-9_]*$",
+            r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$",
+            r"^[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*_[A-Z][A-Z0-9_]*$",
+        ]
+    })
+}
+
+/// Get the list of dangerous patterns that should be rejected in values.
+///
+/// Returns static references to patterns that indicate potential command
+/// injection or shell expansion attempts (e.g., `;`, `$`, `|`).
+pub(crate) fn get_dangerous_patterns() -> &'static Vec<&'static str> {
+    static DANGEROUS_PATTERNS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    DANGEROUS_PATTERNS.get_or_init(|| {
+        vec![
+            ";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r", "\\", "\t", "\\n", "\\r",
+            "\\t", "; ", "& ", "| ", "$ ",
+        ]
+    })
+}
+
+/// Configuration for environment variable validation
+#[derive(Debug, Clone)]
+pub struct EnvironmentValidationConfig {
+    max_name_length: usize,
+    max_value_length: usize,
+    enable_blocked_patterns: bool,
+    enable_length_validation: bool,
+    allow_encrypted_values: bool,
+    blocked_patterns: Vec<String>,
+    allowed_patterns: Vec<String>,
+}
+
+impl Default for EnvironmentValidationConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EnvironmentValidationConfig {
+    pub fn new() -> Self {
+        Self {
+            max_name_length: 256,
+            max_value_length: 4096,
+            enable_blocked_patterns: true,
+            enable_length_validation: true,
+            allow_encrypted_values: true,
+            blocked_patterns: Vec::new(),
+            allowed_patterns: Vec::new(),
+        }
+    }
+
+    pub fn with_max_name_length(mut self, length: usize) -> Self {
+        self.max_name_length = length;
+        self
+    }
+
+    pub fn with_max_value_length(mut self, length: usize) -> Self {
+        self.max_value_length = length;
+        self
+    }
+
+    pub fn with_blocked_patterns_check(mut self, enabled: bool) -> Self {
+        self.enable_blocked_patterns = enabled;
+        self
+    }
+
+    pub fn with_length_validation(mut self, enabled: bool) -> Self {
+        self.enable_length_validation = enabled;
+        self
+    }
+
+    pub fn with_blocked_patterns_disabled(mut self) -> Self {
+        self.enable_blocked_patterns = false;
+        self
+    }
+
+    pub fn with_length_validation_disabled(mut self) -> Self {
+        self.enable_length_validation = false;
+        self
+    }
+
+    pub fn with_custom_blocked_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.blocked_patterns = patterns;
+        self
+    }
+
+    pub fn with_custom_allowed_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.allowed_patterns = patterns;
+        self
+    }
+
+    pub fn with_encrypted_values(mut self, allow: bool) -> Self {
+        self.allow_encrypted_values = allow;
+        self
+    }
+
+    pub fn max_name_length(&self) -> usize {
+        self.max_name_length
+    }
+
+    pub fn max_value_length(&self) -> usize {
+        self.max_value_length
+    }
+}
+
+/// Security validation for environment variable mapping
+#[derive(Debug, Clone)]
+pub struct EnvSecurityValidator {
+    /// Maximum length for environment variable names
+    max_name_length: usize,
+    /// Maximum length for environment variable values
+    max_value_length: usize,
+    /// Configuration for validation behavior
+    config: EnvironmentValidationConfig,
+}
+
+impl Default for EnvSecurityValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EnvSecurityValidator {
+    /// Create a new security validator with default rules
+    pub fn new() -> Self {
+        Self::with_config(EnvironmentValidationConfig::new())
+    }
+
+    /// Create a security validator with custom configuration
+    pub fn with_config(config: EnvironmentValidationConfig) -> Self {
+        Self {
+            max_name_length: config.max_name_length,
+            max_value_length: config.max_value_length,
+            config,
+        }
+    }
+
+    /// Create a strict validator for production environments
+    pub fn strict() -> Self {
+        Self::with_config(
+            EnvironmentValidationConfig::new()
+                .with_max_name_length(128)
+                .with_max_value_length(2048),
+        )
+    }
+
+    /// Create a lenient validator for testing
+    pub fn lenient() -> Self {
+        Self::with_config(
+            EnvironmentValidationConfig::new()
+                .with_max_name_length(1024)
+                .with_max_value_length(8192)
+                .with_blocked_patterns_disabled()
+                .with_length_validation_disabled(),
+        )
+    }
+
+    /// Validate an environment variable name
+    /// If value is provided and starts with "enc:", secret-related names are allowed
+    pub fn validate_env_name(
+        &self,
+        name: &str,
+        value: Option<&str>,
+    ) -> Result<(), EnvSecurityError> {
+        let blocked_patterns = get_blocked_patterns()?;
+        let allowed_patterns = get_allowed_patterns()?;
+
+        if self.config.enable_length_validation && name.len() > self.max_name_length {
+            return Err(EnvSecurityError::NameTooLong {
+                name: name.to_string(),
+                max_length: self.max_name_length,
+                actual_length: name.len(),
+            });
+        }
+
+        if self.config.enable_blocked_patterns {
+            for pattern in blocked_patterns {
+                if pattern.is_match(name) {
+                    if let Some(val) = value {
+                        if self.config.allow_encrypted_values && val.starts_with("enc:") {
+                            continue;
+                        }
+                    }
+                    return Err(EnvSecurityError::BlockedName {
+                        name: name.to_string(),
+                        pattern: pattern.as_str().to_string(),
+                    });
+                }
+            }
+        }
+
+        let mut matched = false;
+        for pattern in allowed_patterns {
+            if pattern.is_match(name) {
+                matched = true;
+                break;
+            }
+        }
+
+        if !matched {
+            return Err(EnvSecurityError::InvalidNameFormat {
+                name: name.to_string(),
+                expected_patterns: get_allowed_pattern_strings()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Check if value contains control characters (excluding common whitespace)
+    fn has_control_characters(value: &str) -> bool {
+        value
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+    }
+
+    /// Find the first dangerous pattern in the value, returning None if safe
+    fn find_dangerous_pattern(value: &str) -> Option<String> {
+        let patterns = get_dangerous_patterns();
+        for pattern in patterns.iter() {
+            if value.contains(pattern) {
+                return Some(pattern.to_string());
+            }
+        }
+        None
+    }
+
+    /// Validate an environment variable value
+    pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
+        if self.config.allow_encrypted_values && is_encrypted_value(value) {
+            validate_encrypted_format(value)?;
+            return Ok(());
+        }
+
+        // Early return if blocked patterns check is disabled
+        if !self.config.enable_blocked_patterns {
+            return Ok(());
+        }
+
+        // Check for control characters (excluding common whitespace)
+        if Self::has_control_characters(value) {
+            return Err(EnvSecurityError::CommandInjection {
+                pattern: "control_character".to_string(),
+            });
+        }
+
+        // Check for null bytes
+        if value.contains('\0') {
+            return Err(EnvSecurityError::NullByte);
+        }
+
+        // Check for shell expansion patterns
+        if value.contains("${") && value.contains('}') {
+            return Err(EnvSecurityError::ShellExpansion);
+        }
+
+        // Check for dangerous patterns
+        if let Some(pattern) = Self::find_dangerous_pattern(value) {
+            return Err(EnvSecurityError::CommandInjection { pattern });
+        }
+
+        // Length validation (moved to the end as a guard clause)
+        if self.config.enable_length_validation && value.len() > self.max_value_length {
+            return Err(EnvSecurityError::ValueTooLong {
+                value_length: value.len(),
+                max_length: self.max_value_length,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validate a complete environment variable mapping
+    pub fn validate_env_mapping(
+        &self,
+        mapping: &HashMap<String, String>,
+    ) -> Result<(), EnvSecurityError> {
+        for (field_name, env_name) in mapping {
+            self.validate_env_name(env_name, None)?;
+
+            // Also validate that the field name is reasonable
+            if field_name.is_empty() || field_name.contains(' ') {
+                return Err(EnvSecurityError::InvalidFieldName {
+                    field_name: field_name.to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Sanitize an environment variable value for logging
+    pub fn sanitize_for_logging(&self, value: &str) -> String {
+        if value.len() > 100 {
+            format!("{}...", &value[..97])
+        } else {
+            value.to_string()
+        }
+    }
+
+    /// Check if an environment variable should be allowed
+    pub fn should_allow_env_var(&self, name: &str) -> bool {
+        self.validate_env_name(name, None).is_ok()
+    }
+}
+
+/// Security validation errors
+#[derive(Debug, Clone, PartialEq)]
+pub enum EnvSecurityError {
+    /// Environment variable name is too long
+    NameTooLong {
+        name: String,
+        max_length: usize,
+        actual_length: usize,
+    },
+    /// Environment variable name matches a blocked pattern
+    BlockedName { name: String, pattern: String },
+    /// Environment variable name doesn't match allowed patterns
+    InvalidNameFormat {
+        name: String,
+        expected_patterns: Vec<String>,
+    },
+    /// Invalid regex pattern
+    InvalidRegex { pattern: String, error: String },
+    /// Environment variable value is too long
+    ValueTooLong {
+        value_length: usize,
+        max_length: usize,
+    },
+    /// Environment variable value contains null bytes
+    NullByte,
+    /// Environment variable value contains shell expansion
+    ShellExpansion,
+    /// Environment variable value contains command injection patterns
+    CommandInjection { pattern: String },
+    /// Invalid field name in mapping
+    InvalidFieldName { field_name: String },
+    /// Invalid value format
+    InvalidValueFormat { reason: String },
+}
+
+impl std::fmt::Display for EnvSecurityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EnvSecurityError::NameTooLong {
+                name,
+                max_length,
+                actual_length,
+            } => {
+                write!(
+                    f,
+                    "Environment variable name '{}' is too long: {} > {}",
+                    name, actual_length, max_length
+                )
+            }
+            EnvSecurityError::BlockedName { name, pattern } => {
+                write!(
+                    f,
+                    "Environment variable name '{}' matches blocked pattern: {}",
+                    name, pattern
+                )
+            }
+            EnvSecurityError::InvalidNameFormat {
+                name,
+                expected_patterns,
+            } => {
+                write!(
+                    f,
+                    "Environment variable name '{}' doesn't match any allowed pattern: {:?}",
+                    name, expected_patterns
+                )
+            }
+            EnvSecurityError::InvalidRegex { pattern, error } => {
+                write!(f, "Invalid regex pattern '{}': {}", pattern, error)
+            }
+            EnvSecurityError::ValueTooLong {
+                value_length,
+                max_length,
+            } => {
+                write!(
+                    f,
+                    "Environment variable value is too long: {} > {}",
+                    value_length, max_length
+                )
+            }
+            EnvSecurityError::NullByte => {
+                write!(f, "Environment variable value contains null bytes")
+            }
+            EnvSecurityError::ShellExpansion => {
+                write!(f, "Environment variable value contains shell expansion")
+            }
+            EnvSecurityError::CommandInjection { pattern } => {
+                write!(
+                    f,
+                    "Environment variable value contains dangerous pattern: '{}'",
+                    pattern
+                )
+            }
+            EnvSecurityError::InvalidFieldName { field_name } => {
+                write!(
+                    f,
+                    "Invalid field name in environment mapping: '{}'",
+                    field_name
+                )
+            }
+            EnvSecurityError::InvalidValueFormat { reason } => {
+                write!(f, "Invalid value format: {}", reason)
+            }
+        }
+    }
+}
+
+impl std::error::Error for EnvSecurityError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_valid_env_name() {
+        let validator = EnvSecurityValidator::new();
+        assert!(validator.validate_env_name("APP_PORT", None).is_ok());
+        assert!(validator.validate_env_name("DATABASE_HOST", None).is_ok());
+        assert!(validator.validate_env_name("REDIS_PORT", None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_blocked_env_name() {
+        let validator = EnvSecurityValidator::new();
+        assert!(validator.validate_env_name("PATH", None).is_err());
+        assert!(validator.validate_env_name("HOME", None).is_err());
+        assert!(validator.validate_env_name("SECRET_KEY", None).is_err());
+        assert!(validator.validate_env_name("API_TOKEN", None).is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_env_name_format() {
+        let validator = EnvSecurityValidator::new();
+        assert!(validator.validate_env_name("app_port", None).is_err()); // lowercase
+        assert!(validator.validate_env_name("APP-PORT", None).is_err()); // dash
+        assert!(validator.validate_env_name("123PORT", None).is_err()); // starts with number
+    }
+
+    #[test]
+    fn test_validate_env_name_length() {
+        let validator = EnvSecurityValidator::new();
+
+        // Valid: exactly 256 characters (max allowed)
+        let valid_256 = "A".repeat(256);
+        assert!(validator.validate_env_name(&valid_256, None).is_ok());
+
+        // Valid: less than 256 characters
+        let valid_255 = "A".repeat(255);
+        assert!(validator.validate_env_name(&valid_255, None).is_ok());
+
+        // Invalid: more than 256 characters
+        let invalid_257 = "A".repeat(257);
+        assert!(validator.validate_env_name(&invalid_257, None).is_err());
+    }
+
+    #[test]
+    fn test_validate_dangerous_env_value() {
+        let validator = EnvSecurityValidator::new();
+        assert!(validator.validate_env_value("hello").is_ok());
+        assert!(validator.validate_env_value("test123").is_ok());
+
+        assert!(validator.validate_env_value("hello;world").is_err()); // command injection
+        assert!(validator.validate_env_value("hello|world").is_err()); // pipe
+        assert!(validator.validate_env_value("hello${world}").is_err()); // shell expansion
+        assert!(validator.validate_env_value("hello\0world").is_err()); // null byte
+    }
+
+    #[test]
+    fn test_dangerous_patterns_oncelock_optimization() {
+        // Test that get_dangerous_patterns returns consistent results
+        let patterns1 = get_dangerous_patterns();
+        let patterns2 = get_dangerous_patterns();
+        // Should be the same reference (OnceLock ensures single initialization)
+        assert!(std::ptr::eq(patterns1, patterns2));
+
+        // Test that all expected patterns are present
+        let patterns = get_dangerous_patterns();
+        assert!(patterns.contains(&";"));
+        assert!(patterns.contains(&"&"));
+        assert!(patterns.contains(&"|"));
+        assert!(patterns.contains(&"`"));
+        assert!(patterns.contains(&"$"));
+        assert!(patterns.contains(&"\\n"));
+        assert!(patterns.contains(&"\\r"));
+        assert!(patterns.contains(&"\\t"));
+        assert!(patterns.contains(&"; "));
+        assert!(patterns.contains(&"& "));
+        assert!(patterns.contains(&"| "));
+        assert!(patterns.contains(&"$ "));
+    }
+
+    #[test]
+    fn test_command_injection_patterns_with_optimized_loop() {
+        let validator = EnvSecurityValidator::new();
+
+        // Test all dangerous patterns from the OnceLock-optimized list
+        assert!(validator.validate_env_value("test;command").is_err());
+        assert!(validator.validate_env_value("test&command").is_err());
+        assert!(validator.validate_env_value("test|command").is_err());
+        assert!(validator.validate_env_value("test`command`").is_err());
+        assert!(validator.validate_env_value("test$command").is_err());
+        assert!(validator.validate_env_value("test\ncommand").is_err());
+        assert!(validator.validate_env_value("test\rcommand").is_err());
+        assert!(validator.validate_env_value("test\tcommand").is_err());
+        assert!(validator.validate_env_value("test; command").is_err());
+        assert!(validator.validate_env_value("test& command").is_err());
+        assert!(validator.validate_env_value("test| command").is_err());
+        assert!(validator.validate_env_value("test$ command").is_err());
+    }
+
+    #[test]
+    fn test_validate_env_mapping() {
+        let validator = EnvSecurityValidator::new();
+        let mut mapping = HashMap::new();
+        mapping.insert("port".to_string(), "APP_PORT".to_string());
+        mapping.insert("host".to_string(), "DATABASE_HOST".to_string());
+
+        assert!(validator.validate_env_mapping(&mapping).is_ok());
+
+        // Invalid field name
+        let mut bad_mapping = HashMap::new();
+        bad_mapping.insert("invalid field".to_string(), "APP_PORT".to_string());
+        assert!(validator.validate_env_mapping(&bad_mapping).is_err());
+
+        // Invalid env name
+        let mut bad_env_mapping = HashMap::new();
+        bad_env_mapping.insert("port".to_string(), "PATH".to_string());
+        assert!(validator.validate_env_mapping(&bad_env_mapping).is_err());
+    }
+
+    #[test]
+    fn test_custom_length_limits() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(100)
+            .with_max_value_length(500);
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let valid_100 = "A".repeat(100);
+        assert!(validator.validate_env_name(&valid_100, None).is_ok());
+
+        let invalid_101 = "A".repeat(101);
+        assert!(validator.validate_env_name(&invalid_101, None).is_err());
+
+        assert!(validator.validate_env_value(&"x".repeat(500)).is_ok());
+        assert!(validator.validate_env_value(&"x".repeat(501)).is_err());
+    }
+
+    #[test]
+    fn test_strict_validator() {
+        let validator = EnvSecurityValidator::strict();
+
+        let valid_128 = "A".repeat(128);
+        assert!(validator.validate_env_name(&valid_128, None).is_ok());
+
+        let invalid_129 = "A".repeat(129);
+        assert!(validator.validate_env_name(&invalid_129, None).is_err());
+
+        assert!(validator.validate_env_value(&"x".repeat(2048)).is_ok());
+        assert!(validator.validate_env_value(&"x".repeat(2049)).is_err());
+    }
+
+    #[test]
+    fn test_lenient_validator() {
+        let validator = EnvSecurityValidator::lenient();
+
+        let long_name = "A".repeat(500);
+        assert!(validator.validate_env_name(&long_name, None).is_ok());
+
+        let long_value = "x".repeat(5000);
+        assert!(validator.validate_env_value(&long_value).is_ok());
+
+        assert!(validator.validate_env_name("PATH", None).is_ok());
+        assert!(validator.validate_env_value("hello;world").is_ok());
+    }
+
+    #[test]
+    fn test_disabled_blocked_patterns() {
+        let config = EnvironmentValidationConfig::new().with_blocked_patterns_disabled();
+        let validator = EnvSecurityValidator::with_config(config);
+
+        assert!(validator.validate_env_name("PATH", None).is_ok());
+        assert!(validator.validate_env_name("HOME", None).is_ok());
+        assert!(validator.validate_env_name("SECRET_KEY", None).is_ok());
+    }
+
+    #[test]
+    fn test_disabled_length_validation() {
+        let config = EnvironmentValidationConfig::new().with_length_validation_disabled();
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let very_long_name = "A".repeat(1000);
+        assert!(validator.validate_env_name(&very_long_name, None).is_ok());
+
+        let very_long_value = "x".repeat(10000);
+        assert!(validator.validate_env_value(&very_long_value).is_ok());
+    }
+
+    #[test]
+    fn test_disabled_encrypted_value_skip() {
+        let config = EnvironmentValidationConfig::new()
+            .with_length_validation_disabled()
+            .with_blocked_patterns_disabled()
+            .with_custom_blocked_patterns(vec![r".*SECRET.*".to_string()]);
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let encrypted_value = "enc:ABC123XYZ789";
+        assert!(validator.validate_env_value(encrypted_value).is_ok());
+
+        let secret_with_encrypted = "MY_SECRET"; // pragma: allowlist secret
+        assert!(validator
+            .validate_env_name(secret_with_encrypted, Some(encrypted_value))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_global_config_functions() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(512)
+            .with_max_value_length(8192);
+
+        let validator = EnvSecurityValidator::with_config(config.clone());
+
+        assert_eq!(config.max_name_length(), 512);
+        assert_eq!(config.max_value_length(), 8192);
+
+        let long_name = "A".repeat(512);
+        assert!(validator.validate_env_name(&long_name, None).is_ok());
+
+        let invalid_513 = "A".repeat(513);
+        assert!(validator.validate_env_name(&invalid_513, None).is_err());
+    }
+
+    #[test]
+    fn test_config_builder_pattern() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(64)
+            .with_max_value_length(1024)
+            .with_blocked_patterns_disabled()
+            .with_length_validation_disabled();
+
+        assert_eq!(config.max_name_length, 64);
+        assert_eq!(config.max_value_length, 1024);
+        assert!(!config.enable_blocked_patterns);
+        assert!(!config.enable_length_validation);
+    }
+}
+
+// 安全模块导出
+#[cfg(feature = "encryption")]
+pub mod secure_string;
+#[cfg(feature = "encryption")]
+pub use secure_string::{
+    allocated_secure_strings, deallocated_secure_strings, SecureString, SecureStringBuilder,
+    SensitiveData, SensitivityLevel,
+};
+
+#[cfg(feature = "encryption")]
+pub mod config_injector;
+#[cfg(feature = "encryption")]
+pub use config_injector::{ConfigInjectionError, ConfigInjector, EnvironmentConfig};
+
+#[cfg(feature = "encryption")]
+pub mod input_validation;
+#[cfg(feature = "encryption")]
+pub use input_validation::{
+    ConfigValidationError as ConfigFieldValidationError, ConfigValidationResult, ConfigValidator,
+    ConfigValidatorBuilder, InputValidationError, InputValidator, SensitiveDataDetector,
+    SensitivityResult,
+};
+
+#[cfg(feature = "encryption")]
+pub mod error_sanitization;
+#[cfg(feature = "encryption")]
+pub use error_sanitization::{
+    Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
+    SensitiveDataFilter,
+};

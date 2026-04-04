@@ -52,6 +52,8 @@ rayon = { version = "1.11", optional = true }
 hex = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
 similar = { version = "2", optional = true }
+moka = { version = "0.12", features = ["future", "sync"] }
+getset = "0.1"
 
 [workspace]
 members = ["macros", "examples", "fuzz"]

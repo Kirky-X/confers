@@ -884,6 +884,19 @@ impl std::fmt::Display for WarningCode {
 /// Type alias for configuration results.
 pub type ConfigResult<T> = Result<T, ConfigError>;
 
+// ============== BrickArchitecture Error Types ==============
+
+/// Runtime error alias for BrickArchitecture compliance.
+///
+/// This is an alias for `ConfigError` to follow the BrickArchitecture naming convention.
+/// Use `ConfersError` for runtime errors that occur during configuration access.
+pub type ConfersError = ConfigError;
+
+/// Result type alias for runtime operations.
+///
+/// Use `ConfersResult` for operations that may fail with `ConfersError`.
+pub type ConfersResult<T> = Result<T, ConfersError>;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -50,6 +50,7 @@ temp/
 # Development files
 dev-v2.md
 docs/adr/
+docs/superpowers/
 spec/
 
 # Docker
