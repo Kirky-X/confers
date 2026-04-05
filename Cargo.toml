@@ -46,6 +46,7 @@ zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.18", features = ["tls"], optional = true }
 consul-client = { version = "0.1.0-alpha.0", optional = true }
+ipnet = { version = "2.11", optional = true }
 redis = { version = "1.1", features = ["tokio-comp"], optional = true }
 url = "2.5"
 rayon = { version = "1.11", optional = true }
@@ -141,7 +142,7 @@ poll = ["remote", "dep:reqwest"]
 vault = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
 
 # Remote sources
-remote = ["dep:reqwest", "dep:async-trait", "dep:tokio"]
+remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]

@@ -628,6 +628,7 @@ dependencies = [
  "hex",
  "hkdf",
  "indexmap 2.13.0",
+ "ipnet",
  "macros",
  "metrics",
  "moka",

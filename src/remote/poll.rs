@@ -24,19 +24,34 @@ use reqwest::Client;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::time::Duration;
 
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 
+static BLOCKED_NETWORKS: LazyLock<Vec<ipnet::IpNet>> = LazyLock::new(|| {
+    vec![
+        "127.0.0.0/8".parse().unwrap(),
+        "10.0.0.0/8".parse().unwrap(),
+        "172.16.0.0/12".parse().unwrap(),
+        "192.168.0.0/16".parse().unwrap(),
+        "169.254.0.0/16".parse().unwrap(),
+        "100.64.0.0/10".parse().unwrap(),
+        "192.0.2.0/24".parse().unwrap(),
+        "198.51.100.0/24".parse().unwrap(),
+        "203.0.113.0/24".parse().unwrap(),
+        "192.0.0.0/24".parse().unwrap(),
+        "fc00::/7".parse().unwrap(),
+        "fe80::/10".parse().unwrap(),
+    ]
+});
+
 /// Check if an IP address is in a blocked range.
 pub fn is_ip_blocked(ip: IpAddr) -> bool {
-    // Block IPv4-mapped IPv6 addresses (::ffff:0:0/96)
-    // IPv4-mapped IPv6 addresses have the format ::ffff:x.x.x.x
     if let IpAddr::V6(ipv6) = ip {
         let octets = ipv6.octets();
-        // Check for ::ffff: prefix (first 10 bytes are 0, bytes 10-11 are 0xff)
         if octets[..10] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             && octets[10] == 0xff
             && octets[11] == 0xff
@@ -44,52 +59,12 @@ pub fn is_ip_blocked(ip: IpAddr) -> bool {
             return true;
         }
     }
-    match ip {
-        IpAddr::V4(ipv4) => {
-            let octets = ipv4.octets();
-            // Block 127.x.x.x (loopback)
-            octets[0] == 127
-            // Block 10.x.x.x
-            || octets[0] == 10
-            // Block 172.16-31.x.x
-            || (octets[0] == 172 && (16..=31).contains(&octets[1]))
-            // Block 192.168.x.x
-            || (octets[0] == 192 && octets[1] == 168)
-            // Block 169.254.x.x (link-local)
-            || (octets[0] == 169 && octets[1] == 254)
-            // Block 100.64-127.x.x (carrier-grade NAT)
-            || (octets[0] == 100 && (64..=127).contains(&octets[1]))
-            // Block 192.0.0.0/24 (IETF Protocol)
-            || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
-            // Block 192.0.2.0/24 (Documentation)
-            || (octets[0] == 192 && octets[1] == 0 && octets[2] == 2)
-            // Block 198.51.100.0/24 (Documentation)
-            || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
-            // Block 203.0.113.0/24 (Documentation)
-            || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
-        }
-        IpAddr::V6(ipv6) => {
-            let segments = ipv6.segments();
-            // Block fc00::/7 (unique local)
-            (segments[0] & 0xfe00) == 0xfc00
-            // Block fe80::/10 (link-local)
-            || (segments[0] & 0xffc0) == 0xfe80
-            // Block ::1 (loopback)
-            || ipv6.is_loopback()
-        }
+
+    if ip.is_loopback() {
+        return true;
     }
-}
 
-/// Check if a std::net::Ipv4Addr is blocked.
-#[allow(dead_code)]
-pub fn is_ip_blocked_std(ip: std::net::Ipv4Addr) -> bool {
-    is_ip_blocked(IpAddr::V4(ip))
-}
-
-/// Check if a std::net::Ipv6Addr is blocked.
-#[allow(dead_code)]
-pub fn is_ip_blocked_v6(ip: std::net::Ipv6Addr) -> bool {
-    is_ip_blocked(IpAddr::V6(ip))
+    BLOCKED_NETWORKS.iter().any(|net| net.contains(&ip))
 }
 
 /// Resolve a hostname and check all resolved IPs against blocked ranges.
@@ -208,7 +183,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
             Ok(resolved)
         }
         url::Host::Ipv4(ip) => {
-            if is_ip_blocked_std(ip) {
+            if is_ip_blocked(IpAddr::V4(ip)) {
                 // Private IPv4 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
                     key: "url".to_string(),
@@ -220,7 +195,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
             Ok(vec![IpAddr::V4(ip)])
         }
         url::Host::Ipv6(ip) => {
-            if is_ip_blocked_v6(ip) {
+            if is_ip_blocked(IpAddr::V6(ip)) {
                 // Private IPv6 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
                     key: "url".to_string(),
