@@ -17,26 +17,26 @@
 #[allow(unused)]
 #[allow(dead_code)]
 #[allow(unused_imports)]
-pub mod default;
+pub(crate) mod default;
 
 #[allow(unused)]
 #[allow(dead_code)]
 #[allow(unused_imports)]
-pub mod format;
+pub(crate) mod format;
 
 #[allow(unused)]
 #[allow(dead_code)]
 #[allow(unused_imports)]
-pub mod loader;
+pub(crate) mod loader;
 
 #[allow(unused)]
 #[allow(dead_code)]
 #[allow(unused_imports)]
-pub mod memory;
+pub(crate) mod memory;
 
 #[allow(unused)]
 #[allow(dead_code)]
 #[allow(unused_imports)]
-pub mod merger;
+pub(crate) mod merger;
 
-pub mod source;
+pub(crate) mod source;
