@@ -90,7 +90,7 @@ mod async_traits {
     #[async_trait]
     pub trait ConfigConnector: ConfigReader + ConfigWriter + Send + Sync {
         /// Health check: verify the connector is operational.
-        async fn health_check(&self) -> anyhow::Result<()>;
+        async fn health_check(&self) -> crate::error::ConfersResult<()>;
 
         /// Graceful shutdown: release resources.
         async fn shutdown(&self);
@@ -178,7 +178,7 @@ mod sync_traits {
     /// - Embeds lifecycle methods (health_check, shutdown)
     pub trait ConfigConnector: ConfigReader + ConfigWriter + Send + Sync {
         /// Health check: verify the connector is operational.
-        fn health_check(&self) -> anyhow::Result<()>;
+        fn health_check(&self) -> crate::error::ConfersResult<()>;
 
         /// Graceful shutdown: release resources.
         fn shutdown(&self);

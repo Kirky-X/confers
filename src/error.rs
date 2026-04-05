@@ -97,6 +97,8 @@ pub enum ErrorCode {
     WatcherError = 1020,
     OverrideBlocked = 1021,
     LockPoisoned = 1022,
+    /// Health check failed
+    HealthCheckFailed = 1023,
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -124,6 +126,7 @@ impl std::fmt::Display for ErrorCode {
             ErrorCode::WatcherError => write!(f, "WATCHER_ERROR"),
             ErrorCode::OverrideBlocked => write!(f, "OVERRIDE_BLOCKED"),
             ErrorCode::LockPoisoned => write!(f, "LOCK_POISONED"),
+            ErrorCode::HealthCheckFailed => write!(f, "HEALTH_CHECK_FAILED"),
         }
     }
 }
@@ -336,6 +339,13 @@ pub enum ConfigError {
         /// Source attempting the override
         override_source: Option<String>,
     },
+
+    /// Health check failed.
+    #[error("Health check failed: {reason}")]
+    HealthCheckFailed {
+        /// Reason for health check failure
+        reason: String,
+    },
 }
 
 impl ConfigError {
@@ -365,6 +375,7 @@ impl ConfigError {
             ConfigError::KeyRotationFailed { .. } => ErrorCode::KeyRotationFailed,
             ConfigError::WatcherError { .. } => ErrorCode::WatcherError,
             ConfigError::OverrideBlocked { .. } => ErrorCode::OverrideBlocked,
+            ConfigError::HealthCheckFailed { .. } => ErrorCode::HealthCheckFailed,
         }
     }
 
@@ -556,6 +567,9 @@ impl ConfigError {
                     "Override blocked for key '{}'{}: {}",
                     key, source_str, reason
                 )
+            }
+            ConfigError::HealthCheckFailed { reason } => {
+                format!("Health check failed: {}", reason)
             }
         }
     }

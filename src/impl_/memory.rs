@@ -121,11 +121,13 @@ mod async_impl {
 
     #[async_trait]
     impl ConfigConnector for InMemoryConfig {
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
                 Ok(())
             } else {
-                anyhow::bail!("InMemoryConfig is not healthy")
+                Err(crate::error::ConfigError::HealthCheckFailed {
+                    reason: "InMemoryConfig is not healthy".into(),
+                })
             }
         }
 
@@ -332,11 +334,13 @@ mod sync_impl {
     }
 
     impl ConfigConnector for InMemoryConfig {
-        fn health_check(&self) -> anyhow::Result<()> {
+        fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
                 Ok(())
             } else {
-                anyhow::bail!("InMemoryConfig is not healthy")
+                Err(crate::error::ConfigError::HealthCheckFailed {
+                    reason: "InMemoryConfig is not healthy".into(),
+                })
             }
         }
 

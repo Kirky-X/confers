@@ -148,11 +148,13 @@ mod async_impl {
 
     #[async_trait]
     impl ConfigConnector for ConfigImpl {
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
                 Ok(())
             } else {
-                anyhow::bail!("ConfigImpl is not healthy")
+                Err(crate::error::ConfigError::HealthCheckFailed {
+                    reason: "ConfigImpl is not healthy".into(),
+                })
             }
         }
 
@@ -400,11 +402,13 @@ mod sync_impl {
     }
 
     impl ConfigConnector for ConfigImpl {
-        fn health_check(&self) -> anyhow::Result<()> {
+        fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
                 Ok(())
             } else {
-                anyhow::bail!("ConfigImpl is not healthy")
+                Err(crate::error::ConfigError::HealthCheckFailed {
+                    reason: "ConfigImpl is not healthy".into(),
+                })
             }
         }
 

@@ -115,7 +115,7 @@ impl WatcherGuard {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn shutdown(&self, _timeout: Duration) -> Result<bool, anyhow::Error> {
+    pub async fn shutdown(&self, _timeout: Duration) -> crate::error::ConfersResult<bool> {
         self.stop();
 
         // Note: Cannot await JoinHandle through a shared reference in async context.
