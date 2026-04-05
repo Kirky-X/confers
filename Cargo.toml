@@ -211,6 +211,16 @@ harness = false
 required-features = ["dynamic"]
 
 [[bench]]
+name = "hot_path_bench"
+harness = false
+required-features = ["dynamic"]
+
+[[bench]]
+name = "concurrent_rw_bench"
+harness = false
+required-features = ["dynamic"]
+
+[[bench]]
 name = "concurrent_access_bench"
 harness = false
 required-features = ["dynamic"]
