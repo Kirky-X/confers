@@ -50,7 +50,11 @@ mod async_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                overrides: moka::future::Cache::builder().max_capacity(1_000).build(),
+                overrides: moka::future::Cache::builder()
+                    .max_capacity(1_000)
+                    .time_to_live(std::time::Duration::from_secs(300))
+                    .time_to_idle(std::time::Duration::from_secs(60))
+                    .build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),
@@ -301,7 +305,11 @@ mod sync_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                overrides: moka::sync::Cache::builder().max_capacity(1_000).build(),
+                overrides: moka::sync::Cache::builder()
+                    .max_capacity(1_000)
+                    .time_to_live(std::time::Duration::from_secs(300))
+                    .time_to_idle(std::time::Duration::from_secs(60))
+                    .build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),
