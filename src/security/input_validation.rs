@@ -16,6 +16,45 @@
 
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
+
+/// 默认敏感模式 - 全局缓存
+static DEFAULT_SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)password").unwrap(),
+        Regex::new(r"(?i)secret").unwrap(),
+        Regex::new(r"(?i)token").unwrap(),
+        Regex::new(r"(?i)api_key").unwrap(),
+        Regex::new(r"(?i)access_key").unwrap(),
+        Regex::new(r"(?i)private_key").unwrap(),
+        Regex::new(r"(?i)credential").unwrap(),
+        Regex::new(r"(?i)auth").unwrap(),
+        Regex::new(r"(?i)key").unwrap(),
+        Regex::new(r"(?i)cert").unwrap(),
+        Regex::new(r"(?i)password_hash").unwrap(),
+        Regex::new(r"(?i)session_id").unwrap(),
+    ]
+});
+
+/// 默认危险模式 - 全局缓存
+static DEFAULT_DANGEROUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"[;<>&|`$()]").unwrap(),
+        Regex::new(r"\$\{.*\}").unwrap(),
+        Regex::new(r"`[^`]+`").unwrap(),
+        Regex::new(r"\|").unwrap(),
+        Regex::new(r"&&").unwrap(),
+        Regex::new(r"\|\|").unwrap(),
+        Regex::new(r">>").unwrap(),
+        Regex::new(r"2>").unwrap(),
+        Regex::new(r"\.\.[/\\]").unwrap(),
+        Regex::new(r"[/\\]\.\.[/\\]").unwrap(),
+        Regex::new(r"(?i)(;?\s*(drop|delete|update|insert|alter|create)\b)").unwrap(),
+        Regex::new(r"(?i)(union\s+select\b)").unwrap(),
+        Regex::new(r"(?i)'+\s*(or|and)\b").unwrap(),
+        Regex::new(r"(?i)--\s*$").unwrap(),
+    ]
+});
 
 /// 敏感数据检测器
 #[derive(Debug, Clone)]
@@ -46,20 +85,7 @@ impl SensitiveDataDetector {
 
     /// 默认敏感模式
     fn default_sensitive_patterns() -> Vec<Regex> {
-        vec![
-            Regex::new(r"(?i)password").unwrap(),
-            Regex::new(r"(?i)secret").unwrap(),
-            Regex::new(r"(?i)token").unwrap(),
-            Regex::new(r"(?i)api_key").unwrap(),
-            Regex::new(r"(?i)access_key").unwrap(),
-            Regex::new(r"(?i)private_key").unwrap(),
-            Regex::new(r"(?i)credential").unwrap(),
-            Regex::new(r"(?i)auth").unwrap(),
-            Regex::new(r"(?i)key").unwrap(),
-            Regex::new(r"(?i)cert").unwrap(),
-            Regex::new(r"(?i)password_hash").unwrap(),
-            Regex::new(r"(?i)session_id").unwrap(),
-        ]
+        DEFAULT_SENSITIVE_PATTERNS.clone()
     }
 
     /// 默认高敏感度关键词
@@ -208,26 +234,7 @@ impl InputValidator {
 
     /// 默认危险模式
     fn default_dangerous_patterns() -> Vec<Regex> {
-        vec![
-            Regex::new(r"[;<>&|`$()]").unwrap(), // Shell 元字符
-            Regex::new(r"\$\{.*\}").unwrap(),    // Shell 变量展开
-            Regex::new(r"`[^`]+`").unwrap(),     // 命令替换
-            Regex::new(r"\|").unwrap(),          // 管道
-            Regex::new(r"&&").unwrap(),          // 条件执行
-            Regex::new(r"\|\|").unwrap(),        // 条件执行
-            Regex::new(r">>").unwrap(),          // 追加重定向
-            Regex::new(r"2>").unwrap(),          // 错误重定向
-            // 路径遍历检测
-            Regex::new(r"\.\.[/\\]").unwrap(),      // ../ or ..\
-            Regex::new(r"[/\\]\.\.[/\\]").unwrap(), // /../ or \..\
-            // SQL 注入检测
-            // 注意：这是纵深防御措施，主要的 SQL 注入防护应在数据库层通过参数化查询实现
-            // 此处检测用于在配置层捕获明显的注入尝试，作为额外安全层
-            Regex::new(r"(?i)(;?\s*(drop|delete|update|insert|alter|create)\b)").unwrap(),
-            Regex::new(r"(?i)(union\s+select\b)").unwrap(),
-            Regex::new(r"(?i)'+\s*(or|and)\b").unwrap(),
-            Regex::new(r"(?i)--\s*$").unwrap(),
-        ]
+        DEFAULT_DANGEROUS_PATTERNS.clone()
     }
 
     /// 设置最大字符串长度

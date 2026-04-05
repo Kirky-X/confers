@@ -7,10 +7,35 @@ use crate::error::ConfigError;
 use crate::key::KeyManager;
 use crate::secret::{SecretBytes, XChaCha20Crypto};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::LazyLock;
+
+/// 十六进制模式 - 全局缓存
+static HEX_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-fA-F]{8,64}").unwrap());
+
+/// 密钥模式 - 全局缓存
+static KEY_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)key\s*[:=]\s*[0-9a-fA-F]+").unwrap());
+
+/// 主密钥模式 - 全局缓存
+static MASTER_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)master\s*[:=]\s*[0-9a-fA-F]+").unwrap());
+
+/// 密钥模式 - 全局缓存
+static SECRET_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)secret\s*[:=]\s*[0-9a-fA-F]+").unwrap());
+
+/// 长十六进制模式 - 全局缓存
+static LONG_HEX_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[0-9a-fA-F]{64}").unwrap());
+
+/// Base64模式 - 全局缓存
+static BASE64_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Za-z0-9+/]{32,}={0,2}").unwrap());
 
 /// 脱敏级别定义
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,59 +102,35 @@ impl ErrorSanitizer {
     }
 
     /// 脱敏密钥片段（8字符以上的十六进制字符串）
+    /// 脱敏十六进制片段
     fn sanitize_key_fragments(&self, message: &str) -> String {
-        use regex::Regex;
-
-        // 匹配8-64个字符的十六进制字符串
-        let hex_pattern = Regex::new(r"[0-9a-fA-F]{8,64}").unwrap();
-        hex_pattern
+        HEX_PATTERN
             .replace_all(message, &self.replacement)
             .to_string()
     }
 
     /// 脱敏常见的密钥相关模式
     fn sanitize_key_patterns(&self, message: &str) -> String {
-        use regex::Regex;
-
         let mut result = message.to_string();
-
-        // 脱敏 "key:" 模式
-        let key_pattern = Regex::new(r"(?i)key\s*[:=]\s*[0-9a-fA-F]+").unwrap();
-        result = key_pattern.replace_all(&result, "key: ***").to_string();
-
-        // 脱敏 "master:" 模式
-        let master_pattern = Regex::new(r"(?i)master\s*[:=]\s*[0-9a-fA-F]+").unwrap();
-        result = master_pattern
+        result = KEY_PATTERN.replace_all(&result, "key: ***").to_string();
+        result = MASTER_PATTERN
             .replace_all(&result, "master: ***")
             .to_string();
-
-        // 脱敏 "secret:" 模式
-        let secret_pattern = Regex::new(r"(?i)secret\s*[:=]\s*[0-9a-fA-F]+").unwrap();
-        result = secret_pattern
+        result = SECRET_PATTERN
             .replace_all(&result, "secret: ***")
             .to_string();
-
         result
     }
 
     /// 脱敏可疑模式（激进模式）
     fn sanitize_suspicious_patterns(&self, message: &str) -> String {
-        use regex::Regex;
-
         let mut result = message.to_string();
-
-        // 脱敏任何64字符的字符串（可能是完整的密钥）
-        let long_hex_pattern = Regex::new(r"[0-9a-fA-F]{64}").unwrap();
-        result = long_hex_pattern
+        result = LONG_HEX_PATTERN
             .replace_all(&result, &self.replacement)
             .to_string();
-
-        // 脱敏base64编码的长字符串（可能是编码的密钥）
-        let base64_pattern = Regex::new(r"[A-Za-z0-9+/]{32,}={0,2}").unwrap();
-        result = base64_pattern
+        result = BASE64_PATTERN
             .replace_all(&result, &self.replacement)
             .to_string();
-
         result
     }
 }
@@ -743,14 +744,12 @@ mod tests {
         let master_key = [0x42; 32];
         let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Aggressive);
 
-        // 测试64字符十六进制字符串脱敏
-        let hex_64 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+        let hex_64 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"; // pragma: allowlist secret
         let sanitized = sanitizer.sanitize(&format!("Error: {}", hex_64));
         assert!(sanitized.contains("***"));
         assert!(!sanitized.contains(hex_64));
 
-        // 测试base64字符串脱敏
-        let base64_long = "SGVsbG8gV29ybGQhVGhpcyBpcyBhIHZlcnkgbG9uZyBiYXNlNjQgc3RyaW5nIHRlc3Q=";
+        let base64_long = "SGVsbG8gV29ybGQhVGhpcyBpcyBhIHZlcnkgbG9uZyBiYXNlNjQgc3RyaW5nIHRlc3Q="; // pragma: allowlist secret
         let sanitized = sanitizer.sanitize(&format!("Data: {}", base64_long));
         assert!(sanitized.contains("***"));
         assert!(!sanitized.contains(base64_long));

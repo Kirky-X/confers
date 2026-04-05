@@ -37,8 +37,18 @@ use crate::security::{EnvSecurityError, EnvSecurityValidator};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, LazyLock, OnceLock, RwLock};
 use std::time::Instant;
+
+/// 默认敏感字段模式 - 全局缓存
+static DEFAULT_SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)(secret|password|token|key|auth|credential)").unwrap(),
+        Regex::new(r"(?i)(api_key|access_token|refresh_token)").unwrap(),
+        Regex::new(r"(?i)(private_key|public_key)").unwrap(),
+        Regex::new(r"(?i)(database_url|connection_string)").unwrap(),
+    ]
+});
 
 /// Rate limiter configuration
 const RATE_LIMIT_MAX_REQUESTS: usize = 100;
@@ -234,12 +244,7 @@ impl ConfigInjector {
 
     /// 默认敏感字段模式
     fn default_sensitive_patterns() -> Vec<Regex> {
-        vec![
-            Regex::new(r"(?i)(secret|password|token|key|auth|credential)").unwrap(),
-            Regex::new(r"(?i)(api_key|access_token|refresh_token)").unwrap(),
-            Regex::new(r"(?i)(private_key|public_key)").unwrap(),
-            Regex::new(r"(?i)(database_url|connection_string)").unwrap(),
-        ]
+        DEFAULT_SENSITIVE_PATTERNS.clone()
     }
 
     fn validate_injection(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {
