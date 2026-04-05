@@ -356,6 +356,34 @@ impl std::fmt::Display for Format {
     }
 }
 
+impl Format {
+    /// Get the file extension for this format.
+    pub const fn ext(&self) -> &'static str {
+        match self {
+            Format::Toml => "toml",
+            Format::Json => "json",
+            Format::Yaml => "yaml",
+            Format::Ini => "ini",
+        }
+    }
+
+    /// Get all supported file formats.
+    pub const fn all() -> &'static [Format] {
+        &[Format::Toml, Format::Json, Format::Yaml, Format::Ini]
+    }
+
+    /// Parse a format from a string (case-insensitive).
+    pub fn from_str(s: &str) -> Option<Format> {
+        match s.to_lowercase().as_str() {
+            "toml" => Some(Format::Toml),
+            "json" => Some(Format::Json),
+            "yaml" | "yml" => Some(Format::Yaml),
+            "ini" => Some(Format::Ini),
+            _ => None,
+        }
+    }
+}
+
 /// Detect configuration format from file path extension.
 ///
 /// Returns `Some(Format)` if the extension matches a known format,

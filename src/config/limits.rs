@@ -1,5 +1,7 @@
 //! Configuration limits for safety and resource management.
 
+use crate::impl_::loader::Format;
+
 /// Configuration size and resource limits.
 #[derive(Debug, Clone)]
 pub struct ConfigLimits {
@@ -32,13 +34,7 @@ impl Default for ConfigLimits {
             max_keys: 10_000,
             max_array_length: 10_000,
             max_string_length: 1024 * 1024, // 1 MB
-            allowed_extensions: vec![
-                "toml".to_string(),
-                "json".to_string(),
-                "yaml".to_string(),
-                "yml".to_string(),
-                "ini".to_string(),
-            ],
+            allowed_extensions: Format::all().iter().map(|f| f.ext().to_string()).collect(),
             allow_remote: false, // Secure by default
             max_sources: 50,
         }
@@ -151,13 +147,7 @@ impl ConfigLimits {
             max_keys: 100_000,
             max_array_length: 100_000,
             max_string_length: 10 * 1024 * 1024, // 10 MB
-            allowed_extensions: vec![
-                "toml".to_string(),
-                "json".to_string(),
-                "yaml".to_string(),
-                "yml".to_string(),
-                "ini".to_string(),
-            ],
+            allowed_extensions: Format::all().iter().map(|f| f.ext().to_string()).collect(),
             allow_remote: true,
             max_sources: 100,
         }
