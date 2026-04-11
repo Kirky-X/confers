@@ -56,3 +56,4 @@ spec/
 # Docker
 docker-compose.test.yml
 .worktrees/
+.gitnexus
