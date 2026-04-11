@@ -5,6 +5,32 @@
 //! - Sanitized messages for user display
 //! - Audit-safe messages for logging
 //! - Retryable error classification
+//!
+//! # BrickArchitecture: Phase Separation
+//!
+//! This module follows BrickArchitecture error phase separation:
+//!
+//! - **`ConfersConfigError`** — Configuration phase errors (initialization time)
+//!   - See [`config_error`] module for full documentation
+//!   - Returned by factory functions and builders
+//!
+//! - **`ConfersError`** — Runtime errors (use time)
+//!   - Defined in this module
+//!   - Returned by trait methods during configuration use
+//!
+//! # Backward Compatibility
+//!
+//! The following aliases are provided for backward compatibility:
+//! - `ConfigError` → `ConfersError`
+//! - `ConfigResult<T>` → `ConfersResult<T>`
+//! - `ErrorCode` → Runtime error codes
+
+// Configuration phase errors (initialization time)
+pub mod config_error;
+
+// Re-export configuration phase error types
+pub use config_error::ConfersConfigError;
+pub use config_error::{ConfigErrorCode, ConfigResult as InitResult};
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
