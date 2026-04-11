@@ -1,10 +1,6 @@
 //! Configuration merge engine.
 //!
-//! This module provides various merge strategies for combining configuration values
-//! from multiple sources with different priorities.
+//! Implementation lives in `crate::impl_::merger`. This module provides
+//! the public API surface for configuration merge strategies.
 
-mod engine;
-mod strategy;
-
-pub use engine::*;
-pub use strategy::*;
+pub use crate::impl_::merger::{MergeEngine, MergeStrategy};

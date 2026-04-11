@@ -6,7 +6,7 @@ use crate::value::ConfigValue;
 pub type CustomMergeFn = fn(&ConfigValue, &ConfigValue) -> ConfigValue;
 
 /// Merge strategy for combining configuration values.
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 pub enum MergeStrategy {
     /// Replace the lower priority value entirely (default)
     #[default]

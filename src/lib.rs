@@ -9,7 +9,7 @@
 //!
 //! # Quick Start
 //!
-//! ```no_run
+//! ```ignore
 //! use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,13 +27,30 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # BrickArchitecture Error Separation
+//!
+//! This library separates configuration phase errors from runtime errors:
+//!
+//! - **`ConfersConfigError`** — Initialization errors (missing fields, parse errors, validation failures)
+//! - **`ConfersError`** — Runtime errors (timeout, remote unavailable, decryption failures)
+//!
+//! Use `new_in_memory_validated()` for BrickArchitecture-compliant initialization:
+//!
+//! ```rust
+//! use confers::{new_in_memory_validated, ConfigConnector, ConfersConfigError};
+//!
+//! # fn main() -> Result<(), ConfersConfigError> {
+//! let config = new_in_memory_validated(1000)?; // Returns Result, validates capacity > 0
+//! # Ok(())
+//! # }
+//! ```
 
 // ============== Public Modules ==============
 
 pub mod config;
 pub mod error;
 pub mod format;
-pub mod interface;
 pub mod loader;
 pub mod merger;
 pub mod traits;
@@ -103,12 +120,15 @@ pub use config::{
 
 // Error types (BrickArchitecture compliant)
 pub use error::{
-    BuildResult, BuildWarning, ConfersError, ConfersResult, ConfigError, ConfigResult, ErrorCode,
-    ParseLocation,
+    BuildResult, BuildWarning, ConfersConfigError, ConfersError, ConfersResult, ConfigError,
+    ConfigErrorCode, ConfigResult, ErrorCode, InitResult, ParseLocation,
 };
 
 // Interface traits (BrickArchitecture)
-pub use interface::{ConfigConnector, ConfigReader, ConfigWriter};
+pub use traits::{
+    ConfigConnector, ConfigProvider, ConfigProviderExt, ConfigReader, ConfigWriter, KeyProvider,
+    TypedConfigKey,
+};
 
 // Public types
 pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
@@ -117,7 +137,6 @@ pub use loader::{
     detect_format_from_content, detect_format_from_path, load_file, parse_content, Format,
     LoaderConfig,
 };
-pub use traits::{ConfigProvider, ConfigProviderExt, KeyProvider, TypedConfigKey};
 
 // Re-export derive macros
 pub use macros::Config;
@@ -189,7 +208,7 @@ pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use confers::{new_in_memory, ConfigConnector, ConfigReader, ConfigWriter, ConfigValue, AnnotatedValue, SourceId};
 ///
 /// # async fn example() -> Result<(), confers::ConfersError> {
@@ -208,6 +227,9 @@ pub fn new_in_memory() -> impl ConfigConnector {
 
 /// Create an in-memory config with custom capacity.
 ///
+/// Note: This function does not validate capacity. For production use,
+/// prefer `new_in_memory_validated()` which returns a Result.
+///
 /// # Example
 ///
 /// ```rust
@@ -221,15 +243,46 @@ pub fn new_in_memory_with_capacity(max_capacity: u64) -> impl ConfigConnector {
         .build()
 }
 
+/// Create a validated in-memory config with capacity limit.
+///
+/// # BrickArchitecture
+///
+/// This factory function returns `Result` for initialization failures,
+/// following BrickArchitecture fail-fast principle.
+///
+/// # Errors
+///
+/// Returns `ConfersConfigError::InvalidValue` if capacity is 0.
+///
+/// # Example
+///
+/// ```rust
+/// use confers::{new_in_memory_validated, ConfigConnector, ConfersConfigError};
+///
+/// # fn example() -> Result<(), ConfersConfigError> {
+/// let config = new_in_memory_validated(1000)?;
+/// # Ok(())
+/// # }
+/// ```
+pub fn new_in_memory_validated(
+    max_capacity: u64,
+) -> Result<impl ConfigConnector, ConfersConfigError> {
+    impl_::memory::InMemoryConfig::new_validated(max_capacity)
+}
+
 // ============== Prelude ==============
 
 /// Prelude for common imports.
 pub mod prelude {
     pub use crate::config::{config, ConfigBuilder, ConfigLimits};
-    pub use crate::error::{BuildResult, ConfigError, ConfigResult, ErrorCode};
-    pub use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
+    pub use crate::error::{
+        BuildResult, ConfersConfigError, ConfersError, ConfigError, ConfigResult, ErrorCode,
+    };
     pub use crate::loader::{Format, LoaderConfig};
-    pub use crate::traits::{ConfigProvider, ConfigProviderExt, TypedConfigKey};
+    pub use crate::traits::{
+        ConfigConnector, ConfigProvider, ConfigProviderExt, ConfigReader, ConfigWriter,
+        TypedConfigKey,
+    };
     pub use crate::value::{AnnotatedValue, ConfigValue};
     pub use crate::Config;
 

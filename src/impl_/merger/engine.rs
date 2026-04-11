@@ -52,7 +52,7 @@ impl MergeEngine {
         low: &AnnotatedValue,
         high: &AnnotatedValue,
     ) -> ConfigResult<AnnotatedValue> {
-        Self::merge_with_depth(low, high, self.get_strategy(&low.path).clone(), 0)
+        Self::merge_with_depth(low, high, *self.get_strategy(&low.path), 0)
     }
 
     fn merge_with_depth(
@@ -215,7 +215,7 @@ fn merge_maps_with_cow(
 
             if needs_recursive {
                 let merged_inner =
-                    MergeEngine::merge_with_depth(v_low, v_high, strategy.clone(), depth + 1)?;
+                    MergeEngine::merge_with_depth(v_low, v_high, *strategy, depth + 1)?;
                 result.insert(
                     k.clone(),
                     build_annotated_value(merged_inner.inner.clone(), v_high, v_low),

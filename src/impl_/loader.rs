@@ -371,16 +371,26 @@ impl Format {
     pub const fn all() -> &'static [Format] {
         &[Format::Toml, Format::Json, Format::Yaml, Format::Ini]
     }
+}
 
-    /// Parse a format from a string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Format> {
+impl std::str::FromStr for Format {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "toml" => Some(Format::Toml),
-            "json" => Some(Format::Json),
-            "yaml" | "yml" => Some(Format::Yaml),
-            "ini" => Some(Format::Ini),
-            _ => None,
+            "toml" => Ok(Format::Toml),
+            "json" => Ok(Format::Json),
+            "yaml" | "yml" => Ok(Format::Yaml),
+            "ini" => Ok(Format::Ini),
+            _ => Err(()),
         }
+    }
+}
+
+impl Format {
+    /// Parse a format from a string (case-insensitive).
+    pub fn try_parse(s: &str) -> Option<Format> {
+        s.parse().ok()
     }
 }
 

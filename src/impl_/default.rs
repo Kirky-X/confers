@@ -5,8 +5,8 @@
 
 use crate::config::{ConfigLimits, SourceChain, SourceChainBuilder};
 use crate::error::ConfersResult;
-use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::merger::MergeStrategy;
+use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::value::{AnnotatedValue, ConfigValue, SourceId};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 ))]
 mod async_impl {
     use super::*;
+    use crate::traits::sealed::Sealed;
     use async_trait::async_trait;
     use moka::future::Cache;
 
@@ -100,6 +101,8 @@ mod async_impl {
             Ok(keys)
         }
     }
+
+    impl Sealed for ConfigImpl {}
 
     #[async_trait]
     impl ConfigReader for ConfigImpl {
@@ -243,7 +246,7 @@ mod async_impl {
 
         /// Set the merge strategy.
         pub fn merge_strategy(mut self, strategy: MergeStrategy) -> Self {
-            self.merge_strategy = strategy.clone();
+            self.merge_strategy = strategy;
             self.chain_builder = self.chain_builder.strategy(strategy);
             self
         }
@@ -280,6 +283,7 @@ pub use async_impl::{ConfigImpl, ConfigImplBuilder};
 )))]
 mod sync_impl {
     use super::*;
+    use crate::traits::sealed::Sealed;
     use moka::sync::Cache;
 
     /// Primary configuration implementation with multiple source support.
@@ -357,6 +361,8 @@ mod sync_impl {
             Ok(keys)
         }
     }
+
+    impl Sealed for ConfigImpl {}
 
     impl ConfigReader for ConfigImpl {
         fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>> {
@@ -497,7 +503,7 @@ mod sync_impl {
 
         /// Set the merge strategy.
         pub fn merge_strategy(mut self, strategy: MergeStrategy) -> Self {
-            self.merge_strategy = strategy.clone();
+            self.merge_strategy = strategy;
             self.chain_builder = self.chain_builder.strategy(strategy);
             self
         }

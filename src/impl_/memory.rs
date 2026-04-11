@@ -2,9 +2,17 @@
 //!
 //! This module provides `InMemoryConfig` - a thread-safe, high-performance
 //! in-memory configuration store backed by moka cache.
+//!
+//! # BrickArchitecture Compliance
+//!
+//! This module follows BrickArchitecture patterns:
+//! - Factory functions return Result for initialization failures
+//! - Configuration phase errors use `ConfersConfigError`
+//! - Runtime errors use `ConfersError`
 
-use crate::error::ConfersResult;
-use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
+use crate::error::{ConfersConfigError, ConfersResult, ConfigErrorCode};
+use crate::traits::sealed::Sealed;
+use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::value::{AnnotatedValue, SourceId};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -48,6 +56,38 @@ mod async_impl {
             Self::builder().build()
         }
 
+        /// Create a validated in-memory config with capacity limit.
+        ///
+        /// # BrickArchitecture
+        ///
+        /// This is the validated constructor that returns Result for
+        /// initialization failures. Use this for production code.
+        ///
+        /// # Errors
+        ///
+        /// Returns `ConfersConfigError::InvalidValue` if:
+        /// - `max_capacity` is 0 (invalid capacity)
+        ///
+        /// # Example
+        ///
+        /// ```rust,ignore
+        /// // Use new_in_memory_validated() from lib.rs instead
+        /// use confers::{new_in_memory_validated, ConfigConnector};
+        ///
+        /// let config = new_in_memory_validated(1000)?;
+        /// # Ok::<(), confers::ConfersConfigError>(())
+        /// ```
+        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfersConfigError> {
+            if max_capacity == 0 {
+                return Err(ConfersConfigError::InvalidValue {
+                    field: "max_capacity".into(),
+                    expected_type: "u64".into(),
+                    message: "must be greater than 0".into(),
+                });
+            }
+            Ok(Self::builder().max_capacity(max_capacity).build())
+        }
+
         /// Create a builder for custom configuration.
         pub fn builder() -> InMemoryConfigBuilder {
             InMemoryConfigBuilder::default()
@@ -84,6 +124,8 @@ mod async_impl {
             Self::new()
         }
     }
+
+    impl Sealed for InMemoryConfig {}
 
     #[async_trait]
     impl ConfigReader for InMemoryConfig {
@@ -264,6 +306,28 @@ mod sync_impl {
             Self::builder().build()
         }
 
+        /// Create a validated in-memory config with capacity limit.
+        ///
+        /// # BrickArchitecture
+        ///
+        /// This is the validated constructor that returns Result for
+        /// initialization failures. Use this for production code.
+        ///
+        /// # Errors
+        ///
+        /// Returns `ConfersConfigError::InvalidValue` if:
+        /// - `max_capacity` is 0 (invalid capacity)
+        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfersConfigError> {
+            if max_capacity == 0 {
+                return Err(ConfersConfigError::InvalidValue {
+                    field: "max_capacity".into(),
+                    expected_type: "u64".into(),
+                    message: "must be greater than 0".into(),
+                });
+            }
+            Ok(Self::builder().max_capacity(max_capacity).build())
+        }
+
         /// Create a builder for custom configuration.
         pub fn builder() -> InMemoryConfigBuilder {
             InMemoryConfigBuilder::default()
@@ -300,6 +364,8 @@ mod sync_impl {
             Self::new()
         }
     }
+
+    impl Sealed for InMemoryConfig {}
 
     impl ConfigReader for InMemoryConfig {
         fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>> {

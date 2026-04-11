@@ -1,15 +1,195 @@
 //! Core trait definitions for confers.
 //!
+//! Follows Interface Segregation Principle (ISP) — traits are split by responsibility.
+//!
 //! This module defines the core abstractions:
+//! - `ConfigReader` / `ConfigWriter` / `ConfigConnector` - Read/write access (feature-gated async/sync)
 //! - `ConfigProvider` - Synchronous configuration access
 //! - `ConfigProviderExt` - Extension trait with convenience methods
 //! - `AsyncConfigProvider` - Asynchronous configuration access
 //! - `KeyProvider` - Encryption key provider
 //! - `MetricsBackend` - Metrics collection interface
 
-use crate::error::ConfigResult;
+use crate::error::{ConfersResult, ConfigResult};
 use crate::value::AnnotatedValue;
 use std::collections::HashMap;
+
+// ============== Sealed Trait Pattern ==============
+
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
+
+// ============== Async Traits (feature-gated) ==============
+
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+pub use async_traits_impl::*;
+
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+mod async_traits_impl {
+    use super::sealed::Sealed;
+    use super::*;
+    use async_trait::async_trait;
+    use std::time::Duration;
+
+    #[async_trait]
+    pub trait ConfigReader: Sealed + Send + Sync {
+        async fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>>;
+        async fn keys(&self) -> ConfersResult<Vec<String>>;
+        async fn has(&self, key: &str) -> ConfersResult<bool> {
+            Ok(self.get_raw(key).await?.is_some())
+        }
+        async fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
+            Ok(self.get_raw(key).await?.and_then(|v| v.as_string()))
+        }
+        async fn get_i64(&self, key: &str) -> ConfersResult<Option<i64>> {
+            Ok(self.get_raw(key).await?.and_then(|v| v.as_i64()))
+        }
+        async fn get_u64(&self, key: &str) -> ConfersResult<Option<u64>> {
+            Ok(self.get_raw(key).await?.and_then(|v| v.as_u64()))
+        }
+        async fn get_f64(&self, key: &str) -> ConfersResult<Option<f64>> {
+            Ok(self.get_raw(key).await?.and_then(|v| v.as_f64()))
+        }
+        async fn get_bool(&self, key: &str) -> ConfersResult<Option<bool>> {
+            Ok(self.get_raw(key).await?.and_then(|v| v.as_bool()))
+        }
+    }
+
+    #[async_trait]
+    pub trait ConfigWriter: Sealed + Send + Sync {
+        async fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()>;
+        async fn delete(&self, key: &str) -> ConfersResult<bool>;
+        async fn clear(&self) -> ConfersResult<()>;
+    }
+
+    #[async_trait]
+    pub trait ConfigConnector: ConfigReader + ConfigWriter + Sealed + Send + Sync {
+        async fn health_check(&self) -> crate::error::ConfersResult<()>;
+        async fn shutdown(&self);
+    }
+
+    #[async_trait]
+    pub trait AsyncConfigProvider: Send + Sync {
+        async fn get_string_async(&self, key: &str) -> ConfigResult<Option<String>>;
+        async fn get_typed_async<T>(&self, key: &str) -> ConfigResult<T>
+        where
+            T: std::str::FromStr + Default + Send,
+            T::Err: std::fmt::Display + Send;
+        async fn refresh(&self) -> ConfigResult<()>;
+    }
+
+    #[async_trait]
+    pub trait AsyncKeyProvider: Send + Sync {
+        async fn get_key(&self) -> ConfigResult<ZeroizingBytes>;
+        fn provider_type(&self) -> &'static str;
+        fn ttl(&self) -> Option<Duration> {
+            None
+        }
+        fn cache_policy(&self) -> KeyCachePolicy {
+            KeyCachePolicy::default()
+        }
+    }
+}
+
+// ============== Sync Traits (for minimal builds) ==============
+
+#[cfg(not(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+)))]
+pub use sync_traits::*;
+
+#[cfg(not(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+)))]
+mod sync_traits {
+    use super::sealed::Sealed;
+    use super::*;
+
+    /// Configuration reader trait (sync).
+    ///
+    /// Provides read-only access to configuration values.
+    pub trait ConfigReader: Sealed + Send + Sync {
+        /// Get raw annotated value.
+        fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>>;
+
+        /// Get all configuration keys.
+        fn keys(&self) -> ConfersResult<Vec<String>>;
+
+        /// Check if key exists.
+        fn has(&self, key: &str) -> ConfersResult<bool> {
+            Ok(self.get_raw(key)?.is_some())
+        }
+
+        /// Get string value.
+        fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
+            Ok(self.get_raw(key)?.and_then(|v| v.as_string()))
+        }
+
+        /// Get i64 value.
+        fn get_i64(&self, key: &str) -> ConfersResult<Option<i64>> {
+            Ok(self.get_raw(key)?.and_then(|v| v.as_i64()))
+        }
+
+        /// Get u64 value.
+        fn get_u64(&self, key: &str) -> ConfersResult<Option<u64>> {
+            Ok(self.get_raw(key)?.and_then(|v| v.as_u64()))
+        }
+
+        /// Get f64 value.
+        fn get_f64(&self, key: &str) -> ConfersResult<Option<f64>> {
+            Ok(self.get_raw(key)?.and_then(|v| v.as_f64()))
+        }
+
+        /// Get bool value.
+        fn get_bool(&self, key: &str) -> ConfersResult<Option<bool>> {
+            Ok(self.get_raw(key)?.and_then(|v| v.as_bool()))
+        }
+    }
+
+    /// Configuration writer trait (sync).
+    ///
+    /// Provides write access to configuration values.
+    pub trait ConfigWriter: Sealed + Send + Sync {
+        /// Set a configuration value.
+        fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()>;
+
+        /// Delete a configuration key.
+        fn delete(&self, key: &str) -> ConfersResult<bool>;
+
+        /// Clear all configuration.
+        fn clear(&self) -> ConfersResult<()>;
+    }
+
+    /// Combined configuration connector trait (sync).
+    ///
+    /// Implements BrickArchitecture specification:
+    /// - Inherits ConfigReader and ConfigWriter
+    /// - Embeds lifecycle methods (health_check, shutdown)
+    pub trait ConfigConnector: ConfigReader + ConfigWriter + Sealed + Send + Sync {
+        /// Health check: verify the connector is operational.
+        fn health_check(&self) -> crate::error::ConfersResult<()>;
+
+        /// Graceful shutdown: release resources.
+        fn shutdown(&self);
+    }
+}
 
 /// Core trait for configuration access.
 ///
@@ -185,55 +365,6 @@ impl Drop for ZeroizingBytes {
 // ZeroizingBytes does not implement Clone to prevent bypassing memory protection.
 // The Drop trait ensures sensitive data is zeroized on drop.
 // Note: Cloning ZeroizingBytes would leave copies in memory that cannot be zeroized.
-
-#[cfg(any(feature = "remote", feature = "config-bus", feature = "encryption"))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(any(feature = "remote", feature = "config-bus", feature = "encryption")))
-)]
-pub use async_traits::*;
-
-#[cfg(any(feature = "remote", feature = "config-bus", feature = "encryption"))]
-mod async_traits {
-    use super::*;
-    use std::time::Duration;
-
-    /// Asynchronous configuration provider for remote sources.
-    #[async_trait::async_trait]
-    pub trait AsyncConfigProvider: Send + Sync {
-        /// Get a string value asynchronously.
-        async fn get_string_async(&self, key: &str) -> ConfigResult<Option<String>>;
-
-        /// Get a typed value asynchronously.
-        async fn get_typed_async<T>(&self, key: &str) -> ConfigResult<T>
-        where
-            T: std::str::FromStr + Default + Send,
-            T::Err: std::fmt::Display + Send;
-
-        /// Refresh configuration from source.
-        async fn refresh(&self) -> ConfigResult<()>;
-    }
-
-    /// Asynchronous encryption key provider.
-    #[async_trait::async_trait]
-    pub trait AsyncKeyProvider: Send + Sync {
-        /// Get the encryption key asynchronously.
-        async fn get_key(&self) -> ConfigResult<ZeroizingBytes>;
-
-        /// Get the provider type name.
-        fn provider_type(&self) -> &'static str;
-
-        /// Get the TTL for caching.
-        fn ttl(&self) -> Option<Duration> {
-            None
-        }
-
-        /// Get the cache policy.
-        fn cache_policy(&self) -> KeyCachePolicy {
-            KeyCachePolicy::default()
-        }
-    }
-}
 
 /// Health status for progressive reload.
 #[derive(Debug, Clone, PartialEq, Eq)]
