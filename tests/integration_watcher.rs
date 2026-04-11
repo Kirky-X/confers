@@ -57,8 +57,11 @@ fn test_watcher_module_exists() {
 #[test]
 #[allow(unused_imports)]
 fn test_progressive_reload_module_exists() {
-    // Just verify the progressive reload module types are accessible
-    use confers::watcher::progressive::*;
+    // Verify progressive reload types are accessible via re-exports
+    use confers::watcher::{
+        HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
+        ReloadOutcome, ReloadStrategy,
+    };
 }
 
 // ========================================
@@ -600,7 +603,7 @@ mod progressive_tests {
     use async_trait::async_trait;
     use confers::traits::ConfigProvider;
     use confers::value::AnnotatedValue;
-    use confers::watcher::progressive::{
+    use confers::watcher::{
         HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
         ReloadOutcome, ReloadStrategy,
     };

@@ -452,7 +452,7 @@ mod consul_tests {
     /// Test Consul with TLS config (4.1.5).
     #[test]
     fn test_consul_tls_config() {
-        use confers::remote::consul::ConsulTlsConfig;
+        use confers::remote::ConsulTlsConfig;
 
         let tls_config = ConsulTlsConfig {
             ca_file: "/path/to/ca.pem".to_string(),
