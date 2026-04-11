@@ -8,18 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - **SECURITY.md**: Comprehensive security policy document with vulnerability reporting process, security features documentation, best practices guide, and security audit process
 - **ADR-041**: Async trait stabilization strategy - evaluating migration from `async-trait` crate to native `async fn in traits`
 - **ADR-042**: Source registry mechanism - unified `SourceProvider` trait and `SourceRegistry` for extensible data source registration
 - **ADR-043**: Error type simplification strategy - layered error architecture with simplified public API
 - **ADR-044**: Test coverage targets (80%) - per-module coverage requirements and CI integration
 - **ADR-045**: API versioning strategy - semver enforcement, deprecation process, and breaking change policy
+- **BrickArchitecture Compliance**: Configuration phase error type `ConfersConfigError` with 10 variants and error codes (2001-2999)
+
+### Changed
+
+- **Error Type Separation**: Split errors into configuration phase (`ConfersConfigError`) and runtime phase (`ConfersError`)
+- **Factory Functions**: Added `new_in_memory_validated()` returning `Result` for BrickArchitecture fail-fast initialization
+- **Backward Compatibility**: Added aliases `ConfersError = ConfigError`, `ConfersResult<T>` to preserve existing code
 
 ### Documentation
+
 - **README.md**: Added comprehensive feature matrix table and examples directory section with direct links to all 13 runnable examples
 - **CONTRIBUTING.md**: Added explicit code coverage requirements (>= 80%) and updated testing guidelines to align with ADR-044
+- **lib.rs**: Added BrickArchitecture error separation section with migration examples
 
 ### Security
+
 - Security documentation now covers all encryption, input validation, SSRF protection, audit logging, and key management features
 
 ---
@@ -29,32 +40,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎉 Added
 
 #### TypeScript Schema Generation
+
 - Added `typescript-schema` feature
 - Support for generating TypeScript type definitions from Rust types
 - API: `confers::schema::generate_typescript::<T>()`
 
 #### Key Management System (key feature)
+
 - `KeyManager`: Key lifecycle management
 - `KeyStorage`: Encrypted key storage (XChaCha20)
 - `KeyRotationService`: Automatic key rotation
 - Key metadata and version management
 
 #### Security Module (security feature)
+
 - `EnvSecurityValidator`: Environment variable security validation
 - `ErrorSanitizer`: Sensitive data redaction in error messages
 - `ConfigInjector`: Secure configuration injection
 - `SecureString`: Auto-zeroing secure string
 
 #### CLI Enhanced Commands
+
 - `confers generate`: Configuration template generation
 - `confers wizard`: Interactive configuration wizard
 - `confers completions`: Shell completion generation
 
 #### Parallel Validation
+
 - Added `parallel` feature (rayon)
 - Improved validation performance for large configurations
 
 ### 🔧 Improved
+
 - Updated feature preset definitions (minimal, recommended, dev, production, full, distributed)
 - Optimized XChaCha20 encryption performance
 - Improved error message readability
@@ -68,15 +85,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added missing features documentation (config-bus, progressive-reload, metrics, etc.)
 
 ### 🐛 Fixed
+
 - Fixed `progressive-reload` feature gating (missing `async_trait`)
 - Fixed `encryption` feature test panic
 
 ### 🔒 Security
+
 - Key management uses HKDF key derivation
 - Enhanced environment variable injection protection
 - Added path traversal protection
 
 ### 📊 Statistics
+
 - New files: 17
 - New code: 6,855 lines
 - New features: 4 (typescript-schema, security, key, parallel)
@@ -84,22 +104,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.2] - 2026-01-25
 
 ### Security
+
 - Internal function visibility hardening (pub(crate) for internal helpers)
 - TlsConfig refactored to use builder pattern
 - Clippy code style fixes applied
 
 ### Tests
+
 - All 167 unit tests passing
 - All 34 doc tests passing
 - cargo clippy --all-features passing
 - cargo deny check passing
 
 ### Changed
+
 - FileFormat unified across the codebase
 
 ## [0.2.1] - 2026-01-17
 
 ### Security
+
 - **Enhanced Audit Logging System**: Added comprehensive audit logging with event classification, integrity protection, log rotation, and query capabilities
 - **Enhanced Configuration Validation**: Implemented advanced validation system with range, dependency, format, and consistency validators
 - **Security Documentation**: Added comprehensive security documentation in API reference and user guide
@@ -107,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security Examples**: Added security examples for audit logging, configuration validation, and key management
 
 ### Added
+
 - Audit event types and priorities (ConfigLoad, KeyRotation, SecurityViolation, etc.)
 - Audit event generator with metadata tracking
 - Audit log writer with HMAC integrity protection
@@ -125,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced validation example in examples/src/02-validation/02-validation-advanced_validation.rs
 
 ### Changed
+
 - Added EncryptionError and DecryptionError to ConfigError enum
 - Added std::io::Write import to src/audit/mod.rs
 - Fixed Arc::clone usage for SecureString in src/core/loader.rs
@@ -134,11 +160,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated examples with complete security demonstrations
 
 ### Fixed
+
 - Fixed compilation errors with Arc<SecureString> type annotations
 - Fixed unused import warnings in src/audit/mod.rs and src/validator/mod.rs
 - Fixed documentation tests with proper imports and types
 
 ### Tests
+
 - All 204 tests passing (178 unit tests + 26 doc tests)
 - All security tests passing (93 tests)
 - All audit tests passing (6 tests)
@@ -147,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-01-16
 
 ### Security
+
 - **Internal Implementation Protection**: Privatized sensitive fields in `RemoteConfig` and `ConfigLoader` to prevent accidental exposure.
 - **Sensitive Data Isolation**: Replaced `String` with `Arc<Secure String>` for sensitive fields (`password`, `token`, `bearer_token`) in `HttpProvider` and `RemoteConfig`.
 - **Access Control**: Introduced secure Builder patterns for `EnvironmentValidationConfig` and `RemoteConfig`, enforcing secure construction via `with_auth_secure` and `with_bearer_token_secure`.
@@ -172,14 +201,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve input validation logic
 
 ### Fixed
+
 - Fixed compilation errors in `Config` derive macro by automatically implementing `OptionalValidate` trait when validation feature is disabled.
 - Resolved duplicate method definitions in `ConfigLoader`.
 
 ### Added
+
 - Create unified file format detection module (eliminates 4 duplicate implementations)
 - Add comprehensive security tests (800+ lines of test coverage)
 
 ### Changed
+
 - Enhance error handling with comprehensive error types
 - Optimize HTTP provider for remote configuration
 - Rename `resource/` directory to `docs/image/` for better organization
@@ -202,6 +234,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `RefreshKind::new()` to `RefreshKind::nothing()` for sysinfo compatibility
 
 ### Dependencies Updated
+
 - Updated all dependencies to their latest stable versions
 - Upgraded `lru` from 0.12 to 0.16.3 to fix soundness issue (RUSTSEC-2026-0002)
 - Updated core dependencies: tokio 1.48 → 1.49, serde, validator, schemars, thiserror, clap, etc.
@@ -210,27 +243,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-01-02
 
 ### Security
+
 - Add DNS rebinding protection to SSRF validation to prevent SSRF attacks via hostname resolution
 - Add safe_display() method to ConfigError to sanitize sensitive information from error messages
 - Mask key IDs in error messages to prevent sensitive data leakage
 
 ### Fixed
+
 - Increase default memory limit from 10MB to 512MB to prevent production outages
 - Make HTTP request timeouts configurable (default 30s) for better performance control
 - Replace RwLock unwrap() calls with proper error handling to prevent panics
 - Update validator registry methods to return Results instead of panicking
 
 ### Added
+
 - Add nonce cache monitoring methods (usage_percent, cache_stats) for production observability
 - Add warning for low memory limits (< 100MB) in ConfigLoader
 
 ### Changed
+
 - Simplified boolean expressions in SSRF validation (Clippy improvements)
 - Improved code formatting and documentation
 
 ## [0.1.0] - 2025-12-27
 
 ### Added
+
 - Type-safe configuration management with derive macro
 - Multi-format support (TOML, YAML, JSON, INI)
 - Environment variable override support
@@ -243,13 +281,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tool with multiple commands (encrypt, validate, diff, generate, etc.)
 
 ### Changed
+
 - Initial release
 - Improved documentation and examples
 
 ### Security
+
 - Secure memory cleanup
 - AES encryption for sensitive data
 - PBKDF2 key derivation
 
 ### Thanks
+
 - Thanks to all contributors and the Rust community

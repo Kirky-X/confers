@@ -1,4 +1,5 @@
 <span id="top"></span>
+
 <div align="center">
 
 <img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
@@ -56,9 +57,9 @@
 
 Confers provides a **declarative approach** to configuration management with:
 
-| ✨ Type Safety | 🔄 Auto Reload | 🔐 XChaCha20-Poly1305 Encryption | 🌐 Remote Sources |
-|:-------------:|:--------------:|:---------------------:|:-----------------:|
-| Compile-time checks | Hot reload support | Sensitive data protection | etcd, Consul, HTTP |
+|   ✨ Type Safety    |   🔄 Auto Reload   | 🔐 XChaCha20-Poly1305 Encryption | 🌐 Remote Sources  |
+| :-----------------: | :----------------: | :------------------------------: | :----------------: |
+| Compile-time checks | Hot reload support |    Sensitive data protection     | etcd, Consul, HTTP |
 
 ```rust
 use confers::Config;
@@ -106,8 +107,8 @@ let config = AppConfig::load_sync()?;
 ## <span id="features">✨ Features</span>
 
 | 🎯 Core Features | ⚡ Optional Features |
-|:-----------------|:--------------------|
-| Always available | Enable as needed |
+| :--------------- | :------------------- |
+| Always available | Enable as needed     |
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -115,32 +116,32 @@ let config = AppConfig::load_sync()?;
 
 ### 🎯 Core Features (Always Available)
 
-| Status | Feature | Description |
-|:------:|---------|-------------|
-| ✅ | **Type-safe Configuration** | Auto-generate config structs via derive macros (`derive` feature) |
-| ✅ | **Multi-format Support** | TOML, YAML, JSON, INI configuration files |
-| ✅ | **Environment Variable Override** | Support environment variable overrides |
-| ✅ | **CLI Argument Override** | Support command-line argument overrides (`cli` feature) |
+| Status | Feature                           | Description                                                       |
+| :----: | --------------------------------- | ----------------------------------------------------------------- |
+|   ✅   | **Type-safe Configuration**       | Auto-generate config structs via derive macros (`derive` feature) |
+|   ✅   | **Multi-format Support**          | TOML, YAML, JSON, INI configuration files                         |
+|   ✅   | **Environment Variable Override** | Support environment variable overrides                            |
+|   ✅   | **CLI Argument Override**         | Support command-line argument overrides (`cli` feature)           |
 
 </td>
 <td width="50%" style="vertical-align:top; padding: 16px">
 
 ### ⚡ Optional Features
 
-| Status | Feature | Description |
-|:------:|---------|-------------|
-| 🔍 | **Configuration Validation** | Built-in validator integration (`validation` feature) |
-| 📊 | **Schema Generation** | Auto-generate JSON Schema (`schema` feature) |
-| 🚀 | **File Watching & Hot Reload** | Real-time file monitoring (`watch` feature) |
-| 🔐 | **Configuration Encryption** | XChaCha20-Poly1305 encrypted storage (`encryption` feature) |
-| 🌐 | **Remote Configuration** | etcd, Consul, HTTP support (`remote` feature) |
-| 📦 | **Audit Logging** | Record access & change history (`audit` feature) |
-| ⚡ | **Parallel Validation** | Parallel validation for large configs (`parallel` feature) |
-| 📈 | **System Monitoring** | Memory usage monitoring (`monitoring` feature) |
-| 🔧 | **Configuration Diff** | Compare configs with multiple output formats |
-| 🎨 | **Interactive Wizard** | Generate config templates via CLI |
-| 🛡️ | **Security Enhancements** | Nonce reuse detection, SSRF protection |
-| 🔑 | **Key Management** | Built-in key generation and rotation |
+| Status | Feature                        | Description                                                 |
+| :----: | ------------------------------ | ----------------------------------------------------------- |
+|   🔍   | **Configuration Validation**   | Built-in validator integration (`validation` feature)       |
+|   📊   | **Schema Generation**          | Auto-generate JSON Schema (`schema` feature)                |
+|   🚀   | **File Watching & Hot Reload** | Real-time file monitoring (`watch` feature)                 |
+|   🔐   | **Configuration Encryption**   | XChaCha20-Poly1305 encrypted storage (`encryption` feature) |
+|   🌐   | **Remote Configuration**       | etcd, Consul, HTTP support (`remote` feature)               |
+|   📦   | **Audit Logging**              | Record access & change history (`audit` feature)            |
+|   ⚡   | **Parallel Validation**        | Parallel validation for large configs (`parallel` feature)  |
+|   📈   | **System Monitoring**          | Memory usage monitoring (`monitoring` feature)              |
+|   🔧   | **Configuration Diff**         | Compare configs with multiple output formats                |
+|   🎨   | **Interactive Wizard**         | Generate config templates via CLI                           |
+|   🛡️   | **Security Enhancements**      | Nonce reuse detection, SSRF protection                      |
+|   🔑   | **Key Management**             | Built-in key generation and rotation                        |
 
 </td>
 </tr>
@@ -148,14 +149,14 @@ let config = AppConfig::load_sync()?;
 
 ### 📦 Feature Presets
 
-| Preset | Features | Use Case |
-|--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables + JSON |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | Distributed systems |
-| <span style="color:#5B21B6; padding:4px 8px">full</span> | All features | Complete feature set |
+| Preset                                                          | Features                                                                                                                                                     | Use Case                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| <span style="color:#166534; padding:4px 8px">minimal</span>     | `env`, `json`                                                                                                                                                | Environment variables + JSON          |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation`                                                                                                                          | **Recommended for most applications** |
+| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
+| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit`                                                                 | Distributed systems                   |
+| <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
 
 **Note:** Default features include `toml`, `json`, `env`. The `cli` feature automatically includes `validation` and `encryption` dependencies.
 
@@ -182,75 +183,75 @@ graph LR
 
 ### 📋 Feature Matrix
 
-| Feature | Default | Description | Stability |
-|:--------|:-------:|:------------|:----------|
-| **Format Support** ||||
-| `toml` | ✅ | TOML configuration files | Stable |
-| `json` | ✅ | JSON configuration files | Stable |
-| `yaml` | ❌ | YAML configuration files | Stable |
-| `ini` | ❌ | INI configuration files | Stable |
-| `env` | ✅ | Environment variable support | Stable |
-| **Core Features** ||||
-| `validation` | ❌ | Configuration validation (garde) | Stable |
-| `watch` | ❌ | File watching and hot reload | Stable |
-| `encryption` | ❌ | XChaCha20-Poly1305 encryption | Stable |
-| `cli` | ❌ | CLI tool with commands | Stable |
-| `schema` | ❌ | JSON Schema generation | Stable |
-| `parallel` | ❌ | Parallel validation (rayon) | Stable |
-| `typescript-schema` | ❌ | TypeScript type generation | Stable |
-| **Advanced Features** ||||
-| `audit` | ❌ | Audit logging | Stable |
-| `metrics` | ❌ | Metrics collection | Stable |
-| `dynamic` | ❌ | Dynamic fields | Stable |
-| `progressive-reload` | ❌ | Canary/linear rollout | Stable |
-| `migration` | ❌ | Configuration migration | Stable |
-| `snapshot` | ❌ | Snapshot rollback | Stable |
-| `profile` | ❌ | Environment profiles | Stable |
-| `interpolation` | ❌ | Variable interpolation | Stable |
-| `hot-reload` | ❌ | Hot reload (alias for watch) | Stable |
-| **Remote Sources** ||||
-| `remote` | ❌ | HTTP polling | Beta |
-| `etcd` | ❌ | Etcd v3 integration | Beta |
-| `consul` | ❌ | Consul integration | Beta |
-| `cache-redis` | ❌ | Redis cache | Beta |
-| **Message Bus** ||||
-| `config-bus` | ❌ | Config event bus | Stable |
-| `nats-bus` | ❌ | NATS integration | Stable |
-| `redis-bus` | ❌ | Redis Pub/Sub | Stable |
-| **Security** ||||
-| `security` | ❌ | Security module (env validation, error sanitization) | Stable |
-| `key` | ❌ | Key management and rotation | Stable |
-| **Context & Modules** ||||
-| `context-aware` | ❌ | Tenant-aware configuration | Stable |
-| `modules` | ❌ | Modular configuration | Stable |
-| **Infrastructure** ||||
-| `preload-validator` | ❌ | Async preload validator | Stable |
-| `poll` | ❌ | HTTP polling | Stable |
-| `vault` | ❌ | Vault integration | Beta |
+| Feature               | Default | Description                                          | Stability |
+| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
+| **Format Support**    |         |                                                      |           |
+| `toml`                |   ✅    | TOML configuration files                             | Stable    |
+| `json`                |   ✅    | JSON configuration files                             | Stable    |
+| `yaml`                |   ❌    | YAML configuration files                             | Stable    |
+| `ini`                 |   ❌    | INI configuration files                              | Stable    |
+| `env`                 |   ✅    | Environment variable support                         | Stable    |
+| **Core Features**     |         |                                                      |           |
+| `validation`          |   ❌    | Configuration validation (garde)                     | Stable    |
+| `watch`               |   ❌    | File watching and hot reload                         | Stable    |
+| `encryption`          |   ❌    | XChaCha20-Poly1305 encryption                        | Stable    |
+| `cli`                 |   ❌    | CLI tool with commands                               | Stable    |
+| `schema`              |   ❌    | JSON Schema generation                               | Stable    |
+| `parallel`            |   ❌    | Parallel validation (rayon)                          | Stable    |
+| `typescript-schema`   |   ❌    | TypeScript type generation                           | Stable    |
+| **Advanced Features** |         |                                                      |           |
+| `audit`               |   ❌    | Audit logging                                        | Stable    |
+| `metrics`             |   ❌    | Metrics collection                                   | Stable    |
+| `dynamic`             |   ❌    | Dynamic fields                                       | Stable    |
+| `progressive-reload`  |   ❌    | Canary/linear rollout                                | Stable    |
+| `migration`           |   ❌    | Configuration migration                              | Stable    |
+| `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
+| `profile`             |   ❌    | Environment profiles                                 | Stable    |
+| `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
+| `hot-reload`          |   ❌    | Hot reload (alias for watch)                         | Stable    |
+| **Remote Sources**    |         |                                                      |           |
+| `remote`              |   ❌    | HTTP polling                                         | Beta      |
+| `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
+| `consul`              |   ❌    | Consul integration                                   | Beta      |
+| `cache-redis`         |   ❌    | Redis cache                                          | Beta      |
+| **Message Bus**       |         |                                                      |           |
+| `config-bus`          |   ❌    | Config event bus                                     | Stable    |
+| `nats-bus`            |   ❌    | NATS integration                                     | Stable    |
+| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | Stable    |
+| **Security**          |         |                                                      |           |
+| `security`            |   ❌    | Security module (env validation, error sanitization) | Stable    |
+| `key`                 |   ❌    | Key management and rotation                          | Stable    |
+| **Context & Modules** |         |                                                      |           |
+| `context-aware`       |   ❌    | Tenant-aware configuration                           | Stable    |
+| `modules`             |   ❌    | Modular configuration                                | Stable    |
+| **Infrastructure**    |         |                                                      |           |
+| `preload-validator`   |   ❌    | Async preload validator                              | Stable    |
+| `poll`                |   ❌    | HTTP polling                                         | Stable    |
+| `vault`               |   ❌    | Vault integration                                    | Beta      |
 
 ### 🗂️ Examples Directory
 
 Complete, runnable examples demonstrating all major features. All examples can be found in the [`examples/`](examples/) directory.
 
-| Example | File | Features | Description |
-|:--------|:-----|:---------|:------------|
-| **basic_usage** | `examples/src/examples/basic_usage.rs` | `toml`, `env` | Basic configuration loading from TOML and environment variables |
-| **hot_reload** | `examples/src/examples/hot_reload.rs` | `watch` | Real-time file monitoring with automatic reload |
-| **encryption** | `examples/src/examples/encryption.rs` | `encryption` | Sensitive field encryption with XChaCha20-Poly1305 |
-| **key_rotation** | `examples/src/examples/key_rotation.rs` | `key` | Key lifecycle management and rotation |
-| **migration** | `examples/src/examples/migration.rs` | `migration` | Configuration version migration |
-| **dynamic_fields** | `examples/src/examples/dynamic_fields.rs` | `dynamic` | Lock-free dynamic field updates with callbacks |
-| **config_groups** | `examples/src/examples/config_groups.rs` | `modules` | Modular configuration groups |
-| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout |
-| **config_bus** | `examples/src/examples/config_bus.rs` | `config-bus` | Multi-instance config broadcast via NATS/Redis |
-| **snapshot** | `examples/src/examples/snapshot.rs` | `snapshot` | Configuration snapshots with diff and rollback |
-| **remote_consul** | `examples/src/examples/remote_consul.rs` | `consul` | Remote config from HashiCorp Consul |
-| **remote_etcd** | `examples/src/examples/remote_etcd.rs` | `etcd` | Remote config from etcd v3 |
-| **validation** | `examples/src/examples/validation.rs` | `validation` | Configuration validation with garde |
-| **json_schema** | `examples/src/examples/json_schema.rs` | `schema` | JSON Schema and TypeScript type generation |
-| **metrics** | `examples/src/examples/metrics.rs` | `metrics` | Metrics collection and monitoring |
-| **cli_integration** | `examples/src/examples/cli_integration.rs` | `cli` | CLI tool integration and usage |
-| **full_stack** | `examples/src/examples/full_stack.rs` | `full` | Complete feature showcase |
+| Example                | File                                          | Features             | Description                                                     |
+| :--------------------- | :-------------------------------------------- | :------------------- | :-------------------------------------------------------------- |
+| **basic_usage**        | `examples/src/examples/basic_usage.rs`        | `toml`, `env`        | Basic configuration loading from TOML and environment variables |
+| **hot_reload**         | `examples/src/examples/hot_reload.rs`         | `watch`              | Real-time file monitoring with automatic reload                 |
+| **encryption**         | `examples/src/examples/encryption.rs`         | `encryption`         | Sensitive field encryption with XChaCha20-Poly1305              |
+| **key_rotation**       | `examples/src/examples/key_rotation.rs`       | `key`                | Key lifecycle management and rotation                           |
+| **migration**          | `examples/src/examples/migration.rs`          | `migration`          | Configuration version migration                                 |
+| **dynamic_fields**     | `examples/src/examples/dynamic_fields.rs`     | `dynamic`            | Lock-free dynamic field updates with callbacks                  |
+| **config_groups**      | `examples/src/examples/config_groups.rs`      | `modules`            | Modular configuration groups                                    |
+| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout                |
+| **config_bus**         | `examples/src/examples/config_bus.rs`         | `config-bus`         | Multi-instance config broadcast via NATS/Redis                  |
+| **snapshot**           | `examples/src/examples/snapshot.rs`           | `snapshot`           | Configuration snapshots with diff and rollback                  |
+| **remote_consul**      | `examples/src/examples/remote_consul.rs`      | `consul`             | Remote config from HashiCorp Consul                             |
+| **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
+| **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
+| **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
+| **metrics**            | `examples/src/examples/metrics.rs`            | `metrics`            | Metrics collection and monitoring                               |
+| **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
+| **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
 
 ```bash
 # Run any example from the examples directory
@@ -274,61 +275,61 @@ cd examples && ./verify_examples.sh
 
 #### 🦀 Rust Installation
 
-| Installation Type | Configuration | Use Case |
-|-------------------|---------------|----------|
-| **Default** | `confers = "0.3.0"` | Includes `toml`, `json`, `env` (default features) |
-| **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables + JSON only |
-| **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation |
-| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI with validation and encryption |
-| **Full** | `confers = { version = "0.3.0", features = ["full"] }` | All features |
+| Installation Type  | Configuration                                                                           | Use Case                                          |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Default**        | `confers = "0.3.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
+| **Minimal**        | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
+| **Recommended**    | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation                           |
+| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }`                                   | CLI with validation and encryption                |
+| **Full**           | `confers = { version = "0.3.0", features = ["full"] }`                                  | All features                                      |
 
 **Individual Features:**
 
-| Feature | Description | Default |
-|---------|-------------|---------|
-| **Format Support** |||
-| `toml` | TOML format support | ✅ |
-| `json` | JSON format support | ✅ |
-| `yaml` | YAML format support | ❌ |
-| `ini` | INI format support | ❌ |
-| `env` | Environment variable support | ✅ |
-| **Core Features** |||
-| `validation` | Configuration validation (garde) | ❌ |
-| `watch` | File watching and hot reload | ❌ |
-| `encryption` | XChaCha20-Poly1305 encryption | ❌ |
-| `cli` | Command-line tool | ❌ |
-| `schema` | JSON Schema generation | ❌ |
-| `parallel` | Parallel validation | ❌ |
-| **Advanced Features** |||
-| `audit` | Audit logging | ❌ |
-| `metrics` | Metrics collection | ❌ |
-| `dynamic` | Dynamic fields | ❌ |
-| `progressive-reload` | Progressive reload | ❌ |
-| `migration` | Configuration migration | ❌ |
-| `snapshot` | Snapshot rollback | ❌ |
-| `profile` | Environment configuration | ❌ |
-| `interpolation` | Variable interpolation | ❌ |
-| **Remote Sources** |||
-| `remote` | HTTP polling | ❌ |
-| `etcd` | Etcd integration | ❌ |
-| `consul` | Consul integration | ❌ |
-| `cache-redis` | Redis cache | ❌ |
-| **Message Bus** |||
-| `config-bus` | Configuration event bus | ❌ |
-| `nats-bus` | NATS message bus | ❌ |
-| `redis-bus` | Redis message bus | ❌ |
-| **Others** |||
-| `security` | Security module | ❌ |
-| `key` | Key management system | ❌ |
-| `modules` | Modular configuration | ❌ |
-| `context-aware` | Context-aware configuration | ❌ |
+| Feature               | Description                      | Default |
+| --------------------- | -------------------------------- | ------- |
+| **Format Support**    |                                  |         |
+| `toml`                | TOML format support              | ✅      |
+| `json`                | JSON format support              | ✅      |
+| `yaml`                | YAML format support              | ❌      |
+| `ini`                 | INI format support               | ❌      |
+| `env`                 | Environment variable support     | ✅      |
+| **Core Features**     |                                  |         |
+| `validation`          | Configuration validation (garde) | ❌      |
+| `watch`               | File watching and hot reload     | ❌      |
+| `encryption`          | XChaCha20-Poly1305 encryption    | ❌      |
+| `cli`                 | Command-line tool                | ❌      |
+| `schema`              | JSON Schema generation           | ❌      |
+| `parallel`            | Parallel validation              | ❌      |
+| **Advanced Features** |                                  |         |
+| `audit`               | Audit logging                    | ❌      |
+| `metrics`             | Metrics collection               | ❌      |
+| `dynamic`             | Dynamic fields                   | ❌      |
+| `progressive-reload`  | Progressive reload               | ❌      |
+| `migration`           | Configuration migration          | ❌      |
+| `snapshot`            | Snapshot rollback                | ❌      |
+| `profile`             | Environment configuration        | ❌      |
+| `interpolation`       | Variable interpolation           | ❌      |
+| **Remote Sources**    |                                  |         |
+| `remote`              | HTTP polling                     | ❌      |
+| `etcd`                | Etcd integration                 | ❌      |
+| `consul`              | Consul integration               | ❌      |
+| `cache-redis`         | Redis cache                      | ❌      |
+| **Message Bus**       |                                  |         |
+| `config-bus`          | Configuration event bus          | ❌      |
+| `nats-bus`            | NATS message bus                 | ❌      |
+| `redis-bus`           | Redis message bus                | ❌      |
+| **Others**            |                                  |         |
+| `security`            | Security module                  | ❌      |
+| `key`                 | Key management system            | ❌      |
+| `modules`             | Modular configuration            | ❌      |
+| `context-aware`       | Context-aware configuration      | ❌      |
 
 ### 🔧 CLI Command Feature Dependencies
 
-| Command | Required Features | Optional Features | Description |
-|---------|------------------|------------------|-------------|
-| `validate` | `cli` | - | Validate configuration files |
-| `diff` | `cli` | - | Compare configuration files |
+| Command    | Required Features | Optional Features | Description                  |
+| ---------- | ----------------- | ----------------- | ---------------------------- |
+| `validate` | `cli`             | -                 | Validate configuration files |
+| `diff`     | `cli`             | -                 | Compare configuration files  |
 
 **Note**: The `cli` feature provides command-line tools for configuration management.
 
@@ -547,13 +548,49 @@ let service = MyService::new(shared_config);
 
 ### 📖 Additional Resources
 
-| Resource | Description |
-|----------|-------------|
-| ❓ [FAQ](docs/FAQ.md) | Frequently asked questions |
-| 📖 [Contributing Guide](docs/CONTRIBUTING.md) | Code contribution guidelines |
-| 📘 [API Reference](docs/API_REFERENCE.md) | Complete API documentation |
-| 🏗️ [Architecture Decisions](docs/architecture_decisions.md) | ADR documentation |
+| Resource                                                    | Description                                     |
+| ----------------------------------------------------------- | ----------------------------------------------- |
+| ❓ [FAQ](docs/FAQ.md)                                       | Frequently asked questions                      |
+| 📖 [Contributing Guide](docs/CONTRIBUTING.md)               | Code contribution guidelines                    |
+| 📘 [API Reference](docs/API_REFERENCE.md)                   | Complete API documentation                      |
+| 🏗️ [Architecture Decisions](docs/architecture_decisions.md) | ADR documentation                               |
 | 📚 [Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
+
+### 🔄 BrickArchitecture Migration Guide
+
+Confers now follows **BrickArchitecture** error separation patterns:
+
+| Error Type           | Phase         | When It Occurs      | Example                                        |
+| -------------------- | ------------- | ------------------- | ---------------------------------------------- |
+| `ConfersConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
+| `ConfersError`       | Runtime       | Use time            | Timeout, remote unavailable, decryption failed |
+
+**Backward Compatibility:** Existing `ConfigError` and `ConfigResult<T>` aliases remain available.
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Migration Example</summary>
+
+```rust
+// OLD: ConfigError for all errors
+use confers::{ConfigError, new_in_memory_with_capacity};
+
+// NEW: Use validated constructor for initialization
+use confers::{ConfersConfigError, ConfersError, new_in_memory_validated};
+
+// Configuration phase - use ConfersConfigError
+fn init_config() -> Result<impl ConfigConnector, ConfersConfigError> {
+    let config = new_in_memory_validated(1000)?;  // Returns ConfigError
+    Ok(config)
+}
+
+// Runtime phase - use ConfersError
+async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
+    let value = config.get_string("key").await?;  // Returns ConfersError
+    Ok(())
+}
+```
+
+</details>
 
 ---
 
@@ -718,17 +755,17 @@ graph TB
 
 ### 📐 Component Status
 
-| Component | Description | Status |
-|-----------|-------------|--------|
-| **ConfigLoader** | Core loader with multi-source support | ✅ Stable |
-| **Configuration Validation** | Built-in validator integration | ✅ Stable |
-| **Schema Generation** | Auto-generate JSON Schema | ✅ Stable |
-| **File Watching** | Real-time monitoring with hot reload | ✅ Stable |
-| **Remote Configuration** | etcd, Consul, HTTP support | 🚧 Beta |
-| **Audit Logging** | Record access and change history | ✅ Stable |
-| **Encrypted Storage** | XChaCha20-Poly1305 encrypted storage | ✅ Stable |
-| **Configuration Diff** | Multiple output formats | ✅ Stable |
-| **Interactive Wizard** | Template generation | ✅ Stable |
+| Component                    | Description                           | Status    |
+| ---------------------------- | ------------------------------------- | --------- |
+| **ConfigLoader**             | Core loader with multi-source support | ✅ Stable |
+| **Configuration Validation** | Built-in validator integration        | ✅ Stable |
+| **Schema Generation**        | Auto-generate JSON Schema             | ✅ Stable |
+| **File Watching**            | Real-time monitoring with hot reload  | ✅ Stable |
+| **Remote Configuration**     | etcd, Consul, HTTP support            | 🚧 Beta   |
+| **Audit Logging**            | Record access and change history      | ✅ Stable |
+| **Encrypted Storage**        | XChaCha20-Poly1305 encrypted storage  | ✅ Stable |
+| **Configuration Diff**       | Multiple output formats               | ✅ Stable |
+| **Interactive Wizard**       | Template generation                   | ✅ Stable |
 
 ---
 
@@ -786,15 +823,15 @@ cache_size = 1000
 <details style="padding:16px; margin: 16px 0">
 <summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 All Configuration Options</summary>
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `name` | String | - | Project name |
-| `version` | String | "1.0.0" | Version number |
-| `host` | String | "localhost" | Server host |
-| `port` | u16 | 8080 | Server port |
-| `debug` | Boolean | false | Enable debug mode |
-| `workers` | usize | 4 | Number of worker threads |
-| `cache_size` | usize | 1000 | Cache size in MB |
+| Option       | Type    | Default     | Description              |
+| ------------ | ------- | ----------- | ------------------------ |
+| `name`       | String  | -           | Project name             |
+| `version`    | String  | "1.0.0"     | Version number           |
+| `host`       | String  | "localhost" | Server host              |
+| `port`       | u16     | 8080        | Server port              |
+| `debug`      | Boolean | false       | Enable debug mode        |
+| `workers`    | usize   | 4           | Number of worker threads |
+| `cache_size` | usize   | 1000        | Cache size in MB         |
 
 </details>
 
@@ -821,12 +858,12 @@ cargo test test_name
 <details style="padding:16px; margin: 16px 0">
 <summary style="cursor:pointer; font-weight:600; color:#166534">📊 Test Statistics</summary>
 
-| Category | Test Count | Coverage |
-|----------|------------|----------|
-| 🧪 Unit Tests | 50+ | 85% |
-| 🔗 Integration Tests | 20+ | 80% |
-| ⚡ Performance Tests | 10+ | 75% |
-| **📈 Total** | **80+** | **80%** |
+| Category             | Test Count | Coverage |
+| -------------------- | ---------- | -------- |
+| 🧪 Unit Tests        | 50+        | 85%      |
+| 🔗 Integration Tests | 20+        | 80%      |
+| ⚡ Performance Tests | 10+        | 75%      |
+| **📈 Total**         | **80+**    | **80%**  |
 
 </details>
 
@@ -842,11 +879,11 @@ cargo test test_name
 
 **📊 Throughput**
 
-| Operation | Performance |
-|-----------|-------------|
+| Operation   | Performance       |
+| ----------- | ----------------- |
 | Config Load | 1,000,000 ops/sec |
-| Validation | 500,000 ops/sec |
-| Schema Gen | 2,000,000 ops/sec |
+| Validation  | 500,000 ops/sec   |
+| Schema Gen  | 2,000,000 ops/sec |
 
 </td>
 <td width="50%" style="padding: 16px; text-align:center">
@@ -854,10 +891,10 @@ cargo test test_name
 **⏱️ Latency**
 
 | Percentile | Latency |
-|------------|---------|
-| P50 | 0.5ms |
-| P95 | 1.2ms |
-| P99 | 2.5ms |
+| ---------- | ------- |
+| P50        | 0.5ms   |
+| P95        | 1.2ms   |
+| P99        | 2.5ms   |
 
 </td>
 </tr>
@@ -914,16 +951,16 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 ### 🛡️ Security Measures
 
-| Measure | Description | API Reference |
-|---------|-------------|---------------|
-| ✅ **Memory Protection** | Automatic secure cleanup with zeroization | `SecureString`, `zeroize` crate |
-| ✅ **Side-channel Protection** | Constant-time cryptographic operations | XChaCha20-Poly1305 encryption |
-| ✅ **Input Validation** | Comprehensive input sanitization | `ConfigValidator`, `InputValidator` |
-| ✅ **Audit Logging** | Full operation tracking | `AuditConfig`, audit trails |
-| ✅ **SSRF Protection** | Built-in Server-Side Request Forgery prevention | `HttpPolledSource`, `is_ip_blocked()` |
-| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields | `SensitiveDataDetector` |
-| ✅ **Error Sanitization** | Remove sensitive info from error messages | `ErrorSanitizer`, `SecureLogger` |
-| ✅ **Nonce Reuse Detection** | Prevent cryptographic nonce reuse | Built into encryption module |
+| Measure                         | Description                                     | API Reference                         |
+| ------------------------------- | ----------------------------------------------- | ------------------------------------- |
+| ✅ **Memory Protection**        | Automatic secure cleanup with zeroization       | `SecureString`, `zeroize` crate       |
+| ✅ **Side-channel Protection**  | Constant-time cryptographic operations          | XChaCha20-Poly1305 encryption         |
+| ✅ **Input Validation**         | Comprehensive input sanitization                | `ConfigValidator`, `InputValidator`   |
+| ✅ **Audit Logging**            | Full operation tracking                         | `AuditConfig`, audit trails           |
+| ✅ **SSRF Protection**          | Built-in Server-Side Request Forgery prevention | `HttpPolledSource`, `is_ip_blocked()` |
+| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields         | `SensitiveDataDetector`               |
+| ✅ **Error Sanitization**       | Remove sensitive info from error messages       | `ErrorSanitizer`, `SecureLogger`      |
+| ✅ **Nonce Reuse Detection**    | Prevent cryptographic nonce reuse               | Built into encryption module          |
 
 ### 🔐 Security APIs
 
@@ -1124,13 +1161,13 @@ This project is licensed under **MIT License**:
 
 ### 💝 Special Thanks
 
-| Category | Description |
-|----------|-------------|
-| 🌟 **Dependency Projects** | [serde](https://github.com/serde-rs/serde) - Serialization framework |
-| | [figment](https://github.com/SergioBenitez/figment) - Configuration management |
-| | [validator](https://github.com/Keats/validator) - Validation library |
-| 👥 **Contributors** | Thanks to all contributors! |
-| 💬 **Community** | Special thanks to community members |
+| Category                   | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| 🌟 **Dependency Projects** | [serde](https://github.com/serde-rs/serde) - Serialization framework           |
+|                            | [figment](https://github.com/SergioBenitez/figment) - Configuration management |
+|                            | [validator](https://github.com/Keats/validator) - Validation library           |
+| 👥 **Contributors**        | Thanks to all contributors!                                                    |
+| 💬 **Community**           | Special thanks to community members                                            |
 
 ---
 
@@ -1175,8 +1212,6 @@ This project is licensed under **MIT License**:
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
 ---
-
-
 
 ### 💝 Support This Project
 
