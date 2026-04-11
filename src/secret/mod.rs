@@ -1,17 +1,17 @@
 #[cfg(feature = "encryption")]
-pub mod bytes;
+pub(crate) mod bytes;
 #[cfg(feature = "encryption")]
-pub mod crypto;
+pub(crate) mod crypto;
 #[cfg(feature = "encryption")]
-pub mod key_provider;
+pub(crate) mod key_provider;
 #[cfg(feature = "encryption")]
-pub mod key_registry;
+pub(crate) mod key_registry;
 #[cfg(feature = "encryption")]
-pub mod providers;
+pub(crate) mod providers;
 #[cfg(feature = "encryption")]
-pub mod string;
+pub(crate) mod string;
 #[cfg(feature = "encryption")]
-pub mod zeroizing;
+pub(crate) mod zeroizing;
 
 #[cfg(feature = "encryption")]
 pub use bytes::SecretBytes;

@@ -1,12 +1,12 @@
 //! File system watcher for hot reload support.
 
-pub mod debounce;
+pub(crate) mod debounce;
 
 #[cfg(feature = "progressive-reload")]
-pub mod progressive;
+pub(crate) mod progressive;
 
 #[cfg(feature = "watch")]
-pub mod fs_watcher;
+pub(crate) mod fs_watcher;
 
 pub use debounce::AdaptiveDebouncer;
 

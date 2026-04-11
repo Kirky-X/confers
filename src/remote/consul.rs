@@ -37,6 +37,7 @@ pub struct ConsulSourceBuilder {
 
 /// TLS configuration for Consul connection.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ConsulTlsConfig {
     pub ca_file: String,
     pub cert_file: String,

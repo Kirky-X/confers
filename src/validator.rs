@@ -116,7 +116,7 @@ impl ValidationRule {
 
 /// No-op module when validation is disabled.
 #[cfg(not(feature = "validation"))]
-pub mod no_validation {
+pub(crate) mod no_validation {
     //! Placeholder module when validation feature is disabled.
 
     /// Placeholder trait for Validate when validation is disabled.

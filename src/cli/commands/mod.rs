@@ -1,3 +1,3 @@
-pub mod completions;
-pub mod generate;
-pub mod wizard;
+pub(crate) mod completions;
+pub(crate) mod generate;
+pub(crate) mod wizard;

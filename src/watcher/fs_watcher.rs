@@ -11,6 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+/// Default recv timeout in milliseconds for polling the debouncer.
+const DEFAULT_RECV_TIMEOUT_MS: u64 = 50;
+
 /// File system watcher with debouncing.
 ///
 /// This watcher monitors file changes and emits debounced events
@@ -47,7 +50,7 @@ impl FsWatcher {
     ///
     /// ```rust
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     use confers::watcher::fs_watcher::FsWatcher;
+    ///     use confers::watcher::FsWatcher;
     ///
     ///     let mut watcher = FsWatcher::new("./config.toml", 200).await?;
     ///
@@ -60,6 +63,24 @@ impl FsWatcher {
     /// }
     /// ```
     pub async fn new(path: impl AsRef<Path>, debounce_ms: u64) -> ConfigResult<Self> {
+        Self::with_recv_timeout(path, debounce_ms, DEFAULT_RECV_TIMEOUT_MS).await
+    }
+
+    /// Create a new file system watcher with custom recv timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The file or directory to watch
+    /// * `debounce_ms` - Debounce duration in milliseconds
+    /// * `recv_timeout_ms` - Recv timeout for polling debouncer events (default: 50ms)
+    ///
+    /// Lower values mean faster response but higher CPU usage.
+    /// Higher values mean slower response but lower CPU usage.
+    pub async fn with_recv_timeout(
+        path: impl AsRef<Path>,
+        debounce_ms: u64,
+        recv_timeout_ms: u64,
+    ) -> ConfigResult<Self> {
         let watch_path = Arc::new(path.as_ref().to_path_buf());
 
         // Verify the path exists
@@ -78,7 +99,13 @@ impl FsWatcher {
 
         // Spawn the watcher in a dedicated thread (not tokio task)
         let watcher_thread = std::thread::spawn(move || {
-            Self::run_watcher(&path_clone, debounce_ms, tx_for_thread, running_clone);
+            Self::run_watcher(
+                &path_clone,
+                debounce_ms,
+                recv_timeout_ms,
+                tx_for_thread,
+                running_clone,
+            );
         });
 
         Ok(Self {
@@ -136,6 +163,7 @@ impl FsWatcher {
     fn run_watcher(
         path: &Path,
         debounce_ms: u64,
+        recv_timeout_ms: u64,
         tx: mpsc::Sender<PathBuf>,
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
@@ -164,9 +192,11 @@ impl FsWatcher {
             return;
         }
 
+        let recv_timeout = Duration::from_millis(recv_timeout_ms);
+
         // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
-            match bridge_rx.recv_timeout(Duration::from_millis(50)) {
+            match bridge_rx.recv_timeout(recv_timeout) {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {
@@ -249,7 +279,7 @@ impl MultiFsWatcher {
     ///
     /// ```rust
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     use confers::watcher::fs_watcher::MultiFsWatcher;
+    ///     use confers::watcher::MultiFsWatcher;
     ///
     ///     let paths = vec!["./config.toml", "./config.prod.toml"];
     ///     let mut watcher = MultiFsWatcher::new(paths, 200).await?;
@@ -264,6 +294,24 @@ impl MultiFsWatcher {
     pub async fn new(
         paths: impl IntoIterator<Item = impl AsRef<Path>>,
         debounce_ms: u64,
+    ) -> ConfigResult<Self> {
+        Self::with_recv_timeout(paths, debounce_ms, DEFAULT_RECV_TIMEOUT_MS).await
+    }
+
+    /// Create a new multi-file system watcher with custom recv timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `paths` - Iterator of files or directories to watch
+    /// * `debounce_ms` - Debounce duration in milliseconds
+    /// * `recv_timeout_ms` - Recv timeout for polling debouncer events (default: 50ms)
+    ///
+    /// Lower values mean faster response but higher CPU usage.
+    /// Higher values mean slower response but lower CPU usage.
+    pub async fn with_recv_timeout(
+        paths: impl IntoIterator<Item = impl AsRef<Path>>,
+        debounce_ms: u64,
+        recv_timeout_ms: u64,
     ) -> ConfigResult<Self> {
         let watch_paths: HashSet<PathBuf> = paths
             .into_iter()
@@ -297,7 +345,13 @@ impl MultiFsWatcher {
 
         // Spawn the watcher in a dedicated thread (not tokio task)
         let watcher_thread = std::thread::spawn(move || {
-            Self::run_watcher(&paths_for_thread, debounce_ms, tx_for_thread, running_clone);
+            Self::run_watcher(
+                &paths_for_thread,
+                debounce_ms,
+                recv_timeout_ms,
+                tx_for_thread,
+                running_clone,
+            );
         });
 
         Ok(Self {
@@ -355,6 +409,7 @@ impl MultiFsWatcher {
     fn run_watcher(
         paths: &HashSet<PathBuf>,
         debounce_ms: u64,
+        recv_timeout_ms: u64,
         tx: mpsc::Sender<PathBuf>,
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
@@ -388,9 +443,11 @@ impl MultiFsWatcher {
             }
         }
 
+        let recv_timeout = Duration::from_millis(recv_timeout_ms);
+
         // Process events
         while running.load(std::sync::atomic::Ordering::SeqCst) {
-            match bridge_rx.recv_timeout(Duration::from_millis(50)) {
+            match bridge_rx.recv_timeout(recv_timeout) {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {

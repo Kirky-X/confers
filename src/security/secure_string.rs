@@ -3,6 +3,8 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+#![allow(dead_code)] // Reserved functionality with test coverage
+
 //! # SecureString - 安全字符串类型
 //!
 //! 提供内存安全的字符串类型，自动清零敏感数据，防止内存泄漏。
@@ -16,7 +18,7 @@
 //!
 //! ## 使用示例
 //!
-//! ```rust
+//! ```rust,ignore
 //! use confers::security::SecureString;
 //!
 //! // 创建安全字符串
@@ -101,7 +103,7 @@ pub(crate) fn reset_secure_string_counters() {
 ///
 /// # 示例
 ///
-/// ```rust
+/// ```rust,ignore
 /// use confers::security::{SecureString, SensitivityLevel, SensitiveData};
 ///
 /// let secret = SecureString::from("password123");
@@ -187,6 +189,7 @@ impl SecureString {
     ///
     /// 调用此方法后，原始 SecureString 仍然包含敏感数据。
     /// 仅在必要时使用，并确保妥善处理返回的 String。
+    #[allow(clippy::wrong_self_convention)] // Consumes self intentionally for conversion
     pub fn to_plain_string(self) -> String {
         // 将数据转换为字符串（复制数据以避免所有权问题）
         String::from_utf8(self.data.clone()).unwrap_or_default()

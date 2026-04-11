@@ -768,30 +768,11 @@ mod tests {
 }
 
 // 安全模块导出
+pub(crate) mod config_injector;
+pub(crate) mod error_sanitization;
+pub(crate) mod input_validation;
 #[cfg(feature = "encryption")]
-pub mod secure_string;
-#[cfg(feature = "encryption")]
-pub use secure_string::{
-    allocated_secure_strings, deallocated_secure_strings, SecureString, SecureStringBuilder,
-    SensitiveData, SensitivityLevel,
-};
-
-#[cfg(feature = "encryption")]
-pub mod config_injector;
-#[cfg(feature = "encryption")]
-pub use config_injector::{ConfigInjectionError, ConfigInjector, EnvironmentConfig};
-
-#[cfg(feature = "encryption")]
-pub mod input_validation;
-#[cfg(feature = "encryption")]
-pub use input_validation::{
-    ConfigValidationError as ConfigFieldValidationError, ConfigValidationResult, ConfigValidator,
-    ConfigValidatorBuilder, InputValidationError, InputValidator, SensitiveDataDetector,
-    SensitivityResult,
-};
-
-#[cfg(feature = "encryption")]
-pub mod error_sanitization;
+pub(crate) mod secure_string;
 #[cfg(feature = "encryption")]
 pub use error_sanitization::{
     Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,

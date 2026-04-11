@@ -319,10 +319,7 @@ mod tests {
         assert_eq!(config.version, "2.0.0");
         assert_eq!(config.server.host, "0.0.0.0");
         assert_eq!(config.server.port, 3000);
-        assert_eq!(
-            config.database.url,
-            "postgres://localhost:5432/testdb"
-        );
+        assert_eq!(config.database.url, "postgres://localhost:5432/testdb");
         assert_eq!(config.logging.level, "debug");
         assert!(config.output_path.is_none());
     }

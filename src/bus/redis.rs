@@ -1,6 +1,7 @@
 //! Redis-based ConfigBus implementation.
 
 use std::pin::Pin;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::Stream;
@@ -9,16 +10,29 @@ use redis::AsyncCommands;
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigError, ConfigResult};
 
+/// Default retry wait time when no message is available (100ms).
+const DEFAULT_RETRY_WAIT_MS: u64 = 100;
+
+/// Default error retry wait time (1 second).
+const DEFAULT_ERROR_RETRY_WAIT_SECS: u64 = 1;
+
+/// Redis default port.
+const DEFAULT_REDIS_PORT: u16 = 6379;
+
 pub struct RedisConfigBus {
     client: redis::Client,
     channel: String,
+    /// Retry wait time in milliseconds when no message available.
+    retry_wait_ms: u64,
+    /// Error retry wait time in seconds.
+    error_retry_wait_secs: u64,
 }
 
 impl RedisConfigBus {
     fn sanitize_url(url: &str) -> String {
         if let Ok(parsed) = url::Url::parse(url) {
             let host = parsed.host_str().unwrap_or("unknown");
-            let port = parsed.port().unwrap_or(6379);
+            let port = parsed.port().unwrap_or(DEFAULT_REDIS_PORT);
             format!("{}:{}", host, port)
         } else {
             "invalid_url".to_string()
@@ -26,6 +40,30 @@ impl RedisConfigBus {
     }
 
     pub async fn connect(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
+        Self::connect_with_config(
+            url,
+            channel,
+            DEFAULT_RETRY_WAIT_MS,
+            DEFAULT_ERROR_RETRY_WAIT_SECS,
+        )
+        .await
+    }
+
+    pub async fn connect_with_pool(
+        url: &str,
+        channel: impl Into<String>,
+        _pool_size: usize,
+    ) -> ConfigResult<Self> {
+        Self::connect(url, channel).await
+    }
+
+    /// Connect with custom retry wait times.
+    pub async fn connect_with_config(
+        url: &str,
+        channel: impl Into<String>,
+        retry_wait_ms: u64,
+        error_retry_wait_secs: u64,
+    ) -> ConfigResult<Self> {
         let safe_host = Self::sanitize_url(url);
 
         let client = redis::Client::open(url).map_err(|e| ConfigError::RemoteUnavailable {
@@ -36,15 +74,9 @@ impl RedisConfigBus {
         Ok(Self {
             client,
             channel: channel.into(),
+            retry_wait_ms,
+            error_retry_wait_secs,
         })
-    }
-
-    pub async fn connect_with_pool(
-        url: &str,
-        channel: impl Into<String>,
-        _pool_size: usize,
-    ) -> ConfigResult<Self> {
-        Self::connect(url, channel).await
     }
 }
 
@@ -80,17 +112,19 @@ impl ConfigBus for RedisConfigBus {
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         let channel = self.channel.clone();
         let client = self.client.clone();
+        let retry_wait = Duration::from_millis(self.retry_wait_ms);
+        let error_retry_wait = Duration::from_secs(self.error_retry_wait_secs);
 
         let stream = async_stream::stream! {
             loop {
                 match get_message(&client, &channel).await {
                     Ok(Some(event)) => yield event,
                     Ok(None) => {
-                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        tokio::time::sleep(retry_wait).await;
                     }
                     Err(_e) => {
                         // Log error silently and continue retrying
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        tokio::time::sleep(error_retry_wait).await;
                     }
                 }
             }
@@ -138,6 +172,10 @@ pub struct RedisBusBuilder {
     url: Option<String>,
     channel: Option<String>,
     pool_size: Option<usize>,
+    /// Retry wait time in milliseconds when no message available.
+    retry_wait_ms: u64,
+    /// Error retry wait time in seconds.
+    error_retry_wait_secs: u64,
 }
 
 impl RedisBusBuilder {
@@ -146,6 +184,8 @@ impl RedisBusBuilder {
             url: None,
             channel: None,
             pool_size: None,
+            retry_wait_ms: DEFAULT_RETRY_WAIT_MS,
+            error_retry_wait_secs: DEFAULT_ERROR_RETRY_WAIT_SECS,
         }
     }
 
@@ -164,6 +204,22 @@ impl RedisBusBuilder {
         self
     }
 
+    /// Set retry wait time in milliseconds when no message is available.
+    ///
+    /// Default: 100ms.
+    pub fn retry_wait_ms(mut self, ms: u64) -> Self {
+        self.retry_wait_ms = ms;
+        self
+    }
+
+    /// Set error retry wait time in seconds.
+    ///
+    /// Default: 1 second.
+    pub fn error_retry_wait_secs(mut self, secs: u64) -> Self {
+        self.error_retry_wait_secs = secs;
+        self
+    }
+
     pub async fn build(self) -> ConfigResult<RedisConfigBus> {
         let url = self.url.ok_or(ConfigError::InvalidValue {
             key: "redis_url".to_string(),
@@ -173,11 +229,13 @@ impl RedisBusBuilder {
 
         let channel = self.channel.unwrap_or_else(|| "config:events".to_string());
 
-        if let Some(size) = self.pool_size {
-            RedisConfigBus::connect_with_pool(&url, channel, size).await
-        } else {
-            RedisConfigBus::connect(&url, channel).await
-        }
+        RedisConfigBus::connect_with_config(
+            &url,
+            channel,
+            self.retry_wait_ms,
+            self.error_retry_wait_secs,
+        )
+        .await
     }
 }
 

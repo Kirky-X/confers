@@ -9,7 +9,7 @@
 mod builder;
 mod chain;
 mod limits;
-pub mod source;
+pub(crate) mod source;
 
 #[cfg(feature = "snapshot")]
 pub use builder::SnapshotConfig;

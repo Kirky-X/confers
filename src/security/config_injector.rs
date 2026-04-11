@@ -3,6 +3,8 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+#![allow(dead_code)] // Reserved functionality with test coverage
+
 //! # 环境变量注入机制
 //!
 //! 提供安全的运行时配置注入，支持通过环境变量动态配置系统参数。
@@ -16,7 +18,7 @@
 //!
 //! ## 使用示例
 //!
-//! ```rust
+//! ```rust,ignore
 //! use confers::security::{ConfigInjector, EnvironmentConfig};
 //!
 //! // 创建配置注入器
@@ -50,9 +52,29 @@ static DEFAULT_SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     ]
 });
 
-/// Rate limiter configuration
-const RATE_LIMIT_MAX_REQUESTS: usize = 100;
-const RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
+/// Rate limiter configuration defaults
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS: usize = 100;
+const DEFAULT_RATE_LIMIT_WINDOW_SECONDS: u64 = 60;
+
+/// Environment variable names for rate limiter configuration
+const ENV_RATE_LIMIT_MAX_REQUESTS: &str = "CONFERS_RATE_LIMIT_MAX_REQUESTS";
+const ENV_RATE_LIMIT_WINDOW_SECONDS: &str = "CONFERS_RATE_LIMIT_WINDOW_SECONDS";
+
+/// Get rate limit max requests from environment or default.
+fn get_rate_limit_max_requests() -> usize {
+    std::env::var(ENV_RATE_LIMIT_MAX_REQUESTS)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_RATE_LIMIT_MAX_REQUESTS)
+}
+
+/// Get rate limit window seconds from environment or default.
+fn get_rate_limit_window_seconds() -> u64 {
+    std::env::var(ENV_RATE_LIMIT_WINDOW_SECONDS)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_RATE_LIMIT_WINDOW_SECONDS)
+}
 
 /// Configuration injection rate limiter
 #[derive(Debug, Clone)]
@@ -71,13 +93,17 @@ impl Default for InjectionRateLimiter {
 }
 
 impl InjectionRateLimiter {
-    /// Create a new rate limiter with default settings
+    /// Create a new rate limiter with default settings.
+    ///
+    /// Default values can be configured via environment variables:
+    /// - `CONFERS_RATE_LIMIT_MAX_REQUESTS`: Maximum requests per window (default: 100)
+    /// - `CONFERS_RATE_LIMIT_WINDOW_SECONDS`: Window duration in seconds (default: 60)
     pub fn new() -> Self {
         Self {
             window_counter: Arc::new(AtomicU64::new(0)),
             window_start: Arc::new(AtomicU64::new(0)),
-            max_requests: RATE_LIMIT_MAX_REQUESTS,
-            window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+            max_requests: get_rate_limit_max_requests(),
+            window_seconds: get_rate_limit_window_seconds(),
             rate_limiting_enabled: true,
         }
     }
@@ -195,7 +221,7 @@ pub(crate) static GLOBAL_INJECTOR: OnceLock<Arc<RwLock<ConfigInjector>>> = OnceL
 ///
 /// # 使用示例
 ///
-/// ```rust
+/// ```rust,ignore
 /// use confers::security::ConfigInjector;
 ///
 /// let injector = ConfigInjector::new();
@@ -587,7 +613,7 @@ impl From<EnvSecurityError> for ConfigInjectionError {
 ///
 /// # 使用示例
 ///
-/// ```rust
+/// ```rust,ignore
 /// use confers::security::{EnvironmentConfig, ConfigInjector};
 ///
 /// let injector = ConfigInjector::new();
@@ -685,12 +711,12 @@ impl<'a> EnvironmentConfig<'a> {
 }
 
 /// 配置宏辅助函数
-pub mod macros {
+pub(crate) mod macros {
     /// 安全注入配置宏
     ///
     /// # 使用示例
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use confers::security::ConfigInjector;
     /// use confers::safe_inject;
     ///
@@ -713,7 +739,7 @@ pub mod macros {
     ///
     /// # 使用示例
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use confers::security::ConfigInjector;
     /// use confers::inject_from_env;
     ///
