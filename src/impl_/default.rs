@@ -2,9 +2,20 @@
 //!
 //! This module provides `ConfigImpl` - the primary configuration implementation
 //! that combines multiple sources and implements the BrickArchitecture traits.
+//!
+//! # Feature-gated async/sync duality
+//!
+//! `ConfigImpl` is defined twice (async_impl and sync_impl modules) because
+//! the trait implementations differ significantly:
+//! - async_impl uses `moka::future::Cache`, `#[async_trait]`, `.await`
+//! - sync_impl uses `moka::sync::Cache`, direct calls
+//!
+//! Only one version is compiled depending on whether any async feature
+//! (remote/config-bus/encryption/watch) is enabled.
 
 use crate::config::{ConfigLimits, SourceChain, SourceChainBuilder};
-use crate::error::ConfersResult;
+use crate::error::{ConfersResult, ConfigConfigError};
+use crate::lifecycle::Lifecycle;
 use crate::merger::MergeStrategy;
 use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::value::{AnnotatedValue, ConfigValue, SourceId};
@@ -150,6 +161,18 @@ mod async_impl {
     }
 
     #[async_trait]
+    impl Lifecycle for ConfigImpl {
+        async fn start(&self) -> Result<(), ConfigConfigError> {
+            Ok(())
+        }
+        async fn stop(&self) -> ConfersResult<()> {
+            self.overrides.invalidate_all();
+            self.healthy.store(false, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    #[async_trait]
     impl ConfigConnector for ConfigImpl {
         async fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
@@ -271,6 +294,7 @@ mod async_impl {
     feature = "encryption",
     feature = "watch"
 ))]
+#[allow(unused_imports)]
 pub use async_impl::{ConfigImpl, ConfigImplBuilder};
 
 // ============== Sync Implementation (for minimal builds) ==============
@@ -407,6 +431,17 @@ mod sync_impl {
         }
     }
 
+    impl Lifecycle for ConfigImpl {
+        fn start(&self) -> Result<(), ConfigConfigError> {
+            Ok(())
+        }
+        fn stop(&self) -> ConfersResult<()> {
+            self.overrides.invalidate_all();
+            self.healthy.store(false, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
     impl ConfigConnector for ConfigImpl {
         fn health_check(&self) -> crate::error::ConfersResult<()> {
             if self.healthy.load(Ordering::Relaxed) {
@@ -528,6 +563,7 @@ mod sync_impl {
     feature = "encryption",
     feature = "watch"
 )))]
+#[allow(unused_imports)]
 pub use sync_impl::{ConfigImpl, ConfigImplBuilder};
 
 // ============== Tests ==============

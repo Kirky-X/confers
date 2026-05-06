@@ -23,6 +23,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::error::{ConfersResult, ConfigConfigError};
+
 /// Guard for managing watcher lifecycle.
 ///
 /// When dropped, the watcher will be stopped automatically.
@@ -51,6 +53,7 @@ impl WatcherGuard {
     }
 
     /// Create a new WatcherGuard with an associated task handle.
+    /// Reserved for future async watcher integration.
     #[allow(dead_code)]
     pub(crate) fn with_task(
         running: Arc<AtomicBool>,
@@ -125,9 +128,27 @@ impl WatcherGuard {
     }
 
     /// Set the task handle for this guard (internal use).
+    /// Reserved for future async watcher integration.
     #[allow(dead_code)]
     pub(crate) fn set_task_handle(&mut self, handle: tokio::task::JoinHandle<()>) {
         self.task_handle = Some(handle);
+    }
+}
+
+#[cfg(feature = "watch")]
+impl WatcherGuard {
+    /// Start the watcher task (delegates to existing start method).
+    #[allow(dead_code)]
+    pub(crate) async fn lifecycle_start(&self) -> Result<(), ConfigConfigError> {
+        self.start();
+        Ok(())
+    }
+
+    /// Stop the watcher gracefully (delegates to shutdown).
+    #[allow(dead_code)]
+    pub(crate) async fn lifecycle_stop(&self) -> ConfersResult<()> {
+        self.shutdown(Duration::from_secs(5)).await?;
+        Ok(())
     }
 }
 

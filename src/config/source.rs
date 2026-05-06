@@ -205,6 +205,8 @@ pub struct EnvSource {
     source_id: SourceId,
     /// Whether to handle _FILE suffix for Docker secrets.
     file_suffix_enabled: bool,
+    /// The file suffix for Docker secrets convention (default: "_FILE").
+    file_suffix: &'static str,
 }
 
 impl EnvSource {
@@ -216,6 +218,7 @@ impl EnvSource {
             priority: 50,
             source_id: SourceId::new("env"),
             file_suffix_enabled: true,
+            file_suffix: "_FILE",
         }
     }
 
@@ -227,6 +230,7 @@ impl EnvSource {
             priority: 50,
             source_id: SourceId::new("env"),
             file_suffix_enabled: true,
+            file_suffix: "_FILE",
         }
     }
 
@@ -248,6 +252,12 @@ impl EnvSource {
         self
     }
 
+    /// Set a custom file suffix (default: "_FILE").
+    pub fn file_suffix(mut self, suffix: &'static str) -> Self {
+        self.file_suffix = suffix;
+        self
+    }
+
     /// Parse an environment variable name into a config path.
     fn parse_key(&self, env_key: &str) -> Option<String> {
         let key = if let Some(ref prefix) = self.prefix {
@@ -259,25 +269,48 @@ impl EnvSource {
             env_key
         };
 
-        // Skip _FILE suffix variables when handling file mode
-        if self.file_suffix_enabled && key.ends_with("_FILE") {
-            return None;
-        }
+        // Handle _FILE suffix for Docker secrets convention:
+        // Only active when a prefix is configured to avoid picking up
+        // system env vars like CARGO_PKG_LICENSE_FILE.
+        // MY_PASSWORD_FILE=/run/secrets/pass → key=my_password, reads file content
+        let actual_key =
+            if self.file_suffix_enabled && self.prefix.is_some() && key.ends_with(self.file_suffix)
+            {
+                &key[..key.len() - self.file_suffix.len()]
+            } else if self.file_suffix_enabled
+                && self.prefix.is_none()
+                && key.ends_with(self.file_suffix)
+            {
+                // Without a prefix, skip _FILE vars to avoid accidentally
+                // picking up CARGO_*, RUST_*, etc. vars ending with _FILE
+                return None;
+            } else {
+                key
+            };
 
         // Convert UPPER_SNAKE_CASE to lower.snake.case
-        Some(key.to_lowercase().replace(&self.separator, "."))
+        Some(actual_key.to_lowercase().replace(&self.separator, "."))
     }
 
-    /// Resolve the value, handling _FILE suffix mode.
-    fn resolve_value(&self, raw: &str, _env_key: &str) -> ConfigResult<String> {
-        // Temporarily disable _FILE suffix handling to fix test failures
-        // TODO: Re-enable with proper fix for Docker secrets convention
-        Ok(raw.to_string())
+    /// Resolve the value, handling _FILE suffix mode for Docker secrets.
+    ///
+    /// When `env_key` ends with `_FILE`, the `raw` value is treated as a file path,
+    /// validated for security, and its contents are read instead.
+    fn resolve_value(&self, raw: &str, env_key: &str) -> ConfigResult<String> {
+        if self.file_suffix_enabled && env_key.ends_with(self.file_suffix) {
+            // Docker secrets convention: value is a file path, read its content
+            self.validate_file_path(raw)?;
+            std::fs::read_to_string(raw).map_err(|_| ConfigError::InvalidValue {
+                key: raw.to_string(),
+                expected_type: "readable file".to_string(),
+                message: format!("Cannot read file referenced by {}", env_key),
+            })
+        } else {
+            Ok(raw.to_string())
+        }
     }
 
     /// Validate file path for security (prevent path traversal).
-    /// Note: This method is reserved for future use with file-based secret loading.
-    #[allow(dead_code)]
     fn validate_file_path(&self, file_path: &str) -> ConfigResult<()> {
         // Skip empty file paths
         if file_path.is_empty() {
@@ -353,6 +386,27 @@ impl Source for EnvSource {
     fn collect(&self) -> ConfigResult<AnnotatedValue> {
         let mut map = indexmap::IndexMap::new();
 
+        // Load .env file entries first (lower priority) if dotenv feature is enabled
+        #[cfg(feature = "dotenv")]
+        {
+            if let Ok(iter) = dotenvy::dotenv_iter() {
+                for item in iter.flatten() {
+                    if let Some(config_path) = self.parse_key(&item.0) {
+                        let resolved = self.resolve_value(&item.1, &item.0)?;
+                        let value = AnnotatedValue::new(
+                            ConfigValue::String(resolved),
+                            self.source_id.clone(),
+                            std::sync::Arc::from(config_path.as_str()),
+                        )
+                        .with_priority(self.priority.saturating_sub(10));
+                        let parts: Vec<&str> = config_path.split('.').collect();
+                        Self::insert_nested(&mut map, &parts, value);
+                    }
+                }
+            }
+        }
+
+        // Process real environment variables (higher priority, override .env)
         for (key, value) in std::env::vars() {
             if let Some(config_path) = self.parse_key(&key) {
                 let resolved = self.resolve_value(&value, &key)?;

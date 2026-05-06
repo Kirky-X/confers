@@ -6,13 +6,13 @@ use crate::impl_::loader::Format;
 #[derive(Debug, Clone)]
 pub struct ConfigLimits {
     /// Maximum configuration file size in bytes.
-    pub max_file_size: u64,
+    pub max_file_size_bytes: u64,
     /// Maximum total configuration size in bytes.
     pub max_total_size: u64,
     /// Maximum depth of nested configuration.
-    pub max_depth: usize,
+    pub max_nesting_depth: usize,
     /// Maximum number of keys.
-    pub max_keys: usize,
+    pub max_total_fields: usize,
     /// Maximum array length.
     pub max_array_length: usize,
     /// Maximum string length.
@@ -28,10 +28,10 @@ pub struct ConfigLimits {
 impl Default for ConfigLimits {
     fn default() -> Self {
         Self {
-            max_file_size: 10 * 1024 * 1024,   // 10 MB
-            max_total_size: 100 * 1024 * 1024, // 100 MB
-            max_depth: 20,
-            max_keys: 10_000,
+            max_file_size_bytes: 10 * 1024 * 1024, // 10 MB
+            max_total_size: 100 * 1024 * 1024,     // 100 MB
+            max_nesting_depth: 20,
+            max_total_fields: 10_000,
             max_array_length: 10_000,
             max_string_length: 1024 * 1024, // 1 MB
             allowed_extensions: Format::all().iter().map(|f| f.ext().to_string()).collect(),
@@ -48,8 +48,8 @@ impl ConfigLimits {
     }
 
     /// Set the maximum file size.
-    pub fn with_max_file_size(mut self, bytes: u64) -> Self {
-        self.max_file_size = bytes;
+    pub fn with_max_file_size_bytes(mut self, bytes: u64) -> Self {
+        self.max_file_size_bytes = bytes;
         self
     }
 
@@ -60,14 +60,14 @@ impl ConfigLimits {
     }
 
     /// Set the maximum nesting depth.
-    pub fn with_max_depth(mut self, depth: usize) -> Self {
-        self.max_depth = depth;
+    pub fn with_max_nesting_depth(mut self, depth: usize) -> Self {
+        self.max_nesting_depth = depth;
         self
     }
 
     /// Set the maximum number of keys.
-    pub fn with_max_keys(mut self, count: usize) -> Self {
-        self.max_keys = count;
+    pub fn with_max_total_fields(mut self, count: usize) -> Self {
+        self.max_total_fields = count;
         self
     }
 
@@ -115,7 +115,7 @@ impl ConfigLimits {
 
     /// Check if a file size is within limits.
     pub fn is_file_size_ok(&self, size: u64) -> bool {
-        size <= self.max_file_size
+        size <= self.max_file_size_bytes
     }
 
     /// Check if total size is within limits.
@@ -126,10 +126,10 @@ impl ConfigLimits {
     /// Create a strict limits configuration.
     pub fn strict() -> Self {
         Self {
-            max_file_size: 1024 * 1024,       // 1 MB
+            max_file_size_bytes: 1024 * 1024, // 1 MB
             max_total_size: 10 * 1024 * 1024, // 10 MB
-            max_depth: 10,
-            max_keys: 1_000,
+            max_nesting_depth: 10,
+            max_total_fields: 1_000,
             max_array_length: 1_000,
             max_string_length: 100 * 1024, // 100 KB
             allowed_extensions: vec!["toml".to_string(), "json".to_string()],
@@ -141,10 +141,10 @@ impl ConfigLimits {
     /// Create a permissive limits configuration.
     pub fn permissive() -> Self {
         Self {
-            max_file_size: 100 * 1024 * 1024,   // 100 MB
-            max_total_size: 1024 * 1024 * 1024, // 1 GB
-            max_depth: 50,
-            max_keys: 100_000,
+            max_file_size_bytes: 100 * 1024 * 1024, // 100 MB
+            max_total_size: 1024 * 1024 * 1024,     // 1 GB
+            max_nesting_depth: 50,
+            max_total_fields: 100_000,
             max_array_length: 100_000,
             max_string_length: 10 * 1024 * 1024, // 10 MB
             allowed_extensions: Format::all().iter().map(|f| f.ext().to_string()).collect(),
@@ -162,21 +162,21 @@ mod tests {
     #[test]
     fn test_default_limits() {
         let limits = ConfigLimits::default();
-        assert_eq!(limits.max_file_size, 10 * 1024 * 1024);
-        assert_eq!(limits.max_depth, 20);
-        assert_eq!(limits.max_keys, 10_000);
+        assert_eq!(limits.max_file_size_bytes, 10 * 1024 * 1024);
+        assert_eq!(limits.max_nesting_depth, 20);
+        assert_eq!(limits.max_total_fields, 10_000);
         assert!(!limits.allow_remote); // Secure by default
     }
 
     #[test]
     fn test_builder_pattern() {
         let limits = ConfigLimits::new()
-            .with_max_file_size(1024)
-            .with_max_depth(5)
+            .with_max_file_size_bytes(1024)
+            .with_max_nesting_depth(5)
             .with_allow_remote(false);
 
-        assert_eq!(limits.max_file_size, 1024);
-        assert_eq!(limits.max_depth, 5);
+        assert_eq!(limits.max_file_size_bytes, 1024);
+        assert_eq!(limits.max_nesting_depth, 5);
         assert!(!limits.allow_remote);
     }
 
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test_size_checks() {
         let limits = ConfigLimits::new()
-            .with_max_file_size(1000)
+            .with_max_file_size_bytes(1000)
             .with_max_total_size(5000);
 
         assert!(limits.is_file_size_ok(500));
@@ -208,13 +208,13 @@ mod tests {
     fn test_strict_limits() {
         let limits = ConfigLimits::strict();
         assert!(!limits.allow_remote);
-        assert_eq!(limits.max_file_size, 1024 * 1024);
+        assert_eq!(limits.max_file_size_bytes, 1024 * 1024);
     }
 
     #[test]
     fn test_permissive_limits() {
         let limits = ConfigLimits::permissive();
         assert!(limits.allow_remote);
-        assert_eq!(limits.max_file_size, 100 * 1024 * 1024);
+        assert_eq!(limits.max_file_size_bytes, 100 * 1024 * 1024);
     }
 }

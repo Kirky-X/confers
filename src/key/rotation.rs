@@ -126,7 +126,7 @@ pub struct RotationTask {
     pub errors: Vec<String>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // used via KeyRotationService in integrated scenarios
 impl RotationTask {
     pub fn new(key_id: String, plan: RotationPlan) -> Self {
         let plan_cloned = plan.clone();
@@ -181,7 +181,7 @@ impl RotationTask {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // used via KeyRotationPolicy in integrated scenarios
 pub struct KeyRotationService {
     policy: KeyRotationPolicy,
     history: Vec<RotationHistory>,

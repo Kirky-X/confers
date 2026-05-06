@@ -32,15 +32,15 @@
 //!
 //! This library separates configuration phase errors from runtime errors:
 //!
-//! - **`ConfersConfigError`** — Initialization errors (missing fields, parse errors, validation failures)
+//! - **`ConfigConfigError`** — Initialization errors (missing fields, parse errors, validation failures)
 //! - **`ConfersError`** — Runtime errors (timeout, remote unavailable, decryption failures)
 //!
 //! Use `new_in_memory_validated()` for BrickArchitecture-compliant initialization:
 //!
 //! ```rust
-//! use confers::{new_in_memory_validated, ConfigConnector, ConfersConfigError};
+//! use confers::{new_in_memory_validated, ConfigConnector, ConfigConfigError};
 //!
-//! # fn main() -> Result<(), ConfersConfigError> {
+//! # fn main() -> Result<(), ConfigConfigError> {
 //! let config = new_in_memory_validated(1000)?; // Returns Result, validates capacity > 0
 //! # Ok(())
 //! # }
@@ -72,6 +72,8 @@ pub mod watcher;
 
 #[cfg(feature = "encryption")]
 pub mod secret;
+
+pub mod lifecycle;
 
 #[cfg(feature = "audit")]
 pub mod audit;
@@ -111,6 +113,8 @@ pub mod remote;
 
 // ============== Core Re-exports ==============
 
+pub use lifecycle::Lifecycle;
+
 #[cfg(feature = "snapshot")]
 pub use config::SnapshotConfig;
 pub use config::{
@@ -120,8 +124,8 @@ pub use config::{
 
 // Error types (BrickArchitecture compliant)
 pub use error::{
-    BuildResult, BuildWarning, ConfersConfigError, ConfersError, ConfersResult, ConfigError,
-    ConfigErrorCode, ConfigResult, ErrorCode, InitResult, ParseLocation,
+    BuildResult, ConfersError, ConfersResult, ConfigConfigError, ConfigError, ConfigErrorCode,
+    ConfigResult, ErrorCode, InitResult, ParseLocation, SourceWarning,
 };
 
 // Interface traits (BrickArchitecture)
@@ -194,7 +198,7 @@ pub use context::{
 };
 
 #[cfg(feature = "config-bus")]
-pub use bus::{BusBuilder, ConfigBus, ConfigChangeEvent, InMemoryBus};
+pub use bus::{BusBuilder, BusEventLimiter, ConfigBus, ConfigChangeEvent, InMemoryBus};
 
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
@@ -252,21 +256,21 @@ pub fn new_in_memory_with_capacity(max_capacity: u64) -> impl ConfigConnector {
 ///
 /// # Errors
 ///
-/// Returns `ConfersConfigError::InvalidValue` if capacity is 0.
+/// Returns `ConfigConfigError::InvalidValue` if capacity is 0.
 ///
 /// # Example
 ///
 /// ```rust
-/// use confers::{new_in_memory_validated, ConfigConnector, ConfersConfigError};
+/// use confers::{new_in_memory_validated, ConfigConnector, ConfigConfigError};
 ///
-/// # fn example() -> Result<(), ConfersConfigError> {
+/// # fn example() -> Result<(), ConfigConfigError> {
 /// let config = new_in_memory_validated(1000)?;
 /// # Ok(())
 /// # }
 /// ```
 pub fn new_in_memory_validated(
     max_capacity: u64,
-) -> Result<impl ConfigConnector, ConfersConfigError> {
+) -> Result<impl ConfigConnector, ConfigConfigError> {
     impl_::memory::InMemoryConfig::new_validated(max_capacity)
 }
 
@@ -276,8 +280,9 @@ pub fn new_in_memory_validated(
 pub mod prelude {
     pub use crate::config::{config, ConfigBuilder, ConfigLimits};
     pub use crate::error::{
-        BuildResult, ConfersConfigError, ConfersError, ConfigError, ConfigResult, ErrorCode,
+        BuildResult, ConfersError, ConfigConfigError, ConfigError, ConfigResult, ErrorCode,
     };
+    pub use crate::lifecycle::Lifecycle;
     pub use crate::loader::{Format, LoaderConfig};
     pub use crate::traits::{
         ConfigConnector, ConfigProvider, ConfigProviderExt, ConfigReader, ConfigWriter,

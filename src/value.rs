@@ -10,8 +10,9 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-// Re-export MergeStrategy from merger module to avoid breaking existing code
-pub use crate::merger::MergeStrategy;
+// MergeStrategy is now imported directly from crate::merger.
+// This re-export was removed to fix a reverse dependency (value -> merger violates layering).
+// Users should import MergeStrategy from crate::merger::MergeStrategy.
 
 /// Source identifier for tracking where a value came from.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -81,6 +82,8 @@ pub struct SourceLocation {
     pub line: usize,
     /// Column number (1-based)
     pub column: usize,
+    /// Full file path for internal diagnostics (not exposed to end users)
+    pub(crate) file_path: Option<std::path::PathBuf>,
 }
 
 impl Serialize for SourceLocation {
@@ -89,10 +92,11 @@ impl Serialize for SourceLocation {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("SourceLocation", 3)?;
+        let mut s = serializer.serialize_struct("SourceLocation", 4)?;
         s.serialize_field("source_name", &*self.source_name)?;
         s.serialize_field("line", &self.line)?;
         s.serialize_field("column", &self.column)?;
+        s.serialize_field("file_path", &self.file_path)?;
         s.end()
     }
 }
@@ -113,6 +117,7 @@ impl<'de> Deserialize<'de> for SourceLocation {
             source_name: Arc::from(h.source_name),
             line: h.line,
             column: h.column,
+            file_path: None,
         })
     }
 }
@@ -124,6 +129,7 @@ impl SourceLocation {
             source_name: source_name.into(),
             line,
             column,
+            file_path: None,
         }
     }
 
@@ -133,7 +139,13 @@ impl SourceLocation {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown");
-        Self::new(source_name, line, column)
+        let fp = Some(path.to_path_buf());
+        Self {
+            source_name: Arc::from(source_name),
+            line,
+            column,
+            file_path: fp,
+        }
     }
 }
 
@@ -841,6 +853,38 @@ impl AnnotatedValue {
             ),
         }
     }
+
+    /// Merge two configuration values using the default replace strategy.
+    ///
+    /// Delegates to [`MergeEngine::merge`] for the actual merge logic.
+    pub fn merge(low: &Self, high: &Self) -> Self {
+        use crate::impl_::merger::MergeEngine;
+        let engine = MergeEngine::new();
+        engine.merge(low, high).unwrap_or_else(|_| high.clone())
+    }
+
+    /// Compare two values and produce a conflict report.
+    ///
+    /// The conflict report shows the lower and higher priority values
+    /// along with their sources for diagnostic purposes.
+    pub fn conflict_report(low: &Self, high: &Self) -> ConflictReport {
+        let mut builder = ConflictReport::builder()
+            .path(low.path.clone())
+            .low_value(format!("{:?}", low.inner), low.source.clone())
+            .high_value(format!("{:?}", high.inner), high.source.clone())
+            .winner(if low.priority >= high.priority {
+                ConflictWinner::Low
+            } else {
+                ConflictWinner::High
+            });
+        if let Some(ref loc) = low.location {
+            builder = builder.low_location(loc.clone());
+        }
+        if let Some(ref loc) = high.location {
+            builder = builder.high_location(loc.clone());
+        }
+        builder.build()
+    }
 }
 
 impl Default for AnnotatedValue {
@@ -1010,6 +1054,7 @@ impl ConflictReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::merger::MergeStrategy;
 
     #[test]
     fn test_source_id() {

@@ -142,12 +142,7 @@ impl SourceChain {
 
         // Handle all errors case
         if values.is_empty() && !errors.is_empty() {
-            let indexed_errors: Vec<(usize, ConfigError)> = errors
-                .into_iter()
-                .enumerate()
-                .map(|(i, (_, e))| (i, e))
-                .collect();
-            let multi_err = crate::error::MultiSourceError::new(sources.len(), indexed_errors);
+            let multi_err = crate::error::MultiSourceError::new(sources.len(), errors);
             return Err(ConfigError::MultiSource { source: multi_err });
         }
 

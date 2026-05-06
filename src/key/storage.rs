@@ -708,7 +708,10 @@ mod tests {
         let master_key = [0x42; 32];
         let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Minimal);
 
-        let error_msg = format!("Failed with key: {}", hex::encode(master_key));
+        // NOTE: We use the hex-encoded key to verify sanitization works,
+        // but in production code, never embed master keys in format strings.
+        let key_hex = hex::encode(master_key);
+        let error_msg = format!("Failed with key: {key_hex}");
         let sanitized = sanitizer.sanitize(&error_msg);
 
         assert_eq!(sanitized, "Failed with key: ***");
@@ -720,10 +723,11 @@ mod tests {
         let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Standard);
 
         // 测试完整密钥脱敏
-        let error_msg = format!("Failed with key: {}", hex::encode(master_key));
+        let test_key_hex = hex::encode(master_key);
+        let error_msg = format!("Failed with key: {}", test_key_hex);
         let sanitized = sanitizer.sanitize(&error_msg);
         assert!(sanitized.contains("***"));
-        assert!(!sanitized.contains(&hex::encode(master_key)));
+        assert!(!sanitized.contains(&test_key_hex));
 
         // 测试密钥片段脱敏
         let fragment_msg = "Error with key fragment: deadbeefcafebabe";
@@ -769,11 +773,12 @@ mod tests {
         let master_key = [0x42; 32];
         storage.set_master_key(&master_key);
 
-        let error_msg = format!("Test error with key: {}", hex::encode(master_key));
+        let test_key_hex = hex::encode(master_key);
+        let error_msg = format!("Test error with key: {}", test_key_hex);
         let sanitized = storage.sanitize_error(&error_msg);
 
         assert!(sanitized.contains("***"));
-        assert!(!sanitized.contains(&hex::encode(master_key)));
+        assert!(!sanitized.contains(&test_key_hex));
 
         // 清除主密钥后测试
         storage.clear_master_key();

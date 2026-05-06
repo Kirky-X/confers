@@ -42,27 +42,24 @@ fn test_error_code_variants() {
     use confers::error::ErrorCode;
 
     // Test all error codes exist and have expected values
-    assert_eq!(ErrorCode::FileNotFound as u16, 1001);
-    assert_eq!(ErrorCode::ParseError as u16, 1002);
-    assert_eq!(ErrorCode::ValidationFailed as u16, 1003);
-    assert_eq!(ErrorCode::DecryptionFailed as u16, 1004);
-    assert_eq!(ErrorCode::RemoteUnavailable as u16, 1005);
-    assert_eq!(ErrorCode::VersionMismatch as u16, 1006);
-    assert_eq!(ErrorCode::MigrationFailed as u16, 1007);
-    assert_eq!(ErrorCode::ModuleNotFound as u16, 1008);
-    assert_eq!(ErrorCode::ReloadRolledBack as u16, 1009);
-    assert_eq!(ErrorCode::IoError as u16, 1010);
-    assert_eq!(ErrorCode::InvalidValue as u16, 1011);
-    assert_eq!(ErrorCode::SourceChainError as u16, 1012);
-    assert_eq!(ErrorCode::Timeout as u16, 1013);
-    assert_eq!(ErrorCode::SizeLimitExceeded as u16, 1014);
-    assert_eq!(ErrorCode::InterpolationError as u16, 1015);
-    assert_eq!(ErrorCode::KeyError as u16, 1016);
-    assert_eq!(ErrorCode::CircularReference as u16, 1017);
-    assert_eq!(ErrorCode::ConcurrencyConflict as u16, 1018);
-    assert_eq!(ErrorCode::KeyRotationFailed as u16, 1019);
-    assert_eq!(ErrorCode::WatcherError as u16, 1020);
-    assert_eq!(ErrorCode::OverrideBlocked as u16, 1021);
+    assert_eq!(ErrorCode::FileNotFound as u16, 1);
+    assert_eq!(ErrorCode::FilePermission as u16, 2);
+    assert_eq!(ErrorCode::FileParseError as u16, 3);
+    assert_eq!(ErrorCode::IoError as u16, 10);
+    assert_eq!(ErrorCode::ValidationFailed as u16, 100);
+    assert_eq!(ErrorCode::TypeMismatch as u16, 101);
+    assert_eq!(ErrorCode::InvalidValue as u16, 102);
+    assert_eq!(ErrorCode::SchemaValidationFailed as u16, 103);
+    assert_eq!(ErrorCode::DecryptionFailed as u16, 200);
+    assert_eq!(ErrorCode::KeyRotationFailed as u16, 203);
+    assert_eq!(ErrorCode::RemoteUnavailable as u16, 300);
+    assert_eq!(ErrorCode::Timeout as u16, 900);
+    assert_eq!(ErrorCode::SizeLimitExceeded as u16, 500);
+    assert_eq!(ErrorCode::InterpolationError as u16, 402);
+    assert_eq!(ErrorCode::CircularReference as u16, 400);
+    assert_eq!(ErrorCode::ConcurrencyConflict as u16, 901);
+    assert_eq!(ErrorCode::WatcherError as u16, 501);
+    assert_eq!(ErrorCode::OverrideBlocked as u16, 401);
 }
 
 /// Test ErrorCode Display.
@@ -71,7 +68,7 @@ fn test_error_code_display() {
     use confers::error::ErrorCode;
 
     assert_eq!(format!("{}", ErrorCode::FileNotFound), "FILE_NOT_FOUND");
-    assert_eq!(format!("{}", ErrorCode::ParseError), "PARSE_ERROR");
+    assert_eq!(format!("{}", ErrorCode::FileParseError), "FILE_PARSE_ERROR");
     assert_eq!(
         format!("{}", ErrorCode::ValidationFailed),
         "VALIDATION_FAILED"
@@ -684,10 +681,10 @@ fn test_multi_source_error() {
     use confers::error::MultiSourceError;
     use confers::ConfigError;
 
-    let errors = vec![
-        (0, ConfigError::Timeout { duration_ms: 1000 }),
+    let errors: Vec<(&str, ConfigError)> = vec![
+        ("source_1", ConfigError::Timeout { duration_ms: 1000 }),
         (
-            1,
+            "source_2",
             ConfigError::RemoteUnavailable {
                 error_type: "connection".to_string(),
                 retryable: true,
@@ -697,8 +694,8 @@ fn test_multi_source_error() {
 
     let multi_err = MultiSourceError::new(5, errors);
 
-    assert_eq!(multi_err.failed_count(), 2);
-    assert_eq!(multi_err.total_count(), 5);
+    assert_eq!(multi_err.failed_count, 2);
+    assert_eq!(multi_err.total_count, 5);
 
     let display = format!("{}", multi_err);
     assert!(display.contains("2/5"));
@@ -710,18 +707,19 @@ fn test_multi_source_error_partial_config() {
     use confers::error::MultiSourceError;
     use confers::ConfigError;
 
-    let errors = vec![(
-        0,
+    let errors: Vec<(&str, ConfigError)> = vec![(
+        "source_1",
         ConfigError::FileNotFound {
             filename: PathBuf::from("missing.toml"),
             source: None,
         },
     )];
 
-    let multi_err = MultiSourceError::with_partial(3, errors, "{ partial: true }".to_string());
+    let multi_err =
+        MultiSourceError::with_partial(3, errors, serde_json::json!({ "partial": true }));
 
-    assert_eq!(multi_err.failed_count(), 1);
-    assert_eq!(multi_err.total_count(), 3);
+    assert_eq!(multi_err.failed_count, 1);
+    assert_eq!(multi_err.total_count, 3);
     assert!(multi_err.partial_config().is_some());
 }
 
@@ -743,9 +741,9 @@ fn test_build_result_ok() {
 /// Test BuildResult with warnings.
 #[test]
 fn test_build_result_with_warnings() {
-    use confers::error::{BuildResult, BuildWarning, WarningCode};
+    use confers::error::{BuildResult, SourceWarning, WarningCode};
 
-    let warnings = vec![BuildWarning {
+    let warnings = vec![SourceWarning {
         message: "unused key".to_string(),
         source: Some("config.toml".to_string()),
         code: WarningCode::UnusedKey,

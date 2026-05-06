@@ -198,16 +198,16 @@ fn test_dynamic_field_get_ref() {
     assert_eq!(&*arc, &[1, 2, 3]);
 }
 
-// Test callback guard into_id method.
+// Test callback guard drops on scope exit.
 #[test]
-fn test_callback_guard_into_id() {
+fn test_callback_guard_deregisters_on_drop() {
     let field = DynamicField::new(0u32);
-    let guard = field.on_change(|_val| {});
-
-    assert_eq!(field.callback_count(), 1);
-
-    let _id = guard.into_id();
-
+    assert_eq!(field.callback_count(), 0);
+    {
+        let _guard = field.on_change(|_val| {});
+        assert_eq!(field.callback_count(), 1);
+    }
+    // After guard drops, callback should be removed
     assert_eq!(field.callback_count(), 0);
 }
 

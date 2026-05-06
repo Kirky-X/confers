@@ -8,7 +8,8 @@ use futures_util::Stream;
 use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
-use crate::error::{ConfigError, ConfigResult};
+use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
+use crate::lifecycle::Lifecycle;
 
 /// Default retry wait time when no message is available (100ms).
 const DEFAULT_RETRY_WAIT_MS: u64 = 100;
@@ -77,6 +78,17 @@ impl RedisConfigBus {
             retry_wait_ms,
             error_retry_wait_secs,
         })
+    }
+}
+
+#[async_trait]
+impl Lifecycle for RedisConfigBus {
+    async fn start(&self) -> Result<(), ConfigConfigError> {
+        Ok(())
+    }
+
+    async fn stop(&self) -> ConfigResult<()> {
+        Ok(())
     }
 }
 

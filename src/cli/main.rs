@@ -3,5 +3,5 @@
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    confers::cli::run()
+    confers::cli::run::<serde_json::Value>()
 }

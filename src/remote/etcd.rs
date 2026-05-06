@@ -134,10 +134,10 @@ impl Default for EtcdSourceBuilder {
 }
 
 /// Etcd-backed configuration source using the etcd-client SDK.
-#[allow(dead_code)]
 pub struct EtcdSource {
     client: Arc<Client>,
     prefix: Arc<str>,
+    #[allow(dead_code)] // reserved for future format-specific polling
     format: Option<Format>,
     interval: Duration,
     last_revision: AtomicI64,

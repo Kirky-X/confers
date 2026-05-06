@@ -3,8 +3,6 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-#![allow(dead_code)] // Reserved functionality with test coverage
-
 //! # SecureString - 安全字符串类型
 //!
 //! 提供内存安全的字符串类型，自动清零敏感数据，防止内存泄漏。
@@ -138,13 +136,7 @@ impl SecureString {
         let display_name = match sensitivity {
             SensitivityLevel::Critical => "[SENSITIVE]".to_string(),
             SensitivityLevel::High => format!("[{} chars]", string.len()),
-            SensitivityLevel::Medium => {
-                if string.len() > 4 {
-                    format!("{}****", &string[..2])
-                } else {
-                    "[REDACTED]".to_string()
-                }
-            }
+            SensitivityLevel::Medium => format!("[{} chars]", string.len()),
             SensitivityLevel::Low => string.clone(),
         };
         let data = string.into_bytes();

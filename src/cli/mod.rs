@@ -178,7 +178,13 @@ enum SnapshotCommands {
 }
 
 /// Run the CLI entry point
-pub fn run() -> Result<()> {
+///
+/// Generic over the config type `T` for type-safe validation and schema
+/// generation. Use with `confers::cli::run::<AppConfig>()`.
+pub fn run<T>() -> Result<()>
+where
+    T: serde::de::DeserializeOwned + Send + Sync + 'static,
+{
     let cli = Cli::parse();
 
     if let Some(env_file) = &cli.env_file {
@@ -237,7 +243,6 @@ pub fn run() -> Result<()> {
 }
 
 /// Inspect configuration - list all keys with their sources
-#[allow(dead_code)]
 fn cmd_inspect(
     config_paths: &[PathBuf],
     keys: &[String],
@@ -416,7 +421,6 @@ fn format_value(value: &crate::value::ConfigValue) -> String {
 }
 
 /// Validate configuration against schema
-#[allow(dead_code)]
 fn cmd_validate(
     config_paths: &[PathBuf],
     strict: bool,
@@ -556,7 +560,6 @@ fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut 
 }
 
 /// Export merged configuration (sanitized)
-#[allow(dead_code)]
 fn cmd_export(
     config_paths: &[PathBuf],
     format: &str,

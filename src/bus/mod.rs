@@ -1,5 +1,9 @@
 //! ConfigBus - Multi-instance configuration change broadcast.
 
+pub mod limiter;
+
+pub use limiter::BusEventLimiter;
+
 use std::pin::Pin;
 
 use async_trait::async_trait;
@@ -9,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::error::ConfigResult;
+use crate::error::{ConfigConfigError, ConfigResult};
+use crate::lifecycle::Lifecycle;
 
 #[cfg(feature = "nats-bus")]
 mod nats;
@@ -49,8 +54,9 @@ impl ConfigChangeEvent {
 }
 
 /// Trait for configuration change event bus implementations.
+/// Extends `Lifecycle` for unified startup/shutdown handling.
 #[async_trait]
-pub trait ConfigBus: Send + Sync {
+pub trait ConfigBus: Send + Sync + Lifecycle {
     async fn publish(&self, event: ConfigChangeEvent) -> ConfigResult<()>;
     async fn subscribe(
         &self,
@@ -82,6 +88,17 @@ impl InMemoryBus {
 impl Default for InMemoryBus {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[async_trait]
+impl Lifecycle for InMemoryBus {
+    async fn start(&self) -> Result<(), ConfigConfigError> {
+        Ok(())
+    }
+
+    async fn stop(&self) -> ConfigResult<()> {
+        Ok(())
     }
 }
 

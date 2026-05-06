@@ -107,10 +107,7 @@ impl KeyRegistry {
     ) -> Result<(), CryptoError> {
         // RwLock may poison if a previous holder panicked while holding the lock.
         // Using expect() provides a descriptive message for debugging.
-        let mut keys = self
-            .keys
-            .write()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let mut keys = self.keys.write().unwrap_or_else(|e| e.into_inner());
 
         if is_primary {
             for (_, v) in keys.iter_mut() {
@@ -119,8 +116,7 @@ impl KeyRegistry {
             *self
                 .primary_version
                 .write()
-                .expect("KeyRegistry primary_version lock poisoned: previous holder panicked") =
-                Some(version.clone());
+                .unwrap_or_else(|e| e.into_inner()) = Some(version.clone());
         }
 
         keys.insert(
@@ -156,7 +152,7 @@ impl KeyRegistry {
         let old_primary = self
             .primary_version
             .read()
-            .expect("KeyRegistry primary_version lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .clone();
 
         self.register_key(new_version.clone(), new_key, true)?;
@@ -168,14 +164,11 @@ impl KeyRegistry {
         let version = self
             .primary_version
             .read()
-            .expect("KeyRegistry primary_version lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .clone()
             .ok_or(CryptoError::InvalidKeyLength(0))?;
 
-        let keys = self
-            .keys
-            .read()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let keys = self.keys.read().unwrap_or_else(|e| e.into_inner());
         let key_version = keys.get(&version).ok_or(CryptoError::InvalidKeyLength(0))?;
 
         Ok((
@@ -185,10 +178,7 @@ impl KeyRegistry {
     }
 
     pub fn get_key(&self, version: &str) -> Result<ZeroizingBytes, CryptoError> {
-        let keys = self
-            .keys
-            .read()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let keys = self.keys.read().unwrap_or_else(|e| e.into_inner());
         let key_version = keys.get(version).ok_or(CryptoError::InvalidKeyLength(0))?;
         Ok(zeroizing_bytes(key_version.key.as_slice().to_vec()))
     }
@@ -196,7 +186,7 @@ impl KeyRegistry {
     pub fn get_all_versions(&self) -> Vec<String> {
         self.keys
             .read()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .keys()
             .cloned()
             .collect()
@@ -210,10 +200,7 @@ impl KeyRegistry {
         use crate::secret::XChaCha20Crypto;
 
         let crypto = XChaCha20Crypto::new();
-        let keys = self
-            .keys
-            .read()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked");
+        let keys = self.keys.read().unwrap_or_else(|e| e.into_inner());
 
         for (version, key_version) in keys.iter() {
             let key_bytes = key_version.key.as_slice();
@@ -228,14 +215,14 @@ impl KeyRegistry {
     pub fn add_provider(&self, provider: Arc<dyn KeyProvider>) {
         self.providers
             .write()
-            .expect("KeyRegistry providers lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .push(provider);
     }
 
     pub fn add_async_provider(&self, provider: Arc<dyn AsyncKeyProvider>) {
         self.async_providers
             .write()
-            .expect("KeyRegistry async_providers lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .push(provider);
     }
 
@@ -243,7 +230,7 @@ impl KeyRegistry {
         for provider in self
             .providers
             .read()
-            .expect("KeyRegistry providers lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
         {
             if let Ok(key) = provider.get_key() {
@@ -260,7 +247,7 @@ impl KeyRegistry {
         let async_providers: Vec<Arc<dyn AsyncKeyProvider>> = self
             .async_providers
             .read()
-            .expect("KeyRegistry async_providers lock poisoned: previous holder panicked")
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .cloned()
             .collect();
@@ -280,10 +267,7 @@ impl KeyRegistry {
     }
 
     pub fn version_count(&self) -> usize {
-        self.keys
-            .read()
-            .expect("KeyRegistry keys lock poisoned: previous holder panicked")
-            .len()
+        self.keys.read().unwrap_or_else(|e| e.into_inner()).len()
     }
 }
 

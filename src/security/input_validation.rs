@@ -3,8 +3,6 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-#![allow(dead_code)] // Reserved functionality with test coverage
-
 //! # 输入验证增强
 //!
 //! 提供增强的输入验证功能，包括长度限制、敏感数据自动检测和输入清理。

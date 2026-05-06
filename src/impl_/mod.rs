@@ -12,22 +12,17 @@
 //! - `format` - Format detection and parsing
 //! - `source` - Source implementations
 
-// Internal implementations may have unused items depending on feature flags
+// Feature gates cause dead_code warnings under some feature combinations.
+// Each module is annotated only where needed; verify with `cargo clippy --features full`.
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod default;
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod format;
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod loader;
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod memory;
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod merger;
 #[allow(dead_code)]
-#[allow(unused_imports)]
 pub(crate) mod source;

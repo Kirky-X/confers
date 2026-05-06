@@ -37,7 +37,6 @@ pub struct ConsulSourceBuilder {
 
 /// TLS configuration for Consul connection.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ConsulTlsConfig {
     pub ca_file: String,
     pub cert_file: String,
@@ -137,11 +136,11 @@ impl Default for ConsulSourceBuilder {
 }
 
 /// Consul-backed configuration source.
-#[allow(dead_code)]
 pub struct ConsulSource {
     client: Arc<Client>,
     address: Arc<str>,
     prefix: Arc<str>,
+    #[allow(dead_code)] // reserved for future format-specific polling
     format: Option<Format>,
     interval: Duration,
     token: Option<Arc<str>>,

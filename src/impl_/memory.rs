@@ -3,14 +3,23 @@
 //! This module provides `InMemoryConfig` - a thread-safe, high-performance
 //! in-memory configuration store backed by moka cache.
 //!
+//! # Feature-gated async/sync duality
+//!
+//! `InMemoryConfig` is defined twice: async_impl uses `moka::future::Cache`
+//! with `#[async_trait]`; sync_impl uses `moka::sync::Cache`. Only one is
+//! compiled based on feature flags (remote/config-bus/encryption/watch).
+//!
 //! # BrickArchitecture Compliance
 //!
 //! This module follows BrickArchitecture patterns:
 //! - Factory functions return Result for initialization failures
-//! - Configuration phase errors use `ConfersConfigError`
+//! - Configuration phase errors use `ConfigConfigError`
 //! - Runtime errors use `ConfersError`
 
-use crate::error::{ConfersConfigError, ConfersResult, ConfigErrorCode};
+#[allow(unused_imports)]
+use crate::error::ConfigErrorCode;
+use crate::error::{ConfersResult, ConfigConfigError};
+use crate::lifecycle::Lifecycle;
 use crate::traits::sealed::Sealed;
 use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::value::{AnnotatedValue, SourceId};
@@ -65,7 +74,7 @@ mod async_impl {
         ///
         /// # Errors
         ///
-        /// Returns `ConfersConfigError::InvalidValue` if:
+        /// Returns `ConfigConfigError::InvalidValue` if:
         /// - `max_capacity` is 0 (invalid capacity)
         ///
         /// # Example
@@ -75,11 +84,11 @@ mod async_impl {
         /// use confers::{new_in_memory_validated, ConfigConnector};
         ///
         /// let config = new_in_memory_validated(1000)?;
-        /// # Ok::<(), confers::ConfersConfigError>(())
+        /// # Ok::<(), confers::ConfigConfigError>(())
         /// ```
-        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfersConfigError> {
+        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
             if max_capacity == 0 {
-                return Err(ConfersConfigError::InvalidValue {
+                return Err(ConfigConfigError::InvalidValue {
                     field: "max_capacity".into(),
                     expected_type: "u64".into(),
                     message: "must be greater than 0".into(),
@@ -157,6 +166,17 @@ mod async_impl {
         async fn clear(&self) -> ConfersResult<()> {
             self.cache.invalidate_all();
             self.version.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Lifecycle for InMemoryConfig {
+        async fn start(&self) -> Result<(), ConfigConfigError> {
+            Ok(())
+        }
+        async fn stop(&self) -> ConfersResult<()> {
+            self.healthy.store(false, Ordering::Release);
             Ok(())
         }
     }
@@ -315,11 +335,11 @@ mod sync_impl {
         ///
         /// # Errors
         ///
-        /// Returns `ConfersConfigError::InvalidValue` if:
+        /// Returns `ConfigConfigError::InvalidValue` if:
         /// - `max_capacity` is 0 (invalid capacity)
-        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfersConfigError> {
+        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
             if max_capacity == 0 {
-                return Err(ConfersConfigError::InvalidValue {
+                return Err(ConfigConfigError::InvalidValue {
                     field: "max_capacity".into(),
                     expected_type: "u64".into(),
                     message: "must be greater than 0".into(),
@@ -413,6 +433,16 @@ mod sync_impl {
         fn shutdown(&self) {
             self.cache.invalidate_all();
             self.healthy.store(false, Ordering::Relaxed);
+        }
+    }
+
+    impl Lifecycle for InMemoryConfig {
+        fn start(&self) -> Result<(), ConfigConfigError> {
+            Ok(())
+        }
+        fn stop(&self) -> ConfersResult<()> {
+            self.healthy.store(false, Ordering::Relaxed);
+            Ok(())
         }
     }
 

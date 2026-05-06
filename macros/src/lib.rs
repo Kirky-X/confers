@@ -31,7 +31,7 @@
 //! }
 //!
 //! // Load configuration
-//! let config = AppConfig::load_sync().unwrap();
+//! let config = AppConfig::load_sync().expect("config should load");
 //! println!("{:?}", config);
 //! ```
 //!
@@ -101,8 +101,9 @@
 
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, Type};
 
 mod codegen;
 mod parse;
@@ -136,7 +137,7 @@ use parse::{FieldAttrs, StructAttrs};
 /// }
 ///
 /// // Load configuration
-/// let config = AppConfig::load().unwrap();
+/// let config = AppConfig::load().expect("config should load");
 /// ```
 ///
 /// # Struct Attributes
@@ -256,7 +257,7 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
                 fields
                     .iter()
                     .find(|f| f.ident.as_ref() == Some(ident))
-                    .unwrap(),
+                    .expect("field must exist in parsed fields"),
             )
             .map_err(|e| syn::Error::new_spanned(ident, e.to_string()))?;
     }
@@ -265,11 +266,45 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let defaults_impl = generate_defaults_impl(struct_ident, &field_info);
     let load_impl = generate_load_impl(struct_ident, &struct_attrs, fields);
     let validate_impl = generate_validate_impl(&struct_attrs, &field_info);
+    // Generate sensitive_paths() for ConfigProvider::keys() filtering
+    let sensitive_paths = generate_sensitive_paths(struct_ident, &field_info);
     Ok(quote! {
         #defaults_impl
         #load_impl
         #validate_impl
+        #sensitive_paths
     })
+}
+
+/// Generate a `sensitive_paths()` method that returns paths of all
+/// fields marked `#[config(sensitive = true)]` or `#[config(encrypt = "...")]`.
+/// Used by ConfigProvider backends to filter `keys()` output.
+fn generate_sensitive_paths(
+    struct_ident: &Ident,
+    fields: &[(&Ident, &Type, FieldAttrs)],
+) -> TokenStream2 {
+    use syn::LitStr;
+
+    let sensitive_paths: Vec<LitStr> = fields
+        .iter()
+        .filter(|(_, _, attrs)| attrs.sensitive || attrs.encrypt.is_some())
+        .map(|(ident, _, attrs)| {
+            let name = attrs.name.clone().unwrap_or_else(|| ident.to_string());
+            LitStr::new(&name, ident.span())
+        })
+        .collect();
+
+    if sensitive_paths.is_empty() {
+        return TokenStream2::new();
+    }
+
+    quote! {
+        impl #struct_ident {
+            fn sensitive_paths() -> &'static [&'static str] {
+                &[#(#sensitive_paths),*]
+            }
+        }
+    }
 }
 
 fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {

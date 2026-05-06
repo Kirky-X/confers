@@ -25,8 +25,9 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::RwLock;
+
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
@@ -165,10 +166,18 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
             // Check whitelist first
             let domain_str = domain.to_string();
             let is_whitelisted = allowed_domains.iter().any(|allowed| {
-                // Support exact match and subdomain match (*.example.com style via prefix)
-                allowed == &domain_str
-                    || domain_str.ends_with(&format!(".{}", allowed))
-                    || allowed.starts_with("*.")
+                // Exact match
+                if allowed == &domain_str {
+                    return true;
+                }
+                // Wildcard match: *.example.com matches sub.example.com
+                if let Some(suffix) = allowed.strip_prefix("*.") {
+                    // Domain must be a proper subdomain (e.g., sub.example.com, not example.com)
+                    return domain_str.ends_with(&format!(".{suffix}"))
+                        && !domain_str.ends_with(suffix);
+                }
+                // Subdomain match for non-wildcard entries (e.g., "example.com" matches "sub.example.com")
+                domain_str.ends_with(&format!(".{allowed}"))
             });
 
             if is_whitelisted {
@@ -265,13 +274,13 @@ pub trait PolledSource: Send + Sync {
 /// This implementation uses atomics for ETag/Modified tracking to minimize
 /// lock contention in high-concurrency scenarios. Only the cached value
 /// is protected by a RwLock, which is held for the minimal time necessary.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct HttpPolledSource {
     url: Arc<str>,
     interval: Duration,
     client: Client,
     format: Option<Format>,
+    #[allow(dead_code)] // reserved for cache invalidation tracking
     cache_generation: AtomicU64,
     cached: RwLock<Option<AnnotatedValue>>,
     last_etag: ArcSwap<Option<String>>,
@@ -443,7 +452,7 @@ impl PolledSource for HttpPolledSource {
         let status = response.status();
 
         if status == reqwest::StatusCode::NOT_MODIFIED {
-            if let Some(cached) = self.cached.read().expect("RwLock poisoned").as_ref() {
+            if let Some(cached) = self.cached.read().await.as_ref() {
                 return Ok(cached.clone());
             }
             return Err(ConfigError::RemoteUnavailable {
@@ -487,7 +496,7 @@ impl PolledSource for HttpPolledSource {
         let source = self.source_id.clone();
         let value = parse_remote_content(&body, format, source)?;
 
-        *self.cached.write().expect("RwLock poisoned") = Some(value.clone());
+        *self.cached.write().await = Some(value.clone());
 
         Ok(value)
     }

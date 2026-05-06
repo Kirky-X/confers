@@ -6,7 +6,7 @@
 //!
 //! # Phase Distinction (BrickArchitecture)
 //!
-//! - **`ConfersConfigError`** — Configuration phase errors (initialization time)
+//! - **`ConfigConfigError`** — Configuration phase errors (initialization time)
 //!   - Missing required fields
 //!   - Invalid configuration values
 //!   - File not found during setup
@@ -22,14 +22,14 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use confers::error::ConfersConfigError;
+//! use confers::error::ConfigConfigError;
 //!
 //! // Match configuration phase errors
 //! match result {
-//!     Err(ConfersConfigError::MissingField { field }) => {
+//!     Err(ConfigConfigError::MissingField { field }) => {
 //!         println!("Missing: {}", field);
 //!     }
-//!     Err(ConfersConfigError::InvalidValue { field, reason }) => {
+//!     Err(ConfigConfigError::InvalidValue { field, reason }) => {
 //!         println!("Invalid {}: {}", field, reason);
 //!     }
 //!     _ => {}
@@ -89,7 +89,7 @@ impl std::fmt::Display for ConfigErrorCode {
 ///
 /// # When to Use
 ///
-/// Use `ConfersConfigError` for errors that occur in:
+/// Use `ConfigConfigError` for errors that occur in:
 /// - Factory functions (`new_in_memory`, `from_chain`)
 /// - Configuration builders (`ConfigBuilder::build`)
 /// - File loading (`load_file`)
@@ -100,11 +100,11 @@ impl std::fmt::Display for ConfigErrorCode {
 /// ```rust,ignore
 /// // Factory function returns ConfigError
 /// let config = new_in_memory_with_capacity(0)?;
-/// // Returns Err(ConfersConfigError::InvalidConfigValue { ... })
+/// // Returns Err(ConfigConfigError::InvalidConfigValue { ... })
 /// ```
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum ConfersConfigError {
+pub enum ConfigConfigError {
     /// Required configuration field is missing.
     #[error("Missing required configuration field: {field}")]
     MissingField {
@@ -200,26 +200,22 @@ pub enum ConfersConfigError {
     },
 }
 
-impl ConfersConfigError {
+impl ConfigConfigError {
     /// Get the error code for this error.
     pub fn code(&self) -> ConfigErrorCode {
         match self {
-            ConfersConfigError::MissingField { .. } => ConfigErrorCode::MissingField,
-            ConfersConfigError::InvalidValue { .. } => ConfigErrorCode::InvalidConfigValue,
-            ConfersConfigError::FileNotFound { .. } => ConfigErrorCode::ConfigFileNotFound,
-            ConfersConfigError::ParseError { .. } => ConfigErrorCode::ConfigParseError,
-            ConfersConfigError::SizeLimitExceeded { .. } => {
-                ConfigErrorCode::ConfigSizeLimitExceeded
-            }
-            ConfersConfigError::ValidationFailed { .. } => ConfigErrorCode::ConfigValidationFailed,
-            ConfersConfigError::VersionMismatch { .. } => ConfigErrorCode::ConfigVersionMismatch,
-            ConfersConfigError::SourceChainError { .. } => ConfigErrorCode::SourceChainConfigError,
-            ConfersConfigError::InterpolationError { .. } => {
+            ConfigConfigError::MissingField { .. } => ConfigErrorCode::MissingField,
+            ConfigConfigError::InvalidValue { .. } => ConfigErrorCode::InvalidConfigValue,
+            ConfigConfigError::FileNotFound { .. } => ConfigErrorCode::ConfigFileNotFound,
+            ConfigConfigError::ParseError { .. } => ConfigErrorCode::ConfigParseError,
+            ConfigConfigError::SizeLimitExceeded { .. } => ConfigErrorCode::ConfigSizeLimitExceeded,
+            ConfigConfigError::ValidationFailed { .. } => ConfigErrorCode::ConfigValidationFailed,
+            ConfigConfigError::VersionMismatch { .. } => ConfigErrorCode::ConfigVersionMismatch,
+            ConfigConfigError::SourceChainError { .. } => ConfigErrorCode::SourceChainConfigError,
+            ConfigConfigError::InterpolationError { .. } => {
                 ConfigErrorCode::InterpolationConfigError
             }
-            ConfersConfigError::CircularReference { .. } => {
-                ConfigErrorCode::ConfigCircularReference
-            }
+            ConfigConfigError::CircularReference { .. } => ConfigErrorCode::ConfigCircularReference,
         }
     }
 
@@ -229,13 +225,13 @@ impl ConfersConfigError {
     /// file paths, IP addresses, or other sensitive information.
     pub fn user_message(&self) -> String {
         match self {
-            ConfersConfigError::MissingField { field } => {
+            ConfigConfigError::MissingField { field } => {
                 format!("Missing required configuration field: '{}'", field)
             }
-            ConfersConfigError::InvalidValue { field, message, .. } => {
+            ConfigConfigError::InvalidValue { field, message, .. } => {
                 format!("Invalid value for '{}': {}", field, message)
             }
-            ConfersConfigError::FileNotFound { filename, .. } => {
+            ConfigConfigError::FileNotFound { filename, .. } => {
                 // Sanitize sensitive paths
                 let path_str = filename.display().to_string();
                 let sanitized = if path_str.contains(".ssh")
@@ -253,7 +249,7 @@ impl ConfersConfigError {
                 };
                 format!("Configuration file '{}' not found", sanitized)
             }
-            ConfersConfigError::ParseError {
+            ConfigConfigError::ParseError {
                 format,
                 location,
                 message,
@@ -265,26 +261,26 @@ impl ConfersConfigError {
                     format!("Failed to parse {}: {}", format, message)
                 }
             }
-            ConfersConfigError::SizeLimitExceeded { actual, limit } => {
+            ConfigConfigError::SizeLimitExceeded { actual, limit } => {
                 format!(
                     "Configuration size exceeded: {} bytes (limit: {})",
                     actual, limit
                 )
             }
-            ConfersConfigError::ValidationFailed { field, message, .. } => {
+            ConfigConfigError::ValidationFailed { field, message, .. } => {
                 format!("Field '{}' failed validation: {}", field, message)
             }
-            ConfersConfigError::VersionMismatch { found, expected } => {
+            ConfigConfigError::VersionMismatch { found, expected } => {
                 format!(
                     "Configuration version mismatch: found {}, expected {}",
                     found, expected
                 )
             }
-            ConfersConfigError::SourceChainError { message, .. } => message.clone(),
-            ConfersConfigError::InterpolationError { variable, message } => {
+            ConfigConfigError::SourceChainError { message, .. } => message.clone(),
+            ConfigConfigError::InterpolationError { variable, message } => {
                 format!("Interpolation error for '{}': {}", variable, message)
             }
-            ConfersConfigError::CircularReference { path } => {
+            ConfigConfigError::CircularReference { path } => {
                 format!("Circular reference detected: {}", path)
             }
         }
@@ -306,7 +302,7 @@ impl ConfersConfigError {
         rule: impl Into<String>,
         message: impl Into<String>,
     ) -> Self {
-        ConfersConfigError::ValidationFailed {
+        ConfigConfigError::ValidationFailed {
             field: field.into(),
             rule: rule.into(),
             message: message.into(),
@@ -315,7 +311,7 @@ impl ConfersConfigError {
 
     /// Create a missing field error.
     pub fn missing(field: impl Into<String>) -> Self {
-        ConfersConfigError::MissingField {
+        ConfigConfigError::MissingField {
             field: field.into(),
         }
     }
@@ -326,7 +322,7 @@ impl ConfersConfigError {
         expected_type: impl Into<String>,
         message: impl Into<String>,
     ) -> Self {
-        ConfersConfigError::InvalidValue {
+        ConfigConfigError::InvalidValue {
             field: field.into(),
             expected_type: expected_type.into(),
             message: message.into(),
@@ -336,9 +332,9 @@ impl ConfersConfigError {
 
 /// Result type for configuration phase operations.
 ///
-/// Use `ConfigResult<T>` for operations that may fail during
+/// Use `InitResult<T>` for operations that may fail during
 /// configuration initialization (factory functions, builders).
-pub type ConfigResult<T> = Result<T, ConfersConfigError>;
+pub type InitResult<T> = Result<T, ConfigConfigError>;
 
 #[cfg(test)]
 mod tests {
@@ -346,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_error_code() {
-        let err = ConfersConfigError::MissingField {
+        let err = ConfigConfigError::MissingField {
             field: "endpoint".to_string(),
         };
         assert_eq!(err.code(), ConfigErrorCode::MissingField);
@@ -355,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_user_message_missing_field() {
-        let err = ConfersConfigError::MissingField {
+        let err = ConfigConfigError::MissingField {
             field: "database.host".to_string(),
         };
         assert_eq!(
@@ -366,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_user_message_invalid_value() {
-        let err = ConfersConfigError::InvalidValue {
+        let err = ConfigConfigError::InvalidValue {
             field: "port".to_string(),
             expected_type: "u16".to_string(),
             message: "out of range".to_string(),
@@ -377,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_user_message_file_not_found_sanitized() {
-        let err = ConfersConfigError::FileNotFound {
+        let err = ConfigConfigError::FileNotFound {
             filename: PathBuf::from("/home/user/.ssh/config"),
             source: None,
         };
@@ -389,7 +385,7 @@ mod tests {
     #[test]
     fn test_user_message_parse_error_with_location() {
         let loc = crate::value::SourceLocation::new("config.toml", 10, 5);
-        let err = ConfersConfigError::ParseError {
+        let err = ConfigConfigError::ParseError {
             format: "toml".to_string(),
             message: "invalid syntax".to_string(),
             location: Some(loc),
@@ -400,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_audit_message() {
-        let err = ConfersConfigError::ValidationFailed {
+        let err = ConfigConfigError::ValidationFailed {
             field: "email".to_string(),
             rule: "format".to_string(),
             message: "not a valid email".to_string(),
@@ -412,14 +408,14 @@ mod tests {
 
     #[test]
     fn test_helper_methods() {
-        let err = ConfersConfigError::missing("required_field");
-        assert!(matches!(err, ConfersConfigError::MissingField { .. }));
+        let err = ConfigConfigError::missing("required_field");
+        assert!(matches!(err, ConfigConfigError::MissingField { .. }));
 
-        let err = ConfersConfigError::validation("email", "format", "invalid");
-        assert!(matches!(err, ConfersConfigError::ValidationFailed { .. }));
+        let err = ConfigConfigError::validation("email", "format", "invalid");
+        assert!(matches!(err, ConfigConfigError::ValidationFailed { .. }));
 
-        let err = ConfersConfigError::invalid("port", "u16", "too large");
-        assert!(matches!(err, ConfersConfigError::InvalidValue { .. }));
+        let err = ConfigConfigError::invalid("port", "u16", "too large");
+        assert!(matches!(err, ConfigConfigError::InvalidValue { .. }));
     }
 
     #[test]

@@ -3,8 +3,6 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-#![allow(dead_code)] // Reserved functionality with test coverage
-
 //! # 环境变量注入机制
 //!
 //! 提供安全的运行时配置注入，支持通过环境变量动态配置系统参数。
@@ -729,9 +727,14 @@ pub(crate) mod macros {
     #[macro_export]
     macro_rules! safe_inject {
         ($injector:expr, { $($name:expr => $value:expr),+ }) => {
-            $(
-                let _ = $injector.inject($name, $value);
-            )+
+            vec![
+                $(
+                    $injector.inject($name, $value).map_err(|e| ($name, e))
+                ),+
+            ]
+            .into_iter()
+            .filter_map(|r| r.err())
+            .collect::<Vec<_>>()
         };
     }
 
@@ -749,11 +752,18 @@ pub(crate) mod macros {
     #[macro_export]
     macro_rules! inject_from_env {
         ($injector:expr, $prefix:expr, [$($name:expr),+]) => {
-            $(
-                if let Ok(value) = std::env::var(format!("{}{}", $prefix, $name)) {
-                    let _ = $injector.inject(&format!("{}{}", $prefix, $name), &value);
-                }
-            )+
+            vec![
+                $(
+                    if let Ok(value) = std::env::var(format!("{}{}", $prefix, $name)) {
+                        $injector.inject(&format!("{}{}", $prefix, $name), &value).map_err(|e| (concat!($prefix, $name), e))
+                    } else {
+                        Ok(())
+                    }
+                ),+
+            ]
+            .into_iter()
+            .filter_map(|r| r.err())
+            .collect::<Vec<_>>()
         };
     }
 }

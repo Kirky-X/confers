@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use futures_util::{Stream, StreamExt};
 
 use super::{ConfigBus, ConfigChangeEvent};
-use crate::error::{ConfigError, ConfigResult};
+use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
+use crate::lifecycle::Lifecycle;
 
 pub struct NatsConfigBus {
     client: async_nats::Client,
@@ -73,6 +74,23 @@ impl NatsConfigBus {
             })?;
 
         Ok(stream)
+    }
+}
+
+#[async_trait]
+impl Lifecycle for NatsConfigBus {
+    async fn start(&self) -> Result<(), ConfigConfigError> {
+        Ok(())
+    }
+
+    async fn stop(&self) -> ConfigResult<()> {
+        self.client
+            .flush()
+            .await
+            .map_err(|e| ConfigError::RemoteUnavailable {
+                error_type: format!("nats_flush: {}", e),
+                retryable: false,
+            })
     }
 }
 

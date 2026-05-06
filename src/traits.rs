@@ -20,7 +20,7 @@ pub(crate) mod sealed {
     pub trait Sealed {}
 }
 
-// ============== Async Traits (feature-gated) ==============
+// ============== Async Traits (feature-gated, mirrors sync below) ==============
 
 #[cfg(any(
     feature = "remote",
@@ -205,14 +205,24 @@ pub trait ConfigProvider: Send + Sync {
     /// Returns `None` if the key does not exist.
     fn get_raw(&self, key: &str) -> Option<&AnnotatedValue>;
 
-    /// Get all configuration keys.
+    /// Get all non-sensitive configuration keys.
     ///
     /// Returns keys in dot-notation format (e.g., "database.host").
+    /// Sensitive fields marked `#[config(sensitive = true)]` or `#[config(encrypt = "...")]`
+    /// SHALL NOT appear in the returned list.
     fn keys(&self) -> Vec<String>;
 
     /// Check if a key exists.
     fn has(&self, key: &str) -> bool {
         self.get_raw(key).is_some()
+    }
+
+    /// Get all configuration keys including sensitive fields.
+    ///
+    /// Only available in debug builds. In release builds, use `keys()` instead.
+    #[cfg(debug_assertions)]
+    fn keys_all(&self) -> Vec<String> {
+        self.keys()
     }
 }
 
@@ -296,6 +306,31 @@ pub trait ConfigProviderExt: ConfigProvider {
 
 // Blanket implementation for all ConfigProvider types
 impl<T: ConfigProvider + ?Sized> ConfigProviderExt for T {}
+
+/// Filter sensitive keys from a list of configuration keys.
+///
+/// This utility can be used by `ConfigProvider` implementers to filter
+/// the output of `keys()` when sensitive path information is available.
+///
+/// # Example
+///
+/// ```rust
+/// use confers::traits::filter_sensitive_keys;
+///
+/// let all_keys = vec!["host".into(), "password".into()];
+/// let sensitive = &["password"];
+/// let filtered = filter_sensitive_keys(all_keys, sensitive);
+/// assert_eq!(filtered, vec!["host"]);
+/// ```
+pub fn filter_sensitive_keys(keys: Vec<String>, sensitive_paths: &[&str]) -> Vec<String> {
+    keys.into_iter()
+        .filter(|key| {
+            !sensitive_paths
+                .iter()
+                .any(|s| key == s || key.starts_with(s))
+        })
+        .collect()
+}
 
 /// Caching policy for key providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

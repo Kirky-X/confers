@@ -10,7 +10,7 @@
 //!
 //! This module follows BrickArchitecture error phase separation:
 //!
-//! - **`ConfersConfigError`** — Configuration phase errors (initialization time)
+//! - **`ConfigConfigError`** — Configuration phase errors (initialization time)
 //!   - See [`config_error`] module for full documentation
 //!   - Returned by factory functions and builders
 //!
@@ -29,8 +29,8 @@
 pub mod config_error;
 
 // Re-export configuration phase error types
-pub use config_error::ConfersConfigError;
-pub use config_error::{ConfigErrorCode, ConfigResult as InitResult};
+pub use config_error::ConfigConfigError;
+pub use config_error::{ConfigErrorCode, InitResult};
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -78,81 +78,78 @@ static AWS_SAK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// Stable numeric error codes for programmatic handling.
+/// Values follow category-based ranges per dev-v2.md spec:
+///   1-9 = File/IO, 100-199 = Validation, 200-299 = Crypto,
+///   300-399 = Remote, 400-499 = Reference/Processing,
+///   500-599 = Size/Watcher, 600-699 = Version/Migration,
+///   700-799 = Modules, 800-899 = Multi-source,
+///   900-999 = Timeout/Concurrency/Other
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum ErrorCode {
-    /// File not found
-    FileNotFound = 1001,
-    /// Parse error in configuration file
-    ParseError = 1002,
-    /// Validation failed
-    ValidationFailed = 1003,
-    /// Decryption failed
-    DecryptionFailed = 1004,
-    /// Remote source unavailable
-    RemoteUnavailable = 1005,
-    /// Configuration version mismatch
-    VersionMismatch = 1006,
-    /// Migration failed
-    MigrationFailed = 1007,
-    /// Module not found
-    ModuleNotFound = 1008,
-    /// Reload rolled back
-    ReloadRolledBack = 1009,
-    /// IO error
-    IoError = 1010,
-    /// Invalid configuration value
-    InvalidValue = 1011,
-    /// Source chain error
-    SourceChainError = 1012,
-    /// Timeout error
-    Timeout = 1013,
-    /// Size limit exceeded
-    SizeLimitExceeded = 1014,
-    /// Interpolation error
-    InterpolationError = 1015,
-    /// Encryption key error
-    KeyError = 1016,
-    /// Circular reference detected
-    CircularReference = 1017,
-    /// Concurrency conflict
-    ConcurrencyConflict = 1018,
-    /// Key rotation failed
-    KeyRotationFailed = 1019,
-    /// Watcher error
-    WatcherError = 1020,
-    OverrideBlocked = 1021,
-    LockPoisoned = 1022,
-    /// Health check failed
-    HealthCheckFailed = 1023,
+    FileNotFound = 1,
+    FilePermission = 2,
+    FileParseError = 3,
+    IoError = 10,
+    ValidationFailed = 100,
+    TypeMismatch = 101,
+    InvalidValue = 102,
+    SchemaValidationFailed = 103,
+    DecryptionFailed = 200,
+    KeyNotFound = 201,
+    KeyTooWeak = 202,
+    KeyRotationFailed = 203,
+    RemoteUnavailable = 300,
+    RemoteTimeout = 301,
+    CircularReference = 400,
+    OverrideBlocked = 401,
+    InterpolationError = 402,
+    SizeLimitExceeded = 500,
+    WatcherError = 501,
+    VersionMismatch = 600,
+    MigrationFailed = 601,
+    ModuleNotFound = 700,
+    ReloadRolledBack = 701,
+    MultipleSources = 800,
+    Timeout = 900,
+    ConcurrencyConflict = 901,
+    LockPoisoned = 902,
+    HealthCheckFailed = 903,
+    Unknown = 999,
 }
 
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorCode::FileNotFound => write!(f, "FILE_NOT_FOUND"),
-            ErrorCode::ParseError => write!(f, "PARSE_ERROR"),
+            ErrorCode::FilePermission => write!(f, "FILE_PERMISSION"),
+            ErrorCode::FileParseError => write!(f, "FILE_PARSE_ERROR"),
+            ErrorCode::IoError => write!(f, "IO_ERROR"),
             ErrorCode::ValidationFailed => write!(f, "VALIDATION_FAILED"),
+            ErrorCode::TypeMismatch => write!(f, "TYPE_MISMATCH"),
+            ErrorCode::InvalidValue => write!(f, "INVALID_VALUE"),
+            ErrorCode::SchemaValidationFailed => write!(f, "SCHEMA_VALIDATION_FAILED"),
             ErrorCode::DecryptionFailed => write!(f, "DECRYPTION_FAILED"),
+            ErrorCode::KeyNotFound => write!(f, "KEY_NOT_FOUND"),
+            ErrorCode::KeyTooWeak => write!(f, "KEY_TOO_WEAK"),
+            ErrorCode::KeyRotationFailed => write!(f, "KEY_ROTATION_FAILED"),
             ErrorCode::RemoteUnavailable => write!(f, "REMOTE_UNAVAILABLE"),
+            ErrorCode::RemoteTimeout => write!(f, "REMOTE_TIMEOUT"),
+            ErrorCode::CircularReference => write!(f, "CIRCULAR_REFERENCE"),
+            ErrorCode::OverrideBlocked => write!(f, "OVERRIDE_BLOCKED"),
+            ErrorCode::InterpolationError => write!(f, "INTERPOLATION_ERROR"),
+            ErrorCode::SizeLimitExceeded => write!(f, "SIZE_LIMIT_EXCEEDED"),
+            ErrorCode::WatcherError => write!(f, "WATCHER_ERROR"),
             ErrorCode::VersionMismatch => write!(f, "VERSION_MISMATCH"),
             ErrorCode::MigrationFailed => write!(f, "MIGRATION_FAILED"),
             ErrorCode::ModuleNotFound => write!(f, "MODULE_NOT_FOUND"),
             ErrorCode::ReloadRolledBack => write!(f, "RELOAD_ROLLED_BACK"),
-            ErrorCode::IoError => write!(f, "IO_ERROR"),
-            ErrorCode::InvalidValue => write!(f, "INVALID_VALUE"),
-            ErrorCode::SourceChainError => write!(f, "SOURCE_CHAIN_ERROR"),
+            ErrorCode::MultipleSources => write!(f, "MULTIPLE_SOURCES"),
             ErrorCode::Timeout => write!(f, "TIMEOUT"),
-            ErrorCode::SizeLimitExceeded => write!(f, "SIZE_LIMIT_EXCEEDED"),
-            ErrorCode::InterpolationError => write!(f, "INTERPOLATION_ERROR"),
-            ErrorCode::KeyError => write!(f, "KEY_ERROR"),
-            ErrorCode::CircularReference => write!(f, "CIRCULAR_REFERENCE"),
             ErrorCode::ConcurrencyConflict => write!(f, "CONCURRENCY_CONFLICT"),
-            ErrorCode::KeyRotationFailed => write!(f, "KEY_ROTATION_FAILED"),
-            ErrorCode::WatcherError => write!(f, "WATCHER_ERROR"),
-            ErrorCode::OverrideBlocked => write!(f, "OVERRIDE_BLOCKED"),
             ErrorCode::LockPoisoned => write!(f, "LOCK_POISONED"),
             ErrorCode::HealthCheckFailed => write!(f, "HEALTH_CHECK_FAILED"),
+            ErrorCode::Unknown => write!(f, "UNKNOWN"),
         }
     }
 }
@@ -192,6 +189,13 @@ pub enum ConfigError {
         rule: String,
         /// Human-readable error message
         message: String,
+    },
+
+    /// Schema validation failed with error count.
+    #[error("schema validation failed with {count} error(s)")]
+    SchemaValidationFailed {
+        /// Number of schema validation errors
+        count: usize,
     },
 
     /// Decryption failed.
@@ -379,8 +383,9 @@ impl ConfigError {
     pub fn code(&self) -> ErrorCode {
         match self {
             ConfigError::FileNotFound { .. } => ErrorCode::FileNotFound,
-            ConfigError::ParseError { .. } => ErrorCode::ParseError,
+            ConfigError::ParseError { .. } => ErrorCode::FileParseError,
             ConfigError::ValidationFailed { .. } => ErrorCode::ValidationFailed,
+            ConfigError::SchemaValidationFailed { .. } => ErrorCode::SchemaValidationFailed,
             ConfigError::DecryptionFailed { .. } => ErrorCode::DecryptionFailed,
             ConfigError::RemoteUnavailable { .. } => ErrorCode::RemoteUnavailable,
             ConfigError::VersionMismatch { .. } => ErrorCode::VersionMismatch,
@@ -389,14 +394,14 @@ impl ConfigError {
             ConfigError::ReloadRolledBack { .. } => ErrorCode::ReloadRolledBack,
             ConfigError::IoError(_) => ErrorCode::IoError,
             ConfigError::InvalidValue { .. } => ErrorCode::InvalidValue,
-            ConfigError::SourceChainError { .. } => ErrorCode::SourceChainError,
+            ConfigError::SourceChainError { .. } => ErrorCode::MultipleSources,
             ConfigError::Timeout { .. } => ErrorCode::Timeout,
             ConfigError::SizeLimitExceeded { .. } => ErrorCode::SizeLimitExceeded,
             ConfigError::InterpolationError { .. } => ErrorCode::InterpolationError,
-            ConfigError::KeyError { .. } => ErrorCode::KeyError,
+            ConfigError::KeyError { .. } => ErrorCode::KeyNotFound,
             ConfigError::CircularReference { .. } => ErrorCode::CircularReference,
             ConfigError::LockPoisoned { .. } => ErrorCode::LockPoisoned,
-            ConfigError::MultiSource { .. } => ErrorCode::SourceChainError,
+            ConfigError::MultiSource { .. } => ErrorCode::MultipleSources,
             ConfigError::ConcurrencyConflict { .. } => ErrorCode::ConcurrencyConflict,
             ConfigError::KeyRotationFailed { .. } => ErrorCode::KeyRotationFailed,
             ConfigError::WatcherError { .. } => ErrorCode::WatcherError,
@@ -504,6 +509,9 @@ impl ConfigError {
             ConfigError::ValidationFailed { field, message, .. } => {
                 format!("Field '{}' failed validation: {}", field, message)
             }
+            ConfigError::SchemaValidationFailed { count } => {
+                format!("Schema validation failed with {} error(s)", count)
+            }
             ConfigError::DecryptionFailed { .. } => {
                 "Failed to decrypt configuration value".to_string()
             }
@@ -551,8 +559,7 @@ impl ConfigError {
             ConfigError::MultiSource { source } => {
                 format!(
                     "Multiple sources failed: {}/{}",
-                    source.failed_count(),
-                    source.total_count()
+                    source.failed_count, source.total_count
                 )
             }
             ConfigError::ConcurrencyConflict { key, message, .. } => {
@@ -757,63 +764,71 @@ fn sanitize_error_message(msg: &str) -> String {
 
 /// Error from multiple failed sources.
 #[derive(Debug, Error)]
+#[error("multiple sources failed: {failed_count}/{total_count}")]
 pub struct MultiSourceError {
+    /// Errors from each failed source (source_name, error)
+    pub errors: Vec<(String, ConfigError)>,
+    /// Partially loaded configuration (if any), as JSON Value
+    pub partial_config: Option<serde_json::Value>,
+    /// Whether a fallback configuration was used
+    pub fallback_used: bool,
+    /// Number of failed sources
+    pub failed_count: usize,
     /// Total number of sources attempted
-    total: usize,
-    /// Errors from each failed source
-    errors: Vec<(usize, ConfigError)>,
-    /// Partially loaded configuration (if any)
-    partial_config: Option<String>,
-}
-
-impl std::fmt::Display for MultiSourceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Multi-source error: {}/{} sources failed",
-            self.errors.len(),
-            self.total
-        )
-    }
+    pub total_count: usize,
 }
 
 impl MultiSourceError {
     /// Create a new multi-source error.
-    pub fn new(total: usize, errors: Vec<(usize, ConfigError)>) -> Self {
+    pub fn new<T: Into<String>>(total_count: usize, errors: Vec<(T, ConfigError)>) -> Self {
+        let errors: Vec<(String, ConfigError)> =
+            errors.into_iter().map(|(n, e)| (n.into(), e)).collect();
+        let failed_count = errors.len();
         Self {
-            total,
             errors,
             partial_config: None,
+            fallback_used: false,
+            failed_count,
+            total_count,
         }
     }
 
     /// Create with partial configuration.
-    pub fn with_partial(total: usize, errors: Vec<(usize, ConfigError)>, partial: String) -> Self {
+    pub fn with_partial<T: Into<String>>(
+        total_count: usize,
+        errors: Vec<(T, ConfigError)>,
+        partial: serde_json::Value,
+    ) -> Self {
+        let errors: Vec<(String, ConfigError)> =
+            errors.into_iter().map(|(n, e)| (n.into(), e)).collect();
+        let failed_count = errors.len();
         Self {
-            total,
             errors,
             partial_config: Some(partial),
+            fallback_used: false,
+            failed_count,
+            total_count,
         }
     }
 
-    /// Get the number of failed sources.
-    pub fn failed_count(&self) -> usize {
-        self.errors.len()
-    }
-
-    /// Get the total number of sources.
-    pub fn total_count(&self) -> usize {
-        self.total
-    }
-
     /// Get the errors.
-    pub fn errors(&self) -> &[(usize, ConfigError)] {
+    pub fn errors(&self) -> &[(String, ConfigError)] {
         &self.errors
     }
 
     /// Get the partial configuration if available.
-    pub fn partial_config(&self) -> Option<&str> {
-        self.partial_config.as_deref()
+    pub fn partial_config(&self) -> Option<&serde_json::Value> {
+        self.partial_config.as_ref()
+    }
+
+    /// Check if the build had partial success.
+    pub fn has_partial_success(&self) -> bool {
+        self.partial_config.is_some()
+    }
+
+    /// Count errors of a specific type.
+    pub fn count_error_type(&self, code: ErrorCode) -> usize {
+        self.errors.iter().filter(|(_, e)| e.code() == code).count()
     }
 }
 
@@ -823,7 +838,7 @@ pub struct BuildResult<T> {
     /// The built configuration
     pub config: T,
     /// Warnings encountered during build
-    pub warnings: Vec<BuildWarning>,
+    pub warnings: Vec<SourceWarning>,
     /// Whether the build is in degraded mode
     pub degraded: bool,
     /// Reason for degraded mode (if applicable)
@@ -842,7 +857,7 @@ impl<T> BuildResult<T> {
     }
 
     /// Create a build result with warnings.
-    pub fn with_warnings(config: T, warnings: Vec<BuildWarning>) -> Self {
+    pub fn with_warnings(config: T, warnings: Vec<SourceWarning>) -> Self {
         Self {
             config,
             warnings,
@@ -879,7 +894,7 @@ impl<T> BuildResult<T> {
 
 /// Warning encountered during configuration build.
 #[derive(Debug, Clone)]
-pub struct BuildWarning {
+pub struct SourceWarning {
     /// Warning message
     pub message: String,
     /// Warning source (file, source name, etc.)
@@ -926,15 +941,32 @@ pub type ConfigResult<T> = Result<T, ConfigError>;
 
 // ============== BrickArchitecture Error Types ==============
 
-/// Runtime error alias for BrickArchitecture compliance.
+/// Runtime error type for BrickArchitecture compliance.
 ///
-/// This is an alias for `ConfigError` to follow the BrickArchitecture naming convention.
-/// Use `ConfersError` for runtime errors that occur during configuration access.
+/// This is the canonical name for runtime configuration errors. It is
+/// structurally identical to `ConfigError` (same enum), following the
+/// BrickArchitecture convention that library users interact with `ConfersError`
+/// while `ConfigError` serves as the internal implementation detail.
+///
+/// # Phase Distinction
+///
+/// | Phase | Error Type | When |
+/// |-------|-----------|------|
+/// | Configuration (init) | [`ConfigConfigError`] | Factory functions, builders |
+/// | Runtime (use) | `ConfersError` | get/set/delete operations |
+///
+/// # Example
+///
+/// ```rust
+/// use confers::ConfersError;
+/// # fn main() {}
+/// ```
 pub type ConfersError = ConfigError;
 
 /// Result type alias for runtime operations.
 ///
-/// Use `ConfersResult` for operations that may fail with `ConfersError`.
+/// Equivalent to `Result<T, ConfersError>`. Use this for all runtime
+/// configuration operations (get/set/delete/health_check/shutdown).
 pub type ConfersResult<T> = Result<T, ConfersError>;
 
 #[cfg(test)]
@@ -948,7 +980,7 @@ mod tests {
             source: None,
         };
         assert_eq!(err.code(), ErrorCode::FileNotFound);
-        assert_eq!(err.code() as u16, 1001);
+        assert_eq!(err.code() as u16, 1);
     }
 
     #[test]
@@ -1011,7 +1043,7 @@ mod tests {
             source: None,
         };
         let audit = err.audit_message();
-        assert!(audit.contains("error_code=1001"));
+        assert!(audit.contains("error_code=1"));
         assert!(audit.contains("FILE_NOT_FOUND"));
     }
 
@@ -1020,9 +1052,12 @@ mod tests {
         let err = MultiSourceError::new(
             5,
             vec![
-                (0, ConfigError::Timeout { duration_ms: 1000 }),
                 (
-                    2,
+                    "source_a".to_string(),
+                    ConfigError::Timeout { duration_ms: 1000 },
+                ),
+                (
+                    "source_b".to_string(),
                     ConfigError::RemoteUnavailable {
                         error_type: "connection".to_string(),
                         retryable: true,
@@ -1030,8 +1065,8 @@ mod tests {
                 ),
             ],
         );
-        assert_eq!(err.failed_count(), 2);
-        assert_eq!(err.total_count(), 5);
+        assert_eq!(err.failed_count, 2);
+        assert_eq!(err.total_count, 5);
     }
 
     #[test]

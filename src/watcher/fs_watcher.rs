@@ -18,7 +18,6 @@ const DEFAULT_RECV_TIMEOUT_MS: u64 = 50;
 ///
 /// This watcher monitors file changes and emits debounced events
 /// to avoid triggering multiple reloads for a single file modification.
-#[allow(dead_code)]
 pub struct FsWatcher {
     /// Path being watched
     watch_path: Arc<PathBuf>,
@@ -247,7 +246,6 @@ impl FsWatcher {
 /// Multi-file watcher that watches multiple paths.
 ///
 /// This is useful when watching multiple configuration files.
-#[allow(dead_code)]
 pub struct MultiFsWatcher {
     /// Paths being watched
     watch_paths: Arc<HashSet<PathBuf>>,

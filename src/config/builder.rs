@@ -9,9 +9,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+use crate::lifecycle::LifecycleRegistry;
+
 #[cfg(feature = "config-bus")]
 use crate::bus::ConfigBus;
-use crate::error::{BuildResult, BuildWarning, ConfigError, ConfigResult, WarningCode};
+use crate::error::{BuildResult, ConfigError, ConfigResult, SourceWarning, WarningCode};
 use crate::merger::MergeStrategy;
 #[cfg(feature = "progressive-reload")]
 use crate::traits::ReloadHealthCheck;
@@ -89,6 +97,14 @@ pub struct ConfigBuilder<T> {
     reload_health_check: Option<Arc<dyn ReloadHealthCheck>>,
     /// Type marker.
     _marker: PhantomData<T>,
+    /// Lifecycle registry for managing component startup/shutdown.
+    #[cfg(any(
+        feature = "remote",
+        feature = "config-bus",
+        feature = "encryption",
+        feature = "watch"
+    ))]
+    lifecycle_registry: LifecycleRegistry,
 }
 
 impl<T> Default for ConfigBuilder<T> {
@@ -120,6 +136,13 @@ impl<T> ConfigBuilder<T> {
             preload_validators: Vec::new(),
             #[cfg(feature = "progressive-reload")]
             reload_health_check: None,
+            #[cfg(any(
+                feature = "remote",
+                feature = "config-bus",
+                feature = "encryption",
+                feature = "watch"
+            ))]
+            lifecycle_registry: LifecycleRegistry::new(),
             _marker: PhantomData,
         }
     }
@@ -279,6 +302,22 @@ impl<T> ConfigBuilder<T> {
         self.reload_health_check = Some(health_check);
         self
     }
+
+    /// Register a lifecycle component for managed startup/shutdown.
+    #[cfg(any(
+        feature = "remote",
+        feature = "config-bus",
+        feature = "encryption",
+        feature = "watch"
+    ))]
+    pub fn register_lifecycle(
+        mut self,
+        name: &'static str,
+        component: Arc<dyn crate::lifecycle::Lifecycle>,
+    ) -> Self {
+        self.lifecycle_registry.register(name, component);
+        self
+    }
 }
 
 impl<T> ConfigBuilder<T>
@@ -349,7 +388,7 @@ where
             Ok(config) => BuildResult::ok(config),
             Err(e) => BuildResult {
                 config: fallback,
-                warnings: vec![BuildWarning {
+                warnings: vec![SourceWarning {
                     message: format!("Using fallback configuration: {}", e),
                     source: None,
                     code: WarningCode::RemoteFallback,

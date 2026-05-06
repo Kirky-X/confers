@@ -88,14 +88,13 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     ///     println!("Value changed to: {}", new_val);
     /// });
     /// ```
-    pub fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard<T> {
+    pub fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.callbacks.insert(id, Box::new(f));
-        CallbackGuard {
-            id,
-            callbacks: Arc::clone(&self.callbacks),
-            _phantom: std::marker::PhantomData,
-        }
+        let callbacks = Arc::clone(&self.callbacks);
+        CallbackGuard::new(Box::new(move || {
+            callbacks.remove(&id);
+        }))
     }
 
     /// Update value and trigger all callbacks.
@@ -118,7 +117,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
 
     /// Subscribe to changes (deprecated, use `on_change` instead).
     #[deprecated(since = "0.3.0", note = "Use `on_change` instead")]
-    pub fn subscribe(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard<T> {
+    pub fn subscribe(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard {
         self.on_change(f)
     }
 }
@@ -132,25 +131,36 @@ where
     }
 }
 
-pub struct CallbackGuard<T: Clone + Send + Sync + 'static> {
-    id: CallbackId,
-    callbacks: CallbackStorage<T>,
-    _phantom: std::marker::PhantomData<T>,
+/// RAII callback deregistration guard.
+///
+/// Uses a type-erased `Box<dyn FnOnce() + Send>` to avoid generic
+/// parameter pollution. When the guard is dropped, the stored remover
+/// is called, which removes the associated callback from the field.
+///
+/// # Important
+///
+/// Holding this guard keeps the callback registered. Drop it to
+/// deregister. Store the guard in your component's fields for
+/// persistent subscriptions.
+pub struct CallbackGuard {
+    /// Type-erased removal closure: captures Arc<DashMap> and CallbackId
+    remover: Option<Box<dyn FnOnce() + Send>>,
 }
 
-impl<T: Clone + Send + Sync + 'static> Drop for CallbackGuard<T> {
+impl Drop for CallbackGuard {
     fn drop(&mut self) {
-        self.callbacks.remove(&self.id);
+        if let Some(remover) = self.remover.take() {
+            remover();
+        }
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> CallbackGuard<T> {
-    /// Consumes the guard, returning the callback ID.
-    ///
-    /// This is useful when you want to manually manage the callback lifecycle
-    /// but still benefit from RAII cleanup.
-    pub fn into_id(self) -> CallbackId {
-        self.id
+impl CallbackGuard {
+    /// Create a new CallbackGuard with the given remover closure.
+    pub(crate) fn new(remover: Box<dyn FnOnce() + Send>) -> Self {
+        Self {
+            remover: Some(remover),
+        }
     }
 }
 
@@ -170,11 +180,11 @@ impl<T: Clone + Send + Sync + 'static> DynamicFieldBuilder<T> {
     ///
     /// # Panics
     ///
-    /// Panics if no initial value was provided.
+    /// Panics via `expect()` if no initial value was set via [`set_initial`].
     pub fn build(self) -> DynamicField<T> {
         DynamicField::new(
             self.initial
-                .unwrap_or_else(|| panic!("initial value required")),
+                .expect("DynamicFieldBuilder: call set_initial() before build()"),
         )
     }
 }
@@ -348,11 +358,13 @@ mod tests {
     }
 
     #[test]
-    fn test_callback_guard_into_id() {
+    fn test_callback_guard_deregisters_on_drop() {
         let field = DynamicField::new(0u32);
-        let guard = field.on_change(|_val| {});
-        let _id = guard.into_id();
-        // After consuming guard, callback should be removed
+        {
+            let _guard = field.on_change(|_val| {});
+            assert_eq!(field.callback_count(), 1);
+        }
+        // After guard drops, callback should be removed
         assert_eq!(field.callback_count(), 0);
     }
 }
