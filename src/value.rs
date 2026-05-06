@@ -1189,4 +1189,393 @@ mod tests {
             serde_json::Value::String("[REDACTED]".to_string())
         );
     }
+
+    #[test]
+    fn test_annotated_value_merge_basic() {
+        let low = AnnotatedValue::new(
+            ConfigValue::string("localhost"),
+            SourceId::new("file"),
+            "host",
+        );
+        let high = AnnotatedValue::new(
+            ConfigValue::string("prod.example.com"),
+            SourceId::new("env"),
+            "host",
+        );
+
+        let merged = AnnotatedValue::merge(&low, &high);
+        assert_eq!(merged.as_str(), Some("prod.example.com"));
+    }
+
+    #[test]
+    fn test_annotated_value_merge_prefers_high() {
+        let low = AnnotatedValue::new(ConfigValue::integer(8080), SourceId::new("default"), "port")
+            .with_priority(10);
+        let high = AnnotatedValue::new(ConfigValue::integer(9090), SourceId::new("env"), "port")
+            .with_priority(50);
+
+        let merged = AnnotatedValue::merge(&low, &high);
+        assert_eq!(merged.as_i64(), Some(9090));
+    }
+
+    #[test]
+    fn test_annotated_value_merge_null_high_returns_low() {
+        let low = AnnotatedValue::new(ConfigValue::string("keep_me"), SourceId::new("file"), "key");
+        let high = AnnotatedValue::new(ConfigValue::Null, SourceId::new("env"), "key");
+
+        let merged = AnnotatedValue::merge(&low, &high);
+        assert_eq!(merged.as_str(), Some("keep_me"));
+    }
+
+    #[test]
+    fn test_annotated_value_conflict_report_high_wins() {
+        let low = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("file"), "key")
+            .with_priority(10);
+        let high = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("env"), "key")
+            .with_priority(50);
+
+        let report = AnnotatedValue::conflict_report(&low, &high);
+        assert_eq!(report.winner, ConflictWinner::High);
+        assert_eq!(report.path.as_ref(), "key");
+    }
+
+    #[test]
+    fn test_annotated_value_conflict_report_low_wins() {
+        let low = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("file"), "key")
+            .with_priority(50);
+        let high = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("env"), "key")
+            .with_priority(10);
+
+        let report = AnnotatedValue::conflict_report(&low, &high);
+        assert_eq!(report.winner, ConflictWinner::Low);
+    }
+
+    #[test]
+    fn test_source_location_from_path() {
+        let path = std::path::Path::new("/etc/config/app.toml");
+        let loc = SourceLocation::from_path(path, 10, 5);
+        assert_eq!(loc.source_name.as_ref(), "app.toml");
+        assert_eq!(loc.line, 10);
+        assert_eq!(loc.column, 5);
+        assert_eq!(
+            loc.file_path,
+            Some(std::path::PathBuf::from("/etc/config/app.toml"))
+        );
+    }
+
+    #[test]
+    fn test_serialize_mode_copy() {
+        assert_ne!(SerializeMode::Redacted, SerializeMode::Full);
+    }
+
+    #[test]
+    fn test_conflict_winner_eq() {
+        assert_eq!(ConflictWinner::High, ConflictWinner::High);
+        assert_ne!(ConflictWinner::High, ConflictWinner::Low);
+    }
+
+    #[test]
+    fn test_config_value_from_option_some() {
+        let v: ConfigValue = Some(true).into();
+        assert_eq!(v.as_bool(), Some(true));
+    }
+
+    #[test]
+    fn test_config_value_from_option_none() {
+        let v: ConfigValue = Option::<bool>::None.into();
+        assert!(v.is_null());
+    }
+
+    #[test]
+    fn test_config_value_array_from_vec() {
+        let items = vec!["a".to_string(), "b".to_string()];
+        let v: ConfigValue = items.into();
+        assert!(v.is_array());
+    }
+
+    #[test]
+    fn test_annotated_value_empty_checks() {
+        let null_val = AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "");
+        assert!(null_val.is_empty());
+
+        let str_val = AnnotatedValue::new(ConfigValue::string(""), SourceId::new("t"), "");
+        assert!(str_val.is_empty());
+
+        let non_empty = AnnotatedValue::new(ConfigValue::string("hello"), SourceId::new("t"), "");
+        assert!(!non_empty.is_empty());
+    }
+
+    #[test]
+    fn test_all_paths_flat() {
+        let val = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "simple.key");
+        let paths = val.all_paths();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].as_ref(), "simple.key");
+    }
+
+    #[test]
+    fn test_all_paths_nested() {
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+
+        let inner = ConfigValue::map(vec![
+            (
+                "host".to_string(),
+                AnnotatedValue::new(
+                    ConfigValue::string("localhost"),
+                    SourceId::new("t"),
+                    "db.host",
+                ),
+            ),
+            (
+                "port".to_string(),
+                AnnotatedValue::new(ConfigValue::uint(5432), SourceId::new("t"), "db.port"),
+            ),
+        ]);
+        let val = AnnotatedValue::new(inner, SourceId::new("t"), "db");
+        let paths = val.all_paths();
+        assert!(paths.iter().any(|p| p.as_ref() == "db"));
+        assert!(paths.iter().any(|p| p.as_ref() == "db.host"));
+        assert!(paths.iter().any(|p| p.as_ref() == "db.port"));
+    }
+
+    #[test]
+    fn test_bytes_value_roundtrip() {
+        let bytes = vec![1u8, 2, 3, 255];
+        let v = ConfigValue::Bytes(bytes.clone());
+        assert!(matches!(v, ConfigValue::Bytes(_)));
+    }
+
+    #[test]
+    fn test_config_value_from_i64_conv() {
+        let from_i32: ConfigValue = 42i32.into();
+        assert_eq!(from_i32.as_i64(), Some(42));
+        let from_i16: ConfigValue = 16i16.into();
+        assert_eq!(from_i16.as_i64(), Some(16));
+        let from_isize: ConfigValue = 100isize.into();
+        assert_eq!(from_isize.as_i64(), Some(100));
+    }
+
+    #[test]
+    fn test_config_value_from_u64_conv() {
+        let from_u32: ConfigValue = 99u32.into();
+        assert_eq!(from_u32.as_u64(), Some(99));
+        let from_u16: ConfigValue = 16u16.into();
+        assert_eq!(from_u16.as_u64(), Some(16));
+        let from_usize: ConfigValue = 1000usize.into();
+        assert_eq!(from_usize.as_u64(), Some(1000));
+    }
+
+    #[test]
+    fn test_config_value_from_str_variants() {
+        let from_string: ConfigValue = "owned".to_string().into();
+        assert!(from_string.is_string());
+        let from_str: ConfigValue = "borrowed".into();
+        assert!(from_str.is_string());
+    }
+
+    #[test]
+    fn test_config_value_type_checks() {
+        let b = ConfigValue::Bool(true);
+        assert!(b.is_bool());
+        assert!(!b.is_integer());
+        assert!(!b.is_number());
+        assert!(!b.is_string());
+
+        let i = ConfigValue::I64(1);
+        assert!(i.is_integer());
+        assert!(i.is_number());
+
+        let u = ConfigValue::U64(1);
+        assert!(u.is_integer());
+        assert!(u.is_number());
+
+        let f = ConfigValue::F64(1.0);
+        assert!(!f.is_integer());
+        assert!(f.is_number());
+    }
+
+    #[test]
+    fn test_config_value_conv_i64_to_u64() {
+        let v = ConfigValue::I64(100);
+        assert_eq!(v.as_u64(), Some(100));
+        let neg = ConfigValue::I64(-1);
+        assert_eq!(neg.as_u64(), None);
+    }
+
+    #[test]
+    fn test_config_value_conv_u64_to_i64() {
+        let v = ConfigValue::U64(100);
+        assert_eq!(v.as_i64(), Some(100));
+        let big = ConfigValue::U64(i64::MAX as u64 + 1);
+        assert_eq!(big.as_i64(), None);
+    }
+
+    #[test]
+    fn test_annotated_value_default() {
+        let v = AnnotatedValue::default();
+        assert!(v.is_null());
+        assert_eq!(v.priority, 0);
+        assert_eq!(v.version, 0);
+        assert!(v.location.is_none());
+    }
+
+    #[test]
+    fn test_annotated_value_from_config_value() {
+        let cv = ConfigValue::string("test");
+        let av: AnnotatedValue = cv.into();
+        assert_eq!(av.as_str(), Some("test"));
+    }
+
+    #[test]
+    fn test_serialize_mode_eq() {
+        assert_eq!(SerializeMode::Redacted, SerializeMode::Redacted);
+        assert_eq!(SerializeMode::Full, SerializeMode::Full);
+        assert_ne!(SerializeMode::Redacted, SerializeMode::Full);
+    }
+
+    #[test]
+    fn test_source_id_default_and_from() {
+        let sid: SourceId = Default::default();
+        assert_eq!(sid.as_str(), "default");
+
+        let sid2: SourceId = "custom".into();
+        assert_eq!(sid2.as_str(), "custom");
+
+        let sid3: SourceId = "owned_string".to_string().into();
+        assert_eq!(sid3.as_str(), "owned_string");
+    }
+
+    #[test]
+    fn test_source_location_display() {
+        let loc = SourceLocation::new("file.toml", 10, 3);
+        assert_eq!(loc.to_string(), "file.toml:10:3");
+    }
+
+    #[test]
+    fn test_source_location_clone_eq() {
+        let a = SourceLocation::new("f.toml", 1, 2);
+        let b = a.clone();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_config_value_f64_conv_limitations() {
+        let v = ConfigValue::F64(3.14);
+        assert!(!v.is_integer());
+        assert!(v.is_number());
+        let v2 = ConfigValue::I64(10);
+        assert!((v2.as_f64().unwrap() - 10.0).abs() < 0.001);
+        let v3 = ConfigValue::U64(20);
+        assert!((v3.as_f64().unwrap() - 20.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_config_value_as_array_map() {
+        let av = ConfigValue::Array(vec![].into());
+        assert!(av.is_array());
+        assert!(av.as_array().unwrap().is_empty());
+        let mv = ConfigValue::Map(Default::default());
+        assert!(mv.is_map());
+        assert!(mv.as_map().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_annotated_value_with_location_builder() {
+        let loc = SourceLocation::new("file.toml", 5, 10);
+        let av = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "k")
+            .with_priority(10)
+            .with_version(2)
+            .with_location(loc.clone());
+        assert_eq!(av.priority, 10);
+        assert_eq!(av.version, 2);
+        assert_eq!(av.location, Some(loc));
+    }
+
+    #[test]
+    fn test_config_value_bytes_ser_roundtrip() {
+        let bytes = vec![0u8, 1, 255, 128];
+        let cv = ConfigValue::Bytes(bytes);
+        assert!(matches!(cv, ConfigValue::Bytes(_)));
+        // Verify serialization produces an array
+        let json = serde_json::to_value(&cv).unwrap();
+        assert!(json.is_array());
+    }
+
+    #[test]
+    fn test_source_id_serialize_roundtrip() {
+        let sid = SourceId::new("test-source");
+        let json = serde_json::to_string(&sid).unwrap();
+        let deser: SourceId = serde_json::from_str(&json).unwrap();
+        assert_eq!(sid, deser);
+    }
+
+    #[test]
+    fn test_source_id_display() {
+        let sid = SourceId::new("my-source");
+        assert_eq!(sid.to_string(), "my-source");
+    }
+
+    #[test]
+    fn test_deprecated_all_paths_including_self() {
+        #[allow(deprecated)]
+        {
+            let val = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "k");
+            let paths = val.all_paths_including_self();
+            assert_eq!(paths.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_annotated_value_is_null() {
+        let n = AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "");
+        assert!(n.is_null());
+        let s = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "");
+        assert!(!s.is_null());
+    }
+
+    #[test]
+    fn test_annotated_value_array_ser() {
+        let items = vec![AnnotatedValue::new(
+            ConfigValue::string("a"),
+            SourceId::new("t"),
+            "arr.0",
+        )];
+        let arr = AnnotatedValue::new(ConfigValue::Array(items.into()), SourceId::new("t"), "arr");
+        let json = arr.to_json();
+        assert!(json.is_array());
+    }
+
+    #[test]
+    fn test_conflict_report_builder_all_fields() {
+        let loc = SourceLocation::new("f.toml", 1, 1);
+        let report = ConflictReport::builder()
+            .path("key")
+            .low_value("old".into(), SourceId::new("f1"))
+            .low_location(loc.clone())
+            .high_value("new".into(), SourceId::new("f2"))
+            .high_location(loc)
+            .winner(ConflictWinner::High)
+            .build();
+        assert_eq!(report.path.as_ref(), "key");
+        assert_eq!(report.winner, ConflictWinner::High);
+        assert!(report.low_location.is_some());
+        assert!(report.high_location.is_some());
+    }
+
+    #[test]
+    fn test_config_value_usize_roundtrip() {
+        let cv: ConfigValue = 999usize.into();
+        assert_eq!(cv.as_u64(), Some(999));
+        let cv2: ConfigValue = (-5isize).into();
+        assert_eq!(cv2.as_i64(), Some(-5));
+    }
+
+    #[test]
+    fn test_config_value_u8_u16_roundtrip() {
+        let from_u8: ConfigValue = 200u8.into();
+        assert_eq!(from_u8.as_u64(), Some(200));
+        let from_i8: ConfigValue = (-100i8).into();
+        assert_eq!(from_i8.as_i64(), Some(-100));
+    }
 }

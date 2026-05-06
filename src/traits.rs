@@ -616,4 +616,232 @@ mod tests {
         }
         assert_eq!(MyConfig::VERSION, 2);
     }
+
+    #[test]
+    fn test_filter_sensitive_keys_exact_match() {
+        let keys = vec!["host".into(), "password".into(), "port".into()];
+        let sensitive = &["password"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert_eq!(filtered, vec!["host", "port"]);
+    }
+
+    #[test]
+    fn test_filter_sensitive_keys_prefix_match() {
+        let keys = vec!["db.host".into(), "db.password".into(), "db.port".into()];
+        let sensitive = &["db.password"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert_eq!(filtered, vec!["db.host", "db.port"]);
+    }
+
+    #[test]
+    fn test_filter_sensitive_keys_nested_path() {
+        let keys = vec![
+            "server.host".into(),
+            "server.tls.key".into(),
+            "server.tls.cert".into(),
+            "server.port".into(),
+        ];
+        let sensitive = &["server.tls"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert_eq!(filtered, vec!["server.host", "server.port"]);
+    }
+
+    #[test]
+    fn test_filter_sensitive_keys_no_match() {
+        let keys = vec!["host".into(), "port".into()];
+        let sensitive = &["password"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert_eq!(filtered, vec!["host", "port"]);
+    }
+
+    #[test]
+    fn test_filter_sensitive_keys_empty() {
+        let keys: Vec<String> = vec![];
+        let sensitive = &["password"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_typed_not_found() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+
+        struct SimpleProvider(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for SimpleProvider {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+
+        let mut map = HashMap::new();
+        map.insert(
+            "host".into(),
+            AnnotatedValue::new(
+                ConfigValue::string("localhost"),
+                SourceId::new("test"),
+                "host",
+            ),
+        );
+        let provider = SimpleProvider(map);
+
+        let result: Result<String, crate::error::ConfigError> = provider.get_typed("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_many() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+
+        struct SimpleProvider(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for SimpleProvider {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+
+        let mut map = HashMap::new();
+        map.insert(
+            "a".into(),
+            AnnotatedValue::new(ConfigValue::string("1"), SourceId::new("test"), "a"),
+        );
+        map.insert(
+            "b".into(),
+            AnnotatedValue::new(ConfigValue::string("2"), SourceId::new("test"), "b"),
+        );
+        let provider = SimpleProvider(map);
+
+        let result = provider.get_many(&["a", "c"]);
+        assert!(result.get("a").unwrap().is_some());
+        assert!(result.get("c").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_by_path_joins_segments() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+        struct FlatProvider(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for FlatProvider {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(
+            "db.host".into(),
+            AnnotatedValue::new(
+                ConfigValue::string("localhost"),
+                SourceId::new("test"),
+                "db.host",
+            ),
+        );
+        let provider = FlatProvider(map);
+        let result = provider.get_by_path(&["db", "host"]);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().as_str(), Some("localhost"));
+    }
+
+    #[test]
+    fn test_config_provider_ext_has() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+        struct P(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for P {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(
+            "x".into(),
+            AnnotatedValue::new(ConfigValue::string("1"), SourceId::new("t"), "x"),
+        );
+        let p = P(map);
+        assert!(p.has("x"));
+        assert!(!p.has("y"));
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_typed_success() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+        struct P(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for P {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(
+            "port".into(),
+            AnnotatedValue::new(ConfigValue::string("8080"), SourceId::new("t"), "port"),
+        );
+        let p = P(map);
+        let result: Result<u16, crate::error::ConfigError> = p.get_typed("port");
+        assert_eq!(result.unwrap(), 8080);
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_string() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+        struct P(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for P {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(
+            "host".into(),
+            AnnotatedValue::new(ConfigValue::string("localhost"), SourceId::new("t"), "host"),
+        );
+        let p = P(map);
+        assert_eq!(p.get_string("host"), Some("localhost".into()));
+        assert_eq!(p.get_string("missing"), None);
+    }
+
+    #[test]
+    fn test_config_provider_ext_get_int() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use std::collections::HashMap;
+        struct P(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for P {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+        let mut map = HashMap::new();
+        map.insert(
+            "count".into(),
+            AnnotatedValue::new(ConfigValue::integer(42), SourceId::new("t"), "count"),
+        );
+        let p = P(map);
+        assert_eq!(p.get_int("count"), Some(42));
+        assert_eq!(p.get_uint("count"), Some(42));
+        assert_eq!(p.get_float("count"), Some(42.0));
+        assert_eq!(p.get_bool("count"), None);
+    }
 }
