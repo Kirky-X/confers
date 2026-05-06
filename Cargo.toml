@@ -38,6 +38,9 @@ serde_json = { version = "1.0", optional = true }
 serde_yaml_ng = { version = "0.10", optional = true }
 sha2 = { version = "0.10", optional = true }
 thiserror = "2.0"
+dotenvy = { version = "0.15", optional = true }
+aes-gcm = { version = "0.10", optional = true }
+serde_ini = { version = "0.1", optional = true }
 regex = "1.11"
 anyhow = "1"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
@@ -109,8 +112,9 @@ default = ["toml", "json", "env"]
 toml = ["dep:toml"]
 json = ["dep:serde_json"]
 yaml = ["dep:serde_yaml_ng"]
-ini = []
-env = []
+ini = ["dep:serde_ini"]
+env = ["dep:dotenvy"]
+dotenv = ["env"]
 
 # Core features
 validation = ["dep:garde"]
@@ -119,7 +123,7 @@ typescript-schema = ["dep:schemars"]
 security = ["encryption", "dep:hex"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap"]
-encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio"]
+encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm"]
 cli = ["dep:clap", "dep:similar", "dep:toml", "dep:serde_json", "dep:serde_yaml_ng", "dep:chrono"]
 schema = ["dep:schemars"]
 metrics = ["dep:metrics"]
@@ -164,7 +168,7 @@ modules = []
 recommended = ["toml", "env", "validation", "json"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "profile", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "profile", "metrics", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot"]
-full = ["toml", "json", "yaml", "env", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
 minimal = ["env", "json"]
 distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "metrics", "audit"]
 etcd-client = ["dep:etcd-client"]
