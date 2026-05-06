@@ -1,0 +1,18 @@
+[licenses]
+allow = ["MIT", "Apache-2.0", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Zlib", "Unicode-3.0"]
+unused-allowed-license = "warn"
+
+
+[bans]
+multiple-versions = "warn"
+
+[[bans.deny]]
+name = "config"       # removed intermediate dependency
+wrappers = []
+
+[[bans.deny]]
+name = "serde_yaml"   # deprecated, use serde_yaml_ng
+wrappers = []
+
+[advisories]
+ignore = []
