@@ -306,6 +306,55 @@ pub fn normalize_and_validate_path(
                     normalized.push(s);
                 }
             }
+
+            #[test]
+            fn test_format_display() {
+                assert_eq!(Format::Toml.to_string(), "toml");
+                assert_eq!(Format::Json.to_string(), "json");
+                assert_eq!(Format::Yaml.to_string(), "yaml");
+            }
+
+            #[test]
+            fn test_format_try_parse() {
+                assert_eq!(Format::try_parse("toml"), Some(Format::Toml));
+                assert_eq!(Format::try_parse("json"), Some(Format::Json));
+                assert_eq!(Format::try_parse("yaml"), Some(Format::Yaml));
+                assert_eq!(Format::try_parse("unknown"), None);
+            }
+
+            #[test]
+            fn test_format_ext() {
+                assert_eq!(Format::Toml.ext(), "toml");
+                assert_eq!(Format::Json.ext(), "json");
+                assert_eq!(Format::Yaml.ext(), "yaml");
+            }
+
+            #[test]
+            fn test_format_all() {
+                assert!(Format::all().contains(&Format::Toml));
+            }
+
+            #[test]
+            fn test_detect_from_path_case_insensitive() {
+                assert_eq!(
+                    detect_format_from_path(Path::new("config.TOML")),
+                    Some(Format::Toml)
+                );
+                assert_eq!(
+                    detect_format_from_path(Path::new("config.JSON")),
+                    Some(Format::Json)
+                );
+                assert_eq!(
+                    detect_format_from_path(Path::new("config.YAML")),
+                    Some(Format::Yaml)
+                );
+            }
+
+            #[test]
+            fn test_detect_from_path_none() {
+                assert_eq!(detect_format_from_path(Path::new("config")), None);
+                assert_eq!(detect_format_from_path(Path::new("")), None);
+            }
         }
 
         // Check that normalized path doesn't escape

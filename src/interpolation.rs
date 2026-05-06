@@ -754,4 +754,19 @@ mod tests {
         assert!(config.is_sensitive("DB_PASSWORD"));
         assert!(!config.is_sensitive("HOST"));
     }
+
+    #[test]
+    #[test]
+    fn test_interpolate_empty_template() {
+        let result = interpolate("", &|_| None::<String>);
+        assert_eq!(result.unwrap(), "");
+    }
+
+    #[test]
+    fn test_interpolate_default_values() {
+        let result = interpolate("${PORT:8080}", &|_| None::<String>);
+        assert_eq!(result.unwrap(), "8080");
+        let result = interpolate("${HOST:localhost}", &|_| None::<String>);
+        assert_eq!(result.unwrap(), "localhost");
+    }
 }
