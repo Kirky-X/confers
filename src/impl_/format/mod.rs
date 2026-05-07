@@ -1013,4 +1013,43 @@ key = "value""#
         assert!(!ini.supports(FormatFeature::NestedMaps));
         assert!(ini.supports(FormatFeature::Sections));
     }
+
+    #[test]
+    fn test_all_converters_not_empty() {
+        let converters = all_converters();
+        assert!(!converters.is_empty());
+    }
+
+    #[test]
+    fn test_converter_for_toml() {
+        let conv = converter_for(Format::Toml);
+        assert!(conv.is_some());
+        assert_eq!(conv.unwrap().format(), Format::Toml);
+    }
+
+    #[test]
+    fn test_converter_for_json() {
+        let conv = converter_for(Format::Json);
+        assert!(conv.is_some());
+        assert_eq!(conv.unwrap().format(), Format::Json);
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    #[cfg(feature = "toml")]
+    #[test]
+    #[cfg(feature = "yaml")]
+    #[test]
+    #[test]
+    fn test_format_feature_nested_maps() {
+        let toml = toml_converter::TomlConverter::new();
+        assert!(toml.supports(FormatFeature::NestedMaps));
+        assert!(toml.supports(FormatFeature::Sections));
+    }
+
+    #[test]
+    fn test_format_match_debug() {
+        let m = FormatMatch::Confident;
+        assert!(!format!("{:?}", m).is_empty());
+    }
 }
