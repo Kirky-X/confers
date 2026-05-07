@@ -522,4 +522,18 @@ mod tests {
         // Provider was added (no panic means success)
         assert!(true);
     }
+
+    #[test]
+    fn test_key_cache_policy_default() {
+        let p = KeyCachePolicy::default();
+        assert_eq!(p, KeyCachePolicy::CacheWithTtl(Duration::from_secs(3600)));
+        assert_ne!(p, KeyCachePolicy::NoCache);
+        assert_ne!(p, KeyCachePolicy::CacheIndefinitely);
+    }
+
+    #[test]
+    fn test_key_rotation_config_default() {
+        let cfg = KeyRotationConfig::default();
+        assert_eq!(cfg.max_key_versions, 3);
+    }
 }
