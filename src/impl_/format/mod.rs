@@ -1108,4 +1108,28 @@ key = "value""#
         let m = FormatMatch::NoMatch;
         assert!(!format!("{:?}", m).is_empty());
     }
+
+    #[test]
+    fn test_toml_converter_parse_serialize_roundtrip() {
+        use crate::value::SourceId;
+        let c = toml_converter::TomlConverter::new();
+        let parsed = c
+            .parse("name = \"test\"", SourceId::new("test"), None)
+            .unwrap();
+        assert!(parsed.is_map());
+        let serialized = c.serialize(&parsed).unwrap();
+        assert!(serialized.contains("test"));
+    }
+
+    #[test]
+    fn test_json_converter_parse_serialize_roundtrip() {
+        use crate::value::SourceId;
+        let c = json_converter::JsonConverter::new();
+        let parsed = c
+            .parse("{\"name\":\"test\"}", SourceId::new("test"), None)
+            .unwrap();
+        assert!(parsed.is_map());
+        let serialized = c.serialize(&parsed).unwrap();
+        assert!(serialized.contains("test"));
+    }
 }
