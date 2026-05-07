@@ -1083,4 +1083,30 @@ mod tests {
             .iter()
             .any(|i| i.contains("boolean") || i.contains("true")));
     }
+
+    #[test]
+    fn test_print_config_value_basic() {
+        use crate::value::{ConfigValue, SourceId};
+        let v = AnnotatedValue::new(ConfigValue::string("test"), SourceId::new("t"), "k");
+        // Should not panic
+        print_config_value(&v, "", false);
+    }
+
+    #[test]
+    fn test_print_config_value_map() {
+        use crate::value::{ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("host"),
+            AnnotatedValue::new(
+                ConfigValue::string("localhost"),
+                SourceId::new("env"),
+                "host",
+            ),
+        );
+        let v = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "");
+        print_config_value(&v, "", true);
+    }
 }
