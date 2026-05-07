@@ -1157,5 +1157,25 @@ mod tests {
             assert_eq!(detect_format_from_content("{\"a\":1}"), Some(Format::Json));
             assert_eq!(detect_format_from_content(""), None);
         }
+
+        #[test]
+        fn test_parse_toml_table() {
+            let mut table = toml::Table::new();
+            table.insert("key".to_string(), toml::Value::String("val".to_string()));
+            let result = parse_toml_table(&table, &SourceId::new("t"), "");
+            assert!(result.is_map());
+        }
+
+        #[test]
+        fn test_check_traversal_rejects_long_path() {
+            let long = "a".repeat(10000);
+            assert!(!check_path_traversal_attempt(&long));
+        }
+
+        #[test]
+        fn test_loader_config_allow_absolute() {
+            let config = LoaderConfig::new().allow_absolute();
+            assert!(config.allow_absolute);
+        }
     }
 }
