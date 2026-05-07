@@ -368,4 +368,32 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_file_key_provider_whitespace_trim() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"  this-is-a-test-key-with-32-chars-min  \n")
+            .unwrap();
+        let p = FileKeyProvider::new(f.path());
+        let key = p.get_key().unwrap();
+        assert_eq!(key.len(), 32);
+    }
+
+    #[test]
+    fn test_file_key_provider_builder_no_path() {
+        let result = FileKeyProvider::builder().build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_key_provider_builder_cache_policy() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"test-key-12345678901234567890").unwrap();
+        let p = FileKeyProvider::builder()
+            .path(f.path())
+            .cache_policy(KeyCachePolicy::Never)
+            .build()
+            .unwrap();
+        assert_eq!(p.provider_type(), "file");
+    }
 }
