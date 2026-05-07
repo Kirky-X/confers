@@ -1114,5 +1114,48 @@ mod tests {
                 panic!("Unexpected error for normal path: {:?}", e);
             }
         }
+
+        #[test]
+        fn test_parse_toml_content() {
+            let result = parse_toml("key = \"value\"", SourceId::new("test"), None);
+            assert!(result.is_ok());
+            let val = result.unwrap();
+            assert!(val.is_map());
+        }
+
+        #[test]
+        fn test_parse_json_content() {
+            let result = parse_json("{\"key\": \"value\"}", SourceId::new("test"), None);
+            assert!(result.is_ok());
+            let val = result.unwrap();
+            assert!(val.is_map());
+        }
+
+        #[test]
+        fn test_parse_yaml_content() {
+            let result = parse_yaml("key: value", SourceId::new("test"), None);
+            assert!(result.is_ok());
+            let val = result.unwrap();
+            assert!(val.is_map());
+        }
+
+        #[test]
+        fn test_parse_content_toml() {
+            let r = parse_content("name = \"test\"", Format::Toml, SourceId::new("t"), None);
+            assert!(r.is_ok());
+        }
+
+        #[test]
+        fn test_parse_content_json() {
+            let r = parse_content("{\"k\":\"v\"}", Format::Json, SourceId::new("t"), None);
+            assert!(r.is_ok());
+        }
+
+        #[test]
+        fn test_detect_format_toml_json_yaml() {
+            assert_eq!(detect_format_from_content("x = 1"), Some(Format::Toml));
+            assert_eq!(detect_format_from_content("{\"a\":1}"), Some(Format::Json));
+            assert_eq!(detect_format_from_content(""), None);
+        }
     }
 }

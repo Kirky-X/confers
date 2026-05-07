@@ -217,4 +217,16 @@ mod tests {
         assert!(limits.allow_remote);
         assert_eq!(limits.max_file_size_bytes, 100 * 1024 * 1024);
     }
+
+    #[test]
+    fn test_limits_string_length() {
+        let l = ConfigLimits::new().with_max_string_length(500);
+        assert_eq!(l.max_string_length, 500);
+    }
+
+    #[test]
+    fn test_limits_array_length() {
+        let l = ConfigLimits::new().with_max_array_length(50);
+        assert_eq!(l.max_array_length, 50);
+    }
 }

@@ -1052,4 +1052,16 @@ key = "value""#
         let m = FormatMatch::Confident;
         assert!(!format!("{:?}", m).is_empty());
     }
+
+    #[test]
+    fn test_format_match_partial() {
+        let m = FormatMatch::Possible;
+        assert!(!format!("{:?}", m).is_empty());
+    }
+
+    #[test]
+    fn test_format_feature_debug() {
+        let f = FormatFeature::Sections;
+        assert!(!format!("{:?}", f).is_empty());
+    }
 }
