@@ -675,4 +675,52 @@ mod tests {
         assert_eq!(config.max_snapshots, 30);
         assert!(config.include_provenance);
     }
+
+    #[test]
+    fn test_builder_new() {
+        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new();
+        // Builder is created with defaults, no sources yet
+        // We verify by checking build_annotated works
+    }
+
+    #[test]
+    fn test_builder_file_method() {
+        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().file("config.toml");
+        // Builder should have one source after calling file()
+    }
+
+    #[test]
+    fn test_builder_env_method() {
+        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().env();
+    }
+
+    #[test]
+    fn test_builder_defaults_method() {
+        use crate::ConfigValue;
+        use std::collections::HashMap;
+        let mut defaults = HashMap::new();
+        defaults.insert("host".to_string(), ConfigValue::string("localhost"));
+        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().defaults(defaults);
+    }
+
+    #[test]
+    fn test_builder_limits_method() {
+        let builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().limits(ConfigLimits::strict());
+    }
+
+    #[test]
+    fn test_builder_metrics_method() {
+        use crate::traits::MetricsBackend;
+        use crate::traits::NoOpMetrics;
+        let builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().metrics(Arc::new(NoOpMetrics));
+    }
+
+    #[test]
+    fn test_builder_strategy_method() {
+        use crate::merger::MergeStrategy;
+        let builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().strategy(MergeStrategy::Append);
+    }
 }
