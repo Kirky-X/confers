@@ -1230,5 +1230,32 @@ mod tests {
             let result = parse_json_value(&v, &SourceId::new("test"), "");
             assert_eq!(result.as_i64(), Some(42));
         }
+
+        #[test]
+        fn test_detect_format_toml_content() {
+            assert_eq!(detect_format_from_content("key = 1"), Some(Format::Toml));
+            assert_eq!(
+                detect_format_from_content("[table]\nk=v"),
+                Some(Format::Toml)
+            );
+        }
+
+        #[test]
+        fn test_detect_format_json_content() {
+            assert_eq!(detect_format_from_content("{\"k\":1}"), Some(Format::Json));
+            assert_eq!(detect_format_from_content("[1,2,3]"), Some(Format::Json));
+        }
+
+        #[test]
+        fn test_detect_format_yaml_content() {
+            let r = detect_format_from_content("key: value");
+            assert!(r.is_some());
+        }
+
+        #[test]
+        fn test_detect_format_empty_content() {
+            assert_eq!(detect_format_from_content(""), None);
+            assert_eq!(detect_format_from_content("   "), None);
+        }
     }
 }
