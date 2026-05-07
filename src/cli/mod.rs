@@ -919,3 +919,52 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_location_none() {
+        assert_eq!(format_location(&None), "-");
+    }
+
+    #[test]
+    fn test_format_location_some() {
+        use crate::value::SourceLocation;
+        let loc = SourceLocation::new("test.toml", 10, 5);
+        let result = format_location(&Some(loc));
+        assert!(result.contains("10"));
+        assert!(result.contains("5"));
+    }
+
+    #[test]
+    fn test_format_value_string() {
+        let v = crate::ConfigValue::string("hello");
+        assert_eq!(format_value(&v), "\"hello\"");
+    }
+
+    #[test]
+    fn test_format_value_int() {
+        let v = crate::ConfigValue::integer(42);
+        assert_eq!(format_value(&v), "42");
+    }
+
+    #[test]
+    fn test_format_value_bool() {
+        let v = crate::ConfigValue::bool(true);
+        assert_eq!(format_value(&v), "true");
+    }
+
+    #[test]
+    fn test_format_value_null() {
+        let v = crate::ConfigValue::Null;
+        assert_eq!(format_value(&v), "[null]");
+    }
+
+    #[test]
+    fn test_load_env_file_not_found() {
+        let p = std::path::PathBuf::from("/nonexistent/.env");
+        assert!(load_env_file(&p).is_err());
+    }
+}
