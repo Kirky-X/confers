@@ -1177,5 +1177,29 @@ mod tests {
             let config = LoaderConfig::new().allow_absolute();
             assert!(config.allow_absolute);
         }
+
+        #[test]
+        fn test_normalize_accepts_valid_relative() {
+            let allowed = vec![std::path::PathBuf::from(".")];
+            let r = normalize_and_validate_path(
+                std::path::Path::new("Cargo.toml"),
+                &allowed,
+                false,
+                true,
+            );
+            assert!(r.is_ok() || matches!(r, Err(PathTraversalError::NotFound)));
+        }
+
+        #[test]
+        fn test_normalize_rejects_absolute_when_disallowed() {
+            let allowed = vec![std::path::PathBuf::from(".")];
+            let r = normalize_and_validate_path(
+                std::path::Path::new("/etc/passwd"),
+                &allowed,
+                false,
+                true,
+            );
+            assert_eq!(r, Err(PathTraversalError::AbsolutePath));
+        }
     }
 }
