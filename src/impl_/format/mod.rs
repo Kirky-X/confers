@@ -1132,4 +1132,27 @@ key = "value""#
         let serialized = c.serialize(&parsed).unwrap();
         assert!(serialized.contains("test"));
     }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_converter_parse_serialize() {
+        use crate::value::SourceId;
+        let c = yaml_converter::YamlConverter::new();
+        let parsed = c.parse("name: test", SourceId::new("test"), None).unwrap();
+        assert!(parsed.is_map());
+        let serialized = c.serialize(&parsed).unwrap();
+        assert!(serialized.contains("test"));
+    }
+
+    #[test]
+    fn test_ini_converter_parse_serialize() {
+        use crate::value::SourceId;
+        let c = ini_converter::IniConverter::new();
+        let parsed = c
+            .parse("[section]\nkey=value", SourceId::new("test"), None)
+            .unwrap();
+        assert!(parsed.is_map());
+        let serialized = c.serialize(&parsed).unwrap();
+        assert!(serialized.contains("section"));
+    }
 }
