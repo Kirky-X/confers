@@ -967,4 +967,56 @@ mod tests {
         let p = std::path::PathBuf::from("/nonexistent/.env");
         assert!(load_env_file(&p).is_err());
     }
+
+    #[test]
+    #[test]
+    fn test_find_value_by_key_missing() {
+        use crate::value::SourceId;
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("a"),
+            AnnotatedValue::new(crate::ConfigValue::string("1"), SourceId::new("t"), "a"),
+        );
+        let av = AnnotatedValue::new(
+            crate::ConfigValue::Map(Arc::new(map)),
+            SourceId::new("test"),
+            "",
+        );
+        assert!(find_value_by_key(&av, "nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_find_value_by_key_nested() {
+        use crate::value::SourceId;
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut inner = IndexMap::new();
+        inner.insert(
+            Arc::from("host"),
+            AnnotatedValue::new(
+                crate::ConfigValue::string("localhost"),
+                SourceId::new("t"),
+                "host",
+            ),
+        );
+        let mut outer = IndexMap::new();
+        outer.insert(
+            Arc::from("db"),
+            AnnotatedValue::new(
+                crate::ConfigValue::Map(Arc::new(inner)),
+                SourceId::new("t"),
+                "db",
+            ),
+        );
+        let av = AnnotatedValue::new(
+            crate::ConfigValue::Map(Arc::new(outer)),
+            SourceId::new("test"),
+            "",
+        );
+        let val = find_value_by_key(&av, "db.host");
+        assert!(val.is_some());
+        assert_eq!(val.unwrap().as_str(), Some("localhost"));
+    }
 }
