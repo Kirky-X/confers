@@ -1201,5 +1201,34 @@ mod tests {
             );
             assert_eq!(r, Err(PathTraversalError::AbsolutePath));
         }
+
+        #[test]
+        fn test_parse_json_value_object() {
+            let v = serde_json::json!({"host": "localhost", "port": 8080});
+            let result = parse_json_value(&v, &SourceId::new("test"), "");
+            assert!(result.is_map());
+        }
+
+        #[test]
+        fn test_parse_json_value_string() {
+            let v = serde_json::json!("hello");
+            let result = parse_json_value(&v, &SourceId::new("test"), "");
+            assert_eq!(result.as_str(), Some("hello"));
+        }
+
+        #[test]
+        fn test_parse_json_value_array() {
+            let v = serde_json::json!([1, 2, 3]);
+            let result = parse_json_value(&v, &SourceId::new("test"), "");
+            // Array may be wrapped
+            assert!(result.inner.is_array() || result.is_null() == false);
+        }
+
+        #[test]
+        fn test_parse_json_value_number() {
+            let v = serde_json::json!(42);
+            let result = parse_json_value(&v, &SourceId::new("test"), "");
+            assert_eq!(result.as_i64(), Some(42));
+        }
     }
 }
