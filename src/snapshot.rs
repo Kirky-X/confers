@@ -411,4 +411,36 @@ mod tests {
         let manager = SnapshotManager::default();
         assert_eq!(manager.config().max_snapshots, 30);
     }
+
+    #[test]
+    fn test_snapshot_format_debug() {
+        let f = SnapshotFormat::Toml;
+        assert!(!format!("{:?}", f).is_empty());
+    }
+
+    #[test]
+    fn test_snapshot_format_clone_eq() {
+        let a = SnapshotFormat::Json;
+        let b = a.clone();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_snapshot_config_clone() {
+        let a = SnapshotConfig::new("/tmp/a");
+        let b = a.clone();
+        assert_eq!(a.dir, b.dir);
+    }
+
+    #[test]
+    fn test_snapshot_config_custom() {
+        let config = SnapshotConfig {
+            dir: std::path::PathBuf::from("/custom"),
+            max_snapshots: 5,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        };
+        assert_eq!(config.max_snapshots, 5);
+        assert!(!config.include_provenance);
+    }
 }

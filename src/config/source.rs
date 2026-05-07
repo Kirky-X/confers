@@ -718,4 +718,95 @@ mod tests {
         let env = EnvSource::new();
         assert_eq!(env.source_kind(), SourceKind::Environment);
     }
+
+    #[test]
+    fn test_default_source_priority() {
+        let source = DefaultSource::new();
+        assert_eq!(source.priority(), 0);
+    }
+
+    #[test]
+    fn test_memory_source_priority() {
+        let source = MemorySource::new();
+        assert_eq!(source.priority(), 0);
+    }
+
+    #[test]
+    fn test_env_source_builder_priority() {
+        let source = EnvSource::with_prefix("X_").with_priority(99);
+        assert_eq!(source.priority(), 99);
+    }
+
+    #[test]
+    fn test_env_source_name_default() {
+        let source = EnvSource::new();
+        assert_eq!(source.name(), "env");
+    }
+
+    #[test]
+    fn test_memory_source_name() {
+        let source = MemorySource::new();
+        assert_eq!(source.name(), "memory");
+    }
+
+    #[test]
+    fn test_default_source_name() {
+        let source = DefaultSource::new();
+        assert_eq!(source.name(), "default");
+    }
+
+    #[test]
+    fn test_file_source_name() {
+        let source = FileSource::new("test.toml");
+        assert_eq!(source.name(), "test.toml");
+    }
+
+    #[test]
+    fn test_file_source_path() {
+        let source = FileSource::new("test.toml");
+        assert!(source.file_path().is_some());
+        assert!(!source.is_optional());
+    }
+
+    #[test]
+    fn test_file_source_optional_flag() {
+        let source = FileSource::new("missing.toml").optional();
+        assert!(source.is_optional());
+    }
+
+    #[test]
+    fn test_file_source_format() {
+        let source = FileSource::new("config.toml").with_format(crate::loader::Format::Toml);
+        assert_eq!(source.name(), "config.toml");
+    }
+
+    #[test]
+    fn test_memory_source_is_not_optional() {
+        let source = MemorySource::new();
+        assert!(!source.is_optional());
+    }
+
+    #[test]
+    fn test_source_kind_memory() {
+        let source = MemorySource::new();
+        assert_eq!(source.source_kind(), SourceKind::Memory);
+    }
+
+    #[test]
+    fn test_source_kind_default() {
+        let source = DefaultSource::new();
+        assert_eq!(source.source_kind(), SourceKind::Default);
+    }
+
+    #[test]
+    fn test_source_kind_file() {
+        let source = FileSource::new("test.toml");
+        assert_eq!(source.source_kind(), SourceKind::File);
+    }
+
+    #[test]
+    fn test_env_source_default_priority() {
+        let source = EnvSource::new();
+        assert_eq!(source.priority(), 50);
+    }
 }

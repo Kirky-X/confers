@@ -98,3 +98,39 @@ fn test_dynamic_field_default() {
     let f: DynamicField<u64> = DynamicField::default();
     assert_eq!(f.get(), 0);
 }
+
+#[test]
+fn test_loader_config_default() {
+    use confers::loader::LoaderConfig;
+    let cfg = LoaderConfig::new();
+    assert!(!cfg.allow_absolute);
+}
+
+#[test]
+fn test_loader_detect_from_content_json() {
+    let r = loader::detect_format_from_content("{\"a\":1}");
+    assert_eq!(r, Some(loader::Format::Json));
+}
+
+#[test]
+fn test_error_code_display() {
+    assert_eq!(error::ErrorCode::FileNotFound.to_string(), "FILE_NOT_FOUND");
+    assert_eq!(error::ErrorCode::Timeout.to_string(), "TIMEOUT");
+}
+
+#[test]
+fn test_config_value_string_creation() {
+    let v = confers::ConfigValue::string("test");
+    assert!(v.is_string());
+    assert_eq!(v.as_str(), Some("test"));
+}
+
+#[test]
+fn test_config_value_type_checks() {
+    let b = confers::ConfigValue::bool(true);
+    assert!(b.is_bool());
+    let n = confers::ConfigValue::null();
+    assert!(n.is_null());
+    let i = confers::ConfigValue::integer(42);
+    assert!(i.is_integer());
+}
