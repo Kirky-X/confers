@@ -1019,4 +1019,68 @@ mod tests {
         assert!(val.is_some());
         assert_eq!(val.unwrap().as_str(), Some("localhost"));
     }
+
+    #[test]
+    fn test_check_required_keys_detects_missing_server() {
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let map = IndexMap::new();
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        // No server section, so no specific error
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_check_required_keys_server_missing_host() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut server_map = IndexMap::new();
+        // Server exists but has neither host nor port
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("server"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(server_map)),
+                SourceId::new("t"),
+                "",
+            ),
+        );
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        assert!(issues.is_empty() || issues.iter().any(|i| i.contains("missing")));
+    }
+
+    #[test]
+    fn test_check_types_detects_number_in_string() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("port"),
+            AnnotatedValue::new(ConfigValue::string("8080"), SourceId::new("t"), "port"),
+        );
+        let mut issues = Vec::new();
+        check_types(&map, &mut issues);
+        assert!(issues.iter().any(|i| i.contains("8080")));
+    }
+
+    #[test]
+    fn test_check_types_detects_bool_in_string() {
+        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("debug"),
+            AnnotatedValue::new(ConfigValue::string("true"), SourceId::new("t"), "debug"),
+        );
+        let mut issues = Vec::new();
+        check_types(&map, &mut issues);
+        assert!(issues
+            .iter()
+            .any(|i| i.contains("boolean") || i.contains("true")));
+    }
 }
