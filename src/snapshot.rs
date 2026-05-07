@@ -443,4 +443,34 @@ mod tests {
         assert_eq!(config.max_snapshots, 5);
         assert!(!config.include_provenance);
     }
+
+    #[test]
+    fn test_snapshot_info_create() {
+        use chrono::Utc;
+        let info = SnapshotInfo {
+            path: std::path::PathBuf::from("snap.json"),
+            created_at: Utc::now(),
+            size_bytes: 1024,
+        };
+        assert!(info.size_bytes > 0);
+        assert_eq!(info.path.file_name().unwrap(), "snap.json");
+    }
+
+    #[test]
+    fn test_snapshot_manager_default_config() {
+        let manager = SnapshotManager::default();
+        assert!(manager.config().include_provenance);
+        assert_eq!(manager.config().max_snapshots, 30);
+    }
+
+    #[test]
+    fn test_snapshot_manager_path() {
+        let config = SnapshotConfig::new("./mysnapshots");
+        let manager = SnapshotManager::new(config);
+        assert!(manager
+            .config()
+            .dir
+            .to_string_lossy()
+            .contains("mysnapshots"));
+    }
 }

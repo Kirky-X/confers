@@ -1064,4 +1064,48 @@ key = "value""#
         let f = FormatFeature::Sections;
         assert!(!format!("{:?}", f).is_empty());
     }
+
+    #[test]
+    fn test_toml_converter_extension() {
+        let c = toml_converter::TomlConverter::new();
+        assert_eq!(c.extension(), "toml");
+    }
+
+    #[test]
+    fn test_json_converter_extension() {
+        let c = json_converter::JsonConverter::new();
+        assert_eq!(c.extension(), "json");
+    }
+
+    #[test]
+    fn test_yaml_converter_extension() {
+        let c = yaml_converter::YamlConverter::new();
+        assert!(!c.extension().is_empty());
+    }
+
+    #[test]
+    fn test_ini_converter_extension() {
+        let c = ini_converter::IniConverter::new();
+        assert_eq!(c.extension(), "ini");
+    }
+
+    #[test]
+    fn test_converter_for_yaml() {
+        let c = converter_for(Format::Yaml);
+        assert!(c.is_some());
+        assert_eq!(c.unwrap().format(), Format::Yaml);
+    }
+
+    #[test]
+    fn test_converter_for_ini() {
+        let c = converter_for(Format::Ini);
+        assert!(c.is_some());
+        assert_eq!(c.unwrap().format(), Format::Ini);
+    }
+
+    #[test]
+    fn test_format_match_no_match() {
+        let m = FormatMatch::NoMatch;
+        assert!(!format!("{:?}", m).is_empty());
+    }
 }
