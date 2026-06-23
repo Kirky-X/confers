@@ -248,6 +248,11 @@ impl<T: Clone + Send + Sync + 'static> ContextAwareField<T> {
         }
     }
 
+    /// Construct with a default value. This is a thin wrapper around [`Self::new`].
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use `ContextAwareFieldBuilder::new(default)` directly instead."
+    )]
     pub fn with_default(default: T) -> Self {
         Self::new(default)
     }

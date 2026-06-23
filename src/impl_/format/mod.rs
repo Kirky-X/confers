@@ -25,6 +25,13 @@ use crate::error::{ConfigError, ConfigResult};
 use crate::value::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::Path;
 
+#[cfg(feature = "json")]
+use super::convert::json_to_config_value;
+#[cfg(feature = "toml")]
+use super::convert::toml_table_to_config_value;
+#[cfg(feature = "yaml")]
+use super::convert::yaml_to_config_value;
+
 /// Result of format detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatMatch {
@@ -227,63 +234,6 @@ mod toml_converter {
         }
     }
 
-    fn toml_table_to_config_value(
-        table: &toml::Table,
-        source: &SourceId,
-        prefix: &str,
-    ) -> ConfigValue {
-        use indexmap::IndexMap;
-        use std::sync::Arc;
-        let entries: Vec<(Arc<str>, AnnotatedValue)> = table
-            .iter()
-            .map(|(k, v)| {
-                let path = if prefix.is_empty() {
-                    k.clone()
-                } else {
-                    format!("{}.{}", prefix, k)
-                };
-                (
-                    Arc::from(path.clone()),
-                    AnnotatedValue::new(
-                        toml_value_to_config_value(v, source, &path),
-                        source.clone(),
-                        k.clone(),
-                    ),
-                )
-            })
-            .collect();
-        ConfigValue::Map(Arc::new(entries.into_iter().collect::<IndexMap<_, _>>()))
-    }
-
-    fn toml_value_to_config_value(
-        value: &toml::Value,
-        source: &SourceId,
-        prefix: &str,
-    ) -> ConfigValue {
-        match value {
-            toml::Value::String(s) => ConfigValue::String(s.clone()),
-            toml::Value::Integer(i) => ConfigValue::I64(*i),
-            toml::Value::Float(f) => ConfigValue::F64(*f),
-            toml::Value::Boolean(b) => ConfigValue::Bool(*b),
-            toml::Value::Datetime(dt) => ConfigValue::String(dt.to_string()),
-            toml::Value::Array(arr) => ConfigValue::Array(
-                arr.iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        let path = format!("{}.{}", prefix, i);
-                        AnnotatedValue::new(
-                            toml_value_to_config_value(v, source, &path),
-                            source.clone(),
-                            path,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .into(),
-            ),
-            toml::Value::Table(t) => toml_table_to_config_value(t, source, prefix),
-        }
-    }
-
     fn config_value_to_toml_value(value: &ConfigValue) -> toml::Value {
         use toml::map::Map;
         match value {
@@ -401,51 +351,6 @@ mod json_converter {
                 FormatFeature::TopLevelArrays => true,
                 FormatFeature::Sections => false,
             }
-        }
-    }
-
-    fn json_to_config_value(v: &serde_json::Value, src: &SourceId, pre: &str) -> ConfigValue {
-        use indexmap::IndexMap;
-        use std::sync::Arc;
-        match v {
-            serde_json::Value::Null => ConfigValue::Null,
-            serde_json::Value::Bool(b) => ConfigValue::Bool(*b),
-            serde_json::Value::Number(n) => n
-                .as_i64()
-                .map(ConfigValue::I64)
-                .or_else(|| n.as_u64().map(ConfigValue::U64))
-                .or_else(|| n.as_f64().map(ConfigValue::F64))
-                .unwrap_or(ConfigValue::Null),
-            serde_json::Value::String(s) => ConfigValue::String(s.clone()),
-            serde_json::Value::Array(a) => ConfigValue::Array(
-                a.iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        let p = format!("{}.{}", pre, i);
-                        AnnotatedValue::new(json_to_config_value(v, src, &p), src.clone(), p)
-                    })
-                    .collect::<Vec<_>>()
-                    .into(),
-            ),
-            serde_json::Value::Object(o) => ConfigValue::Map(Arc::new(
-                o.iter()
-                    .map(|(k, v)| {
-                        let p = if pre.is_empty() {
-                            k.clone()
-                        } else {
-                            format!("{}.{}", pre, k)
-                        };
-                        (
-                            Arc::from(p.clone()),
-                            AnnotatedValue::new(
-                                json_to_config_value(v, src, &p),
-                                src.clone(),
-                                k.clone(),
-                            ),
-                        )
-                    })
-                    .collect::<IndexMap<_, _>>(),
-            )),
         }
     }
 
@@ -573,55 +478,6 @@ mod yaml_converter {
                 FormatFeature::TopLevelArrays => true,
                 FormatFeature::Sections => true,
             }
-        }
-    }
-
-    fn yaml_to_config_value(v: &serde_yaml_ng::Value, src: &SourceId, pre: &str) -> ConfigValue {
-        use indexmap::IndexMap;
-        use std::sync::Arc;
-        match v {
-            serde_yaml_ng::Value::Null => ConfigValue::Null,
-            serde_yaml_ng::Value::Bool(b) => ConfigValue::Bool(*b),
-            serde_yaml_ng::Value::Number(n) => n
-                .as_i64()
-                .map(ConfigValue::I64)
-                .or_else(|| n.as_u64().map(ConfigValue::U64))
-                .or_else(|| n.as_f64().map(ConfigValue::F64))
-                .unwrap_or(ConfigValue::Null),
-            serde_yaml_ng::Value::String(s) => ConfigValue::String(s.clone()),
-            serde_yaml_ng::Value::Sequence(s) => ConfigValue::Array(
-                s.iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        let p = format!("{}.{}", pre, i);
-                        AnnotatedValue::new(yaml_to_config_value(v, src, &p), src.clone(), p)
-                    })
-                    .collect::<Vec<_>>()
-                    .into(),
-            ),
-            serde_yaml_ng::Value::Mapping(m) => ConfigValue::Map(
-                m.iter()
-                    .filter_map(|(k, v)| {
-                        k.as_str().map(|key| {
-                            let p = if pre.is_empty() {
-                                key.to_string()
-                            } else {
-                                format!("{}.{}", pre, key)
-                            };
-                            (
-                                Arc::from(p.clone()),
-                                AnnotatedValue::new(
-                                    yaml_to_config_value(v, src, &p),
-                                    src.clone(),
-                                    key,
-                                ),
-                            )
-                        })
-                    })
-                    .collect::<IndexMap<_, _>>()
-                    .into(),
-            ),
-            serde_yaml_ng::Value::Tagged(t) => yaml_to_config_value(&t.value, src, pre),
         }
     }
 
@@ -1034,12 +890,7 @@ key = "value""#
         assert_eq!(conv.unwrap().format(), Format::Json);
     }
 
-    #[cfg(feature = "json")]
-    #[test]
-    #[cfg(feature = "toml")]
-    #[test]
-    #[cfg(feature = "yaml")]
-    #[test]
+    #[cfg(all(feature = "json", feature = "toml", feature = "yaml"))]
     #[test]
     fn test_format_feature_nested_maps() {
         let toml = toml_converter::TomlConverter::new();

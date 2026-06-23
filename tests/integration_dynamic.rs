@@ -166,10 +166,8 @@ async fn test_field_watcher_changed_for() {
 // Test that FieldWatcher detects field changes (requires watch feature).
 #[tokio::test]
 #[cfg(feature = "watch")]
-async fn test_field_watcher_no_trigger_if_field_unchanged() {
-    // Skip this test - FieldWatcher implementation has edge cases with empty baseline
-    // The core functionality is tested in test_field_watcher_changed_for
-}
+#[ignore = "FieldWatcher has edge cases with empty baseline"]
+async fn test_field_watcher_no_trigger_if_field_unchanged() {}
 
 // Test with complex types.
 #[test]

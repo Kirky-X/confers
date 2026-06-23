@@ -14,27 +14,10 @@
 //! - **输入清理**: 提供输入清理和验证功能
 //! - **白名单验证**: 支持白名单格式验证
 
+use crate::security::patterns::{SENSITIVE_DETECTION_PATTERNS, SENSITIVE_KEYWORDS};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
-
-/// 默认敏感模式 - 全局缓存
-static DEFAULT_SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    vec![
-        Regex::new(r"(?i)password").unwrap(),
-        Regex::new(r"(?i)secret").unwrap(),
-        Regex::new(r"(?i)token").unwrap(),
-        Regex::new(r"(?i)api_key").unwrap(),
-        Regex::new(r"(?i)access_key").unwrap(),
-        Regex::new(r"(?i)private_key").unwrap(),
-        Regex::new(r"(?i)credential").unwrap(),
-        Regex::new(r"(?i)auth").unwrap(),
-        Regex::new(r"(?i)key").unwrap(),
-        Regex::new(r"(?i)cert").unwrap(),
-        Regex::new(r"(?i)password_hash").unwrap(),
-        Regex::new(r"(?i)session_id").unwrap(),
-    ]
-});
 
 /// 默认危险模式 - 全局缓存
 static DEFAULT_DANGEROUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
@@ -85,24 +68,12 @@ impl SensitiveDataDetector {
 
     /// 默认敏感模式
     fn default_sensitive_patterns() -> Vec<Regex> {
-        DEFAULT_SENSITIVE_PATTERNS.clone()
+        SENSITIVE_DETECTION_PATTERNS.clone()
     }
 
     /// 默认高敏感度关键词
     fn default_high_sensitivity_keywords() -> HashSet<&'static str> {
-        let mut set = HashSet::new();
-        set.insert("password");
-        set.insert("secret");
-        set.insert("private_key");
-        set.insert("master_key");
-        set.insert("encryption_key");
-        set.insert("api_secret");
-        set.insert("access_token");
-        set.insert("refresh_token");
-        set.insert("client_secret");
-        set.insert("db_password");
-        set.insert("admin_password");
-        set
+        SENSITIVE_KEYWORDS.clone()
     }
 
     /// 添加自定义敏感字段

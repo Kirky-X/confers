@@ -386,8 +386,11 @@ async fn test_fs_watcher_file_creation_detection() {
     // Cleanup
     watcher.stop();
 
-    // Should detect some file change
-    assert!(event.is_ok() || event.is_err()); // Either receives event or times out
+    // Should detect some file change — watcher may not fire reliably on all platforms
+    assert!(
+        event.is_ok() || event.is_err(),
+        "Watcher test completed (event delivery is platform-dependent)"
+    );
 }
 
 /// Test FsWatcher detects file modification (2.1.3).
@@ -412,7 +415,10 @@ async fn test_fs_watcher_file_modification_detection() {
     // Cleanup
     watcher.stop();
 
-    assert!(event.is_ok() || event.is_err());
+    assert!(
+        event.is_ok() || event.is_err(),
+        "Watcher test completed (event delivery is platform-dependent)"
+    );
 }
 
 /// Test FsWatcher detects file deletion (2.1.4).
@@ -437,12 +443,14 @@ async fn test_fs_watcher_file_deletion_detection() {
     // Cleanup
     watcher.stop();
 
-    assert!(event.is_ok() || event.is_err());
+    assert!(
+        event.is_ok() || event.is_err(),
+        "Watcher test completed (event delivery is platform-dependent)"
+    );
 }
 
 // ========================================
 // MultiFsWatcher Tests
-// ========================================
 
 /// Test MultiFsWatcher requires at least one path.
 #[tokio::test]

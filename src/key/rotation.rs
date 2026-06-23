@@ -4,9 +4,11 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::error::ConfigError;
-use crate::key::{KeyMetadata, KeyRing, KeyStatus, RotationPlan};
+use crate::key::{now_timestamp, KeyMetadata, KeyRing, KeyStatus, RotationPlan, SECONDS_PER_DAY};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const CRITICAL_EXPIRY_DAYS: u64 = 7;
+const WARNING_EXPIRY_DAYS: u64 = 30;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyRotationPolicy {
@@ -286,11 +288,11 @@ impl KeyRotationService {
             KeyExpirationStatus::Expired
         } else if let Some(expires_at) = metadata.expires_at {
             let now = now_timestamp();
-            let days_until_expiry = (expires_at.saturating_sub(now)) / 86400;
+            let days_until_expiry = (expires_at.saturating_sub(now)) / SECONDS_PER_DAY;
 
-            if days_until_expiry <= 7 {
+            if days_until_expiry <= CRITICAL_EXPIRY_DAYS {
                 KeyExpirationStatus::Critical(days_until_expiry as u32)
-            } else if days_until_expiry <= 30 {
+            } else if days_until_expiry <= WARNING_EXPIRY_DAYS {
                 KeyExpirationStatus::Warning(days_until_expiry as u32)
             } else {
                 KeyExpirationStatus::Valid
@@ -327,11 +329,12 @@ impl KeyRotationService {
     ) -> RotationRecommendation {
         let days_since_rotation = key_ring
             .last_rotated_at
-            .map(|last| (now_timestamp().saturating_sub(last)) / 86400)
+            .map(|last| (now_timestamp().saturating_sub(last)) / SECONDS_PER_DAY)
             .unwrap_or(0);
 
-        let version_age_days =
-            (now_timestamp().saturating_sub(key_ring.primary_key.metadata.created_at)) / 86400;
+        let version_age_days = (now_timestamp()
+            .saturating_sub(key_ring.primary_key.metadata.created_at))
+            / SECONDS_PER_DAY;
 
         let should_rotate = days_since_rotation >= policy.rotation_interval_days as u64
             || version_age_days >= policy.rotation_interval_days as u64 * 2;
@@ -398,11 +401,4 @@ pub struct RotationRecommendation {
     pub should_rotate: bool,
     pub priority: RecommendationPriority,
     pub estimated_downtime_minutes: Option<u32>,
-}
-
-fn now_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
 }
