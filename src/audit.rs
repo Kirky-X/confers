@@ -195,7 +195,6 @@ impl AuditWriter {
             "api_key",
             "apikey",
             "access_key",
-            "access_key",
             "private_key",
             "session_id",
             "sessionid",

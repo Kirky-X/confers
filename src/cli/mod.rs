@@ -11,8 +11,44 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::AnnotatedValue;
+use crate::ConfigBuilder;
+use crate::ConfigResult;
 
 const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
+
+fn build_annotated_from_cli(
+    config_paths: &[PathBuf],
+    allow_absolute_paths: bool,
+) -> ConfigResult<AnnotatedValue> {
+    let mut builder = ConfigBuilder::<serde_json::Value>::new();
+    if allow_absolute_paths {
+        builder = builder.allow_absolute_paths();
+    }
+    for path in config_paths {
+        if path.exists() {
+            builder = builder.file(path.clone());
+        }
+    }
+    builder = builder.env();
+    builder.build_annotated()
+}
+
+fn build_config_from_cli(
+    config_paths: &[PathBuf],
+    allow_absolute_paths: bool,
+) -> ConfigResult<serde_json::Value> {
+    let mut builder = ConfigBuilder::<serde_json::Value>::new();
+    if allow_absolute_paths {
+        builder = builder.allow_absolute_paths();
+    }
+    for path in config_paths {
+        if path.exists() {
+            builder = builder.file(path.clone());
+        }
+    }
+    builder = builder.env();
+    builder.build()
+}
 
 /// Load environment variables from a .env file
 pub fn load_env_file(path: &PathBuf) -> Result<()> {
@@ -250,23 +286,7 @@ fn cmd_inspect(
     format: &str,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use crate::ConfigBuilder;
-
-    let mut builder = ConfigBuilder::<serde_json::Value>::new();
-
-    if allow_absolute_paths {
-        builder = builder.allow_absolute_paths();
-    }
-
-    for config_path in config_paths {
-        if config_path.exists() {
-            builder = builder.file(config_path.clone());
-        }
-    }
-
-    builder = builder.env();
-
-    let annotated_config = builder.build_annotated()?;
+    let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
 
     match format {
         "json" => {
@@ -427,23 +447,7 @@ fn cmd_validate(
     format: &str,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use crate::ConfigBuilder;
-
-    let mut builder = ConfigBuilder::<serde_json::Value>::new();
-
-    if allow_absolute_paths {
-        builder = builder.allow_absolute_paths();
-    }
-
-    for config_path in config_paths {
-        if config_path.exists() {
-            builder = builder.file(config_path.clone());
-        }
-    }
-
-    builder = builder.env();
-
-    match builder.build_annotated() {
+    match build_annotated_from_cli(config_paths, allow_absolute_paths) {
         Ok(annotated_config) => {
             let mut issues = Vec::new();
 
@@ -568,7 +572,6 @@ fn cmd_export(
     raw: bool,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use crate::ConfigBuilder;
     use chrono::Utc;
 
     if raw {
@@ -578,21 +581,7 @@ fn cmd_export(
     }
 
     if with_provenance {
-        let mut builder = ConfigBuilder::<serde_json::Value>::new();
-
-        if allow_absolute_paths {
-            builder = builder.allow_absolute_paths();
-        }
-
-        for config_path in config_paths {
-            if config_path.exists() {
-                builder = builder.file(config_path.clone());
-            }
-        }
-
-        builder = builder.env();
-
-        let annotated_config = builder.build_annotated()?;
+        let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
@@ -620,21 +609,7 @@ fn cmd_export(
             println!("{}", formatted);
         }
     } else {
-        let mut builder = ConfigBuilder::<serde_json::Value>::new();
-
-        if allow_absolute_paths {
-            builder = builder.allow_absolute_paths();
-        }
-
-        for config_path in config_paths {
-            if config_path.exists() {
-                builder = builder.file(config_path.clone());
-            }
-        }
-
-        builder = builder.env();
-
-        let config = builder.build()?;
+        let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
@@ -968,7 +943,6 @@ mod tests {
         assert!(load_env_file(&p).is_err());
     }
 
-    #[test]
     #[test]
     fn test_find_value_by_key_missing() {
         use crate::value::SourceId;

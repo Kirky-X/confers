@@ -184,7 +184,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicFieldBuilder<T> {
     pub fn build(self) -> DynamicField<T> {
         DynamicField::new(
             self.initial
-                .expect("DynamicFieldBuilder: call set_initial() before build()"),
+                .expect("DynamicFieldBuilder: call initial() before build()"),
         )
     }
 }

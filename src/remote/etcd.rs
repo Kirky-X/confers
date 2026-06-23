@@ -3,8 +3,9 @@
 //! This module provides an etcd-backed implementation of the `PolledSource` trait,
 //! using the etcd-client SDK (gRPC) to interact with etcd's KV store.
 
+use super::common::{merge_into_map, try_parse_value};
 use crate::error::{ConfigError, ConfigResult};
-use crate::loader::{detect_format_from_content, Format};
+use crate::loader::Format;
 use crate::value::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -218,7 +219,7 @@ impl EtcdSource {
             };
 
             // Try to parse as config format
-            if let Some(parsed) = try_parse_value(&value) {
+            if let Some(parsed) = try_parse_value(&value, "etcd") {
                 merge_into_map(&mut config_map, &relative_key, parsed);
             } else {
                 // Treat as simple string value
@@ -247,52 +248,6 @@ impl EtcdSource {
 
         Ok(result)
     }
-}
-
-/// Try to parse a value as config format.
-fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
-    // Try to detect format
-    let format = detect_format_from_content(content)?;
-
-    match format {
-        Format::Toml => {
-            let table: toml::Table = toml::from_str(content).ok()?;
-            Some(crate::loader::parse_toml_table(
-                &table,
-                &SourceId::new("etcd"),
-                "",
-            ))
-        }
-        Format::Json => {
-            let v: serde_json::Value = serde_json::from_str(content).ok()?;
-            Some(crate::loader::parse_json_value(
-                &v,
-                &SourceId::new("etcd"),
-                "",
-            ))
-        }
-        #[cfg(feature = "yaml")]
-        Format::Yaml => {
-            let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
-            Some(crate::loader::parse_yaml_value(
-                &v,
-                &SourceId::new("etcd"),
-                "",
-            ))
-        }
-        #[cfg(not(feature = "yaml"))]
-        Format::Yaml => None,
-        _ => None,
-    }
-}
-
-/// Merge a key-value pair into a config map.
-fn merge_into_map(
-    map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>,
-    key: &str,
-    value: AnnotatedValue,
-) {
-    map.insert(Arc::from(key.to_string()), value);
 }
 
 #[async_trait]

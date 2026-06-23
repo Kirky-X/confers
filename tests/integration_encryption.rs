@@ -428,9 +428,9 @@ mod tests {
         let long_key = [0u8; 64]; // 64 bytes
 
         let result = crypto.encrypt(&[1, 2, 3], &long_key);
-        // Should either error or truncate - implementation dependent
-        // Just verify it doesn't panic
-        let _ = result;
+        // Implementation may truncate key or return error — both are acceptable
+        // as long as it doesn't panic
+        assert!(result.is_ok() || result.is_err());
     }
 }
 

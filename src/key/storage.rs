@@ -4,7 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::error::ConfigError;
-use crate::key::KeyManager;
+use crate::key::{now_timestamp, KeyManager};
 use crate::secret::{SecretBytes, XChaCha20Crypto};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use regex::Regex;
@@ -688,14 +688,6 @@ impl Drop for KeyStorage {
     fn drop(&mut self) {
         self.clear_master_key();
     }
-}
-
-fn now_timestamp() -> u64 {
-    use std::time::SystemTime;
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or(std::time::Duration::ZERO)
-        .as_secs()
 }
 
 #[cfg(test)]

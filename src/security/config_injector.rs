@@ -33,22 +33,11 @@
 //! }
 //! ```
 
+use crate::security::patterns::SENSITIVE_DETECTION_PATTERNS;
 use crate::security::{EnvSecurityError, EnvSecurityValidator};
-use regex::Regex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, LazyLock, OnceLock, RwLock};
-use std::time::Instant;
-
-/// 默认敏感字段模式 - 全局缓存
-static DEFAULT_SENSITIVE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    vec![
-        Regex::new(r"(?i)(secret|password|token|key|auth|credential)").unwrap(),
-        Regex::new(r"(?i)(api_key|access_token|refresh_token)").unwrap(),
-        Regex::new(r"(?i)(private_key|public_key)").unwrap(),
-        Regex::new(r"(?i)(database_url|connection_string)").unwrap(),
-    ]
-});
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// Rate limiter configuration defaults
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS: usize = 100;
@@ -137,53 +126,54 @@ impl InjectionRateLimiter {
             return Ok(());
         }
 
-        let now = Instant::now();
-        let now_secs = now.elapsed().as_secs();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
-        // Get or initialize window start
-        let window_start = self.window_start.load(Ordering::SeqCst);
-        if window_start == 0 {
-            // First request, initialize window
-            if self
-                .window_start
-                .compare_exchange(0, now_secs, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
+        for _ in 0..8 {
+            let window_start = self.window_start.load(Ordering::SeqCst);
+            if window_start == 0 {
+                if self
+                    .window_start
+                    .compare_exchange(0, now_secs, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+                continue;
+            }
+
+            if now_secs - window_start < self.window_seconds {
+                let current = self.window_counter.fetch_add(1, Ordering::SeqCst);
+                if current as usize >= self.max_requests {
+                    self.window_counter.fetch_sub(1, Ordering::SeqCst);
+                    let retry_after = self.window_seconds - (now_secs - window_start);
+                    return Err(retry_after);
+                }
                 return Ok(());
             }
-        }
 
-        // Check if we're in the same window
-        if now_secs - window_start < self.window_seconds {
-            // Same window, increment counter
-            let current = self.window_counter.fetch_add(1, Ordering::SeqCst);
-            if current as usize >= self.max_requests {
-                // Rate limited, decrement and return error
-                self.window_counter.fetch_sub(1, Ordering::SeqCst);
-                let retry_after = self.window_seconds - (now_secs - window_start);
-                return Err(retry_after);
-            }
-            Ok(())
-        } else {
-            // New window, reset
             if self
                 .window_start
                 .compare_exchange(window_start, now_secs, Ordering::SeqCst, Ordering::SeqCst)
                 .is_ok()
             {
                 self.window_counter.store(1, Ordering::SeqCst);
-                Ok(())
-            } else {
-                // Another thread reset the window, try again
-                self.check_rate_limit()
+                return Ok(());
             }
         }
+
+        Ok(())
     }
 
     #[allow(dead_code)]
     /// Get current usage statistics
     pub fn usage_stats(&self) -> (usize, u64, f64) {
-        let now_secs = Instant::now().elapsed().as_secs();
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let window_start = self.window_start.load(Ordering::SeqCst);
         let counter = self.window_counter.load(Ordering::SeqCst);
 
@@ -267,8 +257,8 @@ impl ConfigInjector {
     }
 
     /// 默认敏感字段模式
-    fn default_sensitive_patterns() -> Vec<Regex> {
-        DEFAULT_SENSITIVE_PATTERNS.clone()
+    fn default_sensitive_patterns() -> Vec<regex::Regex> {
+        SENSITIVE_DETECTION_PATTERNS.clone()
     }
 
     fn validate_injection(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {

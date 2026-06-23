@@ -315,7 +315,6 @@ fn test_dynamic_field_no_callbacks() {
 
 // ============ Context Module ============
 
-#[test]
 // ============ Merger Module ============
 #[test]
 fn test_merge_strategies() {

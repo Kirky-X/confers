@@ -756,7 +756,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_interpolate_empty_template() {
         let result = interpolate("", &|_| None::<String>);
         assert_eq!(result.unwrap(), "");

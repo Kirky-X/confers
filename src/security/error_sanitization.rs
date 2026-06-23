@@ -14,6 +14,7 @@
 //! - **错误消息过滤**: 过滤包含敏感信息的错误消息
 //! - **自定义脱敏规则**: 支持自定义脱敏模式和规则
 
+use crate::security::patterns::SENSITIVE_KEYWORDS;
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -130,16 +131,7 @@ impl ErrorSanitizer {
 
     /// 默认敏感关键词
     fn default_keywords() -> HashSet<String> {
-        let mut set = HashSet::new();
-        set.insert("password".to_string());
-        set.insert("secret".to_string());
-        set.insert("token".to_string());
-        set.insert("key".to_string());
-        set.insert("credential".to_string());
-        set.insert("auth".to_string());
-        set.insert("private".to_string());
-        set.insert("encryption".to_string());
-        set
+        SENSITIVE_KEYWORDS.iter().map(|s| s.to_string()).collect()
     }
 
     /// 启用严格模式
@@ -335,9 +327,11 @@ impl SecureLogger {
         }
 
         let sanitized = self.sanitizer.sanitize(message);
-        let _log_entry = format!("[{}] {}", level.as_str(), sanitized);
-        // In production, we skip logging to avoid external dependencies
-        // The SecureLogger is primarily for testing purposes in test modules
+        let log_entry = format!("[{}] {}", level.as_str(), sanitized);
+        match level {
+            LogLevel::Error | LogLevel::Warn => eprintln!("{log_entry}"),
+            LogLevel::Info | LogLevel::Debug => eprintln!("{log_entry}"),
+        }
     }
 
     /// 获取脱敏器引用

@@ -5,13 +5,12 @@
 
 use crate::error::ConfigError;
 use crate::key::{
-    KeyBundle, KeyRing, KeyRotationSchedule, KeyStatus, RotationPlan, RotationResult,
-    CURRENT_KEY_VERSION,
+    now_timestamp, KeyBundle, KeyRing, KeyRotationSchedule, KeyStatus, RotationPlan,
+    RotationResult, CURRENT_KEY_VERSION, SECONDS_PER_DAY,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "encryption")]
 use rand::Rng;
@@ -338,7 +337,7 @@ impl KeyManager {
         schedule.rotation_interval_days = interval_days;
         schedule.next_rotation = schedule
             .last_rotation
-            .saturating_add(interval_days as u64 * 86400);
+            .saturating_add(interval_days as u64 * SECONDS_PER_DAY);
 
         Ok(())
     }
@@ -473,11 +472,4 @@ pub struct RotationStatus {
     pub days_until_rotation: i64,
     pub is_overdue: bool,
     pub auto_rotate: bool,
-}
-
-fn now_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
 }

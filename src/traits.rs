@@ -21,6 +21,9 @@ pub(crate) mod sealed {
 }
 
 // ============== Async Traits (feature-gated, mirrors sync below) ==============
+// NOTE: ConfigReader/ConfigWriter/ConfigConnector are intentionally defined in both
+// async (feature-gated) and sync (minimal builds) variants. The feature gate selects
+// which version is active at compile time — they are never both visible.
 
 #[cfg(any(
     feature = "remote",
@@ -440,6 +443,9 @@ pub trait ReloadHealthCheck: Send + Sync {
 }
 
 /// Metrics backend for collecting configuration metrics.
+///
+/// Public extension point for integrating custom metrics systems.
+/// Not used by the library itself — provided for downstream consumers.
 pub trait MetricsBackend: Send + Sync {
     /// Increment a counter metric.
     fn counter(&self, name: &str, labels: &[(&str, &str)]);
@@ -449,6 +455,9 @@ pub trait MetricsBackend: Send + Sync {
 }
 
 /// No-op metrics backend for when metrics are disabled.
+///
+/// Public extension point companion to [`MetricsBackend`] — provided for
+/// downstream consumers who need a default implementation.
 #[derive(Debug, Clone, Default)]
 pub struct NoOpMetrics;
 

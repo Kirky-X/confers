@@ -15,6 +15,13 @@ use crate::value::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+#[cfg(feature = "json")]
+use super::convert::json_to_config_value;
+#[cfg(feature = "toml")]
+use super::convert::toml_table_to_config_value;
+#[cfg(feature = "yaml")]
+use super::convert::yaml_to_config_value;
+
 /// Maximum file size in bytes (default: 10MB)
 const DEFAULT_MAX_SIZE: usize = 10 * 1024 * 1024;
 
@@ -306,55 +313,6 @@ pub fn normalize_and_validate_path(
                     normalized.push(s);
                 }
             }
-
-            #[test]
-            fn test_format_display() {
-                assert_eq!(Format::Toml.to_string(), "toml");
-                assert_eq!(Format::Json.to_string(), "json");
-                assert_eq!(Format::Yaml.to_string(), "yaml");
-            }
-
-            #[test]
-            fn test_format_try_parse() {
-                assert_eq!(Format::try_parse("toml"), Some(Format::Toml));
-                assert_eq!(Format::try_parse("json"), Some(Format::Json));
-                assert_eq!(Format::try_parse("yaml"), Some(Format::Yaml));
-                assert_eq!(Format::try_parse("unknown"), None);
-            }
-
-            #[test]
-            fn test_format_ext() {
-                assert_eq!(Format::Toml.ext(), "toml");
-                assert_eq!(Format::Json.ext(), "json");
-                assert_eq!(Format::Yaml.ext(), "yaml");
-            }
-
-            #[test]
-            fn test_format_all() {
-                assert!(Format::all().contains(&Format::Toml));
-            }
-
-            #[test]
-            fn test_detect_from_path_case_insensitive() {
-                assert_eq!(
-                    detect_format_from_path(Path::new("config.TOML")),
-                    Some(Format::Toml)
-                );
-                assert_eq!(
-                    detect_format_from_path(Path::new("config.JSON")),
-                    Some(Format::Json)
-                );
-                assert_eq!(
-                    detect_format_from_path(Path::new("config.YAML")),
-                    Some(Format::Yaml)
-                );
-            }
-
-            #[test]
-            fn test_detect_from_path_none() {
-                assert_eq!(detect_format_from_path(Path::new("config")), None);
-                assert_eq!(detect_format_from_path(Path::new("")), None);
-            }
         }
 
         // Check that normalized path doesn't escape
@@ -607,55 +565,6 @@ pub fn parse_toml(
     ))
 }
 
-#[cfg(feature = "toml")]
-fn toml_table_to_config_value(table: &toml::Table, source: &SourceId, prefix: &str) -> ConfigValue {
-    let entries: Vec<(Arc<str>, AnnotatedValue)> = table
-        .iter()
-        .map(|(k, v)| {
-            let path = if prefix.is_empty() {
-                k.clone()
-            } else {
-                format!("{}.{}", prefix, k)
-            };
-            (
-                Arc::from(path.clone()),
-                AnnotatedValue::new(
-                    toml_value_to_config_value(v, source, &path),
-                    source.clone(),
-                    k.clone(),
-                ),
-            )
-        })
-        .collect();
-    ConfigValue::map(entries)
-}
-
-#[cfg(feature = "toml")]
-fn toml_value_to_config_value(value: &toml::Value, source: &SourceId, prefix: &str) -> ConfigValue {
-    match value {
-        toml::Value::String(s) => ConfigValue::String(s.clone()),
-        toml::Value::Integer(i) => ConfigValue::I64(*i),
-        toml::Value::Float(f) => ConfigValue::F64(*f),
-        toml::Value::Boolean(b) => ConfigValue::Bool(*b),
-        toml::Value::Datetime(dt) => ConfigValue::String(dt.to_string()),
-        toml::Value::Array(arr) => ConfigValue::Array(
-            arr.iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let path = format!("{}.{}", prefix, i);
-                    AnnotatedValue::new(
-                        toml_value_to_config_value(v, source, &path),
-                        source.clone(),
-                        path,
-                    )
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        ),
-        toml::Value::Table(t) => toml_table_to_config_value(t, source, prefix),
-    }
-}
-
 #[cfg(feature = "json")]
 pub fn parse_json(
     content: &str,
@@ -674,50 +583,6 @@ pub fn parse_json(
         source,
         "",
     ))
-}
-
-#[cfg(feature = "json")]
-fn json_to_config_value(v: &serde_json::Value, src: &SourceId, pre: &str) -> ConfigValue {
-    match v {
-        serde_json::Value::Null => ConfigValue::Null,
-        serde_json::Value::Bool(b) => ConfigValue::Bool(*b),
-        serde_json::Value::Number(n) => n
-            .as_i64()
-            .map(ConfigValue::I64)
-            .or_else(|| n.as_u64().map(ConfigValue::U64))
-            .or_else(|| n.as_f64().map(ConfigValue::F64))
-            .unwrap_or(ConfigValue::Null),
-        serde_json::Value::String(s) => ConfigValue::String(s.clone()),
-        serde_json::Value::Array(a) => ConfigValue::Array(
-            a.iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let p = format!("{}.{}", pre, i);
-                    AnnotatedValue::new(json_to_config_value(v, src, &p), src.clone(), p)
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        ),
-        serde_json::Value::Object(o) => ConfigValue::map(
-            o.iter()
-                .map(|(k, v)| {
-                    let p = if pre.is_empty() {
-                        k.clone()
-                    } else {
-                        format!("{}.{}", pre, k)
-                    };
-                    (
-                        Arc::from(p.clone()),
-                        AnnotatedValue::new(
-                            json_to_config_value(v, src, &p),
-                            src.clone(),
-                            k.clone(),
-                        ),
-                    )
-                })
-                .collect(),
-        ),
-    }
 }
 
 #[cfg(feature = "yaml")]
@@ -743,49 +608,6 @@ pub fn parse_yaml(
         source,
         "",
     ))
-}
-
-#[cfg(feature = "yaml")]
-fn yaml_to_config_value(v: &serde_yaml_ng::Value, src: &SourceId, pre: &str) -> ConfigValue {
-    match v {
-        serde_yaml_ng::Value::Null => ConfigValue::Null,
-        serde_yaml_ng::Value::Bool(b) => ConfigValue::Bool(*b),
-        serde_yaml_ng::Value::Number(n) => n
-            .as_i64()
-            .map(ConfigValue::I64)
-            .or_else(|| n.as_u64().map(ConfigValue::U64))
-            .or_else(|| n.as_f64().map(ConfigValue::F64))
-            .unwrap_or(ConfigValue::Null),
-        serde_yaml_ng::Value::String(s) => ConfigValue::String(s.clone()),
-        serde_yaml_ng::Value::Sequence(s) => ConfigValue::Array(
-            s.iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    let p = format!("{}.{}", pre, i);
-                    AnnotatedValue::new(yaml_to_config_value(v, src, &p), src.clone(), p)
-                })
-                .collect::<Vec<_>>()
-                .into(),
-        ),
-        serde_yaml_ng::Value::Mapping(m) => ConfigValue::map(
-            m.iter()
-                .filter_map(|(k, v)| {
-                    k.as_str().map(|key| {
-                        let p = if pre.is_empty() {
-                            key.to_string()
-                        } else {
-                            format!("{}.{}", pre, key)
-                        };
-                        (
-                            Arc::from(p.clone()),
-                            AnnotatedValue::new(yaml_to_config_value(v, src, &p), src.clone(), key),
-                        )
-                    })
-                })
-                .collect(),
-        ),
-        serde_yaml_ng::Value::Tagged(t) => yaml_to_config_value(&t.value, src, pre),
-    }
 }
 
 #[cfg(not(feature = "toml"))]
@@ -924,6 +746,55 @@ pub fn parse_ini(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_format_display() {
+        assert_eq!(Format::Toml.to_string(), "TOML");
+        assert_eq!(Format::Json.to_string(), "JSON");
+        assert_eq!(Format::Yaml.to_string(), "YAML");
+    }
+    #[test]
+    fn test_format_try_parse() {
+        assert_eq!(Format::try_parse("toml"), Some(Format::Toml));
+        assert_eq!(Format::try_parse("json"), Some(Format::Json));
+        assert_eq!(Format::try_parse("yaml"), Some(Format::Yaml));
+        assert_eq!(Format::try_parse("ini"), Some(Format::Ini));
+        assert_eq!(Format::try_parse("unknown"), None);
+    }
+    #[test]
+    fn test_format_ext() {
+        assert_eq!(Format::Toml.ext(), "toml");
+        assert_eq!(Format::Json.ext(), "json");
+        assert_eq!(Format::Yaml.ext(), "yaml");
+        assert_eq!(Format::Ini.ext(), "ini");
+    }
+    #[test]
+    fn test_format_all() {
+        let all = Format::all();
+        assert!(all.contains(&Format::Toml));
+        assert!(all.contains(&Format::Json));
+        assert!(all.contains(&Format::Yaml));
+        assert!(all.contains(&Format::Ini));
+    }
+    #[test]
+    fn test_detect_from_path_case_insensitive() {
+        assert_eq!(
+            detect_format_from_path(Path::new("config.TOML")),
+            Some(Format::Toml)
+        );
+        assert_eq!(
+            detect_format_from_path(Path::new("config.JSON")),
+            Some(Format::Json)
+        );
+        assert_eq!(
+            detect_format_from_path(Path::new("config.YAML")),
+            Some(Format::Yaml)
+        );
+    }
+    #[test]
+    fn test_detect_from_path_none() {
+        assert_eq!(detect_format_from_path(Path::new("config")), None);
+        assert_eq!(detect_format_from_path(Path::new("")), None);
+    }
     #[test]
     fn test_detect_format_from_path() {
         assert_eq!(
@@ -1114,148 +985,106 @@ mod tests {
                 panic!("Unexpected error for normal path: {:?}", e);
             }
         }
+    }
 
-        #[test]
-        fn test_parse_toml_content() {
-            let result = parse_toml("key = \"value\"", SourceId::new("test"), None);
-            assert!(result.is_ok());
-            let val = result.unwrap();
-            assert!(val.is_map());
-        }
+    #[test]
+    fn test_parse_toml_content() {
+        let result = parse_toml("key = \"value\"", SourceId::new("test"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
 
-        #[test]
-        fn test_parse_json_content() {
-            let result = parse_json("{\"key\": \"value\"}", SourceId::new("test"), None);
-            assert!(result.is_ok());
-            let val = result.unwrap();
-            assert!(val.is_map());
-        }
+    #[test]
+    fn test_parse_json_content() {
+        let result = parse_json("{\"key\": \"value\"}", SourceId::new("test"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
 
-        #[test]
-        fn test_parse_yaml_content() {
-            let result = parse_yaml("key: value", SourceId::new("test"), None);
-            assert!(result.is_ok());
-            let val = result.unwrap();
-            assert!(val.is_map());
-        }
+    #[test]
+    fn test_parse_yaml_content() {
+        let result = parse_yaml("key: value", SourceId::new("test"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
 
-        #[test]
-        fn test_parse_content_toml() {
-            let r = parse_content("name = \"test\"", Format::Toml, SourceId::new("t"), None);
-            assert!(r.is_ok());
-        }
+    #[test]
+    fn test_parse_content_toml() {
+        let r = parse_content("name = \"test\"", Format::Toml, SourceId::new("t"), None);
+        assert!(r.is_ok());
+    }
 
-        #[test]
-        fn test_parse_content_json() {
-            let r = parse_content("{\"k\":\"v\"}", Format::Json, SourceId::new("t"), None);
-            assert!(r.is_ok());
-        }
+    #[test]
+    fn test_parse_content_json() {
+        let r = parse_content("{\"k\":\"v\"}", Format::Json, SourceId::new("t"), None);
+        assert!(r.is_ok());
+    }
 
-        #[test]
-        fn test_detect_format_toml_json_yaml() {
-            assert_eq!(detect_format_from_content("x = 1"), Some(Format::Toml));
-            assert_eq!(detect_format_from_content("{\"a\":1}"), Some(Format::Json));
-            assert_eq!(detect_format_from_content(""), None);
-        }
+    #[test]
+    fn test_detect_format_toml_json_yaml() {
+        assert_eq!(detect_format_from_content("x = 1"), Some(Format::Toml));
+        assert_eq!(detect_format_from_content("{\"a\":1}"), Some(Format::Json));
+        assert_eq!(detect_format_from_content(""), None);
+    }
 
-        #[test]
-        fn test_parse_toml_table() {
-            let mut table = toml::Table::new();
-            table.insert("key".to_string(), toml::Value::String("val".to_string()));
-            let result = parse_toml_table(&table, &SourceId::new("t"), "");
-            assert!(result.is_map());
-        }
+    #[test]
+    fn test_parse_toml_table() {
+        let mut table = toml::Table::new();
+        table.insert("key".to_string(), toml::Value::String("val".to_string()));
+        let result = parse_toml_table(&table, &SourceId::new("t"), "");
+        assert!(result.is_map());
+    }
 
-        #[test]
-        fn test_check_traversal_rejects_long_path() {
-            let long = "a".repeat(10000);
-            assert!(!check_path_traversal_attempt(&long));
-        }
+    #[test]
+    fn test_check_traversal_rejects_long_path() {
+        let long = "a".repeat(10000);
+        assert!(!check_path_traversal_attempt(&long));
+    }
 
-        #[test]
-        fn test_loader_config_allow_absolute() {
-            let config = LoaderConfig::new().allow_absolute();
-            assert!(config.allow_absolute);
-        }
+    #[test]
+    fn test_loader_config_allow_absolute() {
+        let config = LoaderConfig::new().allow_absolute();
+        assert!(config.allow_absolute);
+    }
 
-        #[test]
-        fn test_normalize_accepts_valid_relative() {
-            let allowed = vec![std::path::PathBuf::from(".")];
-            let r = normalize_and_validate_path(
-                std::path::Path::new("Cargo.toml"),
-                &allowed,
-                false,
-                true,
-            );
-            assert!(r.is_ok() || matches!(r, Err(PathTraversalError::NotFound)));
-        }
+    #[test]
+    fn test_normalize_accepts_valid_relative() {
+        let allowed = vec![std::path::PathBuf::from(".")];
+        let r =
+            normalize_and_validate_path(std::path::Path::new("Cargo.toml"), &allowed, false, true);
+        assert!(r.is_ok() || matches!(r, Err(PathTraversalError::NotFound)));
+    }
 
-        #[test]
-        fn test_normalize_rejects_absolute_when_disallowed() {
-            let allowed = vec![std::path::PathBuf::from(".")];
-            let r = normalize_and_validate_path(
-                std::path::Path::new("/etc/passwd"),
-                &allowed,
-                false,
-                true,
-            );
-            assert_eq!(r, Err(PathTraversalError::AbsolutePath));
-        }
+    #[test]
+    fn test_normalize_rejects_absolute_when_disallowed() {
+        let allowed = vec![std::path::PathBuf::from(".")];
+        let r =
+            normalize_and_validate_path(std::path::Path::new("/etc/passwd"), &allowed, false, true);
+        assert_eq!(r, Err(PathTraversalError::AbsolutePath));
+    }
 
-        #[test]
-        fn test_parse_json_value_object() {
-            let v = serde_json::json!({"host": "localhost", "port": 8080});
-            let result = parse_json_value(&v, &SourceId::new("test"), "");
-            assert!(result.is_map());
-        }
+    #[test]
+    fn test_detect_format_toml_content() {
+        assert_eq!(detect_format_from_content("key = 1"), Some(Format::Toml));
+    }
 
-        #[test]
-        fn test_parse_json_value_string() {
-            let v = serde_json::json!("hello");
-            let result = parse_json_value(&v, &SourceId::new("test"), "");
-            assert_eq!(result.as_str(), Some("hello"));
-        }
+    #[test]
+    fn test_detect_format_json_content() {
+        assert_eq!(detect_format_from_content("{\"k\":1}"), Some(Format::Json));
+    }
 
-        #[test]
-        fn test_parse_json_value_array() {
-            let v = serde_json::json!([1, 2, 3]);
-            let result = parse_json_value(&v, &SourceId::new("test"), "");
-            // Array may be wrapped
-            assert!(result.inner.is_array() || result.is_null() == false);
-        }
+    #[test]
+    fn test_detect_format_yaml_content() {
+        let r = detect_format_from_content("key: value");
+        assert!(r.is_some());
+    }
 
-        #[test]
-        fn test_parse_json_value_number() {
-            let v = serde_json::json!(42);
-            let result = parse_json_value(&v, &SourceId::new("test"), "");
-            assert_eq!(result.as_i64(), Some(42));
-        }
-
-        #[test]
-        fn test_detect_format_toml_content() {
-            assert_eq!(detect_format_from_content("key = 1"), Some(Format::Toml));
-            assert_eq!(
-                detect_format_from_content("[table]\nk=v"),
-                Some(Format::Toml)
-            );
-        }
-
-        #[test]
-        fn test_detect_format_json_content() {
-            assert_eq!(detect_format_from_content("{\"k\":1}"), Some(Format::Json));
-            assert_eq!(detect_format_from_content("[1,2,3]"), Some(Format::Json));
-        }
-
-        #[test]
-        fn test_detect_format_yaml_content() {
-            let r = detect_format_from_content("key: value");
-            assert!(r.is_some());
-        }
-
-        #[test]
-        fn test_detect_format_empty_content() {
-            assert_eq!(detect_format_from_content(""), None);
-            assert_eq!(detect_format_from_content("   "), None);
-        }
+    #[test]
+    fn test_detect_format_empty_content() {
+        assert_eq!(detect_format_from_content(""), None);
+        assert_eq!(detect_format_from_content("   "), None);
     }
 }

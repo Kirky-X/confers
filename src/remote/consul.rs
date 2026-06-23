@@ -3,8 +3,9 @@
 //! This module provides a Consul-backed implementation of the `PolledSource` trait,
 //! using the Consul KV REST API via reqwest.
 
+use super::common::{merge_into_map, try_parse_value};
 use crate::error::{ConfigError, ConfigResult};
-use crate::loader::{detect_format_from_content, Format};
+use crate::loader::Format;
 use crate::value::{AnnotatedValue, SourceId};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -295,7 +296,7 @@ impl ConsulSource {
                 };
 
                 // Try to parse as TOML/JSON/YAML
-                if let Some(parsed) = try_parse_value(&decoded) {
+                if let Some(parsed) = try_parse_value(&decoded, "consul") {
                     // Merge into config map
                     merge_into_map(&mut config_map, &key, parsed);
                 } else {
@@ -341,54 +342,6 @@ fn base64_decode(input: &str) -> Result<String, base64::DecodeError> {
     let engine = base64::engine::general_purpose::STANDARD;
     let decoded = engine.decode(input)?;
     Ok(String::from_utf8(decoded).unwrap_or_default())
-}
-
-/// Try to parse a value as config format.
-fn try_parse_value(content: &str) -> Option<AnnotatedValue> {
-    // Try to detect format
-    let format = detect_format_from_content(content)?;
-
-    match format {
-        Format::Toml => {
-            let table: toml::Table = toml::from_str(content).ok()?;
-            Some(crate::loader::parse_toml_table(
-                &table,
-                &SourceId::new("consul"),
-                "",
-            ))
-        }
-        Format::Json => {
-            let v: serde_json::Value = serde_json::from_str(content).ok()?;
-            Some(crate::loader::parse_json_value(
-                &v,
-                &SourceId::new("consul"),
-                "",
-            ))
-        }
-        #[cfg(feature = "yaml")]
-        Format::Yaml => {
-            let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
-            Some(crate::loader::parse_yaml_value(
-                &v,
-                &SourceId::new("consul"),
-                "",
-            ))
-        }
-        #[cfg(not(feature = "yaml"))]
-        Format::Yaml => None,
-        _ => None,
-    }
-}
-
-/// Merge a key-value pair into a config map.
-fn merge_into_map(
-    map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>,
-    key: &str,
-    value: AnnotatedValue,
-) {
-    // For simplicity, use the full key as-is
-    // A more complete implementation would handle nested keys
-    map.insert(Arc::from(key), value);
 }
 
 #[async_trait]

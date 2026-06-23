@@ -29,6 +29,7 @@ use rand::Rng;
 pub const CONFERS_KEY_VERSION: &str = "v1";
 pub const KEY_VERSION_PREFIX: &str = "v";
 pub const CURRENT_KEY_VERSION: u32 = 1;
+pub(crate) const SECONDS_PER_DAY: u64 = 86_400;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum KeyStatus {
@@ -296,7 +297,8 @@ impl KeyRotationSchedule {
         last_rotation: u64,
         max_versions: u32,
     ) -> Self {
-        let next_rotation = last_rotation.saturating_add(rotation_interval_days as u64 * 86400);
+        let next_rotation =
+            last_rotation.saturating_add(rotation_interval_days as u64 * SECONDS_PER_DAY);
 
         Self {
             key_id,
@@ -316,17 +318,17 @@ impl KeyRotationSchedule {
         self.last_rotation = now_timestamp();
         self.next_rotation = self
             .last_rotation
-            .saturating_add(self.rotation_interval_days as u64 * 86400);
+            .saturating_add(self.rotation_interval_days as u64 * SECONDS_PER_DAY);
     }
 
     pub fn days_until_rotation(&self) -> i64 {
         let now = now_timestamp() as i64;
         let next = self.next_rotation as i64;
-        (next - now) / 86400
+        (next - now) / SECONDS_PER_DAY as i64
     }
 }
 
-fn now_timestamp() -> u64 {
+pub(crate) fn now_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or(Duration::ZERO)

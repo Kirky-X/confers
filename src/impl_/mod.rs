@@ -10,10 +10,10 @@
 //! - `loader` - Format loading
 //! - `merger` - Merge engine
 //! - `format` - Format detection and parsing
-//! - `source` - Source implementations
-
 // Feature gates cause dead_code warnings under some feature combinations.
 // Each module is annotated only where needed; verify with `cargo clippy --features full`.
+#[allow(dead_code)]
+pub(crate) mod convert;
 #[allow(dead_code)]
 pub(crate) mod default;
 #[allow(dead_code)]
@@ -24,5 +24,3 @@ pub(crate) mod loader;
 pub(crate) mod memory;
 #[allow(dead_code)]
 pub(crate) mod merger;
-#[allow(dead_code)]
-pub(crate) mod source;

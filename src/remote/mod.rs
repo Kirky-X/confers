@@ -1,5 +1,6 @@
 //! Remote configuration sources.
 
+pub(crate) mod common;
 mod interval;
 
 #[cfg(feature = "consul")]
