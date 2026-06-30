@@ -4,12 +4,11 @@
 //! and merges their values according to merge strategies.
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::merger::{MergeEngine, MergeStrategy};
-use crate::value::{AnnotatedValue, ConfigValue};
+use crate::impl_::merger::{MergeEngine, MergeStrategy};
+use crate::interface::Source;
+use crate::types::{AnnotatedValue, ConfigValue, SourceKind};
 use indexmap::IndexMap;
 use std::sync::Arc;
-
-use super::source::{Source, SourceKind};
 
 /// A chain of configuration sources with priority ordering.
 ///
@@ -116,7 +115,7 @@ impl SourceChain {
         if sources.is_empty() {
             return Ok(AnnotatedValue::new(
                 ConfigValue::Map(Arc::new(IndexMap::new())),
-                crate::value::SourceId::new("empty"),
+                crate::types::SourceId::new("empty"),
                 "",
             ));
         }
@@ -156,7 +155,7 @@ impl SourceChain {
         // Merge all values
         let mut merged = AnnotatedValue::new(
             ConfigValue::Map(Arc::new(IndexMap::new())),
-            crate::value::SourceId::new("merged"),
+            crate::types::SourceId::new("merged"),
             "",
         );
 
@@ -305,7 +304,7 @@ impl SourceChainBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::source::{DefaultSource, MemorySource};
+    use crate::impl_::config::{DefaultSource, MemorySource};
 
     #[test]
     fn test_empty_chain() {
@@ -372,7 +371,7 @@ mod tests {
         let chain = SourceChain::new()
             .fail_fast(false)
             .push(Box::new(
-                crate::config::source::FileSource::new("/nonexistent.toml").optional(),
+                crate::impl_::config::FileSource::new("/nonexistent.toml").optional(),
             ))
             .push(Box::new(
                 MemorySource::new().set("key", ConfigValue::string("value")),

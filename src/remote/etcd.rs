@@ -6,7 +6,7 @@
 use super::common::{merge_into_map, try_parse_value};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
-use crate::value::{AnnotatedValue, SourceId};
+use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use etcd_client::{Client, ConnectOptions};
@@ -226,7 +226,7 @@ impl EtcdSource {
                 config_map.insert(
                     Arc::from(relative_key.clone()),
                     AnnotatedValue::new(
-                        crate::value::ConfigValue::String(value),
+                        crate::types::ConfigValue::String(value),
                         SourceId::new("etcd"),
                         relative_key.as_str(),
                     ),
@@ -235,9 +235,9 @@ impl EtcdSource {
         }
 
         let value = if config_map.is_empty() {
-            crate::value::ConfigValue::Null
+            crate::types::ConfigValue::Null
         } else {
-            crate::value::ConfigValue::map(config_map.into_iter().collect())
+            crate::types::ConfigValue::map(config_map.into_iter().collect())
         };
 
         let result = AnnotatedValue::new(value, SourceId::new("etcd"), "");
@@ -266,7 +266,7 @@ impl crate::remote::PolledSource for EtcdSource {
 }
 
 #[async_trait]
-impl crate::config::source::AsyncSource for EtcdSource {
+impl crate::interface::AsyncSource for EtcdSource {
     async fn load(&self) -> ConfigResult<AnnotatedValue> {
         self.poll_internal().await
     }

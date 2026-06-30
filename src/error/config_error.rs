@@ -98,9 +98,11 @@ impl std::fmt::Display for ConfigErrorCode {
 /// # Example
 ///
 /// ```rust,ignore
-/// // Factory function returns ConfigError
-/// let config = new_in_memory_with_capacity(0)?;
-/// // Returns Err(ConfigConfigError::InvalidConfigValue { ... })
+/// // Builder returns ConfigConfigError when validation fails
+/// use confers::impl_::memory::InMemoryConfigBuilder;
+///
+/// let result = InMemoryConfigBuilder::default().max_capacity(0).build();
+/// // Returns Err(ConfigConfigError::InvalidValue { ... })
 /// ```
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -140,7 +142,7 @@ pub enum ConfigConfigError {
         /// Human-readable error message
         message: String,
         /// Optional precise location
-        location: Option<crate::value::SourceLocation>,
+        location: Option<crate::types::SourceLocation>,
         /// Source error
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -384,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_user_message_parse_error_with_location() {
-        let loc = crate::value::SourceLocation::new("config.toml", 10, 5);
+        let loc = crate::types::SourceLocation::new("config.toml", 10, 5);
         let err = ConfigConfigError::ParseError {
             format: "toml".to_string(),
             message: "invalid syntax".to_string(),

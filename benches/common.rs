@@ -3,7 +3,7 @@
 //! This module provides shared utility functions used across multiple
 //! benchmark files to reduce code duplication.
 
-use confers::value::{AnnotatedValue, ConfigValue};
+use confers::types::{AnnotatedValue, ConfigValue};
 use confers::SourceId;
 use std::sync::Arc;
 
@@ -90,6 +90,6 @@ mod tests {
     #[test]
     fn test_create_large_map() {
         let result = create_large_map(100, "val");
-        assert!(matches!(result, confers::value::ConfigValue::Map(_)));
+        assert!(matches!(result, confers::types::ConfigValue::Map(_)));
     }
 }

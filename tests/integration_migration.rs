@@ -1,7 +1,7 @@
 //! Integration tests for the Migration module.
 
 #[cfg(feature = "migration")]
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 
 #[cfg(feature = "migration")]
 use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};

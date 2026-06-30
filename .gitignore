@@ -26,6 +26,9 @@ Cargo.lock
 # Test
 coverage/
 *.profraw
+*.profdata
+*.gcda
+*.gcno
 lcov.info
 
 # Generated files (from examples)
@@ -48,7 +51,7 @@ tmp/
 temp/
 
 # Development files
-dev-v2.md
+docs/dev-v2.md
 docs/adr/
 docs/superpowers/
 spec/

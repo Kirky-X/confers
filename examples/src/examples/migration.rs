@@ -7,7 +7,7 @@
 //! - 热重载时的自动迁移
 
 use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use indexmap::IndexMap;
 use std::sync::Arc;
 use tracing::{info, warn};

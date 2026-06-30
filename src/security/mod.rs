@@ -237,9 +237,9 @@ impl Default for EnvSecurityValidator {
 }
 
 impl EnvSecurityValidator {
-    /// Create a new security validator with default rules
+    /// Create a security validator with default configuration
     pub fn new() -> Self {
-        Self::with_config(EnvironmentValidationConfig::new())
+        Self::with_config(EnvironmentValidationConfig::default())
     }
 
     /// Create a security validator with custom configuration
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_validate_valid_env_name() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
         assert!(validator.validate_env_name("APP_PORT", None).is_ok());
         assert!(validator.validate_env_name("DATABASE_HOST", None).is_ok());
         assert!(validator.validate_env_name("REDIS_PORT", None).is_ok());
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_validate_blocked_env_name() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
         assert!(validator.validate_env_name("PATH", None).is_err());
         assert!(validator.validate_env_name("HOME", None).is_err());
         assert!(validator.validate_env_name("SECRET_KEY", None).is_err());
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_env_name_format() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
         assert!(validator.validate_env_name("app_port", None).is_err()); // lowercase
         assert!(validator.validate_env_name("APP-PORT", None).is_err()); // dash
         assert!(validator.validate_env_name("123PORT", None).is_err()); // starts with number
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_validate_env_name_length() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
 
         // Valid: exactly 256 characters (max allowed)
         let valid_256 = "A".repeat(256);
@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_validate_dangerous_env_value() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
         assert!(validator.validate_env_value("hello").is_ok());
         assert!(validator.validate_env_value("test123").is_ok());
 
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_command_injection_patterns_with_optimized_loop() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
 
         // Test all dangerous patterns from the OnceLock-optimized list
         assert!(validator.validate_env_value("test;command").is_err());
@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_validate_env_mapping() {
-        let validator = EnvSecurityValidator::new();
+        let validator = EnvSecurityValidator::default();
         let mut mapping = HashMap::new();
         mapping.insert("port".to_string(), "APP_PORT".to_string());
         mapping.insert("host".to_string(), "DATABASE_HOST".to_string());

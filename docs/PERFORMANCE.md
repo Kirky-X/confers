@@ -164,7 +164,7 @@ let loader = ConfigLoader::builder()
 ### Zero-Copy Reads
 
 ```rust
-use confers::value::ConfigValue;
+use confers::types::ConfigValue;
 
 let value: &ConfigValue = config.get("key")?;
 // Zero-copy access to config values

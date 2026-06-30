@@ -19,10 +19,10 @@
 #[allow(unused_imports)]
 use crate::error::ConfigErrorCode;
 use crate::error::{ConfersResult, ConfigConfigError};
-use crate::lifecycle::Lifecycle;
-use crate::traits::sealed::Sealed;
-use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
-use crate::value::{AnnotatedValue, SourceId};
+use crate::impl_::lifecycle::Lifecycle;
+use crate::interface::sealed::Sealed;
+use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
+use crate::types::{AnnotatedValue, SourceId};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 // ============== Async Implementation (feature-gated) ==============
@@ -80,10 +80,9 @@ mod async_impl {
         /// # Example
         ///
         /// ```rust,ignore
-        /// // Use new_in_memory_validated() from lib.rs instead
-        /// use confers::{new_in_memory_validated, ConfigConnector};
+        /// use confers::impl_::memory::InMemoryConfig;
         ///
-        /// let config = new_in_memory_validated(1000)?;
+        /// let config = InMemoryConfig::new_validated(1000)?;
         /// # Ok::<(), confers::ConfigConfigError>(())
         /// ```
         pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
@@ -285,6 +284,7 @@ mod async_impl {
     feature = "encryption",
     feature = "watch"
 ))]
+#[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
 pub use async_impl::{InMemoryConfig, InMemoryConfigBuilder};
 
 // ============== Sync Implementation (for minimal builds) ==============
@@ -539,7 +539,7 @@ pub use sync_impl::{InMemoryConfig, InMemoryConfigBuilder};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::ConfigValue;
+    use crate::types::ConfigValue;
 
     #[cfg(any(
         feature = "remote",

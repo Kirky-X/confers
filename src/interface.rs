@@ -11,8 +11,12 @@
 //! - `MetricsBackend` - Metrics collection interface
 
 use crate::error::{ConfersResult, ConfigResult};
-use crate::value::AnnotatedValue;
+use crate::types::{AnnotatedValue, KeyCachePolicy, SourceId, SourceKind, ZeroizingBytes};
 use std::collections::HashMap;
+use std::path::Path;
+
+#[cfg(feature = "progressive-reload")]
+use crate::HealthStatus;
 
 // ============== Sealed Trait Pattern ==============
 
@@ -53,6 +57,7 @@ mod async_traits_impl {
             Ok(self.get_raw(key).await?.is_some())
         }
         async fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
+            #[allow(deprecated)]
             Ok(self.get_raw(key).await?.and_then(|v| v.as_string()))
         }
         async fn get_i64(&self, key: &str) -> ConfersResult<Option<i64>> {
@@ -142,6 +147,7 @@ mod sync_traits {
 
         /// Get string value.
         fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
+            #[allow(deprecated)]
             Ok(self.get_raw(key)?.and_then(|v| v.as_string()))
         }
 
@@ -235,6 +241,7 @@ pub trait ConfigProvider: Send + Sync {
 pub trait ConfigProviderExt: ConfigProvider {
     /// Get a string value by key.
     fn get_string(&self, key: &str) -> Option<String> {
+        #[allow(deprecated)]
         self.get_raw(key).and_then(|v| v.as_string())
     }
 
@@ -274,13 +281,16 @@ pub trait ConfigProviderExt: ConfigProvider {
                 message: "key not found".to_string(),
             })?;
 
-        let s = value
-            .as_string()
-            .ok_or_else(|| crate::error::ConfigError::InvalidValue {
-                key: key.to_string(),
-                expected_type: std::any::type_name::<T>().to_string(),
-                message: "value is not a string".to_string(),
-            })?;
+        let s = {
+            #[allow(deprecated)]
+            let s = value.as_string();
+            s
+        }
+        .ok_or_else(|| crate::error::ConfigError::InvalidValue {
+            key: key.to_string(),
+            expected_type: std::any::type_name::<T>().to_string(),
+            message: "value is not a string".to_string(),
+        })?;
 
         s.parse::<T>()
             .map_err(|e| crate::error::ConfigError::InvalidValue {
@@ -318,7 +328,7 @@ impl<T: ConfigProvider + ?Sized> ConfigProviderExt for T {}
 /// # Example
 ///
 /// ```rust
-/// use confers::traits::filter_sensitive_keys;
+/// use confers::interface::filter_sensitive_keys;
 ///
 /// let all_keys = vec!["host".into(), "password".into()];
 /// let sensitive = &["password"];
@@ -333,18 +343,6 @@ pub fn filter_sensitive_keys(keys: Vec<String>, sensitive_paths: &[&str]) -> Vec
                 .any(|s| key == s || key.starts_with(s))
         })
         .collect()
-}
-
-/// Caching policy for key providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum KeyCachePolicy {
-    /// Cache with time-to-live
-    #[default]
-    Ttl,
-    /// Cache indefinitely
-    Forever,
-    /// Never cache
-    Never,
 }
 
 /// Synchronous encryption key provider.
@@ -362,74 +360,6 @@ pub trait KeyProvider: Send + Sync {
     /// Get the cache policy for this provider.
     fn cache_policy(&self) -> KeyCachePolicy {
         KeyCachePolicy::default()
-    }
-}
-
-/// A wrapper for bytes that zeroizes on drop.
-#[derive(Debug)]
-pub struct ZeroizingBytes(Vec<u8>);
-
-impl ZeroizingBytes {
-    /// Create new zeroizing bytes.
-    pub fn new(bytes: Vec<u8>) -> Self {
-        Self(bytes)
-    }
-
-    /// Get a reference to the bytes.
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
-    }
-
-    /// Get the length of the bytes.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Check if empty.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl Drop for ZeroizingBytes {
-    fn drop(&mut self) {
-        // Zeroize the bytes on drop
-        for byte in &mut self.0 {
-            *byte = 0;
-        }
-    }
-}
-
-// ZeroizingBytes does not implement Clone to prevent bypassing memory protection.
-// The Drop trait ensures sensitive data is zeroized on drop.
-// Note: Cloning ZeroizingBytes would leave copies in memory that cannot be zeroized.
-
-/// Health status for progressive reload.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HealthStatus {
-    /// Configuration is healthy
-    Healthy,
-    /// Configuration is degraded but functional
-    Degraded {
-        /// Reason for degraded status
-        reason: String,
-    },
-    /// Configuration is critical and should be rolled back
-    Critical {
-        /// Reason for critical status
-        reason: String,
-    },
-}
-
-impl HealthStatus {
-    /// Check if the status is healthy.
-    pub fn is_healthy(&self) -> bool {
-        matches!(self, HealthStatus::Healthy)
-    }
-
-    /// Check if the status requires rollback.
-    pub fn requires_rollback(&self) -> bool {
-        matches!(self, HealthStatus::Critical { .. })
     }
 }
 
@@ -454,27 +384,62 @@ pub trait MetricsBackend: Send + Sync {
     fn histogram(&self, name: &str, value: f64, labels: &[(&str, &str)]);
 }
 
-/// No-op metrics backend for when metrics are disabled.
-///
-/// Public extension point companion to [`MetricsBackend`] — provided for
-/// downstream consumers who need a default implementation.
-#[derive(Debug, Clone, Default)]
-pub struct NoOpMetrics;
-
-impl MetricsBackend for NoOpMetrics {
-    fn counter(&self, _name: &str, _labels: &[(&str, &str)]) {
-        // No-op
-    }
-
-    fn histogram(&self, _name: &str, _value: f64, _labels: &[(&str, &str)]) {
-        // No-op
-    }
-}
-
 /// Trait for versioned configurations.
 pub trait Versioned {
     /// The configuration version constant.
     const VERSION: u32;
+}
+
+// ============== Source traits (migrated from config/source.rs) ==============
+
+/// Trait for configuration sources.
+///
+/// Sources are responsible for collecting configuration values.
+/// They are combined in a `SourceChain` with priority ordering.
+pub trait Source: Send + Sync {
+    /// Collect configuration values from this source.
+    fn collect(&self) -> ConfigResult<AnnotatedValue>;
+
+    /// Get the priority of this source (higher = more important).
+    fn priority(&self) -> u8;
+
+    /// Get the name of this source for debugging.
+    fn name(&self) -> &str;
+
+    /// Get the kind of this source.
+    fn source_kind(&self) -> SourceKind;
+
+    /// Check if this source is optional (errors are non-fatal).
+    fn is_optional(&self) -> bool {
+        false
+    }
+
+    /// Get the file path if this is a file source.
+    fn file_path(&self) -> Option<&Path> {
+        None
+    }
+}
+
+/// Trait for asynchronous configuration sources.
+///
+/// This trait is used for remote sources that require async I/O,
+/// such as HTTP endpoints, etcd, Consul, etc.
+#[cfg(feature = "remote")]
+#[async_trait::async_trait]
+pub trait AsyncSource: Send + Sync {
+    /// Load configuration values from this source asynchronously.
+    async fn load(&self) -> ConfigResult<AnnotatedValue>;
+
+    /// Get the source ID for tracking.
+    fn source_id(&self) -> &SourceId;
+
+    /// Get the priority of this source (higher = more important).
+    fn priority(&self) -> u8 {
+        50
+    }
+
+    /// Get the name of this source for debugging.
+    fn name(&self) -> &str;
 }
 
 /// Context-aware configuration provider.
@@ -585,6 +550,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "progressive-reload")]
     fn test_health_status() {
         let healthy = HealthStatus::Healthy;
         assert!(healthy.is_healthy());
@@ -599,7 +565,10 @@ mod tests {
 
     #[test]
     fn test_key_cache_policy() {
-        assert_eq!(KeyCachePolicy::default(), KeyCachePolicy::Ttl);
+        assert_eq!(
+            KeyCachePolicy::default(),
+            KeyCachePolicy::CacheWithTtl(std::time::Duration::from_secs(3600))
+        );
     }
 
     #[test]
@@ -612,6 +581,7 @@ mod tests {
 
     #[test]
     fn test_noop_metrics() {
+        use crate::types::NoOpMetrics;
         let metrics = NoOpMetrics::default();
         metrics.counter("test", &[("status", "ok")]);
         metrics.histogram("duration", 1.5, &[("source", "file")]);
@@ -619,6 +589,7 @@ mod tests {
 
     #[test]
     fn test_versioned() {
+        use crate::migration::Versioned;
         struct MyConfig;
         impl Versioned for MyConfig {
             const VERSION: u32 = 2;
@@ -673,7 +644,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_typed_not_found() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
 
         struct SimpleProvider(HashMap<String, AnnotatedValue>);
@@ -703,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_many() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
 
         struct SimpleProvider(HashMap<String, AnnotatedValue>);
@@ -734,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_by_path_joins_segments() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
         struct FlatProvider(HashMap<String, AnnotatedValue>);
         impl ConfigProvider for FlatProvider {
@@ -762,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_has() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
         struct P(HashMap<String, AnnotatedValue>);
         impl ConfigProvider for P {
@@ -785,7 +756,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_typed_success() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
         struct P(HashMap<String, AnnotatedValue>);
         impl ConfigProvider for P {
@@ -808,7 +779,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_string() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
         struct P(HashMap<String, AnnotatedValue>);
         impl ConfigProvider for P {
@@ -831,7 +802,7 @@ mod tests {
 
     #[test]
     fn test_config_provider_ext_get_int() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use std::collections::HashMap;
         struct P(HashMap<String, AnnotatedValue>);
         impl ConfigProvider for P {

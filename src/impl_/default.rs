@@ -13,12 +13,12 @@
 //! Only one version is compiled depending on whether any async feature
 //! (remote/config-bus/encryption/watch) is enabled.
 
-use crate::config::{ConfigLimits, SourceChain, SourceChainBuilder};
 use crate::error::{ConfersResult, ConfigConfigError};
-use crate::lifecycle::Lifecycle;
-use crate::merger::MergeStrategy;
-use crate::traits::{ConfigConnector, ConfigReader, ConfigWriter};
-use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+use crate::impl_::config::{ConfigLimits, SourceChain, SourceChainBuilder};
+use crate::impl_::lifecycle::Lifecycle;
+use crate::impl_::merger::MergeStrategy;
+use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
+use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 ))]
 mod async_impl {
     use super::*;
-    use crate::traits::sealed::Sealed;
+    use crate::interface::sealed::Sealed;
     use async_trait::async_trait;
     use moka::future::Cache;
 
@@ -307,7 +307,7 @@ pub use async_impl::{ConfigImpl, ConfigImplBuilder};
 )))]
 mod sync_impl {
     use super::*;
-    use crate::traits::sealed::Sealed;
+    use crate::interface::sealed::Sealed;
     use moka::sync::Cache;
 
     /// Primary configuration implementation with multiple source support.

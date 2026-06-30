@@ -35,8 +35,8 @@ use std::time::{Duration, Instant};
 
 use std::sync::RwLock;
 
+use crate::interface::{AsyncKeyProvider, KeyProvider};
 use crate::secret::{zeroizing_bytes, CryptoError, SecretBytes, ZeroizingBytes};
-use crate::traits::{AsyncKeyProvider, KeyProvider};
 
 #[derive(Debug)]
 pub struct KeyVersion {
@@ -46,18 +46,8 @@ pub struct KeyVersion {
     pub is_primary: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KeyCachePolicy {
-    NoCache,
-    CacheWithTtl(Duration),
-    CacheIndefinitely,
-}
-
-impl Default for KeyCachePolicy {
-    fn default() -> Self {
-        KeyCachePolicy::CacheWithTtl(Duration::from_secs(3600))
-    }
-}
+// Re-export unified KeyCachePolicy from crate::types (BrickArchitecture: single source of truth).
+pub use crate::types::KeyCachePolicy;
 
 #[derive(Debug, Clone)]
 pub struct KeyRotationConfig {
@@ -502,8 +492,8 @@ mod tests {
     #[test]
     fn test_add_provider() {
         use crate::error::ConfigResult;
-        use crate::traits::KeyProvider;
-        use crate::traits::ZeroizingBytes;
+        use crate::interface::KeyProvider;
+        use crate::types::ZeroizingBytes;
 
         struct DummyProvider;
         impl KeyProvider for DummyProvider {

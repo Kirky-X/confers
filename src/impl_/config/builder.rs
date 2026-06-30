@@ -15,20 +15,23 @@ use std::time::Duration;
     feature = "encryption",
     feature = "watch"
 ))]
-use crate::lifecycle::LifecycleRegistry;
+use crate::impl_::lifecycle::LifecycleRegistry;
 
 #[cfg(feature = "config-bus")]
 use crate::bus::ConfigBus;
 use crate::error::{BuildResult, ConfigError, ConfigResult, SourceWarning, WarningCode};
-use crate::merger::MergeStrategy;
+use crate::impl_::merger::MergeStrategy;
+#[cfg(feature = "snapshot")]
+use crate::impl_::snapshot::SnapshotConfig;
+use crate::interface::{KeyProvider, MetricsBackend};
+use crate::types::NoOpMetrics;
+use crate::types::{AnnotatedValue, ConfigValue};
 #[cfg(feature = "progressive-reload")]
-use crate::traits::ReloadHealthCheck;
-use crate::traits::{KeyProvider, MetricsBackend, NoOpMetrics};
-use crate::value::{AnnotatedValue, ConfigValue};
+use crate::watcher::ReloadHealthCheck;
 
 use super::chain::SourceChainBuilder;
 use super::limits::ConfigLimits;
-use super::source::Source;
+use crate::interface::Source;
 
 /// Reload strategy for hot reload.
 #[derive(Debug, Clone, Default)]
@@ -51,10 +54,6 @@ pub enum ReloadStrategy {
         interval: Duration,
     },
 }
-
-/// Re-export SnapshotConfig from snapshot module.
-#[cfg(feature = "snapshot")]
-pub use crate::snapshot::SnapshotConfig;
 
 /// Builder for creating configuration instances.
 ///
@@ -313,7 +312,7 @@ impl<T> ConfigBuilder<T> {
     pub fn register_lifecycle(
         mut self,
         name: &'static str,
-        component: Arc<dyn crate::lifecycle::Lifecycle>,
+        component: Arc<dyn crate::impl_::lifecycle::Lifecycle>,
     ) -> Self {
         self.lifecycle_registry.register(name, component);
         self
@@ -435,41 +434,14 @@ where
     ///
     /// Returns a receiver for configuration updates and a guard for the watcher.
     ///
-    /// The watcher will monitor all file sources and detect file changes.
-    /// **Note**: This is a partial implementation. Due to ownership constraints,
-    /// automatic configuration rebuild is not supported. When file changes are detected,
-    /// a warning is logged and users must manually call `build()` to reload configuration.
-    ///
-    /// For full hot reload support, consider using the `watch` feature with
-    /// `FsWatcher` or `MultiFsWatcher` directly.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use confers::ConfigBuilder;
-    /// use confers::Config;
-    /// use serde::Deserialize;
-    ///
-    /// #[derive(Debug, Config, Deserialize)]
-    /// struct MyConfig {
-    ///     host: String,
-    ///     port: u16,
-    /// }
-    ///
-    /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let builder = ConfigBuilder::<MyConfig>::new()
-    ///         .file("config.toml")
-    ///         .env();
-    ///
-    ///     let (mut rx, _guard) = builder.build_with_watcher().await?;
-    ///
-    ///     // Get initial config
-    ///     let config = rx.borrow().clone();
-    ///     println!("Config loaded: {:?}", config);
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
+    /// **Deprecated**: This method is a partial implementation that does not
+    /// actually reload configuration when file changes are detected. For full
+    /// hot reload support, use the `watch` feature with `FsWatcher` or
+    /// `MultiFsWatcher` directly.
+    #[deprecated(
+        since = "0.3.0",
+        note = "Partial implementation - does not reload on file changes. Use FsWatcher/MultiFsWatcher directly."
+    )]
     #[cfg(feature = "watch")]
     pub async fn build_with_watcher(
         self,
@@ -711,15 +683,15 @@ mod tests {
 
     #[test]
     fn test_builder_metrics_method() {
-        use crate::traits::MetricsBackend;
-        use crate::traits::NoOpMetrics;
+        use crate::interface::MetricsBackend;
+        use crate::types::NoOpMetrics;
         let builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().metrics(Arc::new(NoOpMetrics));
     }
 
     #[test]
     fn test_builder_strategy_method() {
-        use crate::merger::MergeStrategy;
+        use crate::impl_::merger::MergeStrategy;
         let builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().strategy(MergeStrategy::Append);
     }

@@ -6,5 +6,5 @@
 mod engine;
 mod strategy;
 
-pub use engine::*;
-pub use strategy::*;
+pub use engine::MergeEngine;
+pub use strategy::{CustomMergeFn, MergeStrategy};

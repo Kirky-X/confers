@@ -4,11 +4,11 @@
 use confers::config;
 use confers::config::Source;
 use confers::error;
+use confers::interface;
 use confers::loader;
 use confers::snapshot::SnapshotFormat;
-use confers::traits;
-use confers::traits::HealthStatus;
 use confers::ConfigValue;
+use confers::HealthStatus;
 
 // ============ Loader Module ============
 
@@ -202,7 +202,7 @@ fn test_error_is_retryable() {
 fn test_filter_sensitive_keys_works() {
     let keys = vec!["a".into(), "password".into(), "b".into()];
     assert_eq!(
-        traits::filter_sensitive_keys(keys, &["password"]),
+        interface::filter_sensitive_keys(keys, &["password"]),
         vec!["a", "b"]
     );
 }
@@ -210,14 +210,14 @@ fn test_filter_sensitive_keys_works() {
 #[test]
 fn test_filter_sensitive_keys_nested() {
     let keys = vec!["db.host".into(), "db.password".into()];
-    let r = traits::filter_sensitive_keys(keys, &["db.password"]);
+    let r = interface::filter_sensitive_keys(keys, &["db.password"]);
     assert_eq!(r, vec!["db.host"]);
 }
 
 #[test]
 fn test_filter_sensitive_keys_all_sensitive() {
     let keys = vec!["pwd".into()];
-    let r = traits::filter_sensitive_keys(keys, &["pwd"]);
+    let r = interface::filter_sensitive_keys(keys, &["pwd"]);
     assert!(r.is_empty());
 }
 

@@ -9,6 +9,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 
 // MergeStrategy is now imported directly from crate::merger.
 // This re-export was removed to fix a reverse dependency (value -> merger violates layering).
@@ -387,6 +388,7 @@ impl ConfigValue {
     }
 
     /// Get as string.
+    #[deprecated(since = "0.3.0", note = "Prefer as_str() to avoid allocation")]
     pub fn as_string(&self) -> Option<String> {
         match self {
             ConfigValue::String(s) => Some(s.clone()),
@@ -678,7 +680,9 @@ impl AnnotatedValue {
     }
 
     /// Get as string.
+    #[deprecated(since = "0.3.0", note = "Prefer as_str() to avoid allocation")]
     pub fn as_string(&self) -> Option<String> {
+        #[allow(deprecated)]
         self.inner.as_string()
     }
 
@@ -713,15 +717,6 @@ impl AnnotatedValue {
 
     /// Get all configuration paths from this value (including self).
     pub fn all_paths(&self) -> Vec<Arc<str>> {
-        self.all_paths_internal(true)
-    }
-
-    /// Get all paths including this value (legacy method for compatibility).
-    #[deprecated(
-        since = "0.3.0",
-        note = "Use all_paths() instead - this method is identical"
-    )]
-    pub fn all_paths_including_self(&self) -> Vec<Arc<str>> {
         self.all_paths_internal(true)
     }
 
@@ -772,26 +767,8 @@ impl AnnotatedValue {
                             path_buf.push_str(&current_path);
                             path_buf.push('.');
                         }
-                        // Convert index to string efficiently
-                        let _start = path_buf.len();
-                        // Simple integer to string without format! overhead
-                        let mut n = i;
-                        let mut digits = [0u8; 20];
-                        let mut len = 0;
-                        if n == 0 {
-                            digits[0] = b'0';
-                            len = 1;
-                        } else {
-                            while n > 0 {
-                                digits[len] = b'0' + (n % 10) as u8;
-                                n /= 10;
-                                len += 1;
-                            }
-                            digits[..len].reverse();
-                        }
-                        path_buf.push_str(std::str::from_utf8(&digits[..len]).unwrap_or("0"));
-                        // Fallback for non-ASCII (shouldn't happen for array indices)
-                        // path_buf.extend(i.to_string().chars());
+                        let mut itoa_buf = itoa::Buffer::new();
+                        path_buf.push_str(itoa_buf.format(i));
 
                         let new_path: Arc<str> = Arc::from(path_buf.as_str());
                         paths.push(new_path.clone());
@@ -854,36 +831,25 @@ impl AnnotatedValue {
         }
     }
 
-    /// Merge two configuration values using the default replace strategy.
-    ///
-    /// Delegates to [`MergeEngine::merge`] for the actual merge logic.
-    pub fn merge(low: &Self, high: &Self) -> Self {
-        use crate::impl_::merger::MergeEngine;
-        let engine = MergeEngine::new();
-        engine.merge(low, high).unwrap_or_else(|_| high.clone())
-    }
-
     /// Compare two values and produce a conflict report.
     ///
     /// The conflict report shows the lower and higher priority values
     /// along with their sources for diagnostic purposes.
     pub fn conflict_report(low: &Self, high: &Self) -> ConflictReport {
-        let mut builder = ConflictReport::builder()
-            .path(low.path.clone())
-            .low_value(format!("{:?}", low.inner), low.source.clone())
-            .high_value(format!("{:?}", high.inner), high.source.clone())
-            .winner(if low.priority >= high.priority {
+        ConflictReport::new(
+            low.path.clone(),
+            format!("{:?}", low.inner),
+            low.source.clone(),
+            low.location.clone(),
+            format!("{:?}", high.inner),
+            high.source.clone(),
+            high.location.clone(),
+            if low.priority >= high.priority {
                 ConflictWinner::Low
             } else {
                 ConflictWinner::High
-            });
-        if let Some(ref loc) = low.location {
-            builder = builder.low_location(loc.clone());
-        }
-        if let Some(ref loc) = high.location {
-            builder = builder.high_location(loc.clone());
-        }
-        builder.build()
+            },
+        )
     }
 }
 
@@ -947,8 +913,6 @@ pub struct ConflictReport {
 
 impl ConflictReport {
     /// Create a new conflict report.
-    ///
-    /// Note: Consider using the builder pattern via `Self::builder()` for better readability.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl Into<Arc<str>>,
@@ -973,82 +937,121 @@ impl ConflictReport {
     }
 }
 
-/// Builder for creating ConflictReport instances.
+// ============== Data types migrated from interface.rs (BrickArchitecture D1) ==============
+
+/// Caching policy for key providers.
+///
+/// Unified type used by both `interface::KeyProvider` (sync) and `secret::KeyRegistry`.
+/// Bricks that need TTL semantics should use `CacheWithTtl(duration)`;
+/// permanent caches should use `CacheIndefinitely`; sensitive keys that must
+/// never be cached should use `NoCache`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyCachePolicy {
+    /// Never cache keys — re-fetch on every access.
+    NoCache,
+    /// Cache with a time-to-live (defaults to 1 hour when constructed via [`Default`]).
+    CacheWithTtl(Duration),
+    /// Cache indefinitely until explicitly invalidated.
+    CacheIndefinitely,
+}
+
+impl Default for KeyCachePolicy {
+    fn default() -> Self {
+        KeyCachePolicy::CacheWithTtl(Duration::from_secs(3600))
+    }
+}
+
+/// A wrapper for bytes that zeroizes on drop.
+#[derive(Debug)]
+pub struct ZeroizingBytes(Vec<u8>);
+
+impl ZeroizingBytes {
+    /// Create new zeroizing bytes.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
+    /// Get a reference to the bytes.
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+
+    /// Get the length of the bytes.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Check if empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl Drop for ZeroizingBytes {
+    fn drop(&mut self) {
+        // Zeroize the bytes on drop
+        for byte in &mut self.0 {
+            *byte = 0;
+        }
+    }
+}
+
+// Deref/DerefMut mirror `zeroize::Zeroizing<Vec<u8>>` so that downstream code can
+// treat `ZeroizingBytes` as `Vec<u8>` (e.g. `&*bytes`). The Drop impl still zeroes
+// the underlying buffer when the wrapper goes out of scope.
+impl std::ops::Deref for ZeroizingBytes {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ZeroizingBytes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+// ZeroizingBytes does not implement Clone to prevent bypassing memory protection.
+// The Drop trait ensures sensitive data is zeroized on drop.
+// Note: Cloning ZeroizingBytes would leave copies in memory that cannot be zeroized.
+
+/// No-op metrics backend for when metrics are disabled.
+///
+/// Public extension point companion to [`crate::interface::MetricsBackend`] — provided for
+/// downstream consumers who need a default implementation.
 #[derive(Debug, Clone, Default)]
-pub struct ConflictReportBuilder {
-    path: Option<Arc<str>>,
-    low_value: Option<String>,
-    low_source: Option<SourceId>,
-    low_location: Option<SourceLocation>,
-    high_value: Option<String>,
-    high_source: Option<SourceId>,
-    high_location: Option<SourceLocation>,
-    winner: Option<ConflictWinner>,
-}
+pub struct NoOpMetrics;
 
-impl ConflictReportBuilder {
-    /// Set the path of the conflicting value.
-    pub fn path(mut self, path: impl Into<Arc<str>>) -> Self {
-        self.path = Some(path.into());
-        self
+impl crate::interface::MetricsBackend for NoOpMetrics {
+    fn counter(&self, _name: &str, _labels: &[(&str, &str)]) {
+        // No-op
     }
 
-    /// Set the low priority value and its source.
-    pub fn low_value(mut self, value: String, source: SourceId) -> Self {
-        self.low_value = Some(value);
-        self.low_source = Some(source);
-        self
-    }
-
-    /// Set the low priority value location.
-    pub fn low_location(mut self, loc: SourceLocation) -> Self {
-        self.low_location = Some(loc);
-        self
-    }
-
-    /// Set the high priority value and its source.
-    pub fn high_value(mut self, value: String, source: SourceId) -> Self {
-        self.high_value = Some(value);
-        self.high_source = Some(source);
-        self
-    }
-
-    /// Set the high priority value location.
-    pub fn high_location(mut self, loc: SourceLocation) -> Self {
-        self.high_location = Some(loc);
-        self
-    }
-
-    /// Set which value won.
-    pub fn winner(mut self, winner: ConflictWinner) -> Self {
-        self.winner = Some(winner);
-        self
-    }
-
-    /// Build the ConflictReport.
-    ///
-    /// # Panics
-    ///
-    /// Panics if required fields (path, values, sources, winner) are not set.
-    pub fn build(self) -> ConflictReport {
-        ConflictReport::new(
-            self.path.expect("path required"),
-            self.low_value.expect("low_value required"),
-            self.low_source.expect("low_source required"),
-            self.low_location,
-            self.high_value.expect("high_value required"),
-            self.high_source.expect("high_source required"),
-            self.high_location,
-            self.winner.expect("winner required"),
-        )
+    fn histogram(&self, _name: &str, _value: f64, _labels: &[(&str, &str)]) {
+        // No-op
     }
 }
 
-impl ConflictReport {
-    /// Create a builder for ConflictReport.
-    pub fn builder() -> ConflictReportBuilder {
-        ConflictReportBuilder::default()
-    }
+// ============== Source-related data types (migrated from config/source.rs) ==============
+
+/// Kind of configuration source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    /// File-based source
+    File,
+    /// Environment variable source
+    Environment,
+    /// Command-line argument source
+    CommandLine,
+    /// Default value source
+    Default,
+    /// Remote source (HTTP, Consul, etc.)
+    #[cfg(feature = "remote")]
+    Remote,
+    /// In-memory source
+    Memory,
 }
 
 #[cfg(test)]
@@ -1160,12 +1163,16 @@ mod tests {
 
     #[test]
     fn test_conflict_report() {
-        let report = ConflictReport::builder()
-            .path("database.host")
-            .low_value("localhost".to_string(), SourceId::new("file1"))
-            .high_value("127.0.0.1".to_string(), SourceId::new("file2"))
-            .winner(ConflictWinner::High)
-            .build();
+        let report = ConflictReport::new(
+            "database.host",
+            "localhost".to_string(),
+            SourceId::new("file1"),
+            None,
+            "127.0.0.1".to_string(),
+            SourceId::new("file2"),
+            None,
+            ConflictWinner::High,
+        );
 
         assert_eq!(report.path.as_ref(), "database.host");
         assert_eq!(report.winner, ConflictWinner::High);
@@ -1203,7 +1210,8 @@ mod tests {
             "host",
         );
 
-        let merged = AnnotatedValue::merge(&low, &high);
+        let engine = crate::impl_::merger::MergeEngine::new();
+        let merged = engine.merge(&low, &high).unwrap_or_else(|_| high.clone());
         assert_eq!(merged.as_str(), Some("prod.example.com"));
     }
 
@@ -1214,7 +1222,8 @@ mod tests {
         let high = AnnotatedValue::new(ConfigValue::integer(9090), SourceId::new("env"), "port")
             .with_priority(50);
 
-        let merged = AnnotatedValue::merge(&low, &high);
+        let engine = crate::impl_::merger::MergeEngine::new();
+        let merged = engine.merge(&low, &high).unwrap_or_else(|_| high.clone());
         assert_eq!(merged.as_i64(), Some(9090));
     }
 
@@ -1223,7 +1232,8 @@ mod tests {
         let low = AnnotatedValue::new(ConfigValue::string("keep_me"), SourceId::new("file"), "key");
         let high = AnnotatedValue::new(ConfigValue::Null, SourceId::new("env"), "key");
 
-        let merged = AnnotatedValue::merge(&low, &high);
+        let engine = crate::impl_::merger::MergeEngine::new();
+        let merged = engine.merge(&low, &high).unwrap_or_else(|_| high.clone());
         assert_eq!(merged.as_str(), Some("keep_me"));
     }
 
@@ -1517,16 +1527,6 @@ mod tests {
     }
 
     #[test]
-    fn test_deprecated_all_paths_including_self() {
-        #[allow(deprecated)]
-        {
-            let val = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "k");
-            let paths = val.all_paths_including_self();
-            assert_eq!(paths.len(), 1);
-        }
-    }
-
-    #[test]
     fn test_annotated_value_is_null() {
         let n = AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "");
         assert!(n.is_null());
@@ -1547,16 +1547,18 @@ mod tests {
     }
 
     #[test]
-    fn test_conflict_report_builder_all_fields() {
+    fn test_conflict_report_new_all_fields() {
         let loc = SourceLocation::new("f.toml", 1, 1);
-        let report = ConflictReport::builder()
-            .path("key")
-            .low_value("old".into(), SourceId::new("f1"))
-            .low_location(loc.clone())
-            .high_value("new".into(), SourceId::new("f2"))
-            .high_location(loc)
-            .winner(ConflictWinner::High)
-            .build();
+        let report = ConflictReport::new(
+            "key",
+            "old".into(),
+            SourceId::new("f1"),
+            Some(loc.clone()),
+            "new".into(),
+            SourceId::new("f2"),
+            Some(loc),
+            ConflictWinner::High,
+        );
         assert_eq!(report.path.as_ref(), "key");
         assert_eq!(report.winner, ConflictWinner::High);
         assert!(report.low_location.is_some());

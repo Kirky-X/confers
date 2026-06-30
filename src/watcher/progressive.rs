@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::traits::ConfigProvider;
+use crate::interface::ConfigProvider;
 
 /// Reload strategy for hot reload.
 #[derive(Debug, Clone, Default)]
@@ -36,6 +36,18 @@ pub enum HealthStatus {
     Healthy,
     Degraded { reason: String },
     Critical { reason: String },
+}
+
+impl HealthStatus {
+    /// Check if the status is healthy.
+    pub fn is_healthy(&self) -> bool {
+        matches!(self, HealthStatus::Healthy)
+    }
+
+    /// Check if the status requires rollback.
+    pub fn requires_rollback(&self) -> bool {
+        matches!(self, HealthStatus::Critical { .. })
+    }
 }
 
 /// Reload health check trait
@@ -246,8 +258,8 @@ impl<T: Clone + Send + Sync + 'static> Default for ProgressiveReloaderBuilder<T>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::traits::ConfigProvider;
-    use crate::value::AnnotatedValue;
+    use crate::interface::ConfigProvider;
+    use crate::types::AnnotatedValue;
 
     #[derive(Debug, Clone)]
     struct MockProvider;

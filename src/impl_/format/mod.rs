@@ -17,12 +17,12 @@
 //!
 //! let content = r#"{"name":"test","port":8080}"#;
 //! let converter = converter_for(Format::Json).expect("JSON converter should exist");
-//! let result = converter.parse(content, confers::value::SourceId::new("test"), None);
+//! let result = converter.parse(content, confers::types::SourceId::new("test"), None);
 //! assert!(result.is_ok());
 //! ```
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::Path;
 
 #[cfg(feature = "json")]
@@ -748,7 +748,7 @@ pub fn converter_for(format: Format) -> Option<Box<dyn FormatConverter>> {
 // Re-export Format from loader for compatibility
 // =============================================================================
 
-pub use crate::loader::Format;
+pub use crate::impl_::loader::Format;
 
 #[cfg(test)]
 mod tests {
@@ -818,7 +818,7 @@ key = "value""#
     #[cfg(feature = "json")]
     #[test]
     fn test_json_converter_serialize() {
-        use crate::value::ConfigValue;
+        use crate::types::ConfigValue;
         let conv = json_converter::JsonConverter::new();
         let val = AnnotatedValue::new(
             ConfigValue::map(vec![(
@@ -962,7 +962,7 @@ key = "value""#
 
     #[test]
     fn test_toml_converter_parse_serialize_roundtrip() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         let c = toml_converter::TomlConverter::new();
         let parsed = c
             .parse("name = \"test\"", SourceId::new("test"), None)
@@ -974,7 +974,7 @@ key = "value""#
 
     #[test]
     fn test_json_converter_parse_serialize_roundtrip() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         let c = json_converter::JsonConverter::new();
         let parsed = c
             .parse("{\"name\":\"test\"}", SourceId::new("test"), None)
@@ -987,7 +987,7 @@ key = "value""#
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_converter_parse_serialize() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         let c = yaml_converter::YamlConverter::new();
         let parsed = c.parse("name: test", SourceId::new("test"), None).unwrap();
         assert!(parsed.is_map());
@@ -997,7 +997,7 @@ key = "value""#
 
     #[test]
     fn test_ini_converter_parse_serialize() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         let c = ini_converter::IniConverter::new();
         let parsed = c
             .parse("[section]\nkey=value", SourceId::new("test"), None)

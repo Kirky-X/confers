@@ -42,11 +42,6 @@ impl Default for ConfigLimits {
 }
 
 impl ConfigLimits {
-    /// Create new limits with default values.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Set the maximum file size.
     pub fn with_max_file_size_bytes(mut self, bytes: u64) -> Self {
         self.max_file_size_bytes = bytes;
@@ -170,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_builder_pattern() {
-        let limits = ConfigLimits::new()
+        let limits = ConfigLimits::default()
             .with_max_file_size_bytes(1024)
             .with_max_nesting_depth(5)
             .with_allow_remote(false);
@@ -192,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_size_checks() {
-        let limits = ConfigLimits::new()
+        let limits = ConfigLimits::default()
             .with_max_file_size_bytes(1000)
             .with_max_total_size(5000);
 
@@ -220,13 +215,13 @@ mod tests {
 
     #[test]
     fn test_limits_string_length() {
-        let l = ConfigLimits::new().with_max_string_length(500);
+        let l = ConfigLimits::default().with_max_string_length(500);
         assert_eq!(l.max_string_length, 500);
     }
 
     #[test]
     fn test_limits_array_length() {
-        let l = ConfigLimits::new().with_max_array_length(50);
+        let l = ConfigLimits::default().with_max_array_length(50);
         assert_eq!(l.max_array_length, 50);
     }
 }

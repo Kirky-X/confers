@@ -11,7 +11,7 @@
 //! - URL-encoded traversal (`%2e%2e`, `%252e`)
 //! - Mixed encoding (`%2e./`)
 use crate::error::{ConfigError, ConfigResult, ParseLocation};
-use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 

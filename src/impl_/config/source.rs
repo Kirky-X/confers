@@ -1,85 +1,17 @@
-//! Source abstraction for configuration loading.
+//! Built-in configuration source implementations.
 //!
-//! This module defines the `Source` trait for configuration sources
-//! and provides built-in implementations for common sources.
+//! The `Source` and `AsyncSource` traits are defined in `crate::interface`.
+//! The `SourceKind` enum is defined in `crate::types`.
+//! This module provides concrete implementations: FileSource, EnvSource,
+//! MemorySource, DefaultSource.
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::loader::{self, Format};
-use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+use crate::impl_::loader::{self, Format};
+use crate::interface::Source;
+use crate::types::{AnnotatedValue, ConfigValue, SourceId, SourceKind};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-#[cfg(feature = "remote")]
-use async_trait::async_trait;
-
-/// Kind of configuration source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceKind {
-    /// File-based source
-    File,
-    /// Environment variable source
-    Environment,
-    /// Command-line argument source
-    CommandLine,
-    /// Default value source
-    Default,
-    /// Remote source (HTTP, Consul, etc.)
-    #[cfg(feature = "remote")]
-    Remote,
-    /// In-memory source
-    Memory,
-}
-
-/// Trait for configuration sources.
-///
-/// Sources are responsible for collecting configuration values.
-/// They are combined in a `SourceChain` with priority ordering.
-pub trait Source: Send + Sync {
-    /// Collect configuration values from this source.
-    fn collect(&self) -> ConfigResult<AnnotatedValue>;
-
-    /// Get the priority of this source (higher = more important).
-    fn priority(&self) -> u8;
-
-    /// Get the name of this source for debugging.
-    fn name(&self) -> &str;
-
-    /// Get the kind of this source.
-    fn source_kind(&self) -> SourceKind;
-
-    /// Check if this source is optional (errors are non-fatal).
-    fn is_optional(&self) -> bool {
-        false
-    }
-
-    /// Get the file path if this is a file source.
-    fn file_path(&self) -> Option<&Path> {
-        None
-    }
-}
-
-/// Trait for asynchronous configuration sources.
-///
-/// This trait is used for remote sources that require async I/O,
-/// such as HTTP endpoints, etcd, Consul, etc.
-#[cfg(feature = "remote")]
-#[async_trait]
-pub trait AsyncSource: Send + Sync {
-    /// Load configuration values from this source asynchronously.
-    async fn load(&self) -> ConfigResult<AnnotatedValue>;
-
-    /// Get the source ID for tracking.
-    fn source_id(&self) -> &SourceId;
-
-    /// Get the priority of this source (higher = more important).
-    fn priority(&self) -> u8 {
-        50
-    }
-
-    /// Get the name of this source for debugging.
-    fn name(&self) -> &str;
-}
 
 /// File-based configuration source.
 #[derive(Debug)]
@@ -776,7 +708,7 @@ mod tests {
 
     #[test]
     fn test_file_source_format() {
-        let source = FileSource::new("config.toml").with_format(crate::loader::Format::Toml);
+        let source = FileSource::new("config.toml").with_format(crate::impl_::loader::Format::Toml);
         assert_eq!(source.name(), "config.toml");
     }
 

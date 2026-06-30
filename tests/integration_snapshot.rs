@@ -16,7 +16,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 use confers::snapshot::{SnapshotConfig, SnapshotFormat, SnapshotInfo, SnapshotManager};
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 
 // ========================================
 // Basic Module Tests (3.1.1)

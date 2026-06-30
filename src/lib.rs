@@ -35,15 +35,12 @@
 //! - **`ConfigConfigError`** — Initialization errors (missing fields, parse errors, validation failures)
 //! - **`ConfersError`** — Runtime errors (timeout, remote unavailable, decryption failures)
 //!
-//! Use `new_in_memory_validated()` for BrickArchitecture-compliant initialization:
+//! Use `new_in_memory()` for the canonical in-memory configuration factory:
 //!
 //! ```rust
-//! use confers::{new_in_memory_validated, ConfigConnector, ConfigConfigError};
+//! use confers::{new_in_memory, interface::ConfigConnector};
 //!
-//! # fn main() -> Result<(), ConfigConfigError> {
-//! let config = new_in_memory_validated(1000)?; // Returns Result, validates capacity > 0
-//! # Ok(())
-//! # }
+//! let config = new_in_memory();
 //! ```
 
 // ============== Public Modules ==============
@@ -51,10 +48,10 @@
 pub mod config;
 pub mod error;
 pub mod format;
+pub mod interface;
 pub mod loader;
 pub mod merger;
-pub mod traits;
-pub mod value;
+pub mod types;
 
 // Internal implementation (not exposed)
 mod impl_;
@@ -129,13 +126,16 @@ pub use error::{
 };
 
 // Interface traits (BrickArchitecture)
-pub use traits::{
+pub use interface::{
     ConfigConnector, ConfigProvider, ConfigProviderExt, ConfigReader, ConfigWriter, KeyProvider,
     TypedConfigKey,
 };
 
 // Public types
-pub use value::{AnnotatedValue, ConfigValue, SourceId, SourceLocation};
+pub use types::{
+    AnnotatedValue, ConfigValue, KeyCachePolicy, NoOpMetrics, SourceId, SourceLocation,
+    ZeroizingBytes,
+};
 
 pub use loader::{
     detect_format_from_content, detect_format_from_path, load_file, parse_content, Format,
@@ -187,7 +187,7 @@ pub use dynamic::{CallbackGuard, DynamicField, DynamicFieldBuilder};
 pub use migration::{MigrationFn, MigrationOnReload, MigrationRegistry, Versioned};
 
 #[cfg(feature = "snapshot")]
-pub use snapshot::{SnapshotFormat, SnapshotInfo, SnapshotManager, SnapshotOptions};
+pub use snapshot::{SnapshotFormat, SnapshotInfo, SnapshotManager};
 
 #[cfg(feature = "modules")]
 pub use modules::{ModuleConfig, ModuleRegistry};
@@ -229,51 +229,6 @@ pub fn new_in_memory() -> impl ConfigConnector {
     impl_::memory::InMemoryConfig::new()
 }
 
-/// Create an in-memory config with custom capacity.
-///
-/// Note: This function does not validate capacity. For production use,
-/// prefer `new_in_memory_validated()` which returns a Result.
-///
-/// # Example
-///
-/// ```rust
-/// use confers::{new_in_memory_with_capacity, ConfigConnector};
-///
-/// let config = new_in_memory_with_capacity(1000);
-/// ```
-pub fn new_in_memory_with_capacity(max_capacity: u64) -> impl ConfigConnector {
-    impl_::memory::InMemoryConfigBuilder::default()
-        .max_capacity(max_capacity)
-        .build()
-}
-
-/// Create a validated in-memory config with capacity limit.
-///
-/// # BrickArchitecture
-///
-/// This factory function returns `Result` for initialization failures,
-/// following BrickArchitecture fail-fast principle.
-///
-/// # Errors
-///
-/// Returns `ConfigConfigError::InvalidValue` if capacity is 0.
-///
-/// # Example
-///
-/// ```rust
-/// use confers::{new_in_memory_validated, ConfigConnector, ConfigConfigError};
-///
-/// # fn example() -> Result<(), ConfigConfigError> {
-/// let config = new_in_memory_validated(1000)?;
-/// # Ok(())
-/// # }
-/// ```
-pub fn new_in_memory_validated(
-    max_capacity: u64,
-) -> Result<impl ConfigConnector, ConfigConfigError> {
-    impl_::memory::InMemoryConfig::new_validated(max_capacity)
-}
-
 // ============== Prelude ==============
 
 /// Prelude for common imports.
@@ -282,13 +237,13 @@ pub mod prelude {
     pub use crate::error::{
         BuildResult, ConfersError, ConfigConfigError, ConfigError, ConfigResult, ErrorCode,
     };
-    pub use crate::lifecycle::Lifecycle;
-    pub use crate::loader::{Format, LoaderConfig};
-    pub use crate::traits::{
+    pub use crate::interface::{
         ConfigConnector, ConfigProvider, ConfigProviderExt, ConfigReader, ConfigWriter,
         TypedConfigKey,
     };
-    pub use crate::value::{AnnotatedValue, ConfigValue};
+    pub use crate::lifecycle::Lifecycle;
+    pub use crate::loader::{Format, LoaderConfig};
+    pub use crate::types::{AnnotatedValue, ConfigValue};
     pub use crate::Config;
 
     #[cfg(feature = "validation")]

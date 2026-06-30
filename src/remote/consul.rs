@@ -6,7 +6,7 @@
 use super::common::{merge_into_map, try_parse_value};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
-use crate::value::{AnnotatedValue, SourceId};
+use crate::types::{AnnotatedValue, SourceId};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -304,7 +304,7 @@ impl ConsulSource {
                     config_map.insert(
                         Arc::from(key.clone()),
                         AnnotatedValue::new(
-                            crate::value::ConfigValue::String(decoded.clone()),
+                            crate::types::ConfigValue::String(decoded.clone()),
                             SourceId::new("consul"),
                             key.as_str(),
                         ),
@@ -314,9 +314,9 @@ impl ConsulSource {
         }
 
         let value = if config_map.is_empty() {
-            crate::value::ConfigValue::Null
+            crate::types::ConfigValue::Null
         } else {
-            crate::value::ConfigValue::map(config_map.into_iter().collect())
+            crate::types::ConfigValue::map(config_map.into_iter().collect())
         };
 
         let result = AnnotatedValue::new(value, SourceId::new("consul"), "");
@@ -360,7 +360,7 @@ impl crate::remote::PolledSource for ConsulSource {
 }
 
 #[async_trait]
-impl crate::config::source::AsyncSource for ConsulSource {
+impl crate::interface::AsyncSource for ConsulSource {
     async fn load(&self) -> ConfigResult<AnnotatedValue> {
         self.poll_internal().await
     }

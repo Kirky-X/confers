@@ -2,7 +2,7 @@
 
 mod common;
 
-use confers::value::ConfigValue;
+use confers::types::ConfigValue;
 use confers::ConfigBuilder;
 use std::io::Write;
 

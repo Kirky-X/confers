@@ -17,7 +17,7 @@
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::{detect_format_from_content, parse_content, Format};
-use crate::value::{AnnotatedValue, SourceId};
+use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use reqwest::Client;

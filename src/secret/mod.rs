@@ -20,9 +20,7 @@ pub use crypto::{derive_field_key, CryptoError, XChaCha20Crypto, NONCE_SIZE};
 #[cfg(feature = "encryption")]
 pub use key_provider::{EnvKeyProvider, EnvKeyProviderBuilder, SecretKeyProvider};
 #[cfg(feature = "encryption")]
-pub use key_registry::{
-    KeyCachePolicy, KeyRegistry, KeyRegistryBuilder, KeyRotationConfig, KeyVersion,
-};
+pub use key_registry::{KeyRegistry, KeyRegistryBuilder, KeyRotationConfig, KeyVersion};
 #[cfg(feature = "encryption")]
 pub use providers::{FileKeyProvider, FileKeyProviderBuilder};
 #[cfg(all(feature = "encryption", feature = "remote"))]

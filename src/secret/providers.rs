@@ -3,10 +3,11 @@
 use std::path::PathBuf;
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::traits::{KeyCachePolicy, KeyProvider, ZeroizingBytes};
+use crate::interface::KeyProvider;
+use crate::types::{KeyCachePolicy, ZeroizingBytes};
 
 #[cfg(feature = "remote")]
-use crate::traits::AsyncKeyProvider;
+use crate::interface::AsyncKeyProvider;
 
 pub struct FileKeyProvider {
     path: PathBuf,
@@ -350,7 +351,7 @@ mod tests {
 
         let provider = FileKeyProvider::builder()
             .path(temp_file.path())
-            .cache_policy(KeyCachePolicy::Never)
+            .cache_policy(KeyCachePolicy::NoCache)
             .build()
             .unwrap();
 
@@ -391,7 +392,7 @@ mod tests {
         f.write_all(b"test-key-12345678901234567890").unwrap();
         let p = FileKeyProvider::builder()
             .path(f.path())
-            .cache_policy(KeyCachePolicy::Never)
+            .cache_policy(KeyCachePolicy::NoCache)
             .build()
             .unwrap();
         assert_eq!(p.provider_type(), "file");

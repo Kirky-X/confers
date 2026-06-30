@@ -124,7 +124,7 @@ fn test_module_config_default_profile_without_default() {
 
 #[test]
 fn test_registry_new() {
-    let registry = ModuleRegistry::new();
+    let registry = ModuleRegistry::default();
     assert!(registry.is_empty());
     assert_eq!(registry.len(), 0);
 }
@@ -137,7 +137,7 @@ fn test_registry_with_capacity() {
 
 #[test]
 fn test_register_group() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -155,7 +155,7 @@ fn test_register_group() {
 
 #[test]
 fn test_register_multiple_groups() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group("database", vec![], None);
     registry.register_group("cache", vec![], None);
@@ -165,7 +165,7 @@ fn test_register_multiple_groups() {
 
 #[test]
 fn test_list_groups() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group("database", vec![], None);
     registry.register_group("cache", vec![], None);
@@ -177,7 +177,7 @@ fn test_list_groups() {
 
 #[test]
 fn test_get_active_profile() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -194,7 +194,7 @@ fn test_get_active_profile() {
 
 #[test]
 fn test_get_active_profile_nonexistent() {
-    let registry = ModuleRegistry::new();
+    let registry = ModuleRegistry::default();
 
     let profile = registry.get_active_profile("nonexistent");
     assert!(profile.is_none());
@@ -202,7 +202,7 @@ fn test_get_active_profile_nonexistent() {
 
 #[test]
 fn test_set_active_profile() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -222,7 +222,7 @@ fn test_set_active_profile() {
 
 #[test]
 fn test_set_active_profile_nonexistent_group() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let result = registry.set_active_profile("nonexistent", "profile");
     assert!(result.is_err());
@@ -237,7 +237,7 @@ fn test_set_active_profile_nonexistent_group() {
 
 #[test]
 fn test_set_active_profile_nonexistent_profile() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -251,7 +251,7 @@ fn test_set_active_profile_nonexistent_profile() {
 
 #[test]
 fn test_get_module_config() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -276,7 +276,7 @@ fn test_get_module_config() {
 
 #[test]
 fn test_load_module_not_found_group() {
-    let registry = ModuleRegistry::new();
+    let registry = ModuleRegistry::default();
 
     let result = registry.load_module("nonexistent", "profile", &LoaderConfig::default());
 
@@ -291,7 +291,7 @@ fn test_load_module_not_found_group() {
 
 #[test]
 fn test_load_module_not_found_profile() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     registry.register_group(
         "database",
@@ -308,7 +308,7 @@ fn test_load_module_not_found_profile() {
 fn test_load_module_file_not_found() {
     let temp_dir = create_local_temp_dir();
 
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let relative_path = get_relative_path(&temp_dir.path().join("nonexistent.toml"));
     registry.register_group("database", vec![("mysql", relative_path)], Some("mysql"));
@@ -325,7 +325,7 @@ fn test_load_module_success_toml() {
     let mysql_path = temp_dir.path().join("mysql.toml");
     std::fs::write(&mysql_path, "host = \"localhost\"\nport = 3306\n").unwrap();
 
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let relative_path = get_relative_path(&mysql_path);
     registry.register_group("database", vec![("mysql", relative_path)], Some("mysql"));
@@ -348,7 +348,7 @@ fn test_load_module_success_json() {
     let config_path = temp_dir.path().join("config.json");
     std::fs::write(&config_path, "{\"host\": \"localhost\", \"port\": 8080}").unwrap();
 
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let relative_path = get_relative_path(&config_path);
     registry.register_group("app", vec![("dev", relative_path)], Some("dev"));
@@ -371,7 +371,7 @@ fn test_load_module_success_json() {
 
 #[test]
 fn test_load_active_not_found() {
-    let registry = ModuleRegistry::new();
+    let registry = ModuleRegistry::default();
 
     let result = registry.load_active("nonexistent", &LoaderConfig::default());
 
@@ -388,7 +388,7 @@ fn test_load_active_success() {
     let postgresql_path = temp_dir.path().join("postgresql.toml");
     std::fs::write(&postgresql_path, "host = \"pg.example.com\"\nport = 5432\n").unwrap();
 
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let mysql_relative = get_relative_path(&mysql_path);
     let postgresql_relative = get_relative_path(&postgresql_path);
@@ -432,7 +432,7 @@ fn test_load_active_success() {
 
 #[test]
 fn test_registry_chaining() {
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     // Test method chaining
     registry
@@ -452,7 +452,7 @@ fn test_multiple_groups_load() {
     let redis_path = temp_dir.path().join("redis.toml");
     std::fs::write(&redis_path, "host = \"redis.local\"").unwrap();
 
-    let mut registry = ModuleRegistry::new();
+    let mut registry = ModuleRegistry::default();
 
     let mysql_relative = get_relative_path(&mysql_path);
     let redis_relative = get_relative_path(&redis_path);

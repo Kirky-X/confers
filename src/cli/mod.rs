@@ -349,7 +349,7 @@ fn cmd_inspect(
 /// Recursively print configuration values
 fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool) {
     match &value.inner {
-        crate::value::ConfigValue::Map(map) => {
+        crate::types::ConfigValue::Map(map) => {
             for (key, val) in map.iter() {
                 let full_key = if prefix.is_empty() {
                     key.clone()
@@ -358,7 +358,7 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
                 };
 
                 match &val.inner {
-                    crate::value::ConfigValue::Map(_) => {
+                    crate::types::ConfigValue::Map(_) => {
                         print_config_value(val, &full_key, show_conflicts);
                     }
                     _ => {
@@ -391,7 +391,7 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
 }
 
 /// Format location information for display
-fn format_location(location: &Option<crate::value::SourceLocation>) -> String {
+fn format_location(location: &Option<crate::types::SourceLocation>) -> String {
     match location {
         Some(loc) => format!("line {}, col {}", loc.line, loc.column),
         None => "-".to_string(),
@@ -405,7 +405,7 @@ fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a Ann
 
     for part in parts {
         match &current.inner {
-            crate::value::ConfigValue::Map(map) => {
+            crate::types::ConfigValue::Map(map) => {
                 current = map.get(part)?;
             }
             _ => return None,
@@ -416,9 +416,9 @@ fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a Ann
 }
 
 /// Format a value for display
-fn format_value(value: &crate::value::ConfigValue) -> String {
+fn format_value(value: &crate::types::ConfigValue) -> String {
     match value {
-        crate::value::ConfigValue::String(s) => {
+        crate::types::ConfigValue::String(s) => {
             // Truncate long strings
             if s.len() > 20 {
                 format!("\"{}...\"", &s[..17])
@@ -426,14 +426,14 @@ fn format_value(value: &crate::value::ConfigValue) -> String {
                 format!("\"{}\"", s)
             }
         }
-        crate::value::ConfigValue::I64(n) => n.to_string(),
-        crate::value::ConfigValue::U64(n) => n.to_string(),
-        crate::value::ConfigValue::F64(n) => n.to_string(),
-        crate::value::ConfigValue::Bool(b) => b.to_string(),
-        crate::value::ConfigValue::Null => "[null]".to_string(),
-        crate::value::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
-        crate::value::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
-        crate::value::ConfigValue::Map(obj) => {
+        crate::types::ConfigValue::I64(n) => n.to_string(),
+        crate::types::ConfigValue::U64(n) => n.to_string(),
+        crate::types::ConfigValue::F64(n) => n.to_string(),
+        crate::types::ConfigValue::Bool(b) => b.to_string(),
+        crate::types::ConfigValue::Null => "[null]".to_string(),
+        crate::types::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
+        crate::types::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
+        crate::types::ConfigValue::Map(obj) => {
             let keys: Vec<_> = obj.keys().collect();
             format!("{{ {} keys }}", keys.len())
         }
@@ -451,7 +451,7 @@ fn cmd_validate(
         Ok(annotated_config) => {
             let mut issues = Vec::new();
 
-            if let crate::value::ConfigValue::Map(map) = &annotated_config.inner {
+            if let crate::types::ConfigValue::Map(map) = &annotated_config.inner {
                 check_required_keys(map, &mut issues);
                 check_types(map, &mut issues);
             }
@@ -516,7 +516,7 @@ fn check_required_keys(
 ) {
     // Check for server configuration
     if let Some(server) = obj.get("server") {
-        if let crate::value::ConfigValue::Map(server_map) = &server.inner {
+        if let crate::types::ConfigValue::Map(server_map) = &server.inner {
             if !server_map.contains_key("host") && !server_map.contains_key("port") {
                 issues.push("Server configuration missing host/port".to_string());
             }
@@ -525,7 +525,7 @@ fn check_required_keys(
 
     // Check for database configuration
     if let Some(db) = obj.get("database") {
-        if let crate::value::ConfigValue::Map(db_map) = &db.inner {
+        if let crate::types::ConfigValue::Map(db_map) = &db.inner {
             if !db_map.contains_key("url") && !db_map.contains_key("host") {
                 issues.push("Database configuration missing connection details".to_string());
             }
@@ -534,7 +534,7 @@ fn check_required_keys(
 
     // Check for empty required sections
     for (key, value) in obj.iter() {
-        if matches!(value.inner, crate::value::ConfigValue::Null) {
+        if matches!(value.inner, crate::types::ConfigValue::Null) {
             issues.push(format!("Configuration key '{}' has null value", key));
         }
     }
@@ -544,7 +544,7 @@ fn check_required_keys(
 fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
     // Check for suspicious string values that might be numbers
     for (key, value) in obj.iter() {
-        if let crate::value::ConfigValue::String(s) = &value.inner {
+        if let crate::types::ConfigValue::String(s) = &value.inner {
             // Check if string looks like a number
             if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
                 issues.push(format!(
@@ -662,7 +662,7 @@ fn cmd_diff(
         &base_content,
         loader::detect_format_from_path(base)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for base config"))?,
-        crate::value::SourceId::new(base.to_string_lossy().as_ref()),
+        crate::types::SourceId::new(base.to_string_lossy().as_ref()),
         Some(base),
     )?;
 
@@ -673,7 +673,7 @@ fn cmd_diff(
         &overlay_content,
         loader::detect_format_from_path(overlay)
             .ok_or_else(|| anyhow::anyhow!("Unknown format for overlay config"))?,
-        crate::value::SourceId::new(overlay.to_string_lossy().as_ref()),
+        crate::types::SourceId::new(overlay.to_string_lossy().as_ref()),
         Some(overlay),
     )?;
 
@@ -906,7 +906,7 @@ mod tests {
 
     #[test]
     fn test_format_location_some() {
-        use crate::value::SourceLocation;
+        use crate::types::SourceLocation;
         let loc = SourceLocation::new("test.toml", 10, 5);
         let result = format_location(&Some(loc));
         assert!(result.contains("10"));
@@ -945,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_find_value_by_key_missing() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut map = IndexMap::new();
@@ -963,7 +963,7 @@ mod tests {
 
     #[test]
     fn test_find_value_by_key_nested() {
-        use crate::value::SourceId;
+        use crate::types::SourceId;
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut inner = IndexMap::new();
@@ -1007,7 +1007,7 @@ mod tests {
 
     #[test]
     fn test_check_required_keys_server_missing_host() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut server_map = IndexMap::new();
@@ -1028,7 +1028,7 @@ mod tests {
 
     #[test]
     fn test_check_types_detects_number_in_string() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut map = IndexMap::new();
@@ -1043,7 +1043,7 @@ mod tests {
 
     #[test]
     fn test_check_types_detects_bool_in_string() {
-        use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut map = IndexMap::new();
@@ -1060,7 +1060,7 @@ mod tests {
 
     #[test]
     fn test_print_config_value_basic() {
-        use crate::value::{ConfigValue, SourceId};
+        use crate::types::{ConfigValue, SourceId};
         let v = AnnotatedValue::new(ConfigValue::string("test"), SourceId::new("t"), "k");
         // Should not panic
         print_config_value(&v, "", false);
@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn test_print_config_value_map() {
-        use crate::value::{ConfigValue, SourceId};
+        use crate::types::{ConfigValue, SourceId};
         use indexmap::IndexMap;
         use std::sync::Arc;
         let mut map = IndexMap::new();

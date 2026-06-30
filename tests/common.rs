@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use confers::traits::ConfigProvider;
-use confers::value::{AnnotatedValue, ConfigValue, SourceId};
+use confers::interface::ConfigProvider;
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use tempfile::NamedTempFile;
 
 #[cfg(feature = "remote")]

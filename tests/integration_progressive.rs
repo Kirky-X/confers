@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use confers::error::ConfigError;
-use confers::traits::ConfigProvider;
+use confers::interface::ConfigProvider;
 use confers::watcher::{
     HealthStatus, ProgressiveReloader, ReloadHealthCheck, ReloadOutcome, ReloadStrategy,
 };

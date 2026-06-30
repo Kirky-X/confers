@@ -3,7 +3,7 @@
 //! These functions are used by both the loader and the format converter modules
 //! to avoid duplicating the same conversion logic.
 
-use crate::value::{AnnotatedValue, ConfigValue, SourceId};
+use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::sync::Arc;
 
 #[cfg(feature = "toml")]

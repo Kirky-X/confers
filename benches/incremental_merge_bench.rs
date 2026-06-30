@@ -3,7 +3,7 @@
 //! Measures performance of incremental configuration merging.
 
 use confers::merger::{MergeEngine, MergeStrategy};
-use confers::value::{AnnotatedValue, ConfigValue};
+use confers::types::{AnnotatedValue, ConfigValue};
 use confers::SourceId;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;

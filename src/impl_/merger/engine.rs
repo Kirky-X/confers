@@ -1,8 +1,8 @@
 //! Merge engine for combining configuration values.
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::merger::MergeStrategy;
-use crate::value::{AnnotatedValue, ConfigValue, ConflictReport, ConflictWinner};
+use crate::impl_::merger::MergeStrategy;
+use crate::types::{AnnotatedValue, ConfigValue, ConflictReport, ConflictWinner};
 use indexmap::IndexMap;
 use std::sync::Arc;
 
@@ -290,26 +290,10 @@ fn apply_leaf_strategy(
     }
 }
 
-pub fn merge_all(values: &[AnnotatedValue], engine: &MergeEngine) -> ConfigResult<AnnotatedValue> {
-    if values.is_empty() {
-        return Err(ConfigError::ParseError {
-            format: "merge".into(),
-            message: "No values to merge".into(),
-            location: None,
-            source: None,
-        });
-    }
-    let mut r = values[0].clone();
-    for v in &values[1..] {
-        r = engine.merge(&r, v)?;
-    }
-    Ok(r)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::value::SourceId;
+    use crate::types::SourceId;
 
     #[test]
     fn test_engine_new() {

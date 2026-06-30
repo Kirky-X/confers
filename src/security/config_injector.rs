@@ -35,6 +35,7 @@
 
 use crate::security::patterns::SENSITIVE_DETECTION_PATTERNS;
 use crate::security::{EnvSecurityError, EnvSecurityValidator};
+use regex::Regex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
@@ -243,7 +244,7 @@ impl Default for ConfigInjector {
 impl ConfigInjector {
     /// 创建新的配置注入器
     pub fn new() -> Self {
-        Self::with_validator(EnvSecurityValidator::new())
+        Self::with_validator(EnvSecurityValidator::default())
     }
 
     /// 使用自定义验证器创建注入器

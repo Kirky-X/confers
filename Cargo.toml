@@ -58,6 +58,7 @@ rand = { version = "0.8", optional = true }
 similar = { version = "2", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
 getset = "0.1"
+itoa = "1"
 
 [workspace]
 members = ["macros", "examples", "fuzz"]
@@ -134,7 +135,6 @@ migration = ["dep:chrono"]
 snapshot = ["dep:chrono", "dep:tokio", "json", "toml", "yaml", "dynamic"]
 profile = []
 interpolation = []
-hot-reload = ["watch"]
 
 # Preload validation
 preload-validator = ["dep:async-trait", "dep:tokio"]
@@ -168,7 +168,7 @@ modules = []
 recommended = ["toml", "env", "validation", "json"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "profile", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "profile", "metrics", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "hot-reload", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "schema", "metrics", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "profile", "interpolation", "remote", "config-bus", "context-aware", "modules", "etcd", "consul", "cache-redis", "preload-validator", "poll", "vault"]
 minimal = ["env", "json"]
 distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "metrics", "audit"]
 etcd-client = ["dep:etcd-client"]

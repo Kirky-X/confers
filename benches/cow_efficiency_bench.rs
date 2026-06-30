@@ -3,7 +3,7 @@
 //! Measures the efficiency of the merger's copy-on-write implementation.
 
 use confers::merger::{MergeEngine, MergeStrategy};
-use confers::value::ConfigValue;
+use confers::types::ConfigValue;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use std::sync::Arc;

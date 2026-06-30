@@ -1,7 +1,7 @@
 //! Shared utilities for remote configuration sources.
 
 use crate::loader::{detect_format_from_content, Format};
-use crate::value::{AnnotatedValue, SourceId};
+use crate::types::{AnnotatedValue, SourceId};
 use std::sync::Arc;
 
 /// Try to parse a value as config format.

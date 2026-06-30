@@ -1,6 +1,6 @@
 //! Merge strategies for configuration values.
 
-use crate::value::ConfigValue;
+use crate::types::ConfigValue;
 
 /// Custom merge function type.
 pub type CustomMergeFn = fn(&ConfigValue, &ConfigValue) -> ConfigValue;

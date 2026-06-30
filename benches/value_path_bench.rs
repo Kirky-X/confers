@@ -2,7 +2,7 @@
 //!
 //! Measures `all_paths()` performance for various tree shapes and sizes.
 
-use confers::value::{AnnotatedValue, ConfigValue};
+use confers::types::{AnnotatedValue, ConfigValue};
 use confers::SourceId;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;

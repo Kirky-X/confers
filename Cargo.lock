@@ -656,6 +656,7 @@ dependencies = [
  "hkdf",
  "indexmap 2.13.0",
  "ipnet",
+ "itoa",
  "macros",
  "metrics",
  "moka",

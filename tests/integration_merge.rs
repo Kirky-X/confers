@@ -1,5 +1,5 @@
 use confers::merger::*;
-use confers::value::*;
+use confers::types::*;
 use confers::SourceId;
 use std::sync::Arc;
 

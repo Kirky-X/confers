@@ -37,7 +37,7 @@ use std::sync::LazyLock;
 use thiserror::Error;
 
 // Re-export SourceLocation as ParseLocation for backward compatibility
-pub use crate::value::SourceLocation as ParseLocation;
+pub use crate::types::SourceLocation as ParseLocation;
 
 // Precompiled regex patterns for sanitization (avoid recompiling on each call)
 

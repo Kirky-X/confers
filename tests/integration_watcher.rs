@@ -609,8 +609,8 @@ fn test_watcher_config_builder_chaining() {
 mod progressive_tests {
     use super::*;
     use async_trait::async_trait;
-    use confers::traits::ConfigProvider;
-    use confers::value::AnnotatedValue;
+    use confers::interface::ConfigProvider;
+    use confers::types::AnnotatedValue;
     use confers::watcher::{
         HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
         ReloadOutcome, ReloadStrategy,
