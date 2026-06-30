@@ -161,3 +161,431 @@ pub(crate) fn yaml_to_config_value(
         serde_yaml_ng::Value::Tagged(t) => yaml_to_config_value(&t.value, source, prefix),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn src() -> SourceId {
+        SourceId::new("test")
+    }
+
+    // ===== toml_value_to_config_value =====
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_string() {
+        let v: toml::Value = "hello".into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_str(), Some("hello"));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_integer() {
+        let v: toml::Value = 42i64.into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_i64(), Some(42));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_negative_integer() {
+        let v: toml::Value = (-7i64).into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_i64(), Some(-7));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_float() {
+        let v: toml::Value = 2.5f64.into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_f64(), Some(2.5));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_boolean() {
+        let v: toml::Value = true.into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_bool(), Some(true));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_datetime() {
+        let v: toml::Value = toml::Value::Datetime("2024-01-01".parse().unwrap());
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        assert!(cv.as_str().unwrap().contains("2024-01-01"));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_array() {
+        let v: toml::Value = toml::Value::Array(vec![1i64.into(), 2i64.into()]);
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        let arr = cv.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].inner.as_i64(), Some(1));
+        assert_eq!(arr[1].inner.as_i64(), Some(2));
+        // Path is "{prefix}.{index}"
+        assert_eq!(arr[0].path.as_ref(), "p.0");
+        assert_eq!(arr[1].path.as_ref(), "p.1");
+        assert_eq!(arr[0].source.as_str(), "test");
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_array_nested() {
+        let v: toml::Value = toml::Value::Array(vec![toml::Value::Array(vec![1i64.into()])]);
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        let outer = cv.as_array().unwrap();
+        let inner = outer[0].inner.as_array().unwrap();
+        assert_eq!(inner[0].inner.as_i64(), Some(1));
+        assert_eq!(inner[0].path.as_ref(), "p.0.0");
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_table_delegates_to_table_fn() {
+        let mut tbl = toml::value::Table::new();
+        tbl.insert("a".to_string(), 1i64.into());
+        tbl.insert("b".to_string(), "x".into());
+        let v: toml::Value = tbl.into();
+        let cv = toml_value_to_config_value(&v, &src(), "p");
+        let map = cv.as_map().unwrap();
+        assert_eq!(map.len(), 2);
+        // Map key is the full path "{prefix}.{key}", but AnnotatedValue.path
+        // stores the bare key from the table (not the prefixed path).
+        let a = map.get("p.a").unwrap();
+        assert_eq!(a.inner.as_i64(), Some(1));
+        assert_eq!(a.path.as_ref(), "a");
+        let b = map.get("p.b").unwrap();
+        assert_eq!(b.inner.as_str(), Some("x"));
+        assert_eq!(b.path.as_ref(), "b");
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_value_table_key_with_dot_in_path() {
+        let mut tbl = toml::value::Table::new();
+        tbl.insert("name".to_string(), "v".into());
+        let v: toml::Value = tbl.into();
+        let cv = toml_value_to_config_value(&v, &src(), "prefix");
+        let map = cv.as_map().unwrap();
+        let n = map.get("prefix.name").unwrap();
+        assert_eq!(n.inner.as_str(), Some("v"));
+    }
+
+    // ===== toml_table_to_config_value =====
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_table_empty_prefix() {
+        let mut tbl = toml::value::Table::new();
+        tbl.insert("k".to_string(), 5i64.into());
+        let cv = toml_table_to_config_value(&tbl, &src(), "");
+        let map = cv.as_map().unwrap();
+        let v = map.get("k").unwrap();
+        assert_eq!(v.inner.as_i64(), Some(5));
+        assert_eq!(v.path.as_ref(), "k");
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_table_with_prefix() {
+        let mut tbl = toml::value::Table::new();
+        tbl.insert("k".to_string(), 5i64.into());
+        let cv = toml_table_to_config_value(&tbl, &src(), "root");
+        let map = cv.as_map().unwrap();
+        let v = map.get("root.k").unwrap();
+        assert_eq!(v.inner.as_i64(), Some(5));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_table_empty_table() {
+        let tbl = toml::value::Table::new();
+        let cv = toml_table_to_config_value(&tbl, &src(), "");
+        assert!(cv.is_map());
+        assert_eq!(cv.as_map().unwrap().len(), 0);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_table_nested_path_construction() {
+        let mut inner = toml::value::Table::new();
+        inner.insert("x".to_string(), 1i64.into());
+        let mut outer = toml::value::Table::new();
+        outer.insert("inner".to_string(), inner.into());
+        let cv = toml_table_to_config_value(&outer, &src(), "root");
+        let map = cv.as_map().unwrap();
+        // Outer key path: "root.inner"
+        let inner_av = map.get("root.inner").unwrap();
+        let inner_map = inner_av.inner.as_map().unwrap();
+        // Inner key path: "root.inner.x" (constructed via recursive call with prefix="root.inner")
+        let x_av = inner_map.get("root.inner.x").unwrap();
+        assert_eq!(x_av.inner.as_i64(), Some(1));
+    }
+
+    // ===== json_to_config_value =====
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_null() {
+        let v = serde_json::Value::Null;
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert!(cv.is_null());
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_bool() {
+        let v = serde_json::json!(true);
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_bool(), Some(true));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_i64() {
+        let v = serde_json::json!(-42);
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_i64(), Some(-42));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_u64_large() {
+        // A value above i64::MAX should land in U64.
+        let v = serde_json::json!(u64::MAX);
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_u64(), Some(u64::MAX));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_f64() {
+        let v = serde_json::json!(2.5);
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_f64(), Some(2.5));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_string() {
+        let v = serde_json::json!("hi");
+        let cv = json_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_str(), Some("hi"));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_array_paths() {
+        let v = serde_json::json!([1, 2]);
+        let cv = json_to_config_value(&v, &src(), "p");
+        let arr = cv.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].path.as_ref(), "p.0");
+        assert_eq!(arr[1].path.as_ref(), "p.1");
+        assert_eq!(arr[0].source.as_str(), "test");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_array_nested() {
+        let v = serde_json::json!([[1]]);
+        let cv = json_to_config_value(&v, &src(), "p");
+        let outer = cv.as_array().unwrap();
+        let inner = outer[0].inner.as_array().unwrap();
+        assert_eq!(inner[0].inner.as_i64(), Some(1));
+        assert_eq!(inner[0].path.as_ref(), "p.0.0");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_object_empty_prefix() {
+        let v = serde_json::json!({ "a": 1 });
+        let cv = json_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let a = map.get("a").unwrap();
+        assert_eq!(a.inner.as_i64(), Some(1));
+        assert_eq!(a.path.as_ref(), "a");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_object_with_prefix() {
+        let v = serde_json::json!({ "a": 1 });
+        let cv = json_to_config_value(&v, &src(), "root");
+        let map = cv.as_map().unwrap();
+        let a = map.get("root.a").unwrap();
+        assert_eq!(a.inner.as_i64(), Some(1));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_object_nested_path() {
+        let v = serde_json::json!({ "outer": { "inner": 1 } });
+        let cv = json_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let outer_av = map.get("outer").unwrap();
+        let inner_map = outer_av.inner.as_map().unwrap();
+        let inner_av = inner_map.get("outer.inner").unwrap();
+        assert_eq!(inner_av.inner.as_i64(), Some(1));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_object_preserves_key_name() {
+        let v = serde_json::json!({ "my_key": "val" });
+        let cv = json_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let av = map.get("my_key").unwrap();
+        // Source path is the constructed path, but original key is preserved separately.
+        assert_eq!(av.path.as_ref(), "my_key");
+    }
+
+    // ===== yaml_to_config_value =====
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_null() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("null").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert!(cv.is_null());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_bool_true() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("true").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_bool(), Some(true));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_bool_false() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("false").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_bool(), Some(false));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_integer_i64() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("-99").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_i64(), Some(-99));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_integer_u64_large() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(&u64::MAX.to_string()).unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_u64(), Some(u64::MAX));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_float() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("1.5").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_f64(), Some(1.5));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_string() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("hello").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        assert_eq!(cv.as_str(), Some("hello"));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_sequence_paths() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("- 1\n- 2").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        let arr = cv.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].inner.as_i64(), Some(1));
+        assert_eq!(arr[0].path.as_ref(), "p.0");
+        assert_eq!(arr[1].path.as_ref(), "p.1");
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_mapping_empty_prefix() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("a: 1").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let a = map.get("a").unwrap();
+        assert_eq!(a.inner.as_i64(), Some(1));
+        assert_eq!(a.path.as_ref(), "a");
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_mapping_with_prefix() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("a: 1").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "root");
+        let map = cv.as_map().unwrap();
+        let a = map.get("root.a").unwrap();
+        assert_eq!(a.inner.as_i64(), Some(1));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_mapping_nested_path() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("outer:\n  inner: 1").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let outer_av = map.get("outer").unwrap();
+        let inner_map = outer_av.inner.as_map().unwrap();
+        let inner_av = inner_map.get("outer.inner").unwrap();
+        assert_eq!(inner_av.inner.as_i64(), Some(1));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_mapping_non_string_key_filtered() {
+        // Numeric keys cannot be converted to &str and are silently filtered out.
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("1: foo\nname: bar").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        assert_eq!(map.len(), 1);
+        assert!(map.get("name").is_some());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_tagged_unwraps_inner_value() {
+        // A YAML tag like !!str on a numeric value should unwrap to the inner value.
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("!!str 42").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        // The Tagged wrapper is unwrapped, and the inner string "42" is used.
+        assert_eq!(cv.as_str(), Some("42"));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_empty_sequence() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("[]").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        let arr = cv.as_array().unwrap();
+        assert_eq!(arr.len(), 0);
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_empty_mapping() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("{}").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "p");
+        let map = cv.as_map().unwrap();
+        assert_eq!(map.len(), 0);
+    }
+}

@@ -308,4 +308,550 @@ mod tests {
         assert!(ts_type.contains("enabled: boolean"));
         assert!(ts_type.contains("tags: string[]"));
     }
+
+    // ---- from_json_value: each Value variant ----
+
+    #[test]
+    fn test_from_json_value_string() {
+        let v = serde_json::json!("hello");
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "string");
+    }
+
+    #[test]
+    fn test_from_json_value_number() {
+        let v = serde_json::json!(42);
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "number");
+    }
+
+    #[test]
+    fn test_from_json_value_bool() {
+        let v = serde_json::json!(true);
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "boolean");
+    }
+
+    #[test]
+    fn test_from_json_value_null() {
+        let v = serde_json::Value::Null;
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "null");
+    }
+
+    #[test]
+    fn test_from_json_value_empty_array() {
+        let v = serde_json::json!([]);
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "any[]");
+    }
+
+    #[test]
+    fn test_from_json_value_array_with_first_element() {
+        let v = serde_json::json!([1, 2, 3]);
+        assert_eq!(TypeScriptGenerator::from_json_value(&v), "number[]");
+    }
+
+    #[test]
+    fn test_from_json_value_array_of_objects() {
+        let v = serde_json::json!([{ "x": 1 }]);
+        let ts = TypeScriptGenerator::from_json_value(&v);
+        assert!(ts.ends_with("[]"));
+        assert!(ts.contains("x: number"));
+    }
+
+    #[test]
+    fn test_from_json_value_empty_object() {
+        let v = serde_json::json!({});
+        assert_eq!(
+            TypeScriptGenerator::from_json_value(&v),
+            "Record<string, any>"
+        );
+    }
+
+    #[test]
+    fn test_from_json_value_nested_object() {
+        let v = serde_json::json!({
+            "outer": { "inner": "value", "n": 5 }
+        });
+        let ts = TypeScriptGenerator::from_json_value(&v);
+        assert!(ts.contains("outer:"));
+        assert!(ts.contains("inner: string"));
+        assert!(ts.contains("n: number"));
+    }
+
+    // ---- get_typescript_type: $ref ----
+
+    #[test]
+    fn test_get_typescript_type_ref_simple() {
+        let s = serde_json::json!({ "$ref": "#/definitions/Foo" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "Foo");
+    }
+
+    #[test]
+    fn test_get_typescript_type_ref_no_slashes() {
+        let s = serde_json::json!({ "$ref": "Bar" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "Bar");
+    }
+
+    #[test]
+    fn test_get_typescript_type_ref_empty_string() {
+        // An empty $ref string splits into [""], so parts.last() returns "" (not "any").
+        let s = serde_json::json!({ "$ref": "" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "");
+    }
+
+    #[test]
+    fn test_get_typescript_type_ref_non_string() {
+        let s = serde_json::json!({ "$ref": 42 });
+        // No type, no anyOf/oneOf/allOf/enum -> falls through to "any".
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: type arrays (Option-like) ----
+
+    #[test]
+    fn test_get_typescript_type_array_option_string() {
+        let s = serde_json::json!({ "type": ["string", "null"] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_option_integer() {
+        let s = serde_json::json!({ "type": ["integer", "null"] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_option_number() {
+        let s = serde_json::json!({ "type": ["null", "number"] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_two_non_null() {
+        let s = serde_json::json!({ "type": ["string", "number"] });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "string | number"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_only_null() {
+        // types.len() == 1, so the "len == 2 && contains null" branch is false.
+        let s = serde_json::json!({ "type": ["null"] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "null");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_with_unknown_type() {
+        let s = serde_json::json!({ "type": ["string", "object"] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string | any");
+    }
+
+    // ---- get_typescript_type: single type string ----
+
+    #[test]
+    fn test_get_typescript_type_string() {
+        let s = serde_json::json!({ "type": "string" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_integer() {
+        let s = serde_json::json!({ "type": "integer" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+    }
+
+    #[test]
+    fn test_get_typescript_type_number() {
+        let s = serde_json::json!({ "type": "number" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+    }
+
+    #[test]
+    fn test_get_typescript_type_boolean() {
+        let s = serde_json::json!({ "type": "boolean" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "boolean");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_with_items_ref() {
+        let s = serde_json::json!({
+            "type": "array",
+            "items": { "$ref": "#/definitions/Foo" }
+        });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "Foo[]");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_with_items_string() {
+        let s = serde_json::json!({
+            "type": "array",
+            "items": { "type": "string" }
+        });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string[]");
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_without_items() {
+        let s = serde_json::json!({ "type": "array" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any[]");
+    }
+
+    #[test]
+    fn test_get_typescript_type_object_with_properties() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "a": { "type": "string" },
+                "b": { "type": "integer" }
+            }
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "{ a: string; b: number }"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_object_with_additional_properties() {
+        let s = serde_json::json!({
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "Record<string, string>"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_object_bare() {
+        let s = serde_json::json!({ "type": "object" });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "Record<string, any>"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_unknown_single_type() {
+        let s = serde_json::json!({ "type": "weird" });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: anyOf ----
+
+    #[test]
+    fn test_get_typescript_type_any_of_single() {
+        let s = serde_json::json!({ "anyOf": [{ "type": "string" }] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_any_of_multiple() {
+        let s = serde_json::json!({
+            "anyOf": [{ "type": "string" }, { "type": "integer" }]
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "string | number"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_any_of_only_null() {
+        // All variants are null -> filtered out -> empty -> "any"
+        let s = serde_json::json!({ "anyOf": [{ "type": "null" }] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    #[test]
+    fn test_get_typescript_type_any_of_empty() {
+        let s = serde_json::json!({ "anyOf": [] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: oneOf ----
+
+    #[test]
+    fn test_get_typescript_type_one_of_single() {
+        let s = serde_json::json!({ "oneOf": [{ "type": "string" }] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_one_of_multiple() {
+        let s = serde_json::json!({
+            "oneOf": [{ "type": "string" }, { "type": "integer" }]
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "string | number"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_one_of_skips_any() {
+        let s = serde_json::json!({
+            "oneOf": [{ "type": "string" }, { "type": "weird" }]
+        });
+        // "weird" resolves to "any" and is skipped.
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_one_of_all_any() {
+        let s = serde_json::json!({
+            "oneOf": [{ "type": "weird" }, { "type": "alien" }]
+        });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: allOf ----
+
+    #[test]
+    fn test_get_typescript_type_all_of_single() {
+        let s = serde_json::json!({ "allOf": [{ "type": "string" }] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_all_of_multiple() {
+        let s = serde_json::json!({
+            "allOf": [{ "type": "string" }, { "type": "integer" }]
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "string & number"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_all_of_skips_any() {
+        let s = serde_json::json!({
+            "allOf": [{ "type": "string" }, { "type": "weird" }]
+        });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+    }
+
+    #[test]
+    fn test_get_typescript_type_all_of_empty() {
+        let s = serde_json::json!({ "allOf": [] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: enum ----
+
+    #[test]
+    fn test_get_typescript_type_enum_strings() {
+        let s = serde_json::json!({ "enum": ["red", "green", "blue"] });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "\"red\" | \"green\" | \"blue\""
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_enum_mixed() {
+        let s = serde_json::json!({ "enum": ["x", 42, true] });
+        let ts = TypeScriptGenerator::get_typescript_type(&s);
+        assert!(ts.contains("\"x\""));
+        assert!(ts.contains("42"));
+        assert!(ts.contains("true"));
+    }
+
+    #[test]
+    fn test_get_typescript_type_enum_empty() {
+        let s = serde_json::json!({ "enum": [] });
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- get_typescript_type: nothing recognizable ----
+
+    #[test]
+    fn test_get_typescript_type_empty_object() {
+        let s = serde_json::json!({});
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
+    }
+
+    // ---- is_optional ----
+
+    #[test]
+    fn test_is_optional_no_required_array() {
+        // No "required" -> all properties are optional.
+        let s = serde_json::json!({ "properties": { "a": {} } });
+        assert!(TypeScriptGenerator::is_optional("a", &s));
+    }
+
+    #[test]
+    fn test_is_optional_when_required_present() {
+        let s = serde_json::json!({
+            "required": ["a"],
+            "properties": { "a": {}, "b": {} }
+        });
+        assert!(!TypeScriptGenerator::is_optional("a", &s));
+        assert!(TypeScriptGenerator::is_optional("b", &s));
+    }
+
+    #[test]
+    fn test_is_optional_required_not_array() {
+        // "required" is present but not an array -> treated as no required list.
+        let s = serde_json::json!({ "required": "oops" });
+        assert!(TypeScriptGenerator::is_optional("a", &s));
+    }
+
+    // ---- generate_interface ----
+
+    #[test]
+    fn test_generate_interface_one_of_returns_type_alias() {
+        let s = serde_json::json!({
+            "oneOf": [{ "type": "string" }, { "type": "integer" }]
+        });
+        let out = TypeScriptGenerator::generate_interface("MyUnion", &s);
+        assert!(out.starts_with("export type MyUnion ="));
+        assert!(out.contains("string | number"));
+    }
+
+    #[test]
+    fn test_generate_interface_primitive_alias() {
+        let s = serde_json::json!({ "type": "string" });
+        let out = TypeScriptGenerator::generate_interface("Alias", &s);
+        assert_eq!(out, "export type Alias = string;");
+    }
+
+    #[test]
+    fn test_generate_interface_alias_integer() {
+        let s = serde_json::json!({ "type": "integer" });
+        let out = TypeScriptGenerator::generate_interface("Count", &s);
+        assert_eq!(out, "export type Count = number;");
+    }
+
+    #[test]
+    fn test_generate_interface_with_required_and_optional_props() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "age": { "type": "integer" }
+            },
+            "required": ["name"]
+        });
+        let out = TypeScriptGenerator::generate_interface("Person", &s);
+        assert!(out.contains("name: string;"));
+        assert!(out.contains("age?: number;"));
+        assert!(out.starts_with("export interface Person {"));
+    }
+
+    #[test]
+    fn test_generate_interface_no_properties_object() {
+        // Object type with no properties array and no primitive alias branch hit:
+        // falls through to empty interface body.
+        let s = serde_json::json!({ "type": "object" });
+        let out = TypeScriptGenerator::generate_interface("Empty", &s);
+        assert!(out.contains("export interface Empty"));
+    }
+
+    // ---- convert_json_schema_to_typescript ----
+
+    #[test]
+    fn test_convert_invalid_schema_returns_comment() {
+        // No definitions, no properties -> empty interfaces -> invalid marker.
+        let s = serde_json::json!({ "type": "object" });
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        assert_eq!(out, "// Invalid schema format");
+    }
+
+    #[test]
+    fn test_convert_empty_value_returns_comment() {
+        let s = serde_json::Value::Null;
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        assert_eq!(out, "// Invalid schema format");
+    }
+
+    #[test]
+    fn test_convert_with_definitions_and_main() {
+        let s = serde_json::json!({
+            "title": "Config",
+            "definitions": {
+                "Inner": {
+                    "type": "object",
+                    "properties": { "x": { "type": "string" } }
+                }
+            },
+            "properties": {
+                "name": { "type": "string" }
+            }
+        });
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        assert!(out.contains("interface Inner"));
+        assert!(out.contains("interface Config"));
+    }
+
+    #[test]
+    fn test_convert_definitions_only() {
+        let s = serde_json::json!({
+            "definitions": {
+                "Foo": { "type": "string" }
+            }
+        });
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        assert!(out.contains("export type Foo = string;"));
+        // No main properties, so only the definition interface is emitted.
+        assert!(!out.contains("interface Config"));
+    }
+
+    #[test]
+    fn test_convert_main_no_title_uses_default_name() {
+        let s = serde_json::json!({
+            "properties": {
+                "name": { "type": "string" }
+            }
+        });
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        assert!(out.contains("interface Config"));
+    }
+
+    #[test]
+    fn test_convert_definitions_not_object_ignored() {
+        let s = serde_json::json!({
+            "definitions": "not-an-object",
+            "properties": { "a": { "type": "string" } }
+        });
+        let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
+        // Main interface still emitted, definitions ignored.
+        assert!(out.contains("interface Config"));
+    }
+
+    // ---- generate<T>: end-to-end smoke tests ----
+
+    #[test]
+    fn test_generate_simple_struct() {
+        #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+        struct Simple {
+            name: String,
+            count: i64,
+        }
+        let ts = TypeScriptGenerator::generate::<Simple>();
+        assert!(ts.contains("interface Simple"));
+        assert!(ts.contains("name: string;"));
+        assert!(ts.contains("count: number;"));
+    }
+
+    #[test]
+    fn test_generate_unit_struct_alias() {
+        #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+        struct Unit;
+        let ts = TypeScriptGenerator::generate::<Unit>();
+        assert!(!ts.is_empty());
+    }
+
+    #[test]
+    fn test_generate_array_field_with_items() {
+        #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+        struct WithArray {
+            tags: Vec<String>,
+            counts: Vec<i32>,
+        }
+        let ts = TypeScriptGenerator::generate::<WithArray>();
+        assert!(ts.contains("tags: string[]"));
+        assert!(ts.contains("counts: number[]"));
+    }
 }
