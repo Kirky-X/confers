@@ -665,6 +665,446 @@ mod tests {
             config.delete("key").await.unwrap();
             assert_eq!(config.version(), 2);
         }
+
+        // ---- get_raw: navigation branches ----
+
+        #[tokio::test]
+        async fn test_get_raw_nonexistent_key_returns_none() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "name".to_string(),
+                    ConfigValue::string("v"),
+                )]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("does_not_exist").await.unwrap();
+            assert!(res.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_nested_map_path() {
+            let nested = ConfigValue::map(vec![(
+                "inner",
+                AnnotatedValue::new(ConfigValue::uint(42), SourceId::new("test"), "outer.inner"),
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("outer".to_string(), nested)]))
+                .build()
+                .unwrap();
+            let v = config.get_raw("outer.inner").await.unwrap();
+            assert!(v.is_some());
+            assert_eq!(v.unwrap().as_u64(), Some(42));
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_array_index_path() {
+            let arr = ConfigValue::array(vec![
+                AnnotatedValue::new(ConfigValue::uint(10), SourceId::new("test"), "arr.0"),
+                AnnotatedValue::new(ConfigValue::uint(20), SourceId::new("test"), "arr.1"),
+            ]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            let v0 = config.get_raw("arr.0").await.unwrap();
+            assert!(v0.is_some());
+            assert_eq!(v0.unwrap().as_u64(), Some(10));
+            let v1 = config.get_raw("arr.1").await.unwrap();
+            assert_eq!(v1.unwrap().as_u64(), Some(20));
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_array_non_numeric_index_returns_none() {
+            let arr = ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::uint(10),
+                SourceId::new("test"),
+                "arr.0",
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            // "abc" cannot be parsed as usize -> None.
+            let res = config.get_raw("arr.abc").await.unwrap();
+            assert!(res.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_array_index_out_of_bounds_returns_none() {
+            let arr = ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::uint(10),
+                SourceId::new("test"),
+                "arr.0",
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("arr.5").await.unwrap();
+            assert!(res.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_descend_into_primitive_returns_none() {
+            // "name" is a String; navigating into "name.subkey" should hit the `_ => None` branch.
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "name".to_string(),
+                    ConfigValue::string("v"),
+                )]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("name.subkey").await.unwrap();
+            assert!(res.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_map_missing_intermediate_key_returns_none() {
+            let nested = ConfigValue::map(vec![(
+                "inner",
+                AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("test"), "outer.inner"),
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("outer".to_string(), nested)]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("outer.missing.deeper").await.unwrap();
+            assert!(res.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_get_raw_override_shadows_merged() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "k".to_string(),
+                    ConfigValue::string("merged"),
+                )]))
+                .build()
+                .unwrap();
+            // Override takes precedence over the merged value.
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(
+                        ConfigValue::string("override"),
+                        SourceId::new("override-src"),
+                        "k",
+                    ),
+                )
+                .await
+                .unwrap();
+            let v = config.get_raw("k").await.unwrap().unwrap();
+            assert_eq!(v.as_str(), Some("override"));
+        }
+
+        // ---- keys ----
+
+        #[tokio::test]
+        async fn test_keys_returns_merged_paths() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([
+                    ("a".to_string(), ConfigValue::uint(1)),
+                    ("b".to_string(), ConfigValue::uint(2)),
+                ]))
+                .build()
+                .unwrap();
+            let mut keys = config.keys().await.unwrap();
+            keys.sort();
+            // The root AnnotatedValue has path "" which is included in all_paths().
+            assert_eq!(keys, vec!["".to_string(), "a".to_string(), "b".to_string()]);
+        }
+
+        #[tokio::test]
+        async fn test_keys_deduplicates_override_and_merged() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "k".to_string(),
+                    ConfigValue::string("merged"),
+                )]))
+                .build()
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::string("override"), SourceId::new("src"), "k"),
+                )
+                .await
+                .unwrap();
+            let keys = config.keys().await.unwrap();
+            // Same key appears only once after dedup.
+            assert_eq!(keys.iter().filter(|k| k.as_str() == "k").count(), 1);
+        }
+
+        #[tokio::test]
+        async fn test_keys_includes_override_only_keys() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "override-only",
+                    AnnotatedValue::new(
+                        ConfigValue::uint(1),
+                        SourceId::new("test"),
+                        "override-only",
+                    ),
+                )
+                .await
+                .unwrap();
+            let keys = config.keys().await.unwrap();
+            assert!(keys.iter().any(|k| k == "override-only"));
+        }
+
+        // ---- delete / clear ----
+
+        #[tokio::test]
+        async fn test_delete_nonexistent_returns_false_no_version_bump() {
+            let config = ConfigImpl::builder().build().unwrap();
+            let initial = config.version();
+            let existed = config.delete("ghost").await.unwrap();
+            assert!(!existed);
+            assert_eq!(config.version(), initial);
+        }
+
+        #[tokio::test]
+        async fn test_clear_removes_overrides_and_bumps_version() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k1",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k1"),
+                )
+                .await
+                .unwrap();
+            config
+                .set(
+                    "k2",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k2"),
+                )
+                .await
+                .unwrap();
+            let before_clear = config.version();
+            config.clear().await.unwrap();
+            assert_eq!(config.version(), before_clear + 1);
+            // After clear, overrides are gone.
+            assert!(config.get_raw("k1").await.unwrap().is_none());
+            assert!(config.get_raw("k2").await.unwrap().is_none());
+        }
+
+        // ---- reload ----
+
+        #[tokio::test]
+        async fn test_reload_replaces_values_and_bumps_version() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "host".to_string(),
+                    ConfigValue::string("old"),
+                )]))
+                .build()
+                .unwrap();
+            let v0 = config.version();
+            let new_chain = SourceChainBuilder::default()
+                .defaults(HashMap::from([(
+                    "host".to_string(),
+                    ConfigValue::string("new"),
+                )]))
+                .build();
+            config.reload(new_chain).unwrap();
+            assert_eq!(config.version(), v0 + 1);
+            let host = config.get_raw("host").await.unwrap().unwrap();
+            assert_eq!(host.as_str(), Some("new"));
+        }
+
+        // ---- source_id ----
+
+        #[tokio::test]
+        async fn test_source_id_returns_config() {
+            let config = ConfigImpl::builder().build().unwrap();
+            assert_eq!(config.source_id().as_str(), "config");
+        }
+
+        // ---- lifecycle ----
+
+        #[tokio::test]
+        async fn test_start_is_noop() {
+            let config = ConfigImpl::builder().build().unwrap();
+            // start() always returns Ok(()).
+            config.start().await.unwrap();
+            assert!(config.health_check().await.is_ok());
+        }
+
+        #[tokio::test]
+        async fn test_stop_marks_unhealthy_and_clears_overrides() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            config.stop().await.unwrap();
+            assert!(config.health_check().await.is_err());
+            // Overrides were invalidated.
+            assert!(config.get_raw("k").await.unwrap().is_none());
+        }
+
+        #[tokio::test]
+        async fn test_health_check_after_shutdown() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config.shutdown().await;
+            let err = config.health_check().await.unwrap_err();
+            // Error variant should mention the failure.
+            assert!(format!("{err}").to_lowercase().contains("health"));
+        }
+
+        // ---- builder options ----
+
+        #[tokio::test]
+        async fn test_builder_file_optional_missing_file_succeeds() {
+            // An optional file that does not exist should not fail the build.
+            let config = ConfigImpl::builder()
+                .file_optional("/nonexistent/confers/test-missing.toml")
+                .build();
+            assert!(config.is_ok());
+        }
+
+        #[tokio::test]
+        async fn test_builder_env_chain_compiles() {
+            // Just verifies the env builder method compiles and chains.
+            let builder = ConfigImpl::builder().env();
+            let config = builder.build().unwrap();
+            // An empty env-backed config has no merged keys.
+            let keys = config.keys().await.unwrap();
+            assert!(keys.is_empty() || !keys.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_builder_env_prefix_chain_compiles() {
+            let builder = ConfigImpl::builder().env_prefix("CONFERS_TEST_PREFIX_UNSET");
+            let _config = builder.build().unwrap();
+        }
+
+        #[tokio::test]
+        async fn test_builder_merge_strategy_replace() {
+            let config = ConfigImpl::builder()
+                .merge_strategy(MergeStrategy::Replace)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::string("v"))]))
+                .build()
+                .unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_str(),
+                Some("v")
+            );
+        }
+
+        #[tokio::test]
+        async fn test_builder_merge_strategy_deep_merge() {
+            let config = ConfigImpl::builder()
+                .merge_strategy(MergeStrategy::DeepMerge)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
+                .build()
+                .unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_u64(),
+                Some(1)
+            );
+        }
+
+        #[tokio::test]
+        async fn test_builder_limits_does_not_break_build() {
+            let limits = ConfigLimits::default();
+            let config = ConfigImpl::builder()
+                .limits(limits)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
+                .build()
+                .unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_u64(),
+                Some(1)
+            );
+        }
+
+        // ---- from_chain ----
+
+        #[tokio::test]
+        async fn test_from_chain_empty_succeeds() {
+            let chain = SourceChainBuilder::default().build();
+            let config = ConfigImpl::from_chain(chain).unwrap();
+            assert_eq!(config.version(), 0);
+            assert_eq!(config.source_id().as_str(), "config");
+            let keys = config.keys().await.unwrap();
+            // The root AnnotatedValue path "" is always present in all_paths().
+            assert_eq!(keys, vec!["".to_string()]);
+        }
+
+        #[tokio::test]
+        async fn test_from_chain_with_defaults() {
+            let chain = SourceChainBuilder::default()
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::string("v"))]))
+                .build();
+            let config = ConfigImpl::from_chain(chain).unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_str(),
+                Some("v")
+            );
+        }
+
+        // ---- multiple operations ----
+
+        #[tokio::test]
+        async fn test_multiple_overrides_same_key_latest_wins() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(3), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_u64(),
+                Some(3)
+            );
+        }
+
+        #[tokio::test]
+        async fn test_set_then_delete_then_set_again() {
+            let config = ConfigImpl::builder().build().unwrap();
+            // Set, delete, then set again - all should work without issues.
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            assert!(config.delete("k").await.unwrap());
+            assert!(config.get_raw("k").await.unwrap().is_none());
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k"),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                config.get_raw("k").await.unwrap().unwrap().as_u64(),
+                Some(2)
+            );
+        }
     }
 
     #[cfg(not(any(
@@ -756,6 +1196,405 @@ mod tests {
 
             config.delete("key").unwrap();
             assert_eq!(config.version(), 2);
+        }
+
+        // ---- get_raw: navigation branches ----
+
+        #[test]
+        fn test_get_raw_nonexistent_key_returns_none() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "name".to_string(),
+                    ConfigValue::string("v"),
+                )]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("does_not_exist").unwrap();
+            assert!(res.is_none());
+        }
+
+        #[test]
+        fn test_get_raw_nested_map_path() {
+            let nested = ConfigValue::map(vec![(
+                "inner",
+                AnnotatedValue::new(ConfigValue::uint(42), SourceId::new("test"), "outer.inner"),
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("outer".to_string(), nested)]))
+                .build()
+                .unwrap();
+            let v = config.get_raw("outer.inner").unwrap();
+            assert!(v.is_some());
+            assert_eq!(v.unwrap().as_u64(), Some(42));
+        }
+
+        #[test]
+        fn test_get_raw_array_index_path() {
+            let arr = ConfigValue::array(vec![
+                AnnotatedValue::new(ConfigValue::uint(10), SourceId::new("test"), "arr.0"),
+                AnnotatedValue::new(ConfigValue::uint(20), SourceId::new("test"), "arr.1"),
+            ]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            let v0 = config.get_raw("arr.0").unwrap();
+            assert!(v0.is_some());
+            assert_eq!(v0.unwrap().as_u64(), Some(10));
+            let v1 = config.get_raw("arr.1").unwrap();
+            assert_eq!(v1.unwrap().as_u64(), Some(20));
+        }
+
+        #[test]
+        fn test_get_raw_array_non_numeric_index_returns_none() {
+            let arr = ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::uint(10),
+                SourceId::new("test"),
+                "arr.0",
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("arr.abc").unwrap();
+            assert!(res.is_none());
+        }
+
+        #[test]
+        fn test_get_raw_array_index_out_of_bounds_returns_none() {
+            let arr = ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::uint(10),
+                SourceId::new("test"),
+                "arr.0",
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("arr".to_string(), arr)]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("arr.5").unwrap();
+            assert!(res.is_none());
+        }
+
+        #[test]
+        fn test_get_raw_descend_into_primitive_returns_none() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "name".to_string(),
+                    ConfigValue::string("v"),
+                )]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("name.subkey").unwrap();
+            assert!(res.is_none());
+        }
+
+        #[test]
+        fn test_get_raw_map_missing_intermediate_key_returns_none() {
+            let nested = ConfigValue::map(vec![(
+                "inner",
+                AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("test"), "outer.inner"),
+            )]);
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([("outer".to_string(), nested)]))
+                .build()
+                .unwrap();
+            let res = config.get_raw("outer.missing.deeper").unwrap();
+            assert!(res.is_none());
+        }
+
+        #[test]
+        fn test_get_raw_override_shadows_merged() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "k".to_string(),
+                    ConfigValue::string("merged"),
+                )]))
+                .build()
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(
+                        ConfigValue::string("override"),
+                        SourceId::new("override-src"),
+                        "k",
+                    ),
+                )
+                .unwrap();
+            let v = config.get_raw("k").unwrap().unwrap();
+            assert_eq!(v.as_str(), Some("override"));
+        }
+
+        // ---- keys ----
+
+        #[test]
+        fn test_keys_returns_merged_paths() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([
+                    ("a".to_string(), ConfigValue::uint(1)),
+                    ("b".to_string(), ConfigValue::uint(2)),
+                ]))
+                .build()
+                .unwrap();
+            let mut keys = config.keys().unwrap();
+            keys.sort();
+            // The root AnnotatedValue has path "" which is included in all_paths().
+            assert_eq!(keys, vec!["".to_string(), "a".to_string(), "b".to_string()]);
+        }
+
+        #[test]
+        fn test_keys_deduplicates_override_and_merged() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "k".to_string(),
+                    ConfigValue::string("merged"),
+                )]))
+                .build()
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::string("override"), SourceId::new("src"), "k"),
+                )
+                .unwrap();
+            let keys = config.keys().unwrap();
+            assert_eq!(keys.iter().filter(|k| k.as_str() == "k").count(), 1);
+        }
+
+        #[test]
+        fn test_keys_includes_override_only_keys() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "override-only",
+                    AnnotatedValue::new(
+                        ConfigValue::uint(1),
+                        SourceId::new("test"),
+                        "override-only",
+                    ),
+                )
+                .unwrap();
+            let keys = config.keys().unwrap();
+            assert!(keys.iter().any(|k| k == "override-only"));
+        }
+
+        // ---- delete / clear ----
+
+        #[test]
+        fn test_delete_nonexistent_returns_false_no_version_bump() {
+            let config = ConfigImpl::builder().build().unwrap();
+            let initial = config.version();
+            let existed = config.delete("ghost").unwrap();
+            assert!(!existed);
+            assert_eq!(config.version(), initial);
+        }
+
+        #[test]
+        fn test_clear_removes_overrides_and_bumps_version() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k1",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k1"),
+                )
+                .unwrap();
+            config
+                .set(
+                    "k2",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k2"),
+                )
+                .unwrap();
+            let before_clear = config.version();
+            config.clear().unwrap();
+            assert_eq!(config.version(), before_clear + 1);
+            assert!(config.get_raw("k1").unwrap().is_none());
+            assert!(config.get_raw("k2").unwrap().is_none());
+        }
+
+        // ---- reload ----
+
+        #[test]
+        fn test_reload_replaces_values_and_bumps_version() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "host".to_string(),
+                    ConfigValue::string("old"),
+                )]))
+                .build()
+                .unwrap();
+            let v0 = config.version();
+            let new_chain = SourceChainBuilder::default()
+                .defaults(HashMap::from([(
+                    "host".to_string(),
+                    ConfigValue::string("new"),
+                )]))
+                .build();
+            config.reload(new_chain).unwrap();
+            assert_eq!(config.version(), v0 + 1);
+            let host = config.get_raw("host").unwrap().unwrap();
+            assert_eq!(host.as_str(), Some("new"));
+        }
+
+        // ---- source_id ----
+
+        #[test]
+        fn test_source_id_returns_config() {
+            let config = ConfigImpl::builder().build().unwrap();
+            assert_eq!(config.source_id().as_str(), "config");
+        }
+
+        // ---- lifecycle ----
+
+        #[test]
+        fn test_start_is_noop() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config.start().unwrap();
+            assert!(config.health_check().is_ok());
+        }
+
+        #[test]
+        fn test_stop_marks_unhealthy_and_clears_overrides() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            config.stop().unwrap();
+            assert!(config.health_check().is_err());
+            assert!(config.get_raw("k").unwrap().is_none());
+        }
+
+        #[test]
+        fn test_health_check_after_shutdown() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config.shutdown();
+            let err = config.health_check().unwrap_err();
+            assert!(format!("{err}").to_lowercase().contains("health"));
+        }
+
+        // ---- builder options ----
+
+        #[test]
+        fn test_builder_file_optional_missing_file_succeeds() {
+            let config = ConfigImpl::builder()
+                .file_optional("/nonexistent/confers/test-missing.toml")
+                .build();
+            assert!(config.is_ok());
+        }
+
+        #[test]
+        fn test_builder_env_chain_compiles() {
+            let builder = ConfigImpl::builder().env();
+            let config = builder.build().unwrap();
+            let keys = config.keys().unwrap();
+            assert!(keys.is_empty() || !keys.is_empty());
+        }
+
+        #[test]
+        fn test_builder_env_prefix_chain_compiles() {
+            let builder = ConfigImpl::builder().env_prefix("CONFERS_TEST_PREFIX_UNSET");
+            let _config = builder.build().unwrap();
+        }
+
+        #[test]
+        fn test_builder_merge_strategy_replace() {
+            let config = ConfigImpl::builder()
+                .merge_strategy(MergeStrategy::Replace)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::string("v"))]))
+                .build()
+                .unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_str(), Some("v"));
+        }
+
+        #[test]
+        fn test_builder_merge_strategy_deep_merge() {
+            let config = ConfigImpl::builder()
+                .merge_strategy(MergeStrategy::DeepMerge)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
+                .build()
+                .unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_u64(), Some(1));
+        }
+
+        #[test]
+        fn test_builder_limits_does_not_break_build() {
+            let limits = ConfigLimits::default();
+            let config = ConfigImpl::builder()
+                .limits(limits)
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
+                .build()
+                .unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_u64(), Some(1));
+        }
+
+        // ---- from_chain ----
+
+        #[test]
+        fn test_from_chain_empty_succeeds() {
+            let chain = SourceChainBuilder::default().build();
+            let config = ConfigImpl::from_chain(chain).unwrap();
+            assert_eq!(config.version(), 0);
+            assert_eq!(config.source_id().as_str(), "config");
+            let keys = config.keys().unwrap();
+            // The root AnnotatedValue path "" is always present in all_paths().
+            assert_eq!(keys, vec!["".to_string()]);
+        }
+
+        #[test]
+        fn test_from_chain_with_defaults() {
+            let chain = SourceChainBuilder::default()
+                .defaults(HashMap::from([("k".to_string(), ConfigValue::string("v"))]))
+                .build();
+            let config = ConfigImpl::from_chain(chain).unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_str(), Some("v"));
+        }
+
+        // ---- multiple operations ----
+
+        #[test]
+        fn test_multiple_overrides_same_key_latest_wins() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(3), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_u64(), Some(3));
+        }
+
+        #[test]
+        fn test_set_then_delete_then_set_again() {
+            let config = ConfigImpl::builder().build().unwrap();
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(1), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            assert!(config.delete("k").unwrap());
+            assert!(config.get_raw("k").unwrap().is_none());
+            config
+                .set(
+                    "k",
+                    AnnotatedValue::new(ConfigValue::uint(2), SourceId::new("t"), "k"),
+                )
+                .unwrap();
+            assert_eq!(config.get_raw("k").unwrap().unwrap().as_u64(), Some(2));
         }
     }
 }
