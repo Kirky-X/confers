@@ -380,4 +380,245 @@ mod tests {
         let result = chain.collect().unwrap();
         assert!(result.is_map());
     }
+
+    #[test]
+    fn test_chain_default_trait() {
+        let chain = SourceChain::default();
+        assert!(chain.is_empty());
+    }
+
+    #[test]
+    fn test_chain_is_empty() {
+        let chain = SourceChain::new();
+        assert!(chain.is_empty());
+        let chain2 = SourceChain::new().push(Box::new(MemorySource::new()));
+        assert!(!chain2.is_empty());
+    }
+
+    #[test]
+    fn test_chain_len() {
+        let chain = SourceChain::new();
+        assert_eq!(chain.len(), 0);
+        let chain2 = SourceChain::new()
+            .push(Box::new(MemorySource::new()))
+            .push(Box::new(MemorySource::new()));
+        assert_eq!(chain2.len(), 2);
+    }
+
+    #[test]
+    fn test_chain_with_strategy() {
+        let chain = SourceChain::with_strategy(MergeStrategy::Append);
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_chain_add_ordered() {
+        let chain = SourceChain::new()
+            .add_ordered(Box::new(MemorySource::new().with_priority(10)))
+            .add_ordered(Box::new(MemorySource::new().with_priority(50)))
+            .add_ordered(Box::new(MemorySource::new().with_priority(30)));
+        assert_eq!(chain.len(), 3);
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_chain_with_field_strategy() {
+        let chain = SourceChain::new()
+            .with_field_strategy("name", MergeStrategy::Replace)
+            .push(Box::new(
+                MemorySource::new().set("name", ConfigValue::string("x")),
+            ));
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_chain_sources_accessor() {
+        let chain = SourceChain::new()
+            .push(Box::new(MemorySource::new()))
+            .push(Box::new(DefaultSource::new()));
+        assert_eq!(chain.sources().len(), 2);
+    }
+
+    #[test]
+    fn test_chain_source_kinds() {
+        let chain = SourceChain::new()
+            .push(Box::new(MemorySource::new()))
+            .push(Box::new(DefaultSource::new()));
+        let kinds = chain.source_kinds();
+        assert_eq!(kinds, vec![SourceKind::Memory, SourceKind::Default]);
+    }
+
+    #[test]
+    fn test_chain_override_behavior() {
+        // Higher priority source overrides lower priority
+        let chain = SourceChain::new()
+            .push(Box::new(
+                DefaultSource::new().set("key", ConfigValue::string("default_val")),
+            ))
+            .push(Box::new(
+                MemorySource::new()
+                    .set("key", ConfigValue::string("override_val"))
+                    .with_priority(50),
+            ));
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+        if let ConfigValue::Map(map) = &result.inner {
+            let val = map.get("key").expect("key should exist");
+            if let ConfigValue::String(s) = &val.inner {
+                assert_eq!(s, "override_val");
+            } else {
+                panic!("expected String value");
+            }
+        } else {
+            panic!("expected map");
+        }
+    }
+
+    #[test]
+    fn test_chain_fail_fast_required_error() {
+        // fail_fast=true + required source fails → immediate error
+        let chain = SourceChain::new().fail_fast(true).push(Box::new(
+            crate::impl_::config::FileSource::new("/nonexistent.toml"),
+        ));
+        let result = chain.collect();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::FileNotFound { .. }
+        ));
+    }
+
+    #[test]
+    fn test_chain_multi_source_error() {
+        // fail_fast=false + all required sources fail → MultiSource error
+        let chain = SourceChain::new()
+            .fail_fast(false)
+            .push(Box::new(crate::impl_::config::FileSource::new(
+                "/nonexistent1.toml",
+            )))
+            .push(Box::new(crate::impl_::config::FileSource::new(
+                "/nonexistent2.toml",
+            )));
+        let result = chain.collect();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::MultiSource { .. }
+        ));
+    }
+
+    #[test]
+    fn test_builder_default_trait() {
+        let builder = SourceChainBuilder::default();
+        let chain = builder.build();
+        assert!(chain.is_empty());
+    }
+
+    #[test]
+    fn test_builder_source_method() {
+        let chain = SourceChainBuilder::new()
+            .source(Box::new(
+                MemorySource::new().set("k", ConfigValue::string("v")),
+            ))
+            .build();
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_file_method() {
+        let chain = SourceChainBuilder::new().file("config.toml").build();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain.source_kinds(), vec![SourceKind::File]);
+    }
+
+    #[test]
+    fn test_builder_file_optional_method() {
+        let chain = SourceChainBuilder::new()
+            .file_optional("missing.toml")
+            .build();
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_env_method() {
+        let chain = SourceChainBuilder::new().env().build();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain.source_kinds(), vec![SourceKind::Environment]);
+    }
+
+    #[test]
+    fn test_builder_env_with_prefix_method() {
+        let chain = SourceChainBuilder::new().env_with_prefix("X_").build();
+        assert_eq!(chain.len(), 1);
+        assert_eq!(chain.source_kinds(), vec![SourceKind::Environment]);
+    }
+
+    #[test]
+    fn test_builder_memory_with_priority() {
+        let chain = SourceChainBuilder::new()
+            .memory_with_priority(
+                std::collections::HashMap::from([("k".to_string(), ConfigValue::string("v"))]),
+                99,
+            )
+            .build();
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_strategy_method() {
+        let chain = SourceChainBuilder::new()
+            .strategy(MergeStrategy::Append)
+            .build();
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_builder_field_strategy_method() {
+        let chain = SourceChainBuilder::new()
+            .field_strategy("key", MergeStrategy::Replace)
+            .build();
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_builder_fail_fast_method() {
+        let chain = SourceChainBuilder::new().fail_fast(false).build();
+        let result = chain.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_builder_allow_absolute_paths_method() {
+        let chain = SourceChainBuilder::new()
+            .allow_absolute_paths()
+            .file("/absolute/path.toml")
+            .build();
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_get_watch_paths() {
+        let builder = SourceChainBuilder::new()
+            .file("config1.toml")
+            .file("config2.json")
+            .env();
+        let paths = builder.get_watch_paths();
+        // Only file sources contribute paths (env source has none)
+        assert_eq!(paths.len(), 2);
+    }
+
+    #[test]
+    fn test_chain_source_names_multi() {
+        let chain = SourceChain::new()
+            .push(Box::new(MemorySource::new().with_name("alpha")))
+            .push(Box::new(MemorySource::new().with_name("beta")))
+            .push(Box::new(DefaultSource::new()));
+        let names = chain.source_names();
+        assert_eq!(names, vec!["alpha", "beta", "default"]);
+    }
 }

@@ -694,4 +694,277 @@ mod tests {
         let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().strategy(MergeStrategy::Append);
     }
+
+    #[test]
+    fn test_builder_default_trait() {
+        let builder1: ConfigBuilder<TestConfig> = ConfigBuilder::new();
+        // Use Default::default() to avoid collision with inherent `default()` method
+        let builder2: ConfigBuilder<TestConfig> = Default::default();
+        let _ = builder1.build();
+        let _ = builder2.build();
+    }
+
+    #[test]
+    fn test_builder_default_single_value() {
+        let config = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("single"))
+            .build()
+            .unwrap();
+        assert_eq!(config.name, "single");
+    }
+
+    #[test]
+    fn test_builder_memory_priority_setter() {
+        let config = ConfigBuilder::<TestConfig>::new()
+            .memory_priority(99)
+            .memory(HashMap::from([(
+                "name".to_string(),
+                ConfigValue::string("priority_test"),
+            )]))
+            .build()
+            .unwrap();
+        assert_eq!(config.name, "priority_test");
+    }
+
+    #[test]
+    fn test_builder_validate_false() {
+        let config = ConfigBuilder::<TestConfig>::new()
+            .validate(false)
+            .default("name", ConfigValue::string("no_validate"))
+            .build()
+            .unwrap();
+        assert_eq!(config.name, "no_validate");
+    }
+
+    #[test]
+    fn test_builder_field_strategy_method() {
+        use crate::impl_::merger::MergeStrategy;
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().field_strategy("name", MergeStrategy::Replace);
+    }
+
+    #[test]
+    fn test_builder_reload_strategy_canary() {
+        let strategy = ReloadStrategy::Canary {
+            trial_duration: Duration::from_secs(30),
+            poll_interval: Duration::from_secs(5),
+        };
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().reload_strategy(strategy);
+    }
+
+    #[test]
+    fn test_builder_reload_strategy_linear() {
+        let strategy = ReloadStrategy::Linear {
+            steps: 5,
+            interval: Duration::from_secs(10),
+        };
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().reload_strategy(strategy);
+    }
+
+    #[test]
+    fn test_builder_build_timeout_setter() {
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().build_timeout(Duration::from_secs(5));
+    }
+
+    #[cfg(feature = "snapshot")]
+    #[test]
+    fn test_builder_with_snapshot() {
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().with_snapshot(SnapshotConfig::default());
+    }
+
+    #[test]
+    fn test_builder_watch_setter() {
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().watch(true);
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().watch(false);
+    }
+
+    #[test]
+    fn test_builder_allow_absolute_paths() {
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().allow_absolute_paths();
+    }
+
+    #[test]
+    fn test_builder_key_provider_setter() {
+        struct DummyKeyProvider;
+        impl crate::interface::KeyProvider for DummyKeyProvider {
+            fn get_key(&self) -> crate::error::ConfigResult<crate::types::ZeroizingBytes> {
+                Ok(crate::types::ZeroizingBytes::new(vec![0u8; 32]))
+            }
+            fn provider_type(&self) -> &'static str {
+                "dummy"
+            }
+        }
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().key_provider(Arc::new(DummyKeyProvider));
+    }
+
+    #[test]
+    fn test_builder_build_annotated() {
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("annotated"))
+            .build_annotated()
+            .unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_builder_build_annotated_with_memory() {
+        let result = ConfigBuilder::<TestConfig>::new()
+            .memory(HashMap::from([(
+                "name".to_string(),
+                ConfigValue::string("mem_annotated"),
+            )]))
+            .build_annotated()
+            .unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_builder_build_resilient_success() {
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("resilient"))
+            .build_resilient()
+            .unwrap();
+        assert!(!result.degraded);
+        assert_eq!(result.config.name, "resilient");
+    }
+
+    #[test]
+    fn test_builder_build_with_fallback_success() {
+        let fallback = TestConfig {
+            name: "fallback".to_string(),
+            port: 9000,
+        };
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("ok"))
+            .build_with_fallback(fallback);
+        assert!(!result.degraded);
+        assert_eq!(result.config.name, "ok");
+    }
+
+    #[test]
+    fn test_builder_build_invalid_type() {
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("port", ConfigValue::string("not_a_number"))
+            .build();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::InvalidValue { .. }
+        ));
+    }
+
+    #[test]
+    fn test_builder_build_resilient_invalid_type() {
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("port", ConfigValue::string("not_a_number"))
+            .build_resilient();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_value_to_json_all_variants() {
+        let sid = crate::types::SourceId::new("test");
+
+        let av = AnnotatedValue::new(ConfigValue::Null, sid.clone(), "k");
+        assert!(value_to_json(&av).is_null());
+
+        let av = AnnotatedValue::new(ConfigValue::Bool(true), sid.clone(), "k");
+        assert_eq!(value_to_json(&av), serde_json::Value::Bool(true));
+
+        let av = AnnotatedValue::new(ConfigValue::I64(-42), sid.clone(), "k");
+        assert_eq!(value_to_json(&av), serde_json::json!(-42));
+
+        let av = AnnotatedValue::new(ConfigValue::U64(42), sid.clone(), "k");
+        assert_eq!(value_to_json(&av), serde_json::json!(42));
+
+        let av = AnnotatedValue::new(ConfigValue::F64(2.5), sid.clone(), "k");
+        assert_eq!(value_to_json(&av), serde_json::json!(2.5));
+
+        let av = AnnotatedValue::new(ConfigValue::String("hello".to_string()), sid.clone(), "k");
+        assert_eq!(value_to_json(&av), serde_json::json!("hello"));
+
+        let av = AnnotatedValue::new(ConfigValue::Bytes(vec![1, 2, 3]), sid.clone(), "k");
+        assert!(value_to_json(&av).is_string());
+
+        let inner = AnnotatedValue::new(ConfigValue::I64(1), sid.clone(), "k");
+        let av = AnnotatedValue::new(ConfigValue::array(vec![inner]), sid.clone(), "k");
+        assert!(value_to_json(&av).is_array());
+
+        let val = AnnotatedValue::new(ConfigValue::Bool(true), sid.clone(), "v");
+        let av = AnnotatedValue::new(ConfigValue::map(vec![("key", val)]), sid, "k");
+        assert!(value_to_json(&av).is_object());
+    }
+
+    #[test]
+    fn test_value_to_json_nan_float() {
+        let sid = crate::types::SourceId::new("test");
+        let av = AnnotatedValue::new(ConfigValue::F64(f64::NAN), sid, "k");
+        // NaN cannot be represented as JSON number → becomes Null
+        assert!(value_to_json(&av).is_null());
+    }
+
+    #[test]
+    fn test_reload_strategy_clone() {
+        let strategy = ReloadStrategy::Immediate;
+        let cloned = strategy.clone();
+        assert!(matches!(cloned, ReloadStrategy::Immediate));
+    }
+
+    #[cfg(feature = "config-bus")]
+    #[test]
+    fn test_builder_config_bus_setter() {
+        let bus = Arc::new(crate::bus::InMemoryBus::new());
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().config_bus(bus);
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    #[test]
+    fn test_builder_preload_validator_setter() {
+        use crate::interface::ConfigProvider;
+        use async_trait::async_trait;
+        struct DummyCheck;
+        #[async_trait]
+        impl crate::watcher::ReloadHealthCheck for DummyCheck {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> crate::HealthStatus {
+                crate::HealthStatus::Healthy
+            }
+        }
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().preload_validator(Arc::new(DummyCheck));
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    #[test]
+    fn test_builder_reload_health_check_setter() {
+        use crate::interface::ConfigProvider;
+        use async_trait::async_trait;
+        struct DummyCheck;
+        #[async_trait]
+        impl crate::watcher::ReloadHealthCheck for DummyCheck {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> crate::HealthStatus {
+                crate::HealthStatus::Healthy
+            }
+        }
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().reload_health_check(Arc::new(DummyCheck));
+    }
+
+    #[cfg(any(
+        feature = "remote",
+        feature = "config-bus",
+        feature = "encryption",
+        feature = "watch"
+    ))]
+    #[test]
+    fn test_builder_register_lifecycle() {
+        use async_trait::async_trait;
+        struct DummyLifecycle;
+        #[async_trait]
+        impl crate::impl_::lifecycle::Lifecycle for DummyLifecycle {}
+        let _builder: ConfigBuilder<TestConfig> =
+            ConfigBuilder::new().register_lifecycle("dummy", Arc::new(DummyLifecycle));
+    }
 }

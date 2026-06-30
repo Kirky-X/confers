@@ -741,4 +741,266 @@ mod tests {
         let source = EnvSource::new();
         assert_eq!(source.priority(), 50);
     }
+
+    #[test]
+    fn test_env_source_default_trait() {
+        let source = EnvSource::default();
+        assert_eq!(source.name(), "env");
+        assert_eq!(source.priority(), 50);
+    }
+
+    #[test]
+    fn test_env_source_separator_setter() {
+        let source = EnvSource::new().separator("__");
+        // collect should succeed; separator affects key parsing only
+        let _ = source.collect();
+    }
+
+    #[test]
+    fn test_env_source_with_file_suffix_disabled() {
+        let source = EnvSource::with_prefix("X_").with_file_suffix(false);
+        assert_eq!(source.priority(), 50);
+        let _ = source.collect();
+    }
+
+    #[test]
+    fn test_env_source_custom_file_suffix() {
+        let source = EnvSource::with_prefix("X_").file_suffix("_SECRET"); // pragma: allowlist secret
+        assert_eq!(source.priority(), 50);
+        let _ = source.collect();
+    }
+
+    #[test]
+    fn test_file_source_with_priority() {
+        let source = FileSource::new("test.toml").with_priority(75);
+        assert_eq!(source.priority(), 75);
+    }
+
+    #[test]
+    fn test_file_source_with_loader_config() {
+        let config = loader::LoaderConfig::default();
+        let source = FileSource::new("test.toml").with_loader_config(config);
+        assert_eq!(source.name(), "test.toml");
+    }
+
+    #[test]
+    fn test_file_source_allow_absolute_paths() {
+        let source = FileSource::new("test.toml").allow_absolute_paths();
+        assert_eq!(source.name(), "test.toml");
+    }
+
+    #[test]
+    fn test_file_source_path_accessor() {
+        let source = FileSource::new("/some/path/config.json");
+        assert_eq!(source.path(), Path::new("/some/path/config.json"));
+    }
+
+    #[test]
+    fn test_file_source_missing_required_error() {
+        let source = FileSource::new("/nonexistent/required.toml");
+        let result = source.collect();
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::FileNotFound { .. }
+        ));
+    }
+
+    #[test]
+    fn test_file_source_new_no_file_name() {
+        // Path with no file_name component → source_id defaults to "file"
+        let source = FileSource::new("/");
+        assert_eq!(source.name(), "file");
+    }
+
+    #[test]
+    fn test_memory_source_with_values_constructor() {
+        let mut values = HashMap::new();
+        values.insert("key".to_string(), ConfigValue::string("val"));
+        let source = MemorySource::with_values(values);
+        let result = source.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_memory_source_with_priority() {
+        let source = MemorySource::new().with_priority(42);
+        assert_eq!(source.priority(), 42);
+    }
+
+    #[test]
+    fn test_memory_source_with_name() {
+        let source = MemorySource::new().with_name("custom");
+        assert_eq!(source.name(), "custom");
+    }
+
+    #[test]
+    fn test_memory_source_collect_returns_priority() {
+        let source = MemorySource::new()
+            .set("key", ConfigValue::string("val"))
+            .with_priority(30);
+        let result = source.collect().unwrap();
+        assert_eq!(result.priority, 30);
+    }
+
+    #[test]
+    fn test_memory_source_default_trait() {
+        let source = MemorySource::default();
+        assert_eq!(source.name(), "memory");
+        assert_eq!(source.priority(), 0);
+    }
+
+    #[test]
+    fn test_memory_source_nested_keys() {
+        let source = MemorySource::new()
+            .set("database.host", ConfigValue::string("localhost"))
+            .set("database.port", ConfigValue::uint(5432));
+        let result = source.collect().unwrap();
+        assert!(result.is_map());
+        // Verify nested structure was built
+        if let ConfigValue::Map(map) = &result.inner {
+            assert!(map.contains_key("database"));
+        } else {
+            panic!("expected map");
+        }
+    }
+
+    #[test]
+    fn test_default_source_with_defaults_constructor() {
+        let mut defaults = HashMap::new();
+        defaults.insert("key".to_string(), ConfigValue::string("val"));
+        let source = DefaultSource::with_defaults(defaults);
+        let result = source.collect().unwrap();
+        assert!(result.is_map());
+        assert_eq!(result.priority, 0);
+    }
+
+    #[test]
+    fn test_default_source_set_chained() {
+        let source = DefaultSource::new()
+            .set("a", ConfigValue::string("1"))
+            .set("b", ConfigValue::string("2"));
+        let result = source.collect().unwrap();
+        assert!(result.is_map());
+    }
+
+    #[test]
+    fn test_default_source_default_trait() {
+        let source = DefaultSource::default();
+        assert_eq!(source.name(), "default");
+    }
+
+    #[test]
+    fn test_default_source_collect_priority_zero() {
+        let source = DefaultSource::new().set("key", ConfigValue::string("val"));
+        let result = source.collect().unwrap();
+        assert_eq!(result.priority, 0);
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_reads_file() {
+        use std::io::Write;
+        let mut tmp = tempfile::Builder::new().suffix(".txt").tempfile().unwrap();
+        write!(tmp, "the_secret_content").unwrap(); // pragma: allowlist secret
+        let path = tmp.path().to_str().unwrap().to_string();
+        std::env::set_var("MYTEST_VAL_FILE", &path); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_VAL_FILE"); // pragma: allowlist secret
+        let result = result.unwrap();
+
+        // Verify the value was read from the file
+        if let ConfigValue::Map(map) = &result.inner {
+            if let Some(av) = map.get("val") {
+                if let ConfigValue::String(s) = &av.inner {
+                    assert_eq!(s, "the_secret_content"); // pragma: allowlist secret
+                    return;
+                }
+            }
+        }
+        panic!("expected val key with string value read from file");
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_nonexistent_file() {
+        std::env::set_var("MYTEST_MISSING_FILE", "/nonexistent/path.txt"); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_MISSING_FILE"); // pragma: allowlist secret
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::FileNotFound { .. }
+        ));
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_blocks_sensitive_path() {
+        // /etc/passwd is in the sensitive path list and should be blocked
+        std::env::set_var("MYTEST_BLOCK_FILE", "/etc/passwd"); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_BLOCK_FILE"); // pragma: allowlist secret
+                                                   // May fail with FileNotFound (if /etc/passwd missing) or InvalidValue (sensitive)
+        assert!(result.is_err());
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_rejects_directory() {
+        // /tmp is a directory, not a regular file
+        std::env::set_var("MYTEST_DIR_FILE", "/tmp"); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_DIR_FILE"); // pragma: allowlist secret
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::InvalidValue { .. }
+        ));
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_rejects_bad_extension() {
+        use std::io::Write;
+        let mut tmp = tempfile::Builder::new().suffix(".exe").tempfile().unwrap();
+        write!(tmp, "data").unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        std::env::set_var("MYTEST_EXT_FILE", &path); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_EXT_FILE"); // pragma: allowlist secret
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::InvalidValue { .. }
+        ));
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_empty_path() {
+        std::env::set_var("MYTEST_EMPTY_FILE", ""); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_EMPTY_FILE"); // pragma: allowlist secret
+                                                   // Empty path → validate returns Ok, then read_to_string("") fails
+        assert!(result.is_err());
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_skips_file_suffix_without_prefix() {
+        // Without prefix, _FILE vars are skipped (returns None from parse_key)
+        std::env::set_var("MYTEST_NOPREFIX_FILE", "/tmp/x.txt"); // pragma: allowlist secret
+        let source = EnvSource::new(); // no prefix
+                                       // This should not error — _FILE vars without prefix are skipped
+        let result = source.collect();
+        std::env::remove_var("MYTEST_NOPREFIX_FILE"); // pragma: allowlist secret
+        assert!(result.is_ok());
+    }
 }
