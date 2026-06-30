@@ -463,11 +463,18 @@ mod redis_bus_tests {
             .await
             .expect("Redis bus should build");
 
-        // Subscribe first to obtain the polling stream.
+        // Subscribe first to obtain the push stream. The new pubsub-based
+        // implementation uses on_message() push delivery (not polling), so we
+        // must register the subscription before publishing.
         let mut rx = bus
             .subscribe()
             .await
             .expect("subscribe should return a stream");
+
+        // Give the Redis server time to register the subscription before we
+        // publish (avoids the pubsub at-most-once race condition where a
+        // message published before subscription registration is dropped).
+        tokio::time::sleep(Duration::from_millis(150)).await;
 
         let event = ConfigChangeEvent::new(
             "redis-instance-1",
@@ -481,22 +488,16 @@ mod redis_bus_tests {
             .await
             .expect("publish should succeed");
 
-        // Attempt to receive the published event. The current subscribe()
-        // implementation polls via a SUBSCRIBE-as-query pattern on a multiplexed
-        // connection (src/bus/redis.rs::get_message), which does not deliver
-        // real published messages. We still exercise the full subscribe path
-        // (stream creation + get_message + SUBSCRIBE command) for coverage, and
-        // assert correctness if a message is delivered.
-        match timeout(Duration::from_secs(2), rx.next()).await {
-            Ok(Some(received)) => {
-                assert_eq!(received.instance_id, event.instance_id);
-                assert_eq!(received.checksum, event.checksum);
-            }
-            _ => {
-                // Stream was polled at least once (exercising get_message and the
-                // SUBSCRIBE command path); delivery is not guaranteed by the
-                // current implementation.
-            }
-        }
+        // Strict assertion: the new pubsub-based subscribe() must deliver real
+        // published messages. The previous graceful-degrade behavior (silent
+        // pass on timeout) masked a real bug in the multiplexed SUBSCRIBE-as-
+        // query implementation and is no longer appropriate.
+        let received = timeout(Duration::from_secs(2), rx.next())
+            .await
+            .expect("timed out waiting for published message (subscribe broken)")
+            .expect("stream ended unexpectedly without delivering message");
+
+        assert_eq!(received.instance_id, event.instance_id);
+        assert_eq!(received.checksum, event.checksum);
     }
 }

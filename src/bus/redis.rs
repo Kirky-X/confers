@@ -1,10 +1,9 @@
 //! Redis-based ConfigBus implementation.
 
 use std::pin::Pin;
-use std::time::Duration;
 
 use async_trait::async_trait;
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt};
 use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
@@ -24,8 +23,17 @@ pub struct RedisConfigBus {
     client: redis::Client,
     channel: String,
     /// Retry wait time in milliseconds when no message available.
+    ///
+    /// Historical field retained for builder API compatibility. The new
+    /// `subscribe()` implementation uses a dedicated PubSub connection with
+    /// `on_message()` push delivery, so this value is no longer read.
+    #[allow(dead_code)]
     retry_wait_ms: u64,
     /// Error retry wait time in seconds.
+    ///
+    /// Historical field retained for builder API compatibility. See
+    /// `retry_wait_ms` for context.
+    #[allow(dead_code)]
     error_retry_wait_secs: u64,
 }
 
@@ -122,61 +130,49 @@ impl ConfigBus for RedisConfigBus {
     async fn subscribe(
         &self,
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
-        let channel = self.channel.clone();
-        let client = self.client.clone();
-        let retry_wait = Duration::from_millis(self.retry_wait_ms);
-        let error_retry_wait = Duration::from_secs(self.error_retry_wait_secs);
+        // Use a dedicated PubSub connection (not multiplexed). Redis' SUBSCRIBE
+        // command transitions the connection into subscription mode, which is
+        // incompatible with multiplexed-connection query semantics. The previous
+        // implementation used `redis::cmd("SUBSCRIBE").query_async()` on a
+        // multiplexed connection, which never delivers real published messages.
+        let mut pubsub =
+            self.client
+                .get_async_pubsub()
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: format!("redis_pubsub: {}", e),
+                    retryable: true,
+                })?;
 
+        pubsub
+            .subscribe(&self.channel)
+            .await
+            .map_err(|e| ConfigError::RemoteUnavailable {
+                error_type: format!("redis_subscribe: {}", e),
+                retryable: true,
+            })?;
+
+        // on_message(&mut self) borrows pubsub and returns a Stream<Item = Msg>.
+        // Wrap the polling loop in async_stream::stream! so pubsub is owned by
+        // the stream future itself (avoids E0515: cannot return reference to
+        // local). Payload decode errors and JSON deserialization errors are
+        // skipped (Rule 12: errors that cannot be meaningfully surfaced to the
+        // stream consumer are skipped via continue, not silently swallowed).
         let stream = async_stream::stream! {
-            loop {
-                match get_message(&client, &channel).await {
-                    Ok(Some(event)) => yield event,
-                    Ok(None) => {
-                        tokio::time::sleep(retry_wait).await;
-                    }
-                    Err(_e) => {
-                        // Log error silently and continue retrying
-                        tokio::time::sleep(error_retry_wait).await;
-                    }
+            let mut msg_stream = pubsub.on_message();
+            while let Some(msg) = msg_stream.next().await {
+                let payload: Vec<u8> = match msg.get_payload() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+                match serde_json::from_slice::<ConfigChangeEvent>(&payload) {
+                    Ok(event) => yield event,
+                    Err(_) => continue,
                 }
             }
         };
 
         Ok(Box::pin(stream))
-    }
-}
-
-async fn get_message(
-    client: &redis::Client,
-    channel: &str,
-) -> ConfigResult<Option<ConfigChangeEvent>> {
-    let mut conn = client
-        .get_multiplexed_async_connection()
-        .await
-        .map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: format!("redis_connection: {}", e),
-            retryable: true,
-        })?;
-
-    let result: Option<Vec<u8>> = redis::cmd("SUBSCRIBE")
-        .arg(channel)
-        .query_async(&mut conn)
-        .await
-        .map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: format!("redis_subscribe: {}", e),
-            retryable: true,
-        })?;
-
-    match result {
-        Some(payload) => {
-            let event: ConfigChangeEvent =
-                serde_json::from_slice(&payload).map_err(|e| ConfigError::SourceChainError {
-                    message: format!("deserialize event: {}", e),
-                    source_index: 0,
-                })?;
-            Ok(Some(event))
-        }
-        None => Ok(None),
     }
 }
 
