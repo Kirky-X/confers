@@ -581,4 +581,326 @@ mod tests {
         assert!(set.contains(&secret2));
         assert!(set.contains(&secret3));
     }
+
+    #[test]
+    fn test_secure_string_new_critical_display_name() {
+        let secret = SecureString::new("topsecret", SensitivityLevel::Critical);
+        assert_eq!(secret.display_name(), "[SENSITIVE]");
+        assert!(secret.is_highly_sensitive());
+    }
+
+    #[test]
+    fn test_secure_string_new_high_display_name() {
+        let secret = SecureString::new("token123", SensitivityLevel::High);
+        assert_eq!(secret.display_name(), "[8 chars]");
+        assert!(secret.is_highly_sensitive());
+    }
+
+    #[test]
+    fn test_secure_string_new_medium_display_name() {
+        let secret = SecureString::new("user_data", SensitivityLevel::Medium);
+        assert_eq!(secret.display_name(), "[9 chars]");
+        assert!(!secret.is_highly_sensitive());
+    }
+
+    #[test]
+    fn test_secure_string_new_low_display_name() {
+        // Low sensitivity returns the original string as display_name.
+        let secret = SecureString::new("plain_config", SensitivityLevel::Low);
+        assert_eq!(secret.display_name(), "plain_config");
+        assert!(!secret.is_highly_sensitive());
+    }
+
+    #[test]
+    fn test_secure_string_as_str_valid() {
+        let secret = SecureString::from("hello world");
+        assert_eq!(secret.as_str(), "hello world");
+    }
+
+    #[test]
+    fn test_secure_string_as_str_invalid_utf8() {
+        let secret = SecureString::from_bytes(vec![0xFF, 0xFE, 0xFD], SensitivityLevel::High);
+        assert_eq!(secret.as_str(), "[invalid utf-8]");
+    }
+
+    #[test]
+    fn test_secure_string_to_plain_string() {
+        let secret = SecureString::from("extract-me");
+        let plain = secret.to_plain_string();
+        assert_eq!(plain, "extract-me");
+    }
+
+    #[test]
+    fn test_secure_string_compare_different_lengths() {
+        let secret = SecureString::from("abc");
+        // Shorter other string.
+        assert!(secret.compare("ab").is_err());
+        assert!(secret.compare("a").is_err());
+        // Longer other string.
+        assert!(secret.compare("abcd").is_err());
+        assert!(secret.compare("abcdef").is_err());
+    }
+
+    #[test]
+    fn test_secure_string_compare_empty() {
+        let empty = SecureString::from("");
+        assert!(empty.compare("").is_ok());
+        assert!(empty.compare("nonempty").is_err());
+    }
+
+    #[test]
+    fn test_secure_string_compare_self_equivalent() {
+        let secret = SecureString::from("same-value");
+        assert!(secret.compare("same-value").is_ok());
+    }
+
+    #[test]
+    fn test_secure_string_zeroize() {
+        let mut secret = SecureString::from("will-be-erased");
+        assert_eq!(secret.len(), 14);
+        secret.zeroize();
+        // After zeroize, data buffer is zeroed — length unchanged but content cleared.
+        assert_eq!(secret.len(), 0);
+        assert!(secret.is_empty());
+    }
+
+    #[test]
+    fn test_secure_string_fingerprint_zero_max_len() {
+        let secret = SecureString::from("password");
+        let fp = secret.fingerprint(0);
+        assert_eq!(fp.len(), 0);
+    }
+
+    #[test]
+    fn test_secure_string_fingerprint_full_length() {
+        // SHA-256 produces 32 bytes → 64 hex chars; max_len >= 64 returns full hex.
+        let secret = SecureString::from("password");
+        let fp = secret.fingerprint(100);
+        assert_eq!(fp.len(), 64);
+        assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_secure_string_fingerprint_truncation() {
+        let secret = SecureString::from("password");
+        let fp = secret.fingerprint(32);
+        assert_eq!(fp.len(), 32);
+        assert!(fp.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_secure_string_fingerprint_deterministic() {
+        let s1 = SecureString::from("same-input");
+        let s2 = SecureString::from("same-input");
+        assert_eq!(s1.fingerprint(64), s2.fingerprint(64));
+    }
+
+    #[test]
+    fn test_secure_string_masked_empty() {
+        let secret = SecureString::from("");
+        assert_eq!(secret.masked(), "[empty]");
+    }
+
+    #[test]
+    fn test_secure_string_masked_single_char() {
+        let secret = SecureString::from("a");
+        assert_eq!(secret.masked(), "*");
+    }
+
+    #[test]
+    fn test_secure_string_masked_two_chars() {
+        let secret = SecureString::from("ab");
+        assert_eq!(secret.masked(), "**");
+    }
+
+    #[test]
+    fn test_secure_string_masked_three_chars() {
+        let secret = SecureString::from("abc");
+        assert_eq!(secret.masked(), "a**");
+    }
+
+    #[test]
+    fn test_secure_string_masked_four_chars() {
+        let secret = SecureString::from("abcd");
+        assert_eq!(secret.masked(), "ab**");
+    }
+
+    #[test]
+    fn test_secure_string_masked_long_string() {
+        let secret = SecureString::from("very-long-secret-value");
+        let masked = secret.masked();
+        // For len >= 5: visible = min(2, len/4), masked_chars = min(6, len - visible)
+        // len=22 → visible=2, masked_chars=6 → "ve******"
+        assert_eq!(masked, "ve******");
+    }
+
+    #[test]
+    fn test_secure_string_is_empty_true() {
+        let secret = SecureString::from("");
+        assert!(secret.is_empty());
+        assert_eq!(secret.len(), 0);
+    }
+
+    #[test]
+    fn test_secure_string_len_non_empty() {
+        let secret = SecureString::from("12345678");
+        assert_eq!(secret.len(), 8);
+        assert!(!secret.is_empty());
+    }
+
+    #[test]
+    fn test_sensitive_data_trait_default_is_highly_sensitive() {
+        // Default impl returns false for is_highly_sensitive.
+        struct DummyData;
+        impl SensitiveData for DummyData {
+            fn display_name(&self) -> &str {
+                "dummy"
+            }
+        }
+        let d = DummyData;
+        assert!(!d.is_highly_sensitive());
+        assert_eq!(d.display_name(), "dummy");
+    }
+
+    #[test]
+    fn test_sensitivity_is_critical_or_high() {
+        assert!(SensitivityLevel::Critical.is_critical_or_high());
+        assert!(SensitivityLevel::High.is_critical_or_high());
+        assert!(!SensitivityLevel::Medium.is_critical_or_high());
+        assert!(!SensitivityLevel::Low.is_critical_or_high());
+    }
+
+    #[test]
+    fn test_sensitivity_default_is_low() {
+        let level = SensitivityLevel::default();
+        assert_eq!(level, SensitivityLevel::Low);
+    }
+
+    #[test]
+    fn test_secure_string_builder_with_sensitivity() {
+        let secret = SecureStringBuilder::new()
+            .with_sensitivity(SensitivityLevel::Low)
+            .push_str("data")
+            .build();
+        assert_eq!(secret.sensitivity(), SensitivityLevel::Low);
+        assert!(!secret.is_highly_sensitive());
+    }
+
+    #[test]
+    fn test_secure_string_builder_with_display_name() {
+        let secret = SecureStringBuilder::new()
+            .with_display_name("custom-name")
+            .push_str("data")
+            .build();
+        assert_eq!(secret.display_name(), "custom-name");
+    }
+
+    #[test]
+    fn test_secure_string_builder_push_u8() {
+        let secret = SecureStringBuilder::new()
+            .push_u8(b'A')
+            .push_u8(b'B')
+            .push_u8(b'C')
+            .build();
+        assert_eq!(secret.as_str(), "ABC");
+    }
+
+    #[test]
+    fn test_secure_string_builder_push_unicode_char() {
+        let secret = SecureStringBuilder::new().push('中').push('文').build();
+        assert_eq!(secret.as_str(), "中文");
+        assert_eq!(secret.len(), 6); // 3 bytes per CJK char
+    }
+
+    #[test]
+    fn test_secure_string_builder_empty_build() {
+        let secret = SecureStringBuilder::new().build();
+        assert!(secret.is_empty());
+        assert_eq!(secret.len(), 0);
+    }
+
+    #[test]
+    fn test_secure_string_builder_default() {
+        let secret = SecureStringBuilder::default()
+            .push_str("default-builder")
+            .build();
+        assert_eq!(secret.as_str(), "default-builder");
+    }
+
+    #[test]
+    fn test_secure_string_clone_preserves_data() {
+        let original = SecureString::new("clone-me", SensitivityLevel::High);
+        let cloned = original.clone();
+        assert_eq!(original.as_str(), cloned.as_str());
+        assert_eq!(original.sensitivity(), cloned.sensitivity());
+    }
+
+    #[test]
+    fn test_secure_string_deref_to_str() {
+        let secret = SecureString::from("deref-target");
+        // Deref<Target = str> — &*secret yields &str.
+        let s: &str = &*secret;
+        assert_eq!(s, "deref-target");
+    }
+
+    #[test]
+    fn test_secure_string_from_string() {
+        let input = String::from("from-string");
+        let secret = SecureString::from(input);
+        assert_eq!(secret.as_str(), "from-string");
+    }
+
+    #[test]
+    fn test_secure_string_from_str_ref() {
+        let input = String::from("from-str-ref");
+        let secret = SecureString::from(&input);
+        assert_eq!(secret.as_str(), "from-str-ref");
+    }
+
+    #[test]
+    fn test_secure_string_display_debug_empty() {
+        let empty = SecureString::from("");
+        assert_eq!(format!("{}", empty), "[empty]");
+        assert_eq!(format!("{:?}", empty), "SecureString([empty])");
+    }
+
+    #[test]
+    fn test_secure_string_sensitivity_getter() {
+        let critical = SecureString::new("x", SensitivityLevel::Critical);
+        let medium = SecureString::new("x", SensitivityLevel::Medium);
+        assert_eq!(critical.sensitivity(), SensitivityLevel::Critical);
+        assert_eq!(medium.sensitivity(), SensitivityLevel::Medium);
+    }
+
+    #[test]
+    fn test_secure_string_from_bytes_preserves_data() {
+        let data = vec![0x01, 0x02, 0x03, 0x04];
+        let secret = SecureString::from_bytes(data.clone(), SensitivityLevel::Medium);
+        assert_eq!(secret.as_bytes(), data.as_slice());
+        assert_eq!(secret.len(), 4);
+        assert!(!secret.is_empty());
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_secure_string_counter_lifecycle() {
+        // Serial test: counters are global; this test must run alone.
+        reset_secure_string_counters();
+        assert_eq!(allocated_secure_strings(), 0);
+        assert_eq!(deallocated_secure_strings(), 0);
+
+        {
+            let _s = SecureString::from("counter-test");
+            assert_eq!(allocated_secure_strings(), 1);
+            assert_eq!(deallocated_secure_strings(), 0);
+        }
+        // After drop, deallocated counter increments.
+        assert_eq!(allocated_secure_strings(), 1);
+        assert_eq!(deallocated_secure_strings(), 1);
+
+        // Reset restores both to zero.
+        reset_secure_string_counters();
+        assert_eq!(allocated_secure_strings(), 0);
+        assert_eq!(deallocated_secure_strings(), 0);
+    }
 }
