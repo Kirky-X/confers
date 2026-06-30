@@ -166,13 +166,13 @@ let config = AppConfig::load_sync()?;
 
 ```mermaid
 graph LR
-    A[<b>配置源</b><br/>📁 文件 • 🌐 环境变量 • 💻 CLI] --> B[<b>ConfigLoader</b><br/>🔧 核心引擎]
-    B --> C[<b>验证</b><br/>✅ 类型和业务规则]
-    B --> D[<b>Schema</b><br/>📄 JSON Schema 生成]
-    B --> E[<b>加密</b><br/>🔐 XChaCha20-Poly1305]
-    B --> F[<b>审计</b><br/>📋 访问日志]
-    B --> G[<b>监控</b><br/>📊 内存监控]
-    C --> H[<b>应用配置</b><br/>🚀 可直接使用]
+    A["<b>配置源</b><br/>文件 • 环境变量 • CLI"] --> B["<b>ConfigLoader</b><br/>核心引擎"]
+    B --> C["<b>验证</b><br/>类型和业务规则"]
+    B --> D["<b>Schema</b><br/>JSON Schema 生成"]
+    B --> E["<b>加密</b><br/>XChaCha20-Poly1305"]
+    B --> F["<b>审计</b><br/>访问日志"]
+    B --> G["<b>监控</b><br/>内存监控"]
+    C --> H["<b>应用配置</b><br/>可直接使用"]
     D --> H
     E --> H
     F --> H
@@ -572,28 +572,28 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ```mermaid
 graph TB
-    subgraph Sources ["📥 配置源"]
-        A[📁 本地文件<br/>TOML, JSON, YAML, INI]
-        B[🌐 环境变量]
-        C[💻 命令行参数]
-        D[☁️ 远程配置源<br/>etcd, Consul, HTTP]
+    subgraph Sources ["配置源"]
+        A["本地文件<br/>TOML, JSON, YAML, INI"]
+        B["环境变量"]
+        C["命令行参数"]
+        D["远程配置源<br/>etcd, Consul, HTTP"]
     end
 
-    subgraph Core ["🔧 核心引擎"]
-        E[⚡ ConfigLoader<br/>多源合并]
+    subgraph Core ["核心引擎"]
+        E["ConfigLoader<br/>多源合并"]
     end
 
-    subgraph Processing ["🔨 处理层"]
-        F[✅ 验证<br/>类型和业务规则]
-        G[📄 Schema 生成]
-        H[🔐 加密<br/>XChaCha20-Poly1305]
-        I[📋 审计日志]
-        J[👁️ 文件监控]
-        K[📊 内存监控]
+    subgraph Processing ["处理层"]
+        F["验证<br/>类型和业务规则"]
+        G["Schema 生成"]
+        H["加密<br/>XChaCha20-Poly1305"]
+        I["审计日志"]
+        J["文件监控"]
+        K["内存监控"]
     end
 
-    subgraph Output ["📤 应用"]
-        L[🚀 应用配置<br/>类型安全且已验证]
+    subgraph Output ["应用"]
+        L["应用配置<br/>类型安全且已验证"]
     end
 
     Sources --> Core
@@ -867,14 +867,14 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 gantt
     title Confers 开发路线图
     dateFormat  YYYY-MM
-    section 核心功能 ✅
+    section 核心功能
     类型安全配置     :done, 2024-01, 2024-06
     多格式支持       :done, 2024-02, 2024-06
     环境变量覆盖     :done, 2024-03, 2024-06
-    section 验证系统 ✅
+    section 验证系统
     基础验证集成     :done, 2024-04, 2024-07
     并行验证支持     :done, 2024-05, 2024-08
-    section 高级功能 🚧
+    section 高级功能
     Schema 生成      :active, 2024-06, 2024-09
     文件监控热重载   :done, 2024-07, 2024-09
     远程配置支持     :active, 2024-08, 2024-12

@@ -230,22 +230,22 @@ Understanding these core concepts will help you use `confers` more effectively.
 
 ```mermaid
 graph TB
-    subgraph Sources ["📥 Configuration Sources"]
-        A[📁 Config Files<br/>JSON, TOML, YAML]
-        B[🌐 Environment Variables]
-        C[💻 CLI Arguments]
-        D[☁️ Remote Sources<br/>Etcd, Consul, HTTP]
+    subgraph Sources ["Configuration Sources"]
+        A["Config Files<br/>JSON, TOML, YAML"]
+        B["Environment Variables"]
+        C["CLI Arguments"]
+        D["Remote Sources<br/>Etcd, Consul, HTTP"]
     end
 
-    subgraph Priority ["📊 Priority (High→Low)"]
-        P1["💻 CLI Arguments<br/>Highest Priority"]
-        P2["🌐 Environment Variables"]
-        P3["📁 Config Files"]
-        P4["🔧 Default Values<br/>Lowest Priority"]
+    subgraph Priority ["Priority (High to Low)"]
+        P1["CLI Arguments<br/>Highest Priority"]
+        P2["Environment Variables"]
+        P3["Config Files"]
+        P4["Default Values<br/>Lowest Priority"]
     end
 
-    subgraph Result ["📤 Result"]
-        R[🚀 Type-Safe Configuration]
+    subgraph Result ["Result"]
+        R["Type-Safe Configuration"]
     end
 
     Sources --> Priority

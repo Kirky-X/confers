@@ -145,21 +145,21 @@ confers provides flexible feature configuration, allowing users to select the fu
 
 ```mermaid
 graph TB
-    subgraph Sources ["📥 Configuration Sources"]
-        A[📁 Config Files]
-        B[🌐 Environment Variables]
-        C[💻 CLI Arguments]
-        D[☁️ Remote Sources]
+    subgraph Sources ["Configuration Sources"]
+        A["Config Files"]
+        B["Environment Variables"]
+        C["CLI Arguments"]
+        D["Remote Sources"]
     end
 
-    subgraph Loader ["🔧 ConfigBuilder"]
-        E[⚡ Smart Merging]
-        F[✅ Validation]
-        G[🔄 Hot Reload]
+    subgraph Loader ["ConfigBuilder"]
+        E["Smart Merging"]
+        F["Validation"]
+        G["Hot Reload"]
     end
 
-    subgraph Output ["📤 Output"]
-        H[🚀 Type-Safe Configuration]
+    subgraph Output ["Output"]
+        H["Type-Safe Configuration"]
     end
 
     Sources --> Loader
@@ -536,23 +536,23 @@ pub fn detect_format_from_path(path: &Path) -> Option<Format>
 
 ```mermaid
 graph TB
-    subgraph Storage ["📦 Key Storage"]
-        A[🔑 Keyring]
-        B[📋 Version History]
-        C[🛡️ Metadata]
+    subgraph Storage ["Key Storage"]
+        A["Keyring"]
+        B["Version History"]
+        C["Metadata"]
     end
 
-    subgraph Manager ["🔧 KeyManager"]
-        D[🔄 Rotation Management]
-        E[✅ Version Control]
-        F[🔒 Secure Storage]
+    subgraph Manager ["KeyManager"]
+        D["Rotation Management"]
+        E["Version Control"]
+        F["Secure Storage"]
     end
 
-    subgraph Operations ["⚡ Operations"]
-        G[Create]
-        H[Rotate]
-        I[Get]
-        J[Delete]
+    subgraph Operations ["Operations"]
+        G["Create"]
+        H["Rotate"]
+        I["Get"]
+        J["Delete"]
     end
 
     Storage --> Manager
@@ -692,11 +692,11 @@ pub fn delete_key_ring(&mut self, key_id: &str, master_key: &[u8; 32]) -> Result
 
 ```mermaid
 graph LR
-    A[📝 Plaintext] --> B[🔐 XChaCha20-Poly1305 Encryption]
-    B --> C[📦 Output<br/>nonce + ciphertext]
-    C --> D[💾 Store or Transmit]
-    D --> E[🔓 Decrypt]
-    E --> F[✅ Recover Plaintext]
+    A["Plaintext"] --> B["XChaCha20-Poly1305 Encryption"]
+    B --> C["Output<br/>nonce + ciphertext"]
+    C --> D["Store or Transmit"]
+    D --> E["Decrypt"]
+    E --> F["Recover Plaintext"]
 
     style B fill:#FEF3C7,stroke:#92400E
     style E fill:#DCFCE7,stroke:#166534

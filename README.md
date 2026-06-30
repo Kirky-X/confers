@@ -164,13 +164,13 @@ let config = AppConfig::load_sync()?;
 
 ```mermaid
 graph LR
-    A[<b>Configuration Sources</b><br/>📁 Files • 🌐 Env • 💻 CLI] --> B[<b>ConfigLoader</b><br/>🔧 Core Engine]
-    B --> C[<b>Validation</b><br/>✅ Type & Business Rules]
-    B --> D[<b>Schema</b><br/>📄 JSON Schema Gen]
-    B --> E[<b>Encryption</b><br/>🔐 XChaCha20-Poly1305]
-    B --> F[<b>Audit</b><br/>📋 Access Logs]
-    B --> G[<b>Monitoring</b><br/>📊 Memory Watch]
-    C --> H[<b>Application Config</b><br/>🚀 Ready to Use]
+    A["<b>Configuration Sources</b><br/>Files • Env • CLI"] --> B["<b>ConfigLoader</b><br/>Core Engine"]
+    B --> C["<b>Validation</b><br/>Type & Business Rules"]
+    B --> D["<b>Schema</b><br/>JSON Schema Gen"]
+    B --> E["<b>Encryption</b><br/>XChaCha20-Poly1305"]
+    B --> F["<b>Audit</b><br/>Access Logs"]
+    B --> G["<b>Monitoring</b><br/>Memory Watch"]
+    C --> H["<b>Application Config</b><br/>Ready to Use"]
     D --> H
     E --> H
     F --> H
@@ -720,28 +720,28 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ```mermaid
 graph TB
-    subgraph Sources ["📥 Configuration Sources"]
-        A[📁 Local Files<br/>TOML, JSON, YAML, INI]
-        B[🌐 Environment Variables]
-        C[💻 CLI Arguments]
-        D[☁️ Remote Sources<br/>etcd, Consul, HTTP]
+    subgraph Sources ["Configuration Sources"]
+        A["Local Files<br/>TOML, JSON, YAML, INI"]
+        B["Environment Variables"]
+        C["CLI Arguments"]
+        D["Remote Sources<br/>etcd, Consul, HTTP"]
     end
 
-    subgraph Core ["🔧 Core Engine"]
-        E[⚡ ConfigLoader<br/>Multi-source Merge]
+    subgraph Core ["Core Engine"]
+        E["ConfigLoader<br/>Multi-source Merge"]
     end
 
-    subgraph Processing ["🔨 Processing Layer"]
-        F[✅ Validation<br/>Type & Business Rules]
-        G[📄 Schema Generation]
-        H[🔐 Encryption<br/>XChaCha20-Poly1305]
-        I[📋 Audit Logging]
-        J[👁️ File Watching]
-        K[📊 Memory Monitoring]
+    subgraph Processing ["Processing Layer"]
+        F["Validation<br/>Type & Business Rules"]
+        G["Schema Generation"]
+        H["Encryption<br/>XChaCha20-Poly1305"]
+        I["Audit Logging"]
+        J["File Watching"]
+        K["Memory Monitoring"]
     end
 
-    subgraph Output ["📤 Application"]
-        L[🚀 Application Configuration<br/>Type-Safe & Validated]
+    subgraph Output ["Application"]
+        L["Application Configuration<br/>Type-Safe & Validated"]
     end
 
     Sources --> Core
@@ -1014,14 +1014,14 @@ Please report security vulnerabilities to: **security@confers.example**
 gantt
     title Confers Development Roadmap
     dateFormat  YYYY-MM
-    section Core Features ✅
+    section Core Features
     Type-safe Configuration     :done, 2024-01, 2024-06
     Multi-format Support       :done, 2024-02, 2024-06
     Environment Variable Override     :done, 2024-03, 2024-06
-    section Validation System ✅
+    section Validation System
     Basic Validation Integration     :done, 2024-04, 2024-07
     Parallel Validation Support     :done, 2024-05, 2024-08
-    section Advanced Features 🚧
+    section Advanced Features
     Schema Generation      :active, 2024-06, 2024-09
     File Watching Hot Reload   :done, 2024-07, 2024-09
     Remote Configuration Support     :active, 2024-08, 2024-12
