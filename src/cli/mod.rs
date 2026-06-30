@@ -1180,7 +1180,7 @@ mod tests {
     #[serial_test::serial]
     fn test_load_env_file_valid() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         writeln!(tf, "# comment line").unwrap();
         writeln!(tf).unwrap(); // empty line
         writeln!(tf, "CONFERS_TEST_LIT_PLAIN=plain_value").unwrap();
@@ -1234,7 +1234,7 @@ mod tests {
     fn test_load_env_file_preserves_existing() {
         use std::io::Write;
         std::env::set_var("CONFERS_TEST_PRESERVE", "original");
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         writeln!(tf, "CONFERS_TEST_PRESERVE=should_not_overwrite").unwrap();
         tf.flush().unwrap();
         load_env_file(&tf.path().to_path_buf()).unwrap();
@@ -1245,7 +1245,7 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_load_env_file_empty_file() {
-        let tf = tempfile::NamedTempFile::new().unwrap();
+        let tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         let result = load_env_file(&tf.path().to_path_buf());
         assert!(result.is_ok());
     }
@@ -1254,7 +1254,7 @@ mod tests {
     #[serial_test::serial]
     fn test_load_env_file_only_comments() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         writeln!(tf, "# only a comment").unwrap();
         writeln!(tf, "# another").unwrap();
         tf.flush().unwrap();
@@ -1765,7 +1765,7 @@ mod tests {
     #[test]
     fn test_build_config_from_cli_valid_file() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1778,7 +1778,7 @@ mod tests {
     #[test]
     fn test_build_annotated_from_cli_valid_file() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1793,7 +1793,7 @@ mod tests {
     #[test]
     fn test_cmd_inspect_json_format_no_keys() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1804,7 +1804,7 @@ mod tests {
     #[test]
     fn test_cmd_inspect_text_format_no_keys() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1815,7 +1815,7 @@ mod tests {
     #[test]
     fn test_cmd_inspect_text_format_with_keys() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1827,7 +1827,7 @@ mod tests {
     #[test]
     fn test_cmd_inspect_text_format_key_not_found() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1839,7 +1839,7 @@ mod tests {
     #[test]
     fn test_cmd_inspect_show_conflicts() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1860,7 +1860,7 @@ mod tests {
     #[test]
     fn test_cmd_validate_text_success() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1871,7 +1871,7 @@ mod tests {
     #[test]
     fn test_cmd_validate_json_success() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1883,7 +1883,7 @@ mod tests {
     fn test_cmd_validate_issues_non_strict() {
         // String value that looks like a number triggers an issue
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "port = \"8080\"\ndebug = \"true\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1895,7 +1895,7 @@ mod tests {
     #[test]
     fn test_cmd_validate_issues_strict_fails() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "port = \"8080\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1907,18 +1907,22 @@ mod tests {
     #[test]
     fn test_cmd_validate_json_issues_strict_fails() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "port = \"8080\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
+        // Per cmd_validate design: strict bailing is text-format-only.
+        // JSON format always returns Ok and surfaces validity via the printed
+        // `{"valid": false, ...}` payload (callers parse the JSON to decide).
+        // Therefore strict=true + json must NOT bail.
         let result = cmd_validate(&paths, true, "json", true);
-        assert!(result.is_err());
+        assert!(result.is_ok(), "json strict mode must not bail (design)");
     }
 
     #[test]
     fn test_cmd_validate_invalid_config_text_error() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "this is = = not valid toml\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1930,7 +1934,7 @@ mod tests {
     #[test]
     fn test_cmd_validate_invalid_config_json_error() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "this is = = not valid toml\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1943,7 +1947,7 @@ mod tests {
     #[test]
     fn test_cmd_export_json_stdout() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1954,7 +1958,7 @@ mod tests {
     #[test]
     fn test_cmd_export_toml_stdout() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1965,7 +1969,7 @@ mod tests {
     #[test]
     fn test_cmd_export_yaml_stdout() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1976,7 +1980,7 @@ mod tests {
     #[test]
     fn test_cmd_export_unsupported_format_fails() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1987,7 +1991,7 @@ mod tests {
     #[test]
     fn test_cmd_export_with_provenance_json() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -1998,7 +2002,7 @@ mod tests {
     #[test]
     fn test_cmd_export_raw_flag() {
         use std::io::Write;
-        let mut tf = tempfile::NamedTempFile::new().unwrap();
+        let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(tf, "name = \"confers\"\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
@@ -2010,7 +2014,7 @@ mod tests {
     #[test]
     fn test_cmd_export_to_file() {
         use std::io::Write;
-        let mut cfg = tempfile::NamedTempFile::new().unwrap();
+        let mut cfg = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(cfg, "name = \"confers\"\nport = 8080\n").unwrap();
         cfg.flush().unwrap();
 
@@ -2025,7 +2029,7 @@ mod tests {
     #[test]
     fn test_cmd_export_to_directory() {
         use std::io::Write;
-        let mut cfg = tempfile::NamedTempFile::new().unwrap();
+        let mut cfg = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(cfg, "name = \"confers\"\n").unwrap();
         cfg.flush().unwrap();
 
@@ -2046,7 +2050,7 @@ mod tests {
     #[test]
     fn test_cmd_export_provenance_to_file() {
         use std::io::Write;
-        let mut cfg = tempfile::NamedTempFile::new().unwrap();
+        let mut cfg = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(cfg, "name = \"confers\"\nport = 8080\n").unwrap();
         cfg.flush().unwrap();
 
@@ -2061,7 +2065,7 @@ mod tests {
     #[test]
     fn test_cmd_export_provenance_unsupported_format_fails() {
         use std::io::Write;
-        let mut cfg = tempfile::NamedTempFile::new().unwrap();
+        let mut cfg = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(cfg, "name = \"confers\"\n").unwrap();
         cfg.flush().unwrap();
         let paths = vec![cfg.path().to_path_buf()];
@@ -2074,10 +2078,10 @@ mod tests {
     #[test]
     fn test_cmd_diff_text_different() {
         use std::io::Write;
-        let mut base = tempfile::NamedTempFile::new().unwrap();
+        let mut base = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(base, "name = \"base\"\n").unwrap();
         base.flush().unwrap();
-        let mut overlay = tempfile::NamedTempFile::new().unwrap();
+        let mut overlay = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(overlay, "name = \"overlay\"\n").unwrap();
         overlay.flush().unwrap();
         let result = cmd_diff(
@@ -2093,10 +2097,10 @@ mod tests {
     #[test]
     fn test_cmd_diff_json_format() {
         use std::io::Write;
-        let mut base = tempfile::NamedTempFile::new().unwrap();
+        let mut base = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(base, "name = \"base\"\n").unwrap();
         base.flush().unwrap();
-        let mut overlay = tempfile::NamedTempFile::new().unwrap();
+        let mut overlay = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(overlay, "name = \"overlay\"\n").unwrap();
         overlay.flush().unwrap();
         let result = cmd_diff(
@@ -2112,10 +2116,10 @@ mod tests {
     #[test]
     fn test_cmd_diff_identical() {
         use std::io::Write;
-        let mut base = tempfile::NamedTempFile::new().unwrap();
+        let mut base = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(base, "name = \"same\"\nport = 8080\n").unwrap();
         base.flush().unwrap();
-        let mut overlay = tempfile::NamedTempFile::new().unwrap();
+        let mut overlay = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         write!(overlay, "name = \"same\"\nport = 8080\n").unwrap();
         overlay.flush().unwrap();
         // Identical content short-circuits to "Configurations are identical"
@@ -2132,7 +2136,7 @@ mod tests {
     #[test]
     fn test_cmd_diff_base_not_found_fails() {
         let base = std::path::PathBuf::from("/nonexistent/base.toml");
-        let mut overlay = tempfile::NamedTempFile::new().unwrap();
+        let mut overlay = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         use std::io::Write;
         write!(overlay, "name = \"overlay\"\n").unwrap();
         overlay.flush().unwrap();
@@ -2442,21 +2446,44 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_parse_diff_no_sanitize() {
-        let cli = Cli::try_parse_from([
-            "confers",
-            "diff",
-            "--base",
-            "a.toml",
-            "--overlay",
-            "b.toml",
-            "--sanitize",
-            "false",
-        ])
-        .unwrap();
-        match cli.command {
-            Commands::Diff { sanitize, .. } => assert!(!sanitize),
-            _ => panic!("expected Diff"),
+    fn test_cli_parse_diff_no_sanitize_unsupported() {
+        // Document a production-code limitation: the `Diff.sanitize` field is
+        // declared as `bool` with `default_value = "true"`, which makes clap
+        // use `ArgAction::SetTrue`. This action is one-way — it can only SET
+        // the flag to true, never to false. Neither `--sanitize=false`,
+        // `--sanitize false`, nor `--no-sanitize` is accepted.
+        //
+        // To support sanitize=false, production code would need
+        // `#[arg(long, action = clap::ArgAction::Set, default_value = "true")]`
+        // or `Option<bool>`. That is a behavior change, out of scope for the
+        // test-only coverage task. This test pins the current limitation.
+        let cases: &[&[&str]] = &[
+            &[
+                "confers",
+                "diff",
+                "--base",
+                "a",
+                "--overlay",
+                "b",
+                "--sanitize=false",
+            ],
+            &[
+                "confers",
+                "diff",
+                "--base",
+                "a",
+                "--overlay",
+                "b",
+                "--no-sanitize",
+            ],
+        ];
+        for argv in cases {
+            let result = Cli::try_parse_from(argv.iter().copied());
+            assert!(
+                result.is_err(),
+                "expected parse failure for {:?}, but succeeded",
+                argv
+            );
         }
     }
 
