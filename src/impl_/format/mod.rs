@@ -1008,4 +1008,492 @@ key = "value""#
         let serialized = c.serialize(&parsed).unwrap();
         assert!(serialized.contains("section"));
     }
+
+    #[test]
+    fn test_format_match_equality() {
+        assert_eq!(FormatMatch::Confident, FormatMatch::Confident);
+        assert_eq!(FormatMatch::Possible, FormatMatch::Possible);
+        assert_eq!(FormatMatch::NoMatch, FormatMatch::NoMatch);
+        assert_ne!(FormatMatch::Confident, FormatMatch::NoMatch);
+        assert_ne!(FormatMatch::Possible, FormatMatch::Confident);
+    }
+
+    #[test]
+    fn test_format_match_clone_copy() {
+        let m = FormatMatch::Confident;
+        let copied = m;
+        let cloned = m;
+        assert_eq!(m, copied);
+        assert_eq!(m, cloned);
+    }
+
+    #[test]
+    fn test_format_feature_all_variants_debug() {
+        assert!(!format!("{:?}", FormatFeature::NestedMaps).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Arrays).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Comments).is_empty());
+        assert!(!format!("{:?}", FormatFeature::InlineComments).is_empty());
+        assert!(!format!("{:?}", FormatFeature::MultilineStrings).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Booleans).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Floats).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Null).is_empty());
+        assert!(!format!("{:?}", FormatFeature::DateTime).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Binary).is_empty());
+        assert!(!format!("{:?}", FormatFeature::TopLevelArrays).is_empty());
+        assert!(!format!("{:?}", FormatFeature::Sections).is_empty());
+    }
+
+    #[test]
+    fn test_format_feature_equality_and_clone() {
+        assert_eq!(FormatFeature::Arrays, FormatFeature::Arrays);
+        assert_ne!(FormatFeature::Arrays, FormatFeature::Null);
+        let f = FormatFeature::Booleans;
+        assert_eq!(f, f.clone());
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_converter_detect_possible_and_no_match() {
+        let conv = toml_converter::TomlConverter::new();
+        // Has " = " but also ": " → not confident, falls to Possible
+        assert_eq!(conv.detect("key = value: something"), FormatMatch::Possible);
+        // No " = " → NoMatch
+        assert_eq!(conv.detect("just plain text"), FormatMatch::NoMatch);
+        // JSON-like array → NoMatch
+        assert_eq!(conv.detect("[1, 2, 3]"), FormatMatch::NoMatch);
+        // YAML doc → NoMatch (no " = ")
+        assert_eq!(conv.detect("---\nkey: value"), FormatMatch::NoMatch);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_converter_parse_error() {
+        let conv = toml_converter::TomlConverter::new();
+        let result = conv.parse("[invalid", SourceId::new("t"), None);
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_converter_default() {
+        let conv = toml_converter::TomlConverter::new();
+        assert_eq!(conv.format(), Format::Toml);
+        assert_eq!(conv.extension(), "toml");
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_converter_supports_all_features() {
+        let conv = toml_converter::TomlConverter::new();
+        assert!(conv.supports(FormatFeature::NestedMaps));
+        assert!(conv.supports(FormatFeature::Arrays));
+        assert!(conv.supports(FormatFeature::Comments));
+        assert!(conv.supports(FormatFeature::InlineComments));
+        assert!(conv.supports(FormatFeature::MultilineStrings));
+        assert!(conv.supports(FormatFeature::Booleans));
+        assert!(conv.supports(FormatFeature::Floats));
+        assert!(!conv.supports(FormatFeature::Null));
+        assert!(conv.supports(FormatFeature::DateTime));
+        assert!(conv.supports(FormatFeature::Binary));
+        assert!(!conv.supports(FormatFeature::TopLevelArrays));
+        assert!(conv.supports(FormatFeature::Sections));
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_serialize_scalar_types_require_map() {
+        use crate::types::ConfigValue;
+        let conv = toml_converter::TomlConverter::new();
+        // TOML format requires a top-level table (Map); bare scalar values
+        // cannot be serialized as a standalone TOML document, so all of
+        // these must return Err.
+        let cases: Vec<ConfigValue> = vec![
+            ConfigValue::Null,
+            ConfigValue::Bool(false),
+            ConfigValue::I64(-7),
+            ConfigValue::U64(99),
+            ConfigValue::F64(1.5),
+            ConfigValue::Bytes(vec![10, 20]),
+        ];
+        for cv in cases {
+            let v = AnnotatedValue::new(cv, SourceId::new("t"), "");
+            assert!(
+                conv.serialize(&v).is_err(),
+                "TOML should reject top-level scalar {:?}",
+                v.inner
+            );
+        }
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_serialize_array_in_map() {
+        use crate::types::ConfigValue;
+        let conv = toml_converter::TomlConverter::new();
+        let v = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "items".to_string(),
+                AnnotatedValue::new(
+                    ConfigValue::Array(
+                        vec![
+                            AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), ""),
+                            AnnotatedValue::new(ConfigValue::I64(2), SourceId::new("t"), ""),
+                        ]
+                        .into(),
+                    ),
+                    SourceId::new("t"),
+                    "items",
+                ),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        let result = conv.serialize(&v);
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(result.unwrap().contains("items"));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_converter_detect_no_match() {
+        let conv = json_converter::JsonConverter::new();
+        // Starts with { but invalid JSON
+        assert_eq!(conv.detect("{invalid json}"), FormatMatch::NoMatch);
+        // Doesn't start with { or [
+        assert_eq!(conv.detect("plain text"), FormatMatch::NoMatch);
+        // Empty string
+        assert_eq!(conv.detect(""), FormatMatch::NoMatch);
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_converter_parse_error() {
+        let conv = json_converter::JsonConverter::new();
+        let result = conv.parse("{invalid}", SourceId::new("t"), None);
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_converter_default() {
+        let conv = json_converter::JsonConverter::new();
+        assert_eq!(conv.format(), Format::Json);
+        assert_eq!(conv.extension(), "json");
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_converter_supports_all_features() {
+        let conv = json_converter::JsonConverter::new();
+        assert!(conv.supports(FormatFeature::NestedMaps));
+        assert!(conv.supports(FormatFeature::Arrays));
+        assert!(!conv.supports(FormatFeature::Comments));
+        assert!(!conv.supports(FormatFeature::InlineComments));
+        assert!(conv.supports(FormatFeature::MultilineStrings));
+        assert!(conv.supports(FormatFeature::Booleans));
+        assert!(conv.supports(FormatFeature::Floats));
+        assert!(conv.supports(FormatFeature::Null));
+        assert!(conv.supports(FormatFeature::DateTime));
+        assert!(!conv.supports(FormatFeature::Binary));
+        assert!(conv.supports(FormatFeature::TopLevelArrays));
+        assert!(!conv.supports(FormatFeature::Sections));
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_serialize_various_types() {
+        use crate::types::ConfigValue;
+        let conv = json_converter::JsonConverter::new();
+        // Null
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::Null,
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // Bool
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::Bool(true),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // I64 / U64
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::I64(42),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::U64(100),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // F64
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::F64(2.5),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // String
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::String("hello".into()),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // Bytes → base64-encoded string
+        let r = conv.serialize(&AnnotatedValue::new(
+            ConfigValue::Bytes(vec![1, 2, 3]),
+            SourceId::new("t"),
+            "",
+        ));
+        assert!(r.is_ok());
+        assert!(r.unwrap().contains('"'));
+        // Array
+        let v = AnnotatedValue::new(
+            ConfigValue::Array(
+                vec![AnnotatedValue::new(
+                    ConfigValue::I64(1),
+                    SourceId::new("t"),
+                    "",
+                )]
+                .into(),
+            ),
+            SourceId::new("t"),
+            "",
+        );
+        assert!(conv.serialize(&v).is_ok());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_converter_detect_full() {
+        let conv = yaml_converter::YamlConverter::new();
+        // %YAML marker → Confident
+        assert_eq!(conv.detect("%YAML 1.1"), FormatMatch::Confident);
+        // --- document start → Confident
+        assert_eq!(conv.detect("---\nkey: value"), FormatMatch::Confident);
+        // key: value → Possible
+        assert_eq!(conv.detect("key: value"), FormatMatch::Possible);
+        // Plain text → NoMatch
+        assert_eq!(conv.detect("just text"), FormatMatch::NoMatch);
+        // JSON object → NoMatch
+        assert_eq!(conv.detect(r#"{"k":"v"}"#), FormatMatch::NoMatch);
+        // TOML key = value → NoMatch (contains " = ")
+        assert_eq!(conv.detect(r#"key = "value""#), FormatMatch::NoMatch);
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_converter_parse_error() {
+        let conv = yaml_converter::YamlConverter::new();
+        // Unclosed flow mapping
+        let result = conv.parse("{a: b", SourceId::new("t"), None);
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_converter_default() {
+        let conv = yaml_converter::YamlConverter::new();
+        assert_eq!(conv.format(), Format::Yaml);
+        assert_eq!(conv.extension(), "yaml");
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_converter_supports_all_features() {
+        let conv = yaml_converter::YamlConverter::new();
+        assert!(conv.supports(FormatFeature::NestedMaps));
+        assert!(conv.supports(FormatFeature::Arrays));
+        assert!(conv.supports(FormatFeature::Comments));
+        assert!(conv.supports(FormatFeature::InlineComments));
+        assert!(conv.supports(FormatFeature::MultilineStrings));
+        assert!(conv.supports(FormatFeature::Booleans));
+        assert!(conv.supports(FormatFeature::Floats));
+        assert!(conv.supports(FormatFeature::Null));
+        assert!(conv.supports(FormatFeature::DateTime));
+        assert!(conv.supports(FormatFeature::Binary));
+        assert!(conv.supports(FormatFeature::TopLevelArrays));
+        assert!(conv.supports(FormatFeature::Sections));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_serialize_various_types() {
+        use crate::types::ConfigValue;
+        let conv = yaml_converter::YamlConverter::new();
+        // F64 (converted to string in yaml_value_from_config)
+        let v = AnnotatedValue::new(ConfigValue::F64(2.5), SourceId::new("t"), "");
+        let s = conv.serialize(&v).unwrap();
+        assert!(s.contains("2.5"));
+        // U64
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::U64(8),
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // Bytes → "<binary: N bytes>"
+        let v = AnnotatedValue::new(ConfigValue::Bytes(vec![10, 20]), SourceId::new("t"), "");
+        let s = conv.serialize(&v).unwrap();
+        assert!(s.contains("binary"));
+        // Null
+        assert!(conv
+            .serialize(&AnnotatedValue::new(
+                ConfigValue::Null,
+                SourceId::new("t"),
+                ""
+            ))
+            .is_ok());
+        // Array
+        let v = AnnotatedValue::new(
+            ConfigValue::Array(
+                vec![
+                    AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), ""),
+                    AnnotatedValue::new(ConfigValue::I64(2), SourceId::new("t"), ""),
+                ]
+                .into(),
+            ),
+            SourceId::new("t"),
+            "",
+        );
+        assert!(conv.serialize(&v).is_ok());
+    }
+
+    #[test]
+    fn test_ini_converter_detect_full() {
+        let conv = ini_converter::IniConverter::new();
+        // NoMatch: no = and no section
+        assert_eq!(conv.detect("just text"), FormatMatch::NoMatch);
+        // Possible: only key=value
+        assert_eq!(conv.detect("key=value"), FormatMatch::Possible);
+        // Confident: section + key=value
+        assert_eq!(conv.detect("[section]\nkey=value"), FormatMatch::Confident);
+    }
+
+    #[test]
+    fn test_ini_converter_default() {
+        let conv = ini_converter::IniConverter::new();
+        assert_eq!(conv.format(), Format::Ini);
+        assert_eq!(conv.extension(), "ini");
+    }
+
+    #[test]
+    fn test_ini_converter_supports_all_features() {
+        let conv = ini_converter::IniConverter::new();
+        assert!(!conv.supports(FormatFeature::NestedMaps));
+        assert!(!conv.supports(FormatFeature::Arrays));
+        assert!(conv.supports(FormatFeature::Comments));
+        assert!(!conv.supports(FormatFeature::InlineComments));
+        assert!(!conv.supports(FormatFeature::MultilineStrings));
+        assert!(conv.supports(FormatFeature::Booleans));
+        assert!(conv.supports(FormatFeature::Floats));
+        assert!(!conv.supports(FormatFeature::Null));
+        assert!(!conv.supports(FormatFeature::DateTime));
+        assert!(!conv.supports(FormatFeature::Binary));
+        assert!(!conv.supports(FormatFeature::TopLevelArrays));
+        assert!(conv.supports(FormatFeature::Sections));
+    }
+
+    #[test]
+    fn test_ini_converter_parse_with_comments_and_invalid_lines() {
+        let conv = ini_converter::IniConverter::new();
+        let content = "; ini comment\n# hash comment\n[db]\nhost = localhost\n=value\nbadline\n";
+        let result = conv.parse(content, SourceId::new("t"), None);
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(result.unwrap().is_map());
+    }
+
+    #[test]
+    fn test_ini_converter_parse_empty_section() {
+        let conv = ini_converter::IniConverter::new();
+        let result = conv.parse("[empty]", SourceId::new("t"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
+
+    #[test]
+    fn test_ini_converter_parse_no_section_key_value() {
+        let conv = ini_converter::IniConverter::new();
+        let result = conv.parse("key=value", SourceId::new("t"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
+
+    #[test]
+    fn test_ini_converter_serialize_non_map_error() {
+        use crate::types::ConfigValue;
+        let conv = ini_converter::IniConverter::new();
+        let v = AnnotatedValue::new(
+            ConfigValue::String("not a map".into()),
+            SourceId::new("t"),
+            "",
+        );
+        let result = conv.serialize(&v);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_detect_format_toml_via_function() {
+        assert_eq!(detect_format(r#"key = "value""#), Some(Format::Toml));
+    }
+
+    #[test]
+    fn test_detect_format_yaml_possible() {
+        assert_eq!(detect_format("key: value"), Some(Format::Yaml));
+    }
+
+    #[test]
+    fn test_detect_format_returns_none_for_plain_text() {
+        assert_eq!(detect_format("just some plain text with no markers"), None);
+    }
+
+    #[test]
+    fn test_detect_format_returns_none_for_empty() {
+        assert_eq!(detect_format(""), None);
+        assert_eq!(detect_format("   \n  \t "), None);
+    }
+
+    #[test]
+    fn test_all_converters_count_matches_features() {
+        let converters = all_converters();
+        let expected = 1 // ini always available
+            + if cfg!(feature = "toml") { 1 } else { 0 }
+            + if cfg!(feature = "json") { 1 } else { 0 }
+            + if cfg!(feature = "yaml") { 1 } else { 0 };
+        assert_eq!(converters.len(), expected);
+    }
+
+    #[test]
+    fn test_all_converters_extensions_unique() {
+        let converters = all_converters();
+        let mut exts: Vec<&str> = converters.iter().map(|c| c.extension()).collect();
+        exts.sort();
+        let total = exts.len();
+        exts.dedup();
+        assert_eq!(exts.len(), total, "duplicate extensions found");
+    }
+
+    #[test]
+    fn test_converter_for_all_formats_present() {
+        for format in Format::all() {
+            let conv = converter_for(*format);
+            assert!(conv.is_some(), "converter for {:?} should exist", format);
+            assert_eq!(conv.unwrap().format(), *format);
+        }
+    }
 }

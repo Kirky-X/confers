@@ -1088,4 +1088,402 @@ mod tests {
         assert_eq!(detect_format_from_content(""), None);
         assert_eq!(detect_format_from_content("   "), None);
     }
+
+    #[test]
+    fn test_path_traversal_error_display_all_variants() {
+        assert!(!PathTraversalError::TooLong.to_string().is_empty());
+        assert!(!PathTraversalError::AbsolutePath.to_string().is_empty());
+        assert!(!PathTraversalError::ParentDirectoryReference
+            .to_string()
+            .is_empty());
+        assert!(!PathTraversalError::InvalidComponent.to_string().is_empty());
+        assert!(!PathTraversalError::EncodedTraversal.to_string().is_empty());
+        assert!(!PathTraversalError::NotFound.to_string().is_empty());
+        assert!(!PathTraversalError::CurrentDirUnavailable
+            .to_string()
+            .is_empty());
+        assert!(!PathTraversalError::OutsideAllowedDirectory
+            .to_string()
+            .is_empty());
+        assert!(!PathTraversalError::SymlinkTraversal.to_string().is_empty());
+        assert!(!PathTraversalError::IoError("disk error".to_string())
+            .to_string()
+            .is_empty());
+    }
+
+    #[test]
+    fn test_path_traversal_error_toolong_message_contains_max() {
+        let msg = PathTraversalError::TooLong.to_string();
+        assert!(msg.contains(&MAX_PATH_LENGTH.to_string()));
+    }
+
+    #[test]
+    fn test_path_traversal_error_clone_debug_eq() {
+        let e1 = PathTraversalError::TooLong;
+        let e2 = e1.clone();
+        assert_eq!(e1, e2);
+        assert!(!format!("{:?}", e1).is_empty());
+        let e3 = PathTraversalError::IoError("a".to_string());
+        let e4 = PathTraversalError::IoError("a".to_string());
+        assert_eq!(e3, e4);
+        assert_ne!(e1, e3);
+    }
+
+    #[test]
+    fn test_path_traversal_error_implements_std_error() {
+        fn check(err: &dyn std::error::Error) -> bool {
+            !err.to_string().is_empty()
+        }
+        assert!(check(&PathTraversalError::TooLong));
+        assert!(check(&PathTraversalError::IoError("x".to_string())));
+        assert!(check(&PathTraversalError::SymlinkTraversal));
+    }
+
+    #[test]
+    fn test_check_path_traversal_rejects_backslash_and_mixed_encoding() {
+        assert!(!check_path_traversal_attempt("%5c%5cwindows"));
+        assert!(!check_path_traversal_attempt("%255c%255c"));
+        assert!(!check_path_traversal_attempt(".%2e"));
+    }
+
+    #[test]
+    fn test_check_path_traversal_accepts_empty_string() {
+        assert!(check_path_traversal_attempt(""));
+    }
+
+    #[test]
+    fn test_check_path_traversal_boundary_length() {
+        // Exactly MAX_PATH_LENGTH should be accepted
+        let exact: String = "a".repeat(MAX_PATH_LENGTH);
+        assert!(check_path_traversal_attempt(&exact));
+        // One byte over should be rejected
+        let over: String = "a".repeat(MAX_PATH_LENGTH + 1);
+        assert!(!check_path_traversal_attempt(&over));
+    }
+
+    #[test]
+    fn test_normalize_rejects_encoded_traversal() {
+        let result = normalize_and_validate_path(
+            Path::new("%2e%2e/etc/passwd"),
+            &[PathBuf::from(".")],
+            false,
+            true,
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), PathTraversalError::EncodedTraversal);
+    }
+
+    #[test]
+    fn test_normalize_too_long_returns_encoded_traversal() {
+        let long = "a/".repeat(5000);
+        let result =
+            normalize_and_validate_path(Path::new(&long), &[PathBuf::from(".")], false, true);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), PathTraversalError::EncodedTraversal);
+    }
+
+    #[test]
+    fn test_normalize_no_symlink_check_with_absolute_allowed() {
+        // check_symlinks=false uses lexical normalization; no filesystem access needed.
+        let result = normalize_and_validate_path(
+            Path::new("any_relative_path.toml"),
+            &[PathBuf::from(".")],
+            true,  // allow_absolute
+            false, // no symlink check
+        );
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(result.unwrap().is_absolute());
+    }
+
+    #[test]
+    fn test_normalize_no_symlink_check_rejects_when_absolute_disallowed() {
+        // Without symlink check, normalized path becomes absolute (joined with current_dir)
+        // and is rejected when allow_absolute is false.
+        let result = normalize_and_validate_path(
+            Path::new("any_relative_path.toml"),
+            &[PathBuf::from(".")],
+            false,
+            false,
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), PathTraversalError::AbsolutePath);
+    }
+
+    #[test]
+    fn test_normalize_no_symlink_check_rejects_parent_dir() {
+        // Parent dir is caught by check_path_components before the symlink branch.
+        let result = normalize_and_validate_path(
+            Path::new("../etc/passwd"),
+            &[PathBuf::from(".")],
+            false,
+            false,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            PathTraversalError::ParentDirectoryReference
+        );
+    }
+
+    #[test]
+    fn test_normalize_absolute_path_with_allow_succeeds() {
+        // Create a temp file to exercise the allow_absolute=true canonicalize branch.
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_normalize_abs.txt");
+        std::fs::write(&test_file, "test").unwrap();
+
+        let result = normalize_and_validate_path(&test_file, &[], true, true);
+        assert!(result.is_ok(), "{:?}", result.err());
+
+        let _ = std::fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_validate_path_with_config_encoded_traversal() {
+        let config = LoaderConfig::new();
+        let result = validate_path_with_config(Path::new("%2e%2e/etc/passwd"), &config);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), PathTraversalError::EncodedTraversal);
+    }
+
+    #[test]
+    fn test_validate_path_with_config_absolute_rejected() {
+        let config = LoaderConfig::new();
+        let result = validate_path_with_config(Path::new("/etc/passwd"), &config);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), PathTraversalError::AbsolutePath);
+    }
+
+    #[test]
+    fn test_loader_config_default_values() {
+        let config = LoaderConfig::default();
+        assert_eq!(config.max_size, DEFAULT_MAX_SIZE);
+        assert!(!config.allow_absolute);
+        assert!(config.check_symlinks);
+        assert_eq!(config.allowed_base_dirs, vec![PathBuf::from(".")]);
+    }
+
+    #[test]
+    fn test_loader_config_new_matches_default() {
+        let new = LoaderConfig::new();
+        let default = LoaderConfig::default();
+        assert_eq!(new.max_size, default.max_size);
+        assert_eq!(new.allow_absolute, default.allow_absolute);
+        assert_eq!(new.check_symlinks, default.check_symlinks);
+        assert_eq!(new.allowed_base_dirs.len(), default.allowed_base_dirs.len());
+    }
+
+    #[test]
+    fn test_loader_config_max_size_builder() {
+        let config = LoaderConfig::new().max_size(512);
+        assert_eq!(config.max_size, 512);
+    }
+
+    #[test]
+    fn test_loader_config_add_multiple_dirs() {
+        let config = LoaderConfig::new()
+            .add_allowed_dir("a")
+            .add_allowed_dir("b")
+            .add_allowed_dir("c");
+        assert_eq!(config.allowed_base_dirs.len(), 4); // default "." + 3
+    }
+
+    #[test]
+    fn test_format_from_str_via_parse() {
+        assert_eq!("toml".parse::<Format>(), Ok(Format::Toml));
+        assert_eq!("JSON".parse::<Format>(), Ok(Format::Json));
+        assert_eq!("Yaml".parse::<Format>(), Ok(Format::Yaml));
+        assert_eq!("yml".parse::<Format>(), Ok(Format::Yaml));
+        assert_eq!("ini".parse::<Format>(), Ok(Format::Ini));
+        assert_eq!("INI".parse::<Format>(), Ok(Format::Ini));
+        assert_eq!("unknown".parse::<Format>(), Err(()));
+        assert_eq!("".parse::<Format>(), Err(()));
+    }
+
+    #[test]
+    fn test_format_try_parse_extra_cases() {
+        assert_eq!(Format::try_parse("TOML"), Some(Format::Toml));
+        assert_eq!(Format::try_parse("YML"), Some(Format::Yaml));
+        assert_eq!(Format::try_parse(""), None);
+        assert_eq!(Format::try_parse("toml/json"), None);
+    }
+
+    #[test]
+    fn test_detect_format_from_path_ini_and_yml() {
+        assert_eq!(
+            detect_format_from_path(Path::new("conf.ini")),
+            Some(Format::Ini)
+        );
+        assert_eq!(
+            detect_format_from_path(Path::new("conf.INI")),
+            Some(Format::Ini)
+        );
+        assert_eq!(
+            detect_format_from_path(Path::new("conf.yml")),
+            Some(Format::Yaml)
+        );
+    }
+
+    #[test]
+    fn test_detect_format_from_path_unknown_extension() {
+        assert_eq!(detect_format_from_path(Path::new("conf.txt")), None);
+        assert_eq!(detect_format_from_path(Path::new("conf.xml")), None);
+        assert_eq!(detect_format_from_path(Path::new("conf")), None);
+    }
+
+    #[test]
+    fn test_detect_format_from_content_yaml_marker() {
+        assert_eq!(
+            detect_format_from_content("---\nkey: value"),
+            Some(Format::Yaml)
+        );
+    }
+
+    #[test]
+    fn test_detect_format_from_content_ini_section() {
+        assert_eq!(
+            detect_format_from_content("[section]\nkey=value"),
+            Some(Format::Ini)
+        );
+    }
+
+    #[test]
+    fn test_detect_format_from_content_yaml_colon() {
+        assert_eq!(detect_format_from_content("key: value"), Some(Format::Yaml));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_parse_content_yaml() {
+        let r = parse_content("key: value", Format::Yaml, SourceId::new("t"), None);
+        assert!(r.is_ok(), "{:?}", r.err());
+        assert!(r.unwrap().is_map());
+    }
+
+    #[cfg(feature = "ini")]
+    #[test]
+    fn test_parse_content_ini() {
+        let r = parse_content(
+            "[section]\nkey=value",
+            Format::Ini,
+            SourceId::new("t"),
+            None,
+        );
+        assert!(r.is_ok(), "{:?}", r.err());
+        assert!(r.unwrap().is_map());
+    }
+
+    #[cfg(feature = "ini")]
+    #[test]
+    fn test_parse_ini_with_comments_and_invalid_lines() {
+        let content =
+            "; ini comment\n# hash comment\n[db]\nhost = localhost\nport = 5432\n=value\nbadline\n";
+        let result = parse_ini(content, SourceId::new("test"), None);
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(result.unwrap().is_map());
+    }
+
+    #[cfg(feature = "ini")]
+    #[test]
+    fn test_parse_ini_empty_key_skipped() {
+        let result = parse_ini("=value\n[section]\nvalid=1\n", SourceId::new("test"), None);
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.is_map());
+    }
+
+    #[cfg(feature = "ini")]
+    #[test]
+    fn test_parse_ini_no_section_key_value() {
+        let result = parse_ini("key=value", SourceId::new("test"), None);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_map());
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_parse_json_error() {
+        assert!(parse_json("{invalid}", SourceId::new("t"), None).is_err());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_parse_yaml_error() {
+        // Unclosed flow mapping
+        assert!(parse_yaml("{a: b", SourceId::new("t"), None).is_err());
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_parse_toml_table_helper_multiple_keys() {
+        let mut table = toml::Table::new();
+        table.insert("k1".to_string(), toml::Value::Integer(42));
+        table.insert("k2".to_string(), toml::Value::String("v2".to_string()));
+        let av = parse_toml_table(&table, &SourceId::new("src"), "prefix");
+        assert!(av.is_map());
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_parse_json_value_helper() {
+        let v = serde_json::json!({"key": "value", "num": 123});
+        let av = parse_json_value(&v, &SourceId::new("src"), "prefix");
+        assert!(av.is_map());
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_parse_yaml_value_helper() {
+        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("key: value").unwrap();
+        let av = parse_yaml_value(&v, &SourceId::new("src"), "prefix");
+        assert!(av.is_map());
+    }
+
+    #[test]
+    fn test_load_file_traversal_rejected() {
+        let config = LoaderConfig::new();
+        let result = load_file(Path::new("../../etc/passwd"), &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_file_encoded_traversal_rejected() {
+        let config = LoaderConfig::new();
+        let result = load_file(Path::new("%2e%2e/etc/passwd"), &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_file_absolute_rejected() {
+        let config = LoaderConfig::new();
+        let result = load_file(Path::new("/etc/passwd"), &config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_file_success() {
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_load_success.toml");
+        std::fs::write(&test_file, "key = \"value\"\n").unwrap();
+
+        let config = LoaderConfig::new().allow_absolute();
+        let result = load_file(&test_file, &config);
+        assert!(result.is_ok(), "{:?}", result.err());
+        assert!(result.unwrap().is_map());
+
+        let _ = std::fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_load_file_size_limit_exceeded() {
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_size_limit.toml");
+        std::fs::write(&test_file, "key = \"value\"\n").unwrap();
+
+        let config = LoaderConfig::new().allow_absolute().max_size(1);
+        let result = load_file(&test_file, &config);
+        assert!(result.is_err());
+
+        let _ = std::fs::remove_file(test_file);
+    }
 }
