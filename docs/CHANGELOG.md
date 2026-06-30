@@ -15,12 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ADR-043**: Error type simplification strategy - layered error architecture with simplified public API
 - **ADR-044**: Test coverage targets (80%) - per-module coverage requirements and CI integration
 - **ADR-045**: API versioning strategy - semver enforcement, deprecation process, and breaking change policy
-- **BrickArchitecture Compliance**: Configuration phase error type `ConfersConfigError` with 10 variants and error codes (2001-2999)
+- **BrickArchitecture Compliance**: Configuration phase error type `ConfigConfigError` with 10 variants and error codes (2001-2999)
 
 ### Changed
 
-- **Error Type Separation**: Split errors into configuration phase (`ConfersConfigError`) and runtime phase (`ConfersError`)
-- **Factory Functions**: Added `new_in_memory_validated()` returning `Result` for BrickArchitecture fail-fast initialization
+- **Error Type Separation**: Split errors into configuration phase (`ConfigConfigError`) and runtime phase (`ConfersError`)
+- **Factory Functions**: Added `new_in_memory_validated()` returning `Result` for BrickArchitecture fail-fast initialization (later removed in favor of `InMemoryConfig::new_validated()`)
 - **Backward Compatibility**: Added aliases `ConfersError = ConfigError`, `ConfersResult<T>` to preserve existing code
 
 ### Documentation

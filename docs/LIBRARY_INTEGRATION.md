@@ -1,303 +1,201 @@
 # Library Integration Guide
 
-This guide explains how to integrate confers CLI functionality into your own Rust projects using the unified `ConfersCli` API.
+This guide explains how to embed `confers` in another Rust project using the
+public library API. The CLI binary (`confers` command) is shipped as a thin
+wrapper around the same library API, so the patterns below also describe what
+the CLI does internally.
+
+> **Note:** `confers::cli` is gated behind the `cli` feature flag and the
+> types it exposes (`Cli`, `Commands`) are **crate-private**. There is no
+> public `ConfersCli` struct and no `confers::commands` module. To drive
+> confers programmatically, use the library API documented below.
 
 ## Quick Start
 
 ### 1. Add Dependency
 
-Add confers to your `Cargo.toml` with the `cli` feature enabled:
-
 ```toml
 [dependencies]
-confers = { version = "0.3.0", features = ["cli"] }
+confers = { version = "0.3.0", features = ["toml", "json", "env"] }
 ```
 
 ### 2. Basic Usage
 
 ```rust
-use confers::ConfersCli;
+use confers::{ConfigBuilder, ConfigConnector, ConfigReader};
+use serde::Deserialize;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Generate a configuration template
-    ConfersCli::generate(Some("config.toml"), "full")?;
-    
-    // Validate a configuration file
-    ConfersCli::validate("config.toml", "full")?;
-    
-    // Compare two configurations
-    ConfersCli::diff("config1.toml", "config2.toml", Some("unified"))?;
-    
-    // Encrypt a value (requires CONFERS_ENCRYPTION_KEY env var)
-    let encrypted = ConfersCli::encrypt("secret_value", None)?;
-    println!("Encrypted: {}", encrypted);
-    
-    Ok(())
-}
-```
-
-**Note:** The CLI feature automatically includes `derive`, `validation`, and `encryption` dependencies.
-
-## API Reference
-
-### ConfersCli
-
-A unified facade for all confers CLI operations.
-
-#### Methods
-
-##### `generate(output, level)`
-
-Generate configuration templates.
-
-**Parameters:**
-- `output: Option<&str>` - Output file path (None prints to stdout)
-- `level: &str` - Template level: "minimal", "full", or "documentation"
-
-**Returns:**
-- `Result<(), ConfigError>`
-
-**Example:**
-```rust
-ConfersCli::generate(Some("app.toml"), "minimal")?;
-ConfersCli::generate(None, "documentation")?; // Prints to stdout
-```
-
-**Note:** This uses `GenerateCommand::execute_placeholder()` internally.
-
-##### `validate(config, level)`
-
-Validate configuration files.
-
-**Parameters:**
-- `config: &str` - Path to configuration file
-- `level: &str` - Validation level: "minimal", "full", or "documentation"
-
-**Returns:**
-- `Result<(), ConfigError>`
-
-**Example:**
-```rust
-ConfersCli::validate("config.toml", "full")?;
-```
-
-**Note:** This uses `ValidateCommand::execute_generic()` internally.
-
-##### `diff(file1, file2, format)`
-
-Compare two configuration files.
-
-**Parameters:**
-- `file1: &str` - Path to first configuration file
-- `file2: &str` - Path to second configuration file
-- `format: Option<&str>` - Diff format: "unified", "context", "normal", "side-by-side", or "strict"
-
-**Returns:**
-- `Result<(), ConfigError>`
-
-**Example:**
-```rust
-ConfersCli::diff("old.toml", "new.toml", Some("side-by-side"))?;
-```
-
-**Note:** This creates `DiffOptions` with default values and calls `DiffCommand::execute()`.
-
-##### `encrypt(value, key)`
-
-Encrypt configuration values.
-
-**Parameters:**
-- `value: &str` - Value to encrypt
-- `key: Option<&str>` - Optional Base64-encoded 32-byte key
-
-**Returns:**
-- `Result<String, ConfigError>` - Base64-encoded encrypted value
-
-**Example:**
-```rust
-let encrypted = ConfersCli::encrypt("secret_password", None)?;
-let encrypted_with_key = ConfersCli::encrypt("secret", Some("base64_key_here"))?;
-```
-
-##### `wizard(non_interactive)`
-
-Run the interactive configuration wizard.
-
-**Parameters:**
-- `non_interactive: bool` - If true, uses default values without prompting
-
-**Example:**
-```rust
-ConfersCli::wizard(false)?;  // Interactive mode
-ConfersCli::wizard(true)?;   // Non-interactive mode
-```
-
-##### `completions(shell)`
-
-Generate shell completion scripts.
-
-**Parameters:**
-- `shell: &str` - Shell type: "bash", "fish", "zsh", "powershell", or "elvish"
-
-**Example:**
-```rust
-ConfersCli::completions("bash")?;
-ConfersCli::completions("zsh")?;
-```
-
-##### `key(subcommand)`
-
-Execute key management operations.
-
-**Parameters:**
-- `subcommand: &KeySubcommand` - Key subcommand to execute
-
-**Example:**
-```rust
-use confers::commands::key::KeySubcommand;
-
-ConfersCli::key(&KeySubcommand::Generate)?;
-```
-
-## Advanced Usage
-
-### Custom Configuration Types
-
-You can use confers with your own configuration types:
-
-```rust
-use confers::{Config, ConfersCli};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct MyAppConfig {
+#[derive(Debug, Deserialize)]
+struct AppConfig {
     pub name: String,
     pub port: u16,
-    pub debug: bool,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Generate template for your config type
-    // This requires the schema feature
-    #[cfg(feature = "schema")]
-    {
-        confers::commands::GenerateCommand::execute::<MyAppConfig>(
-            Some("my_app.toml".into()),
-            "full"
-        )?;
-    }
-    
-    // Validate your config type
-    #[cfg(feature = "validation")]
-    {
-        use confers::commands::validate::{ValidateCommand, ValidateLevel};
-        ValidateCommand::execute::<MyAppConfig>("my_app.toml", ValidateLevel::Full)?;
-    }
-    
+fn main() -> confers::BuildResult<()> {
+    let config = ConfigBuilder::<AppConfig>::new()
+        .file("config.toml")
+        .env()
+        .build()?;
+
+    // Access the typed configuration
+    println!("name = {}", config.name);
+    println!("port = {}", config.port);
     Ok(())
 }
 ```
 
-### Error Handling
+## Loading Configuration
 
-All methods return `Result<(), ConfigError>` (or `Result<String, ConfigError>` for encrypt):
+`ConfigBuilder` is the entry point for assembling a configuration from
+multiple sources. Each source contributes a layer, and later sources
+override earlier ones according to the merge strategy.
 
 ```rust
-use confers::{ConfersCli, ConfigError};
+use confers::ConfigBuilder;
 
-fn handle_config_operations() -> Result<(), ConfigError> {
-    match ConfersCli::validate("config.toml", "full") {
-        Ok(_) => println!("Configuration is valid"),
-        Err(ConfigError::FileNotFound { path }) => {
-            eprintln!("Configuration file not found: {:?}", path);
-        }
-        Err(ConfigError::ParseError(msg)) => {
-            eprintln!("Parse error: {}", msg);
-        }
-        Err(e) => {
-            eprintln!("Validation failed: {}", e);
-        }
-    }
-    
-    Ok(())
+let value = ConfigBuilder::<serde_json::Value>::new()
+    .file("base.toml")
+    .file("override.toml")
+    .env()
+    .build_annotated()?; // Returns an AnnotatedValue with provenance
+```
+
+### Source Chain
+
+For finer control over priority, use `SourceChainBuilder`:
+
+```rust
+use confers::{SourceChainBuilder, FileSource, EnvSource};
+
+let chain = SourceChainBuilder::new()
+    .add_source(FileSource::new("base.toml"))
+    .add_source(EnvSource::new())
+    .build();
+```
+
+## Validation
+
+Enable the `validation` feature and derive `Validate` (from `garde`) on the
+config struct:
+
+```rust
+use confers::Config;
+use garde::Validate;
+
+#[derive(Config, Validate)]
+#[config(validate)]
+struct ServerConfig {
+    #[garde(email)]
+    pub admin_email: String,
+    #[garde(range(min = 1, max = 65535))]
+    pub port: u16,
 }
 ```
+
+## Encryption
+
+For sensitive fields, enable the `encryption` feature and use
+`XChaCha20Crypto`:
+
+```rust
+use confers::XChaCha20Crypto;
+
+let crypto = XChaCha20Crypto::new();
+let ciphertext = crypto.encrypt(b"secret value", &key)?;
+```
+
+## Remote Sources
+
+The `remote` feature provides HTTP-polled remote configuration sources:
+
+```rust
+use confers::remote::HttpPolledSourceBuilder;
+
+let source = HttpPolledSourceBuilder::new()
+    .url("https://config-server.example.com/app-config")
+    .interval(std::time::Duration::from_secs(30))
+    .build()?;
+```
+
+For etcd or Consul backends, enable the `etcd` or `consul` feature and use
+`EtcdSourceBuilder` / `ConsulSourceBuilder` respectively.
 
 ## Feature Flags
 
-The library integration requires the `cli` feature, but you can enable additional features:
+The library is feature-gated. See `Cargo.toml` for the full list of feature
+presets (`default`, `recommended`, `dev`, `production`, `full`). Common
+features:
 
-```toml
-[dependencies]
-confers = { 
-    version = "0.3.0", 
-    features = [
-        "cli",           # Required for ConfersCli
-        "validation",    # For config validation
-        "encryption",    # For value encryption
-        "schema",       # For schema generation
-        "watch",        # For file watching
-        "remote",       # For remote configuration
-    ]
+| Feature        | Description                              |
+| -------------- | ---------------------------------------- |
+| `toml`         | TOML format support                      |
+| `json`         | JSON format support                      |
+| `yaml`         | YAML format support                      |
+| `env`          | Environment variable source              |
+| `validation`   | Schema validation via `garde`           |
+| `watch`        | File watching for hot reload            |
+| `encryption`   | Field-level encryption (XChaCha20)      |
+| `audit`        | Audit logging                            |
+| `cli`          | CLI binary (does not expose a public API) |
+
+## Error Handling
+
+The library distinguishes **configuration phase** errors from **runtime**
+errors:
+
+- `ConfigConfigError` — initialization-time failures (missing fields, parse
+  errors, validation failures).
+- `ConfersError` — runtime failures (timeouts, remote unavailable, decryption
+  failures).
+
+```rust
+use confers::{ConfigConfigError, ConfersError};
+
+match result {
+    Err(ConfigConfigError::MissingField { field }) => {
+        eprintln!("Missing field: {}", field);
+    }
+    Err(ConfersError::Timeout { .. }) => {
+        eprintln!("Operation timed out");
+    }
+    _ => {}
 }
 ```
 
-## Migration from Direct Command Usage
+## Migration from Earlier `ConfersCli` Snapshots
 
-If you were previously using the command modules directly:
-
-**Before:**
-```rust
-use confers::commands::{GenerateCommand, ValidateCommand};
-
-GenerateCommand::execute_placeholder(Some("config.toml".into()), "full")?;
-ValidateCommand::execute_generic("config.toml", ValidateLevel::Full)?;
-```
-
-**After:**
-```rust
-use confers::ConfersCli;
-
-ConfersCli::generate(Some("config.toml"), "full")?;
-ConfersCli::validate("config.toml", "full")?;
-```
-
-The new API provides:
-- ✅ Simpler method signatures
-- ✅ Better error handling
-- ✅ Consistent parameter naming
-- ✅ Comprehensive documentation
-- ✅ Type safety where possible
+If you previously relied on snippets referencing `confers::ConfersCli`,
+`confers::commands::key::KeySubcommand`, or
+`confers::commands::validate::{ValidateCommand, ValidateLevel}`, please
+migrate to the public API above. Those types were never part of the public
+export surface and have been removed from the documentation; the CLI binary
+internally uses `clap` and the types remain crate-private.
 
 ## Troubleshooting
 
 ### Feature Not Enabled
 
-If you get "feature not enabled" errors, make sure you have the `cli` feature in your `Cargo.toml`:
+If a symbol is missing, verify the corresponding feature is enabled:
 
 ```toml
 [dependencies]
-confers = { version = "0.3.0", features = ["cli"] }
+confers = { version = "0.3.0", features = ["validation", "encryption"] }
 ```
 
 ### Encryption Key Issues
 
-For encryption operations, you can either:
-1. Set the `CONFERS_ENCRYPTION_KEY` environment variable
-2. Provide a key directly to the `encrypt` method
+`derive_field_key` requires a 32-byte master key. Use `KeyManager` (under the
+`key` feature) to manage key material securely:
 
-```bash
-# Set environment variable
-export CONFERS_ENCRYPTION_KEY=$(base64 <<< "32-byte-key-here-123456789012")
+```rust
+use confers::key::KeyManager;
+use std::path::PathBuf;
+
+let mut km = KeyManager::new(PathBuf::from("./secure_keys"))?;
 ```
 
 ### Validation Failures
 
-If validation fails, use the "documentation" level to get detailed information:
-
-```rust
-ConfersCli::validate("config.toml", "documentation")?;
-```
-
-This will provide a comprehensive report of all validation checks.
+Inspect `ValidationResult` for the list of failing rules and the offending
+field paths. Each `ValidationRule` reports the field path, the rule name, and
+a human-readable message.

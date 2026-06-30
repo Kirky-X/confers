@@ -8,7 +8,7 @@
 
 ```
 examples/
-├── Cargo.toml              # 项目配置（含 13 个 [[bin]] targets）
+├── Cargo.toml              # 项目配置（含 17 个 [[bin]] targets）
 ├── src/
 │   ├── examples/           # 示例源码
 │   │   ├── basic_usage.rs
@@ -23,6 +23,10 @@ examples/
 │   │   ├── progressive_reload.rs
 │   │   ├── config_bus.rs
 │   │   ├── snapshot.rs
+│   │   ├── cli_integration.rs
+│   │   ├── json_schema.rs
+│   │   ├── metrics.rs
+│   │   ├── validation.rs
 │   │   └── full_stack.rs
 │   └── main.rs            # 默认入口（显示帮助信息）
 └── config/                # 配置文件目录
@@ -64,6 +68,10 @@ cargo run --bin snapshot
 | progressive_reload | 渐进式重载功能 | toml, progressive-reload | ADR-036 |
 | config_bus | ConfigBus 多实例广播 | toml, config-bus | ADR-035 |
 | snapshot | 配置快照持久化 | toml, snapshot | ADR-033 |
+| cli_integration | ConfigClap 派生宏 CLI 集成 | cli | ADR-011 |
+| json_schema | ConfigSchema 派生宏 JSON Schema 生成 | schema | ADR-012 |
+| metrics | 指标收集与 Prometheus 导出 | metrics | ADR-014 |
+| validation | 基于 garde 的字段级验证 | validation | ADR-010 |
 | full_stack | 完整功能栈综合示例 | full | - |
 
 ## 示例说明
@@ -162,6 +170,64 @@ cargo run --bin snapshot
 - 动态字段
 - 审计日志
 - 快照
+
+### cli_integration
+展示 CLI 集成功能：
+- `#[derive(ConfigClap)]` 派生宏自动生成 CLI 参数
+- CLI 参数覆盖配置文件值
+- 点号表示法的嵌套配置 CLI 参数
+- 自动生成帮助文本
+- CLI 参数与配置合并
+
+运行方式：
+```bash
+cargo run --bin cli_integration
+cargo run --bin cli_integration -- --help
+cargo run --bin cli_integration -- --host 0.0.0.0 --port 9000
+cargo run --bin cli_integration -- --server.host localhost
+```
+
+### json_schema
+展示 JSON Schema 生成功能：
+- `#[derive(ConfigSchema)]` 派生宏自动生成 JSON Schema
+- 从配置结构生成 TypeScript 类型定义
+- 带验证约束的 schema 生成
+- 嵌套结构 schema 生成
+- Schema 导出到文件
+
+运行方式：
+```bash
+cargo run --bin json_schema
+cargo run --bin json_schema -- --output schema.json
+```
+
+### metrics
+展示指标收集功能：
+- 配置操作指标收集
+- Prometheus exporter 集成
+- 自定义指标注册和记录
+- 带标签的指标（labels/tags）
+- 指标查询和展示
+
+运行方式：
+```bash
+cargo run --bin metrics
+# 在另一个终端启动 Prometheus 并抓取指标:
+# prometheus --config.file=prometheus.yml
+```
+
+### validation
+展示配置验证功能：
+- 基于 garde 框架的字段级验证
+- 内置验证规则（长度、范围、格式）
+- 自定义验证逻辑
+- 验证错误展示和处理
+- 与配置加载集成
+
+运行方式：
+```bash
+cargo run --bin validation
+```
 
 ## 项目结构
 

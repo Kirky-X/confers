@@ -137,7 +137,7 @@ let config = AppConfig::load_sync()?;
 |   🌐   | **Remote Configuration**       | etcd, Consul, HTTP support (`remote` feature)               |
 |   📦   | **Audit Logging**              | Record access & change history (`audit` feature)            |
 |   ⚡   | **Parallel Validation**        | Parallel validation for large configs (`parallel` feature)  |
-|   📈   | **System Monitoring**          | Memory usage monitoring (`monitoring` feature)              |
+|   📈   | **System Monitoring**          | Memory usage monitoring (`metrics` feature)              |
 |   🔧   | **Configuration Diff**         | Compare configs with multiple output formats                |
 |   🎨   | **Interactive Wizard**         | Generate config templates via CLI                           |
 |   🛡️   | **Security Enhancements**      | Nonce reuse detection, SSRF protection                      |
@@ -208,7 +208,7 @@ graph LR
 | `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
 | `profile`             |   ❌    | Environment profiles                                 | Stable    |
 | `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
-| `hot-reload`          |   ❌    | Hot reload (alias for watch)                         | Stable    |
+| `hot-reload`          |   ❌    | Hot reload (removed; use `watch` feature)            | Removed   |
 | **Remote Sources**    |         |                                                      |           |
 | `remote`              |   ❌    | HTTP polling                                         | Beta      |
 | `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
@@ -562,7 +562,7 @@ Confers now follows **BrickArchitecture** error separation patterns:
 
 | Error Type           | Phase         | When It Occurs      | Example                                        |
 | -------------------- | ------------- | ------------------- | ---------------------------------------------- |
-| `ConfersConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
+| `ConfigConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
 | `ConfersError`       | Runtime       | Use time            | Timeout, remote unavailable, decryption failed |
 
 **Backward Compatibility:** Existing `ConfigError` and `ConfigResult<T>` aliases remain available.
@@ -572,14 +572,15 @@ Confers now follows **BrickArchitecture** error separation patterns:
 
 ```rust
 // OLD: ConfigError for all errors
-use confers::{ConfigError, new_in_memory_with_capacity};
+use confers::ConfigError;
 
-// NEW: Use validated constructor for initialization
-use confers::{ConfersConfigError, ConfersError, new_in_memory_validated};
+// NEW: Use BrickArchitecture error separation
+use confers::{ConfigConfigError, ConfersError};
 
-// Configuration phase - use ConfersConfigError
-fn init_config() -> Result<impl ConfigConnector, ConfersConfigError> {
-    let config = new_in_memory_validated(1000)?;  // Returns ConfigError
+// Configuration phase - use ConfigConfigError
+fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
+    use confers::impl_::memory::InMemoryConfig;
+    let config = InMemoryConfig::new_validated(1000)?; // Returns ConfigConfigError
     Ok(config)
 }
 

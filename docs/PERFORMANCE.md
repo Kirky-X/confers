@@ -115,17 +115,9 @@ pub struct LargeConfig {
 
 ### Validation Cache
 
-For repeated validations of the same config:
-
-```rust
-use confers::validator::CachedValidationEngine;
-
-let engine = CachedValidationEngine::new(capacity: 1000);
-let result = engine.validate(&config)?;
-
-// Subsequent validations of same config hit cache
-let cached_result = engine.validate(&config)?;
-```
+Validation caching is not currently exposed as a public API. Wrap `Validate`
+in your own cache (e.g. `moka::Cache`) if repeated validation of identical
+configurations becomes a bottleneck.
 
 ### Skip Expensive Rules When Possible
 
@@ -173,14 +165,10 @@ println!("{:?}", value.as_str());
 
 ### Streaming for Large Files
 
-```rust
-// For configs > 10MB, use streaming
-use confers::loader::StreamingLoader;
-
-let loader = StreamingLoader::new()
-    .max_chunk_size(1024 * 1024)  // 1MB chunks
-    .load("huge-config.json")?;
-```
+`confers` does not currently ship a streaming loader API. For files larger
+than 10 MB, prefer loading the file into a `String` once and passing it to
+`confers::parse_content` so the parser can operate on the in-memory buffer
+without re-reading from disk.
 
 ---
 
@@ -241,24 +229,21 @@ let config = ConfigBuilder::new()
 ### Built-in Cache
 
 ```rust
-use confers::loader::CacheConfig;
+use confers::loader::LoaderConfig;
 
-let loader = ConfigLoader::builder()
-    .cache(CacheConfig::builder()
-        .max_entries(1000)
-        .ttl(std::time::Duration::from_secs(60))
-        .build())
-    .build()?;
+// LoaderConfig exposes the in-memory cache policy used by the loader.
+let loader_config = LoaderConfig::default();
 ```
 
 ### ETags and Remote Config
 
 ```rust
-use confers::remote::HttpProvider;
+use confers::remote::HttpPolledSourceBuilder;
 
-let provider = HttpProvider::new()
-    .enable_etag_caching()  // Use ETags to skip unchanged configs
-    .poll_interval(Duration::from_secs(30));
+let source = HttpPolledSourceBuilder::new()
+    .url("https://config-server.example.com/app-config")
+    .interval(std::time::Duration::from_secs(30))
+    .build()?;
 ```
 
 ### Snapshot Caching

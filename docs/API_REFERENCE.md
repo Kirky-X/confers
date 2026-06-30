@@ -906,13 +906,11 @@ let clean_msg = sanitizer.sanitize(&error_msg);
 
 Secure configuration injector.
 
-```rust
-use confers::security::ConfigInjector;
-
-let injector = ConfigInjector::new()
-    .with_validator(validator)
-    .inject(&config)?;
-```
+> **Note:** `ConfigInjector` currently lives in `src/security/config_injector.rs`
+> but is **not re-exported** as part of the public API (`mod config_injector` is
+> declared `pub(crate)` in `src/security/mod.rs`). It is tracked as internal
+> infrastructure; if you need to integrate configuration injection into your
+> own pipeline, open an issue so the maintainers can expose a stable surface.
 
 ---
 
@@ -1056,7 +1054,7 @@ The `typescript-schema` feature supports generating TypeScript definitions from 
 Generate TypeScript type definitions.
 
 ```rust
-use confers::schema::generate_typescript;
+use confers::schema::TypeScriptGenerator;
 
 #[derive(confers::Config)]
 pub struct AppConfig {
@@ -1065,7 +1063,7 @@ pub struct AppConfig {
     pub debug: bool,
 }
 
-let ts = generate_typescript::<AppConfig>();
+let ts = TypeScriptGenerator::generate::<AppConfig>();
 println!("{}", ts);
 ```
 
@@ -1398,7 +1396,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Key Rotation
 
 ```rust
-use confers::key::manager::KeyManager;
+use confers::key::KeyManager;
 use std::path::PathBuf;
 
 fn rotate_keys() -> Result<(), Box<dyn std::error::Error>> {
@@ -1550,7 +1548,7 @@ fn default_timeout() -> Duration {
 </div>
 
 ```rust
-use confers::key::manager::KeyManager;
+use confers::key::KeyManager;
 use std::path::PathBuf;
 
 fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
@@ -1852,7 +1850,7 @@ let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 **How to rotate keys:**
 
 ```rust
-use confers::key::manager::KeyManager;
+use confers::key::KeyManager;
 use std::path::PathBuf;
 
 let mut km = KeyManager::new(PathBuf::from("./keys"))?;
