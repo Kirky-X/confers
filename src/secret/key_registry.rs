@@ -527,4 +527,301 @@ mod tests {
         let cfg = KeyRotationConfig::default();
         assert_eq!(cfg.max_key_versions, 3);
     }
+
+    #[test]
+    fn test_rotate_to_no_prior_primary() {
+        // Rotating when no primary key exists returns "none".
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let old = registry
+            .rotate_to("v1".to_string(), SecretBytes::new(vec![1u8; 32]))
+            .unwrap();
+        assert_eq!(old, "none");
+        let (version, _) = registry.get_primary_key().unwrap();
+        assert_eq!(version, "v1");
+    }
+
+    #[test]
+    fn test_get_primary_key_no_keys() {
+        // No primary key registered → InvalidKeyLength(0) error.
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let result = registry.get_primary_key();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_key_demotes_old_primary() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true)
+            .unwrap();
+        // Register v2 as primary — v1 must be demoted.
+        registry
+            .register_key("v2".to_string(), SecretBytes::new(vec![2u8; 32]), true)
+            .unwrap();
+
+        let (version, _) = registry.get_primary_key().unwrap();
+        assert_eq!(version, "v2");
+        // Both keys remain in storage.
+        assert_eq!(registry.version_count(), 2);
+        // Old primary key still retrievable.
+        assert!(registry.get_key("v1").is_ok());
+    }
+
+    #[test]
+    fn test_register_key_replaces_same_version() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true)
+            .unwrap();
+        // Re-register same version with different key.
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![2u8; 32]), true)
+            .unwrap();
+        assert_eq!(registry.version_count(), 1);
+        let retrieved = registry.get_key("v1").unwrap();
+        assert_eq!(&*retrieved, &vec![2u8; 32]);
+    }
+
+    #[test]
+    fn test_try_decrypt_with_all_keys_no_match() {
+        use crate::secret::XChaCha20Crypto;
+
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let crypto = XChaCha20Crypto::new();
+
+        // Register key1.
+        let key1 = vec![1u8; 32];
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(key1), true)
+            .unwrap();
+
+        // Encrypt with a DIFFERENT key not in the registry.
+        let key2 = vec![2u8; 32];
+        let plaintext = b"secret message";
+        let (nonce, ciphertext) = crypto.encrypt(plaintext, &key2).unwrap();
+
+        // No registered key can decrypt → DecryptionFailed.
+        let result = registry.try_decrypt_with_all_keys(&nonce, &ciphertext);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_decrypt_with_all_keys_empty_registry() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let result = registry.try_decrypt_with_all_keys(&[0u8; 24], b"some ciphertext");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_add_async_provider() {
+        // Verify add_async_provider does not panic with a minimal mock.
+        // Uses a real provider only when encryption feature is enabled.
+        #[cfg(feature = "encryption")]
+        {
+            use crate::error::ConfigResult;
+            use crate::interface::AsyncKeyProvider;
+            use crate::types::ZeroizingBytes;
+            use async_trait::async_trait;
+
+            struct DummyAsync;
+            #[async_trait]
+            impl AsyncKeyProvider for DummyAsync {
+                async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                    Ok(ZeroizingBytes::new(vec![0u8; 32]))
+                }
+                fn provider_type(&self) -> &'static str {
+                    "dummy-async"
+                }
+            }
+
+            let registry = KeyRegistry::new(KeyRotationConfig::default());
+            registry.add_async_provider(Arc::new(DummyAsync));
+            // No panic means success.
+        }
+    }
+
+    #[cfg(feature = "encryption")]
+    #[tokio::test]
+    async fn test_fetch_and_register_sync_provider() {
+        use crate::error::ConfigResult;
+        use crate::interface::KeyProvider;
+        use crate::types::ZeroizingBytes;
+
+        struct OkProvider;
+        impl KeyProvider for OkProvider {
+            fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                Ok(ZeroizingBytes::new(vec![5u8; 32]))
+            }
+            fn provider_type(&self) -> &'static str {
+                "test-ok"
+            }
+        }
+
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        registry.add_provider(Arc::new(OkProvider));
+        let result = registry.fetch_and_register("v1").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![5u8; 32]);
+        // Key registered as non-primary.
+        assert_eq!(registry.version_count(), 1);
+        assert!(registry.get_key("v1").is_ok());
+    }
+
+    #[cfg(feature = "encryption")]
+    #[tokio::test]
+    async fn test_fetch_and_register_no_providers() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let result = registry.fetch_and_register("v1").await;
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "encryption")]
+    #[tokio::test]
+    async fn test_fetch_and_register_async_provider() {
+        use crate::error::ConfigResult;
+        use crate::interface::AsyncKeyProvider;
+        use crate::types::ZeroizingBytes;
+        use async_trait::async_trait;
+
+        struct OkAsyncProvider;
+        #[async_trait]
+        impl AsyncKeyProvider for OkAsyncProvider {
+            async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                Ok(ZeroizingBytes::new(vec![7u8; 32]))
+            }
+            fn provider_type(&self) -> &'static str {
+                "test-ok-async"
+            }
+        }
+
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        registry.add_async_provider(Arc::new(OkAsyncProvider));
+        let result = registry.fetch_and_register("v1").await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![7u8; 32]);
+    }
+
+    #[test]
+    fn test_key_registry_builder_default_impl() {
+        let registry = KeyRegistryBuilder::default().build();
+        assert_eq!(registry.version_count(), 0);
+        assert!(registry.get_primary_key().is_err());
+    }
+
+    #[test]
+    fn test_key_registry_builder_full_chain() {
+        let registry = KeyRegistry::builder()
+            .max_versions(5)
+            .cache_policy(KeyCachePolicy::NoCache)
+            .initial_key("v1".to_string(), vec![1u8; 32], true)
+            .initial_key("v2".to_string(), vec![2u8; 32], false)
+            .build();
+        assert_eq!(registry.version_count(), 2);
+        let (version, _) = registry.get_primary_key().unwrap();
+        assert_eq!(version, "v1");
+    }
+
+    #[test]
+    fn test_key_registry_builder_initial_keys() {
+        let registry = KeyRegistry::builder()
+            .initial_key("alpha".to_string(), vec![1u8; 32], true)
+            .initial_key("beta".to_string(), vec![2u8; 32], false)
+            .build();
+        let versions = registry.get_all_versions();
+        assert_eq!(versions.len(), 2);
+        assert!(versions.contains(&"alpha".to_string()));
+        assert!(versions.contains(&"beta".to_string()));
+    }
+
+    #[test]
+    fn test_key_registry_builder_max_versions() {
+        let registry = KeyRegistry::builder()
+            .max_versions(2)
+            .initial_key("v1".to_string(), vec![1u8; 32], true)
+            .initial_key("v2".to_string(), vec![2u8; 32], false)
+            .initial_key("v3".to_string(), vec![3u8; 32], false)
+            .build();
+        // max_versions=2 enforces eviction of oldest non-primary.
+        assert_eq!(registry.version_count(), 2);
+    }
+
+    #[test]
+    fn test_key_registry_builder_config_setter() {
+        let config = KeyRotationConfig {
+            max_key_versions: 1,
+            ..Default::default()
+        };
+        let registry = KeyRegistry::builder()
+            .config(config)
+            .initial_key("v1".to_string(), vec![1u8; 32], true)
+            .initial_key("v2".to_string(), vec![2u8; 32], false)
+            .build();
+        // config.max_key_versions=1 → v1 (primary) evicts v2.
+        assert_eq!(registry.version_count(), 1);
+    }
+
+    #[test]
+    fn test_key_registry_builder_with_provider() {
+        use crate::error::ConfigResult;
+        use crate::interface::KeyProvider;
+        use crate::types::ZeroizingBytes;
+
+        struct DummyProvider;
+        impl KeyProvider for DummyProvider {
+            fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                Ok(ZeroizingBytes::new(vec![9u8; 32]))
+            }
+            fn provider_type(&self) -> &'static str {
+                "builder-dummy"
+            }
+        }
+
+        let registry = KeyRegistry::builder()
+            .provider(Arc::new(DummyProvider))
+            .build();
+        // Provider registered without panic; fetch must succeed.
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(registry.fetch_and_register("v1"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_max_versions_keeps_primary() {
+        // Primary key must NOT be evicted even when max versions exceeded.
+        let config = KeyRotationConfig {
+            max_key_versions: 2,
+            ..Default::default()
+        };
+        let registry = KeyRegistry::new(config);
+        registry
+            .register_key("v1".to_string(), SecretBytes::new(vec![1u8; 32]), true)
+            .unwrap();
+        registry
+            .register_key("v2".to_string(), SecretBytes::new(vec![2u8; 32]), false)
+            .unwrap();
+        registry
+            .register_key("v3".to_string(), SecretBytes::new(vec![3u8; 32]), false)
+            .unwrap();
+
+        // v2 should be evicted (oldest non-primary), v1 (primary) must remain.
+        assert_eq!(registry.version_count(), 2);
+        assert!(registry.get_key("v1").is_ok());
+        assert!(registry.get_key("v2").is_err());
+        assert!(registry.get_key("v3").is_ok());
+        let (primary, _) = registry.get_primary_key().unwrap();
+        assert_eq!(primary, "v1");
+    }
+
+    #[test]
+    fn test_version_count_initial() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        assert_eq!(registry.version_count(), 0);
+    }
+
+    #[test]
+    fn test_get_all_versions_empty() {
+        let registry = KeyRegistry::new(KeyRotationConfig::default());
+        let versions = registry.get_all_versions();
+        assert!(versions.is_empty());
+    }
 }

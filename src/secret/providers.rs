@@ -397,4 +397,224 @@ mod tests {
             .unwrap();
         assert_eq!(p.provider_type(), "file");
     }
+
+    #[test]
+    fn test_file_key_provider_file_not_found() {
+        let provider = FileKeyProvider::new("/nonexistent/path/does-not-exist-key.txt");
+        let result = provider.get_key();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_key_provider_non_utf8_content() {
+        let mut f = NamedTempFile::new().unwrap();
+        // Invalid UTF-8 bytes — from_utf8 conversion must fail before length check.
+        f.write_all(&[0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA]).unwrap();
+        let provider = FileKeyProvider::new(f.path());
+        let result = provider.get_key();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_key_provider_empty_file() {
+        let f = NamedTempFile::new().unwrap();
+        let provider = FileKeyProvider::new(f.path());
+        // Empty content → trimmed length 0 < 32 → KeyError
+        let result = provider.get_key();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_key_provider_with_cache_policy() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        let provider = FileKeyProvider::new(f.path()).with_cache_policy(KeyCachePolicy::NoCache);
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::NoCache);
+    }
+
+    #[test]
+    fn test_file_key_provider_default_cache_policy() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        let provider = FileKeyProvider::new(f.path());
+        assert_eq!(
+            provider.cache_policy(),
+            KeyCachePolicy::CacheWithTtl(std::time::Duration::from_secs(3600))
+        );
+    }
+
+    #[test]
+    fn test_file_key_provider_cache_indefinitely_policy() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        let provider =
+            FileKeyProvider::new(f.path()).with_cache_policy(KeyCachePolicy::CacheIndefinitely);
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::CacheIndefinitely);
+    }
+
+    #[test]
+    fn test_file_key_provider_extracts_exactly_32_bytes() {
+        let mut f = NamedTempFile::new().unwrap();
+        let key = b"0123456789abcdef0123456789abcdefEXTRA_TRAILING_DATA"; // pragma: allowlist secret
+        f.write_all(key).unwrap();
+        let provider = FileKeyProvider::new(f.path());
+        let result = provider.get_key().unwrap();
+        assert_eq!(result.len(), 32);
+        assert_eq!(&*result, &key[..32]);
+    }
+
+    #[test]
+    fn test_file_key_provider_exactly_32_chars_boundary() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"0123456789abcdef0123456789abcdef").unwrap(); // pragma: allowlist secret
+        let provider = FileKeyProvider::new(f.path());
+        let result = provider.get_key();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 32);
+    }
+
+    #[test]
+    fn test_file_key_provider_builder_default_impl() {
+        let builder = FileKeyProviderBuilder::default();
+        // Default builder has no path set — build must fail.
+        assert!(builder.build().is_err());
+    }
+
+    #[test]
+    fn test_file_key_provider_as_trait_object() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        let provider = FileKeyProvider::new(f.path());
+        let provider_ref: &dyn KeyProvider = &provider;
+        assert_eq!(provider_ref.provider_type(), "file");
+        let key = provider_ref.get_key().unwrap();
+        assert_eq!(key.len(), 32);
+    }
+
+    #[test]
+    fn test_file_key_provider_builder_with_cache_indefinitely() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        let provider = FileKeyProvider::builder()
+            .path(f.path())
+            .cache_policy(KeyCachePolicy::CacheIndefinitely)
+            .build()
+            .unwrap();
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::CacheIndefinitely);
+    }
+
+    // ===== VaultKeyProvider tests (only when `remote` feature is enabled) =====
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_new_https() {
+        let provider =
+            VaultKeyProvider::new("https://vault.example.com", "secret/data/path", "my_key")
+                .unwrap();
+        assert_eq!(provider.provider_type(), "vault");
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_new_non_https() {
+        let result = VaultKeyProvider::new("http://vault.example.com", "secret/path", "key");
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_with_token() {
+        let provider = VaultKeyProvider::new("https://vault.example.com", "secret/path", "key")
+            .unwrap()
+            .with_token("my-token");
+        assert_eq!(provider.provider_type(), "vault");
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_with_cache_policy() {
+        let provider = VaultKeyProvider::new("https://vault.example.com", "secret/path", "key")
+            .unwrap()
+            .with_cache_policy(KeyCachePolicy::NoCache);
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::NoCache);
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_cache_policy_default() {
+        let provider =
+            VaultKeyProvider::new("https://vault.example.com", "secret/path", "key").unwrap();
+        assert_eq!(
+            provider.cache_policy(),
+            KeyCachePolicy::CacheWithTtl(std::time::Duration::from_secs(3600))
+        );
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_default_impl() {
+        let builder = VaultKeyProviderBuilder::default();
+        assert!(builder.build().is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_success() {
+        let provider = VaultKeyProvider::builder()
+            .vault_addr("https://vault.example.com")
+            .secret_path("secret/data/path")
+            .secret_key("my_key")
+            .token("my-token")
+            .cache_policy(KeyCachePolicy::NoCache)
+            .build()
+            .unwrap();
+        assert_eq!(provider.provider_type(), "vault");
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::NoCache);
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_no_vault_addr() {
+        let result = VaultKeyProvider::builder()
+            .secret_path("secret/path")
+            .secret_key("key")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_non_https() {
+        let result = VaultKeyProvider::builder()
+            .vault_addr("http://vault.example.com")
+            .secret_path("secret/path")
+            .secret_key("key")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_no_secret_path() {
+        let result = VaultKeyProvider::builder()
+            .vault_addr("https://vault.example.com")
+            .secret_key("key")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_key_provider_builder_no_secret_key() {
+        let result = VaultKeyProvider::builder()
+            .vault_addr("https://vault.example.com")
+            .secret_path("secret/path")
+            .build();
+        assert!(result.is_err());
+    }
 }
