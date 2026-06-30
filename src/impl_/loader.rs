@@ -1003,6 +1003,7 @@ mod tests {
         assert!(val.is_map());
     }
 
+    #[cfg(feature = "yaml")]
     #[test]
     fn test_parse_yaml_content() {
         let result = parse_yaml("key: value", SourceId::new("test"), None);

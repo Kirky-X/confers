@@ -322,6 +322,11 @@ mod tests {
     )))]
     mod sync_tests {
         use super::*;
+        // Bring the `Lifecycle` trait into scope so its `start()`/`stop()`
+        // methods are callable on `SyncComponent` (which `impl`s the trait via
+        // the fully-qualified `crate::Lifecycle` path). Without this import the
+        // compiler reports E0599 "method not found" under default features.
+        use crate::Lifecycle;
 
         struct SyncComponent(TestComponent);
 

@@ -928,6 +928,7 @@ key = "value""#
         assert_eq!(c.extension(), "json");
     }
 
+    #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_converter_extension() {
         let c = yaml_converter::YamlConverter::new();
@@ -940,6 +941,7 @@ key = "value""#
         assert_eq!(c.extension(), "ini");
     }
 
+    #[cfg(feature = "yaml")]
     #[test]
     fn test_converter_for_yaml() {
         let c = converter_for(Format::Yaml);

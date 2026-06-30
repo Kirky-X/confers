@@ -587,6 +587,7 @@ mod tests {
         metrics.histogram("duration", 1.5, &[("source", "file")]);
     }
 
+    #[cfg(feature = "migration")]
     #[test]
     fn test_versioned() {
         use crate::migration::Versioned;
