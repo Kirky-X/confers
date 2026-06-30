@@ -582,7 +582,7 @@ mod tests {
     #[test]
     fn test_noop_metrics() {
         use crate::types::NoOpMetrics;
-        let metrics = NoOpMetrics::default();
+        let metrics = NoOpMetrics;
         metrics.counter("test", &[("status", "ok")]);
         metrics.histogram("duration", 1.5, &[("source", "file")]);
     }

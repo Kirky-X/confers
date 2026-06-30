@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 fn run_confers(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("cargo");
-    cmd.args(&["run", "--features", "cli", "--"]);
+    cmd.args(["run", "--features", "cli", "--"]);
     cmd.args(args);
     cmd
 }
@@ -26,7 +26,7 @@ fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path
 #[serial]
 fn test_cli_compiles() {
     let output = std::process::Command::new("cargo")
-        .args(&["build", "--features", "cli"])
+        .args(["build", "--features", "cli"])
         .output()
         .expect("Failed to execute cargo build");
 
@@ -58,7 +58,7 @@ port = 8080
     let output = run_confers(&[
         "--allow-absolute-paths",
         "-c",
-        &config_path.to_str().unwrap(),
+        config_path.to_str().unwrap(),
         "inspect",
     ])
     .output()
@@ -93,7 +93,7 @@ name = "json-test"
     let output = run_confers(&[
         "--allow-absolute-paths",
         "-c",
-        &config_path.to_str().unwrap(),
+        config_path.to_str().unwrap(),
         "inspect",
         "-f",
         "json",
@@ -130,7 +130,7 @@ name = "validate-test"
     let output = run_confers(&[
         "--allow-absolute-paths",
         "-c",
-        &config_path.to_str().unwrap(),
+        config_path.to_str().unwrap(),
         "validate",
     ])
     .output()
@@ -198,7 +198,7 @@ name = "export-test"
     let output = run_confers(&[
         "--allow-absolute-paths",
         "-c",
-        &config_path.to_str().unwrap(),
+        config_path.to_str().unwrap(),
         "export",
         "-f",
         "json",
@@ -235,7 +235,7 @@ name = "export-toml-test"
     let output = run_confers(&[
         "--allow-absolute-paths",
         "-c",
-        &config_path.to_str().unwrap(),
+        config_path.to_str().unwrap(),
         "export",
         "-f",
         "toml",

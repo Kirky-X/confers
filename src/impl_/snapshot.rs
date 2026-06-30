@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn test_snapshot_format_clone_eq() {
         let a = SnapshotFormat::Json;
-        let b = a.clone();
+        let b = a;
         assert_eq!(a, b);
     }
 

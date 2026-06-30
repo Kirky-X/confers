@@ -100,7 +100,7 @@ fn bench_interpolate_large_text_few_vars(c: &mut Criterion) {
          file with a lot of static content and few variable references.";
 
     c.bench_function("interpolate_large_text_few_vars", |b| {
-        b.iter(|| interpolate(black_box(&template), &r).unwrap());
+        b.iter(|| interpolate(black_box(template), &r).unwrap());
     });
 }
 

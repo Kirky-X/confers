@@ -58,8 +58,8 @@ fn test_context_value_from_primitives() {
     let cv: ContextValue = 42i64.into();
     assert!(matches!(cv, ContextValue::Number(n) if n == 42.0));
 
-    let cv: ContextValue = 3.14.into();
-    assert!(matches!(cv, ContextValue::Number(n) if (n - 3.14).abs() < 0.001));
+    let cv: ContextValue = std::f64::consts::PI.into();
+    assert!(matches!(cv, ContextValue::Number(n) if (n - std::f64::consts::PI).abs() < 0.001));
 }
 
 /// Test ContextAwareField returns default value when no rules match
@@ -213,7 +213,7 @@ fn test_upload_limit_use_case() {
             |ctx: &EvaluationContext| {
                 ctx.attributes().get("plan") == Some(&ContextValue::String("pro".into()))
             },
-            1 * 1024 * 1024 * 1024,
+            1024 * 1024 * 1024,
         )
         .when(
             |ctx: &EvaluationContext| {
@@ -230,7 +230,7 @@ fn test_upload_limit_use_case() {
     assert_eq!(upload_limit.evaluate(&ctx), &(10 * 1024 * 1024 * 1024));
 
     let ctx = EvaluationContext::new().attr("plan", "pro");
-    assert_eq!(upload_limit.evaluate(&ctx), &(1 * 1024 * 1024 * 1024));
+    assert_eq!(upload_limit.evaluate(&ctx), &(1024 * 1024 * 1024));
 
     let ctx = EvaluationContext::new().attr("plan", "basic");
     assert_eq!(upload_limit.evaluate(&ctx), &(100 * 1024 * 1024));

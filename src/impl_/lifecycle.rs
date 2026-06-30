@@ -259,7 +259,6 @@ mod tests {
         #[tokio::test]
         async fn test_registry_stop_reverse_order() {
             use super::super::async_impl::LifecycleRegistry;
-            use std::sync::atomic::Ordering;
             use std::sync::Arc;
 
             let order: Vec<&str> = Vec::new();

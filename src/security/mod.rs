@@ -769,10 +769,17 @@ mod tests {
 }
 
 // 安全模块导出
+// Feature gates and BrickArchitecture facade pattern cause dead_code warnings
+// for security primitives not yet wired to public API. Baseline behavior —
+// each module annotated with `#[allow(dead_code)]` matching impl_/mod.rs convention.
+// Verify with `cargo clippy --features full -- -D warnings` after changes.
+#[allow(dead_code)]
 pub(crate) mod config_injector;
 pub(crate) mod error_sanitization;
+#[allow(dead_code)]
 pub(crate) mod input_validation;
 #[cfg(feature = "encryption")]
+#[allow(dead_code)]
 pub(crate) mod secure_string;
 #[cfg(feature = "encryption")]
 pub use error_sanitization::{

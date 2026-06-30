@@ -77,7 +77,7 @@ fn test_watcher_config_default() {
     assert_eq!(config.min_reload_interval_ms, DEFAULT_MIN_RELOAD_MS);
     assert_eq!(config.max_consecutive_failures, DEFAULT_MAX_FAILURES);
     assert_eq!(config.failure_pause_ms, DEFAULT_FAILURE_PAUSE_MS);
-    assert_eq!(config.rollback_on_validation_failure, false);
+    assert!(!config.rollback_on_validation_failure);
 }
 
 /// Test that WatcherConfig::new() returns default values.
@@ -104,7 +104,7 @@ fn test_watcher_config_builder() {
     assert_eq!(config.min_reload_interval_ms, CUSTOM_MIN_RELOAD_MS);
     assert_eq!(config.max_consecutive_failures, CUSTOM_MAX_FAILURES);
     assert_eq!(config.failure_pause_ms, CUSTOM_FAILURE_PAUSE_MS);
-    assert_eq!(config.rollback_on_validation_failure, true);
+    assert!(config.rollback_on_validation_failure);
 }
 
 /// Test WatcherConfigBuilder with partial configuration.
@@ -164,7 +164,7 @@ fn test_watcher_config_with_failure_pause() {
 fn test_watcher_config_with_rollback() {
     let config = WatcherConfig::new().with_rollback_on_validation_failure(true);
 
-    assert_eq!(config.rollback_on_validation_failure, true);
+    assert!(config.rollback_on_validation_failure);
 }
 
 /// Test that WatcherGuard can be created.
@@ -598,7 +598,7 @@ fn test_watcher_config_builder_chaining() {
     assert_eq!(config.min_reload_interval_ms, 3000);
     assert_eq!(config.max_consecutive_failures, 7);
     assert_eq!(config.failure_pause_ms, 45000);
-    assert_eq!(config.rollback_on_validation_failure, true);
+    assert!(config.rollback_on_validation_failure);
 }
 
 // ========================================

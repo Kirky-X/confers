@@ -997,7 +997,6 @@ mod tests {
     #[test]
     fn test_check_required_keys_detects_missing_server() {
         use indexmap::IndexMap;
-        use std::sync::Arc;
         let map = IndexMap::new();
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
@@ -1010,7 +1009,7 @@ mod tests {
         use crate::types::{AnnotatedValue, ConfigValue, SourceId};
         use indexmap::IndexMap;
         use std::sync::Arc;
-        let mut server_map = IndexMap::new();
+        let server_map = IndexMap::new();
         // Server exists but has neither host nor port
         let mut map = IndexMap::new();
         map.insert(

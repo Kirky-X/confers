@@ -650,20 +650,20 @@ mod tests {
 
     #[test]
     fn test_builder_new() {
-        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new();
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new();
         // Builder is created with defaults, no sources yet
         // We verify by checking build_annotated works
     }
 
     #[test]
     fn test_builder_file_method() {
-        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().file("config.toml");
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().file("config.toml");
         // Builder should have one source after calling file()
     }
 
     #[test]
     fn test_builder_env_method() {
-        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().env();
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().env();
     }
 
     #[test]
@@ -672,27 +672,26 @@ mod tests {
         use std::collections::HashMap;
         let mut defaults = HashMap::new();
         defaults.insert("host".to_string(), ConfigValue::string("localhost"));
-        let builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().defaults(defaults);
+        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().defaults(defaults);
     }
 
     #[test]
     fn test_builder_limits_method() {
-        let builder: ConfigBuilder<TestConfig> =
+        let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().limits(ConfigLimits::strict());
     }
 
     #[test]
     fn test_builder_metrics_method() {
-        use crate::interface::MetricsBackend;
         use crate::types::NoOpMetrics;
-        let builder: ConfigBuilder<TestConfig> =
+        let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().metrics(Arc::new(NoOpMetrics));
     }
 
     #[test]
     fn test_builder_strategy_method() {
         use crate::impl_::merger::MergeStrategy;
-        let builder: ConfigBuilder<TestConfig> =
+        let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().strategy(MergeStrategy::Append);
     }
 }

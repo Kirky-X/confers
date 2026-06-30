@@ -900,8 +900,7 @@ mod tests {
         // Test with a well-known public DNS
         // Note: This test requires network access. If it fails, the host doesn't resolve.
         let result = resolve_host_with_validation("example.com", 443);
-        if result.is_ok() {
-            let ips = result.unwrap();
+        if let Ok(ips) = result {
             assert!(!ips.is_empty());
             for ip in &ips {
                 assert!(

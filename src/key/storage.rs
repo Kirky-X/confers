@@ -690,6 +690,8 @@ impl Drop for KeyStorage {
     }
 }
 
+const _: () = ();
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -779,5 +781,3 @@ mod tests {
         assert_eq!(sanitized, error_msg);
     }
 }
-
-const _: () = ();

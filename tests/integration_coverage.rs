@@ -243,7 +243,7 @@ fn test_config_value_creation() {
     assert!(ConfigValue::bool(true).is_bool());
     assert!(ConfigValue::integer(42).is_integer());
     assert!(ConfigValue::uint(100).as_u64() == Some(100));
-    assert!(ConfigValue::float(3.14).is_number());
+    assert!(ConfigValue::float(std::f64::consts::PI).is_number());
     assert!(ConfigValue::string("hello").is_string());
 }
 
@@ -328,7 +328,6 @@ fn test_merge_strategies() {
 
 #[test]
 fn test_validation_rule_parse() {
-    use confers::validator::Validate;
     // Can't call Validate::validate directly without derive,
     // but we can verify the module exports are accessible
     let _validate_type: Option<confers::validator::ValidationRule> = None;

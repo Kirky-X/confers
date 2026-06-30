@@ -66,7 +66,7 @@ mod registry_tests {
     #[test]
     fn test_registry_register() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
+        registry.register(1, 2, Ok);
 
         let migrations = registry.migrations();
         assert!(migrations.contains_key(&(1, 2)));
@@ -76,9 +76,9 @@ mod registry_tests {
     fn test_registry_register_multiple() {
         let mut registry = MigrationRegistry::new();
 
-        registry.register(1, 2, |v| Ok(v));
-        registry.register(2, 3, |v| Ok(v));
-        registry.register(1, 3, |v| Ok(v));
+        registry.register(1, 2, Ok);
+        registry.register(2, 3, Ok);
+        registry.register(1, 3, Ok);
 
         let migrations = registry.migrations();
         assert_eq!(migrations.len(), 3);
@@ -91,7 +91,7 @@ mod registry_tests {
     fn test_registry_register_returns_self() {
         let mut registry = MigrationRegistry::new();
 
-        let result = registry.register(1, 2, |v| Ok(v));
+        let result = registry.register(1, 2, Ok);
 
         // Should return mutable self for chaining
         assert!(result.migrations().contains_key(&(1, 2)));
@@ -100,8 +100,8 @@ mod registry_tests {
     #[test]
     fn test_registry_builder_pattern() {
         let registry = MigrationRegistry::builder()
-            .register(1, 2, |v| Ok(v))
-            .register(2, 3, |v| Ok(v))
+            .register(1, 2, Ok)
+            .register(2, 3, Ok)
             .build();
 
         let migrations = registry.migrations();
@@ -127,8 +127,8 @@ mod path_tests {
     #[test]
     fn test_precompute_paths_direct() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
-        registry.register(2, 3, |v| Ok(v));
+        registry.register(1, 2, Ok);
+        registry.register(2, 3, Ok);
 
         registry.precompute_paths();
 
@@ -140,8 +140,8 @@ mod path_tests {
     #[test]
     fn test_precompute_paths_chain() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
-        registry.register(2, 3, |v| Ok(v));
+        registry.register(1, 2, Ok);
+        registry.register(2, 3, Ok);
 
         registry.precompute_paths();
 
@@ -154,9 +154,9 @@ mod path_tests {
     fn test_precompute_paths_direct_preferred_over_chain() {
         let mut registry = MigrationRegistry::new();
         // Both direct and chain paths available
-        registry.register(1, 2, |v| Ok(v));
-        registry.register(2, 3, |v| Ok(v));
-        registry.register(1, 3, |v| Ok(v));
+        registry.register(1, 2, Ok);
+        registry.register(2, 3, Ok);
+        registry.register(1, 3, Ok);
 
         registry.precompute_paths();
 
@@ -169,7 +169,7 @@ mod path_tests {
     #[test]
     fn test_precompute_paths_no_path() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
+        registry.register(1, 2, Ok);
         // No path from 1 to 3
 
         registry.precompute_paths();
@@ -182,11 +182,11 @@ mod path_tests {
     fn test_precompute_paths_complex_graph() {
         let mut registry = MigrationRegistry::new();
         // Graph: 1->2->3->4 and 1->3, 2->4
-        registry.register(1, 2, |v| Ok(v));
-        registry.register(2, 3, |v| Ok(v));
-        registry.register(3, 4, |v| Ok(v));
-        registry.register(1, 3, |v| Ok(v));
-        registry.register(2, 4, |v| Ok(v));
+        registry.register(1, 2, Ok);
+        registry.register(2, 3, Ok);
+        registry.register(3, 4, Ok);
+        registry.register(1, 3, Ok);
+        registry.register(2, 4, Ok);
 
         registry.precompute_paths();
 
@@ -261,7 +261,7 @@ mod migration_tests {
     #[test]
     fn test_migrate_same_version() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
+        registry.register(1, 2, Ok);
         registry.precompute_paths();
 
         let value = create_test_value();
@@ -273,7 +273,7 @@ mod migration_tests {
     #[test]
     fn test_migrate_no_path() {
         let mut registry = MigrationRegistry::new();
-        registry.register(1, 2, |v| Ok(v));
+        registry.register(1, 2, Ok);
         // No path to version 3
         registry.precompute_paths();
 
@@ -336,7 +336,7 @@ mod migration_on_reload_tests {
     #[test]
     fn test_migration_on_reload_clone() {
         let original = MigrationOnReload::Always;
-        let cloned = original.clone();
+        let cloned = original;
         assert!(matches!(cloned, MigrationOnReload::Always));
     }
 }

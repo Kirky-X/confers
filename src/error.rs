@@ -1093,11 +1093,8 @@ mod tests {
         };
 
         // We can match known variants
-        match &err {
-            ConfigError::FileNotFound { filename, .. } => {
-                assert_eq!(filename, &PathBuf::from("test"));
-            }
-            _ => {}
+        if let ConfigError::FileNotFound { filename, .. } = &err {
+            assert_eq!(filename, &PathBuf::from("test"));
         }
     }
 

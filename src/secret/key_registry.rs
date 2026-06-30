@@ -456,8 +456,10 @@ mod tests {
         use std::thread;
 
         // Use a config with enough capacity for all test keys
-        let mut config = KeyRotationConfig::default();
-        config.max_key_versions = 15;
+        let config = KeyRotationConfig {
+            max_key_versions: 15,
+            ..Default::default()
+        };
         let registry = Arc::new(KeyRegistry::new(config));
         let mut handles = vec![];
 
@@ -510,7 +512,6 @@ mod tests {
         registry.add_provider(Arc::new(DummyProvider));
 
         // Provider was added (no panic means success)
-        assert!(true);
     }
 
     #[test]

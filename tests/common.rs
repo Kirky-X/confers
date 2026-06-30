@@ -13,9 +13,6 @@ use tempfile::NamedTempFile;
 #[cfg(feature = "remote")]
 use std::time::Duration;
 
-#[cfg(feature = "remote")]
-use reqwest;
-
 /// A test configuration struct with common fields used across multiple tests.
 ///
 /// This struct implements `ConfigProvider` and can be used in tests that need
@@ -154,7 +151,7 @@ where
     F: FnOnce() -> R,
 {
     std::env::set_var(key, value);
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f()));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
     std::env::remove_var(key);
 
     match result {

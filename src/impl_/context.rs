@@ -298,8 +298,8 @@ mod tests {
 
     #[test]
     fn test_context_value_from_f64() {
-        let cv: ContextValue = 3.14.into();
-        assert!(matches!(cv, ContextValue::Number(n) if (n - 3.14).abs() < 0.001));
+        let cv: ContextValue = std::f64::consts::PI.into();
+        assert!(matches!(cv, ContextValue::Number(n) if (n - std::f64::consts::PI).abs() < 0.001));
     }
 
     #[test]

@@ -371,7 +371,7 @@ async fn test_snapshot_pruning() {
     // List snapshots - pruning may or may not happen automatically
     let snapshots = manager.list_snapshots().unwrap();
     // Just verify snapshots were created
-    assert!(snapshots.len() > 0);
+    assert!(!snapshots.is_empty());
 }
 
 /// Test prune removes oldest snapshots first.
@@ -400,7 +400,7 @@ async fn test_prune_removes_oldest() {
     // Verify oldest (v0) is removed, newest 2 kept
     let snapshots = manager.list_snapshots().unwrap();
     // Just verify snapshots were created and pruning occurred
-    assert!(snapshots.len() >= 1);
+    assert!(!snapshots.is_empty());
 }
 
 /// Test manual prune.
@@ -614,7 +614,11 @@ async fn test_snapshot_various_value_types() {
     );
     map.insert(
         "float_val".to_string().into(),
-        AnnotatedValue::new(ConfigValue::F64(3.14), SourceId::new("test"), "float_val"),
+        AnnotatedValue::new(
+            ConfigValue::F64(std::f64::consts::PI),
+            SourceId::new("test"),
+            "float_val",
+        ),
     );
     map.insert(
         "bool_val".to_string().into(),

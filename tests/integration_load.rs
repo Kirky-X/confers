@@ -90,8 +90,7 @@ missing_bracket = true
 
         // Empty file should parse as null or empty object
         // Allow either success or error for empty file
-        if result.is_ok() {
-            let config = result.unwrap();
+        if let Ok(config) = result {
             assert!(config.is_null() || config.is_object());
         }
     }
@@ -108,7 +107,6 @@ key = "value"
         if let Err(e) = &result {
             eprintln!("Error: {:?}", e);
         }
-        assert!(result.is_ok());
         let config = result.unwrap();
         assert_eq!(config["key"], "value");
     }
@@ -125,7 +123,6 @@ servers = ["localhost:8080", "localhost:8081", "localhost:8082"]
         if let Err(e) = &result {
             eprintln!("Error: {:?}", e);
         }
-        assert!(result.is_ok());
         let config = result.unwrap();
         assert!(config["servers"].is_array());
         assert_eq!(config["servers"].as_array().unwrap().len(), 3);

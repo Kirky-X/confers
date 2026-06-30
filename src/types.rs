@@ -1088,9 +1088,9 @@ mod tests {
         let v = ConfigValue::uint(100);
         assert_eq!(v.as_u64(), Some(100));
 
-        let v = ConfigValue::float(3.14);
+        let v = ConfigValue::float(std::f64::consts::PI);
         assert!(v.is_number());
-        assert_eq!(v.as_f64(), Some(3.14));
+        assert_eq!(v.as_f64(), Some(std::f64::consts::PI));
 
         let v = ConfigValue::string("hello");
         assert!(v.is_string());
@@ -1325,9 +1325,6 @@ mod tests {
 
     #[test]
     fn test_all_paths_nested() {
-        use indexmap::IndexMap;
-        use std::sync::Arc;
-
         let inner = ConfigValue::map(vec![
             (
                 "host".to_string(),
@@ -1471,7 +1468,7 @@ mod tests {
 
     #[test]
     fn test_config_value_f64_conv_limitations() {
-        let v = ConfigValue::F64(3.14);
+        let v = ConfigValue::F64(std::f64::consts::PI);
         assert!(!v.is_integer());
         assert!(v.is_number());
         let v2 = ConfigValue::I64(10);

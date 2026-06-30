@@ -1,5 +1,5 @@
 use confers::{new_in_memory, AnnotatedValue, ConfigReader, ConfigValue, ConfigWriter, SourceId};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use tokio::runtime::Runtime;
 
 fn bench_hot_path_get(c: &mut Criterion) {
@@ -33,14 +33,14 @@ fn bench_dynamic_field_access(c: &mut Criterion) {
     c.bench_function("dynamic_field_get_ref", |b| {
         b.iter(|| {
             let _arc = field.get_ref();
-            black_box(&_arc);
+            std::hint::black_box(&_arc);
         })
     });
 
     c.bench_function("dynamic_field_get_clone", |b| {
         b.iter(|| {
             let _val = field.get();
-            black_box(&_val);
+            std::hint::black_box(&_val);
         })
     });
 }
