@@ -305,10 +305,136 @@ mod tests {
                 "etcd2.example.com:2379".to_string(),
             ])
             .username("root")
-            .password("secret")
+            .password("secret") // pragma: allowlist secret
             .prefix("my-app")
             .interval(Duration::from_secs(60));
 
         assert_eq!(builder.prefix, "my-app");
+    }
+
+    #[test]
+    fn test_builder_default_impl() {
+        let builder = EtcdSourceBuilder::default();
+        assert_eq!(builder.endpoints, vec!["localhost:2379".to_string()]);
+        assert_eq!(builder.prefix, "config");
+        assert_eq!(builder.username, None);
+        assert_eq!(builder.password, None);
+        assert_eq!(builder.format, None);
+        assert_eq!(builder.interval, None);
+        assert!(builder.tls.is_none());
+    }
+
+    #[test]
+    fn test_builder_endpoints_replace() {
+        let builder = EtcdSourceBuilder::new()
+            .endpoints(vec!["etcd1:2379".to_string(), "etcd2:2379".to_string()]);
+        assert_eq!(builder.endpoints.len(), 2);
+        assert_eq!(builder.endpoints[0], "etcd1:2379");
+        assert_eq!(builder.endpoints[1], "etcd2:2379");
+    }
+
+    #[test]
+    fn test_builder_endpoint_appends() {
+        let builder = EtcdSourceBuilder::new()
+            .endpoint("etcd1:2379")
+            .endpoint("etcd2:2379");
+        // Default endpoint (localhost:2379) + 2 added
+        assert_eq!(builder.endpoints.len(), 3);
+        assert!(builder.endpoints.contains(&"etcd1:2379".to_string()));
+        assert!(builder.endpoints.contains(&"etcd2:2379".to_string()));
+        assert!(builder.endpoints.contains(&"localhost:2379".to_string()));
+    }
+
+    #[test]
+    fn test_builder_username() {
+        let builder = EtcdSourceBuilder::new().username("root");
+        assert_eq!(builder.username.as_deref(), Some("root"));
+    }
+
+    #[test]
+    fn test_builder_password() {
+        let builder = EtcdSourceBuilder::new().password("secret"); // pragma: allowlist secret
+        assert_eq!(builder.password.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn test_builder_prefix() {
+        let builder = EtcdSourceBuilder::new().prefix("my-app/config");
+        assert_eq!(builder.prefix, "my-app/config");
+    }
+
+    #[test]
+    fn test_builder_format() {
+        let builder = EtcdSourceBuilder::new().format(Format::Json);
+        assert_eq!(builder.format, Some(Format::Json));
+    }
+
+    #[test]
+    fn test_builder_interval() {
+        let interval = Duration::from_secs(90);
+        let builder = EtcdSourceBuilder::new().interval(interval);
+        assert_eq!(builder.interval, Some(interval));
+    }
+
+    #[test]
+    fn test_builder_tls() {
+        let tls = EtcdTlsConfig {
+            ca_file: "/path/ca.pem".to_string(),
+            cert_file: "/path/cert.pem".to_string(),
+            key_file: "/path/key.pem".to_string(),
+        };
+        let builder = EtcdSourceBuilder::new().tls(tls.clone());
+        assert!(builder.tls.is_some());
+        // Verify the TLS config was actually stored by checking a field.
+        assert_eq!(builder.tls.as_ref().unwrap().ca_file, "/path/ca.pem");
+    }
+
+    #[test]
+    fn test_builder_full_chain() {
+        let builder = EtcdSourceBuilder::new()
+            .endpoints(vec!["etcd1:2379".to_string()])
+            .username("admin")
+            .password("pass") // pragma: allowlist secret
+            .prefix("app")
+            .format(Format::Toml)
+            .interval(Duration::from_secs(30));
+        assert_eq!(builder.endpoints, vec!["etcd1:2379".to_string()]);
+        assert_eq!(builder.username.as_deref(), Some("admin"));
+        assert_eq!(builder.password.as_deref(), Some("pass"));
+        assert_eq!(builder.prefix, "app");
+        assert_eq!(builder.format, Some(Format::Toml));
+        assert_eq!(builder.interval, Some(Duration::from_secs(30)));
+    }
+
+    #[test]
+    fn test_tls_config_construction() {
+        let tls = EtcdTlsConfig {
+            ca_file: "/ca.pem".to_string(),
+            cert_file: "/cert.pem".to_string(),
+            key_file: "/key.pem".to_string(),
+        };
+        assert_eq!(tls.ca_file, "/ca.pem");
+        assert_eq!(tls.cert_file, "/cert.pem");
+        assert_eq!(tls.key_file, "/key.pem");
+    }
+
+    #[test]
+    fn test_tls_config_clone_debug() {
+        let tls = EtcdTlsConfig {
+            ca_file: "ca".to_string(),
+            cert_file: "cert".to_string(),
+            key_file: "key".to_string(),
+        };
+        let cloned = tls.clone();
+        assert_eq!(tls.ca_file, cloned.ca_file);
+        assert_eq!(tls.cert_file, cloned.cert_file);
+        assert_eq!(tls.key_file, cloned.key_file);
+        let debug_str = format!("{:?}", tls);
+        assert!(debug_str.contains("EtcdTlsConfig"));
+    }
+
+    #[test]
+    fn test_default_etcd_poll_interval_constant() {
+        assert_eq!(DEFAULT_ETCD_POLL_INTERVAL, Duration::from_secs(30));
     }
 }

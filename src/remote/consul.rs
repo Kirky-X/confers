@@ -394,11 +394,225 @@ mod tests {
     fn test_builder_chain() {
         let source = ConsulSourceBuilder::new()
             .address("consul.example.com:8500")
-            .token("my-token")
+            .token("my-token") // pragma: allowlist secret
             .prefix("my-app")
             .interval(Duration::from_secs(60))
             .build();
 
         assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_builder_default_impl() {
+        let builder = ConsulSourceBuilder::default();
+        assert_eq!(builder.address, "127.0.0.1:8500");
+        assert_eq!(builder.prefix, "config");
+        assert_eq!(builder.token, None);
+        assert_eq!(builder.format, None);
+        assert_eq!(builder.interval, None);
+        assert!(!builder.tls_skip_verify);
+    }
+
+    #[test]
+    fn test_builder_address() {
+        let builder = ConsulSourceBuilder::new().address("consul.local:8500");
+        assert_eq!(builder.address, "consul.local:8500");
+    }
+
+    #[test]
+    fn test_builder_token() {
+        let builder = ConsulSourceBuilder::new().token("secret-token"); // pragma: allowlist secret
+        assert_eq!(builder.token.as_deref(), Some("secret-token"));
+    }
+
+    #[test]
+    fn test_builder_prefix() {
+        let builder = ConsulSourceBuilder::new().prefix("my-app/config");
+        assert_eq!(builder.prefix, "my-app/config");
+    }
+
+    #[test]
+    fn test_builder_format() {
+        let builder = ConsulSourceBuilder::new().format(Format::Toml);
+        assert_eq!(builder.format, Some(Format::Toml));
+    }
+
+    #[test]
+    fn test_builder_interval() {
+        let interval = Duration::from_secs(120);
+        let builder = ConsulSourceBuilder::new().interval(interval);
+        assert_eq!(builder.interval, Some(interval));
+    }
+
+    #[test]
+    fn test_builder_tls_skip_verify_debug() {
+        let builder = ConsulSourceBuilder::new().tls_skip_verify(true);
+        #[cfg(debug_assertions)]
+        assert!(builder.tls_skip_verify);
+        #[cfg(not(debug_assertions))]
+        assert!(!builder.tls_skip_verify);
+    }
+
+    #[test]
+    fn test_builder_tls_skip_verify_false() {
+        let builder = ConsulSourceBuilder::new().tls_skip_verify(false);
+        assert!(!builder.tls_skip_verify);
+    }
+
+    #[test]
+    fn test_build_success_with_all_options() {
+        let source = ConsulSourceBuilder::new()
+            .address("consul.example.com:8500")
+            .token("my-token") // pragma: allowlist secret
+            .prefix("my-app")
+            .format(Format::Json)
+            .interval(Duration::from_secs(60))
+            .build();
+        assert!(source.is_ok());
+        let source = source.unwrap();
+        assert_eq!(source.source_id().as_str(), "consul:my-app");
+    }
+
+    #[test]
+    fn test_build_with_tls_skip_verify_debug() {
+        let source = ConsulSourceBuilder::new().tls_skip_verify(true).build();
+        assert!(source.is_ok());
+    }
+
+    #[test]
+    fn test_source_id_format() {
+        let source = ConsulSourceBuilder::new().prefix("my-app").build().unwrap();
+        assert_eq!(source.source_id().as_str(), "consul:my-app");
+    }
+
+    #[test]
+    fn test_source_id_default_prefix() {
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        assert_eq!(source.source_id().as_str(), "consul:config");
+    }
+
+    #[test]
+    fn test_polled_source_poll_interval() {
+        use crate::remote::PolledSource;
+        let source = ConsulSourceBuilder::new()
+            .interval(Duration::from_secs(45))
+            .build()
+            .unwrap();
+        assert_eq!(source.poll_interval(), Some(Duration::from_secs(45)));
+    }
+
+    #[test]
+    fn test_polled_source_poll_interval_default() {
+        use crate::remote::PolledSource;
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        assert_eq!(source.poll_interval(), Some(DEFAULT_CONSUL_POLL_INTERVAL));
+    }
+
+    #[test]
+    fn test_polled_source_source_id() {
+        let source = ConsulSourceBuilder::new().prefix("app").build().unwrap();
+        assert_eq!(source.source_id().as_str(), "consul:app");
+    }
+
+    #[test]
+    fn test_async_source_name() {
+        use crate::interface::AsyncSource;
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        assert_eq!(source.name(), "consul");
+    }
+
+    #[test]
+    fn test_async_source_priority() {
+        use crate::interface::AsyncSource;
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        assert_eq!(source.priority(), 50);
+    }
+
+    #[test]
+    fn test_async_source_source_id() {
+        // Default prefix is "config", so source_id is "consul:config".
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        assert_eq!(source.source_id().as_str(), "consul:config");
+    }
+
+    #[test]
+    fn test_tls_config_construction() {
+        let tls = ConsulTlsConfig {
+            ca_file: "/path/to/ca.pem".to_string(),
+            cert_file: "/path/to/cert.pem".to_string(),
+            key_file: "/path/to/key.pem".to_string(),
+        };
+        assert_eq!(tls.ca_file, "/path/to/ca.pem");
+        assert_eq!(tls.cert_file, "/path/to/cert.pem");
+        assert_eq!(tls.key_file, "/path/to/key.pem");
+    }
+
+    #[test]
+    fn test_tls_config_clone_debug() {
+        let tls = ConsulTlsConfig {
+            ca_file: "ca".to_string(),
+            cert_file: "cert".to_string(),
+            key_file: "key".to_string(),
+        };
+        let cloned = tls.clone();
+        assert_eq!(tls.ca_file, cloned.ca_file);
+        assert_eq!(tls.cert_file, cloned.cert_file);
+        assert_eq!(tls.key_file, cloned.key_file);
+        let debug_str = format!("{:?}", tls);
+        assert!(debug_str.contains("ConsulTlsConfig"));
+    }
+
+    #[test]
+    fn test_base64_decode_valid() {
+        let result = base64_decode("aGVsbG8=").unwrap();
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_base64_decode_empty() {
+        let result = base64_decode("").unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_base64_decode_invalid() {
+        let result = base64_decode("!!!not base64!!!");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base64_decode_complex_string() {
+        // "config value" in base64
+        let result = base64_decode("Y29uZmlnIHZhbHVl").unwrap();
+        assert_eq!(result, "config value");
+    }
+
+    #[test]
+    fn test_kv_response_deserialize_full() {
+        let json = r#"{"Value":"aGVsbG8=","ModifyIndex":42}"#;
+        let resp: KvResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.value, Some("aGVsbG8=".to_string()));
+        assert_eq!(resp.modify_index, Some(42));
+    }
+
+    #[test]
+    fn test_kv_response_deserialize_empty() {
+        let json = r#"{}"#;
+        let resp: KvResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.value, None);
+        assert_eq!(resp.modify_index, None);
+    }
+
+    #[test]
+    fn test_kv_response_deserialize_partial() {
+        let json = r#"{"Value":"dGVzdA=="}"#;
+        let resp: KvResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.value, Some("dGVzdA==".to_string()));
+        assert_eq!(resp.modify_index, None);
+    }
+
+    #[test]
+    fn test_default_consul_poll_interval_constant() {
+        assert_eq!(DEFAULT_CONSUL_POLL_INTERVAL, Duration::from_secs(30));
     }
 }
