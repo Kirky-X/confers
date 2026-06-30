@@ -649,4 +649,328 @@ mod tests {
         assert!(!result.contains("user@example.com"));
         assert!(result.contains("**"), "Email not masked: {}", result);
     }
+
+    #[test]
+    fn test_api_key_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        // 长 API key：保留前 8 位，其余掩码
+        let result = sanitizer.sanitize("API Key: sk-1234567890abcdef"); // pragma: allowlist secret
+        assert!(!result.contains("sk-1234567890abcdef"));
+        assert!(result.contains("***"));
+        // 短 API key（<=8 字符）：全部掩码
+        let result = sanitizer.sanitize("API Key: abcd"); // pragma: allowlist secret
+        assert!(!result.contains("abcd"));
+        assert!(result.contains("****"));
+        // 使用 = 分隔（模式用 [ ]? 可选空格，非下划线）
+        let result = sanitizer.sanitize("api key=secret12345"); // pragma: allowlist secret
+        assert!(!result.contains("secret12345"));
+    }
+
+    #[test]
+    fn test_password_and_token_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        // password: 保留前 4 位
+        let result = sanitizer.sanitize("password: mySecretPass"); // pragma: allowlist secret
+        assert!(!result.contains("mySecretPass"));
+        assert!(result.contains("***"));
+        // access token: 保留前 6 位（模式用 [ ]? 可选空格）
+        let result = sanitizer.sanitize("access token: abcdefghijk"); // pragma: allowlist secret
+        assert!(!result.contains("abcdefghijk"));
+        assert!(result.contains("***"));
+        // refresh token
+        let result = sanitizer.sanitize("refresh token: tok1234567890"); // pragma: allowlist secret
+        assert!(!result.contains("tok1234567890"));
+        // auth token
+        let result = sanitizer.sanitize("auth token: authval123456"); // pragma: allowlist secret
+        assert!(!result.contains("authval123456"));
+    }
+
+    #[test]
+    fn test_secret_and_private_key_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        let result = sanitizer.sanitize("secret key: ABCDEFGHIJ123456"); // pragma: allowlist secret
+        assert!(!result.contains("ABCDEFGHIJ123456"));
+        assert!(result.contains("***"));
+        let result = sanitizer.sanitize("private key: PRIVKEYVALUE123"); // pragma: allowlist secret
+        assert!(!result.contains("PRIVKEYVALUE123"));
+    }
+
+    #[test]
+    fn test_connection_string_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        // mongodb 连接字符串（含凭证）
+        let result = sanitizer.sanitize("mongodb://user:pass@host:27017/db"); // pragma: allowlist secret
+        assert!(!result.contains("user:pass@host:27017"));
+        assert!(result.contains("CONNECTION_STRING"));
+        // mongodb+ssl
+        let result = sanitizer.sanitize("mongodb+ssl://user:pass@host/db"); // pragma: allowlist secret
+        assert!(result.contains("CONNECTION_STRING"));
+    }
+
+    #[test]
+    fn test_bearer_and_basic_auth_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        // Bearer 令牌
+        let result = sanitizer.sanitize("Bearer eyJhbGciOiJIUzI1NiJ9.signature"); // pragma: allowlist secret
+        assert!(!result.contains("eyJhbGciOiJIUzI1NiJ9"));
+        assert!(result.contains("***"));
+        // Basic 认证
+        let result = sanitizer.sanitize("Basic dXNlcjpwYXNz"); // pragma: allowlist secret
+        assert!(!result.contains("dXNlcjpwYXNz"));
+        assert!(result.contains("***"));
+    }
+
+    #[test]
+    fn test_email_masking_variants() {
+        let sanitizer = ErrorSanitizer::new();
+        // 长 local part：保留前 2 位 + 域名
+        let result = sanitizer.sanitize("Contact: aliceuser@example.com");
+        assert!(!result.contains("aliceuser@example.com"));
+        assert!(result.contains("@example.com"));
+        // 短 local part（<=2）：local part 全部替换为 ***
+        let result = sanitizer.sanitize("ab@x.co");
+        assert!(result.contains("***@x.co"));
+        assert!(!result.contains("ab@"));
+    }
+
+    #[test]
+    fn test_ip_address_masking() {
+        let sanitizer = ErrorSanitizer::new();
+        let result = sanitizer.sanitize("Connecting to 192.168.1.1 failed");
+        assert!(!result.contains("192.168.1.1"));
+        assert!(result.contains("IP_ADDRESS"));
+        let result = sanitizer.sanitize("from 10.0.0.1");
+        assert!(result.contains("IP_ADDRESS"));
+    }
+
+    #[test]
+    fn test_aws_key_like_value_detected_and_safe() {
+        // ErrorSanitizer 无 access_key 内置模式，但 contains_sensitive 通过 "key" 关键词
+        // 能检测到该消息含敏感信息，safe_message 返回安全指示而不泄露原值
+        let sanitizer = ErrorSanitizer::new();
+        let msg = "access_key: AKIAIOSFODNN7EXAMPLE"; // pragma: allowlist secret
+                                                      // 关键词检测：含 "key" 子串即视为敏感
+        assert!(sanitizer.contains_sensitive(msg));
+        // safe_message 应返回安全指示消息，且不泄露原值
+        let safe = sanitizer.safe_message(msg, "AWS");
+        assert!(!safe.contains("AKIAIOSFODNN7EXAMPLE"));
+        assert!(safe.contains("Sensitive data detected"));
+        assert!(safe.contains("[AWS]"));
+    }
+
+    #[test]
+    fn test_add_rule_valid_and_invalid() {
+        let sanitizer = ErrorSanitizer::new();
+        // 有效规则
+        assert!(sanitizer.add_rule(r"session_\d+", "[SESSION]").is_ok());
+        let result = sanitizer.sanitize("error in session_12345 failed");
+        assert!(result.contains("[SESSION]"));
+        assert!(!result.contains("session_12345"));
+        // 无效正则
+        let err = sanitizer.add_rule(r"(", "").unwrap_err();
+        assert_eq!(err, Error::InvalidPattern);
+    }
+
+    #[test]
+    fn test_add_sensitive_keyword_strict() {
+        let sanitizer = ErrorSanitizer::new().with_strict_mode();
+        sanitizer.add_sensitive_keyword("proprietary");
+        // 非严格模式下关键词不会单独被替换；严格模式会替换
+        let result = sanitizer.sanitize("the proprietary value leaked");
+        assert!(!result.contains("proprietary"));
+        assert!(result.contains("***"));
+    }
+
+    #[test]
+    fn test_contains_sensitive_and_sanitize_all() {
+        let sanitizer = ErrorSanitizer::new();
+        // 含敏感模式
+        assert!(sanitizer.contains_sensitive("API Key: sk-abc123"));
+        // 含敏感关键词
+        assert!(sanitizer.contains_sensitive("the password was set"));
+        // 不含敏感
+        assert!(!sanitizer.contains_sensitive("normal log message"));
+        // 批量脱敏
+        let results = sanitizer.sanitize_all(&["API Key: sk-abcdef", "clean message"]);
+        assert!(!results[0].contains("sk-abcdef"));
+        assert_eq!(results[1], "clean message");
+    }
+
+    #[test]
+    fn test_sanitize_with_indicator() {
+        let sanitizer = ErrorSanitizer::new();
+        let (sanitized, flagged) = sanitizer.sanitize_with_indicator("API Key: sk-abcdef");
+        assert!(flagged);
+        assert!(sanitized.contains("***"));
+        let (sanitized, flagged) = sanitizer.sanitize_with_indicator("nothing sensitive");
+        assert!(!flagged);
+        assert_eq!(sanitized, "nothing sensitive");
+    }
+
+    #[test]
+    fn test_safe_message_branches() {
+        let sanitizer = ErrorSanitizer::new();
+        // 含敏感 -> 返回指示消息
+        let result = sanitizer.safe_message("API Key: sk-abcdef", "CTX");
+        assert!(result.contains("Sensitive data detected"));
+        assert!(result.contains("CTX"));
+        // 不含敏感 -> 原样返回（脱敏后无变化）
+        let result = sanitizer.safe_message("all good here", "CTX");
+        assert_eq!(result, "all good here");
+    }
+
+    #[test]
+    fn test_error_sanitizer_default() {
+        let sanitizer = ErrorSanitizer::default();
+        // default 与 new 行为一致
+        let result = sanitizer.sanitize("Password: secret123"); // pragma: allowlist secret
+        assert!(!result.contains("secret123"));
+    }
+
+    #[test]
+    fn test_error_display_variants() {
+        assert_eq!(
+            format!("{}", Error::InvalidPattern),
+            "Invalid regex pattern"
+        );
+        assert_eq!(format!("{}", Error::PoisonedLock), "Lock poisoned");
+    }
+
+    #[test]
+    fn test_log_level_as_str() {
+        assert_eq!(LogLevel::Debug.as_str(), "DEBUG");
+        assert_eq!(LogLevel::Info.as_str(), "INFO");
+        assert_eq!(LogLevel::Warn.as_str(), "WARN");
+        assert_eq!(LogLevel::Error.as_str(), "ERROR");
+    }
+
+    #[test]
+    fn test_secure_logger_levels_and_context() {
+        // 高最小级别：低级别日志被跳过（不 panic）
+        let logger = SecureLogger::new().with_min_level(LogLevel::Warn);
+        logger.debug("skipped debug");
+        logger.info("skipped info");
+        logger.warn("warn with API Key: sk-abcdef"); // pragma: allowlist secret
+        logger.error("error msg");
+
+        // error_with_context：含敏感时返回指示消息
+        logger.error_with_context("DB", "failed with password: secret123"); // pragma: allowlist secret
+        logger.error_with_context("DB", "plain failure");
+
+        // sanitizer() 访问器
+        let sanitized = logger.sanitizer().sanitize("Password: p"); // pragma: allowlist secret
+        assert!(!sanitized.contains("Password: p"));
+    }
+
+    #[test]
+    fn test_secure_logger_default() {
+        let logger = SecureLogger::default();
+        // 默认 min_level=Debug，所有级别均记录（不 panic）
+        logger.debug("d");
+        logger.info("i");
+        logger.warn("w");
+        logger.error("e");
+    }
+
+    #[test]
+    fn test_safe_result_ok_and_err() {
+        // 成功结果
+        let ok: SafeResult<i32> = SafeResult::ok(42);
+        assert!(ok.is_ok());
+        assert!(!ok.is_err());
+        assert_eq!(ok.value(), Some(&42));
+        assert!(!ok.contained_sensitive());
+        assert_eq!(ok.unwrap(), 42);
+        assert_eq!(SafeResult::ok(7).unwrap_or(0), 7);
+
+        // 错误结果（含敏感）
+        let err: SafeResult<i32> = SafeResult::err("Error password: secret123"); // pragma: allowlist secret
+        assert!(!err.is_ok());
+        assert!(err.is_err());
+        assert!(err.error_message().is_some());
+        assert!(err.contained_sensitive());
+        assert_eq!(err.unwrap_or(0), 0);
+
+        // 错误结果（不含敏感）
+        let err: SafeResult<i32> = SafeResult::err("plain failure");
+        assert!(!err.contained_sensitive());
+        assert_eq!(err.error_message(), Some("plain failure"));
+    }
+
+    #[test]
+    #[should_panic(expected = "SafeResult::unwrap()")]
+    fn test_safe_result_unwrap_panic_on_err() {
+        let err: SafeResult<i32> = SafeResult::err("failure");
+        let _ = err.unwrap();
+    }
+
+    #[test]
+    fn test_sensitive_data_filter_allowed_blocked_sanitized() {
+        let mut filter = SensitiveDataFilter::new();
+        assert!(filter.add_allowed_pattern(r"^ok").is_ok());
+        assert!(filter.add_blocked_pattern(r".*password.*").is_ok());
+
+        // Allowed：无敏感
+        let r = filter.filter("normal message");
+        assert!(r.is_allowed());
+        assert!(!r.is_blocked());
+        assert_eq!(r.message(), Some("normal message"));
+
+        // Blocked：命中阻止模式
+        let r = filter.filter("contains password here");
+        assert!(r.is_blocked());
+        assert!(!r.is_allowed());
+        assert_eq!(r.message(), None);
+
+        // Sanitized：含敏感但未被阻止
+        let r = filter.filter("API Key: sk-abcdef");
+        match r {
+            FilterResult::Sanitized(msg) => {
+                assert!(!msg.contains("sk-abcdef"));
+                assert!(msg.contains("***"));
+                assert!(FilterResult::Sanitized(msg.clone()).message().is_some());
+            }
+            _ => unreachable!("expected Sanitized"),
+        }
+    }
+
+    #[test]
+    fn test_sensitive_data_filter_invalid_pattern() {
+        let mut filter = SensitiveDataFilter::new();
+        assert_eq!(
+            filter.add_allowed_pattern(r"(").unwrap_err(),
+            Error::InvalidPattern
+        );
+        assert_eq!(
+            filter.add_blocked_pattern(r"[").unwrap_err(),
+            Error::InvalidPattern
+        );
+    }
+
+    #[test]
+    fn test_sensitive_data_filter_default_and_all() {
+        let filter = SensitiveDataFilter::default();
+        // 默认无阻止模式：含敏感 -> Sanitized
+        let results = filter.filter_all(&["normal", "API Key: sk-abcdef"]);
+        assert_eq!(results.len(), 2);
+        assert!(results[0].1.is_allowed());
+        // 第二条被脱敏（非 Allowed）
+        assert!(!results[1].1.is_allowed());
+    }
+
+    #[test]
+    fn test_filter_result_message_all_variants() {
+        assert_eq!(FilterResult::Allowed("a".to_string()).message(), Some("a"));
+        assert_eq!(
+            FilterResult::Sanitized("b".to_string()).message(),
+            Some("b")
+        );
+        assert_eq!(
+            FilterResult::Blocked {
+                reason: "r".to_string()
+            }
+            .message(),
+            None
+        );
+    }
 }

@@ -887,4 +887,310 @@ mod tests {
         assert!(injector.inject("APP_TEST", "hello;world").is_err());
         assert!(injector.inject("APP_TEST", "hello${world}").is_err());
     }
+
+    #[test]
+    fn test_inject_blocked_and_invalid_name_errors() {
+        let injector = ConfigInjector::new();
+        // 阻止的环境变量名
+        let err = injector.inject("PATH", "value").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::BlockedName { .. })
+        ));
+        let err = injector.inject("SHELL", "value").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::BlockedName { .. })
+        ));
+        // 格式不合法（小写）
+        let err = injector.inject("lowercase", "value").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::InvalidNameFormat { .. })
+        ));
+        // 含危险字符的名称
+        let err = injector.inject("APP;NAME", "value").unwrap_err();
+        assert!(err.to_string().contains("blocked") || err.to_string().contains("Invalid"));
+    }
+
+    #[test]
+    fn test_inject_value_dangerous_patterns() {
+        let injector = ConfigInjector::new();
+        // 命令注入：危险模式 ;
+        let err = injector.inject("APP_TEST", "hello;world").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::CommandInjection { .. })
+        ));
+        // shell 展开 ${...}
+        let err = injector.inject("APP_TEST", "hello${world}").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::ShellExpansion)
+        ));
+        // 控制字符（含 null 与其它控制字符均归为 control_character）
+        let err = injector.inject("APP_TEST", "abc\x01def").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::CommandInjection { .. })
+        ));
+        // 管道符
+        let err = injector.inject("APP_TEST", "a|b").unwrap_err();
+        assert!(err.to_string().contains("dangerous") || err.to_string().contains("Security"));
+    }
+
+    #[test]
+    fn test_inject_length_errors() {
+        let injector = ConfigInjector::new();
+        // 名称过长（默认上限 256）
+        let long_name = "A".repeat(300);
+        let err = injector.inject(&long_name, "value").unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::NameTooLong { .. })
+        ));
+        // 值过长（默认上限 4096）
+        let long_value = "a".repeat(5000);
+        let err = injector.inject("APP_TEST", &long_value).unwrap_err();
+        assert!(matches!(
+            err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::ValueTooLong { .. })
+        ));
+    }
+
+    #[test]
+    fn test_sensitive_field_masking() {
+        // 使用宽松验证器以注入敏感命名的字段
+        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        injector.inject("APP_SECRET", "super-secret-value").unwrap(); // pragma: allowlist secret
+        injector.inject("API_TOKEN", "token-1234567890").unwrap(); // pragma: allowlist secret
+        injector.inject("APP_PORT", "8080").unwrap();
+
+        // 敏感字段：get_safe 掩码
+        let secret = injector.get_safe("APP_SECRET").unwrap();
+        assert!(secret.contains('*'));
+        assert_ne!(secret, "super-secret-value");
+        let token = injector.get_safe("API_TOKEN").unwrap();
+        assert!(token.contains('*'));
+        assert_ne!(token, "token-1234567890");
+        // 非敏感字段：原样返回
+        assert_eq!(injector.get_safe("APP_PORT").unwrap(), "8080");
+
+        // get_all_safe：敏感字段掩码、非敏感原样
+        let all_safe = injector.get_all_safe().unwrap();
+        assert!(all_safe.get("APP_SECRET").unwrap().contains('*'));
+        assert!(all_safe.get("API_TOKEN").unwrap().contains('*'));
+        assert_eq!(all_safe.get("APP_PORT").unwrap(), "8080");
+
+        // get_all：原样返回（不掩码）
+        let all = injector.get_all().unwrap();
+        assert_eq!(all.get("APP_SECRET").unwrap(), "super-secret-value"); // pragma: allowlist secret
+    }
+
+    #[test]
+    fn test_mask_value_short_and_long() {
+        // 通过 get_safe 间接测试 mask_value：短值（<=4）全部掩码
+        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        injector.inject("APP_SECRET", "ab").unwrap(); // pragma: allowlist secret
+        let masked = injector.get_safe("APP_SECRET").unwrap();
+        assert_eq!(masked, "**");
+        // 5 字符值：保留前 1 位（min(2, 5/4=1)），其余掩码
+        injector.inject("APP_KEY", "abcde").unwrap(); // pragma: allowlist secret
+        let masked = injector.get_safe("APP_KEY").unwrap();
+        assert_eq!(masked, "a****");
+    }
+
+    #[test]
+    fn test_contains_remove_nonexistent() {
+        let injector = ConfigInjector::new();
+        injector.inject("APP_PORT", "8080").unwrap();
+        // contains false
+        assert!(!injector.contains("MISSING").unwrap());
+        // remove 不存在 -> Ok(None)
+        let removed = injector.remove("MISSING").unwrap();
+        assert_eq!(removed, None);
+        // remove 存在 -> Ok(Some)
+        let removed = injector.remove("APP_PORT").unwrap();
+        assert_eq!(removed, Some("8080".to_string()));
+        assert!(!injector.contains("APP_PORT").unwrap());
+    }
+
+    #[test]
+    fn test_len_is_empty_and_validator_ref() {
+        let injector = ConfigInjector::new();
+        assert!(injector.is_empty().unwrap());
+        assert_eq!(injector.len().unwrap(), 0);
+        injector.inject("APP_PORT", "8080").unwrap();
+        injector.inject("APP_HOST", "localhost").unwrap();
+        assert_eq!(injector.len().unwrap(), 2);
+        assert!(!injector.is_empty().unwrap());
+        // validator() 返回引用
+        assert!(injector.validator().should_allow_env_var("APP_OK"));
+    }
+
+    #[test]
+    fn test_inject_all_mixed_success_and_failures() {
+        let injector = ConfigInjector::new();
+        let mut config = HashMap::new();
+        config.insert("APP_PORT".to_string(), "8080".to_string());
+        // 无效名称
+        config.insert("lowercase".to_string(), "v".to_string());
+        // 无效值
+        config.insert("APP_TEST".to_string(), "a;b".to_string());
+
+        let (success, failures) = injector.inject_all(&config).unwrap();
+        assert_eq!(success.len(), 1);
+        assert!(success.contains(&"APP_PORT".to_string()));
+        assert_eq!(failures.len(), 2);
+        let failed_names: Vec<&str> = failures.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(failed_names.contains(&"lowercase"));
+        assert!(failed_names.contains(&"APP_TEST"));
+        // 失败记录包含错误描述
+        for (_, msg) in &failures {
+            assert!(!msg.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_inject_history_after_operations() {
+        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        injector.inject("APP_PORT", "8080").unwrap();
+        injector.inject("APP_SECRET", "secret").unwrap(); // pragma: allowlist secret
+        let history = injector.get_injection_history().unwrap();
+        assert_eq!(history.len(), 2);
+        assert!(!history[0].is_sensitive);
+        assert!(history[1].is_sensitive);
+        // clear 后历史也被清空
+        injector.clear().unwrap();
+        assert!(injector.get_injection_history().unwrap().is_empty());
+        assert!(injector.is_empty().unwrap());
+    }
+
+    #[test]
+    fn test_environment_config_get_required() {
+        let injector = ConfigInjector::new();
+        injector.inject("APP_PORT", "8080").unwrap();
+        injector.inject("APP_BAD", "notanumber").unwrap();
+
+        let config = EnvironmentConfig::from_injector(&injector);
+        // 必填：成功解析
+        assert_eq!(config.get_required::<u16>("APP_PORT").unwrap(), 8080);
+        // 必填：缺失 -> InvalidName
+        let err = config.get_required::<u16>("MISSING").unwrap_err();
+        assert!(matches!(err, ConfigInjectionError::InvalidName(_)));
+        // 必填：解析失败 -> InvalidValue
+        let err = config.get_required::<u16>("APP_BAD").unwrap_err();
+        assert!(matches!(err, ConfigInjectionError::InvalidValue(_)));
+    }
+
+    #[test]
+    fn test_environment_config_get_with_default() {
+        let injector = ConfigInjector::new();
+        injector.inject("APP_PORT", "8080").unwrap();
+        injector.inject("APP_DEBUG", "true").unwrap();
+        injector.inject("APP_BAD", "notanumber").unwrap();
+
+        let config = EnvironmentConfig::from_injector(&injector);
+        // 命中且解析成功
+        assert_eq!(config.get::<u16>("APP_PORT", 99), 8080);
+        // 命中但解析失败 -> 默认
+        assert_eq!(config.get::<u16>("APP_BAD", 99), 99);
+        // 缺失 -> 默认
+        assert_eq!(config.get::<u16>("MISSING", 99), 99);
+        // 字符串
+        assert_eq!(config.get_string("APP_PORT", "default"), "8080");
+        assert_eq!(config.get_string("MISSING", "default"), "default");
+        // 布尔
+        assert!(config.get_bool("APP_DEBUG", false));
+        assert!(!config.get_bool("MISSING", false));
+        // 数值
+        assert_eq!(config.get_number::<u32>("APP_PORT", 0), 8080);
+        assert_eq!(config.get_number::<u32>("MISSING", 7), 7);
+    }
+
+    #[test]
+    fn test_config_injection_error_display_all_variants() {
+        let s = format!(
+            "{}",
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::NullByte)
+        );
+        assert!(s.contains("Security validation failed"));
+
+        assert_eq!(
+            format!("{}", ConfigInjectionError::PoisonedLock),
+            "Configuration lock poisoned"
+        );
+        assert_eq!(
+            format!("{}", ConfigInjectionError::InvalidName("nm".to_string())),
+            "Invalid configuration name: nm"
+        );
+        assert_eq!(
+            format!("{}", ConfigInjectionError::InvalidValue("vl".to_string())),
+            "Invalid configuration value: vl"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                ConfigInjectionError::RateLimited {
+                    retry_after_seconds: 30
+                }
+            ),
+            "Rate limited. Retry after 30 seconds"
+        );
+    }
+
+    #[test]
+    fn test_config_injection_error_from_env_security() {
+        let env_err = EnvSecurityError::NullByte;
+        let inj_err: ConfigInjectionError = env_err.into();
+        assert!(matches!(
+            inj_err,
+            ConfigInjectionError::SecurityValidation(EnvSecurityError::NullByte)
+        ));
+    }
+
+    #[test]
+    fn test_config_injector_default_and_with_validator() {
+        // default 等价于 new
+        let injector = ConfigInjector::default();
+        assert!(injector.inject("APP_PORT", "8080").is_ok());
+        // 自定义验证器
+        let strict_injector = ConfigInjector::with_validator(EnvSecurityValidator::strict());
+        assert!(strict_injector.inject("APP_PORT", "8080").is_ok());
+    }
+
+    #[test]
+    fn test_rate_limiter_disabled_always_ok() {
+        let limiter = InjectionRateLimiter::disabled();
+        // 禁用限流：多次调用均放行
+        for _ in 0..10 {
+            assert!(limiter.check_rate_limit().is_ok());
+        }
+    }
+
+    #[test]
+    fn test_rate_limiter_enforces_limit() {
+        // max_requests=1：Call1 初始化窗口，Call2 计入 1 次请求（放行），Call3 超限被拒
+        let limiter = InjectionRateLimiter::with_limits(1, 3600);
+        assert!(limiter.check_rate_limit().is_ok());
+        assert!(limiter.check_rate_limit().is_ok());
+        assert!(limiter.check_rate_limit().is_err());
+    }
+
+    #[test]
+    fn test_rate_limiter_usage_stats() {
+        // 全新限流器：window_start=0 -> remaining=0
+        let limiter = InjectionRateLimiter::with_limits(100, 60);
+        let (counter, remaining, usage) = limiter.usage_stats();
+        assert_eq!(counter, 0);
+        assert_eq!(remaining, 0);
+        assert_eq!(usage, 0.0);
+
+        // 初始化窗口后：remaining 接近窗口长度，计数仍为 0（首调用不计数）
+        assert!(limiter.check_rate_limit().is_ok());
+        let (counter, remaining, usage) = limiter.usage_stats();
+        assert_eq!(counter, 0);
+        assert_eq!(usage, 0.0);
+        assert!(remaining > 0 && remaining <= 60);
+    }
 }

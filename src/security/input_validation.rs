@@ -754,4 +754,444 @@ mod tests {
             .is_sensitive("custom_field", "value")
             .needs_protection());
     }
+
+    #[test]
+    fn test_detector_default_and_clone() {
+        let detector = SensitiveDataDetector::default();
+        // 高敏感度关键词命中
+        let high = detector.is_sensitive("password", "v");
+        assert!(matches!(high, SensitivityResult::High { .. }));
+        // 克隆后行为一致
+        let cloned = detector.clone();
+        assert!(cloned.is_sensitive("token", "v").needs_protection());
+        // 非敏感字段
+        assert!(detector.is_sensitive("name", "value").is_low());
+    }
+
+    #[test]
+    fn test_sensitivity_result_variants_and_description() {
+        let low = SensitivityResult::Low;
+        assert!(low.is_low());
+        assert!(!low.needs_protection());
+        assert_eq!(low.description(), "low sensitivity");
+
+        let medium = SensitivityResult::Medium {
+            field: "api_token".to_string(),
+            reason: "custom".to_string(),
+        };
+        assert!(!medium.is_low());
+        assert!(medium.needs_protection());
+        assert!(medium.description().contains("medium sensitivity"));
+        assert!(medium.description().contains("api_token"));
+
+        let high = SensitivityResult::High {
+            field: "password".to_string(),
+            reason: "kw".to_string(),
+        };
+        assert!(!high.is_low());
+        assert!(high.needs_protection());
+        assert!(high.description().contains("high sensitivity"));
+    }
+
+    #[test]
+    fn test_detect_all_filters_low() {
+        let detector = SensitiveDataDetector::new();
+        let mut data = HashMap::new();
+        data.insert("password".to_string(), "secret".to_string());
+        data.insert("username".to_string(), "alice".to_string());
+        data.insert("api_key".to_string(), "val".to_string());
+
+        let results = detector.detect_all(&data);
+        // 只返回非 Low 的条目
+        assert_eq!(results.len(), 2);
+        for (_, r) in &results {
+            assert!(r.needs_protection());
+        }
+    }
+
+    #[test]
+    fn test_custom_sensitive_field_case_insensitive() {
+        let mut detector = SensitiveDataDetector::new();
+        detector.add_custom_sensitive_field("MyCustomField");
+        // 添加时小写化，检测时字段名大小写均应命中
+        assert!(detector
+            .is_sensitive("mycustomfield", "v")
+            .needs_protection());
+        assert!(detector
+            .is_sensitive("MYCUSTOMFIELD", "v")
+            .needs_protection());
+        // 自定义字段标记为 Medium
+        let r = detector.is_sensitive("mycustomfield", "v");
+        assert!(matches!(r, SensitivityResult::Medium { .. }));
+    }
+
+    #[test]
+    fn test_xss_input_rejected() {
+        let validator = InputValidator::new();
+        // < > ( ) 属于危险字符集合
+        assert!(validator
+            .validate_string("<script>alert(1)</script>")
+            .is_err());
+        assert!(validator.validate_string("<img onerror=alert(1)>").is_err());
+        assert!(validator.validate_string("<svg onload=alert(1)>").is_err());
+        assert!(validator
+            .validate_string("javascript:alert(document.cookie)")
+            .is_err());
+        // 清理后应剥离 <>
+        let sanitized = validator
+            .sanitize_string("<script>alert(1)</script>")
+            .unwrap();
+        assert!(!sanitized.contains('<'));
+        assert!(!sanitized.contains('>'));
+        assert!(!sanitized.contains('('));
+    }
+
+    #[test]
+    fn test_sql_injection_rejected() {
+        let validator = InputValidator::new();
+        // 分号 + DROP
+        assert!(validator.validate_string("1; DROP TABLE users").is_err());
+        // UNION SELECT
+        assert!(validator
+            .validate_string("1 UNION SELECT password FROM users")
+            .is_err());
+        // 引号 + OR
+        assert!(validator.validate_string("' OR '1'='1").is_err());
+        // SQL 注释结尾
+        assert!(validator.validate_string("admin'--").is_err());
+        // DELETE
+        assert!(validator.validate_string("; DELETE FROM accounts").is_err());
+    }
+
+    #[test]
+    fn test_path_traversal_rejected() {
+        let validator = InputValidator::new();
+        assert!(validator.validate_string("../../etc/passwd").is_err());
+        assert!(validator
+            .validate_string("..\\..\\windows\\system32")
+            .is_err());
+        assert!(validator.validate_string("/etc/../passwd").is_err());
+        assert!(validator
+            .validate_string("var/log/../../etc/shadow")
+            .is_err());
+    }
+
+    #[test]
+    fn test_command_injection_rejected() {
+        let validator = InputValidator::new();
+        // 分号
+        assert!(validator.validate_string("; rm -rf /").is_err());
+        // 管道
+        assert!(validator.validate_string("| cat /etc/passwd").is_err());
+        // && 和 ||
+        assert!(validator.validate_string("true && whoami").is_err());
+        assert!(validator.validate_string("false || malicious").is_err());
+        // 命令替换 $(...)
+        assert!(validator.validate_string("$(whoami)").is_err());
+        // 反引号
+        assert!(validator.validate_string("`whoami`").is_err());
+        // shell 变量展开
+        assert!(validator.validate_string("${HOME}").is_err());
+        // 重定向
+        assert!(validator.validate_string(">> /tmp/file").is_err());
+        assert!(validator.validate_string("2> /dev/null").is_err());
+    }
+
+    #[test]
+    fn test_validate_string_too_long() {
+        let validator = InputValidator::new().with_max_string_length(5);
+        assert!(validator.validate_string("abcdef").is_err());
+        let err = validator.validate_string("abcdef").unwrap_err();
+        assert!(matches!(
+            err,
+            InputValidationError::TooLong { max: 5, actual: 6 }
+        ));
+        // 边界：恰好等于上限应通过
+        assert!(validator.validate_string("abcde").is_ok());
+    }
+
+    #[test]
+    fn test_validate_string_invalid_characters() {
+        // 允许字符模式不匹配 -> InvalidCharacters
+        let validator = InputValidator::new().with_allowed_chars_pattern(r"^[a-z]+$");
+        assert!(validator.validate_string("hello").is_ok());
+        let err = validator.validate_string("Hello").unwrap_err();
+        assert_eq!(err, InputValidationError::InvalidCharacters);
+        let err2 = validator.validate_string("hello123").unwrap_err();
+        assert_eq!(err2, InputValidationError::InvalidCharacters);
+    }
+
+    #[test]
+    fn test_dangerous_pattern_error_carries_pattern() {
+        let validator = InputValidator::new();
+        let err = validator.validate_string("a;b").unwrap_err();
+        match err {
+            InputValidationError::DangerousPattern { pattern } => {
+                assert!(!pattern.is_empty());
+            }
+            _ => panic!("expected DangerousPattern"),
+        }
+    }
+
+    #[test]
+    fn test_sanitize_string_strips_all_dangerous_chars() {
+        let validator = InputValidator::new();
+        // 全部为危险字符 -> 清理后为空字符串
+        let sanitized = validator.sanitize_string(";<>|`$(){}").unwrap();
+        assert_eq!(sanitized, "");
+        // 混合：危险字符被剥离，其余保留
+        let sanitized = validator.sanitize_string("he;ll{o}").unwrap();
+        assert_eq!(sanitized, "hello");
+        // 含 null 字节
+        let sanitized = validator.sanitize_string("a\0b").unwrap();
+        assert_eq!(sanitized, "ab");
+    }
+
+    #[test]
+    fn test_validate_field_name_variants() {
+        let validator = InputValidator::new();
+        // 空
+        assert_eq!(
+            validator.validate_field_name("").unwrap_err(),
+            InputValidationError::EmptyFieldName
+        );
+        // 以数字开头
+        assert_eq!(
+            validator.validate_field_name("1abc").unwrap_err(),
+            InputValidationError::InvalidFieldNameFormat
+        );
+        // 含空格
+        assert_eq!(
+            validator.validate_field_name("a b").unwrap_err(),
+            InputValidationError::InvalidFieldNameFormat
+        );
+        // 有效：单字母、含 _ - 、全大写
+        assert!(validator.validate_field_name("a").is_ok());
+        assert!(validator.validate_field_name("app_name").is_ok());
+        assert!(validator.validate_field_name("app-name").is_ok());
+        assert!(validator.validate_field_name("APP").is_ok());
+        // 过长
+        let v = InputValidator::new().with_max_string_length(3);
+        assert!(matches!(
+            v.validate_field_name("abcd").unwrap_err(),
+            InputValidationError::TooLong { max: 3, actual: 4 }
+        ));
+    }
+
+    #[test]
+    fn test_validate_url_variants() {
+        let validator = InputValidator::new();
+        // 无效 URL（无法解析）
+        assert_eq!(
+            validator.validate_url("not a url").unwrap_err(),
+            InputValidationError::InvalidUrl
+        );
+        // 非法 scheme
+        assert_eq!(
+            validator.validate_url("ftp://example.com").unwrap_err(),
+            InputValidationError::InvalidUrlScheme
+        );
+        assert_eq!(
+            validator.validate_url("file:///etc/passwd").unwrap_err(),
+            InputValidationError::InvalidUrlScheme
+        );
+        // 含危险模式
+        assert!(matches!(
+            validator.validate_url("https://example.com;a").unwrap_err(),
+            InputValidationError::DangerousPattern { .. }
+        ));
+        assert!(matches!(
+            validator
+                .validate_url("https://example.com/${x}")
+                .unwrap_err(),
+            InputValidationError::DangerousPattern { .. }
+        ));
+        // 过长
+        let v = InputValidator::new().with_max_string_length(5);
+        assert!(matches!(
+            v.validate_url("https://a").unwrap_err(),
+            InputValidationError::TooLong { .. }
+        ));
+        // 有效
+        assert!(validator.validate_url("https://example.com/path").is_ok());
+    }
+
+    #[test]
+    fn test_validate_email_variants() {
+        let validator = InputValidator::new();
+        // 无效
+        assert_eq!(
+            validator.validate_email("invalid-email").unwrap_err(),
+            InputValidationError::InvalidEmail
+        );
+        assert_eq!(
+            validator.validate_email("@example.com").unwrap_err(),
+            InputValidationError::InvalidEmail
+        );
+        assert_eq!(
+            validator.validate_email("user@").unwrap_err(),
+            InputValidationError::InvalidEmail
+        );
+        assert_eq!(
+            validator.validate_email("user@example").unwrap_err(),
+            InputValidationError::InvalidEmail
+        );
+        // 过长
+        let v = InputValidator::new().with_max_string_length(5);
+        assert!(matches!(
+            v.validate_email("a@b.co").unwrap_err(),
+            InputValidationError::TooLong { .. }
+        ));
+        // 有效
+        assert!(validator
+            .validate_email("user.name+tag@example.com")
+            .is_ok());
+    }
+
+    #[test]
+    fn test_validate_whitelist() {
+        // 无白名单 -> 一律放行
+        let validator = InputValidator::new();
+        assert!(validator.validate_whitelist("anything").is_ok());
+        // 添加白名单
+        let validator = InputValidator::new()
+            .add_whitelist_pattern(r"^abc")
+            .add_whitelist_pattern(r"^xyz");
+        assert!(validator.validate_whitelist("abc123").is_ok());
+        assert!(validator.validate_whitelist("xyz789").is_ok());
+        // 不在白名单
+        assert_eq!(
+            validator.validate_whitelist("def456").unwrap_err(),
+            InputValidationError::NotInWhitelist
+        );
+    }
+
+    #[test]
+    fn test_validate_all_collects_errors() {
+        let validator = InputValidator::new();
+        let mut data = HashMap::new();
+        data.insert("valid_name".to_string(), "valid_value".to_string());
+        // 字段名非法（以数字开头）
+        data.insert("1bad".to_string(), "ok".to_string());
+        // 值含危险模式
+        data.insert("good_name".to_string(), "a;b".to_string());
+
+        let errors = validator.validate_all(&data);
+        assert_eq!(errors.len(), 2);
+        // 应包含两个字段错误
+        let names: Vec<&str> = errors.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"1bad"));
+        assert!(names.contains(&"good_name"));
+    }
+
+    #[test]
+    fn test_input_validation_error_display_all_variants() {
+        // 覆盖所有 Display 分支
+        let s = format!("{}", InputValidationError::TooLong { max: 1, actual: 2 });
+        assert!(s.contains("max=1"));
+        assert!(s.contains("actual=2"));
+
+        assert!(format!("{}", InputValidationError::InvalidCharacters).contains("invalid"));
+        assert!(format!(
+            "{}",
+            InputValidationError::DangerousPattern {
+                pattern: "x".into()
+            }
+        )
+        .contains("x"));
+        assert!(format!("{}", InputValidationError::EmptyFieldName).contains("empty"));
+        assert!(format!("{}", InputValidationError::InvalidFieldNameFormat).contains("invalid"));
+        assert!(format!("{}", InputValidationError::InvalidUrl).contains("URL"));
+        assert!(format!("{}", InputValidationError::InvalidUrlScheme).contains("scheme"));
+        assert!(format!("{}", InputValidationError::InvalidEmail).contains("Email"));
+        assert!(format!("{}", InputValidationError::NotInWhitelist).contains("whitelist"));
+        assert!(format!(
+            "{}",
+            InputValidationError::DepthExceeded { max: 1, actual: 2 }
+        )
+        .contains("depth"));
+        assert!(format!(
+            "{}",
+            InputValidationError::ArrayTooLong { max: 1, actual: 2 }
+        )
+        .contains("Array"));
+    }
+
+    #[test]
+    fn test_config_validator_builder_and_strict() {
+        // builder 链式配置
+        let validator = ConfigValidator::builder()
+            .max_string_length(10)
+            .add_sensitive_field("custom_token")
+            .build();
+        let mut data = HashMap::new();
+        data.insert("custom_token".to_string(), "short".to_string());
+        let result = validator.validate(&data);
+        assert!(result.has_sensitive_data());
+
+        // strict_mode：max_string_length=256，token/password 为敏感
+        let strict = ConfigValidatorBuilder::new().strict_mode().build();
+        let mut data = HashMap::new();
+        data.insert("token".to_string(), "abc".to_string());
+        data.insert("password".to_string(), "xyz".to_string());
+        let result = strict.validate(&data);
+        assert_eq!(result.sensitive_fields.len(), 2);
+    }
+
+    #[test]
+    fn test_config_validator_default_and_safe() {
+        let validator = ConfigValidator::default();
+        let mut data = HashMap::new();
+        data.insert("app_name".to_string(), "myapp".to_string());
+        // validate_safe 对有效配置返回 true
+        assert!(validator.validate_safe(&data));
+        // 含危险值 -> false
+        let mut bad = HashMap::new();
+        bad.insert("app_name".to_string(), "a;b".to_string());
+        assert!(!validator.validate_safe(&bad));
+        // 字段名非法 -> false
+        let mut bad_name = HashMap::new();
+        bad_name.insert("1bad".to_string(), "ok".to_string());
+        assert!(!validator.validate_safe(&bad_name));
+    }
+
+    #[test]
+    fn test_config_validation_result_report_and_sensitive() {
+        let validator = ConfigValidator::new();
+        // 无错误：report 为空
+        let mut ok = HashMap::new();
+        ok.insert("app_name".to_string(), "myapp".to_string());
+        let result = validator.validate(&ok);
+        assert!(result.is_valid());
+        assert!(!result.has_sensitive_data());
+        assert_eq!(result.error_report(), "");
+
+        // 有错误：report 非空
+        let mut bad = HashMap::new();
+        bad.insert("1bad".to_string(), "a;b".to_string());
+        let result = validator.validate(&bad);
+        assert!(!result.is_valid());
+        assert!(!result.error_report().is_empty());
+        // 报告中应出现字段名
+        assert!(result.error_report().contains("1bad"));
+    }
+
+    #[test]
+    fn test_config_validation_error_display() {
+        let field_err = ConfigValidationError::FieldError {
+            field: "f".to_string(),
+            error: InputValidationError::EmptyFieldName,
+        };
+        assert!(format!("{}", field_err).contains("f"));
+        let warn = ConfigValidationError::SensitiveDataWarning {
+            field: "pw".to_string(),
+            sensitivity: SensitivityResult::High {
+                field: "pw".to_string(),
+                reason: "r".to_string(),
+            },
+        };
+        let s = format!("{}", warn);
+        assert!(s.contains("pw"));
+        assert!(s.contains("high sensitivity"));
+    }
 }

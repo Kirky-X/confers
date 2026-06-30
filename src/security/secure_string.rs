@@ -839,7 +839,7 @@ mod tests {
     fn test_secure_string_deref_to_str() {
         let secret = SecureString::from("deref-target");
         // Deref<Target = str> — &*secret yields &str.
-        let s: &str = &*secret;
+        let s: &str = &secret;
         assert_eq!(s, "deref-target");
     }
 
