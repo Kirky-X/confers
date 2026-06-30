@@ -358,3 +358,464 @@ impl RotationPlan {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_key_status_variants() {
+        let active = KeyStatus::Active;
+        let deprecated = KeyStatus::Deprecated;
+        let compromised = KeyStatus::Compromised;
+        let expired = KeyStatus::Expired;
+
+        assert_ne!(active, deprecated);
+        assert_ne!(active, compromised);
+        assert_ne!(active, expired);
+        assert_ne!(deprecated, expired);
+    }
+
+    #[test]
+    fn test_key_metadata_new_defaults() {
+        let meta = KeyMetadata::new(3, "alice".to_string(), Some("desc".to_string()));
+        assert_eq!(meta.version, 3);
+        assert_eq!(meta.created_by, "alice");
+        assert_eq!(meta.status, KeyStatus::Active);
+        assert_eq!(meta.expires_at, None);
+        assert_eq!(meta.description.as_deref(), Some("desc"));
+        assert!(meta.created_at > 0);
+    }
+
+    #[test]
+    fn test_key_metadata_new_without_description() {
+        let meta = KeyMetadata::new(1, "bob".to_string(), None);
+        assert_eq!(meta.description, None);
+    }
+
+    #[test]
+    fn test_key_metadata_is_expired_no_expiry() {
+        let meta = KeyMetadata::new(1, "u".to_string(), None);
+        assert!(!meta.is_expired());
+    }
+
+    #[test]
+    fn test_key_metadata_is_expired_past() {
+        let mut meta = KeyMetadata::new(1, "u".to_string(), None);
+        meta.expires_at = Some(now_timestamp().saturating_sub(1));
+        assert!(meta.is_expired());
+    }
+
+    #[test]
+    fn test_key_metadata_is_expired_future() {
+        let mut meta = KeyMetadata::new(1, "u".to_string(), None);
+        meta.expires_at = Some(now_timestamp().saturating_add(86_400));
+        assert!(!meta.is_expired());
+    }
+
+    #[test]
+    fn test_key_metadata_is_active_when_active_no_expiry() {
+        let meta = KeyMetadata::new(1, "u".to_string(), None);
+        assert!(meta.is_active());
+    }
+
+    #[test]
+    fn test_key_metadata_is_active_when_deprecated() {
+        let mut meta = KeyMetadata::new(1, "u".to_string(), None);
+        meta.status = KeyStatus::Deprecated;
+        assert!(!meta.is_active());
+    }
+
+    #[test]
+    fn test_key_metadata_is_active_when_expired() {
+        let mut meta = KeyMetadata::new(1, "u".to_string(), None);
+        meta.expires_at = Some(now_timestamp().saturating_sub(1));
+        assert!(!meta.is_active());
+    }
+
+    #[test]
+    fn test_key_bundle_new_sets_metadata() {
+        let bundle = KeyBundle::new(
+            2,
+            "k_2".to_string(),
+            "encrypted".to_string(),
+            "creator".to_string(),
+            Some("desc".to_string()),
+        );
+        assert_eq!(bundle.metadata.version, 2);
+        assert_eq!(bundle.key_id, "k_2");
+        assert_eq!(bundle.encrypted_key, "encrypted");
+        assert_eq!(bundle.metadata.created_by, "creator");
+        assert_eq!(bundle.metadata.status, KeyStatus::Active);
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_new_computes_next_rotation() {
+        let last_rotation = 1_000_000_u64;
+        let schedule = KeyRotationSchedule::new("k1".to_string(), 90, last_rotation, 5);
+        assert_eq!(schedule.key_id, "k1");
+        assert_eq!(schedule.rotation_interval_days, 90);
+        assert_eq!(schedule.last_rotation, last_rotation);
+        assert_eq!(schedule.max_versions, 5);
+        assert!(schedule.auto_rotate);
+        // next_rotation = last_rotation + 90 days in seconds
+        assert_eq!(schedule.next_rotation, last_rotation + 90 * SECONDS_PER_DAY);
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_new_saturates_on_overflow() {
+        let near_max = u64::MAX;
+        let schedule = KeyRotationSchedule::new("k".to_string(), 1, near_max, 1);
+        // saturating_add keeps it at u64::MAX instead of overflowing
+        assert_eq!(schedule.next_rotation, u64::MAX);
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_is_rotation_due_past() {
+        let past = now_timestamp().saturating_sub(86_400);
+        let schedule = KeyRotationSchedule::new("k".to_string(), 1, past, 5);
+        // next_rotation is past + 1 day, which is now-ish, so should be due
+        assert!(schedule.is_rotation_due());
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_is_rotation_due_future() {
+        let now = now_timestamp();
+        // last_rotation = now, interval = 90 days → next_rotation far in future
+        let schedule = KeyRotationSchedule::new("k".to_string(), 90, now, 5);
+        assert!(!schedule.is_rotation_due());
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_update_after_rotation() {
+        let original_last = 1_000_000_u64;
+        let mut schedule = KeyRotationSchedule::new("k".to_string(), 30, original_last, 5);
+        let original_next = schedule.next_rotation;
+
+        schedule.update_after_rotation();
+
+        assert!(schedule.last_rotation > original_last);
+        assert!(schedule.next_rotation > original_next);
+        assert_eq!(
+            schedule.next_rotation,
+            schedule.last_rotation + 30 * SECONDS_PER_DAY
+        );
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_days_until_rotation_future() {
+        let now = now_timestamp();
+        let schedule = KeyRotationSchedule::new("k".to_string(), 10, now, 5);
+        // ~10 days remaining (within a day of 10 due to elapsed seconds)
+        let days = schedule.days_until_rotation();
+        assert!((9..=10).contains(&days), "expected ~10 days, got {}", days);
+    }
+
+    #[test]
+    fn test_key_rotation_schedule_days_until_rotation_past() {
+        let past = now_timestamp().saturating_sub(20 * 86_400);
+        let schedule = KeyRotationSchedule::new("k".to_string(), 10, past, 5);
+        let days = schedule.days_until_rotation();
+        assert!(days < 0, "expected negative days, got {}", days);
+    }
+
+    #[test]
+    fn test_now_timestamp_nonzero() {
+        let t = now_timestamp();
+        assert!(t > 0);
+        // Two consecutive calls should be >= the first (monotonic-ish)
+        let t2 = now_timestamp();
+        assert!(t2 >= t);
+    }
+
+    #[test]
+    fn test_rotation_plan_new_collects_versions() {
+        let plan = RotationPlan::new("k1".to_string(), 3, 6);
+        assert_eq!(plan.key_id, "k1");
+        assert_eq!(plan.current_version, 3);
+        assert_eq!(plan.target_version, 6);
+        assert_eq!(plan.keys_to_rotate, vec![4, 5, 6]);
+        assert!(plan.reencryption_required);
+    }
+
+    #[test]
+    fn test_rotation_plan_new_adjacent_version() {
+        let plan = RotationPlan::new("k1".to_string(), 5, 6);
+        assert_eq!(plan.keys_to_rotate, vec![6]);
+        assert!(plan.reencryption_required);
+    }
+
+    #[test]
+    fn test_rotation_plan_new_same_version_empty() {
+        let plan = RotationPlan::new("k1".to_string(), 5, 5);
+        assert!(plan.keys_to_rotate.is_empty());
+        assert!(!plan.reencryption_required);
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(CONFERS_KEY_VERSION, "v1");
+        assert_eq!(KEY_VERSION_PREFIX, "v");
+        assert_eq!(CURRENT_KEY_VERSION, 1);
+        assert_eq!(SECONDS_PER_DAY, 86_400);
+    }
+
+    #[test]
+    fn test_key_status_debug_clone_serialize() {
+        let status = KeyStatus::Active;
+        let cloned = status;
+        assert_eq!(status, cloned);
+        let debug_str = format!("{:?}", status);
+        assert_eq!(debug_str, "Active");
+        let json = serde_json::to_string(&status).expect("serialize");
+        assert_eq!(json, "\"Active\"");
+    }
+
+    #[test]
+    fn test_key_metadata_serialize_deserialize() {
+        let meta = KeyMetadata::new(2, "alice".to_string(), Some("d".to_string()));
+        let json = serde_json::to_string(&meta).expect("serialize");
+        let de: KeyMetadata = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(de.version, meta.version);
+        assert_eq!(de.created_by, meta.created_by);
+    }
+
+    #[test]
+    fn test_key_bundle_serialize_deserialize() {
+        let bundle = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "enc".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let json = serde_json::to_string(&bundle).expect("serialize");
+        let de: KeyBundle = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(de.key_id, bundle.key_id);
+        assert_eq!(de.encrypted_key, bundle.encrypted_key);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_bundle_generate_and_get_plaintext_key_round_trip() {
+        let master_key = [0x11; 32];
+        let bundle = KeyBundle::generate(
+            &master_key,
+            1,
+            "creator".to_string(),
+            Some("test key".to_string()),
+        )
+        .expect("generate");
+
+        assert_eq!(bundle.metadata.version, 1);
+        assert_eq!(bundle.metadata.created_by, "creator");
+        assert_eq!(bundle.metadata.status, KeyStatus::Active);
+        assert!(bundle.encrypted_key.contains(':'));
+        assert_eq!(bundle.key_id, format!("{}_1", KEY_VERSION_PREFIX));
+
+        let plaintext = bundle
+            .get_plaintext_key(&master_key)
+            .expect("decrypt round-trip");
+        assert_eq!(plaintext.len(), 32);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_bundle_get_plaintext_key_invalid_format() {
+        let master_key = [0u8; 32];
+        let mut bundle =
+            KeyBundle::generate(&master_key, 1, "u".to_string(), None).expect("generate");
+        bundle.encrypted_key = "no-colon-here".to_string();
+        let err = bundle.get_plaintext_key(&master_key).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Invalid encrypted key format"), "got: {}", msg);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_bundle_get_plaintext_key_wrong_master_key() {
+        let master_key = [0x42; 32];
+        let wrong_key = [0x99; 32];
+        let bundle = KeyBundle::generate(&master_key, 1, "u".to_string(), None).expect("generate");
+        let err = bundle.get_plaintext_key(&wrong_key).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Decryption failed"), "got: {}", msg);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_ring_new_initializes_primary_key() {
+        let master_key = [0x01; 32];
+        let ring = KeyRing::new(&master_key, "prod".to_string(), "team".to_string())
+            .expect("new key ring");
+        assert_eq!(ring.key_id, "prod");
+        assert_eq!(ring.current_version, CURRENT_KEY_VERSION);
+        assert!(ring.secondary_keys.is_empty());
+        assert!(ring.created_at > 0);
+        assert_eq!(ring.last_rotated_at, None);
+        assert_eq!(ring.primary_key.metadata.version, CURRENT_KEY_VERSION);
+        assert_eq!(ring.primary_key.metadata.status, KeyStatus::Active);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_ring_rotate_increments_version_and_archives_old_primary() {
+        let master_key = [0x02; 32];
+        let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
+        let old_primary_version = ring.primary_key.metadata.version;
+        let old_primary = ring.primary_key.clone();
+
+        let new_key = ring
+            .rotate(
+                &master_key,
+                "rotator".to_string(),
+                Some("scheduled".to_string()),
+            )
+            .expect("rotate");
+
+        assert_eq!(new_key.metadata.version, old_primary_version + 1);
+        assert_eq!(ring.current_version, old_primary_version + 1);
+        assert_eq!(ring.primary_key.metadata.version, new_key.metadata.version);
+        // Old primary moved to secondaries
+        assert_eq!(ring.secondary_keys.len(), 1);
+        assert_eq!(ring.secondary_keys[0].metadata.version, old_primary_version);
+        assert_eq!(
+            ring.secondary_keys[0].encrypted_key,
+            old_primary.encrypted_key
+        );
+        assert!(ring.last_rotated_at.is_some());
+    }
+
+    #[test]
+    fn test_key_ring_get_key_by_version_returns_primary() {
+        let bundle = KeyBundle::new(
+            5,
+            "k_5".to_string(),
+            "enc".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 5,
+            primary_key: bundle.clone(),
+            secondary_keys: vec![],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        let found = ring.get_key_by_version(5);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().key_id, bundle.key_id);
+    }
+
+    #[test]
+    fn test_key_ring_get_key_by_version_returns_secondary() {
+        let primary = KeyBundle::new(
+            2,
+            "k_2".to_string(),
+            "e2".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let secondary = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "e1".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 2,
+            primary_key: primary,
+            secondary_keys: vec![secondary.clone()],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        let found = ring.get_key_by_version(1);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().key_id, secondary.key_id);
+        // Missing version returns None
+        assert!(ring.get_key_by_version(99).is_none());
+    }
+
+    #[test]
+    fn test_key_ring_add_secondary_key() {
+        let primary = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "e1".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let extra = KeyBundle::new(
+            2,
+            "k_2".to_string(),
+            "e2".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let mut ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 1,
+            primary_key: primary,
+            secondary_keys: vec![],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        assert_eq!(ring.secondary_keys.len(), 0);
+        ring.add_secondary_key(extra);
+        assert_eq!(ring.secondary_keys.len(), 1);
+    }
+
+    #[test]
+    fn test_key_ring_deactivate_version_marks_deprecated() {
+        let primary = KeyBundle::new(
+            2,
+            "k_2".to_string(),
+            "e2".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let secondary = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "e1".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let mut ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 2,
+            primary_key: primary,
+            secondary_keys: vec![secondary],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        ring.deactivate_version(1);
+        let v1 = ring.get_key_by_version(1).unwrap();
+        assert_eq!(v1.metadata.status, KeyStatus::Deprecated);
+    }
+
+    #[test]
+    fn test_key_ring_deactivate_version_no_op_for_missing() {
+        let primary = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "e1".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let mut ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 1,
+            primary_key: primary,
+            secondary_keys: vec![],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        // Missing version: deactivate is a no-op (no panic, no change)
+        ring.deactivate_version(99);
+        assert_eq!(ring.primary_key.metadata.status, KeyStatus::Active);
+    }
+}

@@ -780,4 +780,459 @@ mod tests {
         let sanitized = storage.sanitize_error(error_msg);
         assert_eq!(sanitized, error_msg);
     }
+
+    #[test]
+    fn test_sanitization_level_variants() {
+        let levels = [
+            SanitizationLevel::Minimal,
+            SanitizationLevel::Standard,
+            SanitizationLevel::Aggressive,
+        ];
+        // Variants must be distinct
+        assert_ne!(levels[0], levels[1]);
+        assert_ne!(levels[1], levels[2]);
+        assert_ne!(levels[0], levels[2]);
+        // Clone + Copy + Debug
+        let copied = levels[0];
+        assert_eq!(copied, levels[0]);
+        let _debug = format!("{:?}", levels[0]);
+    }
+
+    #[test]
+    fn test_error_sanitizer_with_replacement_overrides_default() {
+        let master_key = [0x55; 32];
+        let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Minimal)
+            .with_replacement("[REDACTED]".to_string());
+        let key_hex = hex::encode(master_key);
+        let msg = format!("error: {}", key_hex);
+        let sanitized = sanitizer.sanitize(&msg);
+        assert_eq!(sanitized, "error: [REDACTED]");
+    }
+
+    #[test]
+    fn test_error_sanitizer_minimal_leaves_other_patterns() {
+        let master_key = [0x77; 32];
+        let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Minimal);
+        // Minimal level only replaces the full master key hex; other hex fragments remain.
+        let msg = "fragment: deadbeefcafebabe";
+        let sanitized = sanitizer.sanitize(msg);
+        assert_eq!(
+            sanitized, msg,
+            "Minimal level must not touch other fragments"
+        );
+    }
+
+    #[test]
+    fn test_key_storage_new_creates_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage_dir = temp_dir.path().join("nested").join("keys");
+        // KeyStorage::new has the side effect of creating the directory tree.
+        let _storage = KeyStorage::new(storage_dir.clone()).expect("KeyStorage::new");
+        assert!(storage_dir.exists(), "storage directory should be created");
+        assert!(storage_dir.is_dir());
+    }
+
+    #[test]
+    fn test_key_storage_new_returns_empty_manager() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let km = storage.get_key_manager();
+        assert!(km.list_keys().is_empty());
+    }
+
+    #[test]
+    fn test_key_storage_set_master_key_enables_sanitizer() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Before set_master_key: sanitize_error is a no-op
+        let plain = "no secret here";
+        assert_eq!(storage.sanitize_error(plain), plain);
+
+        let master_key = [0x42; 32];
+        storage.set_master_key(&master_key);
+        let key_hex = hex::encode(master_key);
+        let msg = format!("error with {}", key_hex);
+        let sanitized = storage.sanitize_error(&msg);
+        assert!(sanitized.contains("***"));
+        assert!(!sanitized.contains(&key_hex));
+    }
+
+    #[test]
+    fn test_key_storage_clear_master_key_disables_sanitizer() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x42; 32];
+        storage.set_master_key(&master_key);
+        storage.clear_master_key();
+        let plain = "no secret here";
+        assert_eq!(storage.sanitize_error(plain), plain);
+    }
+
+    #[test]
+    fn test_key_storage_save_without_master_key_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let err = storage.save().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Master key not set"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_storage_load_without_master_key_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let err = storage.load().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Master key not set"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_storage_load_no_file_returns_ok() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x01; 32];
+        storage.set_master_key(&master_key);
+        // No keys.json file yet → load is a no-op Ok
+        storage
+            .load()
+            .expect("load should succeed when no file exists");
+    }
+
+    #[test]
+    fn test_key_storage_initialize_with_master_key_persists_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x10; 32];
+        storage
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .expect("initialize_with_master_key");
+
+        let keys_file = temp_dir.path().join("keys.json");
+        assert!(
+            keys_file.exists(),
+            "keys.json should be created after initialize"
+        );
+        // File must contain EncryptedKeyStore JSON (with version: 1)
+        let contents = std::fs::read_to_string(&keys_file).unwrap();
+        assert!(contents.contains("\"version\""), "got: {}", contents);
+        assert!(contents.contains("\"encrypted_data\""));
+        assert!(contents.contains("\"checksum\""));
+    }
+
+    #[test]
+    fn test_key_storage_save_load_round_trip() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let master_key = [0x20; 32];
+
+        // First storage: initialize and persist
+        let mut storage_a = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage_a.set_master_key(&master_key);
+        storage_a
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+        // Verify state in storage_a
+        let km_a = storage_a.get_key_manager();
+        assert_eq!(km_a.get_default_key_id(), "prod");
+        assert_eq!(km_a.list_keys().len(), 1);
+
+        // Second storage at the same path: load and verify state matches
+        let mut storage_b = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage_b.set_master_key(&master_key);
+        storage_b.load().expect("load");
+        let km_b = storage_b.get_key_manager();
+        assert_eq!(km_b.get_default_key_id(), "prod");
+        assert_eq!(km_b.list_keys().len(), 1);
+    }
+
+    #[test]
+    fn test_key_storage_load_wrong_master_key_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let master_key = [0x30; 32];
+        let wrong_key = [0x99; 32];
+
+        let mut storage_a = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage_a.set_master_key(&master_key);
+        storage_a
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+
+        // Load with a different master key → decryption fails
+        let mut storage_b = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage_b.set_master_key(&wrong_key);
+        let err = storage_b.load().unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Failed to decrypt") || msg.contains("Decryption"),
+            "got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_key_storage_get_key_manager_mut_allows_mutation() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x40; 32];
+        storage.set_master_key(&master_key);
+
+        {
+            let km = storage.get_key_manager_mut();
+            km.initialize(&master_key, "k1".to_string(), "u".to_string())
+                .expect("initialize");
+        }
+        let km = storage.get_key_manager();
+        assert_eq!(km.get_default_key_id(), "k1");
+    }
+
+    #[test]
+    fn test_key_storage_export_keys_creates_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x50; 32];
+        storage.set_master_key(&master_key);
+        storage
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        let export_path = temp_dir.path().join("export.json");
+        storage.export_keys(&export_path).expect("export_keys");
+        assert!(export_path.exists(), "export file should be created");
+
+        let contents = std::fs::read_to_string(&export_path).unwrap();
+        assert!(contents.contains("\"version\""), "got: {}", contents);
+        assert!(contents.contains("\"encrypted_data\""));
+        assert!(contents.contains("\"exported_at\""));
+    }
+
+    #[test]
+    fn test_key_storage_export_keys_without_master_key_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let export_path = temp_dir.path().join("export.json");
+        let err = storage.export_keys(&export_path).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Master key not set"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_storage_import_keys_nonexistent_file_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x60; 32];
+        let import_path = temp_dir.path().join("nonexistent.json");
+        let err = storage.import_keys(&import_path, &master_key).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Failed to open import file"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_storage_backup_creates_backup_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x70; 32];
+        storage.set_master_key(&master_key);
+        storage
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        let backup_dir = temp_dir.path().join("backups");
+        storage.backup(&backup_dir).expect("backup");
+        assert!(backup_dir.exists(), "backup directory should be created");
+
+        let backups = storage.list_backups(&backup_dir).expect("list_backups");
+        assert_eq!(
+            backups.len(),
+            1,
+            "expected exactly one backup, got {:?}",
+            backups
+        );
+        let b = &backups[0];
+        assert!(b.file_name.starts_with("keys_backup_"));
+        assert!(b.file_name.ends_with(".json"));
+        assert!(b.timestamp > 0);
+        assert!(b.path.exists());
+    }
+
+    #[test]
+    fn test_key_storage_list_backups_returns_empty_for_no_backups() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let backup_dir = temp_dir.path().join("no_backups_here");
+        std::fs::create_dir_all(&backup_dir).unwrap();
+        let backups = storage.list_backups(&backup_dir).expect("list_backups");
+        assert!(
+            backups.is_empty(),
+            "expected zero backups, got {:?}",
+            backups
+        );
+    }
+
+    #[test]
+    fn test_key_storage_list_backups_filters_non_backup_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let backup_dir = temp_dir.path().join("mixed");
+        std::fs::create_dir_all(&backup_dir).unwrap();
+        // Create a valid backup file
+        std::fs::write(backup_dir.join("keys_backup_1000.json"), "{}").unwrap();
+        // Create non-backup files that should be ignored
+        std::fs::write(backup_dir.join("random.json"), "{}").unwrap();
+        std::fs::write(backup_dir.join("keys_backup_notanumber.json"), "{}").unwrap();
+        std::fs::write(backup_dir.join("keys_backup_.json"), "{}").unwrap();
+
+        let backups = storage.list_backups(&backup_dir).expect("list_backups");
+        assert_eq!(backups.len(), 1, "got {:?}", backups);
+        assert_eq!(backups[0].timestamp, 1000);
+    }
+
+    #[test]
+    fn test_key_storage_list_backups_sorted_newest_first() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let backup_dir = temp_dir.path().join("sorted");
+        std::fs::create_dir_all(&backup_dir).unwrap();
+        std::fs::write(backup_dir.join("keys_backup_100.json"), "{}").unwrap();
+        std::fs::write(backup_dir.join("keys_backup_300.json"), "{}").unwrap();
+        std::fs::write(backup_dir.join("keys_backup_200.json"), "{}").unwrap();
+
+        let backups = storage.list_backups(&backup_dir).expect("list_backups");
+        assert_eq!(backups.len(), 3);
+        assert_eq!(backups[0].timestamp, 300, "newest first");
+        assert_eq!(backups[1].timestamp, 200);
+        assert_eq!(backups[2].timestamp, 100, "oldest last");
+    }
+
+    #[test]
+    fn test_key_storage_backup_without_master_key_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let backup_dir = temp_dir.path().join("backups");
+        let err = storage.backup(&backup_dir).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Master key not set"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_storage_rotate_master_key_currently_errors_due_to_plaintext_decryption_bug() {
+        // KNOWN PRE-EXISTING BUG (production code; out of scope to fix per task rules):
+        // `rotate_master_key` calls `serialize_key_manager()` (which returns plaintext
+        // BASE64-encoded JSON) and then immediately calls `decrypt_data()` on that
+        // plaintext. `decrypt_data` expects "nonce_base64:ciphertext_base64" format,
+        // so it always fails with "Invalid encrypted data format" — regardless of
+        // whether the supplied `old_master_key` is correct.
+        //
+        // This test pins the current (buggy) behavior so the bug is visible in the
+        // test suite. When the production bug is fixed, this test should be replaced
+        // with a proper round-trip test.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let old_key = [0x80; 32];
+        let new_key = [0x81; 32];
+
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage.set_master_key(&old_key);
+        storage
+            .initialize_with_master_key(&old_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        // Even with the CORRECT old key, rotate_master_key fails because it tries
+        // to decrypt plaintext as if it were ciphertext.
+        let err = storage.rotate_master_key(&old_key, &new_key).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Failed to decrypt with old master key"),
+            "expected the known-bug error message, got: {}",
+            msg
+        );
+        assert!(
+            msg.contains("Invalid encrypted data format"),
+            "expected the underlying 'Invalid encrypted data format' detail, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_encrypted_key_store_serialize_deserialize() {
+        let store = EncryptedKeyStore {
+            version: 1,
+            encrypted_data: "enc_data".to_string(),
+            checksum: "checksum_val".to_string(),
+            created_at: 12345,
+            metadata: KeyStoreMetadata {
+                key_id: "k1".to_string(),
+                key_count: 3,
+                last_modified: 12345,
+                schema_version: 1,
+            },
+        };
+        let json = serde_json::to_string(&store).expect("serialize");
+        let de: EncryptedKeyStore = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(de.version, 1);
+        assert_eq!(de.encrypted_data, "enc_data");
+        assert_eq!(de.checksum, "checksum_val");
+        assert_eq!(de.created_at, 12345);
+        assert_eq!(de.metadata.key_id, "k1");
+        assert_eq!(de.metadata.key_count, 3);
+        assert_eq!(de.metadata.schema_version, 1);
+    }
+
+    #[test]
+    fn test_key_store_metadata_construction() {
+        let meta = KeyStoreMetadata {
+            key_id: "k1".to_string(),
+            key_count: 5,
+            last_modified: 999,
+            schema_version: 2,
+        };
+        assert_eq!(meta.key_id, "k1");
+        assert_eq!(meta.key_count, 5);
+        assert_eq!(meta.last_modified, 999);
+        assert_eq!(meta.schema_version, 2);
+    }
+
+    #[test]
+    fn test_key_export_serialize_deserialize() {
+        let export = KeyExport {
+            version: 1,
+            exported_at: 42,
+            encrypted_data: "data".to_string(),
+        };
+        let json = serde_json::to_string(&export).expect("serialize");
+        let de: KeyExport = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(de.version, 1);
+        assert_eq!(de.exported_at, 42);
+        assert_eq!(de.encrypted_data, "data");
+    }
+
+    #[test]
+    fn test_backup_info_construction() {
+        let path = std::path::PathBuf::from("/tmp/keys_backup_123.json");
+        let info = BackupInfo {
+            path: path.clone(),
+            timestamp: 123,
+            file_name: "keys_backup_123.json".to_string(),
+        };
+        assert_eq!(info.path, path);
+        assert_eq!(info.timestamp, 123);
+        assert_eq!(info.file_name, "keys_backup_123.json");
+    }
+
+    #[test]
+    fn test_key_storage_drop_clears_master_key() {
+        // Drop impl must clear the master key (no leak on drop).
+        // We can't observe the internal state directly (master_key is private),
+        // but we can verify Drop doesn't panic and the storage directory is intact.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let master_key = [0x90; 32];
+        {
+            let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+            storage.set_master_key(&master_key);
+            storage
+                .initialize_with_master_key(&master_key, "k".to_string(), "u".to_string())
+                .unwrap();
+            assert!(temp_dir.path().join("keys.json").exists());
+        }
+        // After storage went out of scope and was dropped, file should still exist.
+        assert!(temp_dir.path().join("keys.json").exists());
+    }
 }
