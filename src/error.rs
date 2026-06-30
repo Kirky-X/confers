@@ -1212,4 +1212,1192 @@ mod tests {
         };
         assert!(err.is_sensitive()); // Contains AWS access key
     }
+
+    // =============================================================================
+    // Additional coverage for ErrorCode Display impl
+    // =============================================================================
+
+    #[test]
+    fn test_error_code_display_all_variants() {
+        assert_eq!(ErrorCode::FileNotFound.to_string(), "FILE_NOT_FOUND");
+        assert_eq!(ErrorCode::FilePermission.to_string(), "FILE_PERMISSION");
+        assert_eq!(ErrorCode::FileParseError.to_string(), "FILE_PARSE_ERROR");
+        assert_eq!(ErrorCode::IoError.to_string(), "IO_ERROR");
+        assert_eq!(ErrorCode::ValidationFailed.to_string(), "VALIDATION_FAILED");
+        assert_eq!(ErrorCode::TypeMismatch.to_string(), "TYPE_MISMATCH");
+        assert_eq!(ErrorCode::InvalidValue.to_string(), "INVALID_VALUE");
+        assert_eq!(
+            ErrorCode::SchemaValidationFailed.to_string(),
+            "SCHEMA_VALIDATION_FAILED"
+        );
+        assert_eq!(ErrorCode::DecryptionFailed.to_string(), "DECRYPTION_FAILED");
+        assert_eq!(ErrorCode::KeyNotFound.to_string(), "KEY_NOT_FOUND");
+        assert_eq!(ErrorCode::KeyTooWeak.to_string(), "KEY_TOO_WEAK");
+        assert_eq!(
+            ErrorCode::KeyRotationFailed.to_string(),
+            "KEY_ROTATION_FAILED"
+        );
+        assert_eq!(
+            ErrorCode::RemoteUnavailable.to_string(),
+            "REMOTE_UNAVAILABLE"
+        );
+        assert_eq!(ErrorCode::RemoteTimeout.to_string(), "REMOTE_TIMEOUT");
+        assert_eq!(
+            ErrorCode::CircularReference.to_string(),
+            "CIRCULAR_REFERENCE"
+        );
+        assert_eq!(ErrorCode::OverrideBlocked.to_string(), "OVERRIDE_BLOCKED");
+        assert_eq!(
+            ErrorCode::InterpolationError.to_string(),
+            "INTERPOLATION_ERROR"
+        );
+        assert_eq!(
+            ErrorCode::SizeLimitExceeded.to_string(),
+            "SIZE_LIMIT_EXCEEDED"
+        );
+        assert_eq!(ErrorCode::WatcherError.to_string(), "WATCHER_ERROR");
+        assert_eq!(ErrorCode::VersionMismatch.to_string(), "VERSION_MISMATCH");
+        assert_eq!(ErrorCode::MigrationFailed.to_string(), "MIGRATION_FAILED");
+        assert_eq!(ErrorCode::ModuleNotFound.to_string(), "MODULE_NOT_FOUND");
+        assert_eq!(
+            ErrorCode::ReloadRolledBack.to_string(),
+            "RELOAD_ROLLED_BACK"
+        );
+        assert_eq!(ErrorCode::MultipleSources.to_string(), "MULTIPLE_SOURCES");
+        assert_eq!(ErrorCode::Timeout.to_string(), "TIMEOUT");
+        assert_eq!(
+            ErrorCode::ConcurrencyConflict.to_string(),
+            "CONCURRENCY_CONFLICT"
+        );
+        assert_eq!(ErrorCode::LockPoisoned.to_string(), "LOCK_POISONED");
+        assert_eq!(
+            ErrorCode::HealthCheckFailed.to_string(),
+            "HEALTH_CHECK_FAILED"
+        );
+        assert_eq!(ErrorCode::Unknown.to_string(), "UNKNOWN");
+    }
+
+    // =============================================================================
+    // ConfigError::code() mapping for all variants
+    // =============================================================================
+
+    #[test]
+    fn test_config_error_code_mapping_all_variants() {
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad".into(),
+            location: None,
+            source: None,
+        };
+        assert_eq!(err.code(), ErrorCode::FileParseError);
+
+        let err = ConfigError::ValidationFailed {
+            field: "f".into(),
+            rule: "r".into(),
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::ValidationFailed);
+
+        let err = ConfigError::SchemaValidationFailed { count: 1 };
+        assert_eq!(err.code(), ErrorCode::SchemaValidationFailed);
+
+        let err = ConfigError::DecryptionFailed {
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::DecryptionFailed);
+
+        let err = ConfigError::RemoteUnavailable {
+            error_type: "timeout".into(),
+            retryable: false,
+        };
+        assert_eq!(err.code(), ErrorCode::RemoteUnavailable);
+
+        let err = ConfigError::VersionMismatch {
+            found: 1,
+            expected: 2,
+        };
+        assert_eq!(err.code(), ErrorCode::VersionMismatch);
+
+        let err = ConfigError::MigrationFailed {
+            from: 1,
+            to: 2,
+            reason: "r".into(),
+            source: None,
+        };
+        assert_eq!(err.code(), ErrorCode::MigrationFailed);
+
+        let err = ConfigError::ModuleNotFound {
+            group: "g".into(),
+            module: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::ModuleNotFound);
+
+        let err = ConfigError::ReloadRolledBack { reason: "r".into() };
+        assert_eq!(err.code(), ErrorCode::ReloadRolledBack);
+
+        let err = ConfigError::InvalidValue {
+            key: "k".into(),
+            expected_type: "t".into(),
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::InvalidValue);
+
+        let err = ConfigError::SourceChainError {
+            message: "m".into(),
+            source_index: 0,
+        };
+        assert_eq!(err.code(), ErrorCode::MultipleSources);
+
+        let err = ConfigError::Timeout { duration_ms: 10 };
+        assert_eq!(err.code(), ErrorCode::Timeout);
+
+        let err = ConfigError::SizeLimitExceeded {
+            actual: 10,
+            limit: 5,
+        };
+        assert_eq!(err.code(), ErrorCode::SizeLimitExceeded);
+
+        let err = ConfigError::InterpolationError {
+            variable: "v".into(),
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::InterpolationError);
+
+        let err = ConfigError::KeyError {
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::KeyNotFound);
+
+        let err = ConfigError::CircularReference { path: "p".into() };
+        assert_eq!(err.code(), ErrorCode::CircularReference);
+
+        let err = ConfigError::LockPoisoned {
+            resource: "r".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::LockPoisoned);
+
+        let err = ConfigError::ConcurrencyConflict {
+            key: "k".into(),
+            message: "m".into(),
+            expected_type: None,
+        };
+        assert_eq!(err.code(), ErrorCode::ConcurrencyConflict);
+
+        let err = ConfigError::KeyRotationFailed {
+            from_version: "v1".into(),
+            to_version: "v2".into(),
+            reason: "r".into(),
+        };
+        assert_eq!(err.code(), ErrorCode::KeyRotationFailed);
+
+        let err = ConfigError::WatcherError {
+            message: "m".into(),
+            path: None,
+            recoverable: false,
+        };
+        assert_eq!(err.code(), ErrorCode::WatcherError);
+
+        let err = ConfigError::OverrideBlocked {
+            key: "k".into(),
+            reason: "r".into(),
+            override_source: None,
+        };
+        assert_eq!(err.code(), ErrorCode::OverrideBlocked);
+
+        let err = ConfigError::HealthCheckFailed { reason: "r".into() };
+        assert_eq!(err.code(), ErrorCode::HealthCheckFailed);
+
+        // MultiSource wraps a MultiSourceError
+        let inner = MultiSourceError::new(1, vec![("s", ConfigError::Timeout { duration_ms: 1 })]);
+        let err = ConfigError::MultiSource { source: inner };
+        assert_eq!(err.code(), ErrorCode::MultipleSources);
+    }
+
+    // =============================================================================
+    // validation() helper
+    // =============================================================================
+
+    #[test]
+    fn test_validation_helper_constructs_validation_failed() {
+        let err = ConfigError::validation("email", "format", "not a valid email");
+        match err {
+            ConfigError::ValidationFailed {
+                field,
+                rule,
+                message,
+            } => {
+                assert_eq!(field, "email");
+                assert_eq!(rule, "format");
+                assert_eq!(message, "not a valid email");
+            }
+            other => panic!("expected ValidationFailed, got {:?}", other),
+        }
+    }
+
+    // =============================================================================
+    // is_retryable for IO error kinds, watcher, concurrency, remote
+    // =============================================================================
+
+    #[test]
+    fn test_is_retryable_io_error_connection_refused() {
+        let err = ConfigError::IoError(std::io::Error::new(
+            std::io::ErrorKind::ConnectionRefused,
+            "refused",
+        ));
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_io_error_connection_reset() {
+        let err = ConfigError::IoError(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "reset",
+        ));
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_io_error_timed_out() {
+        let err = ConfigError::IoError(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timed out",
+        ));
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_io_error_not_retryable() {
+        let err = ConfigError::IoError(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "not found",
+        ));
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_watcher_error_recoverable() {
+        let err = ConfigError::WatcherError {
+            message: "transient".into(),
+            path: None,
+            recoverable: true,
+        };
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_watcher_error_not_recoverable() {
+        let err = ConfigError::WatcherError {
+            message: "fatal".into(),
+            path: None,
+            recoverable: false,
+        };
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_concurrency_conflict() {
+        let err = ConfigError::ConcurrencyConflict {
+            key: "k".into(),
+            message: "m".into(),
+            expected_type: None,
+        };
+        assert!(err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_remote_unavailable_not_retryable() {
+        let err = ConfigError::RemoteUnavailable {
+            error_type: "auth".into(),
+            retryable: false,
+        };
+        assert!(!err.is_retryable());
+    }
+
+    #[test]
+    fn test_is_retryable_other_variants_not_retryable() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("x"),
+            source: None,
+        };
+        assert!(!err.is_retryable());
+
+        let err = ConfigError::ValidationFailed {
+            field: "f".into(),
+            rule: "r".into(),
+            message: "m".into(),
+        };
+        assert!(!err.is_retryable());
+    }
+
+    // =============================================================================
+    // From<std::io::Error> impl
+    // =============================================================================
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = std::io::Error::other("disk full");
+        let config_err: ConfigError = io_err.into();
+        assert!(matches!(config_err, ConfigError::IoError(_)));
+        assert_eq!(config_err.code(), ErrorCode::IoError);
+    }
+
+    // =============================================================================
+    // user_message for all variants
+    // =============================================================================
+
+    #[test]
+    fn test_user_message_parse_error_with_location() {
+        let loc = ParseLocation::new("config.toml", 10, 5);
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad syntax".into(),
+            location: Some(loc),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("toml"));
+        assert!(msg.contains("config.toml:10:5"));
+        assert!(msg.contains("bad syntax"));
+    }
+
+    #[test]
+    fn test_user_message_parse_error_without_location() {
+        let err = ConfigError::ParseError {
+            format: "json".into(),
+            message: "bad".into(),
+            location: None,
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("json"));
+        assert!(msg.contains("bad"));
+        assert!(!msg.contains("at"));
+    }
+
+    #[test]
+    fn test_user_message_validation_failed() {
+        let err = ConfigError::ValidationFailed {
+            field: "port".into(),
+            rule: "range".into(),
+            message: "out of range".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Field 'port' failed validation: out of range"
+        );
+    }
+
+    #[test]
+    fn test_user_message_schema_validation_failed() {
+        let err = ConfigError::SchemaValidationFailed { count: 3 };
+        assert_eq!(
+            err.user_message(),
+            "Schema validation failed with 3 error(s)"
+        );
+    }
+
+    #[test]
+    fn test_user_message_decryption_failed_is_sanitized() {
+        let err = ConfigError::DecryptionFailed {
+            message: "key mismatch detail".into(),
+        };
+        // user_message returns a generic sanitized message, not the raw message
+        assert_eq!(err.user_message(), "Failed to decrypt configuration value");
+    }
+
+    #[test]
+    fn test_user_message_remote_unavailable() {
+        let err = ConfigError::RemoteUnavailable {
+            error_type: "timeout".into(),
+            retryable: true,
+        };
+        assert_eq!(
+            err.user_message(),
+            "Remote configuration source is unavailable"
+        );
+    }
+
+    #[test]
+    fn test_user_message_migration_failed() {
+        let err = ConfigError::MigrationFailed {
+            from: 1,
+            to: 2,
+            reason: "schema change".into(),
+            source: None,
+        };
+        assert_eq!(
+            err.user_message(),
+            "Migration from v1 to v2 failed: schema change"
+        );
+    }
+
+    #[test]
+    fn test_user_message_module_not_found() {
+        let err = ConfigError::ModuleNotFound {
+            group: "g1".into(),
+            module: "m1".into(),
+        };
+        assert_eq!(err.user_message(), "Module 'm1' not found in group 'g1'");
+    }
+
+    #[test]
+    fn test_user_message_reload_rolled_back() {
+        let err = ConfigError::ReloadRolledBack {
+            reason: "validation".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Configuration reload was rolled back: validation"
+        );
+    }
+
+    #[test]
+    fn test_user_message_io_error() {
+        let err = ConfigError::IoError(std::io::Error::other("disk full"));
+        let msg = err.user_message();
+        assert!(msg.contains("IO error"));
+        assert!(msg.contains("disk full"));
+    }
+
+    #[test]
+    fn test_user_message_invalid_value() {
+        let err = ConfigError::InvalidValue {
+            key: "port".into(),
+            expected_type: "u16".into(),
+            message: "too large".into(),
+        };
+        assert_eq!(err.user_message(), "Invalid value for 'port': too large");
+    }
+
+    #[test]
+    fn test_user_message_source_chain_error() {
+        let err = ConfigError::SourceChainError {
+            message: "chain broke".into(),
+            source_index: 2,
+        };
+        assert_eq!(err.user_message(), "chain broke");
+    }
+
+    #[test]
+    fn test_user_message_timeout() {
+        let err = ConfigError::Timeout { duration_ms: 5000 };
+        assert_eq!(err.user_message(), "Operation timed out after 5000ms");
+    }
+
+    #[test]
+    fn test_user_message_size_limit_exceeded() {
+        let err = ConfigError::SizeLimitExceeded {
+            actual: 1024,
+            limit: 512,
+        };
+        assert_eq!(
+            err.user_message(),
+            "Size limit exceeded: 1024 bytes (limit: 512)"
+        );
+    }
+
+    #[test]
+    fn test_user_message_interpolation_error() {
+        let err = ConfigError::InterpolationError {
+            variable: "HOME".into(),
+            message: "not set".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Interpolation error for 'HOME': not set"
+        );
+    }
+
+    #[test]
+    fn test_user_message_key_error_is_sanitized() {
+        let err = ConfigError::KeyError {
+            message: "detailed key info".into(),
+        };
+        // user_message returns generic message, not the raw message
+        assert_eq!(err.user_message(), "Encryption key error");
+    }
+
+    #[test]
+    fn test_user_message_circular_reference() {
+        let err = ConfigError::CircularReference {
+            path: "a.b.c.a".into(),
+        };
+        assert_eq!(err.user_message(), "Circular reference detected: a.b.c.a");
+    }
+
+    #[test]
+    fn test_user_message_lock_poisoned() {
+        let err = ConfigError::LockPoisoned {
+            resource: "config".into(),
+        };
+        assert_eq!(err.user_message(), "Lock poisoned for resource 'config'");
+    }
+
+    #[test]
+    fn test_user_message_multi_source() {
+        let inner = MultiSourceError::new(3, vec![("s1", ConfigError::Timeout { duration_ms: 1 })]);
+        let err = ConfigError::MultiSource { source: inner };
+        assert_eq!(err.user_message(), "Multiple sources failed: 1/3");
+    }
+
+    #[test]
+    fn test_user_message_concurrency_conflict() {
+        let err = ConfigError::ConcurrencyConflict {
+            key: "k".into(),
+            message: "m".into(),
+            expected_type: Some("string".into()),
+        };
+        assert_eq!(err.user_message(), "Concurrency conflict on key 'k': m");
+    }
+
+    #[test]
+    fn test_user_message_key_rotation_failed() {
+        let err = ConfigError::KeyRotationFailed {
+            from_version: "v1".into(),
+            to_version: "v2".into(),
+            reason: "invalid".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Key rotation failed from 'v1' to 'v2': invalid"
+        );
+    }
+
+    #[test]
+    fn test_user_message_watcher_error_with_path() {
+        let err = ConfigError::WatcherError {
+            message: "lost file".into(),
+            path: Some(PathBuf::from("/etc/config.toml")),
+            recoverable: true,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("Watcher error"));
+        assert!(msg.contains("config.toml"));
+        assert!(msg.contains("(recoverable)"));
+    }
+
+    #[test]
+    fn test_user_message_watcher_error_no_path_not_recoverable() {
+        let err = ConfigError::WatcherError {
+            message: "fatal error".into(),
+            path: None,
+            recoverable: false,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("Watcher error"));
+        assert!(!msg.contains("(recoverable)"));
+    }
+
+    #[test]
+    fn test_user_message_override_blocked_with_source() {
+        let err = ConfigError::OverrideBlocked {
+            key: "k".into(),
+            reason: "protected".into(),
+            override_source: Some("cli".into()),
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("Override blocked for key 'k'"));
+        assert!(msg.contains("from 'cli'"));
+        assert!(msg.contains("protected"));
+    }
+
+    #[test]
+    fn test_user_message_override_blocked_no_source() {
+        let err = ConfigError::OverrideBlocked {
+            key: "k".into(),
+            reason: "protected".into(),
+            override_source: None,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("Override blocked for key 'k'"));
+        assert!(!msg.contains("from '"));
+    }
+
+    #[test]
+    fn test_user_message_health_check_failed() {
+        let err = ConfigError::HealthCheckFailed {
+            reason: "db down".into(),
+        };
+        assert_eq!(err.user_message(), "Health check failed: db down");
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_normal_path() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("config.toml"),
+            source: None,
+        };
+        // Normal paths should be shown as-is (no sanitization)
+        assert_eq!(
+            err.user_message(),
+            "Configuration file 'config.toml' not found"
+        );
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_aws_path_sanitized() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/.aws/credentials"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/home/user/.aws/"));
+        assert!(msg.contains("credentials"));
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_kube_path_sanitized() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("/root/.kube/config"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/root/.kube/"));
+        assert!(msg.contains("config"));
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_env_path_sanitized() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("/app/.env"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/app/"));
+        assert!(msg.contains(".env") || msg.contains("env"));
+    }
+
+    // =============================================================================
+    // debug_message with URL credentials
+    // =============================================================================
+
+    #[test]
+    fn test_debug_message_redacts_url_credentials() {
+        let err = ConfigError::DecryptionFailed {
+            message: "fetch https://user:passw0rd123@example.com/keys failed".into(), // pragma: allowlist secret
+        };
+        let dbg = err.debug_message();
+        assert!(!dbg.contains("user:passw0rd123"));
+        assert!(dbg.contains("<creds>") || dbg.contains("<host>"));
+    }
+
+    // =============================================================================
+    // is_sensitive for sensitive patterns
+    // =============================================================================
+
+    #[test]
+    fn test_is_sensitive_url_with_credentials() {
+        let err = ConfigError::DecryptionFailed {
+            message: "fetch https://user:passw0rd123@example.com/keys failed".into(), // pragma: allowlist secret
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_jwt_token() {
+        let err = ConfigError::DecryptionFailed {
+            message: "token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig invalid".into(), // pragma: allowlist secret
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_password_field() {
+        let err = ConfigError::InvalidValue {
+            key: "db.password".into(),
+            expected_type: "string".into(),
+            message: "too short".into(),
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_token_field() {
+        let err = ConfigError::InvalidValue {
+            key: "auth.token".into(),
+            expected_type: "string".into(),
+            message: "expired".into(),
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_api_key_field() {
+        let err = ConfigError::InvalidValue {
+            key: "service.api_key".into(),
+            expected_type: "string".into(),
+            message: "missing".into(),
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_credential_field() {
+        let err = ConfigError::InvalidValue {
+            key: "credential".into(),
+            expected_type: "string".into(),
+            message: "invalid".into(),
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_secret_field() {
+        let err = ConfigError::InvalidValue {
+            key: "client_secret".into(),
+            expected_type: "string".into(),
+            message: "missing".into(),
+        };
+        assert!(err.is_sensitive());
+    }
+
+    #[test]
+    fn test_is_sensitive_clean_error_returns_false() {
+        let err = ConfigError::Timeout { duration_ms: 100 };
+        assert!(!err.is_sensitive());
+
+        let err = ConfigError::VersionMismatch {
+            found: 1,
+            expected: 2,
+        };
+        assert!(!err.is_sensitive());
+    }
+
+    // =============================================================================
+    // sanitized_chain with source errors
+    // =============================================================================
+
+    #[test]
+    fn test_sanitized_chain_parse_error_with_source() {
+        let source: Box<dyn std::error::Error + Send + Sync> =
+            Box::new(std::io::Error::other("inner cause"));
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "outer".into(),
+            location: None,
+            source: Some(source),
+        };
+        let chain = err.sanitized_chain();
+        assert_eq!(chain.len(), 2);
+        // First entry is the user_message (sanitized)
+        assert!(chain[0].contains("toml"));
+        // Second entry is the sanitized source message
+        assert!(chain[1].contains("inner cause"));
+    }
+
+    #[test]
+    fn test_sanitized_chain_parse_error_no_source() {
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "outer".into(),
+            location: None,
+            source: None,
+        };
+        let chain = err.sanitized_chain();
+        assert_eq!(chain.len(), 1);
+    }
+
+    #[test]
+    fn test_sanitized_chain_migration_failed_with_source() {
+        let source: Box<dyn std::error::Error + Send + Sync> =
+            Box::new(std::io::Error::other("migration cause"));
+        let err = ConfigError::MigrationFailed {
+            from: 1,
+            to: 2,
+            reason: "outer".into(),
+            source: Some(source),
+        };
+        let chain = err.sanitized_chain();
+        assert_eq!(chain.len(), 2);
+        assert!(chain[1].contains("migration cause"));
+    }
+
+    #[test]
+    fn test_sanitized_chain_other_variants_no_source() {
+        // Variants without source only have a single entry
+        let err = ConfigError::Timeout { duration_ms: 1 };
+        let chain = err.sanitized_chain();
+        assert_eq!(chain.len(), 1);
+
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("x"),
+            source: None,
+        };
+        let chain = err.sanitized_chain();
+        assert_eq!(chain.len(), 1);
+    }
+
+    // =============================================================================
+    // MultiSourceError additional methods
+    // =============================================================================
+
+    #[test]
+    fn test_multi_source_error_with_partial() {
+        let partial = serde_json::json!({ "host": "localhost" });
+        let err = MultiSourceError::with_partial(
+            4,
+            vec![(
+                "source_a".to_string(),
+                ConfigError::Timeout { duration_ms: 100 },
+            )],
+            partial,
+        );
+        assert_eq!(err.failed_count, 1);
+        assert_eq!(err.total_count, 4);
+        assert!(err.has_partial_success());
+        let partial = err.partial_config().expect("partial config present");
+        assert_eq!(partial["host"], "localhost");
+    }
+
+    #[test]
+    fn test_multi_source_error_no_partial_success() {
+        let err = MultiSourceError::new(2, vec![("s", ConfigError::Timeout { duration_ms: 1 })]);
+        assert!(!err.has_partial_success());
+        assert!(err.partial_config().is_none());
+    }
+
+    #[test]
+    fn test_multi_source_error_errors_accessor() {
+        let err = MultiSourceError::new(
+            3,
+            vec![
+                ("s1".to_string(), ConfigError::Timeout { duration_ms: 1 }),
+                (
+                    "s2".to_string(),
+                    ConfigError::RemoteUnavailable {
+                        error_type: "conn".into(),
+                        retryable: false,
+                    },
+                ),
+            ],
+        );
+        let errors = err.errors();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].0, "s1");
+        assert_eq!(errors[1].0, "s2");
+    }
+
+    #[test]
+    fn test_multi_source_error_count_error_type() {
+        let err = MultiSourceError::new(
+            4,
+            vec![
+                ("s1".to_string(), ConfigError::Timeout { duration_ms: 1 }),
+                ("s2".to_string(), ConfigError::Timeout { duration_ms: 2 }),
+                (
+                    "s3".to_string(),
+                    ConfigError::RemoteUnavailable {
+                        error_type: "conn".into(),
+                        retryable: false,
+                    },
+                ),
+            ],
+        );
+        assert_eq!(err.count_error_type(ErrorCode::Timeout), 2);
+        assert_eq!(err.count_error_type(ErrorCode::RemoteUnavailable), 1);
+        assert_eq!(err.count_error_type(ErrorCode::FileNotFound), 0);
+    }
+
+    // =============================================================================
+    // BuildResult additional methods
+    // =============================================================================
+
+    #[test]
+    fn test_build_result_with_warnings() {
+        let warnings = vec![SourceWarning {
+            message: "deprecated".into(),
+            source: Some("file.toml".into()),
+            code: WarningCode::DeprecatedKey,
+        }];
+        let result: BuildResult<i32> = BuildResult::with_warnings(42, warnings);
+        assert!(!result.degraded);
+        assert!(result.has_warnings());
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0].code, WarningCode::DeprecatedKey);
+    }
+
+    #[test]
+    fn test_build_result_ok_has_no_warnings() {
+        let result: BuildResult<i32> = BuildResult::ok(0);
+        assert!(!result.has_warnings());
+        assert!(result.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_build_result_degraded_has_no_warnings() {
+        let result: BuildResult<i32> = BuildResult::degraded(0, "reason");
+        assert!(result.degraded);
+        assert!(!result.has_warnings());
+        assert_eq!(result.degraded_reason, Some("reason".into()));
+    }
+
+    #[test]
+    fn test_build_result_map_preserves_metadata() {
+        let warnings = vec![SourceWarning {
+            message: "w".into(),
+            source: None,
+            code: WarningCode::DefaultUsed,
+        }];
+        let result: BuildResult<i32> = BuildResult::with_warnings(42, warnings);
+        let mapped: BuildResult<String> = result.map(|n| format!("val={}", n));
+        assert_eq!(mapped.config, "val=42");
+        assert_eq!(mapped.warnings.len(), 1);
+        assert!(!mapped.degraded);
+    }
+
+    // =============================================================================
+    // WarningCode Display for all variants
+    // =============================================================================
+
+    #[test]
+    fn test_warning_code_display_all_variants() {
+        assert_eq!(
+            WarningCode::OptionalSourceSkipped.to_string(),
+            "OPTIONAL_SOURCE_SKIPPED"
+        );
+        assert_eq!(WarningCode::DeprecatedKey.to_string(), "DEPRECATED_KEY");
+        assert_eq!(WarningCode::DefaultUsed.to_string(), "DEFAULT_USED");
+        assert_eq!(WarningCode::ValueTruncated.to_string(), "VALUE_TRUNCATED");
+        assert_eq!(WarningCode::RemoteFallback.to_string(), "REMOTE_FALLBACK");
+        assert_eq!(
+            WarningCode::UnencryptedSensitive.to_string(),
+            "UNENCRYPTED_SENSITIVE"
+        );
+        assert_eq!(WarningCode::UnusedKey.to_string(), "UNUSED_KEY");
+    }
+
+    // =============================================================================
+    // ConfersError / ConfersResult type aliases
+    // =============================================================================
+
+    #[test]
+    fn test_confers_error_type_alias_matches_config_error() {
+        let err: ConfersError = ConfigError::Timeout { duration_ms: 1 };
+        // ConfersError is a type alias for ConfigError, so it should be usable
+        assert_eq!(err.code(), ErrorCode::Timeout);
+        // Verify it can be used where ConfigError is expected
+        let _: &ConfigError = &err;
+    }
+
+    #[test]
+    fn test_confers_result_type_alias() {
+        let ok: ConfersResult<i32> = Ok(42);
+        assert!(ok.is_ok());
+
+        let err: ConfersResult<i32> = Err(ConfigError::Timeout { duration_ms: 1 });
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_config_result_type_alias() {
+        // ConfigResult is the older alias, also resolves to Result<T, ConfigError>
+        let ok: ConfigResult<i32> = Ok(0);
+        assert!(ok.is_ok());
+
+        let err: ConfigResult<i32> = Err(ConfigError::FileNotFound {
+            filename: PathBuf::from("missing"),
+            source: None,
+        });
+        assert!(err.is_err());
+    }
+
+    // =============================================================================
+    // Display impl for ConfigError (exercises thiserror #[error(...)] formats)
+    // =============================================================================
+
+    #[test]
+    fn test_config_error_display_file_not_found() {
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("config.toml"),
+            source: None,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("config.toml"));
+        assert!(s.contains("not found"));
+    }
+
+    #[test]
+    fn test_config_error_display_validation_failed() {
+        let err = ConfigError::ValidationFailed {
+            field: "port".into(),
+            rule: "range".into(),
+            message: "too big".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("port"));
+        assert!(s.contains("range"));
+        assert!(s.contains("too big"));
+    }
+
+    #[test]
+    fn test_config_error_display_migration_failed() {
+        let err = ConfigError::MigrationFailed {
+            from: 1,
+            to: 2,
+            reason: "schema".into(),
+            source: None,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("v1"));
+        assert!(s.contains("v2"));
+        assert!(s.contains("schema"));
+    }
+
+    #[test]
+    fn test_config_error_display_module_not_found() {
+        let err = ConfigError::ModuleNotFound {
+            group: "g".into(),
+            module: "m".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("'m'"));
+        assert!(s.contains("'g'"));
+    }
+
+    #[test]
+    fn test_config_error_display_size_limit_exceeded() {
+        let err = ConfigError::SizeLimitExceeded {
+            actual: 100,
+            limit: 50,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("100"));
+        assert!(s.contains("50"));
+    }
+
+    #[test]
+    fn test_config_error_display_concurrency_conflict_with_expected_type() {
+        let err = ConfigError::ConcurrencyConflict {
+            key: "k".into(),
+            message: "m".into(),
+            expected_type: Some("string".into()),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("k"));
+        assert!(s.contains("m"));
+    }
+
+    #[test]
+    fn test_config_error_display_key_rotation_failed() {
+        let err = ConfigError::KeyRotationFailed {
+            from_version: "v1".into(),
+            to_version: "v2".into(),
+            reason: "bad".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("v1"));
+        assert!(s.contains("v2"));
+        assert!(s.contains("bad"));
+    }
+
+    #[test]
+    fn test_config_error_display_watcher_error() {
+        let err = ConfigError::WatcherError {
+            message: "lost".into(),
+            path: Some(PathBuf::from("/x/y.toml")),
+            recoverable: false,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("lost"));
+    }
+
+    #[test]
+    fn test_config_error_display_override_blocked() {
+        let err = ConfigError::OverrideBlocked {
+            key: "k".into(),
+            reason: "r".into(),
+            override_source: Some("cli".into()),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("k"));
+        assert!(s.contains("r"));
+    }
+
+    #[test]
+    fn test_config_error_display_health_check_failed() {
+        let err = ConfigError::HealthCheckFailed {
+            reason: "down".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("down"));
+    }
+
+    #[test]
+    fn test_config_error_display_multi_source() {
+        let inner = MultiSourceError::new(2, vec![("s", ConfigError::Timeout { duration_ms: 1 })]);
+        let err = ConfigError::MultiSource { source: inner };
+        let s = format!("{}", err);
+        assert!(s.contains("Multiple sources failed"));
+    }
+
+    #[test]
+    fn test_config_error_display_lock_poisoned() {
+        let err = ConfigError::LockPoisoned {
+            resource: "config".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("config"));
+        assert!(s.contains("Lock poisoned"));
+    }
+
+    // =============================================================================
+    // Debug derive for ConfigError and MultiSourceError
+    // =============================================================================
+
+    #[test]
+    fn test_config_error_debug_format() {
+        let err = ConfigError::Timeout { duration_ms: 42 };
+        let dbg = format!("{:?}", err);
+        assert!(dbg.contains("Timeout"));
+        assert!(dbg.contains("42"));
+    }
+
+    #[test]
+    fn test_multi_source_error_debug_format() {
+        let err = MultiSourceError::new(2, vec![("s", ConfigError::Timeout { duration_ms: 1 })]);
+        let dbg = format!("{:?}", err);
+        assert!(dbg.contains("MultiSourceError"));
+        assert!(dbg.contains("failed_count"));
+    }
+
+    // =============================================================================
+    // sanitize_error_message: AWS secret access key (40-char)
+    // =============================================================================
+
+    #[test]
+    fn test_sanitize_error_message_aws_secret_key() {
+        // Exactly 40 chars of [A-Za-z0-9/+=] surrounded by spaces
+        let msg = " secret: abcdefghijklmnopqrstuvwxyz0123456789ABCD "; // pragma: allowlist secret
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            sanitized.contains("<aws_secret_key>"),
+            "expected AWS secret key to be redacted, got: {}",
+            sanitized
+        );
+    }
+
+    // =============================================================================
+    // audit_message for additional variants
+    // =============================================================================
+
+    #[test]
+    fn test_audit_message_timeout() {
+        let err = ConfigError::Timeout { duration_ms: 100 };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=900"));
+        assert!(audit.contains("TIMEOUT"));
+        assert!(audit.contains("operation=config"));
+    }
+
+    #[test]
+    fn test_audit_message_concurrency_conflict() {
+        let err = ConfigError::ConcurrencyConflict {
+            key: "k".into(),
+            message: "m".into(),
+            expected_type: None,
+        };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=901"));
+        assert!(audit.contains("CONCURRENCY_CONFLICT"));
+    }
 }

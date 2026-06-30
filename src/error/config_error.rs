@@ -435,4 +435,492 @@ mod tests {
             "CONFIG_PARSE_ERROR"
         );
     }
+
+    // =============================================================================
+    // Display impl for remaining ConfigErrorCode variants
+    // =============================================================================
+
+    #[test]
+    fn test_display_error_codes_remaining() {
+        assert_eq!(
+            ConfigErrorCode::InvalidConfigValue.to_string(),
+            "CONFIG_INVALID_VALUE"
+        );
+        assert_eq!(
+            ConfigErrorCode::ConfigSizeLimitExceeded.to_string(),
+            "CONFIG_SIZE_LIMIT_EXCEEDED"
+        );
+        assert_eq!(
+            ConfigErrorCode::ConfigValidationFailed.to_string(),
+            "CONFIG_VALIDATION_FAILED"
+        );
+        assert_eq!(
+            ConfigErrorCode::ConfigVersionMismatch.to_string(),
+            "CONFIG_VERSION_MISMATCH"
+        );
+        assert_eq!(
+            ConfigErrorCode::SourceChainConfigError.to_string(),
+            "CONFIG_SOURCE_CHAIN_ERROR"
+        );
+        assert_eq!(
+            ConfigErrorCode::InterpolationConfigError.to_string(),
+            "CONFIG_INTERPOLATION_ERROR"
+        );
+        assert_eq!(
+            ConfigErrorCode::ConfigCircularReference.to_string(),
+            "CONFIG_CIRCULAR_REFERENCE"
+        );
+    }
+
+    // =============================================================================
+    // code() for all ConfigConfigError variants
+    // =============================================================================
+
+    #[test]
+    fn test_code_invalid_value() {
+        let err = ConfigConfigError::InvalidValue {
+            field: "port".into(),
+            expected_type: "u16".into(),
+            message: "out of range".into(),
+        };
+        assert_eq!(err.code(), ConfigErrorCode::InvalidConfigValue);
+        assert_eq!(err.code() as u16, 2100);
+    }
+
+    #[test]
+    fn test_code_file_not_found() {
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("missing.toml"),
+            source: None,
+        };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigFileNotFound);
+        assert_eq!(err.code() as u16, 2200);
+    }
+
+    #[test]
+    fn test_code_parse_error() {
+        let err = ConfigConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad".into(),
+            location: None,
+            source: None,
+        };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigParseError);
+        assert_eq!(err.code() as u16, 2300);
+    }
+
+    #[test]
+    fn test_code_size_limit_exceeded() {
+        let err = ConfigConfigError::SizeLimitExceeded {
+            actual: 100,
+            limit: 50,
+        };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigSizeLimitExceeded);
+        assert_eq!(err.code() as u16, 2400);
+    }
+
+    #[test]
+    fn test_code_validation_failed() {
+        let err = ConfigConfigError::ValidationFailed {
+            field: "f".into(),
+            rule: "r".into(),
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigValidationFailed);
+        assert_eq!(err.code() as u16, 2500);
+    }
+
+    #[test]
+    fn test_code_version_mismatch() {
+        let err = ConfigConfigError::VersionMismatch {
+            found: 1,
+            expected: 2,
+        };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigVersionMismatch);
+        assert_eq!(err.code() as u16, 2600);
+    }
+
+    #[test]
+    fn test_code_source_chain_error() {
+        let err = ConfigConfigError::SourceChainError {
+            message: "m".into(),
+            source_index: 0,
+        };
+        assert_eq!(err.code(), ConfigErrorCode::SourceChainConfigError);
+        assert_eq!(err.code() as u16, 2700);
+    }
+
+    #[test]
+    fn test_code_interpolation_error() {
+        let err = ConfigConfigError::InterpolationError {
+            variable: "v".into(),
+            message: "m".into(),
+        };
+        assert_eq!(err.code(), ConfigErrorCode::InterpolationConfigError);
+        assert_eq!(err.code() as u16, 2800);
+    }
+
+    #[test]
+    fn test_code_circular_reference() {
+        let err = ConfigConfigError::CircularReference { path: "p".into() };
+        assert_eq!(err.code(), ConfigErrorCode::ConfigCircularReference);
+        assert_eq!(err.code() as u16, 2900);
+    }
+
+    // =============================================================================
+    // user_message for all remaining variants
+    // =============================================================================
+
+    #[test]
+    fn test_user_message_size_limit_exceeded() {
+        let err = ConfigConfigError::SizeLimitExceeded {
+            actual: 2048,
+            limit: 1024,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("2048"));
+        assert!(msg.contains("1024"));
+        assert!(msg.contains("size"));
+    }
+
+    #[test]
+    fn test_user_message_validation_failed() {
+        let err = ConfigConfigError::ValidationFailed {
+            field: "email".into(),
+            rule: "format".into(),
+            message: "invalid email".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Field 'email' failed validation: invalid email"
+        );
+    }
+
+    #[test]
+    fn test_user_message_version_mismatch() {
+        let err = ConfigConfigError::VersionMismatch {
+            found: 1,
+            expected: 3,
+        };
+        assert_eq!(
+            err.user_message(),
+            "Configuration version mismatch: found 1, expected 3"
+        );
+    }
+
+    #[test]
+    fn test_user_message_source_chain_error() {
+        let err = ConfigConfigError::SourceChainError {
+            message: "chain broke at index 2".into(),
+            source_index: 2,
+        };
+        assert_eq!(err.user_message(), "chain broke at index 2");
+    }
+
+    #[test]
+    fn test_user_message_interpolation_error() {
+        let err = ConfigConfigError::InterpolationError {
+            variable: "HOME".into(),
+            message: "not set".into(),
+        };
+        assert_eq!(
+            err.user_message(),
+            "Interpolation error for 'HOME': not set"
+        );
+    }
+
+    #[test]
+    fn test_user_message_circular_reference() {
+        let err = ConfigConfigError::CircularReference {
+            path: "a.b.c.a".into(),
+        };
+        assert_eq!(err.user_message(), "Circular reference detected: a.b.c.a");
+    }
+
+    #[test]
+    fn test_user_message_parse_error_without_location() {
+        let err = ConfigConfigError::ParseError {
+            format: "json".into(),
+            message: "unexpected token".into(),
+            location: None,
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(msg.contains("json"));
+        assert!(msg.contains("unexpected token"));
+        assert!(!msg.contains("at"));
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_normal_path() {
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("config.toml"),
+            source: None,
+        };
+        // Normal paths are not sanitized
+        assert_eq!(
+            err.user_message(),
+            "Configuration file 'config.toml' not found"
+        );
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_gcloud_path_sanitized() {
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/.gcloud/key.json"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/home/user/.gcloud/"));
+        assert!(msg.contains("key.json"));
+    }
+
+    // =============================================================================
+    // audit_message for additional variants
+    // =============================================================================
+
+    #[test]
+    fn test_audit_message_missing_field() {
+        let err = ConfigConfigError::MissingField {
+            field: "endpoint".into(),
+        };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=2001"));
+        assert!(audit.contains("CONFIG_MISSING_FIELD"));
+        assert!(audit.contains("operation=config_init"));
+    }
+
+    #[test]
+    fn test_audit_message_invalid_value() {
+        let err = ConfigConfigError::InvalidValue {
+            field: "port".into(),
+            expected_type: "u16".into(),
+            message: "too large".into(),
+        };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=2100"));
+        assert!(audit.contains("CONFIG_INVALID_VALUE"));
+    }
+
+    #[test]
+    fn test_audit_message_parse_error() {
+        let err = ConfigConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad".into(),
+            location: None,
+            source: None,
+        };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=2300"));
+        assert!(audit.contains("CONFIG_PARSE_ERROR"));
+    }
+
+    #[test]
+    fn test_audit_message_circular_reference() {
+        let err = ConfigConfigError::CircularReference {
+            path: "a.b.c.a".into(),
+        };
+        let audit = err.audit_message();
+        assert!(audit.contains("error_code=2900"));
+        assert!(audit.contains("CONFIG_CIRCULAR_REFERENCE"));
+    }
+
+    // =============================================================================
+    // Display impl for ConfigConfigError (thiserror #[error(...)] formats)
+    // =============================================================================
+
+    #[test]
+    fn test_display_missing_field() {
+        let err = ConfigConfigError::MissingField {
+            field: "endpoint".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("endpoint"));
+        assert!(s.contains("Missing required configuration field"));
+    }
+
+    #[test]
+    fn test_display_invalid_value() {
+        let err = ConfigConfigError::InvalidValue {
+            field: "port".into(),
+            expected_type: "u16".into(),
+            message: "too large".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("port"));
+        assert!(s.contains("too large"));
+    }
+
+    #[test]
+    fn test_display_file_not_found() {
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("config.toml"),
+            source: None,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("config.toml"));
+        assert!(s.contains("not found"));
+    }
+
+    #[test]
+    fn test_display_parse_error_with_location() {
+        let loc = crate::types::SourceLocation::new("cfg.toml", 5, 3);
+        let err = ConfigConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad".into(),
+            location: Some(loc),
+            source: None,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("toml"));
+        assert!(s.contains("cfg.toml:5:3"));
+        assert!(s.contains("bad"));
+    }
+
+    #[test]
+    fn test_display_parse_error_without_location() {
+        let err = ConfigConfigError::ParseError {
+            format: "json".into(),
+            message: "bad".into(),
+            location: None,
+            source: None,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("json"));
+        assert!(s.contains("bad"));
+        // No location should not produce " at "
+        assert!(!s.contains(" at "));
+    }
+
+    #[test]
+    fn test_display_size_limit_exceeded() {
+        let err = ConfigConfigError::SizeLimitExceeded {
+            actual: 100,
+            limit: 50,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("100"));
+        assert!(s.contains("50"));
+    }
+
+    #[test]
+    fn test_display_validation_failed() {
+        let err = ConfigConfigError::ValidationFailed {
+            field: "email".into(),
+            rule: "format".into(),
+            message: "bad".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("email"));
+        assert!(s.contains("format"));
+        assert!(s.contains("bad"));
+    }
+
+    #[test]
+    fn test_display_version_mismatch() {
+        let err = ConfigConfigError::VersionMismatch {
+            found: 1,
+            expected: 2,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("found 1"));
+        assert!(s.contains("expected 2"));
+    }
+
+    #[test]
+    fn test_display_source_chain_error() {
+        let err = ConfigConfigError::SourceChainError {
+            message: "broke".into(),
+            source_index: 1,
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("broke"));
+    }
+
+    #[test]
+    fn test_display_interpolation_error() {
+        let err = ConfigConfigError::InterpolationError {
+            variable: "HOME".into(),
+            message: "missing".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("HOME"));
+        assert!(s.contains("missing"));
+    }
+
+    #[test]
+    fn test_display_circular_reference() {
+        let err = ConfigConfigError::CircularReference {
+            path: "a.b.a".into(),
+        };
+        let s = format!("{}", err);
+        assert!(s.contains("a.b.a"));
+    }
+
+    // =============================================================================
+    // Debug derive for ConfigConfigError
+    // =============================================================================
+
+    #[test]
+    fn test_debug_format_config_config_error() {
+        let err = ConfigConfigError::MissingField { field: "x".into() };
+        let dbg = format!("{:?}", err);
+        assert!(dbg.contains("MissingField"));
+        assert!(dbg.contains("x"));
+    }
+
+    // =============================================================================
+    // InitResult type alias
+    // =============================================================================
+
+    #[test]
+    fn test_init_result_type_alias() {
+        let ok: InitResult<i32> = Ok(42);
+        assert!(ok.is_ok());
+
+        let err: InitResult<i32> = Err(ConfigConfigError::MissingField { field: "f".into() });
+        assert!(err.is_err());
+    }
+
+    // =============================================================================
+    // Helper method return types — exhaustive variant matching
+    // =============================================================================
+
+    #[test]
+    fn test_helper_methods_field_values() {
+        // Verify field values are preserved through helpers
+        let err = ConfigConfigError::missing("db.host");
+        match err {
+            ConfigConfigError::MissingField { field } => assert_eq!(field, "db.host"),
+            other => panic!("unexpected variant: {:?}", other),
+        }
+
+        let err = ConfigConfigError::validation("port", "range", "out of bounds");
+        match err {
+            ConfigConfigError::ValidationFailed {
+                field,
+                rule,
+                message,
+            } => {
+                assert_eq!(field, "port");
+                assert_eq!(rule, "range");
+                assert_eq!(message, "out of bounds");
+            }
+            other => panic!("unexpected variant: {:?}", other),
+        }
+
+        let err = ConfigConfigError::invalid("port", "u16", "too large");
+        match err {
+            ConfigConfigError::InvalidValue {
+                field,
+                expected_type,
+                message,
+            } => {
+                assert_eq!(field, "port");
+                assert_eq!(expected_type, "u16");
+                assert_eq!(message, "too large");
+            }
+            other => panic!("unexpected variant: {:?}", other),
+        }
+    }
 }
