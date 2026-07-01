@@ -615,4 +615,319 @@ mod tests {
     fn test_default_consul_poll_interval_constant() {
         assert_eq!(DEFAULT_CONSUL_POLL_INTERVAL, Duration::from_secs(30));
     }
+
+    // --- Helpers for poll_internal coverage ---
+
+    /// Check whether a real Consul agent is reachable on the default port.
+    fn consul_ready() -> bool {
+        std::net::TcpStream::connect("127.0.0.1:8500").is_ok()
+    }
+
+    /// Spawn a minimal HTTP/1.1 server that serves `responses` in order, one per
+    /// connection, then stops. Each entry is `(status_code, body)`. Returns the
+    /// `host:port` address clients should use. Lets us exercise `poll_internal`
+    /// branches deterministically without depending on a live Consul.
+    fn mock_http_server(responses: Vec<(u16, String)>) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for (status, body) in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    continue;
+                };
+                use std::io::{Read, Write};
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let response = format!(
+                    "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {len}\r\n\r\n{body}",
+                    status = status,
+                    len = body.len(),
+                    body = body,
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        format!("127.0.0.1:{}", addr.port())
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_success_returns_map() {
+        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
+        assert!(
+            result.unwrap().is_map(),
+            "non-empty KV response should yield a map"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_non_200_returns_error() {
+        let addr = mock_http_server(vec![(500, "internal error".to_string())]);
+        let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
+        let err = source.poll_internal().await.unwrap_err().to_string();
+        assert!(
+            err.contains("status"),
+            "error should mention response status: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_connection_refused() {
+        // Reserve a port then drop it to get a guaranteed-closed port.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let source = ConsulSourceBuilder::new()
+            .address(format!("127.0.0.1:{}", port))
+            .build()
+            .unwrap();
+        let err = source.poll_internal().await.unwrap_err().to_string();
+        assert!(
+            err.contains("Failed to fetch"),
+            "error should mention fetch failure: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_unsupported_url_scheme() {
+        // reqwest only supports http/https; "ftp://" is rejected at send time,
+        // exercising both the `contains("://")` URL branch and a fetch error.
+        let source = ConsulSourceBuilder::new()
+            .address("ftp://invalid-host")
+            .build()
+            .unwrap();
+        let err = source.poll_internal().await.unwrap_err().to_string();
+        assert!(
+            err.contains("Failed to fetch"),
+            "unsupported scheme should produce a fetch error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_empty_no_cache_returns_error() {
+        let addr = mock_http_server(vec![(200, "[]".to_string())]);
+        let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
+        let err = source.poll_internal().await.unwrap_err().to_string();
+        assert!(
+            err.contains("No configuration found"),
+            "empty response without cache should error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_empty_returns_cached_value() {
+        // First response caches a value (ModifyIndex=10); second response is
+        // empty, exercising the "return cached value" branch (lines 230-246).
+        let non_empty = r#"[{"Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server(vec![(200, non_empty), (200, "[]".to_string())]);
+        let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
+        let first = source.poll_internal().await;
+        assert!(first.is_ok(), "first poll should succeed");
+        assert!(first.as_ref().unwrap().is_map());
+        let second = source.poll_internal().await;
+        assert!(second.is_ok(), "second poll should return cached value");
+        assert!(
+            second.as_ref().unwrap().is_map(),
+            "cached value should be a map"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_token_and_blocking_wait() {
+        // Two polls: the second has current_index > 0, exercising the blocking
+        // wait URL path and the token header re-attachment (lines 193-200).
+        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":7}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body.clone()), (200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .token("test-token") // pragma: allowlist secret
+            .build()
+            .unwrap();
+        let first = source.poll_internal().await;
+        assert!(first.is_ok());
+        let second = source.poll_internal().await;
+        assert!(
+            second.is_ok(),
+            "blocking-wait poll with token should succeed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_url_with_scheme() {
+        // Address containing "://" exercises the scheme-preserving URL branch.
+        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":1}]"#.to_string();
+        let addr = format!("http://{}", mock_http_server(vec![(200, body)]));
+        let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_map());
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_empty_prefix() {
+        // prefix="" exercises the empty-prefix URL and key-extraction branches.
+        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":3}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_map());
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_real_consul_success() {
+        assert!(
+            consul_ready(),
+            "Consul must be running on 127.0.0.1:8500 for this integration test"
+        );
+        let source = ConsulSourceBuilder::new()
+            .address("127.0.0.1:8500")
+            .prefix("config/app")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(
+            result.is_ok(),
+            "real consul poll should succeed: {:?}",
+            result.err()
+        );
+        assert!(
+            result.unwrap().is_map(),
+            "seeded consul KV (config/app/*) should yield a map"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_invalid_json_returns_error() {
+        let addr = mock_http_server(vec![(200, "this is not valid json".to_string())]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_err(), "invalid JSON should produce an error");
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { .. }),
+            "expected InvalidValue, got {:?}",
+            err
+        );
+        assert!(
+            err.to_string().contains("Failed to parse Consul response"),
+            "unexpected error message: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_non_base64_value_fallback() {
+        // Value "!!!notbase64!!!" cannot be decoded as base64 (contains '!'),
+        // so the code falls back to using the raw value string (line 274).
+        let body = r#"[{"Value":"!!!notbase64!!!","ModifyIndex":1}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
+        let value = result.unwrap();
+        assert!(value.is_map(), "non-empty KV response should yield a map");
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_value_starts_with_prefix() {
+        // Value "config/!data" fails base64 decode (contains '!') and starts
+        // with the prefix "config/", exercising the prefix-stripping branch
+        // (lines 288-292).
+        let body = r#"[{"Value":"config/!data","ModifyIndex":1}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config/")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
+        assert!(
+            result.unwrap().is_map(),
+            "non-empty KV response should yield a map"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_poll_internal_null_values_returns_null_config() {
+        // All KV entries have null Value, so config_map stays empty and the
+        // result is ConfigValue::Null (line 317).
+        let body = r#"[{"Value":null,"ModifyIndex":1}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
+        let value = result.unwrap();
+        assert!(
+            value.is_null(),
+            "KV response with all-null values should yield Null config"
+        );
+    }
+
+    #[test]
+    fn test_polled_source_trait_source_id() {
+        use crate::remote::PolledSource;
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        // Call the TRAIT method (which delegates to the inherent method),
+        // not the inherent method directly.
+        let id = <ConsulSource as PolledSource>::source_id(&source);
+        assert_eq!(id.as_str(), "consul:config");
+    }
+
+    #[tokio::test]
+    async fn test_async_source_trait_load() {
+        use crate::interface::AsyncSource;
+        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":5}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+        // Call the TRAIT method AsyncSource::load (delegates to poll_internal).
+        let result = <ConsulSource as AsyncSource>::load(&source).await;
+        assert!(
+            result.is_ok(),
+            "trait load should succeed: {:?}",
+            result.err()
+        );
+        assert!(
+            result.unwrap().is_map(),
+            "non-empty KV response should yield a map"
+        );
+    }
+
+    #[test]
+    fn test_async_source_trait_source_id_ref() {
+        use crate::interface::AsyncSource;
+        let source = ConsulSourceBuilder::new().build().unwrap();
+        // Call the TRAIT method AsyncSource::source_id (returns &SourceId to
+        // a static "consul"), not the inherent source_id.
+        let id = <ConsulSource as AsyncSource>::source_id(&source);
+        assert_eq!(id.as_str(), "consul");
+    }
 }

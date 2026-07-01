@@ -437,4 +437,217 @@ mod tests {
     fn test_default_etcd_poll_interval_constant() {
         assert_eq!(DEFAULT_ETCD_POLL_INTERVAL, Duration::from_secs(30));
     }
+
+    // --- Helpers for live etcd integration tests ---
+
+    /// Check whether a real etcd is reachable on the default gRPC port.
+    fn etcd_ready() -> bool {
+        std::net::TcpStream::connect("127.0.0.1:2379").is_ok()
+    }
+
+    static UNIQUE_PREFIX_COUNTER: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+
+    /// Generate a unique etcd key prefix so parallel tests (and repeated test
+    /// runs, since etcd persists keys) don't collide. Combines a nanosecond
+    /// timestamp (unique per run) with a monotonic counter (unique within a run).
+    fn unique_prefix() -> String {
+        let n = UNIQUE_PREFIX_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        format!("config/cov_{}_{}", ts, n)
+    }
+
+    #[tokio::test]
+    async fn test_build_success_real_etcd() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        let source = EtcdSourceBuilder::new().build().await;
+        assert!(source.is_ok(), "build should succeed: {:?}", source.err());
+    }
+
+    #[tokio::test]
+    async fn test_poll_unreachable_endpoint_returns_error() {
+        // gRPC connect is lazy, so build succeeds; the first poll RPC fails
+        // because the endpoint is unreachable (exercising poll_internal's
+        // error path, lines 162-169).
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let source = EtcdSourceBuilder::new()
+            .endpoints(vec![format!("127.0.0.1:{}", port)])
+            .build()
+            .await
+            .expect("lazy connect should succeed even on a closed port");
+        let result = source.poll_internal().await;
+        assert!(result.is_err(), "poll on unreachable endpoint should fail");
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => unreachable!("expected poll error, got Ok"),
+        };
+        assert!(
+            err.contains("Failed to fetch from etcd"),
+            "error should mention fetch failure: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_build_with_auth_options_rejected_when_auth_disabled() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        // Setting both username and password triggers ConnectOptions::with_user
+        // (line 107). The dev-mode etcd has auth disabled, so connect's auth
+        // RPC is rejected with "authentication is not enabled" — proving the
+        // with_user branch was executed.
+        let result = EtcdSourceBuilder::new()
+            .username("root")
+            .password("pass") // pragma: allowlist secret
+            .build()
+            .await;
+        assert!(
+            result.is_err(),
+            "build with auth should fail on auth-disabled etcd"
+        );
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => unreachable!("expected build error, got Ok"),
+        };
+        assert!(
+            err.contains("authentication is not enabled"),
+            "expected auth-disabled error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_source_id_after_build() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        let source = EtcdSourceBuilder::new()
+            .prefix("my-app")
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(source.source_id().as_str(), "etcd:my-app");
+    }
+
+    #[tokio::test]
+    async fn test_async_source_trait_methods() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        use crate::interface::AsyncSource;
+        let source = EtcdSourceBuilder::new().build().await.unwrap();
+        assert_eq!(source.name(), "etcd");
+        assert_eq!(source.priority(), 50);
+        // Use fully-qualified syntax so the TRAIT method (static "etcd",
+        // lines 274-277) is called instead of the inherent method
+        // (`etcd:{prefix}`).
+        assert_eq!(
+            <EtcdSource as AsyncSource>::source_id(&source).as_str(),
+            "etcd"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_polled_source_poll_interval_after_build() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        use crate::remote::PolledSource;
+        let source = EtcdSourceBuilder::new()
+            .interval(Duration::from_secs(45))
+            .build()
+            .await
+            .unwrap();
+        assert_eq!(source.poll_interval(), Some(Duration::from_secs(45)));
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_poll_internal_returns_seeded_data() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        let prefix = unique_prefix();
+        let put_client = Client::connect(&["127.0.0.1:2379"], None)
+            .await
+            .expect("etcd connect for seed");
+        let mut kv = put_client.kv_client();
+        kv.put(format!("{}/key", prefix), "value".to_string(), None)
+            .await
+            .expect("etcd put seed");
+        let source = EtcdSourceBuilder::new()
+            .prefix(prefix)
+            .build()
+            .await
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
+        assert!(
+            result.unwrap().is_map(),
+            "seeded etcd KV should yield a map"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_poll_returns_cached_on_same_revision() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        let prefix = unique_prefix();
+        let put_client = Client::connect(&["127.0.0.1:2379"], None)
+            .await
+            .expect("etcd connect for seed");
+        let mut kv = put_client.kv_client();
+        kv.put(format!("{}/key", prefix), "value".to_string(), None)
+            .await
+            .expect("etcd put seed");
+        let source = EtcdSourceBuilder::new()
+            .prefix(prefix)
+            .build()
+            .await
+            .unwrap();
+        let first = source.poll_internal().await;
+        assert!(first.is_ok(), "first poll should succeed");
+        assert!(first.as_ref().unwrap().is_map());
+        // No writes between polls (serial) → same revision → cached path
+        // (lines 185-191) is exercised.
+        let second = source.poll_internal().await;
+        assert!(second.is_ok(), "second poll should return cached value");
+        assert!(second.as_ref().unwrap().is_map());
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_poll_empty_prefix_returns_null() {
+        assert!(
+            etcd_ready(),
+            "etcd must be running on 127.0.0.1:2379 for this integration test"
+        );
+        let prefix = unique_prefix(); // no keys put under this prefix
+        let source = EtcdSourceBuilder::new()
+            .prefix(prefix)
+            .build()
+            .await
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "poll on empty prefix should succeed");
+        assert!(
+            result.unwrap().is_null(),
+            "prefix with no keys should yield Null"
+        );
+    }
 }
