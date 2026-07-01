@@ -139,8 +139,6 @@ let config = AppConfig::load_sync()?;
 | 🔐 | **配置加密** | XChaCha20-Poly1305 加密存储（`encryption` 功能） |
 | 🌐 | **远程配置** | 支持 etcd、Consul、HTTP（`remote` 功能） |
 | 📦 | **审计日志** | 记录访问和变更历史（`audit` 功能） |
-| ⚡ | **并行验证** | 大型配置的并行验证（`parallel` 功能） |
-| 📈 | **系统监控** | 内存使用监控（`metrics` 功能） |
 | 🔧 | **配置对比** | 多种输出格式的配置比较 |
 | 🔑 | **密钥管理** | 内置密钥生成和轮换 |
 
@@ -154,9 +152,9 @@ let config = AppConfig::load_sync()?;
 |--------|----------|----------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | 最小化配置加载（无验证、无 CLI） |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | 分布式系统 |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | 分布式系统 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 完整功能集 |
 
 **注意：** `cli` 功能会自动包含 `validation` 和 `encryption` 依赖。
@@ -221,25 +219,18 @@ graph LR
 | `encryption` | XChaCha20-Poly1305 加密 | ❌ |
 | `cli` | 命令行工具 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
-| `parallel` | 并行验证 | ❌ |
-| `typescript-schema` | TypeScript 类型生成 | ❌ |
+| `typescript-schema` | TypeScript 类型生成（`schema` 的别名） | ❌ |
 | **高级功能** |||
 | `audit` | 审计日志 | ❌ |
-| `metrics` | 指标收集 | ❌ |
 | `dynamic` | 动态字段 | ❌ |
 | `progressive-reload` | 渐进式重载 | ❌ |
 | `migration` | 配置迁移 | ❌ |
 | `snapshot` | 快照回滚 | ❌ |
-| `profile` | 环境配置 | ❌ |
 | `interpolation` | 变量插值 | ❌ |
-| `preload-validator` | 异步预加载验证器 | ❌ |
 | **远程源** |||
 | `remote` | HTTP 轮询 | ❌ |
-| `poll` | HTTP 轮询（`remote` 的别名） | ❌ |
 | `etcd` | Etcd 集成 | ❌ |
 | `consul` | Consul 集成 | ❌ |
-| `cache-redis` | Redis 缓存 | ❌ |
-| `vault` | HashiCorp Vault 集成 | ❌ |
 | **消息总线** |||
 | `config-bus` | 配置事件总线 | ❌ |
 | `nats-bus` | NATS 消息总线 | ❌ |
@@ -549,7 +540,7 @@ async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
 | **remote_etcd**      | `examples/src/examples/remote_etcd.rs`         | `etcd`               | 从 etcd v3 获取远程配置                    |
 | **validation**       | `examples/src/examples/validation.rs`          | `validation`         | 使用 garde 进行配置验证                    |
 | **json_schema**      | `examples/src/examples/json_schema.rs`         | `schema`             | JSON Schema 和 TypeScript 类型生成         |
-| **metrics**          | `examples/src/examples/metrics.rs`             | `metrics`            | 指标收集与监控                             |
+| **metrics**          | `examples/src/examples/metrics.rs`             | -                    | 指标收集与监控（仅用 std，无需 feature）   |
 | **cli_integration**  | `examples/src/examples/cli_integration.rs`     | `cli`                | CLI 工具集成与使用                         |
 | **full_stack**       | `examples/src/examples/full_stack.rs`          | `full`               | 完整功能展示                               |
 
@@ -956,7 +947,6 @@ gantt
     环境变量覆盖     :done, 2024-03, 2024-06
     section 验证系统
     基础验证集成     :done, 2024-04, 2024-07
-    并行验证支持     :done, 2024-05, 2024-08
     section 高级功能
     Schema 生成      :active, 2024-06, 2024-09
     文件监控热重载   :done, 2024-07, 2024-09
@@ -978,8 +968,6 @@ gantt
 
 **验证系统**
 - [x] 配置验证系统（garde）
-- [x] 并行验证支持（rayon）
-- [x] 异步预加载验证器
 
 **高级特性**
 - [x] Schema 生成（JSON Schema + TypeScript 类型）
@@ -992,14 +980,11 @@ gantt
 - [x] 配置迁移
 - [x] 快照与回滚
 - [x] 变量插值
-- [x] 环境配置（profile）
 - [x] 渐进式重载（金丝雀发布）
 
 **远程与总线**
 - [x] 远程配置支持（etcd、Consul、HTTP）
 - [x] HTTP 轮询
-- [x] HashiCorp Vault 集成
-- [x] Redis 缓存
 - [x] 配置事件总线（NATS / Redis Pub-Sub）
 
 **安全**

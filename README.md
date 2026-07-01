@@ -136,8 +136,6 @@ let config = AppConfig::load_sync()?;
 |   🔐   | **Configuration Encryption**   | XChaCha20-Poly1305 encrypted storage (`encryption` feature) |
 |   🌐   | **Remote Configuration**       | etcd, Consul, HTTP support (`remote` feature)               |
 |   📦   | **Audit Logging**              | Record access & change history (`audit` feature)            |
-|   ⚡   | **Parallel Validation**        | Parallel validation for large configs (`parallel` feature)  |
-|   📈   | **System Monitoring**          | Memory usage monitoring (`metrics` feature)              |
 |   🔧   | **Configuration Diff**         | Compare configs with multiple output formats                |
 |   🛡️   | **Security Enhancements**      | Nonce reuse detection, SSRF protection                      |
 |   🔑   | **Key Management**             | Built-in key generation and rotation                        |
@@ -152,9 +150,9 @@ let config = AppConfig::load_sync()?;
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
 | <span style="color:#166534; padding:4px 8px">minimal</span>     | `env`, `json`                                                                                                                                                | Environment variables + JSON          |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation`                                                                                                                          | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
-| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit`                                                                 | Distributed systems                   |
+| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
+| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit`                                                                 | Distributed systems                   |
 | <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
 
 **Note:** Default features include `toml`, `json`, `env`. The `cli` feature automatically includes `validation` and `encryption` dependencies.
@@ -197,23 +195,19 @@ graph LR
 | `encryption`          |   ❌    | XChaCha20-Poly1305 encryption                        | Stable    |
 | `cli`                 |   ❌    | CLI tool with commands                               | Stable    |
 | `schema`              |   ❌    | JSON Schema generation                               | Stable    |
-| `parallel`            |   ❌    | Parallel validation (rayon)                          | Stable    |
-| `typescript-schema`   |   ❌    | TypeScript type generation                           | Stable    |
+| `typescript-schema`   |   ❌    | TypeScript type generation (alias of `schema`)       | Stable    |
 | **Advanced Features** |         |                                                      |           |
 | `audit`               |   ❌    | Audit logging                                        | Stable    |
-| `metrics`             |   ❌    | Metrics collection                                   | Stable    |
 | `dynamic`             |   ❌    | Dynamic fields                                       | Stable    |
 | `progressive-reload`  |   ❌    | Canary/linear rollout                                | Stable    |
 | `migration`           |   ❌    | Configuration migration                              | Stable    |
 | `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
-| `profile`             |   ❌    | Environment profiles                                 | Stable    |
 | `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
 | `hot-reload`          |   ❌    | Hot reload (removed; use `watch` feature)            | Removed   |
 | **Remote Sources**    |         |                                                      |           |
 | `remote`              |   ❌    | HTTP polling                                         | Beta      |
 | `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
 | `consul`              |   ❌    | Consul integration                                   | Beta      |
-| `cache-redis`         |   ❌    | Redis cache                                          | Beta      |
 | **Message Bus**       |         |                                                      |           |
 | `config-bus`          |   ❌    | Config event bus                                     | Stable    |
 | `nats-bus`            |   ❌    | NATS integration                                     | Stable    |
@@ -224,10 +218,6 @@ graph LR
 | **Context & Modules** |         |                                                      |           |
 | `context-aware`       |   ❌    | Tenant-aware configuration                           | Stable    |
 | `modules`             |   ❌    | Modular configuration                                | Stable    |
-| **Infrastructure**    |         |                                                      |           |
-| `preload-validator`   |   ❌    | Async preload validator                              | Stable    |
-| `poll`                |   ❌    | HTTP polling                                         | Stable    |
-| `vault`               |   ❌    | Vault integration                                    | Beta      |
 
 ### 🗂️ Examples Directory
 
@@ -249,7 +239,7 @@ Complete, runnable examples demonstrating all major features. All examples can b
 | **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
 | **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
 | **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
-| **metrics**            | `examples/src/examples/metrics.rs`            | `metrics`            | Metrics collection and monitoring                               |
+| **metrics**            | `examples/src/examples/metrics.rs`            | -                    | Metrics collection and monitoring (std-only, no feature required) |
 | **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
 | **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
 
@@ -300,25 +290,18 @@ cd examples && ./verify_examples.sh
 | `encryption`          | XChaCha20-Poly1305 encryption    | ❌      |
 | `cli`                 | Command-line tool                | ❌      |
 | `schema`              | JSON Schema generation           | ❌      |
-| `parallel`            | Parallel validation              | ❌      |
-| `typescript-schema`   | TypeScript type generation       | ❌      |
+| `typescript-schema`   | TypeScript type generation (alias of `schema`) | ❌      |
 | **Advanced Features** |                                  |         |
 | `audit`               | Audit logging                    | ❌      |
-| `metrics`             | Metrics collection               | ❌      |
 | `dynamic`             | Dynamic fields                   | ❌      |
 | `progressive-reload`  | Progressive reload               | ❌      |
 | `migration`           | Configuration migration          | ❌      |
 | `snapshot`            | Snapshot rollback                | ❌      |
-| `profile`             | Environment configuration        | ❌      |
 | `interpolation`       | Variable interpolation           | ❌      |
-| `preload-validator`   | Async preload validator          | ❌      |
 | **Remote Sources**    |                                  |         |
 | `remote`              | HTTP polling                     | ❌      |
-| `poll`                | HTTP polling (alias of `remote`) | ❌      |
 | `etcd`                | Etcd integration                 | ❌      |
 | `consul`              | Consul integration               | ❌      |
-| `cache-redis`         | Redis cache                      | ❌      |
-| `vault`               | HashiCorp Vault integration      | ❌      |
 | **Message Bus**       |                                  |         |
 | `config-bus`          | Configuration event bus          | ❌      |
 | `nats-bus`            | NATS message bus                 | ❌      |
@@ -1031,7 +1014,6 @@ gantt
     Environment Variable Override     :done, 2024-03, 2024-06
     section Validation System
     Basic Validation Integration     :done, 2024-04, 2024-07
-    Parallel Validation Support     :done, 2024-05, 2024-08
     section Advanced Features
     Schema Generation      :active, 2024-06, 2024-09
     File Watching Hot Reload   :done, 2024-07, 2024-09
@@ -1053,8 +1035,6 @@ gantt
 
 **Validation System**
 - [x] Configuration Validation System (garde)
-- [x] Parallel Validation Support (rayon)
-- [x] Async Preload Validator
 
 **Advanced Features**
 - [x] Schema Generation (JSON Schema + TypeScript types)
@@ -1067,14 +1047,11 @@ gantt
 - [x] Configuration Migration
 - [x] Snapshot & Rollback
 - [x] Variable Interpolation
-- [x] Environment Profiles
 - [x] Progressive Reload (canary rollout)
 
 **Remote & Bus**
 - [x] Remote Configuration Support (etcd, Consul, HTTP)
 - [x] HTTP Polling
-- [x] HashiCorp Vault Integration
-- [x] Redis Cache
 - [x] Configuration Event Bus (NATS / Redis Pub-Sub)
 
 **Security**
