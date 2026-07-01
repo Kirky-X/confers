@@ -356,7 +356,8 @@ async fn test_snapshot_pruning() {
     };
     let manager = SnapshotManager::new(config);
 
-    // Create 5 snapshots
+    // Create 5 snapshots — save() auto-prunes after each write, so
+    // once the count exceeds max_snapshots the oldest are removed.
     for i in 0..5 {
         let key = format!("key_{}", i);
         let mut map = indexmap::IndexMap::new();
@@ -365,13 +366,20 @@ async fn test_snapshot_pruning() {
             AnnotatedValue::new(ConfigValue::I64(i), SourceId::new("test"), key.as_str()),
         );
         let value = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("test"), "");
-        let _ = manager.save(&value, &[]).await;
+        manager
+            .save(&value, &[])
+            .await
+            .expect("snapshot save should succeed");
     }
 
-    // List snapshots - pruning may or may not happen automatically
+    // After 5 saves with max=3, auto-prune must have kept the count at 3.
     let snapshots = manager.list_snapshots().unwrap();
-    // Just verify snapshots were created
-    assert!(!snapshots.is_empty());
+    assert_eq!(
+        snapshots.len(),
+        3,
+        "auto-prune should cap snapshot count at max_snapshots=3, got {}",
+        snapshots.len()
+    );
 }
 
 /// Test prune removes oldest snapshots first.
@@ -385,7 +393,9 @@ async fn test_prune_removes_oldest() {
     };
     let manager = SnapshotManager::new(config);
 
-    // Create 4 snapshots with different content
+    // Create 4 snapshots with different content. Capture the first
+    // (oldest) path so we can verify it was pruned.
+    let mut first_path: Option<PathBuf> = None;
     for i in 0..4 {
         tokio::time::sleep(Duration::from_millis(10)).await;
         let mut map = indexmap::IndexMap::new();
@@ -394,13 +404,31 @@ async fn test_prune_removes_oldest() {
             AnnotatedValue::new(ConfigValue::I64(i), SourceId::new("test"), "version"),
         );
         let value = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("test"), "");
-        let _ = manager.save(&value, &[]).await;
+        let path = manager
+            .save(&value, &[])
+            .await
+            .expect("snapshot save should succeed");
+        if i == 0 {
+            first_path = Some(path);
+        }
     }
 
-    // Verify oldest (v0) is removed, newest 2 kept
+    // After 4 saves with max=2, auto-prune should have removed the 2 oldest.
     let snapshots = manager.list_snapshots().unwrap();
-    // Just verify snapshots were created and pruning occurred
-    assert!(!snapshots.is_empty());
+    assert_eq!(
+        snapshots.len(),
+        2,
+        "auto-prune should cap snapshot count at max_snapshots=2, got {}",
+        snapshots.len()
+    );
+
+    // The oldest snapshot (v0) must have been removed.
+    let first = first_path.expect("first snapshot path should have been captured");
+    assert!(
+        !first.exists(),
+        "oldest snapshot {:?} should have been pruned but still exists",
+        first
+    );
 }
 
 /// Test manual prune.
@@ -414,13 +442,21 @@ async fn test_manual_prune() {
     };
     let manager = SnapshotManager::new(config);
 
-    // Create some snapshots
+    // Create 10 snapshots — with max=100, save()'s auto-prune is a no-op.
     for _i in 0..10 {
         let value = create_test_value();
-        let _ = manager.save(&value, &[]).await;
+        manager
+            .save(&value, &[])
+            .await
+            .expect("snapshot save should succeed");
     }
+    assert_eq!(
+        manager.list_snapshots().unwrap().len(),
+        10,
+        "with max=100 no auto-prune should occur"
+    );
 
-    // Now set a lower limit and manually prune
+    // Now set a lower limit and manually prune.
     let config = SnapshotConfig {
         dir: temp_dir.path().to_path_buf(),
         max_snapshots: 3,
@@ -428,9 +464,20 @@ async fn test_manual_prune() {
     };
     let manager = SnapshotManager::new(config);
 
-    // Prune and verify some were removed (exact number may vary)
-    let _removed = manager.prune_old_snapshots().unwrap();
-    // Just verify prune works without error
+    // Prune: 10 snapshots, max=3 → should remove 7.
+    let removed = manager
+        .prune_old_snapshots()
+        .expect("manual prune should succeed");
+    assert_eq!(
+        removed, 7,
+        "prune should remove 7 snapshots (10 - max 3), got {}",
+        removed
+    );
+    assert_eq!(
+        manager.list_snapshots().unwrap().len(),
+        3,
+        "after prune, exactly max_snapshots=3 should remain"
+    );
 }
 
 // ========================================

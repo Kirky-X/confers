@@ -203,22 +203,21 @@ impl FsWatcher {
                                 EventKind::Create(_)
                                 | EventKind::Modify(_)
                                 | EventKind::Remove(_) => {
+                                    // Forward all file-system events. The is_file() check
+                                    // was removed because it drops deletion events (the
+                                    // path no longer exists) and can race with creation
+                                    // events on some platforms. Callers decide what to
+                                    // do with the event.
                                     for event_path in &event.paths {
-                                        if event_path.is_file() {
-                                            // Try to send, but don't block if channel is closed
-                                            match tx.try_send(event_path.clone()) {
-                                                Ok(_) => {}
-                                                Err(mpsc::error::TrySendError::Full(_)) => {
-                                                    // Channel full, skip this event
-                                                }
-                                                Err(mpsc::error::TrySendError::Closed(_)) => {
-                                                    // Channel closed, exit
-                                                    running.store(
-                                                        false,
-                                                        std::sync::atomic::Ordering::SeqCst,
-                                                    );
-                                                    return;
-                                                }
+                                        match tx.try_send(event_path.clone()) {
+                                            Ok(_) => {}
+                                            Err(mpsc::error::TrySendError::Full(_)) => {}
+                                            Err(mpsc::error::TrySendError::Closed(_)) => {
+                                                running.store(
+                                                    false,
+                                                    std::sync::atomic::Ordering::SeqCst,
+                                                );
+                                                return;
                                             }
                                         }
                                     }

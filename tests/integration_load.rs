@@ -88,11 +88,14 @@ missing_bracket = true
 
         let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
-        // Empty file should parse as null or empty object
-        // Allow either success or error for empty file
-        if let Ok(config) = result {
-            assert!(config.is_null() || config.is_object());
-        }
+        // T-C-1 D5a: old code used `if let Ok(config) = result { assert!(...) }`
+        // which silently passed when result was Err — zero assertions executed.
+        // An empty TOML file is valid TOML (empty table) and must parse successfully.
+        let config = result.expect("empty TOML file should parse successfully");
+        assert!(
+            config.is_null() || config.is_object(),
+            "empty file should yield null or empty object, got: {config}"
+        );
     }
 
     #[test]

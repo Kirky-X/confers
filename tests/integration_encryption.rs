@@ -425,12 +425,15 @@ mod tests {
     #[test]
     fn test_encrypt_key_too_long() {
         let crypto = XChaCha20Crypto::new();
-        let long_key = [0u8; 64]; // 64 bytes
+        let long_key = [0u8; 64]; // 64 bytes — XChaCha20 requires exactly 32
 
         let result = crypto.encrypt(&[1, 2, 3], &long_key);
-        // Implementation may truncate key or return error — both are acceptable
-        // as long as it doesn't panic
-        assert!(result.is_ok() || result.is_err());
+        // encrypt() returns Err(InvalidKeyLength(64)) for keys != 32 bytes.
+        // The old assertion `is_ok() || is_err()` was tautological (T-C-1 A1).
+        assert!(
+            matches!(result, Err(CryptoError::InvalidKeyLength(64))),
+            "64-byte key should be rejected with InvalidKeyLength(64), got: {result:?}"
+        );
     }
 }
 

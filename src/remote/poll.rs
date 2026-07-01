@@ -740,8 +740,16 @@ mod tests {
             "https://internal.example.com/config.json",
             &["internal.example.com".to_string()],
         );
-        assert!(result.is_ok());
-        assert!(result.is_ok());
+        // T-C-1 B1: the original test had a redundant duplicate
+        // `assert!(result.is_ok())`. A single, well-messaged assertion is
+        // sufficient — the key behavior is that the whitelist accepts the
+        // exact domain. DNS resolution may return an empty IP list for
+        // example domains, so we only assert Ok here.
+        assert!(
+            result.is_ok(),
+            "whitelisted domain should be accepted: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -751,19 +759,27 @@ mod tests {
             "https://api.example.com/config.json",
             &["example.com".to_string()],
         );
-        assert!(result.is_ok());
-        assert!(result.is_ok());
+        // T-C-1 B2: removed redundant duplicate assertion. The key
+        // behavior is that the whitelist accepts subdomains.
+        assert!(
+            result.is_ok(),
+            "subdomain of whitelisted domain should be accepted: {:?}",
+            result.err()
+        );
     }
 
     #[test]
     fn test_validate_url_whitelist_no_match() {
-        // Non-whitelisted domain should be checked (and will fail DNS in test)
-        let _result = validate_url(
+        // Non-whitelisted domain should be rejected by SSRF check.
+        // T-C-1 D4b: old code discarded the result with `let _result = ...`.
+        let result = validate_url(
             "https://untrusted.example.com/config.json",
             &["trusted.example.com".to_string()],
         );
-        // Will fail DNS resolution since "untrusted.example.com" likely doesn't resolve
-        // in test environment - that's expected
+        assert!(
+            result.is_err(),
+            "non-whitelisted domain should be rejected: {result:?}"
+        );
     }
 
     #[test]

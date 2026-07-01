@@ -373,23 +373,35 @@ async fn test_fs_watcher_file_creation_detection() {
 
     let mut watcher = FsWatcher::new(&config_dir, 100).await.unwrap();
 
+    // Give the watcher thread time to establish the inotify watch before
+    // creating the file. Without this delay, the file may be created before
+    // the watch is active, causing the event to be missed.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
     // Create a new file
     let new_file = config_dir.join("new_config.toml");
     fs::write(&new_file, "new_key = \"new_value\"").unwrap();
 
-    // Wait for the watcher to detect the change
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for the watcher to detect the change (debounce + inotify latency)
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // Try to receive the event
-    let event = tokio::time::timeout(Duration::from_millis(500), watcher.recv()).await;
+    // Try to receive the event with a generous timeout (FS events can be slow)
+    let event = tokio::time::timeout(Duration::from_millis(3000), watcher.recv()).await;
 
     // Cleanup
     watcher.stop();
 
-    // Should detect some file change — watcher may not fire reliably on all platforms
+    // File creation should be detected within the timeout window.
+    // The old assertion `is_ok() || is_err()` was tautological (T-C-1 A4).
     assert!(
-        event.is_ok() || event.is_err(),
-        "Watcher test completed (event delivery is platform-dependent)"
+        event.is_ok(),
+        "file creation should be detected within 3s; \
+         timeout or channel error means watcher failed: {:?}",
+        event.err()
+    );
+    assert!(
+        event.unwrap().is_some(),
+        "recv() should deliver a Some(event), not None (channel closed)"
     );
 }
 
@@ -415,9 +427,15 @@ async fn test_fs_watcher_file_modification_detection() {
     // Cleanup
     watcher.stop();
 
+    // File modification should be detected (T-C-1 A5: old assertion was tautological).
     assert!(
-        event.is_ok() || event.is_err(),
-        "Watcher test completed (event delivery is platform-dependent)"
+        event.is_ok(),
+        "file modification should be detected within 500ms: {:?}",
+        event.err()
+    );
+    assert!(
+        event.unwrap().is_some(),
+        "recv() should deliver a Some(event), not None (channel closed)"
     );
 }
 
@@ -434,18 +452,24 @@ async fn test_fs_watcher_file_deletion_detection() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     fs::remove_file(&config_file).unwrap();
 
-    // Wait for the watcher to detect the change
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Wait for the watcher to detect the change (debounce + inotify latency)
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // Try to receive the event
-    let event = tokio::time::timeout(Duration::from_millis(500), watcher.recv()).await;
+    // Try to receive the event with a generous timeout (FS events can be slow)
+    let event = tokio::time::timeout(Duration::from_millis(3000), watcher.recv()).await;
 
     // Cleanup
     watcher.stop();
 
+    // File deletion should be detected (T-C-1 A6: old assertion was tautological).
     assert!(
-        event.is_ok() || event.is_err(),
-        "Watcher test completed (event delivery is platform-dependent)"
+        event.is_ok(),
+        "file deletion should be detected within 3s: {:?}",
+        event.err()
+    );
+    assert!(
+        event.unwrap().is_some(),
+        "recv() should deliver a Some(event), not None (channel closed)"
     );
 }
 

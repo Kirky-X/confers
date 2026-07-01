@@ -648,8 +648,18 @@ mod tests {
         let builder1: ConfigBuilder<TestConfig> = ConfigBuilder::new();
         // Use Default::default() to avoid collision with inherent `default()` method
         let builder2: ConfigBuilder<TestConfig> = Default::default();
-        let _ = builder1.build();
-        let _ = builder2.build();
+        // T-C-1 D4d: old code used `let _ = builder.build()` which silently
+        // swallowed Err. Now assert both builders produce valid configs.
+        let config1 = builder1
+            .build()
+            .expect("ConfigBuilder::new() should build successfully with defaults");
+        let config2 = builder2
+            .build()
+            .expect("Default::default() should build successfully with defaults");
+        assert_eq!(
+            config1.name, config2.name,
+            "both builders should yield equivalent configs"
+        );
     }
 
     #[test]

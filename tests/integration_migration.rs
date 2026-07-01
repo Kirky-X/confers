@@ -310,10 +310,33 @@ mod migration_on_reload_tests {
 
     #[test]
     fn test_migration_on_reload_variants() {
-        // Test all variants exist
-        let _ = MigrationOnReload::Always;
-        let _ = MigrationOnReload::OnVersionChange;
-        let _ = MigrationOnReload::Disabled;
+        // T-C-1 C3: old test just constructed variants with `let _ = ...` and
+        // no assertions. Now verify the default and equality semantics.
+        assert_eq!(
+            MigrationOnReload::default(),
+            MigrationOnReload::OnVersionChange,
+            "default should be OnVersionChange"
+        );
+        assert_ne!(
+            MigrationOnReload::Always,
+            MigrationOnReload::Disabled,
+            "Always and Disabled must be distinct variants"
+        );
+        // Verify all three variants are distinct.
+        let variants = [
+            MigrationOnReload::Always,
+            MigrationOnReload::OnVersionChange,
+            MigrationOnReload::Disabled,
+        ];
+        for (i, a) in variants.iter().enumerate() {
+            for (j, b) in variants.iter().enumerate() {
+                if i == j {
+                    assert_eq!(a, b);
+                } else {
+                    assert_ne!(a, b, "variants at index {i} and {j} should differ");
+                }
+            }
+        }
     }
 
     #[test]

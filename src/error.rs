@@ -2181,24 +2181,40 @@ mod tests {
 
     #[test]
     fn test_confers_result_type_alias() {
+        // T-C-1 C1: old test asserted `Ok(42).is_ok()` which is tautological.
+        // Now verify the type alias participates in error code mapping by
+        // destructuring with match (avoids clippy unnecessary_literal_unwrap).
         let ok: ConfersResult<i32> = Ok(42);
-        assert!(ok.is_ok());
+        match ok {
+            Ok(v) => assert_eq!(v, 42),
+            Err(e) => panic!("expected Ok(42), got Err: {e:?}"),
+        }
 
-        let err: ConfersResult<i32> = Err(ConfigError::Timeout { duration_ms: 1 });
-        assert!(err.is_err());
+        let err: ConfersResult<i32> = Err(ConfigError::Timeout { duration_ms: 100 });
+        match err {
+            Ok(v) => panic!("expected Err, got Ok({v})"),
+            Err(e) => assert_eq!(e.code(), ErrorCode::Timeout),
+        }
     }
 
     #[test]
     fn test_config_result_type_alias() {
-        // ConfigResult is the older alias, also resolves to Result<T, ConfigError>
+        // T-C-1 C2: old test asserted `Ok(0).is_ok()` which is tautological.
+        // Now verify the type alias propagates error codes correctly.
         let ok: ConfigResult<i32> = Ok(0);
-        assert!(ok.is_ok());
+        match ok {
+            Ok(v) => assert_eq!(v, 0),
+            Err(e) => panic!("expected Ok(0), got Err: {e:?}"),
+        }
 
         let err: ConfigResult<i32> = Err(ConfigError::FileNotFound {
             filename: PathBuf::from("missing"),
             source: None,
         });
-        assert!(err.is_err());
+        match err {
+            Ok(v) => panic!("expected Err, got Ok({v})"),
+            Err(e) => assert_eq!(e.code(), ErrorCode::FileNotFound),
+        }
     }
 
     // =============================================================================

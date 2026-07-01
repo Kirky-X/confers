@@ -294,34 +294,42 @@ mod etcd_tests {
         let _ = builder;
     }
 
-    /// Test Etcd connection failure handling (4.1.3).
     /// Test EtcdSourceBuilder can be constructed with invalid endpoint (4.1.3).
-    /// Note: build() doesn't validate connectivity, it just creates the source.
+    /// build() calls Client::connect() but the etcd-client SDK lazily connects —
+    /// it does not validate DNS/TCP reachability at build time, so build()
+    /// succeeds even for invalid hostnames. Actual connection errors surface
+    /// only when fetching data.
     #[tokio::test]
     async fn test_etcd_invalid_endpoint() {
         let builder = EtcdSourceBuilder::new()
             .endpoint("invalid-hostname:2379")
             .prefix("test");
 
-        // build() creates the source without validating connectivity
-        // Connection errors will occur when actually using the source
-        let result = builder.build().await;
-        // Just verify it can be built (actual connection will fail later)
-        assert!(result.is_ok() || result.is_err()); // Either is acceptable
+        // T-C-1 A2: the original `is_ok() || is_err()` was tautological.
+        // build() succeeds because etcd-client defers actual connection.
+        let source = builder
+            .build()
+            .await
+            .expect("build() should succeed even with an invalid endpoint (lazy connect)");
+        // Verify the source was actually constructed with a valid source_id.
+        let _sid = source.source_id();
     }
 
     /// Test EtcdSourceBuilder with non-existent port (4.1.3).
-    /// Note: build() doesn't validate connectivity.
+    /// Same as above: build() succeeds because etcd-client connects lazily.
     #[tokio::test]
     async fn test_etcd_connection_failure() {
         let builder = EtcdSourceBuilder::new()
             .endpoint("127.0.0.1:9999") // Non-existent port
             .prefix("test");
 
-        let result = builder.build().await;
-        // build() creates the source, actual connection fails on use
-        // Just verify the builder constructs
-        assert!(result.is_ok() || result.is_err());
+        // T-C-1 A3: the original `is_ok() || is_err()` was tautological.
+        // build() succeeds; the TCP failure would only surface on fetch.
+        let source = builder
+            .build()
+            .await
+            .expect("build() should succeed even with a closed port (lazy connect)");
+        let _sid = source.source_id();
     }
 
     /// Test Etcd environment variable authentication (4.1.2).
