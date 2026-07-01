@@ -21,6 +21,7 @@ pub use fs_watcher::{FsWatcher, MultiFsWatcher};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::error::{ConfersResult, ConfigConfigError};
@@ -31,8 +32,10 @@ use crate::error::{ConfersResult, ConfigConfigError};
 /// Use [`shutdown()`](Self::shutdown) for explicit cleanup with waiting.
 pub struct WatcherGuard {
     running: Arc<AtomicBool>,
-    /// Optional handle for async task cleanup
-    task_handle: Option<tokio::task::JoinHandle<()>>,
+    /// Optional handle for async task cleanup.
+    /// Guarded by a Mutex so `shutdown(&self)` can take the handle out
+    /// without needing `&mut self`.
+    task_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl WatcherGuard {
@@ -40,7 +43,7 @@ impl WatcherGuard {
     pub fn new() -> Self {
         Self {
             running: Arc::new(AtomicBool::new(false)),
-            task_handle: None,
+            task_handle: Mutex::new(None),
         }
     }
 
@@ -48,12 +51,11 @@ impl WatcherGuard {
     pub fn from_running(running: Arc<AtomicBool>) -> Self {
         Self {
             running,
-            task_handle: None,
+            task_handle: Mutex::new(None),
         }
     }
 
     /// Create a new WatcherGuard with an associated task handle.
-    /// Reserved for future async watcher integration.
     #[allow(dead_code)]
     pub(crate) fn with_task(
         running: Arc<AtomicBool>,
@@ -61,7 +63,7 @@ impl WatcherGuard {
     ) -> Self {
         Self {
             running,
-            task_handle: Some(task_handle),
+            task_handle: Mutex::new(Some(task_handle)),
         }
     }
 
@@ -91,21 +93,23 @@ impl WatcherGuard {
     /// Shutdown the watcher gracefully with timeout.
     ///
     /// This method:
-    /// 1. Signals the watcher to stop
-    /// 2. Waits for the watcher task to complete (with timeout)
-    /// 3. Ensures audit logs are flushed and snapshots are saved
+    /// 1. Signals the watcher to stop (sets `running` to false)
+    /// 2. If a task handle was registered via `with_task` or `set_task_handle`,
+    ///    awaits its completion with the given timeout
+    /// 3. If no task handle was registered, returns immediately
     ///
     /// # Arguments
     ///
-    /// * `timeout` - Maximum time to wait for graceful shutdown (default: 5 seconds)
+    /// * `timeout` - Maximum time to wait for the task to complete
     ///
     /// # Returns
     ///
-    /// Returns `Ok(true)` if shutdown completed, `Ok(false)` if timeout occurred.
+    /// Returns `Ok(true)` if the task completed (or no task was registered),
+    /// `Ok(false)` if the timeout elapsed before the task finished.
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// async fn example() -> Result<(), Box<dyn std::error::Error>> {
     ///     use std::time::Duration;
     ///     use confers::watcher::WatcherGuard;
@@ -118,20 +122,30 @@ impl WatcherGuard {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn shutdown(&self, _timeout: Duration) -> crate::error::ConfersResult<bool> {
+    pub async fn shutdown(&self, timeout: Duration) -> crate::error::ConfersResult<bool> {
         self.stop();
 
-        // Note: Cannot await JoinHandle through a shared reference in async context.
-        // The task will be aborted when the guard is dropped.
-        // For explicit shutdown, we rely on the running flag and the Drop implementation.
-        Ok(true)
+        // Take the task handle out of the Mutex so we can await it.
+        // The lock is released immediately after take(), so no deadlock risk.
+        let handle = self.task_handle.lock().unwrap().take();
+
+        match handle {
+            None => Ok(true),
+            Some(handle) => {
+                match tokio::time::timeout(timeout, handle).await {
+                    // Task completed within timeout
+                    Ok(_) => Ok(true),
+                    // Timeout elapsed — task did not finish in time
+                    Err(_) => Ok(false),
+                }
+            }
+        }
     }
 
     /// Set the task handle for this guard (internal use).
-    /// Reserved for future async watcher integration.
     #[allow(dead_code)]
-    pub(crate) fn set_task_handle(&mut self, handle: tokio::task::JoinHandle<()>) {
-        self.task_handle = Some(handle);
+    pub(crate) fn set_task_handle(&self, handle: tokio::task::JoinHandle<()>) {
+        *self.task_handle.lock().unwrap() = Some(handle);
     }
 }
 
@@ -162,9 +176,86 @@ impl Drop for WatcherGuard {
     fn drop(&mut self) {
         self.stop();
         // Note: We can't await in Drop, so task cancellation is best-effort
-        if let Some(handle) = self.task_handle.take() {
+        if let Some(handle) = self.task_handle.get_mut().unwrap().take() {
             handle.abort();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    /// Regression test for A-H-10: shutdown with no task handle returns Ok(true)
+    /// and does not block on the timeout.
+    #[tokio::test]
+    async fn test_shutdown_no_task_handle_returns_true() {
+        let guard = WatcherGuard::new();
+        guard.start();
+        assert!(guard.is_running());
+
+        // Should return immediately with Ok(true) since there's no task to await
+        let result = guard.shutdown(Duration::from_secs(5)).await;
+        assert!(result.is_ok(), "shutdown should return Ok");
+        assert!(result.unwrap(), "shutdown with no task should return true");
+        assert!(
+            !guard.is_running(),
+            "guard should be stopped after shutdown"
+        );
+    }
+
+    /// A-H-10: shutdown with a task that completes quickly returns Ok(true).
+    #[tokio::test]
+    async fn test_shutdown_task_completes_within_timeout_returns_true() {
+        let running = Arc::new(AtomicBool::new(true));
+        // Spawn a task that finishes immediately
+        let handle = tokio::spawn(async {});
+
+        let guard = WatcherGuard::with_task(running, handle);
+        let result = guard.shutdown(Duration::from_secs(2)).await;
+        assert!(
+            result.unwrap(),
+            "shutdown should return true when task completes within timeout"
+        );
+    }
+
+    /// A-H-10: shutdown with a task that sleeps longer than the timeout
+    /// returns Ok(false), indicating the task did not finish in time.
+    #[tokio::test]
+    async fn test_shutdown_task_exceeds_timeout_returns_false() {
+        let running = Arc::new(AtomicBool::new(true));
+        // Spawn a task that sleeps for 2 seconds — much longer than our timeout
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        });
+
+        let guard = WatcherGuard::with_task(running, handle);
+        // Use a short timeout so the test runs fast
+        let result = guard.shutdown(Duration::from_millis(50)).await;
+        assert!(
+            !result.unwrap(),
+            "shutdown should return false when task exceeds timeout"
+        );
+    }
+
+    /// Verify set_task_handle registers a task that shutdown can await.
+    /// Also ensures the pub(crate) setter is exercised (no dead code).
+    #[tokio::test]
+    async fn test_set_task_handle_then_shutdown() {
+        let guard = WatcherGuard::new();
+        guard.start();
+
+        // Register a task via the setter (not the with_task constructor)
+        guard.set_task_handle(tokio::spawn(async {}));
+
+        let result = guard.shutdown(Duration::from_secs(2)).await;
+        assert!(
+            result.unwrap(),
+            "shutdown should return true for a task that completes via set_task_handle"
+        );
+        assert!(!guard.is_running());
     }
 }
 
