@@ -156,6 +156,7 @@ let config = AppConfig::load_sync()?;
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | 分布式系统 |
 | <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 完整功能集 |
 
 **注意：** `cli` 功能会自动包含 `validation` 和 `encryption` 依赖。
@@ -213,6 +214,7 @@ graph LR
 | `yaml` | YAML 格式支持 | ❌ |
 | `ini` | INI 格式支持 | ❌ |
 | `env` | 环境变量支持 | ✅ |
+| `dotenv` | `.env` 文件支持（`env` 的别名） | ❌ |
 | **核心功能** |||
 | `validation` | 配置验证（garde） | ❌ |
 | `watch` | 文件监控和热重载 | ❌ |
@@ -220,6 +222,7 @@ graph LR
 | `cli` | 命令行工具 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
 | `parallel` | 并行验证 | ❌ |
+| `typescript-schema` | TypeScript 类型生成 | ❌ |
 | **高级功能** |||
 | `audit` | 审计日志 | ❌ |
 | `metrics` | 指标收集 | ❌ |
@@ -229,11 +232,14 @@ graph LR
 | `snapshot` | 快照回滚 | ❌ |
 | `profile` | 环境配置 | ❌ |
 | `interpolation` | 变量插值 | ❌ |
+| `preload-validator` | 异步预加载验证器 | ❌ |
 | **远程源** |||
 | `remote` | HTTP 轮询 | ❌ |
+| `poll` | HTTP 轮询（`remote` 的别名） | ❌ |
 | `etcd` | Etcd 集成 | ❌ |
 | `consul` | Consul 集成 | ❌ |
 | `cache-redis` | Redis 缓存 | ❌ |
+| `vault` | HashiCorp Vault 集成 | ❌ |
 | **消息总线** |||
 | `config-bus` | 配置事件总线 | ❌ |
 | `nats-bus` | NATS 消息总线 | ❌ |
@@ -477,14 +483,85 @@ let service = MyService::new(shared_config);
 | ❓ [常见问题](docs/FAQ.md) | 常见问题解答 |
 | 📖 [贡献指南](docs/CONTRIBUTING.md) | 代码贡献指南 |
 | 📘 [API 参考](docs/API_REFERENCE.md) | 完整 API 文档 |
-| 🏗️ [架构决策](docs/architecture_decisions.md) | ADR 文档 |
+| 🏗️ [架构决策](docs/adr/) | ADR 文档 |
 | 📚 [库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目中 |
+
+### 🔄 BrickArchitecture 迁移指南
+
+Confers 遵循 **BrickArchitecture** 错误分离模式：
+
+| 错误类型           | 阶段     | 出现时机     | 示例                                        |
+| ------------------ | -------- | ------------ | ------------------------------------------- |
+| `ConfigConfigError` | 配置阶段 | 初始化时     | 缺失字段、解析错误、验证失败                |
+| `ConfersError`     | 运行时   | 使用时       | 超时、远程不可用、解密失败                  |
+
+**向后兼容：** 现有的 `ConfigError` 和 `ConfigResult<T>` 别名仍然可用。
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#166534">📖 迁移示例</summary>
+
+```rust
+// 旧：所有错误都用 ConfigError
+use confers::ConfigError;
+
+// 新：使用 BrickArchitecture 错误分离
+use confers::{ConfigConfigError, ConfersError};
+
+// 配置阶段 - 使用 ConfigConfigError
+fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
+    use confers::impl_::memory::InMemoryConfig;
+    let config = InMemoryConfig::new_validated(1000)?; // 返回 ConfigConfigError
+    Ok(config)
+}
+
+// 运行时阶段 - 使用 ConfersError
+async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
+    let value = config.get_string("key").await?;  // 返回 ConfersError
+    Ok(())
+}
+```
+
+</details>
 
 ---
 
 ---
 
 ## <span id="examples">💻 示例</span>
+
+### 🗂️ 示例目录
+
+完整可运行的示例展示所有主要功能。所有示例可在 [`examples/`](examples/) 目录中找到。
+
+| 示例                | 文件                                           | 所需功能            | 描述                                       |
+| :------------------- | :--------------------------------------------- | :------------------- | :----------------------------------------- |
+| **basic_usage**      | `examples/src/examples/basic_usage.rs`         | `toml`, `env`        | 从 TOML 和环境变量加载基本配置             |
+| **hot_reload**       | `examples/src/examples/hot_reload.rs`          | `watch`              | 实时文件监控与自动重载                     |
+| **encryption**       | `examples/src/examples/encryption.rs`          | `encryption`         | 使用 XChaCha20-Poly1305 加密敏感字段       |
+| **key_rotation**     | `examples/src/examples/key_rotation.rs`        | `key`                | 密钥生命周期管理与轮换                     |
+| **migration**        | `examples/src/examples/migration.rs`           | `migration`          | 配置版本迁移                               |
+| **dynamic_fields**   | `examples/src/examples/dynamic_fields.rs`      | `dynamic`            | 无锁动态字段更新与回调                     |
+| **config_groups**    | `examples/src/examples/config_groups.rs`       | `modules`            | 模块化配置分组                             |
+| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | 金丝雀部署与基于健康检查的滚动发布         |
+| **config_bus**       | `examples/src/examples/config_bus.rs`          | `config-bus`         | 通过 NATS/Redis 多实例配置广播             |
+| **snapshot**         | `examples/src/examples/snapshot.rs`            | `snapshot`           | 配置快照与 diff、回滚                      |
+| **remote_consul**    | `examples/src/examples/remote_consul.rs`       | `consul`             | 从 HashiCorp Consul 获取远程配置           |
+| **remote_etcd**      | `examples/src/examples/remote_etcd.rs`         | `etcd`               | 从 etcd v3 获取远程配置                    |
+| **validation**       | `examples/src/examples/validation.rs`          | `validation`         | 使用 garde 进行配置验证                    |
+| **json_schema**      | `examples/src/examples/json_schema.rs`         | `schema`             | JSON Schema 和 TypeScript 类型生成         |
+| **metrics**          | `examples/src/examples/metrics.rs`             | `metrics`            | 指标收集与监控                             |
+| **cli_integration**  | `examples/src/examples/cli_integration.rs`     | `cli`                | CLI 工具集成与使用                         |
+| **full_stack**       | `examples/src/examples/full_stack.rs`          | `full`               | 完整功能展示                               |
+
+```bash
+# 从 examples 目录运行任意示例
+cd examples && cargo run --bin basic_usage
+cd examples && cargo run --bin encryption
+cd examples && cargo run --bin full_stack
+
+# 验证所有示例可编译
+cd examples && ./verify_examples.sh
+```
 
 ### 💡 实际示例
 
@@ -618,7 +695,6 @@ graph TB
 | **审计日志** | 记录访问和变更历史 | ✅ 稳定 |
 | **加密存储** | XChaCha20-Poly1305 加密存储 | ✅ 稳定 |
 | **配置对比** | 多种输出格式 | ✅ 稳定 |
-| **交互式向导** | 模板生成 | ✅ 稳定 |
 
 ---
 
@@ -711,12 +787,17 @@ cargo test test_name
 <details style="padding:16px; margin: 16px 0">
 <summary style="cursor:pointer; font-weight:600; color:#166534">📊 测试统计</summary>
 
-| 类别 | 测试数量 | 覆盖率 |
+> 数据来源：`cargo test --features full`（截至 2026-07）。数字随代码演进增长，可重新运行命令验证。
+
+| 类别 | 测试数量 | 说明 |
 |----------|------------|----------|
-| 🧪 单元测试 | 50+ | 85% |
-| 🔗 集成测试 | 20+ | 80% |
-| ⚡ 性能测试 | 10+ | 75% |
-| **📈 总计** | **80+** | **80%** |
+| 🧪 单元测试 | 1700+ | 跨所有 feature gate 的 lib 测试 |
+| 🔗 集成测试 | 多套件 | `tests/integration_*.rs` 按 feature 组织 |
+| 📚 文档测试 | 32 | rustdoc 示例 |
+| ⚡ 性能测试 | 10 个 bench 文件 | `benches/*.rs`（criterion） |
+| **📈 总计** | **1700+** | 运行 `cargo test --features full` |
+
+**覆盖率目标**：≥ 80%（CI 通过 `cargo llvm-cov` 强制执行）。
 
 </details>
 
@@ -725,6 +806,8 @@ cargo test test_name
 ## <span id="performance">📊 性能</span>
 
 ### ⚡ 基准测试结果
+
+> 以下为**参考预估值**。实际性能取决于配置复杂度和硬件环境。建议运行 `cargo bench` 获取针对您场景的真实数据。
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -887,23 +970,57 @@ gantt
 
 ### ✅ 已完成
 
+**核心功能**
 - [x] 类型安全配置
 - [x] 多格式支持（TOML、YAML、JSON、INI）
 - [x] 环境变量覆盖
-- [x] 配置验证系统
-- [x] Schema 生成
+- [x] 命令行参数覆盖
+
+**验证系统**
+- [x] 配置验证系统（garde）
+- [x] 并行验证支持（rayon）
+- [x] 异步预加载验证器
+
+**高级特性**
+- [x] Schema 生成（JSON Schema + TypeScript 类型）
 - [x] 文件监控与热重载
 - [x] 审计日志
-- [x] 加密存储支持
+- [x] 加密存储支持（XChaCha20-Poly1305）
+- [x] 动态字段（无锁）
+- [x] 模块化配置（modules）
+- [x] 上下文感知配置（租户感知）
+- [x] 配置迁移
+- [x] 快照与回滚
+- [x] 变量插值
+- [x] 环境配置（profile）
+- [x] 渐进式重载（金丝雀发布）
+
+**远程与总线**
 - [x] 远程配置支持（etcd、Consul、HTTP）
+- [x] HTTP 轮询
+- [x] HashiCorp Vault 集成
+- [x] Redis 缓存
+- [x] 配置事件总线（NATS / Redis Pub-Sub）
+
+**安全**
+- [x] 安全模块（环境变量验证、错误信息清理、SSRF 防护）
+- [x] 密钥管理与轮换
+- [x] Nonce 重用检测
 
 </td>
 <td width="50%" style="padding: 16px">
 
 ### 📋 计划中
 
-- [ ] 性能优化
-- [ ] 云原生集成增强
+**性能优化**
+- [ ] 基准测试套件完善（criterion 基线）
+- [ ] 大型配置的内存占用优化
+- [ ] 高频读取的零拷贝热路径
+
+**云原生集成增强**
+- [ ] Kubernetes ConfigMap 集成
+- [ ] 服务网格支持（Istio/Linkerd）
+- [ ] 分布式追踪集成
 
 </td>
 </tr>

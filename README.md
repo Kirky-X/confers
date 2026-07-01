@@ -139,7 +139,6 @@ let config = AppConfig::load_sync()?;
 |   ⚡   | **Parallel Validation**        | Parallel validation for large configs (`parallel` feature)  |
 |   📈   | **System Monitoring**          | Memory usage monitoring (`metrics` feature)              |
 |   🔧   | **Configuration Diff**         | Compare configs with multiple output formats                |
-|   🎨   | **Interactive Wizard**         | Generate config templates via CLI                           |
 |   🛡️   | **Security Enhancements**      | Nonce reuse detection, SSRF protection                      |
 |   🔑   | **Key Management**             | Built-in key generation and rotation                        |
 
@@ -191,6 +190,7 @@ graph LR
 | `yaml`                |   ❌    | YAML configuration files                             | Stable    |
 | `ini`                 |   ❌    | INI configuration files                              | Stable    |
 | `env`                 |   ✅    | Environment variable support                         | Stable    |
+| `dotenv`              |   ❌    | `.env` file support (alias of `env`)                 | Stable    |
 | **Core Features**     |         |                                                      |           |
 | `validation`          |   ❌    | Configuration validation (garde)                     | Stable    |
 | `watch`               |   ❌    | File watching and hot reload                         | Stable    |
@@ -293,6 +293,7 @@ cd examples && ./verify_examples.sh
 | `yaml`                | YAML format support              | ❌      |
 | `ini`                 | INI format support               | ❌      |
 | `env`                 | Environment variable support     | ✅      |
+| `dotenv`              | `.env` file support (alias of `env`) | ❌      |
 | **Core Features**     |                                  |         |
 | `validation`          | Configuration validation (garde) | ❌      |
 | `watch`               | File watching and hot reload     | ❌      |
@@ -300,6 +301,7 @@ cd examples && ./verify_examples.sh
 | `cli`                 | Command-line tool                | ❌      |
 | `schema`              | JSON Schema generation           | ❌      |
 | `parallel`            | Parallel validation              | ❌      |
+| `typescript-schema`   | TypeScript type generation       | ❌      |
 | **Advanced Features** |                                  |         |
 | `audit`               | Audit logging                    | ❌      |
 | `metrics`             | Metrics collection               | ❌      |
@@ -309,11 +311,14 @@ cd examples && ./verify_examples.sh
 | `snapshot`            | Snapshot rollback                | ❌      |
 | `profile`             | Environment configuration        | ❌      |
 | `interpolation`       | Variable interpolation           | ❌      |
+| `preload-validator`   | Async preload validator          | ❌      |
 | **Remote Sources**    |                                  |         |
 | `remote`              | HTTP polling                     | ❌      |
+| `poll`                | HTTP polling (alias of `remote`) | ❌      |
 | `etcd`                | Etcd integration                 | ❌      |
 | `consul`              | Consul integration               | ❌      |
 | `cache-redis`         | Redis cache                      | ❌      |
+| `vault`               | HashiCorp Vault integration      | ❌      |
 | **Message Bus**       |                                  |         |
 | `config-bus`          | Configuration event bus          | ❌      |
 | `nats-bus`            | NATS message bus                 | ❌      |
@@ -553,7 +558,7 @@ let service = MyService::new(shared_config);
 | ❓ [FAQ](docs/FAQ.md)                                       | Frequently asked questions                      |
 | 📖 [Contributing Guide](docs/CONTRIBUTING.md)               | Code contribution guidelines                    |
 | 📘 [API Reference](docs/API_REFERENCE.md)                   | Complete API documentation                      |
-| 🏗️ [Architecture Decisions](docs/architecture_decisions.md) | ADR documentation                               |
+| 🏗️ [Architecture Decisions](docs/adr/) | ADR documentation                               |
 | 📚 [Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
 
 ### 🔄 BrickArchitecture Migration Guide
@@ -766,7 +771,6 @@ graph TB
 | **Audit Logging**            | Record access and change history      | ✅ Stable |
 | **Encrypted Storage**        | XChaCha20-Poly1305 encrypted storage  | ✅ Stable |
 | **Configuration Diff**       | Multiple output formats               | ✅ Stable |
-| **Interactive Wizard**       | Template generation                   | ✅ Stable |
 
 ---
 
@@ -859,12 +863,17 @@ cargo test test_name
 <details style="padding:16px; margin: 16px 0">
 <summary style="cursor:pointer; font-weight:600; color:#166534">📊 Test Statistics</summary>
 
-| Category             | Test Count | Coverage |
-| -------------------- | ---------- | -------- |
-| 🧪 Unit Tests        | 50+        | 85%      |
-| 🔗 Integration Tests | 20+        | 80%      |
-| ⚡ Performance Tests | 10+        | 75%      |
-| **📈 Total**         | **80+**    | **80%**  |
+> Data source: `cargo test --features full` (as of 2026-07). Numbers grow with code evolution; re-run the command to verify.
+
+| Category             | Test Count        | Notes                                  |
+| -------------------- | ----------------- | -------------------------------------- |
+| 🧪 Unit Tests        | 1700+             | lib tests across all feature gates     |
+| 🔗 Integration Tests | multiple suites   | `tests/integration_*.rs` per feature   |
+| 📚 Doc Tests         | 32                | rustdoc examples                       |
+| ⚡ Performance Tests | 10 bench files    | `benches/*.rs` (criterion)             |
+| **📈 Total**         | **1700+**         | Run `cargo test --features full`       |
+
+**Coverage target:** ≥ 80% (enforced in CI via `cargo llvm-cov`).
 
 </details>
 
@@ -873,6 +882,8 @@ cargo test test_name
 ## <span id="performance">📊 Performance</span>
 
 ### ⚡ Benchmark Results
+
+> The following are **reference estimates**. Actual performance depends on configuration complexity and hardware. Run `cargo bench` to obtain measurements for your specific scenario.
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1034,23 +1045,57 @@ gantt
 
 ### ✅ Completed
 
+**Core Features**
 - [x] Type-safe Configuration
 - [x] Multi-format Support (TOML, YAML, JSON, INI)
 - [x] Environment Variable Override
-- [x] Configuration Validation System
-- [x] Schema Generation
+- [x] CLI Argument Override
+
+**Validation System**
+- [x] Configuration Validation System (garde)
+- [x] Parallel Validation Support (rayon)
+- [x] Async Preload Validator
+
+**Advanced Features**
+- [x] Schema Generation (JSON Schema + TypeScript types)
 - [x] File Watching & Hot Reload
 - [x] Audit Logging
-- [x] Encrypted Storage Support
+- [x] Encrypted Storage Support (XChaCha20-Poly1305)
+- [x] Dynamic Fields (lock-free)
+- [x] Modular Configuration (modules)
+- [x] Context-aware Configuration (tenant-aware)
+- [x] Configuration Migration
+- [x] Snapshot & Rollback
+- [x] Variable Interpolation
+- [x] Environment Profiles
+- [x] Progressive Reload (canary rollout)
+
+**Remote & Bus**
 - [x] Remote Configuration Support (etcd, Consul, HTTP)
+- [x] HTTP Polling
+- [x] HashiCorp Vault Integration
+- [x] Redis Cache
+- [x] Configuration Event Bus (NATS / Redis Pub-Sub)
+
+**Security**
+- [x] Security Module (env validation, error sanitization, SSRF protection)
+- [x] Key Management & Rotation
+- [x] Nonce Reuse Detection
 
 </td>
 <td width="50%" style="padding: 16px">
 
 ### 📋 Planned
 
-- [ ] Performance Optimization
-- [ ] Cloud-native Integration Enhancements
+**Performance Optimization**
+- [ ] Benchmark suite refinement (criterion baselines)
+- [ ] Memory footprint optimization for large configs
+- [ ] Zero-copy hot path for high-frequency reads
+
+**Cloud-native Integration Enhancements**
+- [ ] Kubernetes ConfigMap integration
+- [ ] Service mesh support (Istio/Linkerd)
+- [ ] Distributed tracing integration
 
 </td>
 </tr>
