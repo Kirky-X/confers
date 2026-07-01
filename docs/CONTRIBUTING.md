@@ -194,23 +194,19 @@ This project uses feature flags to enable different functionalities. During deve
 - `encryption`: Configuration encryption (XChaCha20-Poly1305)
 - `cli`: Command-line tool
 - `schema`: JSON Schema generation
-- `parallel`: Parallel validation
 
 **Advanced features:**
 - `audit`: Audit logging
-- `metrics`: Metrics collection
 - `dynamic`: Dynamic fields
 - `progressive-reload`: Progressive reload
 - `migration`: Configuration migration
 - `snapshot`: Snapshot rollback
-- `profile`: Environment configuration
 - `interpolation`: Variable interpolation
 
 **Remote sources:**
 - `remote`: HTTP polling
 - `etcd`: Etcd integration
 - `consul`: Consul integration
-- `cache-redis`: Redis cache
 
 **Message bus:**
 - `config-bus`: Configuration event bus

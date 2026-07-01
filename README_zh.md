@@ -35,7 +35,7 @@
 </p>
 
 <p align="center">
-  <strong>现代化的 Rust 类型安全配置管理库</strong>
+  <strong>生产级 Rust 配置库，零样板代码</strong>
 </p>
 
 <p align="center">
@@ -155,9 +155,7 @@ let config = AppConfig::load_sync()?;
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
 | <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | 分布式系统 |
-| <span style="color:#5B21B6; padding:4px 8px">full</span> | 所有功能 | 完整功能集 |
-
-**注意：** `cli` 功能会自动包含 `validation` 和 `encryption` 依赖。
+| <span style="color:#5B21B6; padding:4px 8px">full</span>        | 所有功能 | 完整功能集 |
 
 
 ### 🎨 功能架构
@@ -197,7 +195,7 @@ graph LR
 | **默认** | `confers = "0.3.0"` | 包含 `toml`、`json`、`env`（默认特性） |
 | **最小化** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
 | **推荐** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
-| **CLI 工具** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI 包含验证和加密 |
+| **CLI 工具** | `confers = { version = "0.3.0", features = ["cli"] }` | CLI 工具（不含验证/加密） |
 | **完整** | `confers = { version = "0.3.0", features = ["full"] }` | 所有功能 |
 
 **单独功能说明：**
@@ -249,7 +247,7 @@ graph LR
 | `export` | `cli` | - | 导出合并后的配置 |
 | `snapshot` | `cli` | `snapshot` | 管理配置快照 |
 
-**注意**：`cli` 功能为方便起见自动包含 `validation` 和 `encryption`。
+**注意**：`cli` 功能提供用于配置管理的命令行工具。
 
 </td>
 </tr>
@@ -877,18 +875,18 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 | 措施 | 描述 | API 参考 |
 |---------|-------------|---------------|
-| ✅ **内存保护** | 使用 zeroization 自动安全清理 | `SecureString`、`zeroize` crate |
+| ✅ **内存保护** | 使用 zeroization 自动安全清理 | `SecretString`、`zeroize` crate |
 | ✅ **侧信道保护** | 常量时间加密操作 | XChaCha20-Poly1305 加密 |
-| ✅ **输入验证** | 全面的输入清理 | `ConfigValidator`、`InputValidator` |
+| ✅ **输入验证** | 全面的输入清理 | `Validate` trait、`garde` crate |
 | ✅ **审计日志** | 完整的操作追踪 | `AuditConfig`、审计追踪 |
 | ✅ **SSRF 防护** | 内置的服务端请求伪造防护 | `HttpPolledSource`、`is_ip_blocked()` |
-| ✅ **敏感数据检测** | 自动检测敏感字段 | `SensitiveDataDetector` |
+| ✅ **敏感数据检测** | 自动检测敏感字段 | `#[config(sensitive = true)]` 派生宏 |
 | ✅ **错误信息清理** | 从错误消息中移除敏感信息 | `ErrorSanitizer`、`SecureLogger` |
 | ✅ **Nonce 重用检测** | 防止加密 nonce 重用 | 内置于加密模块 |
 
 ### 🔐 安全 API
 
-```rust
+```rust,ignore
 // 安全字符串处理
 use confers::security::{SecureString, SensitivityLevel};
 let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
@@ -923,7 +921,7 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ### 📧 报告安全问题
 
-请将安全漏洞报告至：**security@confers.example**
+请将安全漏洞报告至：**security@confers.dev**
 
 </details>
 

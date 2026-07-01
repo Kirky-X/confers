@@ -36,7 +36,7 @@
 </p>
 
 <p align="center">
-  <strong>A modern, type-safe configuration management library for Rust</strong>
+  <strong>A production-ready Rust configuration library with zero boilerplate</strong>
 </p>
 
 <p align="center">
@@ -155,7 +155,7 @@ let config = AppConfig::load_sync()?;
 | <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit`                                                                 | Distributed systems                   |
 | <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
 
-**Note:** Default features include `toml`, `json`, `env`. The `cli` feature automatically includes `validation` and `encryption` dependencies.
+**Note:** Default features include `toml`, `json`, `env`.
 
 ### 🎨 Feature Architecture
 
@@ -268,7 +268,7 @@ cd examples && ./verify_examples.sh
 | **Default**        | `confers = "0.3.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
 | **Minimal**        | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
 | **Recommended**    | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation                           |
-| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }`                                   | CLI with validation and encryption                |
+| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
 | **Full**           | `confers = { version = "0.3.0", features = ["full"] }`                                  | All features                                      |
 
 **Individual Features:**
@@ -598,20 +598,20 @@ cargo install confers
 confers --help
 
 # Inspect configuration - list all keys with their sources
-confers config.toml inspect
+confers --config config.toml inspect
 
 # Validate configuration file
-confers config.toml validate
+confers --config config.toml validate
 
 # Compare configuration files
 confers diff --base config1.toml --overlay config2.toml
 
 # Export merged configuration
-confers config.toml export --format json
+confers --config config.toml export --format json
 
 # Manage configuration snapshots
-confers config.toml snapshot list
-confers config.toml snapshot diff --latest 2
+confers --config config.toml snapshot list
+confers --config config.toml snapshot diff --latest 2
 ```
 
 **Note**: The CLI tool requires the `cli` feature to be enabled.
@@ -945,18 +945,18 @@ test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
 
 | Measure                         | Description                                     | API Reference                         |
 | ------------------------------- | ----------------------------------------------- | ------------------------------------- |
-| ✅ **Memory Protection**        | Automatic secure cleanup with zeroization       | `SecureString`, `zeroize` crate       |
+| ✅ **Memory Protection**        | Automatic secure cleanup with zeroization       | `SecretString`, `zeroize` crate       |
 | ✅ **Side-channel Protection**  | Constant-time cryptographic operations          | XChaCha20-Poly1305 encryption         |
-| ✅ **Input Validation**         | Comprehensive input sanitization                | `ConfigValidator`, `InputValidator`   |
+| ✅ **Input Validation**         | Comprehensive input sanitization                | `Validate` trait, `garde` crate       |
 | ✅ **Audit Logging**            | Full operation tracking                         | `AuditConfig`, audit trails           |
 | ✅ **SSRF Protection**          | Built-in Server-Side Request Forgery prevention | `HttpPolledSource`, `is_ip_blocked()` |
-| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields         | `SensitiveDataDetector`               |
+| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields         | `#[config(sensitive = true)]` proc-macro |
 | ✅ **Error Sanitization**       | Remove sensitive info from error messages       | `ErrorSanitizer`, `SecureLogger`      |
 | ✅ **Nonce Reuse Detection**    | Prevent cryptographic nonce reuse               | Built into encryption module          |
 
 ### 🔐 Security APIs
 
-```rust
+```rust,ignore
 // Secure string handling
 use confers::security::{SecureString, SensitivityLevel};
 let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
@@ -991,7 +991,7 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ### 📧 Reporting Security Issues
 
-Please report security vulnerabilities to: **security@confers.example**
+Please report security vulnerabilities to: **security@confers.dev**
 
 </details>
 

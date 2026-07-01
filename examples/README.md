@@ -70,7 +70,7 @@ cargo run --bin snapshot
 | snapshot | 配置快照持久化 | toml, snapshot | ADR-033 |
 | cli_integration | ConfigClap 派生宏 CLI 集成 | cli | ADR-011 |
 | json_schema | ConfigSchema 派生宏 JSON Schema 生成 | schema | ADR-012 |
-| metrics | 指标收集与 Prometheus 导出 | metrics | ADR-014 |
+| metrics | 指标收集与 Prometheus 导出 | - | ADR-014 |
 | validation | 基于 garde 的字段级验证 | validation | ADR-010 |
 | full_stack | 完整功能栈综合示例 | full | - |
 
@@ -304,7 +304,7 @@ export NATS_URL=nats://127.0.0.1:4222
 
 - [Confers API 文档](https://docs.rs/confers)
 - [项目主 README](../README.md)
-- [开发指南](../dev-v2.md)
+- [开发指南](../docs/dev-v2.md)
 - [ADR 文档](../docs/adr/)
 
 ## 贡献

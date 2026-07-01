@@ -59,15 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConfigInjector`: Secure configuration injection
 - `SecureString`: Auto-zeroing secure string
 
-#### CLI Enhanced Commands
-
-- `confers generate`: Configuration template generation
-- `confers wizard`: Interactive configuration wizard
-- `confers completions`: Shell completion generation
-
 #### Parallel Validation
 
-- Added `parallel` feature (rayon)
 - Improved validation performance for large configurations
 
 ### 🔧 Improved
@@ -82,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed non-existent remote builder methods (`with_remote_config`, etc.)
   - Replaced with `source()` method examples for remote config
   - Updated feature flags list to match Cargo.toml
-  - Added missing features documentation (config-bus, progressive-reload, metrics, etc.)
+  - Added missing features documentation (config-bus, progressive-reload, etc.)
 
 ### 🐛 Fixed
 

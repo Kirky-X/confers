@@ -76,7 +76,7 @@ Confers includes multiple layers of security to protect your configuration data.
 
 All sensitive configuration data can be encrypted at rest using XChaCha20-Poly1305:
 
-```rust
+```rust,ignore
 use confers::{Config, encryption::EncryptionManager};
 
 // Enable encryption feature in Cargo.toml
@@ -99,7 +99,7 @@ let encrypted = manager.encrypt(&config)?;
 
 Sensitive data is automatically zeroized when dropped:
 
-```rust
+```rust,ignore
 use confers::security::SecureString;
 
 let secret = SecureString::new("api-key-12345", SensitivityLevel::High);
@@ -110,7 +110,7 @@ let secret = SecureString::new("api-key-12345", SensitivityLevel::High);
 
 All user inputs are validated to prevent injection attacks:
 
-```rust
+```rust,ignore
 use confers::validator::{InputValidator, ValidationConfig};
 
 let validator = InputValidator::new()
@@ -124,7 +124,7 @@ let result = validator.validate(user_input);
 
 Remote configuration URLs are validated to prevent Server-Side Request Forgery:
 
-```rust
+```rust,ignore
 use confers::remote::HttpProvider;
 
 let provider = HttpProvider::new()
@@ -136,7 +136,7 @@ let provider = HttpProvider::new()
 
 All configuration access and changes are logged:
 
-```rust
+```rust,ignore
 use confers::audit::{AuditConfig, AuditLevel};
 
 let audit = AuditConfig::new()
@@ -148,7 +148,7 @@ audit.log_access("config.load", "user@example.com")?;
 
 ### Security Module APIs
 
-```rust
+```rust,ignore
 // EnvSecurityValidator - Environment variable security
 use confers::security::EnvSecurityValidator;
 let validator = EnvSecurityValidator::new();
