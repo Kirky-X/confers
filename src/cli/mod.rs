@@ -864,7 +864,11 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-/// Prune old snapshots
+/// Prune old snapshots.
+///
+/// Per Rule 12 (Fail Loud): all skipped/failed files are printed to stderr
+/// with their reason, and the summary reports separate counts for removed,
+/// failed, and skipped files. `removed_count` counts only successful removals.
 fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     use std::fs;
 
@@ -873,41 +877,84 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         return Ok(());
     }
 
-    // Parse duration (e.g., "30d" -> 30 days)
+    // Parse duration (e.g., "30d" -> 30 days). Fail loudly on invalid input
+    // instead of silently defaulting to 30 (Rule 12).
     let days = older_than
         .trim_end_matches('d')
         .trim_end_matches('D')
         .parse::<u64>()
-        .unwrap_or(30);
+        .with_context(|| {
+            format!(
+                "invalid duration '{}': expected a number of days with optional 'd' suffix (e.g., '30d')",
+                older_than
+            )
+        })?;
 
     let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 60 * 60);
 
-    let entries: Vec<_> = fs::read_dir(directory)?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            let path = e.path();
-            path.extension()
-                .map(|ext| ext == "json" || ext == "toml")
-                .unwrap_or(false)
-        })
-        .collect();
+    // Collect candidate entries. Propagate read_dir errors (don't silently skip).
+    let mut entries: Vec<std::fs::DirEntry> = Vec::new();
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let is_snapshot = path
+            .extension()
+            .map(|ext| ext == "json" || ext == "toml")
+            .unwrap_or(false);
+        if is_snapshot {
+            entries.push(entry);
+        }
+    }
 
-    let mut removed_count = 0;
+    let mut removed_count: usize = 0;
+    let mut failed_count: usize = 0;
+    let mut skipped_count: usize = 0;
+
     for entry in entries {
-        if let Ok(metadata) = entry.metadata() {
-            if let Ok(modified) = metadata.modified() {
-                if modified < cutoff {
-                    println!("Removing: {}", entry.file_name().display());
-                    let _ = fs::remove_file(entry.path());
-                    removed_count += 1;
+        // Metadata and mtime errors are reported and counted as skipped,
+        // not silently ignored (Rule 12).
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!(
+                    "SKIP: cannot read metadata for {}: {}",
+                    entry.path().display(),
+                    e
+                );
+                skipped_count += 1;
+                continue;
+            }
+        };
+        let modified = match metadata.modified() {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!(
+                    "SKIP: cannot read modification time for {}: {}",
+                    entry.path().display(),
+                    e
+                );
+                skipped_count += 1;
+                continue;
+            }
+        };
+
+        if modified < cutoff {
+            println!("Removing: {}", entry.file_name().display());
+            // Delete failures are reported and counted as failed, not swallowed.
+            // removed_count only counts successful removals (Rule 12).
+            match fs::remove_file(entry.path()) {
+                Ok(()) => removed_count += 1,
+                Err(e) => {
+                    eprintln!("FAIL: cannot remove {}: {}", entry.path().display(), e);
+                    failed_count += 1;
                 }
             }
         }
     }
 
     println!(
-        "Pruned {} snapshot(s) older than {} days",
-        removed_count, days
+        "Pruned {} snapshot(s) older than {} days ({} failed, {} skipped)",
+        removed_count, days, failed_count, skipped_count
     );
     Ok(())
 }
@@ -2313,11 +2360,22 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_snapshot_prune_invalid_duration_defaults() {
+    fn test_cmd_snapshot_prune_invalid_duration_errors() {
         let dir = tempfile::tempdir().unwrap();
-        // Invalid duration "abc" -> parse fails -> defaults to 30 days
+        // Invalid duration "abc" must now return an error (Rule 12: Fail Loud),
+        // not silently default to 30 days.
         let result = cmd_snapshot_prune("abc", &dir.path().to_path_buf());
-        assert!(result.is_ok());
+        assert!(
+            result.is_err(),
+            "invalid duration should error, not silently default; got: {:?}",
+            result
+        );
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("invalid duration"),
+            "error message should explain the invalid duration; got: {}",
+            msg
+        );
     }
 
     #[test]
@@ -2326,6 +2384,32 @@ mod tests {
         // "7D" should trim_end_matches('D') and parse to 7
         let result = cmd_snapshot_prune("7D", &dir.path().to_path_buf());
         assert!(result.is_ok());
+    }
+
+    /// A-H-17/S-M-5: verify that removed_count counts only successful removals
+    /// and that old files are actually deleted.
+    #[test]
+    fn test_cmd_snapshot_prune_removes_old_files_and_counts_correctly() {
+        use std::time::SystemTime;
+        let dir = tempfile::tempdir().unwrap();
+
+        // Create a snapshot file and set its mtime to 2 days ago
+        let old_file = dir.path().join("old_snapshot.json");
+        std::fs::write(&old_file, r#"{"k":1}"#).unwrap();
+        let two_days_ago = SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 60 * 60);
+        let f = std::fs::File::open(&old_file).unwrap();
+        f.set_modified(two_days_ago).unwrap();
+        drop(f);
+
+        // Prune with 1-day cutoff — the old file should be removed
+        let result = cmd_snapshot_prune("1d", &dir.path().to_path_buf());
+        assert!(result.is_ok(), "prune should succeed; got: {:?}", result);
+
+        // The old file must be gone
+        assert!(
+            !old_file.exists(),
+            "old snapshot file should have been removed"
+        );
     }
 
     // ============== cmd_snapshot dispatch ==============
