@@ -14,7 +14,7 @@ categories = ["config", "development-tools::build-tools"]
 
 [dependencies]
 arc-swap = { version = "1.9", optional = true }
-async-nats = { version = "0.46", optional = true }
+async-nats = { version = "0.49", optional = true }
 async-stream = { version = "0.3", optional = true }
 async-trait = { version = "0.1", optional = true }
 base64 = "0.22"
@@ -48,7 +48,6 @@ toml = { version = "1.1", features = ["preserve_order"], optional = true }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.18", features = ["tls"], optional = true }
-consul-client = { version = "0.1.0-alpha.0", optional = true }
 ipnet = { version = "2.11", optional = true }
 redis = { version = "1.1", features = ["tokio-comp"], optional = true }
 url = "2.5"
@@ -150,7 +149,7 @@ remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
-consul = ["remote", "dep:consul-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
+consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 cache-redis = ["dep:redis", "dep:tokio", "dep:async-trait", "dep:tokio-stream"]
 
 # Message bus
@@ -172,7 +171,6 @@ full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "wa
 minimal = ["env", "json"]
 distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "metrics", "audit"]
 etcd-client = ["dep:etcd-client"]
-consul-client = ["dep:consul-client"]
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["async_tokio"] }
@@ -182,7 +180,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }
 # Required by integration_bus.rs::test_nats_bus_options to construct
 # async_nats::ConnectOptions. confers does not re-export async_nats.
-async-nats = "0.46"
+async-nats = "0.49"
 
 [profile.release]
 opt-level = 3
