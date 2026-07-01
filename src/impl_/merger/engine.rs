@@ -153,16 +153,22 @@ fn build_annotated_value(
 /// Optimized COW map merge.
 ///
 /// Key optimizations:
-/// 1. Fast path: if high has no keys, return low unchanged
-/// 2. Single-pass: build modifications in-place on cloned map
-/// 3. Avoid intermediate Vec allocation
-/// 4. Use Arc::make_mut for efficient COW
+/// 1. Arc::ptr_eq fast path: if low_map and high_map share the same allocation,
+///    return immediately (zero allocation, zero copy)
+/// 2. Empty fast paths: if either map is empty, return the other's Arc
+/// 3. Single-pass change detection: scan high keys against low to detect no-op case
+/// 4. Single clone: only clone low_map once when modifications are actually needed
 fn merge_maps_with_cow(
     low_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     high_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     strategy: &MergeStrategy,
     depth: usize,
 ) -> ConfigResult<ConfigValue> {
+    // Fast path: identical Arc → no merge work needed at all
+    if Arc::ptr_eq(low_map, high_map) {
+        return Ok(ConfigValue::Map(Arc::clone(low_map)));
+    }
+
     let low = low_map.as_ref();
     let high = high_map.as_ref();
 
@@ -235,17 +241,21 @@ fn merge_maps_with_cow(
 
 /// Check if two values are equal after applying a merge strategy.
 /// Used for the fast-path detection of no modifications.
+///
+/// Returns true when applying `strategy` to `(low, high)` yields a result equal
+/// to `low` (i.e., no modification needed). For Map/Map with non-Replace strategies,
+/// uses `Arc::ptr_eq` for O(1) pointer comparison; falls back to false (conservative)
+/// when the maps are different allocations, since a full deep comparison would
+/// defeat the purpose of this fast-path check.
 #[inline]
 fn values_equal(low: &ConfigValue, high: &ConfigValue, strategy: &MergeStrategy) -> bool {
     match (low, high, strategy) {
-        // Replace strategy: values are always different unless they're both Null
+        // Replace strategy: result == high, so no change iff low == high
         (_, _, MergeStrategy::Replace) => low == high,
-        // For deep merge: maps need special handling
-        (ConfigValue::Map(_), ConfigValue::Map(_), _) => {
-            // We can't cheaply know if maps are equal here without full comparison
-            // err on the side of saying they might differ (conservative)
-            false
-        }
+        // For Map/Map with non-Replace strategies: use Arc::ptr_eq for O(1) check.
+        // If the maps share the same allocation, merge is a no-op.
+        // If they don't, conservatively report "may differ" to avoid O(n) comparison.
+        (ConfigValue::Map(l), ConfigValue::Map(r), _) => Arc::ptr_eq(l, r),
         // String join: result differs from low
         (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::Join { .. }) => false,
         (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::JoinAppend { .. }) => false,
@@ -742,12 +752,56 @@ mod tests {
     }
 
     #[test]
-    fn test_values_equal_map_always_false() {
+    fn test_values_equal_map_different_arc_false() {
+        // Two maps with different Arc allocations: conservatively report "may differ"
+        // (avoids O(n) deep comparison in the fast-path check)
         let m1 = ConfigValue::Map(Arc::new(IndexMap::new()));
         let m2 = ConfigValue::Map(Arc::new(IndexMap::new()));
-        // For non-Replace strategies, Map/Map always returns false (conservative)
         assert!(!values_equal(&m1, &m2, &MergeStrategy::Append));
         assert!(!values_equal(&m1, &m2, &MergeStrategy::DeepMerge));
+    }
+
+    #[test]
+    fn test_values_equal_map_same_arc_true() {
+        // S-C-5 regression: same Arc allocation means merge is a no-op
+        let shared = Arc::new(IndexMap::from_iter([(
+            Arc::from("k"),
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "k"),
+        )]));
+        let m1 = ConfigValue::Map(Arc::clone(&shared));
+        let m2 = ConfigValue::Map(Arc::clone(&shared));
+        assert!(values_equal(&m1, &m2, &MergeStrategy::Append));
+        assert!(values_equal(&m1, &m2, &MergeStrategy::DeepMerge));
+    }
+
+    #[test]
+    fn test_merge_maps_with_cow_ptr_eq_fast_path() {
+        // S-C-5 regression: merging a map with itself (same Arc) must reuse the
+        // same Arc allocation without cloning
+        let e = MergeEngine::new();
+        let shared = Arc::new(IndexMap::from_iter([(
+            Arc::from("k"),
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "k"),
+        )]));
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::clone(&shared)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::clone(&shared)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        if let ConfigValue::Map(result_arc) = &result.inner {
+            assert!(
+                Arc::ptr_eq(result_arc, &shared),
+                "merge of Arc::ptr_eq maps must return the same Arc (zero allocation)"
+            );
+        } else {
+            panic!("expected ConfigValue::Map, got {:?}", result.inner);
+        }
     }
 
     #[test]
