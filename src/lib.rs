@@ -96,7 +96,7 @@ pub mod bus;
 #[cfg(feature = "cli")]
 pub mod cli;
 
-#[cfg(feature = "typescript-schema")]
+#[cfg(feature = "schema")]
 pub mod schema;
 
 #[cfg(feature = "security")]

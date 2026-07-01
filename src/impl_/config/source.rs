@@ -318,8 +318,8 @@ impl Source for EnvSource {
     fn collect(&self) -> ConfigResult<AnnotatedValue> {
         let mut map = indexmap::IndexMap::new();
 
-        // Load .env file entries first (lower priority) if dotenv feature is enabled
-        #[cfg(feature = "dotenv")]
+        // Load .env file entries first (lower priority) if env feature is enabled
+        #[cfg(feature = "env")]
         {
             if let Ok(iter) = dotenvy::dotenv_iter() {
                 for item in iter.flatten() {
