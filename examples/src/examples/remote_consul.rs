@@ -10,8 +10,13 @@
 //! - Configuration watching and updates
 //!
 //! Run:
-//!   # Start Consul
+//!   # Option 1: Start Consul with TLS (recommended, uses HTTPS port 8501)
+//!   # Generate certificates first - see demo_tls_configuration() below
+//!   docker run -d --name consul -p 8501:8501 consul:latest
+//!
+//!   # Option 2: Start Consul without TLS (local development only)
 //!   docker run -d --name consul -p 8500:8500 consul:latest
+//!   export CONSUL_ADDRESS=http://127.0.0.1:8500
 //!
 //!   # Run example
 //!   cargo run --bin remote_consul
@@ -76,9 +81,14 @@ pub struct DatabaseConfig {
 // =============================================================================
 
 /// Consul client configuration
+///
+/// # Security
+/// Production deployments MUST use HTTPS (e.g., `https://consul.example.com:8501`)
+/// to protect ACL tokens and configuration data in transit. HTTP is only acceptable
+/// for local development on loopback addresses and must never be used across a network.
 #[derive(Debug, Clone)]
 pub struct ConsulConfig {
-    /// Consul HTTP address
+    /// Consul HTTPS address (use `https://` in production; HTTP only for local dev)
     pub address: String,
 
     /// Datacenter (optional)
@@ -100,7 +110,7 @@ pub struct ConsulConfig {
 impl Default for ConsulConfig {
     fn default() -> Self {
         Self {
-            address: "http://127.0.0.1:8500".to_string(),
+            address: "https://127.0.0.1:8501".to_string(),
             datacenter: None,
             token: None,
             namespace: None,
@@ -275,9 +285,36 @@ impl ConsulClient {
         })
     }
 
+    /// Ensure the URL uses HTTPS to prevent cleartext transmission of sensitive data.
+    ///
+    /// In production, this guard prevents accidental data exposure over unencrypted
+    /// channels. HTTP is permitted only for loopback addresses (local development);
+    /// any other HTTP URL is rejected.
+    fn ensure_https(&self, url: &str) -> Result<(), Box<dyn std::error::Error>> {
+        if url.starts_with("https://") {
+            return Ok(());
+        }
+        // Allow HTTP only for loopback addresses (local development)
+        if url.starts_with("http://127.0.0.1") || url.starts_with("http://localhost") {
+            warn!(
+                "SECURITY: Using unencrypted HTTP for local Consul ({}). \
+                 Production deployments MUST use HTTPS.",
+                url
+            );
+            return Ok(());
+        }
+        Err(format!(
+            "SECURITY: Refusing to transmit sensitive data over unencrypted HTTP: {}. \
+             Configure Consul with TLS and use https:// addresses.",
+            url
+        )
+        .into())
+    }
+
     /// Test connection to Consul
     pub async fn test_connection(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let url = format!("{}/v1/status/leader", self.config.address);
+        self.ensure_https(&url)?;
         info!("Testing Consul connection: {}", url);
 
         let mut request = self.client.get(&url);
@@ -328,6 +365,7 @@ impl ConsulClient {
         }
 
         info!("Reading Consul KV prefix: {}", prefix);
+        self.ensure_https(&url)?;
 
         let mut request = self.client.get(&url);
 
@@ -382,6 +420,7 @@ impl ConsulClient {
         value: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/v1/kv/{}", self.config.address, key);
+        self.ensure_https(&url)?;
         info!("Writing key to Consul: {}", key);
 
         let mut request = self.client.put(&url).body(value.to_string());
@@ -404,6 +443,7 @@ impl ConsulClient {
     /// Delete a key
     pub async fn delete_key(&self, key: &str) -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{}/v1/kv/{}", self.config.address, key);
+        self.ensure_https(&url)?;
         info!("Deleting key from Consul: {}", key);
 
         let mut request = self.client.delete(&url);
@@ -539,7 +579,7 @@ async fn demo_basic_connection() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== Demo 1: Basic Connection ===\n");
 
     let address =
-        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
+        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "https://127.0.0.1:8501".to_string());
 
     let config = ConsulConfig::new(&address);
     let client = ConsulClient::new(config)?;
@@ -549,7 +589,7 @@ async fn demo_basic_connection() -> Result<(), Box<dyn std::error::Error>> {
         Ok(true) => info!("✓ Consul is reachable"),
         Ok(false) => {
             warn!("Consul is not reachable (this is normal if Consul is not running)");
-            info!("Start Consul with: docker run -d --name consul -p 8500:8500 consul:latest");
+            info!("Start Consul with TLS: docker run -d --name consul -p 8501:8501 consul:latest");
         }
         Err(e) => error!("Connection error: {}", e),
     }
@@ -660,7 +700,7 @@ async fn demo_acl_authentication() -> Result<(), Box<dyn std::error::Error>> {
     info!("");
     info!("4. Use token in client:");
 
-    let config = ConsulConfig::new("http://127.0.0.1:8500").with_token("your-acl-token-here");
+    let config = ConsulConfig::new("https://127.0.0.1:8501").with_token("your-acl-token-here");
 
     info!("   ConsulConfig {{");
     info!("     address: {}", config.address);
@@ -685,7 +725,7 @@ async fn demo_config_management() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n=== Demo 4: Configuration Management ===\n");
 
     let address =
-        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "http://127.0.0.1:8500".to_string());
+        std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "https://127.0.0.1:8501".to_string());
 
     let config = ConsulConfig::new(&address);
     let client = ConsulClient::new(config)?;
