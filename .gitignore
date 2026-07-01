@@ -60,3 +60,10 @@ spec/
 docker-compose.test.yml
 .worktrees/
 .gitnexus
+
+# Security audit
+.security-audit/
+
+# AI agent guidelines (kept local only)
+AGENTS.md
+CLAUDE.md
