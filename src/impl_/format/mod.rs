@@ -1452,6 +1452,7 @@ key = "value""#
         assert_eq!(detect_format(r#"key = "value""#), Some(Format::Toml));
     }
 
+    #[cfg(feature = "yaml")]
     #[test]
     fn test_detect_format_yaml_possible() {
         assert_eq!(detect_format("key: value"), Some(Format::Yaml));
@@ -1491,6 +1492,10 @@ key = "value""#
     #[test]
     fn test_converter_for_all_formats_present() {
         for format in Format::all() {
+            // Yaml converter only exists when yaml feature is enabled
+            if *format == Format::Yaml && !cfg!(feature = "yaml") {
+                continue;
+            }
             let conv = converter_for(*format);
             assert!(conv.is_some(), "converter for {:?} should exist", format);
             assert_eq!(conv.unwrap().format(), *format);
