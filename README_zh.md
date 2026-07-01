@@ -170,12 +170,10 @@ graph LR
     B --> D["<b>Schema</b><br/>JSON Schema 生成"]
     B --> E["<b>加密</b><br/>XChaCha20-Poly1305"]
     B --> F["<b>审计</b><br/>访问日志"]
-    B --> G["<b>监控</b><br/>内存监控"]
     C --> H["<b>应用配置</b><br/>可直接使用"]
     D --> H
     E --> H
     F --> H
-    G --> H
 
     style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
     style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
@@ -657,7 +655,6 @@ graph TB
         H["加密<br/>XChaCha20-Poly1305"]
         I["审计日志"]
         J["文件监控"]
-        K["内存监控"]
     end
 
     subgraph Output ["应用"]

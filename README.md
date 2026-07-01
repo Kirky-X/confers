@@ -166,12 +166,10 @@ graph LR
     B --> D["<b>Schema</b><br/>JSON Schema Gen"]
     B --> E["<b>Encryption</b><br/>XChaCha20-Poly1305"]
     B --> F["<b>Audit</b><br/>Access Logs"]
-    B --> G["<b>Monitoring</b><br/>Memory Watch"]
     C --> H["<b>Application Config</b><br/>Ready to Use"]
     D --> H
     E --> H
     F --> H
-    G --> H
 
     style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
     style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
@@ -725,7 +723,6 @@ graph TB
         H["Encryption<br/>XChaCha20-Poly1305"]
         I["Audit Logging"]
         J["File Watching"]
-        K["Memory Monitoring"]
     end
 
     subgraph Output ["Application"]
