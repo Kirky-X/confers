@@ -71,13 +71,30 @@ name = "json_schema"
 path = "src/examples/json_schema.rs"
 
 [[bin]]
-name = "metrics"
-path = "src/examples/metrics.rs"
+name = "interpolation"
+path = "src/examples/interpolation.rs"
+
+[[bin]]
+name = "audit"
+path = "src/examples/audit.rs"
+
+[[bin]]
+name = "context_aware"
+path = "src/examples/context_aware.rs"
+
+[[bin]]
+name = "security"
+path = "src/examples/security.rs"
+
+[[bin]]
+name = "modules_demo"
+path = "src/examples/modules_demo.rs"
 
 [dependencies]
 confers = { path = "..", features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }

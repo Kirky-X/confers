@@ -107,13 +107,13 @@ pub fn generate_clap_impl(
             /// Generate clap Args struct by parsing command line arguments.
             #[allow(dead_code)]
             pub fn clap_args() -> #cli_args_ident {
-                #cli_args_ident::parse()
+                <#cli_args_ident as clap::Parser>::parse()
             }
 
             /// Get clap app for custom configuration.
             #[allow(dead_code)]
             pub fn clap_app() -> clap::Command {
-                <#cli_args_ident as clap::IntoApp>::command()
+                <#cli_args_ident as clap::CommandFactory>::command()
             }
 
             /// Create clap args from iterator of strings (for testing).
@@ -123,7 +123,7 @@ pub fn generate_clap_impl(
                 I: Iterator<Item = std::ffi::OsString>,
             {
                 <#cli_args_ident as clap::FromArgMatches>::from_arg_matches(
-                    &<#cli_args_ident as clap::IntoApp>::command()
+                    &<#cli_args_ident as clap::CommandFactory>::command()
                         .try_get_matches_from(iter)
                         .unwrap()
                 )
@@ -147,7 +147,7 @@ pub fn generate_clap_impl(
                 #(
                     map.insert(
                         stringify!(#field_idents).to_string(),
-                        confers::ConfigValue::from(&self.#field_idents)
+                        confers::ConfigValue::from(self.#field_idents.clone())
                     );
                 )*
                 map
