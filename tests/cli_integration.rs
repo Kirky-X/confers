@@ -356,6 +356,7 @@ version = "2.0.0"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "diff",
         "--base",
         base_path.to_str().unwrap(),
@@ -400,6 +401,7 @@ name = "overlay"
     );
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "diff",
         "--base",
         base_path.to_str().unwrap(),
@@ -436,6 +438,7 @@ name = "same"
     let overlay_path = create_test_config(&dir, "overlay.toml", config_content);
 
     let output = run_confers(&[
+        "--allow-absolute-paths",
         "diff",
         "--base",
         base_path.to_str().unwrap(),

@@ -647,9 +647,24 @@ fn cmd_diff(
     overlay: &PathBuf,
     format: &str,
     sanitize: bool,
-    _allow_absolute_paths: bool,
+    allow_absolute_paths: bool,
 ) -> Result<()> {
     use crate::loader;
+
+    if !allow_absolute_paths {
+        if base.is_absolute() {
+            anyhow::bail!(
+                "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
+                base.display()
+            );
+        }
+        if overlay.is_absolute() {
+            anyhow::bail!(
+                "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
+                overlay.display()
+            );
+        }
+    }
 
     println!("Configuration Diff");
     println!("=================");
@@ -2089,7 +2104,7 @@ mod tests {
             &overlay.path().to_path_buf(),
             "text",
             true,
-            false,
+            true,
         );
         assert!(result.is_ok());
     }
@@ -2108,7 +2123,7 @@ mod tests {
             &overlay.path().to_path_buf(),
             "json",
             true,
-            false,
+            true,
         );
         assert!(result.is_ok());
     }
@@ -2128,7 +2143,7 @@ mod tests {
             &overlay.path().to_path_buf(),
             "text",
             true,
-            false,
+            true,
         );
         assert!(result.is_ok());
     }
@@ -2140,7 +2155,7 @@ mod tests {
         use std::io::Write;
         write!(overlay, "name = \"overlay\"\n").unwrap();
         overlay.flush().unwrap();
-        let result = cmd_diff(&base, &overlay.path().to_path_buf(), "text", true, false);
+        let result = cmd_diff(&base, &overlay.path().to_path_buf(), "text", true, true);
         assert!(result.is_err());
     }
 
@@ -2159,9 +2174,34 @@ mod tests {
             &overlay.path().to_path_buf(),
             "text",
             true,
+            true,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cmd_diff_absolute_path_rejected() {
+        use std::io::Write;
+        let mut base = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
+        write!(base, "name = \"base\"\n").unwrap();
+        base.flush().unwrap();
+        let mut overlay = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
+        write!(overlay, "name = \"overlay\"\n").unwrap();
+        overlay.flush().unwrap();
+        // With allow_absolute_paths=false, absolute temp paths must be rejected
+        let result = cmd_diff(
+            &base.path().to_path_buf(),
+            &overlay.path().to_path_buf(),
+            "text",
+            true,
             false,
         );
         assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Absolute path not allowed"),
+            "expected path rejection, got: {err_msg}"
+        );
     }
 
     // ============== cmd_snapshot_list ==============
