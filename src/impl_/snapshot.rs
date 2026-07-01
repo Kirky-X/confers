@@ -6,9 +6,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[allow(unused_imports)]
-use std::sync::Arc;
-
 /// Snapshot file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SnapshotFormat {
@@ -306,19 +303,13 @@ impl SnapshotManager {
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
                 {
-                    serde_json::to_value(toml::from_str::<serde_json::Value>(&content).map_err(
-                        |e| crate::error::ConfigError::ParseError {
+                    toml::from_str::<serde_json::Value>(&content).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
                             format: "toml".to_string(),
                             message: e.to_string(),
                             location: None,
                             source: Some(Box::new(e)),
-                        },
-                    )?)
-                    .map_err(|e| crate::error::ConfigError::ParseError {
-                        format: "toml".to_string(),
-                        message: e.to_string(),
-                        location: None,
-                        source: Some(Box::new(e)),
+                        }
                     })?
                 }
                 #[cfg(not(feature = "toml"))]
@@ -333,21 +324,13 @@ impl SnapshotManager {
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
                 {
-                    serde_json::to_value(
-                        serde_yaml_ng::from_str::<serde_json::Value>(&content).map_err(|e| {
-                            crate::error::ConfigError::ParseError {
-                                format: "yaml".to_string(),
-                                message: e.to_string(),
-                                location: None,
-                                source: Some(Box::new(e)),
-                            }
-                        })?,
-                    )
-                    .map_err(|e| crate::error::ConfigError::ParseError {
-                        format: "yaml".to_string(),
-                        message: e.to_string(),
-                        location: None,
-                        source: Some(Box::new(e)),
+                    serde_yaml_ng::from_str::<serde_json::Value>(&content).map_err(|e| {
+                        crate::error::ConfigError::ParseError {
+                            format: "yaml".to_string(),
+                            message: e.to_string(),
+                            location: None,
+                            source: Some(Box::new(e)),
+                        }
                     })?
                 }
                 #[cfg(not(feature = "yaml"))]
