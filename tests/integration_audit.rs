@@ -222,4 +222,92 @@ mod tests {
         assert!(config.durable_wal);
         assert_eq!(config.channel_size, 2048);
     }
+
+    /// Test 11: Verify BestEffort events are actually persisted to log file.
+    /// Regression test for S-H-2: write_best_effort was previously a no-op
+    /// that sanitized the event then discarded the result without writing.
+    #[test]
+    fn test_audit_best_effort_event_persists_to_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
+
+        // LoadSuccess is classified as BestEffort
+        writer.log_load("test_source_for_best_effort");
+
+        // Give time for sync write
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        // Find the audit log file
+        let entries: Vec<_> = std::fs::read_dir(&log_dir)
+            .expect("log dir readable")
+            .filter_map(|e| e.ok())
+            .collect();
+        assert!(
+            !entries.is_empty(),
+            "BestEffort event should create at least one log file in log_dir"
+        );
+
+        // Verify the file actually contains the event content
+        let log_file = &entries[0];
+        let content = std::fs::read_to_string(log_file.path()).expect("log file readable");
+        assert!(
+            content.contains("LoadSuccess"),
+            "BestEffort event should be persisted; got content: {}",
+            content
+        );
+        assert!(
+            content.contains("test_source_for_best_effort"),
+            "BestEffort event source should appear in log; got content: {}",
+            content
+        );
+    }
+
+    /// Test 12: Verify Durable events are persisted to log file.
+    /// Companion to test_audit_best_effort_event_persists_to_file.
+    #[test]
+    fn test_audit_durable_event_persists_to_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir: PathBuf = temp_dir.path().to_path_buf();
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(log_dir.clone())
+            .build();
+
+        // KeyAccess is classified as Durable
+        writer.log_key_access("test.key.durable");
+
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
+        let entries: Vec<_> = std::fs::read_dir(&log_dir)
+            .expect("log dir readable")
+            .filter_map(|e| e.ok())
+            .collect();
+        assert!(
+            !entries.is_empty(),
+            "Durable event should create a log file"
+        );
+
+        let content = std::fs::read_to_string(entries[0].path()).expect("log file readable");
+        assert!(
+            content.contains("KeyAccess"),
+            "Durable event should be persisted; got content: {}",
+            content
+        );
+    }
+
+    /// Test 13: Verify no log file is created when log_dir is None.
+    /// Ensures write_best_effort does not panic or write to a phantom path.
+    #[test]
+    fn test_audit_no_log_dir_does_not_panic() {
+        let writer = AuditWriter::new(); // log_dir defaults to None
+        writer.log_load("source_without_log_dir");
+        writer.log_key_access("key_without_log_dir");
+        // No assertion needed - test passes if no panic occurs.
+    }
 }

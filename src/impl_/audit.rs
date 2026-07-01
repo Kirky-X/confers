@@ -157,27 +157,34 @@ impl AuditWriter {
     }
 
     fn write_durable(&self, event: &AuditEvent) {
-        if let Some(ref dir) = self.config.log_dir {
-            let sanitized = self.sanitize(event);
-            let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
-            let path = dir.join(filename);
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-            {
-                use std::io::Write;
-                let _ = writeln!(file, "{} {:?}", Utc::now(), sanitized);
-            }
-        }
+        self.write_to_log(event);
     }
 
     fn write_best_effort(&self, event: &AuditEvent) {
-        // Best effort audit - silently ignore if write_durable is not configured
-        let _ = event;
+        // Best-effort: attempt to persist if log_dir is configured.
+        // If log_dir is not configured or write fails, silently drop the event
+        // (do NOT waste CPU on sanitize() when the result will be discarded).
+        self.write_to_log(event);
+    }
+
+    /// Shared write path for both Durable and BestEffort events.
+    /// Writes the sanitized event to `audit_YYYYMMDD.log` in `log_dir` if configured.
+    /// Silently drops the event if `log_dir` is None or the write fails.
+    fn write_to_log(&self, event: &AuditEvent) {
+        let Some(ref dir) = self.config.log_dir else {
+            return;
+        };
         let sanitized = self.sanitize(event);
-        // Fallback: event was sanitized but not persisted
-        let _ = sanitized;
+        let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
+        let path = dir.join(filename);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            use std::io::Write;
+            let _ = writeln!(file, "{} {:?}", Utc::now(), sanitized);
+        }
     }
 
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {
