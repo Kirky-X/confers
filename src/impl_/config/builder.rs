@@ -434,13 +434,13 @@ where
     ///
     /// Returns a receiver for configuration updates and a guard for the watcher.
     ///
-    /// **Deprecated**: This method is a partial implementation that does not
-    /// actually reload configuration when file changes are detected. For full
-    /// hot reload support, use the `watch` feature with `FsWatcher` or
-    /// `MultiFsWatcher` directly.
+    /// **Deprecated**: This method builds the configuration once and returns a
+    /// watch channel that will never receive updates. It does NOT perform hot
+    /// reload when file changes are detected. For full hot reload support, use
+    /// the `watch` feature with `FsWatcher` or `MultiFsWatcher` directly.
     #[deprecated(
         since = "0.3.0",
-        note = "Partial implementation - does not reload on file changes. Use FsWatcher/MultiFsWatcher directly."
+        note = "Does not reload on file changes. Use FsWatcher/MultiFsWatcher directly."
     )]
     #[cfg(feature = "watch")]
     pub async fn build_with_watcher(
@@ -449,65 +449,13 @@ where
         tokio::sync::watch::Receiver<Arc<T>>,
         crate::watcher::WatcherGuard,
     )> {
-        use std::collections::HashMap;
-        use std::sync::atomic;
-        use tokio::spawn;
-        use tokio::time::{interval, Duration};
-
-        // Collect file paths from the source chain (before building)
-        let file_paths: Vec<PathBuf> = self
-            .chain_builder
-            .get_watch_paths()
-            .into_iter()
-            .filter_map(|path| std::fs::canonicalize(path).ok())
-            .collect();
-
-        // Initial build
+        // Build the initial configuration once. The previous implementation
+        // spawned a polling task that detected file modifications but could not
+        // rebuild the source chain (no access to original sources), so it
+        // silently discarded every change — pure dead code. Removed per S-M-6.
         let initial = self.build()?;
         let (_tx, rx) = tokio::sync::watch::channel(Arc::new(initial));
-
-        // Create watcher guard with running flag
-        let running = Arc::new(atomic::AtomicBool::new(true));
-        let guard = crate::watcher::WatcherGuard::from_running(running.clone());
-
-        // If there are file paths, start the watcher task
-        if !file_paths.is_empty() {
-            spawn(async move {
-                let mut ticker = interval(Duration::from_secs(1));
-                let mut last_modifications: HashMap<PathBuf, std::time::SystemTime> =
-                    HashMap::new();
-
-                while running.load(atomic::Ordering::Relaxed) {
-                    ticker.tick().await;
-
-                    // Check all watched files for modifications
-                    let mut needs_reload = false;
-                    for path in &file_paths {
-                        if let Ok(metadata) = std::fs::metadata(path) {
-                            if let Ok(modified) = metadata.modified() {
-                                let last_modified = last_modifications.get(path);
-
-                                if last_modified != Some(&modified) {
-                                    // File was modified
-                                    last_modifications.insert(path.clone(), modified);
-                                    needs_reload = true;
-                                }
-                            }
-                        }
-                    }
-
-                    // Reload configuration if any file changed
-                    if needs_reload {
-                        // Note: We can't rebuild the source chain here since we don't have
-                        // access to the original sources. This is a known limitation.
-                        // For proper hot reload, users should call build() again manually
-                        // when they detect file changes through their own watcher.
-                        // Silently continue - caller should check for file changes
-                    }
-                }
-            });
-        }
-
+        let guard = crate::watcher::WatcherGuard::new();
         Ok((rx, guard))
     }
 }
