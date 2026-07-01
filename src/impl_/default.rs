@@ -14,7 +14,7 @@
 //! (remote/config-bus/encryption/watch) is enabled.
 
 use crate::error::{ConfersResult, ConfigConfigError};
-use crate::impl_::config::{ConfigLimits, SourceChain, SourceChainBuilder};
+use crate::impl_::config::{SourceChain, SourceChainBuilder};
 use crate::impl_::lifecycle::Lifecycle;
 use crate::impl_::merger::MergeStrategy;
 use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
@@ -232,8 +232,6 @@ mod async_impl {
     #[derive(Default)]
     pub struct ConfigImplBuilder {
         chain_builder: SourceChainBuilder,
-        limits: Option<ConfigLimits>,
-        merge_strategy: MergeStrategy,
     }
 
     impl ConfigImplBuilder {
@@ -269,14 +267,7 @@ mod async_impl {
 
         /// Set the merge strategy.
         pub fn merge_strategy(mut self, strategy: MergeStrategy) -> Self {
-            self.merge_strategy = strategy;
             self.chain_builder = self.chain_builder.strategy(strategy);
-            self
-        }
-
-        /// Set configuration limits.
-        pub fn limits(mut self, limits: ConfigLimits) -> Self {
-            self.limits = Some(limits);
             self
         }
 
@@ -501,8 +492,6 @@ mod sync_impl {
     #[derive(Default)]
     pub struct ConfigImplBuilder {
         chain_builder: SourceChainBuilder,
-        limits: Option<ConfigLimits>,
-        merge_strategy: MergeStrategy,
     }
 
     impl ConfigImplBuilder {
@@ -538,14 +527,7 @@ mod sync_impl {
 
         /// Set the merge strategy.
         pub fn merge_strategy(mut self, strategy: MergeStrategy) -> Self {
-            self.merge_strategy = strategy;
             self.chain_builder = self.chain_builder.strategy(strategy);
-            self
-        }
-
-        /// Set configuration limits.
-        pub fn limits(mut self, limits: ConfigLimits) -> Self {
-            self.limits = Some(limits);
             self
         }
 
@@ -1000,20 +982,6 @@ mod tests {
         async fn test_builder_merge_strategy_deep_merge() {
             let config = ConfigImpl::builder()
                 .merge_strategy(MergeStrategy::DeepMerge)
-                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
-                .build()
-                .unwrap();
-            assert_eq!(
-                config.get_raw("k").await.unwrap().unwrap().as_u64(),
-                Some(1)
-            );
-        }
-
-        #[tokio::test]
-        async fn test_builder_limits_does_not_break_build() {
-            let limits = ConfigLimits::default();
-            let config = ConfigImpl::builder()
-                .limits(limits)
                 .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
                 .build()
                 .unwrap();
@@ -1512,17 +1480,6 @@ mod tests {
         fn test_builder_merge_strategy_deep_merge() {
             let config = ConfigImpl::builder()
                 .merge_strategy(MergeStrategy::DeepMerge)
-                .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
-                .build()
-                .unwrap();
-            assert_eq!(config.get_raw("k").unwrap().unwrap().as_u64(), Some(1));
-        }
-
-        #[test]
-        fn test_builder_limits_does_not_break_build() {
-            let limits = ConfigLimits::default();
-            let config = ConfigImpl::builder()
-                .limits(limits)
                 .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
                 .build()
                 .unwrap();
