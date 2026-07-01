@@ -449,19 +449,33 @@ impl MultiFsWatcher {
                     if let Ok(events) = result {
                         for event in events {
                             match event.kind {
-                                EventKind::Create(_)
-                                | EventKind::Modify(_)
-                                | EventKind::Remove(_) => {
+                                EventKind::Create(_) | EventKind::Modify(_) => {
                                     for event_path in &event.paths {
                                         if event_path.is_file() && paths.contains(event_path) {
-                                            // Try to send, but don't block if channel is closed
                                             match tx.try_send(event_path.clone()) {
                                                 Ok(_) => {}
-                                                Err(mpsc::error::TrySendError::Full(_)) => {
-                                                    // Channel full, skip this event
-                                                }
+                                                Err(mpsc::error::TrySendError::Full(_)) => {}
                                                 Err(mpsc::error::TrySendError::Closed(_)) => {
-                                                    // Channel closed, exit
+                                                    running.store(
+                                                        false,
+                                                        std::sync::atomic::Ordering::SeqCst,
+                                                    );
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                EventKind::Remove(_) => {
+                                    // For Remove, the path no longer exists so
+                                    // is_file() returns false. Check only
+                                    // paths.contains() to forward deletions.
+                                    for event_path in &event.paths {
+                                        if paths.contains(event_path) {
+                                            match tx.try_send(event_path.clone()) {
+                                                Ok(_) => {}
+                                                Err(mpsc::error::TrySendError::Full(_)) => {}
+                                                Err(mpsc::error::TrySendError::Closed(_)) => {
                                                     running.store(
                                                         false,
                                                         std::sync::atomic::Ordering::SeqCst,
