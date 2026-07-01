@@ -1577,4 +1577,439 @@ mod tests {
         let from_i8: ConfigValue = (-100i8).into();
         assert_eq!(from_i8.as_i64(), Some(-100));
     }
+
+    #[test]
+    fn test_config_value_null_serde_roundtrip() {
+        let cv = ConfigValue::Null;
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert!(deser.is_null());
+    }
+
+    #[test]
+    fn test_config_value_bool_serde_roundtrip() {
+        let cv = ConfigValue::Bool(true);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.as_bool(), Some(true));
+    }
+
+    #[test]
+    fn test_config_value_i64_serde_roundtrip() {
+        let cv = ConfigValue::I64(-42);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.as_i64(), Some(-42));
+    }
+
+    #[test]
+    fn test_config_value_u64_serde_roundtrip() {
+        let cv = ConfigValue::U64(99);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.as_u64(), Some(99));
+    }
+
+    #[test]
+    fn test_config_value_f64_serde_roundtrip() {
+        let cv = ConfigValue::F64(2.5);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert!((deser.as_f64().unwrap() - 2.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_config_value_string_serde_roundtrip() {
+        let cv = ConfigValue::string("hello world");
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.as_str(), Some("hello world"));
+    }
+
+    #[test]
+    fn test_config_value_bytes_serialize_only() {
+        // Bytes serialize as a JSON array; deserialization produces Array (not Bytes).
+        // This test verifies the serialization path only.
+        let cv = ConfigValue::Bytes(vec![0u8, 127, 255, 1]);
+        let json = serde_json::to_value(&cv).unwrap();
+        assert!(json.is_array());
+        assert_eq!(json[0], serde_json::json!(0));
+        assert_eq!(json[3], serde_json::json!(1));
+    }
+
+    #[test]
+    fn test_config_value_array_serde_roundtrip() {
+        let items = vec![
+            AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "arr.0"),
+            AnnotatedValue::new(ConfigValue::string("two"), SourceId::new("t"), "arr.1"),
+        ];
+        let cv = ConfigValue::Array(items.into());
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        let arr = deser.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].as_i64(), Some(1));
+        assert_eq!(arr[1].as_str(), Some("two"));
+    }
+
+    #[test]
+    fn test_config_value_map_serde_roundtrip() {
+        let cv = ConfigValue::map(vec![
+            (
+                "name",
+                AnnotatedValue::new(ConfigValue::string("test"), SourceId::new("t"), "name"),
+            ),
+            (
+                "count",
+                AnnotatedValue::new(ConfigValue::U64(5), SourceId::new("t"), "count"),
+            ),
+        ]);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        let map = deser.as_map().unwrap();
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("name").unwrap().as_str(), Some("test"));
+        assert_eq!(map.get("count").unwrap().as_u64(), Some(5));
+    }
+
+    #[test]
+    fn test_config_value_deserialize_from_json_null() {
+        let deser: ConfigValue = serde_json::from_str("null").unwrap();
+        assert!(deser.is_null());
+    }
+
+    #[test]
+    fn test_config_value_deserialize_from_unit_json() {
+        // visit_unit path
+        let deser: ConfigValue = serde_json::from_str("null").unwrap();
+        assert!(matches!(deser, ConfigValue::Null));
+    }
+
+    #[test]
+    fn test_source_location_serde_roundtrip() {
+        let loc = SourceLocation::new("config.toml", 42, 7);
+        let json = serde_json::to_string(&loc).unwrap();
+        let deser: SourceLocation = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.source_name.as_ref(), "config.toml");
+        assert_eq!(deser.line, 42);
+        assert_eq!(deser.column, 7);
+        assert_eq!(deser.file_path, None);
+    }
+
+    #[test]
+    fn test_annotated_value_serde_roundtrip() {
+        let loc = SourceLocation::new("f.toml", 1, 2);
+        let av = AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("src"), "path")
+            .with_priority(5)
+            .with_version(3)
+            .with_location(loc.clone());
+        let json = serde_json::to_string(&av).unwrap();
+        let deser: AnnotatedValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(deser.as_str(), Some("v"));
+        assert_eq!(deser.source.as_str(), "src");
+        assert_eq!(deser.path.as_ref(), "path");
+        assert_eq!(deser.priority, 5);
+        assert_eq!(deser.version, 3);
+        assert_eq!(deser.location, Some(loc));
+    }
+
+    #[test]
+    fn test_zeroizing_bytes_new_and_as_slice() {
+        let data = vec![1u8, 2, 3, 4];
+        let zb = ZeroizingBytes::new(data.clone());
+        assert_eq!(zb.as_slice(), &data[..]);
+    }
+
+    #[test]
+    fn test_zeroizing_bytes_len_and_is_empty() {
+        let zb = ZeroizingBytes::new(vec![1u8, 2, 3]);
+        assert_eq!(zb.len(), 3);
+        assert!(!zb.is_empty());
+
+        let empty = ZeroizingBytes::new(vec![]);
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn test_zeroizing_bytes_deref() {
+        let zb = ZeroizingBytes::new(vec![10u8, 20, 30]);
+        assert_eq!(zb.len(), 3);
+        assert_eq!(zb[0], 10);
+        assert_eq!(zb[2], 30);
+    }
+
+    #[test]
+    fn test_zeroizing_bytes_deref_mut() {
+        let mut zb = ZeroizingBytes::new(vec![1u8, 2, 3]);
+        zb[0] = 99;
+        assert_eq!(zb[0], 99);
+        zb.push(4);
+        assert_eq!(zb.len(), 4);
+    }
+
+    #[test]
+    fn test_noop_metrics_default_and_methods() {
+        use crate::interface::MetricsBackend;
+        let metrics = NoOpMetrics;
+        // These should be no-ops and not panic
+        metrics.counter("requests", &[("method", "GET")]);
+        metrics.histogram("latency_ms", 42.5, &[("endpoint", "/api")]);
+    }
+
+    #[test]
+    fn test_noop_metrics_clone() {
+        use crate::interface::MetricsBackend;
+        let m1 = NoOpMetrics;
+        let m2 = m1.clone();
+        m2.counter("test", &[]);
+    }
+
+    #[test]
+    fn test_source_kind_variants() {
+        assert_eq!(SourceKind::File, SourceKind::File);
+        assert_ne!(SourceKind::File, SourceKind::Environment);
+        assert_ne!(SourceKind::Environment, SourceKind::CommandLine);
+        assert_ne!(SourceKind::CommandLine, SourceKind::Default);
+        assert_ne!(SourceKind::Default, SourceKind::Memory);
+    }
+
+    #[test]
+    fn test_source_kind_clone_debug() {
+        let kind = SourceKind::File;
+        let cloned = kind;
+        assert_eq!(kind, cloned);
+        let debug = format!("{:?}", kind);
+        assert!(debug.contains("File"));
+    }
+
+    #[test]
+    fn test_annotated_value_as_bool_accessor() {
+        let av = AnnotatedValue::new(ConfigValue::Bool(true), SourceId::new("t"), "k");
+        assert_eq!(av.as_bool(), Some(true));
+
+        let non_bool = AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("t"), "k");
+        assert_eq!(non_bool.as_bool(), None);
+    }
+
+    #[test]
+    fn test_annotated_value_as_i64_accessor() {
+        let av = AnnotatedValue::new(ConfigValue::I64(42), SourceId::new("t"), "k");
+        assert_eq!(av.as_i64(), Some(42));
+
+        let u_av = AnnotatedValue::new(ConfigValue::U64(10), SourceId::new("t"), "k");
+        assert_eq!(u_av.as_i64(), Some(10));
+    }
+
+    #[test]
+    fn test_annotated_value_as_u64_accessor() {
+        let av = AnnotatedValue::new(ConfigValue::U64(99), SourceId::new("t"), "k");
+        assert_eq!(av.as_u64(), Some(99));
+
+        let i_av = AnnotatedValue::new(ConfigValue::I64(50), SourceId::new("t"), "k");
+        assert_eq!(i_av.as_u64(), Some(50));
+    }
+
+    #[test]
+    fn test_annotated_value_as_f64_accessor() {
+        let av = AnnotatedValue::new(ConfigValue::F64(2.5), SourceId::new("t"), "k");
+        assert!((av.as_f64().unwrap() - 2.5).abs() < 0.001);
+
+        let i_av = AnnotatedValue::new(ConfigValue::I64(10), SourceId::new("t"), "k");
+        assert!((i_av.as_f64().unwrap() - 10.0).abs() < 0.001);
+
+        let u_av = AnnotatedValue::new(ConfigValue::U64(20), SourceId::new("t"), "k");
+        assert!((u_av.as_f64().unwrap() - 20.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_annotated_value_is_map_and_is_array() {
+        let map_av = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "k",
+                AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "k"),
+            )]),
+            SourceId::new("t"),
+            "k",
+        );
+        assert!(map_av.is_map());
+        assert!(!map_av.is_array());
+
+        let arr_av = AnnotatedValue::new(ConfigValue::array(vec![]), SourceId::new("t"), "k");
+        assert!(arr_av.is_array());
+        assert!(!arr_av.is_map());
+    }
+
+    #[test]
+    fn test_annotated_value_as_string_deprecated() {
+        #[allow(deprecated)]
+        {
+            let av = AnnotatedValue::new(ConfigValue::string("val"), SourceId::new("t"), "k");
+            assert_eq!(av.as_string(), Some("val".to_string()));
+
+            let non_str = AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "k");
+            assert_eq!(non_str.as_string(), None);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_null_bool_int() {
+        let null_av = AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "k");
+        assert_eq!(null_av.to_json(), serde_json::Value::Null);
+
+        let bool_av = AnnotatedValue::new(ConfigValue::Bool(true), SourceId::new("t"), "k");
+        assert_eq!(bool_av.to_json(), serde_json::Value::Bool(true));
+
+        let i_av = AnnotatedValue::new(ConfigValue::I64(42), SourceId::new("t"), "k");
+        assert_eq!(i_av.to_json(), serde_json::json!(42));
+
+        let u_av = AnnotatedValue::new(ConfigValue::U64(99), SourceId::new("t"), "k");
+        assert_eq!(u_av.to_json(), serde_json::json!(99));
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_f64_and_bytes() {
+        let f_av = AnnotatedValue::new(ConfigValue::F64(1.5), SourceId::new("t"), "k");
+        assert_eq!(f_av.to_json(), serde_json::json!(1.5));
+
+        let bytes_av =
+            AnnotatedValue::new(ConfigValue::Bytes(vec![1, 2, 3]), SourceId::new("t"), "k");
+        let json = bytes_av.to_json();
+        assert!(json.is_string());
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_map() {
+        let map_av = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "key",
+                AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("t"), "k.key"),
+            )]),
+            SourceId::new("t"),
+            "k",
+        );
+        let json = map_av.to_json();
+        assert!(json.is_object());
+        assert_eq!(json["key"], serde_json::json!("v"));
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_redacted_map_and_array() {
+        let map_av = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "secret",
+                AnnotatedValue::new(
+                    ConfigValue::string("hidden"),
+                    SourceId::new("t"),
+                    "k.secret",
+                ),
+            )]),
+            SourceId::new("t"),
+            "k",
+        );
+        let redacted = map_av.to_json_with_mode(SerializeMode::Redacted, &["k.secret"]);
+        assert_eq!(redacted["secret"], serde_json::json!("[REDACTED]"));
+
+        let arr_av = AnnotatedValue::new(
+            ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::string("x"),
+                SourceId::new("t"),
+                "arr.0",
+            )]),
+            SourceId::new("t"),
+            "arr",
+        );
+        let full = arr_av.to_json_with_mode(SerializeMode::Full, &[]);
+        assert!(full.is_array());
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_f64_nan_to_null() {
+        let av = AnnotatedValue::new(ConfigValue::F64(f64::NAN), SourceId::new("t"), "k");
+        assert_eq!(av.to_json(), serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_from_f64_conversion() {
+        let v: ConfigValue = 2.5f64.into();
+        assert!(v.is_number());
+        assert!(!v.is_integer());
+        assert!((v.as_f64().unwrap() - 2.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_all_paths_with_array() {
+        let inner = ConfigValue::array(vec![
+            AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "arr.0"),
+            AnnotatedValue::new(ConfigValue::I64(2), SourceId::new("t"), "arr.1"),
+        ]);
+        let av = AnnotatedValue::new(inner, SourceId::new("t"), "arr");
+        let paths = av.all_paths();
+        assert!(paths.iter().any(|p| p.as_ref() == "arr"));
+        assert!(paths.iter().any(|p| p.as_ref() == "arr.0"));
+        assert!(paths.iter().any(|p| p.as_ref() == "arr.1"));
+    }
+
+    #[test]
+    fn test_key_cache_policy_default() {
+        let policy = KeyCachePolicy::default();
+        match policy {
+            KeyCachePolicy::CacheWithTtl(d) => assert_eq!(d, Duration::from_secs(3600)),
+            other => panic!("expected CacheWithTtl, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_key_cache_policy_variants() {
+        let no_cache = KeyCachePolicy::NoCache;
+        let indefinite = KeyCachePolicy::CacheIndefinitely;
+        let with_ttl = KeyCachePolicy::CacheWithTtl(Duration::from_secs(60));
+
+        assert_ne!(no_cache, indefinite);
+        assert_ne!(indefinite, with_ttl);
+        assert_ne!(no_cache, with_ttl);
+    }
+
+    #[test]
+    fn test_config_value_constructors_direct() {
+        assert!(ConfigValue::null().is_null());
+        assert_eq!(ConfigValue::bool(false).as_bool(), Some(false));
+        assert_eq!(ConfigValue::integer(-1).as_i64(), Some(-1));
+        assert_eq!(ConfigValue::uint(1).as_u64(), Some(1));
+        assert!((ConfigValue::float(1.0).as_f64().unwrap() - 1.0).abs() < 0.001);
+        assert_eq!(ConfigValue::string("s").as_str(), Some("s"));
+    }
+
+    #[test]
+    fn test_annotated_value_conflict_report_with_locations() {
+        let loc = SourceLocation::new("f.toml", 5, 10);
+        let low = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("l"), "k")
+            .with_location(loc.clone());
+        let high = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("h"), "k")
+            .with_location(loc);
+        let report = AnnotatedValue::conflict_report(&low, &high);
+        assert!(report.low_location.is_some());
+        assert!(report.high_location.is_some());
+        assert_eq!(report.low_value, format!("{:?}", ConfigValue::string("a")));
+        assert_eq!(report.high_value, format!("{:?}", ConfigValue::string("b")));
+    }
+
+    #[test]
+    fn test_source_id_eq_hash() {
+        let a = SourceId::new("x");
+        let b = SourceId::new("x");
+        let c = SourceId::new("y");
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        map.insert(a.clone(), 1);
+        assert_eq!(map.get(&b), Some(&1));
+    }
 }

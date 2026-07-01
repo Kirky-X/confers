@@ -631,6 +631,132 @@ mod tests {
             config.delete("key").await.unwrap();
             assert_eq!(config.version(), 2);
         }
+
+        #[tokio::test]
+        async fn test_new_validated_success() {
+            let config = InMemoryConfig::new_validated(100).unwrap();
+            assert_eq!(config.max_capacity(), 100);
+            assert!(config.is_healthy());
+        }
+
+        #[tokio::test]
+        async fn test_new_validated_zero_capacity() {
+            let err = InMemoryConfig::new_validated(0).unwrap_err();
+            match err {
+                ConfigConfigError::InvalidValue {
+                    field,
+                    expected_type,
+                    message,
+                } => {
+                    assert_eq!(field, "max_capacity");
+                    assert_eq!(expected_type, "u64");
+                    assert_eq!(message, "must be greater than 0");
+                }
+                other => panic!("expected InvalidValue, got {:?}", other),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_default_impl() {
+            let config = InMemoryConfig::default();
+            assert!(config.is_healthy());
+            assert_eq!(config.version(), 0);
+            assert_eq!(config.max_capacity(), 10_000);
+            assert_eq!(config.default_priority(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_clear() {
+            let config = InMemoryConfig::new();
+            config
+                .set(
+                    "k1",
+                    AnnotatedValue::new(ConfigValue::string("v1"), SourceId::new("t"), "k1"),
+                )
+                .await
+                .unwrap();
+            assert_eq!(config.version(), 1);
+
+            config.clear().await.unwrap();
+            assert_eq!(config.version(), 2);
+            let keys = config.keys().await.unwrap();
+            assert!(keys.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_delete_nonexistent_no_version_bump() {
+            let config = InMemoryConfig::new();
+            let deleted = config.delete("missing").await.unwrap();
+            assert!(!deleted);
+            assert_eq!(config.version(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_keys_empty() {
+            let config = InMemoryConfig::new();
+            let keys = config.keys().await.unwrap();
+            assert!(keys.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_source_id_accessor() {
+            let config = InMemoryConfig::new();
+            assert_eq!(config.source_id().as_str(), "memory");
+
+            let custom = InMemoryConfig::builder().source_id("custom").build();
+            assert_eq!(custom.source_id().as_str(), "custom");
+        }
+
+        #[tokio::test]
+        async fn test_health_check_after_shutdown() {
+            let config = InMemoryConfig::new();
+            assert!(config.health_check().await.is_ok());
+
+            config.shutdown().await;
+            assert!(!config.is_healthy());
+
+            let err = config.health_check().await.unwrap_err();
+            match err {
+                crate::error::ConfigError::HealthCheckFailed { reason } => {
+                    assert!(reason.contains("not healthy"));
+                }
+                other => panic!("expected HealthCheckFailed, got {:?}", other),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_initial_capacity_builder() {
+            let config = InMemoryConfig::builder()
+                .initial_capacity(256)
+                .max_capacity(500)
+                .build();
+            assert_eq!(config.max_capacity(), 500);
+            assert!(config.is_healthy());
+        }
+
+        #[tokio::test]
+        async fn test_start_lifecycle() {
+            let config = InMemoryConfig::new();
+            assert!(config.start().await.is_ok());
+            assert!(config.is_healthy());
+        }
+
+        #[tokio::test]
+        async fn test_stop_lifecycle() {
+            let config = InMemoryConfig::new();
+            assert!(config.is_healthy());
+            assert!(config.stop().await.is_ok());
+            assert!(!config.is_healthy());
+        }
+
+        #[test]
+        fn test_builder_default_impl() {
+            let builder = InMemoryConfigBuilder::default();
+            let config = builder.build();
+            assert_eq!(config.max_capacity(), 10_000);
+            assert_eq!(config.default_priority(), 0);
+            assert_eq!(config.source_id().as_str(), "memory");
+        }
     }
 
     #[cfg(not(any(

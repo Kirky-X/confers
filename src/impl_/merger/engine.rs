@@ -375,4 +375,530 @@ mod tests {
         let result = e.merge(&l, &h).unwrap();
         assert!(matches!(result.inner, ConfigValue::Map(_)));
     }
+
+    #[test]
+    fn test_engine_default_impl() {
+        let e = MergeEngine::default();
+        assert_eq!(e.default_strategy, MergeStrategy::Replace);
+    }
+
+    #[test]
+    fn test_with_default_strategy() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::Append);
+        assert_eq!(e.default_strategy, MergeStrategy::Append);
+    }
+
+    #[test]
+    fn test_with_field_strategy_and_get() {
+        let e = MergeEngine::new()
+            .with_default_strategy(MergeStrategy::Replace)
+            .with_field_strategy("special", MergeStrategy::Append);
+        assert_eq!(e.get_strategy("special"), &MergeStrategy::Append);
+        assert_eq!(e.get_strategy("other"), &MergeStrategy::Replace);
+    }
+
+    #[test]
+    fn test_merge_null_low_returns_high() {
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::Null, SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
+        let result = e.merge(&l, &h).unwrap();
+        assert_eq!(result.as_str(), Some("high"));
+    }
+
+    #[test]
+    fn test_merge_join_append_string() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::join_append(","));
+        let l = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("h"), "t");
+        assert_eq!(e.merge(&l, &h).unwrap().as_str(), Some("a,b"));
+    }
+
+    #[test]
+    fn test_merge_prepend_arrays() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::Prepend);
+        let l = AnnotatedValue::new(
+            ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::I64(1),
+                SourceId::new("l"),
+                "t.0",
+            )]),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::I64(2),
+                SourceId::new("h"),
+                "t.0",
+            )]),
+            SourceId::new("h"),
+            "t",
+        );
+        let merged = e.merge(&l, &h).unwrap();
+        let arr = merged.inner.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].as_i64(), Some(2));
+        assert_eq!(arr[1].as_i64(), Some(1));
+    }
+
+    #[test]
+    fn test_merge_custom_strategy() {
+        fn custom_merge(low: &ConfigValue, high: &ConfigValue) -> ConfigValue {
+            match (low, high) {
+                (ConfigValue::String(l), ConfigValue::String(h)) => {
+                    ConfigValue::String(format!("{}+{}", l, h))
+                }
+                _ => high.clone(),
+            }
+        }
+        let e =
+            MergeEngine::new().with_default_strategy(MergeStrategy::custom("test", custom_merge));
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
+        assert_eq!(e.merge(&l, &h).unwrap().as_str(), Some("low+high"));
+    }
+
+    #[test]
+    fn test_merge_type_mismatch_falls_to_high() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::Append);
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::I64(42), SourceId::new("h"), "t");
+        let result = e.merge(&l, &h).unwrap();
+        assert_eq!(result.as_i64(), Some(42));
+    }
+
+    #[test]
+    fn test_merge_nested_maps_with_changes() {
+        let e = MergeEngine::new();
+        let low_inner = IndexMap::from_iter(vec![
+            (
+                Arc::from("a"),
+                AnnotatedValue::new(ConfigValue::string("low_a"), SourceId::new("l"), "t.a"),
+            ),
+            (
+                Arc::from("b"),
+                AnnotatedValue::new(ConfigValue::string("low_b"), SourceId::new("l"), "t.b"),
+            ),
+        ]);
+        let high_inner = IndexMap::from_iter(vec![
+            (
+                Arc::from("a"),
+                AnnotatedValue::new(ConfigValue::string("high_a"), SourceId::new("h"), "t.a"),
+            ),
+            (
+                Arc::from("c"),
+                AnnotatedValue::new(ConfigValue::string("high_c"), SourceId::new("h"), "t.c"),
+            ),
+        ]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(low_inner)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_inner)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        let map = result.inner.as_map().unwrap();
+        assert_eq!(map.len(), 3);
+        assert_eq!(map.get("a").unwrap().as_str(), Some("high_a"));
+        assert_eq!(map.get("b").unwrap().as_str(), Some("low_b"));
+        assert_eq!(map.get("c").unwrap().as_str(), Some("high_c"));
+    }
+
+    #[test]
+    fn test_merge_maps_low_empty() {
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(IndexMap::new())),
+            SourceId::new("l"),
+            "t",
+        );
+        let high_inner = IndexMap::from_iter(vec![(
+            Arc::from("k"),
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("h"), "t.k"),
+        )]);
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_inner)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        let map = result.inner.as_map().unwrap();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("k").unwrap().as_str(), Some("v"));
+    }
+
+    #[test]
+    fn test_merge_maps_no_modification_equal_values() {
+        let e = MergeEngine::new();
+        let inner = IndexMap::from_iter(vec![(
+            Arc::from("k"),
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "t.k"),
+        )]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(inner.clone())),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(ConfigValue::Map(Arc::new(inner)), SourceId::new("h"), "t");
+        let result = e.merge(&l, &h).unwrap();
+        let map = result.inner.as_map().unwrap();
+        assert_eq!(map.get("k").unwrap().as_str(), Some("v"));
+    }
+
+    #[test]
+    fn test_report_conflict_equal_returns_none() {
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::string("same"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("same"), SourceId::new("h"), "t");
+        assert!(e.report_conflict(&l, &h).is_none());
+    }
+
+    #[test]
+    fn test_report_conflict_low_wins() {
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t")
+            .with_priority(100);
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t")
+            .with_priority(1);
+        let report = e.report_conflict(&l, &h).unwrap();
+        assert_eq!(report.winner, ConflictWinner::Low);
+        assert_eq!(report.path.as_ref(), "t");
+    }
+
+    #[test]
+    fn test_report_conflict_with_locations() {
+        let e = MergeEngine::new();
+        let loc = crate::types::SourceLocation::new("f.toml", 1, 1);
+        let l = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("l"), "t")
+            .with_location(loc.clone());
+        let h = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("h"), "t")
+            .with_location(loc);
+        let report = e.report_conflict(&l, &h).unwrap();
+        assert!(report.low_location.is_some());
+        assert!(report.high_location.is_some());
+        assert_eq!(report.low_source.as_str(), "l");
+        assert_eq!(report.high_source.as_str(), "h");
+    }
+
+    #[test]
+    fn test_check_merge_depth_exceeded() {
+        let path: Arc<str> = Arc::from("deep.path");
+        let result = check_merge_depth(MAX_MERGE_DEPTH + 1, &path);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConfigError::ParseError {
+                format, message, ..
+            } => {
+                assert_eq!(format, "merge");
+                assert!(message.contains("Maximum merge depth"));
+                assert!(message.contains(&format!("{}", MAX_MERGE_DEPTH)));
+            }
+            other => panic!("expected ParseError, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_check_merge_depth_ok() {
+        let path: Arc<str> = Arc::from("ok.path");
+        assert!(check_merge_depth(0, &path).is_ok());
+        assert!(check_merge_depth(MAX_MERGE_DEPTH, &path).is_ok());
+    }
+
+    #[test]
+    fn test_merge_deep_merge_strategy_on_maps() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let low_inner = IndexMap::from_iter(vec![(
+            Arc::from("a"),
+            AnnotatedValue::new(ConfigValue::string("low_a"), SourceId::new("l"), "t.a"),
+        )]);
+        let high_inner = IndexMap::from_iter(vec![(
+            Arc::from("a"),
+            AnnotatedValue::new(ConfigValue::string("high_a"), SourceId::new("h"), "t.a"),
+        )]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(low_inner)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_inner)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        let map = result.inner.as_map().unwrap();
+        // DeepMerge on leaf strings falls to _ => high.clone()
+        assert_eq!(map.get("a").unwrap().as_str(), Some("high_a"));
+    }
+
+    #[test]
+    fn test_merge_deep_merge_strategy_on_non_maps() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
+        // DeepMerge on non-map falls to _ => high.inner.clone()
+        assert_eq!(e.merge(&l, &h).unwrap().as_str(), Some("high"));
+    }
+
+    #[test]
+    fn test_merge_nested_maps_recursive() {
+        let e = MergeEngine::new();
+        // Create two-level nested maps: {outer: {inner: "value"}}
+        let low_inner = IndexMap::from_iter(vec![(
+            Arc::from("inner"),
+            AnnotatedValue::new(
+                ConfigValue::string("low_inner"),
+                SourceId::new("l"),
+                "t.outer.inner",
+            ),
+        )]);
+        let low_outer = IndexMap::from_iter(vec![(
+            Arc::from("outer"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(low_inner)),
+                SourceId::new("l"),
+                "t.outer",
+            ),
+        )]);
+        let high_inner = IndexMap::from_iter(vec![(
+            Arc::from("inner"),
+            AnnotatedValue::new(
+                ConfigValue::string("high_inner"),
+                SourceId::new("h"),
+                "t.outer.inner",
+            ),
+        )]);
+        let high_outer = IndexMap::from_iter(vec![(
+            Arc::from("outer"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(high_inner)),
+                SourceId::new("h"),
+                "t.outer",
+            ),
+        )]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(low_outer)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_outer)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        let outer_map = result.inner.as_map().unwrap();
+        let inner_av = outer_map.get("outer").unwrap();
+        let inner_map = inner_av.inner.as_map().unwrap();
+        assert_eq!(inner_map.get("inner").unwrap().as_str(), Some("high_inner"));
+    }
+
+    #[test]
+    fn test_merge_join_append_arrays() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::join_append(","));
+        let l = AnnotatedValue::new(
+            ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::I64(1),
+                SourceId::new("l"),
+                "t.0",
+            )]),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::array(vec![AnnotatedValue::new(
+                ConfigValue::I64(2),
+                SourceId::new("h"),
+                "t.0",
+            )]),
+            SourceId::new("h"),
+            "t",
+        );
+        let merged = e.merge(&l, &h).unwrap();
+        let arr = merged.inner.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0].as_i64(), Some(1));
+        assert_eq!(arr[1].as_i64(), Some(2));
+    }
+
+    #[test]
+    fn test_values_equal_replace_equal() {
+        let s = MergeStrategy::Replace;
+        assert!(values_equal(
+            &ConfigValue::string("a"),
+            &ConfigValue::string("a"),
+            &s
+        ));
+        assert!(!values_equal(
+            &ConfigValue::string("a"),
+            &ConfigValue::string("b"),
+            &s
+        ));
+    }
+
+    #[test]
+    fn test_values_equal_map_always_false() {
+        let m1 = ConfigValue::Map(Arc::new(IndexMap::new()));
+        let m2 = ConfigValue::Map(Arc::new(IndexMap::new()));
+        // For non-Replace strategies, Map/Map always returns false (conservative)
+        assert!(!values_equal(&m1, &m2, &MergeStrategy::Append));
+        assert!(!values_equal(&m1, &m2, &MergeStrategy::DeepMerge));
+    }
+
+    #[test]
+    fn test_values_equal_string_join_false() {
+        let s1 = ConfigValue::string("a");
+        let s2 = ConfigValue::string("a");
+        assert!(!values_equal(&s1, &s2, &MergeStrategy::join(":")));
+        assert!(!values_equal(&s1, &s2, &MergeStrategy::join_append(",")));
+    }
+
+    #[test]
+    fn test_values_equal_array_strategies_false() {
+        let a1 = ConfigValue::array(vec![]);
+        let a2 = ConfigValue::array(vec![]);
+        assert!(!values_equal(&a1, &a2, &MergeStrategy::Append));
+        assert!(!values_equal(&a1, &a2, &MergeStrategy::join_append(",")));
+        assert!(!values_equal(&a1, &a2, &MergeStrategy::Prepend));
+    }
+
+    #[test]
+    fn test_values_equal_deep_merge_non_map() {
+        // DeepMerge on non-map types falls to _ => low == high
+        assert!(values_equal(
+            &ConfigValue::I64(1),
+            &ConfigValue::I64(1),
+            &MergeStrategy::DeepMerge
+        ));
+        assert!(!values_equal(
+            &ConfigValue::I64(1),
+            &ConfigValue::I64(2),
+            &MergeStrategy::DeepMerge
+        ));
+    }
+
+    #[test]
+    fn test_apply_leaf_strategy_replace() {
+        let result = apply_leaf_strategy(
+            &ConfigValue::string("low"),
+            &ConfigValue::string("high"),
+            &MergeStrategy::Replace,
+        );
+        assert_eq!(result.as_str(), Some("high"));
+    }
+
+    #[test]
+    fn test_apply_leaf_strategy_join_and_join_append() {
+        let result = apply_leaf_strategy(
+            &ConfigValue::string("a"),
+            &ConfigValue::string("b"),
+            &MergeStrategy::join("-"),
+        );
+        assert_eq!(result.as_str(), Some("a-b"));
+
+        let result = apply_leaf_strategy(
+            &ConfigValue::string("x"),
+            &ConfigValue::string("y"),
+            &MergeStrategy::join_append("+"),
+        );
+        assert_eq!(result.as_str(), Some("x+y"));
+    }
+
+    #[test]
+    fn test_apply_leaf_strategy_append_prepend() {
+        let low = ConfigValue::array(vec![AnnotatedValue::new(
+            ConfigValue::I64(1),
+            SourceId::new("l"),
+            "t.0",
+        )]);
+        let high = ConfigValue::array(vec![AnnotatedValue::new(
+            ConfigValue::I64(2),
+            SourceId::new("h"),
+            "t.0",
+        )]);
+
+        let appended = apply_leaf_strategy(&low, &high, &MergeStrategy::Append);
+        assert_eq!(appended.as_array().unwrap().len(), 2);
+
+        let prepended = apply_leaf_strategy(&low, &high, &MergeStrategy::Prepend);
+        assert_eq!(prepended.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_apply_leaf_strategy_custom() {
+        fn custom_fn(low: &ConfigValue, _high: &ConfigValue) -> ConfigValue {
+            low.clone()
+        }
+        let result = apply_leaf_strategy(
+            &ConfigValue::string("keep_low"),
+            &ConfigValue::string("ignore_high"),
+            &MergeStrategy::custom("test", custom_fn),
+        );
+        assert_eq!(result.as_str(), Some("keep_low"));
+    }
+
+    #[test]
+    fn test_apply_leaf_strategy_fallback() {
+        // Type mismatch with non-Replace strategy falls to _ => high.clone()
+        let result = apply_leaf_strategy(
+            &ConfigValue::string("low"),
+            &ConfigValue::I64(42),
+            &MergeStrategy::Append,
+        );
+        assert_eq!(result.as_i64(), Some(42));
+    }
+
+    #[test]
+    fn test_report_conflict_high_equal_priority() {
+        // When high.priority >= low.priority, high wins
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t")
+            .with_priority(5);
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t")
+            .with_priority(5);
+        let report = e.report_conflict(&l, &h).unwrap();
+        assert_eq!(report.winner, ConflictWinner::High);
+    }
+
+    #[test]
+    fn test_merge_preserves_priority_and_version() {
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t")
+            .with_priority(10)
+            .with_version(3);
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t")
+            .with_priority(20)
+            .with_version(5);
+        let merged = e.merge(&l, &h).unwrap();
+        assert_eq!(merged.priority, 20); // max(10, 20)
+        assert_eq!(merged.version, 6); // max(3, 5) + 1
+        assert_eq!(merged.source.as_str(), "h"); // high source
+    }
+
+    #[test]
+    fn test_merge_with_location_preserved() {
+        let e = MergeEngine::new();
+        let loc = crate::types::SourceLocation::new("f.toml", 1, 1);
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t")
+            .with_location(loc.clone());
+        let merged = e.merge(&l, &h).unwrap();
+        assert_eq!(merged.location, Some(loc));
+    }
+
+    #[test]
+    fn test_merge_with_location_from_low_when_high_none() {
+        let e = MergeEngine::new();
+        let loc = crate::types::SourceLocation::new("low.toml", 2, 3);
+        let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t")
+            .with_location(loc.clone());
+        let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
+        let merged = e.merge(&l, &h).unwrap();
+        assert_eq!(merged.location, Some(loc));
+    }
 }

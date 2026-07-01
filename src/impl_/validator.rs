@@ -150,4 +150,125 @@ mod tests {
         let rule = ValidationRule::from_str("email");
         assert!(matches!(rule, Some(ValidationRule::Email)));
     }
+
+    #[test]
+    fn test_validation_rule_length_min_only() {
+        let rule = ValidationRule::from_str("length(min=5)");
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Length { min: 5, max }) if max == usize::MAX
+        ));
+    }
+
+    #[test]
+    fn test_validation_rule_length_max_only() {
+        let rule = ValidationRule::from_str("length(max=10)");
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Length { min: 0, max: 10 })
+        ));
+    }
+
+    #[test]
+    fn test_validation_rule_length_no_close_paren() {
+        let rule = ValidationRule::from_str("length(min=5, max=10");
+        assert!(rule.is_none());
+    }
+
+    #[test]
+    fn test_validation_rule_length_invalid_values() {
+        let rule = ValidationRule::from_str("length(min=abc)");
+        assert!(rule.is_none());
+
+        let rule = ValidationRule::from_str("length(max=xyz)");
+        assert!(rule.is_none());
+    }
+
+    #[test]
+    fn test_validation_rule_range_min_only() {
+        let rule = ValidationRule::from_str("range(min=10)");
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Range { min: 10, max }) if max == i64::MAX
+        ));
+    }
+
+    #[test]
+    fn test_validation_rule_range_max_only() {
+        let rule = ValidationRule::from_str("range(max=100)");
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Range { min, max: 100 }) if min == i64::MIN
+        ));
+    }
+
+    #[test]
+    fn test_validation_rule_range_no_close_paren() {
+        let rule = ValidationRule::from_str("range(min=1, max=100");
+        assert!(rule.is_none());
+    }
+
+    #[test]
+    fn test_validation_rule_range_invalid_values() {
+        let rule = ValidationRule::from_str("range(min=abc)");
+        assert!(rule.is_none());
+
+        let rule = ValidationRule::from_str("range(max=xyz)");
+        assert!(rule.is_none());
+    }
+
+    #[test]
+    fn test_validation_rule_url_and_ip() {
+        let rule = ValidationRule::from_str("url");
+        assert!(matches!(rule, Some(ValidationRule::Url)));
+
+        let rule = ValidationRule::from_str("ip");
+        assert!(matches!(rule, Some(ValidationRule::Ip)));
+    }
+
+    #[test]
+    fn test_validation_rule_unknown_returns_none() {
+        let rule = ValidationRule::from_str("unknown_rule");
+        assert!(rule.is_none());
+
+        let rule = ValidationRule::from_str("length");
+        assert!(rule.is_none());
+    }
+
+    #[test]
+    fn test_validation_rule_trim_whitespace() {
+        let rule = ValidationRule::from_str("  email  ");
+        assert!(matches!(rule, Some(ValidationRule::Email)));
+
+        let rule = ValidationRule::from_str("\turl\n");
+        assert!(matches!(rule, Some(ValidationRule::Url)));
+    }
+
+    #[test]
+    fn test_validation_rule_variants_construct_and_derives() {
+        // Construct all variants to cover Debug/Clone/PartialEq/Eq derives
+        let min_len = ValidationRule::MinLength(5);
+        let max_len = ValidationRule::MaxLength(10);
+        let min_val = ValidationRule::MinValue(0);
+        let max_val = ValidationRule::MaxValue(100);
+        let custom = ValidationRule::Custom("my_rule".into());
+
+        // Debug
+        assert!(format!("{:?}", min_len).contains("MinLength"));
+        assert!(format!("{:?}", max_len).contains("MaxLength"));
+        assert!(format!("{:?}", min_val).contains("MinValue"));
+        assert!(format!("{:?}", max_val).contains("MaxValue"));
+        assert!(format!("{:?}", custom).contains("Custom"));
+
+        // Clone + Eq
+        assert_eq!(min_len, min_len.clone());
+        assert_eq!(max_len, max_len.clone());
+        assert_eq!(min_val, min_val.clone());
+        assert_eq!(max_val, max_val.clone());
+        assert_eq!(custom, custom.clone());
+
+        // Inequality
+        assert_ne!(min_len, max_len);
+        assert_ne!(min_val, max_val);
+    }
 }

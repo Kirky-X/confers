@@ -858,4 +858,658 @@ mod tests {
         let nonexistent = registry.get("nonexistent");
         assert!(nonexistent.is_none());
     }
+
+    #[test]
+    fn test_module_config_profile_count_zero() {
+        let config = ModuleConfig::new("empty", vec![], None);
+        assert_eq!(config.profile_count(), 0);
+        assert!(config.profiles().is_empty());
+    }
+
+    #[test]
+    fn test_module_config_profile_count_multiple() {
+        let config = ModuleConfig::new(
+            "database",
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+                ("sqlite", PathBuf::from("conf/db/sqlite.toml")),
+            ],
+            None,
+        );
+        assert_eq!(config.profile_count(), 3);
+        assert_eq!(config.profiles().len(), 3);
+    }
+
+    #[test]
+    fn test_module_config_new_empty_paths_no_default() {
+        // When paths is empty and no default provided, active_profile is "".
+        let config = ModuleConfig::new("orphan", vec![], None);
+        assert_eq!(config.active_profile(), "");
+        assert_eq!(config.profile_count(), 0);
+        assert!(config.profiles().is_empty());
+    }
+
+    #[test]
+    fn test_module_config_new_empty_paths_with_default() {
+        // Default is honored even when paths is empty (active_profile = default).
+        let config = ModuleConfig::new("ghost", vec![], Some("phantom"));
+        assert_eq!(config.active_profile(), "phantom");
+    }
+
+    #[test]
+    fn test_module_config_set_active_profile_success() {
+        let mut config = ModuleConfig::new(
+            "database",
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+        assert_eq!(config.active_profile(), "mysql");
+        config.set_active_profile("postgresql").expect("set_active");
+        assert_eq!(config.active_profile(), "postgresql");
+    }
+
+    #[test]
+    fn test_module_config_set_active_profile_nonexistent_errors() {
+        let mut config = ModuleConfig::new(
+            "database",
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+        let err = config.set_active_profile("nonexistent").unwrap_err();
+        match err {
+            ConfigError::ModuleNotFound { group, module } => {
+                assert_eq!(group, "database");
+                assert_eq!(module, "nonexistent");
+            }
+            other => panic!("expected ModuleNotFound, got {:?}", other),
+        }
+        // Active profile must remain unchanged after the error
+        assert_eq!(config.active_profile(), "mysql");
+    }
+
+    #[test]
+    fn test_module_config_set_active_profile_idempotent() {
+        let mut config = ModuleConfig::new(
+            "database",
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+        config
+            .set_active_profile("mysql")
+            .expect("set same profile");
+        assert_eq!(config.active_profile(), "mysql");
+    }
+
+    #[test]
+    fn test_register_group_returns_self_for_chaining() {
+        let mut registry = ModuleRegistry::default();
+        // register_group returns &mut Self, enabling builder-style chaining.
+        registry
+            .register_group("a", vec![], None)
+            .register_group("b", vec![], None)
+            .register_group("c", vec![], None);
+        assert_eq!(registry.len(), 3);
+        assert!(registry.contains("a"));
+        assert!(registry.contains("b"));
+        assert!(registry.contains("c"));
+    }
+
+    #[test]
+    fn test_register_group_overwrites_existing() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![("mysql", PathBuf::from("old/mysql.toml"))],
+            Some("mysql"),
+        );
+        // Re-register the same group with different profiles.
+        registry.register_group(
+            "database",
+            vec![("postgresql", PathBuf::from("new/postgresql.toml"))],
+            Some("postgresql"),
+        );
+        assert_eq!(registry.len(), 1, "re-register should replace, not add");
+        let config = registry.get("database").unwrap();
+        assert_eq!(config.active_profile(), "postgresql");
+        assert!(!config.has_profile("mysql"));
+        assert!(config.has_profile("postgresql"));
+    }
+
+    #[test]
+    fn test_contains_group() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group("present", vec![], None);
+        assert!(registry.contains("present"));
+        assert!(!registry.contains("absent"));
+    }
+
+    #[test]
+    fn test_load_active_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let mysql_path = create_test_config(&temp_dir, "mysql.toml", "host = \"localhost\"\n");
+        let postgresql_path =
+            create_test_config(&temp_dir, "postgresql.toml", "host = \"pg-host\"\n");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![("mysql", mysql_path), ("postgresql", postgresql_path)],
+            Some("mysql"),
+        );
+
+        let config = LoaderConfig::new()
+            .no_symlink_check()
+            .allow_absolute()
+            .allowed_dirs(Vec::<PathBuf>::new());
+        // load_active uses the currently-active profile ("mysql").
+        let result = registry.load_active("database", &config);
+        assert!(result.is_ok(), "load_active should succeed: {:?}", result);
+
+        // Now switch active profile and load again.
+        registry
+            .set_active_profile("database", "postgresql")
+            .unwrap();
+        let result = registry.load_active("database", &config);
+        assert!(result.is_ok(), "load_active with new profile: {:?}", result);
+    }
+
+    #[test]
+    fn test_active_profiles_empty_registry() {
+        let registry = ModuleRegistry::default();
+        let map = registry.active_profiles();
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn test_active_profiles_returns_all_groups() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+        registry.register_group(
+            "cache",
+            vec![("redis", PathBuf::from("conf/cache/redis.toml"))],
+            Some("redis"),
+        );
+        let map = registry.active_profiles();
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("database").map(|s| s.as_ref()), Some("mysql"));
+        assert_eq!(map.get("cache").map(|s| s.as_ref()), Some("redis"));
+    }
+
+    #[test]
+    fn test_active_profiles_reflects_set_active_profile() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+        let before = registry.active_profiles();
+        assert_eq!(before.get("database").map(|s| s.as_ref()), Some("mysql"));
+
+        registry
+            .set_active_profile("database", "postgresql")
+            .unwrap();
+        let after = registry.active_profiles();
+        assert_eq!(
+            after.get("database").map(|s| s.as_ref()),
+            Some("postgresql")
+        );
+    }
+
+    #[test]
+    fn test_validate_active_profiles_empty_registry_ok() {
+        let registry = ModuleRegistry::default();
+        registry
+            .validate_active_profiles()
+            .expect("empty registry has no profiles to validate");
+    }
+
+    #[test]
+    fn test_validate_active_profiles_all_exist_ok() {
+        let temp_dir = TempDir::new().unwrap();
+        let mysql_path = create_test_config(&temp_dir, "mysql.toml", "host = \"localhost\"\n");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group("database", vec![("mysql", mysql_path)], Some("mysql"));
+        registry
+            .validate_active_profiles()
+            .expect("all active profile files exist");
+    }
+
+    #[test]
+    fn test_validate_active_profiles_missing_file_errors() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![("mysql", PathBuf::from("/nonexistent/mysql.toml"))],
+            Some("mysql"),
+        );
+        let err = registry.validate_active_profiles().unwrap_err();
+        match err {
+            ConfigError::FileNotFound { filename, .. } => {
+                assert!(filename.to_string_lossy().contains("mysql.toml"));
+            }
+            other => panic!("expected FileNotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_validate_active_profiles_checks_active_profile_not_listed() {
+        // Edge case: active_profile points to a profile that has no path entry.
+        // This can only happen if the module was constructed with an empty paths
+        // list but a non-empty default.
+        let mut registry = ModuleRegistry::default();
+        // Register a group with no profiles but a default active profile.
+        registry.register_group("ghost", vec![], Some("phantom"));
+        let err = registry.validate_active_profiles().unwrap_err();
+        match err {
+            ConfigError::ModuleNotFound { group, module } => {
+                assert_eq!(group, "ghost");
+                assert_eq!(module, "phantom");
+            }
+            other => panic!("expected ModuleNotFound, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_list_groups_empty_registry() {
+        let registry = ModuleRegistry::default();
+        assert!(registry.list_groups().is_empty());
+    }
+
+    #[test]
+    fn test_list_groups_returns_all_registered() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group("alpha", vec![], None);
+        registry.register_group("beta", vec![], None);
+        registry.register_group("gamma", vec![], None);
+        let groups = registry.list_groups();
+        assert_eq!(groups.len(), 3);
+        // Each group name should be present (order is not guaranteed by HashMap).
+        let names: Vec<String> = groups.iter().map(|s| s.to_string()).collect();
+        assert!(names.contains(&"alpha".to_string()));
+        assert!(names.contains(&"beta".to_string()));
+        assert!(names.contains(&"gamma".to_string()));
+    }
+
+    #[test]
+    fn test_get_returns_none_for_missing_group() {
+        let registry = ModuleRegistry::default();
+        assert!(registry.get("does-not-exist").is_none());
+    }
+
+    #[test]
+    fn test_len_and_is_empty_consistency() {
+        let mut registry = ModuleRegistry::default();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+        registry.register_group("one", vec![], None);
+        assert!(!registry.is_empty());
+        assert_eq!(registry.len(), 1);
+        registry.register_group("two", vec![], None);
+        assert_eq!(registry.len(), 2);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_module_from_env_changes_profile() {
+        // Use a unique group name to avoid collision with other env-var tests.
+        let unique_group = "envresolve_single_ok";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "postgresql");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        let changed = registry
+            .resolve_module_from_env(unique_group, None)
+            .expect("resolve_module_from_env");
+        assert!(changed, "profile should have changed due to env var");
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "postgresql"
+        );
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_module_from_env_no_env_var_returns_false() {
+        let unique_group = "envresolve_single_novar";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::remove_var(&env_key);
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        let changed = registry
+            .resolve_module_from_env(unique_group, None)
+            .expect("resolve_module_from_env");
+        assert!(!changed, "no env var set → must return false");
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "mysql"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_module_from_env_nonexistent_group_errors() {
+        let err = registry_helper_nonexistent_group();
+        match err {
+            ConfigError::ModuleNotFound { group, module } => {
+                assert_eq!(group, "definitely_not_registered");
+                assert_eq!(module, "env");
+            }
+            other => panic!("expected ModuleNotFound, got {:?}", other),
+        }
+    }
+
+    fn registry_helper_nonexistent_group() -> ConfigError {
+        let mut registry = ModuleRegistry::default();
+        registry
+            .resolve_module_from_env("definitely_not_registered", None)
+            .unwrap_err()
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_module_from_env_invalid_profile_ignored() {
+        // If the env var points to a non-existent profile, the method must NOT
+        // error — it silently ignores the invalid profile and returns false.
+        let unique_group = "envresolve_single_bad_profile";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "nonexistent-profile");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+
+        let changed = registry
+            .resolve_module_from_env(unique_group, None)
+            .expect("must not error for invalid profile");
+        assert!(
+            !changed,
+            "invalid profile should be ignored (changed=false)"
+        );
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "mysql"
+        );
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_module_from_env_with_prefix() {
+        let unique_group = "envresolve_prefix";
+        let env_key = format!("PREFIX_{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "postgresql");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        let changed = registry
+            .resolve_module_from_env(unique_group, Some("PREFIX_"))
+            .expect("resolve_module_from_env with prefix");
+        assert!(changed);
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "postgresql"
+        );
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_from_env_updates_all_matching_groups() {
+        let unique_a = "envresolve_batch_a";
+        let unique_b = "envresolve_batch_b";
+        let env_a = format!("{}_PROFILE", unique_a.to_uppercase());
+        let env_b = format!("{}_PROFILE", unique_b.to_uppercase());
+        std::env::set_var(&env_a, "postgresql");
+        std::env::set_var(&env_b, "redis");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_a,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+        registry.register_group(
+            unique_b,
+            vec![
+                ("memory", PathBuf::from("conf/cache/memory.toml")),
+                ("redis", PathBuf::from("conf/cache/redis.toml")),
+            ],
+            Some("memory"),
+        );
+
+        registry.resolve_from_env(None);
+        assert_eq!(
+            registry.get_active_profile(unique_a).unwrap().as_ref(),
+            "postgresql"
+        );
+        assert_eq!(
+            registry.get_active_profile(unique_b).unwrap().as_ref(),
+            "redis"
+        );
+
+        std::env::remove_var(&env_a);
+        std::env::remove_var(&env_b);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_from_env_ignores_nonexistent_profile() {
+        let unique_group = "envresolve_batch_ignore";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "does-not-exist");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+
+        // Must not panic and must not change the active profile.
+        registry.resolve_from_env(None);
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "mysql"
+        );
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_from_env_no_env_vars_is_noop() {
+        let unique_group = "envresolve_batch_noop";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::remove_var(&env_key);
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        registry.resolve_from_env(None);
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "mysql"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_from_env_with_prefix() {
+        let unique_group = "envresolve_batch_prefix";
+        let env_key = format!("APP_{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "postgresql");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        registry.resolve_from_env(Some("APP_"));
+        assert_eq!(
+            registry.get_active_profile(unique_group).unwrap().as_ref(),
+            "postgresql"
+        );
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_resolve_from_env_returns_self_for_chaining() {
+        let unique_group = "envresolve_chain";
+        let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
+        std::env::set_var(&env_key, "postgresql");
+
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            unique_group,
+            vec![
+                ("mysql", PathBuf::from("conf/db/mysql.toml")),
+                ("postgresql", PathBuf::from("conf/db/postgresql.toml")),
+            ],
+            Some("mysql"),
+        );
+
+        // resolve_from_env returns &mut Self, allowing chaining.
+        registry
+            .resolve_from_env(None)
+            .register_group("added-after-resolve", vec![], None);
+        assert!(registry.contains("added-after-resolve"));
+
+        std::env::remove_var(&env_key);
+    }
+
+    #[test]
+    fn test_module_config_name() {
+        let config = ModuleConfig::new("my-group", vec![], None);
+        assert_eq!(config.name(), "my-group");
+    }
+
+    #[test]
+    fn test_module_config_get_profile_returns_path() {
+        let path = PathBuf::from("conf/db/mysql.toml");
+        let config = ModuleConfig::new("database", vec![("mysql", path.clone())], Some("mysql"));
+        let got = config.get_profile("mysql").expect("profile must exist");
+        assert_eq!(got, &path);
+    }
+
+    #[test]
+    fn test_module_config_get_profile_missing_returns_none() {
+        let config = ModuleConfig::new(
+            "database",
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+        assert!(config.get_profile("oracle").is_none());
+    }
+
+    #[test]
+    fn test_module_config_active_profile_after_construction() {
+        // With default
+        let with_default = ModuleConfig::new(
+            "db",
+            vec![("mysql", PathBuf::from("m.toml"))],
+            Some("mysql"),
+        );
+        assert_eq!(with_default.active_profile(), "mysql");
+
+        // Without default, uses first profile
+        let first_used = ModuleConfig::new(
+            "db",
+            vec![
+                ("mysql", PathBuf::from("m.toml")),
+                ("postgresql", PathBuf::from("p.toml")),
+            ],
+            None,
+        );
+        assert_eq!(first_used.active_profile(), "mysql");
+    }
+
+    #[test]
+    fn test_module_registry_with_capacity_zero() {
+        let registry = ModuleRegistry::with_capacity(0);
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+    }
+
+    #[test]
+    fn test_load_module_with_wrong_profile_name_errors() {
+        let mut registry = ModuleRegistry::default();
+        registry.register_group(
+            "database",
+            vec![("mysql", PathBuf::from("conf/db/mysql.toml"))],
+            Some("mysql"),
+        );
+        let err = registry
+            .load_module("database", "oracle", &LoaderConfig::default())
+            .unwrap_err();
+        match err {
+            ConfigError::ModuleNotFound { group, module } => {
+                assert_eq!(group, "database");
+                assert_eq!(module, "oracle");
+            }
+            other => panic!("expected ModuleNotFound, got {:?}", other),
+        }
+    }
 }
