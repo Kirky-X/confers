@@ -19,7 +19,14 @@ use std::sync::Arc;
 type CallbackId = u64;
 
 /// Callback storage for dynamic field change notifications using DashMap for high concurrency.
-type CallbackStorage<T> = Arc<DashMap<CallbackId, Box<dyn Fn(&T) + Send + Sync>>>;
+///
+/// Uses `Arc<dyn Fn>` (not `Box`) so callbacks can be snapshotted out of the
+/// DashMap without holding the shard read lock during callback execution
+/// (M3: prevents deadlock if a callback registers/unregisters callbacks).
+type CallbackStorage<T> = Arc<DashMap<CallbackId, Arc<dyn Fn(&T) + Send + Sync>>>;
+
+/// Snapshot of a callback taken out of the DashMap for lock-free invocation.
+type CallbackSnapshot<T> = Arc<dyn Fn(&T) + Send + Sync>;
 
 /// Field-level dynamic property handle.
 ///
@@ -90,7 +97,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// ```
     pub fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        self.callbacks.insert(id, Box::new(f));
+        self.callbacks.insert(id, Arc::new(f));
         let callbacks = Arc::clone(&self.callbacks);
         CallbackGuard::new(Box::new(move || {
             callbacks.remove(&id);
@@ -98,10 +105,20 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     }
 
     /// Update value and trigger all callbacks.
+    ///
+    /// Callbacks are snapshotted out of the DashMap before invocation to
+    /// avoid holding a shard read lock during callback execution (M3: a
+    /// callback that calls `on_change` or `update` would otherwise deadlock
+    /// on the same shard's write lock — CWE-667).
     pub fn update(&self, new_val: T) {
         self.value.store(Arc::new(new_val.clone()));
-        for entry in self.callbacks.iter() {
-            let callback: &(dyn Fn(&T) + Send + Sync) = entry.value();
+        // Clone Arc references out so no DashMap lock is held during callbacks.
+        let snapshots: Vec<CallbackSnapshot<T>> = self
+            .callbacks
+            .iter()
+            .map(|e| Arc::clone(e.value()))
+            .collect();
+        for callback in &snapshots {
             callback(&new_val);
         }
     }
@@ -366,5 +383,64 @@ mod tests {
         }
         // After guard drops, callback should be removed
         assert_eq!(field.callback_count(), 0);
+    }
+
+    /// M3 regression: a callback that registers a NEW callback during
+    /// `update()` must not deadlock. The old implementation held a DashMap
+    /// shard read lock during iteration, so `on_change()` (which needs a
+    /// write lock on the same shard) would block forever.
+    #[test]
+    fn test_update_callback_that_registers_callback_does_not_deadlock() {
+        let field = DynamicField::new(0u32);
+        let inner = Arc::new(field);
+
+        // The first callback registers a second callback when invoked.
+        // With the old code, this would deadlock because `update()` held
+        // a read lock on the DashMap shard while iterating, and `on_change()`
+        // tried to acquire a write lock on the same shard.
+        let inner_clone = Arc::clone(&inner);
+        let _guard1 = inner.on_change(move |&val| {
+            if val == 1 {
+                // Register a second callback from inside the first callback.
+                let _guard2 = inner_clone.on_change(|_| {});
+                // guard2 is dropped here — also exercises remove() under lock.
+            }
+        });
+
+        // This must complete without deadlocking.
+        inner.update(1);
+        // After the update, the second callback was registered and then
+        // dropped (guard2 went out of scope inside the closure), so the
+        // callback count should return to 1.
+        assert_eq!(
+            inner.callback_count(),
+            1,
+            "second callback should have been deregistered when its guard dropped"
+        );
+    }
+
+    /// M3 regression: a callback that calls `update()` (reentrant) must not
+    /// deadlock. The snapshotted iteration ensures no lock is held during
+    /// callback execution.
+    #[test]
+    fn test_update_callback_that_calls_update_does_not_deadlock() {
+        let field = DynamicField::new(0u32);
+        let inner = Arc::new(field);
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        let inner_clone = Arc::clone(&inner);
+        let count_clone = Arc::clone(&call_count);
+        let _guard = inner.on_change(move |&val| {
+            count_clone.fetch_add(1, Ordering::SeqCst);
+            // Reentrant update: only recurse once to avoid infinite loop.
+            if val == 1 {
+                inner_clone.update(2);
+            }
+        });
+
+        inner.update(1);
+        // The callback should have been called twice: once for update(1)
+        // and once for the reentrant update(2).
+        assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
 }

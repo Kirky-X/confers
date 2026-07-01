@@ -722,7 +722,18 @@ pub fn parse_ini(
         invalid_lines.push((line_num + 1, line.to_string(), "invalid INI syntax"));
     }
 
-    // INI parsing completed - invalid lines were tracked but not logged in production
+    // M2 (Rule 12: Fail Loud): Surface invalid lines instead of silently
+    // dropping them. The count and details go to stderr so callers can
+    // diagnose malformed INI files.
+    if !invalid_lines.is_empty() {
+        eprintln!(
+            "WARN: parse_ini skipped {} invalid line(s):",
+            invalid_lines.len()
+        );
+        for (line_num, line_text, reason) in &invalid_lines {
+            eprintln!("  line {}: {} — {}", line_num, line_text, reason);
+        }
+    }
 
     // Build the map manually to avoid closure borrow issues
     let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();

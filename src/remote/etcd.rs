@@ -200,13 +200,26 @@ impl EtcdSource {
 
         let kvs = get_response.kvs();
         for kv in kvs.iter() {
-            // Get key as bytes and convert to string
+            // Get key as bytes and convert to string.
+            // M6: Use String::from_utf8 (not from_utf8_lossy) to surface
+            // invalid UTF-8 as an error instead of silently replacing
+            // invalid bytes with U+FFFD (Rule 12: Fail Loud).
             let key_bytes: &[u8] = kv.key();
-            let key = String::from_utf8_lossy(key_bytes).to_string();
+            let key =
+                String::from_utf8(key_bytes.to_vec()).map_err(|e| ConfigError::InvalidValue {
+                    key: "etcd".to_string(),
+                    expected_type: "UTF-8 key".to_string(),
+                    message: format!("etcd key is not valid UTF-8: {}", e),
+                })?;
 
-            // Get value as bytes and convert to string
+            // Get value as bytes and convert to string (same M6 fix).
             let value_bytes: &[u8] = kv.value();
-            let value = String::from_utf8_lossy(value_bytes).to_string();
+            let value =
+                String::from_utf8(value_bytes.to_vec()).map_err(|e| ConfigError::InvalidValue {
+                    key: "etcd".to_string(),
+                    expected_type: "UTF-8 value".to_string(),
+                    message: format!("etcd value for key '{}' is not valid UTF-8: {}", key, e),
+                })?;
 
             // Remove prefix from key
             let relative_key: String = if key.starts_with(&*self.prefix) {

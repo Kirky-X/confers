@@ -412,12 +412,27 @@ impl ConsulSource {
     }
 }
 
-/// Decode base64 string.
-fn base64_decode(input: &str) -> Result<String, base64::DecodeError> {
+/// Decode base64 string to UTF-8.
+///
+/// Returns `ConfigError::InvalidValue` if either the base64 decode or the
+/// subsequent UTF-8 conversion fails. Previously, invalid UTF-8 was silently
+/// replaced with an empty string (`unwrap_or_default`), causing data
+/// corruption (M5 — Rule 12: Fail Loud).
+fn base64_decode(input: &str) -> Result<String, ConfigError> {
     use base64::Engine;
     let engine = base64::engine::general_purpose::STANDARD;
-    let decoded = engine.decode(input)?;
-    Ok(String::from_utf8(decoded).unwrap_or_default())
+    let decoded = engine
+        .decode(input)
+        .map_err(|e| ConfigError::InvalidValue {
+            key: "consul".to_string(),
+            expected_type: "base64".to_string(),
+            message: format!("base64 decode failed: {}", e),
+        })?;
+    String::from_utf8(decoded).map_err(|e| ConfigError::InvalidValue {
+        key: "consul".to_string(),
+        expected_type: "UTF-8 string".to_string(),
+        message: format!("base64-decoded bytes are not valid UTF-8: {}", e),
+    })
 }
 
 #[async_trait]
@@ -666,6 +681,23 @@ mod tests {
         // "config value" in base64
         let result = base64_decode("Y29uZmlnIHZhbHVl").unwrap();
         assert_eq!(result, "config value");
+    }
+
+    /// M5: base64-decoded bytes that are NOT valid UTF-8 must return an
+    /// error, not silently become an empty string (Rule 12: Fail Loud).
+    #[test]
+    fn test_base64_decode_invalid_utf8_returns_error() {
+        // "/w==" decodes to byte 0xFF, which is invalid UTF-8.
+        let result = base64_decode("/w==");
+        assert!(
+            result.is_err(),
+            "invalid UTF-8 after base64 decode must error, got: {result:?}"
+        );
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("not valid UTF-8"),
+            "error should mention UTF-8 failure: {err}"
+        );
     }
 
     #[test]
