@@ -16,6 +16,17 @@ use std::time::Duration;
 /// Default poll interval for Consul (30 seconds).
 pub const DEFAULT_CONSUL_POLL_INTERVAL: Duration = Duration::from_secs(30);
 
+/// Default maximum Consul HTTP response body size in bytes (16 MB).
+///
+/// Guards against DoS/OOM from oversized Consul KV responses (CWE-400).
+/// Config KV dumps are typically small; 16 MB is a generous upper bound.
+pub const DEFAULT_MAX_CONSUL_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+
+/// Default maximum number of KV entries in a single Consul response (10,000).
+///
+/// Guards against unbounded array deserialization (CWE-502).
+pub const DEFAULT_MAX_CONSUL_KV_ENTRIES: usize = 10_000;
+
 /// Consul KV response entry.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -36,6 +47,8 @@ pub struct ConsulSourceBuilder {
     format: Option<Format>,
     interval: Option<Duration>,
     tls_skip_verify: bool,
+    max_response_bytes: usize,
+    max_kv_entries: usize,
 }
 
 /// TLS configuration for Consul connection.
@@ -56,6 +69,8 @@ impl ConsulSourceBuilder {
             format: None,
             interval: None,
             tls_skip_verify: false,
+            max_response_bytes: DEFAULT_MAX_CONSUL_RESPONSE_BYTES,
+            max_kv_entries: DEFAULT_MAX_CONSUL_KV_ENTRIES,
         }
     }
 
@@ -108,6 +123,25 @@ impl ConsulSourceBuilder {
         self
     }
 
+    /// Set the maximum HTTP response body size in bytes.
+    ///
+    /// Responses larger than this are rejected with `ConfigError::SizeLimitExceeded`
+    /// before deserialization, preventing DoS/OOM from oversized Consul KV dumps.
+    pub fn max_response_bytes(mut self, bytes: usize) -> Self {
+        self.max_response_bytes = bytes;
+        self
+    }
+
+    /// Set the maximum number of KV entries accepted in a single response.
+    ///
+    /// Responses with more entries than this are rejected with
+    /// `ConfigError::SizeLimitExceeded` after deserialization, preventing
+    /// unbounded array expansion.
+    pub fn max_kv_entries(mut self, entries: usize) -> Self {
+        self.max_kv_entries = entries;
+        self
+    }
+
     /// Build the Consul source.
     pub fn build(self) -> ConfigResult<ConsulSource> {
         let client = Client::builder()
@@ -128,6 +162,8 @@ impl ConsulSourceBuilder {
             token: self.token.map(Arc::from),
             last_index: Arc::new(std::sync::Mutex::new(0u64)),
             cached_value: Arc::new(std::sync::RwLock::new(None)),
+            max_response_bytes: self.max_response_bytes,
+            max_kv_entries: self.max_kv_entries,
         })
     }
 }
@@ -149,6 +185,8 @@ pub struct ConsulSource {
     token: Option<Arc<str>>,
     last_index: Arc<std::sync::Mutex<u64>>,
     cached_value: Arc<std::sync::RwLock<Option<AnnotatedValue>>>,
+    max_response_bytes: usize,
+    max_kv_entries: usize,
 }
 
 impl ConsulSource {
@@ -202,7 +240,7 @@ impl ConsulSource {
         }
 
         // Make the request
-        let response = request
+        let mut response = request
             .send()
             .await
             .map_err(|e| ConfigError::InvalidValue {
@@ -219,15 +257,54 @@ impl ConsulSource {
             });
         }
 
+        // H1 (CWE-400 + CWE-502): Enforce response size limit BEFORE
+        // deserialization to prevent DoS/OOM from oversized responses.
+        // 1. Check Content-Length header first (fail fast, no body read).
+        if let Some(content_length) = response.content_length() {
+            if (content_length as usize) > self.max_response_bytes {
+                return Err(ConfigError::SizeLimitExceeded {
+                    actual: content_length as usize,
+                    limit: self.max_response_bytes,
+                });
+            }
+        }
+
+        // 2. Read body in chunks, enforcing the size limit as we go.
+        //    This catches servers that lie about (or omit) Content-Length.
+        let mut body: Vec<u8> = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "consul".to_string(),
+                expected_type: "Consul KV response".to_string(),
+                message: format!("Failed to read Consul response body: {}", e),
+            })?
+        {
+            if body.len() + chunk.len() > self.max_response_bytes {
+                return Err(ConfigError::SizeLimitExceeded {
+                    actual: body.len() + chunk.len(),
+                    limit: self.max_response_bytes,
+                });
+            }
+            body.extend_from_slice(&chunk);
+        }
+
+        // 3. Deserialize the bounded body.
         let kv_responses: Vec<KvResponse> =
-            response
-                .json()
-                .await
-                .map_err(|e| ConfigError::InvalidValue {
-                    key: "consul".to_string(),
-                    expected_type: "Consul KV response".to_string(),
-                    message: format!("Failed to parse Consul response: {}", e),
-                })?;
+            serde_json::from_slice(&body).map_err(|e| ConfigError::InvalidValue {
+                key: "consul".to_string(),
+                expected_type: "Consul KV response".to_string(),
+                message: format!("Failed to parse Consul response: {}", e),
+            })?;
+
+        // 4. Guard against unbounded array expansion (CWE-502).
+        if kv_responses.len() > self.max_kv_entries {
+            return Err(ConfigError::SizeLimitExceeded {
+                actual: kv_responses.len(),
+                limit: self.max_kv_entries,
+            });
+        }
 
         if kv_responses.is_empty() {
             // Return cached value if no changes
@@ -410,6 +487,11 @@ mod tests {
         assert_eq!(builder.format, None);
         assert_eq!(builder.interval, None);
         assert!(!builder.tls_skip_verify);
+        assert_eq!(
+            builder.max_response_bytes,
+            DEFAULT_MAX_CONSUL_RESPONSE_BYTES
+        );
+        assert_eq!(builder.max_kv_entries, DEFAULT_MAX_CONSUL_KV_ENTRIES);
     }
 
     #[test]
@@ -928,5 +1010,102 @@ mod tests {
         // a static "consul"), not the inherent source_id.
         let id = <ConsulSource as AsyncSource>::source_id(&source);
         assert_eq!(id.as_str(), "consul");
+    }
+
+    // --- H1 regression tests: response size & entry count limits ---
+
+    #[test]
+    fn test_builder_max_response_bytes() {
+        let builder = ConsulSourceBuilder::new().max_response_bytes(1024);
+        assert_eq!(builder.max_response_bytes, 1024);
+    }
+
+    #[test]
+    fn test_builder_max_kv_entries() {
+        let builder = ConsulSourceBuilder::new().max_kv_entries(500);
+        assert_eq!(builder.max_kv_entries, 500);
+    }
+
+    #[test]
+    fn test_default_max_consul_response_bytes_constant() {
+        assert_eq!(DEFAULT_MAX_CONSUL_RESPONSE_BYTES, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_default_max_consul_kv_entries_constant() {
+        assert_eq!(DEFAULT_MAX_CONSUL_KV_ENTRIES, 10_000);
+    }
+
+    /// H1: A response body larger than `max_response_bytes` is rejected with
+    /// `ConfigError::SizeLimitExceeded`, never reaching the JSON parser.
+    #[tokio::test]
+    async fn test_poll_internal_oversize_body_rejected() {
+        // Build a valid JSON array whose body is 200 bytes (> the 50-byte limit).
+        // Each entry is ~33 bytes, so 6 entries produce ~200 bytes.
+        let body = r#"[
+            {"Key":"k1","Value":"dgVzdA==","ModifyIndex":1},
+            {"Key":"k2","Value":"dgVzdA==","ModifyIndex":2},
+            {"Key":"k3","Value":"dgVzdA==","ModifyIndex":3},
+            {"Key":"k4","Value":"dgVzdA==","ModifyIndex":4},
+            {"Key":"k5","Value":"dgVzdA==","ModifyIndex":5},
+            {"Key":"k6","Value":"dgVzdA==","ModifyIndex":6}
+        ]"#
+        .to_string();
+        assert!(body.len() > 50, "test body must exceed the 50-byte limit");
+
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .max_response_bytes(50)
+            .build()
+            .unwrap();
+        let err = source.poll_internal().await.unwrap_err();
+        assert!(
+            matches!(err, ConfigError::SizeLimitExceeded { .. }),
+            "oversized body should be rejected with SizeLimitExceeded, got: {err}"
+        );
+    }
+
+    /// H1: A response with more KV entries than `max_kv_entries` is rejected
+    /// with `ConfigError::SizeLimitExceeded` after deserialization.
+    #[tokio::test]
+    async fn test_poll_internal_too_many_entries_rejected() {
+        // 3 entries, but limit is 2. Body is small enough to pass the byte limit.
+        let body = r#"[
+            {"Key":"k1","Value":"dgVzdA==","ModifyIndex":1},
+            {"Key":"k2","Value":"dgVzdA==","ModifyIndex":2},
+            {"Key":"k3","Value":"dgVzdA==","ModifyIndex":3}
+        ]"#
+        .to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .max_kv_entries(2)
+            .build()
+            .unwrap();
+        let err = source.poll_internal().await.unwrap_err();
+        assert!(
+            matches!(err, ConfigError::SizeLimitExceeded { actual, limit } if actual == 3 && limit == 2),
+            "too many entries should be rejected with SizeLimitExceeded(3, 2), got: {err}"
+        );
+    }
+
+    /// H1: A response that fits within both limits is accepted normally.
+    #[tokio::test]
+    async fn test_poll_internal_within_limits_succeeds() {
+        let body = r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .max_response_bytes(1024)
+            .max_kv_entries(10)
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
+        assert!(result.is_ok(), "response within limits should succeed");
+        assert!(result.unwrap().is_map());
     }
 }
