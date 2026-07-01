@@ -14,7 +14,7 @@
 //! - `stop()` must flush all pending persistent operations
 //! - FIFO start / LIFO stop order
 
-use crate::error::{ConfigConfigError, ConfigResult};
+use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
 
 #[cfg(any(
     feature = "remote",
@@ -64,9 +64,33 @@ mod async_impl {
             Ok(())
         }
         #[allow(dead_code)]
-        pub(crate) async fn stop_all(&self) {
-            for c in self.components.iter().rev() {
-                let _ = c.1.stop().await;
+        pub(crate) async fn stop_all(&self) -> ConfigResult<()> {
+            // Per ADR-041: stop() must flush all pending persistent operations,
+            // so we MUST call stop() on every component even if some fail.
+            // Collect all errors and aggregate them (Rule 12: Fail Loud).
+            let mut errors: Vec<(String, ConfigError)> = Vec::new();
+            for (name, c) in self.components.iter().rev() {
+                if let Err(e) = c.stop().await {
+                    errors.push((name.clone(), e));
+                }
+            }
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                let detail = errors
+                    .iter()
+                    .map(|(name, e)| format!("  - {}: {}", name, e))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                Err(ConfigError::InvalidValue {
+                    key: "lifecycle".into(),
+                    expected_type: "operational".into(),
+                    message: format!(
+                        "stop_all failed for {} component(s):\n{}",
+                        errors.len(),
+                        detail
+                    ),
+                })
             }
         }
         #[allow(dead_code)]
@@ -123,9 +147,33 @@ mod sync_impl {
             Ok(())
         }
         #[allow(dead_code)]
-        pub(crate) fn stop_all(&self) {
-            for c in self.components.iter().rev() {
-                let _ = c.1.stop();
+        pub(crate) fn stop_all(&self) -> ConfigResult<()> {
+            // Per ADR-041: stop() must flush all pending persistent operations,
+            // so we MUST call stop() on every component even if some fail.
+            // Collect all errors and aggregate them (Rule 12: Fail Loud).
+            let mut errors: Vec<(String, ConfigError)> = Vec::new();
+            for (name, c) in self.components.iter().rev() {
+                if let Err(e) = c.stop() {
+                    errors.push((name.clone(), e));
+                }
+            }
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                let detail = errors
+                    .iter()
+                    .map(|(name, e)| format!("  - {}: {}", name, e))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                Err(ConfigError::InvalidValue {
+                    key: "lifecycle".into(),
+                    expected_type: "operational".into(),
+                    message: format!(
+                        "stop_all failed for {} component(s):\n{}",
+                        errors.len(),
+                        detail
+                    ),
+                })
             }
         }
         #[allow(dead_code)]
@@ -251,7 +299,7 @@ mod tests {
             assert!(c1.0.started.load(std::sync::atomic::Ordering::Acquire));
             assert!(c2.0.started.load(std::sync::atomic::Ordering::Acquire));
 
-            reg.stop_all().await;
+            reg.stop_all().await.unwrap();
             assert!(c1.0.stopped.load(std::sync::atomic::Ordering::Acquire));
             assert!(c2.0.stopped.load(std::sync::atomic::Ordering::Acquire));
         }
@@ -295,7 +343,7 @@ mod tests {
             reg.register("a", c1);
 
             reg.start_all().await.unwrap();
-            reg.stop_all().await;
+            reg.stop_all().await.unwrap();
             let stopped_order = order.lock().unwrap().clone();
             assert_eq!(
                 stopped_order,
@@ -310,7 +358,98 @@ mod tests {
             let reg = LifecycleRegistry::new();
             assert!(reg.is_empty());
             reg.start_all().await.unwrap();
-            reg.stop_all().await;
+            reg.stop_all().await.unwrap();
+        }
+
+        /// Regression test for C-13: stop_all previously swallowed stop() errors
+        /// via `let _ = c.1.stop().await;`. Verifies that:
+        /// 1. stop_all returns Err when any component's stop() fails
+        /// 2. ALL components are still stopped (no short-circuit), per ADR-041
+        /// 3. The aggregated error message lists every failed component (Rule 12)
+        #[tokio::test]
+        async fn test_stop_all_aggregates_errors_and_stops_all() {
+            use super::super::async_impl::LifecycleRegistry;
+            use std::sync::Arc;
+
+            struct FailingStop {
+                name: &'static str,
+                stopped: std::sync::atomic::AtomicBool,
+                fail: bool,
+            }
+            #[async_trait::async_trait]
+            impl crate::Lifecycle for FailingStop {
+                async fn stop(&self) -> crate::ConfigResult<()> {
+                    self.stopped
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    if self.fail {
+                        Err(crate::error::ConfigError::InvalidValue {
+                            key: self.name.into(),
+                            expected_type: "operational".into(),
+                            message: format!("{} failed to flush", self.name),
+                        })
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+
+            let mut reg = LifecycleRegistry::new();
+            // Register 3 components: ok, fail, fail — reverse stop order will be fail, fail, ok
+            let c_ok = Arc::new(FailingStop {
+                name: "ok",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: false,
+            });
+            let c_fail1 = Arc::new(FailingStop {
+                name: "fail1",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: true,
+            });
+            let c_fail2 = Arc::new(FailingStop {
+                name: "fail2",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: true,
+            });
+            reg.register("ok", c_ok.clone());
+            reg.register("fail1", c_fail1.clone());
+            reg.register("fail2", c_fail2.clone());
+
+            let result = reg.stop_all().await;
+
+            // Must return Err (Rule 12: Fail Loud)
+            let err = result.expect_err("stop_all must return Err when components fail");
+
+            // Error message must surface BOTH failures (not just the first)
+            let msg = err.to_string();
+            assert!(
+                msg.contains("fail1"),
+                "aggregated error must mention fail1; got: {}",
+                msg
+            );
+            assert!(
+                msg.contains("fail2"),
+                "aggregated error must mention fail2; got: {}",
+                msg
+            );
+            assert!(
+                msg.contains("2 component(s)"),
+                "error must report failure count; got: {}",
+                msg
+            );
+
+            // ALL components must have been stopped despite failures (ADR-041)
+            assert!(
+                c_ok.stopped.load(std::sync::atomic::Ordering::Acquire),
+                "ok component must still be stopped"
+            );
+            assert!(
+                c_fail1.stopped.load(std::sync::atomic::Ordering::Acquire),
+                "fail1 component must still be stopped"
+            );
+            assert!(
+                c_fail2.stopped.load(std::sync::atomic::Ordering::Acquire),
+                "fail2 component must still be stopped"
+            );
         }
     }
 
@@ -367,7 +506,78 @@ mod tests {
 
             assert!(!reg.is_empty());
             reg.start_all().unwrap();
-            reg.stop_all();
+            reg.stop_all().unwrap();
+        }
+
+        /// Regression test for C-13 (sync variant): stop_all previously swallowed
+        /// stop() errors via `let _ = c.1.stop();`. Verifies that:
+        /// 1. stop_all returns Err when any component's stop() fails
+        /// 2. ALL components are still stopped (no short-circuit), per ADR-041
+        /// 3. The aggregated error message lists every failed component (Rule 12)
+        #[test]
+        fn test_stop_all_aggregates_errors_and_stops_all() {
+            use crate::impl_::lifecycle::sync_impl::LifecycleRegistry;
+
+            struct FailingStop {
+                name: &'static str,
+                stopped: std::sync::atomic::AtomicBool,
+                fail: bool,
+            }
+            impl crate::Lifecycle for FailingStop {
+                fn stop(&self) -> crate::ConfigResult<()> {
+                    self.stopped
+                        .store(true, std::sync::atomic::Ordering::Release);
+                    if self.fail {
+                        Err(crate::error::ConfigError::InvalidValue {
+                            key: self.name.into(),
+                            expected_type: "operational".into(),
+                            message: format!("{} failed to flush", self.name),
+                        })
+                    } else {
+                        Ok(())
+                    }
+                }
+            }
+
+            let mut reg = LifecycleRegistry::new();
+            let c_ok = Box::new(FailingStop {
+                name: "ok",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: false,
+            });
+            let c_fail1 = Box::new(FailingStop {
+                name: "fail1",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: true,
+            });
+            let c_fail2 = Box::new(FailingStop {
+                name: "fail2",
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                fail: true,
+            });
+            reg.register("ok", c_ok);
+            reg.register("fail1", c_fail1);
+            reg.register("fail2", c_fail2);
+
+            let result = reg.stop_all();
+
+            let err = result.expect_err("stop_all must return Err when components fail");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("fail1"),
+                "aggregated error must mention fail1; got: {}",
+                msg
+            );
+            assert!(
+                msg.contains("fail2"),
+                "aggregated error must mention fail2; got: {}",
+                msg
+            );
+            assert!(
+                msg.contains("2 component(s)"),
+                "error must report failure count; got: {}",
+                msg
+            );
         }
     }
 }
