@@ -411,6 +411,7 @@ impl KeyStorage {
 
     fn write_store(&self, store: &EncryptedKeyStore) -> Result<(), ConfigError> {
         let store_path = self.storage_path.join("keys.json");
+        let tmp_path = self.storage_path.join("keys.json.tmp");
         let json = serde_json::to_string_pretty(store).map_err(|e| ConfigError::ParseError {
             format: "key".to_string(),
             message: format!("Failed to serialize key store: {}", e),
@@ -418,17 +419,30 @@ impl KeyStorage {
             source: None,
         })?;
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&store_path)
-            .map_err(|e| {
-                std::io::Error::new(e.kind(), format!("Failed to open key store: {}", e))
+        // 原子写入：先写到临时文件 → fsync → rename 到目标路径
+        // 避免进程崩溃或断电导致 keys.json 被截断/损坏
+        {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&tmp_path)
+                .map_err(|e| {
+                    std::io::Error::new(e.kind(), format!("Failed to open temp key store: {}", e))
+                })?;
+
+            file.write_all(json.as_bytes()).map_err(|e| {
+                std::io::Error::new(e.kind(), format!("Failed to write key store: {}", e))
             })?;
 
-        file.write_all(json.as_bytes()).map_err(|e| {
-            std::io::Error::new(e.kind(), format!("Failed to write key store: {}", e))
+            // fsync 确保数据落盘后再 rename
+            file.sync_all().map_err(|e| {
+                std::io::Error::new(e.kind(), format!("Failed to fsync key store: {}", e))
+            })?;
+        }
+
+        std::fs::rename(&tmp_path, &store_path).map_err(|e| {
+            std::io::Error::new(e.kind(), format!("Failed to rename key store: {}", e))
         })?;
 
         Ok(())
@@ -1785,14 +1799,18 @@ mod tests {
         storage
             .initialize_with_master_key(&master_key, "k".to_string(), "u".to_string())
             .unwrap();
-        // Replace keys.json with a directory — opening a directory for writing
-        // fails with EISDIR, triggering the open error path in write_store.
-        let keys_path = temp_dir.path().join("keys.json");
-        std::fs::remove_file(&keys_path).unwrap();
-        std::fs::create_dir(&keys_path).unwrap();
+        // write_store now writes to keys.json.tmp first (atomic write).
+        // Replace keys.json.tmp with a directory — opening a directory for
+        // writing fails with EISDIR, triggering the open error path.
+        let tmp_path = temp_dir.path().join("keys.json.tmp");
+        std::fs::create_dir(&tmp_path).unwrap();
         let err = storage.save().unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("Failed to open key store"), "got: {}", msg);
+        assert!(
+            msg.contains("Failed to open temp key store"),
+            "got: {}",
+            msg
+        );
     }
 
     #[test]

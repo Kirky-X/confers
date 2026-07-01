@@ -409,8 +409,11 @@ impl EnvSecurityValidator {
 
     /// Sanitize an environment variable value for logging
     pub fn sanitize_for_logging(&self, value: &str) -> String {
-        if value.len() > 100 {
-            format!("{}...", &value[..97])
+        // 按字符计数避免多字节 UTF-8 切片 panic
+        let char_count = value.chars().count();
+        if char_count > 100 {
+            let prefix: String = value.chars().take(97).collect();
+            format!("{}...", prefix)
         } else {
             value.to_string()
         }

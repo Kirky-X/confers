@@ -201,18 +201,17 @@ impl SecureString {
     /// 如果相等返回 Ok(())，否则返回 Err(())
     #[allow(clippy::result_unit_err)]
     pub fn compare(&self, other: &str) -> Result<(), ()> {
-        // 使用恒定时间比较
+        // 长度不同直接失败：长度本身不是秘密，先比较长度是安全的，
+        // 且能避免 zip 提前停止导致循环次数泄露较短字符串长度。
+        if self.data.len() != other.len() {
+            return Err(());
+        }
+        // 恒定时间比较：固定长度循环，对每个字节做 XOR 累积
+        let other_bytes = other.as_bytes();
         let mut result: u8 = 0;
-
-        for (a, b) in self.data.iter().zip(other.bytes()) {
+        for (a, b) in self.data.iter().zip(other_bytes) {
             result |= a ^ b;
         }
-
-        // 检查长度是否相同
-        if self.data.len() != other.len() {
-            result |= 1;
-        }
-
         if result == 0 {
             Ok(())
         } else {
@@ -279,19 +278,22 @@ impl SecureString {
         }
 
         let s = self.as_str();
-        let len = s.len();
+        // 按字符计数而非字节，避免多字节 UTF-8 字符切片 panic
+        let char_count = s.chars().count();
 
-        match len {
+        match char_count {
             0 => "[empty]".to_string(),
-            1..=2 => "*".repeat(len),
+            1..=2 => "*".repeat(char_count),
             3..=4 => {
-                let visible = if len == 3 { 1 } else { 2 };
-                format!("{}{}", &s[..visible], "*".repeat(len - visible))
+                let visible = if char_count == 3 { 1 } else { 2 };
+                let prefix: String = s.chars().take(visible).collect();
+                format!("{}{}", prefix, "*".repeat(char_count - visible))
             }
             _ => {
-                let visible = std::cmp::min(2, len / 4);
-                let masked_chars = std::cmp::min(6, len - visible);
-                format!("{}{}", &s[..visible], "*".repeat(masked_chars))
+                let visible = std::cmp::min(2, char_count / 4);
+                let masked_chars = std::cmp::min(6, char_count - visible);
+                let prefix: String = s.chars().take(visible).collect();
+                format!("{}{}", prefix, "*".repeat(masked_chars))
             }
         }
     }

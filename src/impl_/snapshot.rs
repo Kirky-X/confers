@@ -137,8 +137,16 @@ impl SnapshotManager {
             .await
             .map_err(crate::error::ConfigError::IoError)?;
 
-        let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
-        let filename = format!("config-{}.{}", timestamp, self.config.format.ext());
+        let now = Utc::now();
+        let timestamp = now.format("%Y%m%dT%H%M%SZ");
+        // 添加纳秒后缀防止同秒内多次快照发生文件名碰撞（后者覆盖前者）
+        let nanos = now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+        let filename = format!(
+            "config-{}-{:09}.{}",
+            timestamp,
+            nanos,
+            self.config.format.ext()
+        );
         let path = self.config.dir.join(&filename);
 
         let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);

@@ -165,7 +165,8 @@ impl InjectionRateLimiter {
             }
         }
 
-        Ok(())
+        // CAS 竞争 8 次仍未成功：保守拒绝而非放行（避免限流被绕过）
+        Err(self.window_seconds)
     }
 
     #[allow(dead_code)]
@@ -505,11 +506,14 @@ impl ConfigInjector {
 
     /// 掩码敏感值
     fn mask_value(value: &str) -> String {
-        if value.len() <= 4 {
-            "*".repeat(value.len())
+        // 按字符计数避免多字节 UTF-8 切片 panic
+        let char_count = value.chars().count();
+        if char_count <= 4 {
+            "*".repeat(char_count)
         } else {
-            let visible = std::cmp::min(2, value.len() / 4);
-            format!("{}{}", &value[..visible], "*".repeat(value.len() - visible))
+            let visible = std::cmp::min(2, char_count / 4);
+            let prefix: String = value.chars().take(visible).collect();
+            format!("{}{}", prefix, "*".repeat(char_count - visible))
         }
     }
 

@@ -232,10 +232,13 @@ fn apply_replacement(input: &str, pattern: &Regex, replacement: &Replacement) ->
             Replacement::MaskedGroup(group_idx, visible_chars) => {
                 if let Some(matched) = caps.get(*group_idx) {
                     let s = matched.as_str();
-                    if s.len() <= *visible_chars {
-                        "*".repeat(s.len())
+                    // 按字符计数避免多字节 UTF-8 切片 panic
+                    let char_count = s.chars().count();
+                    if char_count <= *visible_chars {
+                        "*".repeat(char_count)
                     } else {
-                        format!("{}***", &s[..*visible_chars])
+                        let prefix: String = s.chars().take(*visible_chars).collect();
+                        format!("{}***", prefix)
                     }
                 } else {
                     "***".to_string()
@@ -248,10 +251,13 @@ fn apply_replacement(input: &str, pattern: &Regex, replacement: &Replacement) ->
                     if let Some(at_pos) = s.find('@') {
                         let local_part = &s[..at_pos];
                         let domain = &s[at_pos..];
-                        if local_part.len() <= 2 {
+                        // 按字符计数避免多字节 UTF-8 切片 panic
+                        let local_chars = local_part.chars().count();
+                        if local_chars <= 2 {
                             "***".to_string() + domain
                         } else {
-                            format!("{}**{}", &local_part[..2], domain)
+                            let prefix: String = local_part.chars().take(2).collect();
+                            format!("{}**{}", prefix, domain)
                         }
                     } else {
                         "***".to_string()

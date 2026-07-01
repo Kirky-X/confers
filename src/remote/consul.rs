@@ -21,6 +21,8 @@ pub const DEFAULT_CONSUL_POLL_INTERVAL: Duration = Duration::from_secs(30);
 #[serde(rename_all = "PascalCase")]
 struct KvResponse {
     #[serde(default)]
+    key: Option<String>,
+    #[serde(default)]
     value: Option<String>,
     #[serde(default)]
     modify_index: Option<u64>,
@@ -267,49 +269,46 @@ impl ConsulSource {
         let mut config_map = indexmap::IndexMap::new();
 
         for kv in &kv_responses {
-            if let Some(value) = &kv.value {
-                // Decode base64 value (Consul stores values as base64)
-                let decoded = match base64_decode(value) {
+            // 必须有 Key 字段，否则跳过（Consul KV API 保证 Key 存在）
+            let key_path = match &kv.key {
+                Some(k) if !k.is_empty() => k.clone(),
+                _ => continue,
+            };
+
+            // 提取配置 key：剥离 prefix（Consul Key 是路径，如 "config/app/port"）
+            let key = if !self.prefix.is_empty() && key_path.starts_with(&*self.prefix) {
+                key_path
+                    .strip_prefix(&*self.prefix)
+                    .unwrap_or(&key_path)
+                    .trim_start_matches('/')
+                    .to_string()
+            } else {
+                key_path.trim_start_matches('/').to_string()
+            };
+
+            // 解码 value（Consul 将 value 存储为 base64）
+            let value_str = match &kv.value {
+                Some(v) => match base64_decode(v) {
                     Ok(d) => d,
-                    Err(_) => value.clone(),
-                };
+                    Err(_) => v.clone(),
+                },
+                None => String::new(),
+            };
 
-                // Extract key name from full path
-                let key = if self.prefix.is_empty() {
-                    // No prefix, use the full key
-                    if decoded.starts_with('/') {
-                        decoded.trim_start_matches('/').to_string()
-                    } else {
-                        decoded.clone()
-                    }
-                } else {
-                    // Remove prefix from key
-                    if value.starts_with(&*self.prefix) {
-                        value
-                            .strip_prefix(&*self.prefix)
-                            .unwrap_or(value)
-                            .trim_start_matches('/')
-                            .to_string()
-                    } else {
-                        value.clone()
-                    }
-                };
-
-                // Try to parse as TOML/JSON/YAML
-                if let Some(parsed) = try_parse_value(&decoded, "consul") {
-                    // Merge into config map
-                    merge_into_map(&mut config_map, &key, parsed);
-                } else {
-                    // Treat as simple string value
-                    config_map.insert(
-                        Arc::from(key.clone()),
-                        AnnotatedValue::new(
-                            crate::types::ConfigValue::String(decoded.clone()),
-                            SourceId::new("consul"),
-                            key.as_str(),
-                        ),
-                    );
-                }
+            // Try to parse as TOML/JSON/YAML
+            if let Some(parsed) = try_parse_value(&value_str, "consul") {
+                // Merge into config map
+                merge_into_map(&mut config_map, &key, parsed);
+            } else {
+                // Treat as simple string value
+                config_map.insert(
+                    Arc::from(key.clone()),
+                    AnnotatedValue::new(
+                        crate::types::ConfigValue::String(value_str.clone()),
+                        SourceId::new("consul"),
+                        key.as_str(),
+                    ),
+                );
             }
         }
 
@@ -653,7 +652,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_poll_internal_success_returns_map() {
-        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let body = r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)
@@ -726,7 +725,8 @@ mod tests {
     async fn test_poll_internal_empty_returns_cached_value() {
         // First response caches a value (ModifyIndex=10); second response is
         // empty, exercising the "return cached value" branch (lines 230-246).
-        let non_empty = r#"[{"Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let non_empty =
+            r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
         let addr = mock_http_server(vec![(200, non_empty), (200, "[]".to_string())]);
         let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
         let first = source.poll_internal().await;
@@ -763,7 +763,7 @@ mod tests {
     #[tokio::test]
     async fn test_poll_internal_url_with_scheme() {
         // Address containing "://" exercises the scheme-preserving URL branch.
-        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":1}]"#.to_string();
+        let body = r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":1}]"#.to_string();
         let addr = format!("http://{}", mock_http_server(vec![(200, body)]));
         let source = ConsulSourceBuilder::new().address(addr).build().unwrap();
         let result = source.poll_internal().await;
@@ -774,7 +774,7 @@ mod tests {
     #[tokio::test]
     async fn test_poll_internal_empty_prefix() {
         // prefix="" exercises the empty-prefix URL and key-extraction branches.
-        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":3}]"#.to_string();
+        let body = r#"[{"Key":"app/key","Value":"aGVsbG8=","ModifyIndex":3}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)
@@ -835,7 +835,7 @@ mod tests {
     async fn test_poll_internal_non_base64_value_fallback() {
         // Value "!!!notbase64!!!" cannot be decoded as base64 (contains '!'),
         // so the code falls back to using the raw value string (line 274).
-        let body = r#"[{"Value":"!!!notbase64!!!","ModifyIndex":1}]"#.to_string();
+        let body = r#"[{"Key":"app/key","Value":"!!!notbase64!!!","ModifyIndex":1}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)
@@ -850,10 +850,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_poll_internal_value_starts_with_prefix() {
-        // Value "config/!data" fails base64 decode (contains '!') and starts
-        // with the prefix "config/", exercising the prefix-stripping branch
-        // (lines 288-292).
-        let body = r#"[{"Value":"config/!data","ModifyIndex":1}]"#.to_string();
+        // Key "config/app/key" starts with the prefix "config/", exercising
+        // the prefix-stripping branch on the Key field (not Value).
+        let body = r#"[{"Key":"config/app/key","Value":"!data","ModifyIndex":1}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)
@@ -901,7 +900,7 @@ mod tests {
     #[tokio::test]
     async fn test_async_source_trait_load() {
         use crate::interface::AsyncSource;
-        let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":5}]"#.to_string();
+        let body = r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":5}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)

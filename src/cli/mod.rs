@@ -419,9 +419,11 @@ fn find_value_by_key<'a>(value: &'a AnnotatedValue, key: &str) -> Option<&'a Ann
 fn format_value(value: &crate::types::ConfigValue) -> String {
     match value {
         crate::types::ConfigValue::String(s) => {
-            // Truncate long strings
-            if s.len() > 20 {
-                format!("\"{}...\"", &s[..17])
+            // 按字符计数避免多字节 UTF-8 切片 panic
+            let char_count = s.chars().count();
+            if char_count > 20 {
+                let prefix: String = s.chars().take(17).collect();
+                format!("\"{}...\"", prefix)
             } else {
                 format!("\"{}\"", s)
             }
