@@ -237,7 +237,11 @@ Complete, runnable examples demonstrating all major features. All examples can b
 | **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
 | **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
 | **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
-| **metrics**            | `examples/src/examples/metrics.rs`            | -                    | Metrics collection and monitoring (std-only, no feature required) |
+| **interpolation**      | `examples/src/examples/interpolation.rs`      | `interpolation`      | Configuration string interpolation with ${VAR} syntax           |
+| **audit**              | `examples/src/examples/audit.rs`              | `audit`              | Audit logging with AuditWriter and AuditEvent                   |
+| **context_aware**      | `examples/src/examples/context_aware.rs`      | `context-aware`      | Context-aware configuration with ContextAwareField              |
+| **security**           | `examples/src/examples/security.rs`           | `security`           | Security features: encryption prefix detection, env validation  |
+| **modules_demo**       | `examples/src/examples/modules_demo.rs`       | `modules`            | Module registry for feature-based configuration loading         |
 | **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
 | **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
 
@@ -828,10 +832,10 @@ cache_size = 1000
 
 ```bash
 # 🧪 Run all tests
-cargo test --all-features
+cargo test --features full
 
 # 📊 Generate coverage report
-cargo tarpaulin --out Html
+cargo llvm-cov --features full
 
 # ⚡ Run benchmarks
 cargo bench

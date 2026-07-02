@@ -39,6 +39,17 @@ ALL_EXAMPLES=(
     "config_groups"
     "progressive_reload"
     "full_stack"
+    "config_bus"
+    "snapshot"
+    "remote_etcd"
+    "validation"
+    "cli_integration"
+    "json_schema"
+    "interpolation"
+    "audit"
+    "context_aware"
+    "security"
+    "modules_demo"
 )
 
 echo "项目目录: $PROJECT_DIR"
@@ -54,7 +65,7 @@ fi
 check_example_files() {
     local example_name=$1
     local example_file="$PROJECT_DIR/src/examples/${example_name}.rs"
-    
+
     if [ ! -f "$example_file" ]; then
         echo -e "${RED}✗ 缺少源文件: src/examples/${example_name}.rs${NC}"
         return 1
@@ -92,7 +103,7 @@ cd "$PROJECT_DIR"
 failed_builds=0
 for example in "${ALL_EXAMPLES[@]}"; do
     echo -n "编译 $example ... "
-    
+
     if cargo build --bin "$example" --quiet 2>/dev/null; then
         echo -e "${GREEN}✓${NC}"
     else
@@ -116,7 +127,7 @@ echo "-----------------------------------"
 failed_clippy=0
 for example in "${ALL_EXAMPLES[@]}"; do
     echo -n "clippy $example ... "
-    
+
     if cargo clippy --bin "$example" --quiet 2>/dev/null; then
         echo -e "${GREEN}✓${NC}"
     else
@@ -133,10 +144,10 @@ if [ "$RUN_EXAMPLES" = true ]; then
     echo "-----------------------------------"
     echo -e "${BLUE}注意: 某些示例需要外部服务 (Consul, etcd) 才能完全运行${NC}"
     echo ""
-    
+
     for example in "${ALL_EXAMPLES[@]}"; do
         echo -n "运行 $example ... "
-        
+
         # 设置超时（大多数示例应该快速完成或优雅失败）
         if timeout 10 cargo run --bin "$example" --quiet 2>/dev/null; then
             echo -e "${GREEN}✓${NC}"

@@ -94,23 +94,12 @@ let db_config = config.get_section("database")?;
 
 ## <span id="validation-performance">Validation Performance</span>
 
-### Enable Parallel Validation
+### Enable Validation
 
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { features = ["parallel", "validation"] }
-```
-
-```rust
-#[derive(Config)]
-#[config(validate)]
-#[config(parallel_validation = true)]  // Enable parallel validation
-pub struct LargeConfig {
-    pub field_1: String,
-    pub field_2: String,
-    // ... 100+ fields
-}
+confers = { features = ["validation"] }
 ```
 
 ### Validation Cache
@@ -211,17 +200,6 @@ tokio::spawn({
 });
 ```
 
-### Parallel Source Loading
-
-```rust
-let config = ConfigBuilder::new()
-    .file_async("config.toml")      // Load in parallel
-    .env_async()                     // Load in parallel
-    .build()?;
-
-// Waits for all sources concurrently
-```
-
 ---
 
 ## <span id="caching">Caching</span>
@@ -307,7 +285,6 @@ println!("CPU time: {:?}", monitor.elapsed());
 Before production deployment:
 
 - [ ] Run `cargo bench` to verify performance meets targets
-- [ ] Enable `parallel` feature for large configs
 - [ ] Use `json` format for best load performance
 - [ ] Enable `dynamic` feature for lock-free reads
 - [ ] Configure appropriate cache sizes

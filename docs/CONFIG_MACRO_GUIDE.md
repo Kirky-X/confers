@@ -107,23 +107,6 @@ pub struct AppConfig {
 
 ---
 
-### 1.7 Profile Overlay
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(profile)]  // Enable profile overlay
-#[config(profile_env = "APP_ENV")]  // Profile environment variable
-pub struct AppConfig {
-    pub name: String,
-}
-```
-
-**Effects**:
-- Enables loading profile-specific configuration files
-- Profile determined by `profile_env` environment variable
-
----
-
 ## 2. Field-Level Attributes
 
 ### 2.1 Default Values
@@ -709,8 +692,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `strict` | Strict mode for CLI parsing |
 | `watch` | Enable file watching |
 | `version` | Configuration version for migrations |
-| `profile` | Enable profile overlay |
-| `profile_env` | Profile environment variable name |
 
 ### Field-Level Attributes
 
@@ -846,7 +827,7 @@ confers = { version = "0.3", features = ["production"] }
 garde = { version = "0.22", features = ["derive"] }
 ```
 
-The `production` feature includes: `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`
+The `production` feature includes: `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`
 
 ---
 

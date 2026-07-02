@@ -135,11 +135,11 @@ Add `confers` to your `Cargo.toml`:
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env` | Environment variables only |
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables + JSON |
 | <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `env`, `validation` | Config loading + validation |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `profile`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `profile`, `metrics`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `metrics`, `audit` | Distributed systems |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
 | <span style="color:#166534; padding:4px 8px">full</span> | All features | Complete feature set |
 
 **Individual Features:**

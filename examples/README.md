@@ -8,7 +8,7 @@
 
 ```
 examples/
-├── Cargo.toml              # 项目配置（含 17 个 [[bin]] targets）
+├── Cargo.toml              # 项目配置（含 21 个 [[bin]] targets）
 ├── src/
 │   ├── examples/           # 示例源码
 │   │   ├── basic_usage.rs
@@ -25,7 +25,11 @@ examples/
 │   │   ├── snapshot.rs
 │   │   ├── cli_integration.rs
 │   │   ├── json_schema.rs
-│   │   ├── metrics.rs
+│   │   ├── audit.rs
+│   │   ├── context_aware.rs
+│   │   ├── interpolation.rs
+│   │   ├── modules_demo.rs
+│   │   ├── security.rs
 │   │   ├── validation.rs
 │   │   └── full_stack.rs
 │   └── main.rs            # 默认入口（显示帮助信息）
@@ -70,9 +74,13 @@ cargo run --bin snapshot
 | snapshot | 配置快照持久化 | toml, snapshot | ADR-033 |
 | cli_integration | ConfigClap 派生宏 CLI 集成 | cli | ADR-011 |
 | json_schema | ConfigSchema 派生宏 JSON Schema 生成 | schema | ADR-012 |
-| metrics | 指标收集与 Prometheus 导出 | - | ADR-014 |
 | validation | 基于 garde 的字段级验证 | validation | ADR-010 |
 | full_stack | 完整功能栈综合示例 | full | - |
+| interpolation | 配置字符串插值 | interpolation | - |
+| audit | 审计日志记录 | audit | - |
+| context_aware | 上下文感知配置 | context-aware | - |
+| security | 安全功能（加密前缀检测、环境变量验证） | security | - |
+| modules_demo | 模块化配置注册表 | modules | - |
 
 ## 示例说明
 
@@ -201,21 +209,6 @@ cargo run --bin json_schema
 cargo run --bin json_schema -- --output schema.json
 ```
 
-### metrics
-展示指标收集功能：
-- 配置操作指标收集
-- Prometheus exporter 集成
-- 自定义指标注册和记录
-- 带标签的指标（labels/tags）
-- 指标查询和展示
-
-运行方式：
-```bash
-cargo run --bin metrics
-# 在另一个终端启动 Prometheus 并抓取指标:
-# prometheus --config.file=prometheus.yml
-```
-
 ### validation
 展示配置验证功能：
 - 基于 garde 框架的字段级验证
@@ -229,15 +222,76 @@ cargo run --bin metrics
 cargo run --bin validation
 ```
 
+### interpolation
+展示配置字符串插值功能：
+- `${VAR}` 语法插值
+- `InterpolationConfig` 配置
+- `InterpolationContext` 变量上下文
+- `interpolate_tracked()` 跟踪插值来源
+
+运行方式：
+```bash
+cargo run --bin interpolation
+```
+
+### audit
+展示审计日志功能：
+- `AuditWriterBuilder` 构建审计写入器
+- `AuditEvent` 事件记录
+- `AuditLevel` 日志级别
+- 审计日志文件输出
+
+运行方式：
+```bash
+cargo run --bin audit
+```
+
+### context_aware
+展示上下文感知配置功能：
+- `ContextAwareFieldBuilder` 构建上下文感知字段
+- `ContextRule` 上下文规则定义
+- `EvaluationContext` 评估上下文
+- 按 plan/environment/region 解析不同值
+
+运行方式：
+```bash
+cargo run --bin context_aware
+```
+
+### security
+展示安全功能：
+- `EncryptionPrefix` 加密前缀检测
+- `EnvSecurityValidator` 环境变量验证
+- `EnvironmentValidationConfig` 验证配置
+- 加密值绕过验证
+
+运行方式：
+```bash
+cargo run --bin security
+```
+
+### modules_demo
+展示模块化配置注册表功能：
+- `ModuleRegistry` 模块注册表
+- `register_group` 注册配置组
+- `load_module` / `load_active` 加载配置
+- `set_active_profile` 切换活动配置
+- `active_profiles` 查看活动配置
+
+运行方式：
+```bash
+cargo run --bin modules_demo
+```
+
 ## 项目结构
 
 统一项目结构：
 
 ```
 examples/
-├── Cargo.toml              # workspace + 13 个 [[bin]] targets
+├── Cargo.toml              # workspace + 21 个 [[bin]] targets
 ├── src/
-│   ├── examples/           # 示例源码（13 个 .rs 文件）
+│   ├── examples/           # 示例源码（21 个 .rs 文件）
 │   │   ├── basic_usage.rs
 │   │   ├── hot_reload.rs
 │   │   └── ...

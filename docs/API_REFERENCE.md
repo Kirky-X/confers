@@ -81,8 +81,8 @@ confers provides flexible feature configuration, allowing users to select the fu
 |--------|----------|----------|
 | <span style="color:#166534">minimal</span> | `env` + `json` | Minimal dependencies (environment variables + JSON) |
 | <span style="color:#1E40AF">recommended</span> | `toml` + `json` + `env` + `validation` | Recommended for most applications |
-| <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `profile` + `watch` + `migration` + `snapshot` + `dynamic` | Development configuration |
-| <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `profile` + `metrics` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | Production configuration |
+| <span style="color:#92400E">dev</span> | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `watch` + `migration` + `snapshot` + `dynamic` | Development configuration |
+| <span style="color:#991B1B">production</span> | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | Production configuration |
 | <span style="color:#5B21B6">full</span> | All features | Complete feature set |
 
 **Individual Features:**
@@ -102,18 +102,15 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `cli` | Command-line integration | ❌ |
 | `schema` | JSON Schema generation | ❌ |
 | `typescript-schema` | TypeScript type generation | ❌ |
-| `parallel` | Parallel validation | ❌ |
 | **Security** |||
 | `security` | Security module | ❌ |
 | `key` | Key management system | ❌ |
 | **Advanced Features** |||
 | `audit` | Audit logging | ❌ |
-| `metrics` | Metrics collection | ❌ |
 | `dynamic` | Dynamic fields | ❌ |
 | `progressive-reload` | Progressive deployment | ❌ |
 | `migration` | Configuration migration | ❌ |
 | `snapshot` | Snapshot rollback | ❌ |
-| `profile` | Environment configuration | ❌ |
 | `interpolation` | Variable interpolation | ❌ |
 | **Remote Sources** |||
 | `remote` | HTTP polling | ❌ |
@@ -2112,8 +2109,6 @@ RUST_LOG=confers=debug ./myapp
 | `watch` | File monitoring and hot reload | No |
 | `audit` | Configuration loading audit log | No |
 | `schema` | JSON Schema generation | No |
-| `parallel` | Parallel validation | No |
-| `monitoring` | System monitoring | No |
 | `remote` | Remote configuration (etcd, Consul, HTTP) | No |
 | `encryption` | Configuration encryption functionality | No |
 | `cli` | Command-line tool | No |
@@ -2125,8 +2120,8 @@ RUST_LOG=confers=debug ./myapp
 |--------|-------------------|----------|
 | `minimal` | `derive` | Configuration loading only (minimal dependencies) |
 | `recommended` | `derive`, `validation` | Configuration loading + validation (recommended for most applications) |
-| `dev` | `derive`, `validation`, `cli`, `schema`, `audit`, `monitoring` | Development configuration |
-| `production` | `derive`, `validation`, `watch`, `encryption`, `remote`, `monitoring` | Production configuration |
+| `dev` | `derive`, `validation`, `cli`, `schema`, `audit` | Development configuration |
+| `production` | `derive`, `validation`, `watch`, `encryption`, `remote` | Production configuration |
 | `full` | All features | Complete feature set |
 
 ---

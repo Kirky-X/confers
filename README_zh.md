@@ -140,6 +140,7 @@ let config = AppConfig::load_sync()?;
 | 🌐 | **远程配置** | 支持 etcd、Consul、HTTP（`remote` 功能） |
 | 📦 | **审计日志** | 记录访问和变更历史（`audit` 功能） |
 | 🔧 | **配置对比** | 多种输出格式的配置比较 |
+| 🛡️ | **安全增强** | Nonce 重用检测、SSRF 防护 |
 | 🔑 | **密钥管理** | 内置密钥生成和轮换 |
 
 </td>
@@ -536,7 +537,11 @@ async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
 | **remote_etcd**      | `examples/src/examples/remote_etcd.rs`         | `etcd`               | 从 etcd v3 获取远程配置                    |
 | **validation**       | `examples/src/examples/validation.rs`          | `validation`         | 使用 garde 进行配置验证                    |
 | **json_schema**      | `examples/src/examples/json_schema.rs`         | `schema`             | JSON Schema 和 TypeScript 类型生成         |
-| **metrics**          | `examples/src/examples/metrics.rs`             | -                    | 指标收集与监控（仅用 std，无需 feature）   |
+| **interpolation**    | `examples/src/examples/interpolation.rs`      | `interpolation`      | 配置字符串插值，支持 ${VAR} 语法          |
+| **audit**            | `examples/src/examples/audit.rs`              | `audit`              | 审计日志，AuditWriter 和 AuditEvent       |
+| **context_aware**    | `examples/src/examples/context_aware.rs`      | `context-aware`      | 上下文感知配置，ContextAwareField         |
+| **security**         | `examples/src/examples/security.rs`           | `security`           | 安全功能：加密前缀检测、环境变量验证      |
+| **modules_demo**     | `examples/src/examples/modules_demo.rs`       | `modules`            | 模块注册表，按特性加载配置                |
 | **cli_integration**  | `examples/src/examples/cli_integration.rs`     | `cli`                | CLI 工具集成与使用                         |
 | **full_stack**       | `examples/src/examples/full_stack.rs`          | `full`               | 完整功能展示                               |
 
@@ -758,10 +763,10 @@ cache_size = 1000
 
 ```bash
 # 🧪 运行所有测试
-cargo test --all-features
+cargo test --features full
 
 # 📊 生成覆盖率报告
-cargo tarpaulin --out Html
+cargo llvm-cov --features full
 
 # ⚡ 运行基准测试
 cargo bench
