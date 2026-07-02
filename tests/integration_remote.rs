@@ -362,9 +362,15 @@ mod etcd_tests {
             .tls(tls_config)
             .prefix("test");
 
-        // Connection will fail but builder should accept TLS config
-        let _ = builder.build().await;
-        // Just verify it doesn't panic during build
+        // Builder should accept the TLS config without error. TLS cert files
+        // are not validated at build time (only during connect), so build()
+        // succeeding verifies the builder stores the config correctly.
+        let result = builder.build().await;
+        assert!(
+            result.is_ok(),
+            "builder should accept TLS config, but build failed: {:?}",
+            result.err()
+        );
     }
 }
 

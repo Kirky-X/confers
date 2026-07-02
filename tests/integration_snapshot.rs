@@ -697,10 +697,21 @@ async fn test_snapshot_list_ordering() {
     for _i in 0..3 {
         tokio::time::sleep(Duration::from_millis(10)).await;
         let value = create_test_value();
-        let _ = manager.save(&value, &[]).await;
+        manager
+            .save(&value, &[])
+            .await
+            .expect("snapshot save should succeed");
     }
 
     let snapshots = manager.list_snapshots().unwrap();
+
+    // All 3 saves should have produced snapshots
+    assert_eq!(
+        snapshots.len(),
+        3,
+        "expected 3 snapshots after 3 saves, got {}",
+        snapshots.len()
+    );
 
     // Should be ordered newest first
     if snapshots.len() >= 2 {
@@ -722,12 +733,26 @@ async fn test_snapshot_manager_readonly_dir() {
 
     // Trying to create snapshot should work
     let value = create_test_value();
-    let result = manager.save(&value, &[]).await;
-    assert!(result.is_ok());
+    let saved_path = manager
+        .save(&value, &[])
+        .await
+        .expect("snapshot save should succeed");
+    assert!(
+        saved_path.exists(),
+        "saved snapshot file should exist on disk: {}",
+        saved_path.display()
+    );
 
-    // List should work
-    let snapshots = manager.list_snapshots();
-    assert!(snapshots.is_ok());
+    // List should return the saved snapshot
+    let snapshots = manager
+        .list_snapshots()
+        .expect("list_snapshots should succeed");
+    assert_eq!(
+        snapshots.len(),
+        1,
+        "list should contain exactly 1 snapshot after a single save, got {}",
+        snapshots.len()
+    );
 }
 
 /// Test SnapshotManager directory creation.
