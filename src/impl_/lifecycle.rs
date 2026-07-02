@@ -213,6 +213,7 @@ pub use sync_impl::Lifecycle;
     feature = "encryption",
     feature = "watch"
 )))]
+#[allow(unused_imports)] // LifecycleRegistry re-exported for API completeness
 pub(crate) use sync_impl::LifecycleRegistry;
 
 #[cfg(test)]

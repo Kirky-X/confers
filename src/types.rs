@@ -1531,6 +1531,7 @@ mod tests {
         assert!(!s.is_null());
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_annotated_value_array_ser() {
         let items = vec![AnnotatedValue::new(

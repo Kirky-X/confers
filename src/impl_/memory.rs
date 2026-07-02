@@ -532,6 +532,7 @@ mod sync_impl {
     feature = "encryption",
     feature = "watch"
 )))]
+#[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
 pub use sync_impl::{InMemoryConfig, InMemoryConfigBuilder};
 
 // ============== Helper Methods (common to both) ==============

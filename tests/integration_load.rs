@@ -81,6 +81,7 @@ missing_bracket = true
         assert!(matches!(bool_val, ConfigValue::Bool(_)));
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_load_empty_file() {
         let content = "";
@@ -98,6 +99,7 @@ missing_bracket = true
         );
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_load_with_format_detection() {
         let toml_content = r#"
@@ -114,6 +116,7 @@ key = "value"
         assert_eq!(config["key"], "value");
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_load_array_values() {
         let content = r#"

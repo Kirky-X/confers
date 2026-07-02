@@ -15,10 +15,13 @@
 //! ```
 //! use confers::format::{FormatConverter, Format, converter_for};
 //!
+//! # #[cfg(feature = "json")]
+//! # {
 //! let content = r#"{"name":"test","port":8080}"#;
 //! let converter = converter_for(Format::Json).expect("JSON converter should exist");
 //! let result = converter.parse(content, confers::types::SourceId::new("test"), None);
 //! assert!(result.is_ok());
+//! # }
 //! ```
 
 use crate::error::{ConfigError, ConfigResult};
@@ -734,8 +737,12 @@ pub fn converter_for(format: Format) -> Option<Box<dyn FormatConverter>> {
     match format {
         #[cfg(feature = "toml")]
         Format::Toml => Some(Box::new(toml_converter::TomlConverter::new())),
+        #[cfg(not(feature = "toml"))]
+        Format::Toml => None,
         #[cfg(feature = "json")]
         Format::Json => Some(Box::new(json_converter::JsonConverter::new())),
+        #[cfg(not(feature = "json"))]
+        Format::Json => None,
         #[cfg(feature = "yaml")]
         Format::Yaml => Some(Box::new(yaml_converter::YamlConverter::new())),
         #[cfg(not(feature = "yaml"))]
@@ -876,6 +883,7 @@ key = "value""#
         assert!(!converters.is_empty());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_converter_for_toml() {
         let conv = converter_for(Format::Toml);
@@ -883,6 +891,7 @@ key = "value""#
         assert_eq!(conv.unwrap().format(), Format::Toml);
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_converter_for_json() {
         let conv = converter_for(Format::Json);
@@ -916,12 +925,14 @@ key = "value""#
         assert!(!format!("{:?}", f).is_empty());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_toml_converter_extension() {
         let c = toml_converter::TomlConverter::new();
         assert_eq!(c.extension(), "toml");
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_json_converter_extension() {
         let c = json_converter::JsonConverter::new();
@@ -962,6 +973,7 @@ key = "value""#
         assert!(!format!("{:?}", m).is_empty());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_toml_converter_parse_serialize_roundtrip() {
         use crate::types::SourceId;
@@ -974,6 +986,7 @@ key = "value""#
         assert!(serialized.contains("test"));
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_json_converter_parse_serialize_roundtrip() {
         use crate::types::SourceId;
@@ -1447,6 +1460,7 @@ key = "value""#
         assert!(result.is_err());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_detect_format_toml_via_function() {
         assert_eq!(detect_format(r#"key = "value""#), Some(Format::Toml));
@@ -1492,7 +1506,13 @@ key = "value""#
     #[test]
     fn test_converter_for_all_formats_present() {
         for format in Format::all() {
-            // Yaml converter only exists when yaml feature is enabled
+            // Skip formats whose converters are not built (feature is off)
+            if *format == Format::Toml && !cfg!(feature = "toml") {
+                continue;
+            }
+            if *format == Format::Json && !cfg!(feature = "json") {
+                continue;
+            }
             if *format == Format::Yaml && !cfg!(feature = "yaml") {
                 continue;
             }

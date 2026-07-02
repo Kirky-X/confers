@@ -10,9 +10,16 @@
 //! - Absolute paths (`/etc/passwd`)
 //! - URL-encoded traversal (`%2e%2e`, `%252e`)
 //! - Mixed encoding (`%2e./`)
-use crate::error::{ConfigError, ConfigResult, ParseLocation};
-use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+#[cfg(any(feature = "toml", feature = "yaml"))]
+use crate::error::ParseLocation;
+use crate::error::{ConfigError, ConfigResult};
+use crate::types::{AnnotatedValue, SourceId};
 use std::path::{Component, Path, PathBuf};
+
+#[cfg(feature = "ini")]
+use crate::types::ConfigValue;
+
+#[cfg(feature = "ini")]
 use std::sync::Arc;
 
 #[cfg(feature = "json")]
@@ -998,6 +1005,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_parse_toml_content() {
         let result = parse_toml("key = \"value\"", SourceId::new("test"), None);
@@ -1006,6 +1014,7 @@ mod tests {
         assert!(val.is_map());
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_parse_json_content() {
         let result = parse_json("{\"key\": \"value\"}", SourceId::new("test"), None);
@@ -1023,12 +1032,14 @@ mod tests {
         assert!(val.is_map());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_parse_content_toml() {
         let r = parse_content("name = \"test\"", Format::Toml, SourceId::new("t"), None);
         assert!(r.is_ok());
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_parse_content_json() {
         let r = parse_content("{\"k\":\"v\"}", Format::Json, SourceId::new("t"), None);
@@ -1042,6 +1053,7 @@ mod tests {
         assert_eq!(detect_format_from_content(""), None);
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_parse_toml_table() {
         let mut table = toml::Table::new();
@@ -1471,6 +1483,7 @@ mod tests {
         assert!(result.is_err());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_load_file_success() {
         let temp_dir = std::env::temp_dir();
@@ -1485,6 +1498,7 @@ mod tests {
         let _ = std::fs::remove_file(test_file);
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_load_file_size_limit_exceeded() {
         let temp_dir = std::env::temp_dir();

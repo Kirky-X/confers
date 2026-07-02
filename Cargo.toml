@@ -33,7 +33,7 @@ reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", optional = true }
 secrecy = { version = "0.10", features = ["serde"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", optional = true }
+serde_json = "1.0"
 serde_yaml_ng = { version = "0.10", optional = true }
 sha2 = { version = "0.10", optional = true }
 thiserror = "2.0"
@@ -108,7 +108,7 @@ default = ["toml", "json", "env"]
 
 # Format support
 toml = ["dep:toml"]
-json = ["dep:serde_json"]
+json = []
 yaml = ["dep:serde_yaml_ng"]
 ini = ["dep:serde_ini"]
 env = ["dep:dotenvy"]
@@ -121,7 +121,7 @@ security = ["encryption", "dep:hex"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm"]
-cli = ["dep:clap", "dep:similar", "dep:toml", "dep:serde_json", "dep:serde_yaml_ng", "dep:chrono"]
+cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono"]
 schema = ["dep:schemars"]
 dynamic = ["dep:arc-swap", "dep:tokio", "dep:dashmap"]
 progressive-reload = ["watch", "dep:arc-swap", "dep:async-trait"]
@@ -131,7 +131,7 @@ snapshot = ["dep:chrono", "dep:tokio", "json", "toml", "yaml", "dynamic"]
 interpolation = []
 
 # Remote sources
-remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet"]
+remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
@@ -146,7 +146,7 @@ redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 context-aware = []
 
 # Modules
-modules = []
+modules = ["toml"]
 
 # Feature presets
 recommended = ["toml", "env", "validation", "json"]
@@ -154,7 +154,7 @@ dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "w
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot"]
 full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "context-aware", "modules", "etcd", "consul"]
 minimal = ["env", "json"]
-distributed = ["toml", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
+distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["async_tokio"] }
@@ -202,12 +202,12 @@ required-features = ["dynamic"]
 [[bench]]
 name = "hot_path_bench"
 harness = false
-required-features = ["dynamic"]
+required-features = ["dynamic", "watch"]
 
 [[bench]]
 name = "concurrent_rw_bench"
 harness = false
-required-features = ["dynamic"]
+required-features = ["dynamic", "watch"]
 
 [[bench]]
 name = "concurrent_access_bench"

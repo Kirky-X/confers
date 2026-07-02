@@ -472,15 +472,9 @@ fn value_to_json(value: &AnnotatedValue) -> serde_json::Value {
             .unwrap_or(serde_json::Value::Null),
         ConfigValue::String(s) => serde_json::Value::String(s.clone()),
         ConfigValue::Bytes(b) => {
-            // Encode bytes as base64 when json feature is enabled
-            #[cfg(feature = "json")]
-            {
-                use base64::Engine;
-                let encoded = base64::engine::general_purpose::STANDARD.encode(b);
-                serde_json::Value::String(encoded)
-            }
-            #[cfg(not(feature = "json"))]
-            serde_json::Value::Null
+            use base64::Engine;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(b);
+            serde_json::Value::String(encoded)
         }
         ConfigValue::Array(arr) => {
             serde_json::Value::Array(arr.iter().map(value_to_json).collect())

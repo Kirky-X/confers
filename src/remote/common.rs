@@ -1,14 +1,23 @@
 //! Shared utilities for remote configuration sources.
 
+use crate::types::AnnotatedValue;
+
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use crate::loader::{detect_format_from_content, Format};
-use crate::types::{AnnotatedValue, SourceId};
+
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
+use crate::types::SourceId;
+
+#[cfg(any(feature = "etcd", feature = "consul"))]
 use std::sync::Arc;
 
 /// Try to parse a value as config format.
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 pub(crate) fn try_parse_value(content: &str, source_name: &str) -> Option<AnnotatedValue> {
     let format = detect_format_from_content(content)?;
 
     match format {
+        #[cfg(feature = "toml")]
         Format::Toml => {
             let table: toml::Table = toml::from_str(content).ok()?;
             Some(crate::loader::parse_toml_table(
@@ -17,6 +26,7 @@ pub(crate) fn try_parse_value(content: &str, source_name: &str) -> Option<Annota
                 "",
             ))
         }
+        #[cfg(feature = "json")]
         Format::Json => {
             let v: serde_json::Value = serde_json::from_str(content).ok()?;
             Some(crate::loader::parse_json_value(
@@ -34,13 +44,18 @@ pub(crate) fn try_parse_value(content: &str, source_name: &str) -> Option<Annota
                 "",
             ))
         }
+        #[cfg(not(feature = "toml"))]
+        Format::Toml => None,
+        #[cfg(not(feature = "json"))]
+        Format::Json => None,
         #[cfg(not(feature = "yaml"))]
         Format::Yaml => None,
-        _ => None,
+        Format::Ini => None,
     }
 }
 
 /// Merge a key-value pair into a config map.
+#[cfg(any(feature = "etcd", feature = "consul"))]
 pub(crate) fn merge_into_map(
     map: &mut indexmap::IndexMap<Arc<str>, AnnotatedValue>,
     key: &str,
@@ -52,8 +67,9 @@ pub(crate) fn merge_into_map(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ConfigValue;
+    use crate::types::{ConfigValue, SourceId};
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_try_parse_value_toml() {
         let content = "key = \"value\"\n";
@@ -63,6 +79,7 @@ mod tests {
         assert!(val.is_map());
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_try_parse_value_json() {
         let content = "{\"key\": \"value\"}";
@@ -82,6 +99,7 @@ mod tests {
         assert!(val.is_map());
     }
 
+    #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_invalid_content() {
         // Content that does not match any known format pattern
@@ -90,18 +108,21 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_empty_content() {
         let result = try_parse_value("", "test_source");
         assert!(result.is_none());
     }
 
+    #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_whitespace_only() {
         let result = try_parse_value("   \n\t  ", "test_source");
         assert!(result.is_none());
     }
 
+    #[cfg(feature = "toml")]
     #[test]
     fn test_try_parse_value_invalid_toml() {
         // Recognized as TOML (has " = ") but fails to parse
@@ -110,6 +131,7 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[cfg(feature = "json")]
     #[test]
     fn test_try_parse_value_invalid_json() {
         // Recognized as JSON (starts with {, has quotes and colon) but fails to parse
@@ -118,6 +140,7 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_source_name_in_result() {
         let content = "key = \"value\"\n";
@@ -127,6 +150,7 @@ mod tests {
         assert_eq!(val.source.as_str(), "my_source");
     }
 
+    #[cfg(any(feature = "etcd", feature = "consul"))]
     #[test]
     fn test_merge_into_map_insert_single() {
         let mut map = indexmap::IndexMap::new();
@@ -136,6 +160,7 @@ mod tests {
         assert!(map.contains_key("key"));
     }
 
+    #[cfg(any(feature = "etcd", feature = "consul"))]
     #[test]
     fn test_merge_into_map_overwrite() {
         let mut map = indexmap::IndexMap::new();
@@ -147,6 +172,7 @@ mod tests {
         assert_eq!(map.get("key").unwrap().as_str(), Some("new"));
     }
 
+    #[cfg(any(feature = "etcd", feature = "consul"))]
     #[test]
     fn test_merge_into_map_multiple_keys() {
         let mut map = indexmap::IndexMap::new();
@@ -162,6 +188,7 @@ mod tests {
         assert!(map.contains_key("key2"));
     }
 
+    #[cfg(any(feature = "etcd", feature = "consul"))]
     #[test]
     fn test_merge_into_map_preserves_insertion_order() {
         let mut map = indexmap::IndexMap::new();

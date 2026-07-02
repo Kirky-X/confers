@@ -6,8 +6,10 @@ use confers::config::Source;
 use confers::error;
 use confers::interface;
 use confers::loader;
+#[cfg(feature = "snapshot")]
 use confers::snapshot::SnapshotFormat;
 use confers::ConfigValue;
+#[cfg(feature = "progressive-reload")]
 use confers::HealthStatus;
 
 // ============ Loader Module ============
@@ -145,6 +147,7 @@ fn test_source_kind_values() {
 
 // ============ Snapshot Module ============
 
+#[cfg(feature = "snapshot")]
 #[test]
 fn test_snapshot_format_basics() {
     assert_eq!(SnapshotFormat::Toml.ext(), "toml");
@@ -221,6 +224,7 @@ fn test_filter_sensitive_keys_all_sensitive() {
     assert!(r.is_empty());
 }
 
+#[cfg(feature = "progressive-reload")]
 #[test]
 fn test_health_status_variants() {
     assert!(HealthStatus::Healthy.is_healthy());
@@ -259,6 +263,7 @@ fn test_config_value_conversions() {
 
 // ============ Interpolation Module ============
 
+#[cfg(feature = "interpolation")]
 #[test]
 fn test_interpolate_default() {
     use confers::interpolation::interpolate;
@@ -272,6 +277,7 @@ fn test_interpolate_default() {
     );
 }
 
+#[cfg(feature = "interpolation")]
 #[test]
 fn test_interpolate_no_vars() {
     use confers::interpolation::interpolate;
@@ -284,6 +290,7 @@ fn test_interpolate_no_vars() {
 
 // ============ Dynamic Field Module ============
 
+#[cfg(feature = "dynamic")]
 #[test]
 fn test_dynamic_field_default_value() {
     use confers::dynamic::DynamicField;
@@ -291,6 +298,7 @@ fn test_dynamic_field_default_value() {
     assert_eq!(f.get(), 0);
 }
 
+#[cfg(feature = "dynamic")]
 #[test]
 fn test_dynamic_field_builder() {
     use confers::dynamic::DynamicField;
@@ -298,6 +306,7 @@ fn test_dynamic_field_builder() {
     assert_eq!(f.get(), 42);
 }
 
+#[cfg(feature = "dynamic")]
 #[test]
 fn test_dynamic_field_update() {
     use confers::dynamic::DynamicField;
@@ -306,6 +315,7 @@ fn test_dynamic_field_update() {
     assert_eq!(f.get(), 20);
 }
 
+#[cfg(feature = "dynamic")]
 #[test]
 fn test_dynamic_field_no_callbacks() {
     use confers::dynamic::DynamicField;
@@ -326,6 +336,7 @@ fn test_merge_strategies() {
 
 // ============ Validator Module ============
 
+#[cfg(feature = "validation")]
 #[test]
 fn test_validation_rule_parse() {
     // Can't call Validate::validate directly without derive,

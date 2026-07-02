@@ -11,12 +11,15 @@
 //! - `MetricsBackend` - Metrics collection interface
 
 use crate::error::{ConfersResult, ConfigResult};
-use crate::types::{AnnotatedValue, KeyCachePolicy, SourceId, SourceKind, ZeroizingBytes};
+use crate::types::{AnnotatedValue, KeyCachePolicy, SourceKind, ZeroizingBytes};
 use std::collections::HashMap;
 use std::path::Path;
 
 #[cfg(feature = "progressive-reload")]
 use crate::HealthStatus;
+
+#[cfg(feature = "remote")]
+use crate::types::SourceId;
 
 // ============== Sealed Trait Pattern ==============
 

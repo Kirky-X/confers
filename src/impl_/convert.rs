@@ -3,7 +3,10 @@
 //! These functions are used by both the loader and the format converter modules
 //! to avoid duplicating the same conversion logic.
 
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use std::sync::Arc;
 
 #[cfg(feature = "toml")]
@@ -164,7 +167,9 @@ pub(crate) fn yaml_to_config_value(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     use super::*;
+    use crate::types::SourceId;
 
     fn src() -> SourceId {
         SourceId::new("test")

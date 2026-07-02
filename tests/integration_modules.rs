@@ -341,6 +341,7 @@ fn test_load_module_success_toml() {
         .unwrap_or(false));
 }
 
+#[cfg(feature = "json")]
 #[test]
 fn test_load_module_success_json() {
     let temp_dir = create_local_temp_dir();
