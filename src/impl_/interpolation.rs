@@ -331,27 +331,24 @@ where
 /// Formats:
 /// - `VAR` -> (VAR, None)
 /// - `VAR:default` -> (VAR, Some(default))
-/// - `VAR:-default` -> (VAR, Some(default)) (alternative syntax)
+/// - `VAR:-default` -> (VAR, Some(default)) (shell-style syntax)
+///
+/// The separator (`:` or `:-`) is only recognized at nesting depth 0,
+/// so patterns like `${outer:${inner:-fallback}}` parse correctly:
+/// the `:-` inside `${inner:-fallback}` is at depth 1 and is not split.
 fn parse_var_content(content: &str) -> ConfigResult<(&str, Option<&str>)> {
     let content = content.trim();
 
-    // Handle ${VAR:-default} syntax (common in shell)
-    if let Some(pos) = content.find(":-") {
-        let name = content[..pos].trim();
-        let default = &content[pos + 2..];
-        validate_var_name(name)?;
-        return Ok((name, Some(default)));
-    }
-
-    // Handle ${VAR:default} syntax
-    // But be careful not to split on : if it's part of a URL in the default
-    // We need to find the first : that's not inside nested ${}
+    // Find the first `:` or `:-` at depth 0 (outside any nested ${}).
+    // Merges both ${VAR:default} and ${VAR:-default} syntax into one depth-aware scan.
+    let bytes = content.as_bytes();
     let mut depth = 0;
     let mut colon_pos = None;
+    let mut colon_len = 1usize;
 
     for (i, c) in content.char_indices() {
         match c {
-            '$' if content.as_bytes().get(i + 1) == Some(&b'{') => {
+            '$' if bytes.get(i + 1) == Some(&b'{') => {
                 depth += 1;
             }
             '}' if depth > 0 => {
@@ -359,6 +356,10 @@ fn parse_var_content(content: &str) -> ConfigResult<(&str, Option<&str>)> {
             }
             ':' if depth == 0 && colon_pos.is_none() => {
                 colon_pos = Some(i);
+                // Check for `:-` (shell-style default syntax)
+                if bytes.get(i + 1) == Some(&b'-') {
+                    colon_len = 2;
+                }
             }
             _ => {}
         }
@@ -366,7 +367,7 @@ fn parse_var_content(content: &str) -> ConfigResult<(&str, Option<&str>)> {
 
     if let Some(pos) = colon_pos {
         let name = content[..pos].trim();
-        let default = &content[pos + 1..];
+        let default = &content[pos + colon_len..];
         validate_var_name(name)?;
         Ok((name, Some(default)))
     } else {
@@ -767,5 +768,35 @@ mod tests {
         assert_eq!(result.unwrap(), "8080");
         let result = interpolate("${HOST:localhost}", &|_| None::<String>);
         assert_eq!(result.unwrap(), "localhost");
+    }
+
+    #[test]
+    fn test_nested_default_value() {
+        // ${outer:${inner:-fallback}}
+        // inner not set → inner default "fallback" is used
+        // outer not set → outer default "${inner:-fallback}" resolves to "fallback"
+        let result = interpolate("${outer:${inner:-fallback}}", &|_| None::<String>);
+        assert_eq!(result.unwrap(), "fallback");
+
+        // inner set to "value" → inner resolves to "value"
+        // outer not set → outer default "${inner:-fallback}" resolves to "value"
+        let result = interpolate("${outer:${inner:-fallback}}", &|var: &str| {
+            if var == "inner" {
+                Some("value".to_string())
+            } else {
+                None
+            }
+        });
+        assert_eq!(result.unwrap(), "value");
+
+        // outer set to "outer_val" → outer resolves directly, default not used
+        let result = interpolate("${outer:${inner:-fallback}}", &|var: &str| {
+            if var == "outer" {
+                Some("outer_val".to_string())
+            } else {
+                None
+            }
+        });
+        assert_eq!(result.unwrap(), "outer_val");
     }
 }
