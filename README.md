@@ -269,11 +269,11 @@ cd examples && ./verify_examples.sh
 
 | Installation Type  | Configuration                                                                           | Use Case                                          |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Default**        | `confers = "0.3.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
-| **Minimal**        | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
-| **Recommended**    | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation                           |
-| **CLI with Tools** | `confers = { version = "0.3.0", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
-| **Full**           | `confers = { version = "0.3.0", features = ["full"] }`                                  | All features                                      |
+| **Default**        | `confers = "0.4.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
+| **Minimal**        | `confers = { version = "0.4.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
+| **Recommended**    | `confers = { version = "0.4.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation                           |
+| **CLI with Tools** | `confers = { version = "0.4.0", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
+| **Full**           | `confers = { version = "0.4.0", features = ["full"] }`                                  | All features                                      |
 
 **Individual Features:**
 

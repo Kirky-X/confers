@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No changes yet._
+
+---
+
+## [0.4.0] - 2026-07-03
+
+### Breaking Changes
+
+- **SecureString no longer implements `Clone`**: The `impl Clone for SecureString` has been removed to align with the documented security posture ("防止克隆: 禁止 Clone"). This prevents inadvertent duplication of sensitive material in memory. Callers that need to share a `SecureString` across threads should use `Arc<SecureString>` instead.
+
+### Fixed
+
+- **Interpolation nested default-value parsing (M1)**: The `:-` default-value separator is now recognized via a depth-aware parser that tracks `${}` nesting. Previously, `${outer:${inner:-fallback}}` would incorrectly split at the inner `:-`, breaking nested default values.
+- **URL validation rejecting ampersand in query strings (M7)**: The `&` character has been removed from the shell-injection dangerous-character regex. It is a standard URL query-string separator (`?key=val&key2=val2`). Shell logical operators `&&` and `||` are still caught by separate patterns.
+- **`load_env_file` unbounded memory consumption (M9)**: Added `MAX_ENV_FILE_SIZE` (1 MiB) and `MAX_ENV_LINE_LENGTH` (16 KiB) checks to `load_env_file`. Files exceeding these limits are rejected with a descriptive error before being read into memory.
+
+### Changed
+
+- **Error Type Separation**: Split errors into configuration phase (`ConfigConfigError`) and runtime phase (`ConfersError`)
+- **Factory Functions**: Added `new_in_memory_validated()` returning `Result` for BrickArchitecture fail-fast initialization (later removed in favor of `InMemoryConfig::new_validated()`)
+- **Backward Compatibility**: Added aliases `ConfersError = ConfigError`, `ConfersResult<T>` to preserve existing code
+
 ### Added
 
 - **SECURITY.md**: Comprehensive security policy document with vulnerability reporting process, security features documentation, best practices guide, and security audit process
@@ -17,12 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ADR-045**: API versioning strategy - semver enforcement, deprecation process, and breaking change policy
 - **BrickArchitecture Compliance**: Configuration phase error type `ConfigConfigError` with 10 variants and error codes (2001-2999)
 
-### Changed
-
-- **Error Type Separation**: Split errors into configuration phase (`ConfigConfigError`) and runtime phase (`ConfersError`)
-- **Factory Functions**: Added `new_in_memory_validated()` returning `Result` for BrickArchitecture fail-fast initialization (later removed in favor of `InMemoryConfig::new_validated()`)
-- **Backward Compatibility**: Added aliases `ConfersError = ConfigError`, `ConfersResult<T>` to preserve existing code
-
 ### Documentation
 
 - **README.md**: Added comprehensive feature matrix table and examples directory section with direct links to all 13 runnable examples
@@ -32,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Security documentation now covers all encryption, input validation, SSRF protection, audit logging, and key management features
+
+### Test Quality
+
+- **T-C-1**: Audited 61 weak-assertion patterns across `tests/`. Strengthened 3 genuinely weak assertions: discarded `save()` return values now verified, bare `is_ok()` for save+list replaced with file-existence and snapshot-count checks, and discarded `build()` result replaced with explicit assertion verifying TLS config acceptance.
 
 ---
 

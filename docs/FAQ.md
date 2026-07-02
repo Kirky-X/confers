@@ -153,7 +153,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-confers = "0.3.0"
+confers = "0.4.0"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -166,7 +166,7 @@ cargo add confers serde --features serde/derive
 **Optional Features:**
 
 ```toml
-confers = { version = "0.3.0", features = ["watch", "remote", "cli"] }
+confers = { version = "0.4.0", features = ["watch", "remote", "cli"] }
 ```
 
 **Verification:**
@@ -209,23 +209,23 @@ fn main() {
 ```toml
 # Minimal usage
 [dependencies]
-confers = { version = "0.3.0", default-features = false, features = ["minimal"] }
+confers = { version = "0.4.0", default-features = false, features = ["minimal"] }
 
 # Recommended configuration
 [dependencies]
-confers = { version = "0.3.0", default-features = false, features = ["recommended"] }
+confers = { version = "0.4.0", default-features = false, features = ["recommended"] }
 
 # Production configuration
 [dependencies]
-confers = { version = "0.3.0", default-features = false, features = ["production"] }
+confers = { version = "0.4.0", default-features = false, features = ["production"] }
 
 # Distributed systems configuration
 [dependencies]
-confers = { version = "0.3.0", default-features = false, features = ["distributed"] }
+confers = { version = "0.4.0", default-features = false, features = ["distributed"] }
 
 # Full feature configuration
 [dependencies]
-confers = { version = "0.3.0", features = ["full"] }
+confers = { version = "0.4.0", features = ["full"] }
 ```
 
 </div>

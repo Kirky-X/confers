@@ -849,4 +849,4 @@ A: Ensure the `watch` feature is enabled and you're using the `load_with_watcher
 
 ---
 
-*This document is based on Confers v0.3.0*
+*This document is based on Confers v0.4.0*

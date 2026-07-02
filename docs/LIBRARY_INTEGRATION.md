@@ -16,7 +16,7 @@ the CLI does internally.
 
 ```toml
 [dependencies]
-confers = { version = "0.3.0", features = ["toml", "json", "env"] }
+confers = { version = "0.4.0", features = ["toml", "json", "env"] }
 ```
 
 ### 2. Basic Usage
@@ -179,7 +179,7 @@ If a symbol is missing, verify the corresponding feature is enabled:
 
 ```toml
 [dependencies]
-confers = { version = "0.3.0", features = ["validation", "encryption"] }
+confers = { version = "0.4.0", features = ["validation", "encryption"] }
 ```
 
 ### Encryption Key Issues

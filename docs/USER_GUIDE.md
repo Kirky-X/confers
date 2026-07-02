@@ -126,10 +126,10 @@ Add `confers` to your `Cargo.toml`:
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.3.0"` | Includes toml, json, env |
-| **Minimal** | `confers = { version = "0.3.0", default-features = false, features = ["minimal"] }` | Environment variables only |
-| **Recommended** | `confers = { version = "0.3.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
-| **Full** | `confers = { version = "0.3.0", features = ["full"] }` | All features |
+| **Default** | `confers = "0.4.0"` | Includes toml, json, env |
+| **Minimal** | `confers = { version = "0.4.0", default-features = false, features = ["minimal"] }` | Environment variables only |
+| **Recommended** | `confers = { version = "0.4.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
+| **Full** | `confers = { version = "0.4.0", features = ["full"] }` | All features |
 
 **Available Feature Presets:**
 
@@ -424,7 +424,7 @@ confers --help
 ### Command Reference
 
 ```bash
-confers 0.3.0
+confers 0.4.0
 A powerful Rust configuration management library
 
 USAGE:
