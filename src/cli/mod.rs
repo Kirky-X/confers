@@ -16,6 +16,18 @@ use crate::ConfigResult;
 
 const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
 
+/// Maximum allowed size for a .env file loaded via [`load_env_file`].
+///
+/// 1 MiB is far above any realistic .env file size while preventing
+/// unbounded memory allocation when reading untrusted files.
+const MAX_ENV_FILE_SIZE: u64 = 1_048_576; // 1 MiB
+
+/// Maximum allowed length of a single line in a .env file.
+///
+/// 16 KiB prevents pathological single-line files from consuming excessive
+/// memory during parsing while allowing generous values.
+const MAX_ENV_LINE_LENGTH: usize = 16_384; // 16 KiB
+
 fn build_annotated_from_cli(
     config_paths: &[PathBuf],
     allow_absolute_paths: bool,
@@ -56,10 +68,29 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
         anyhow::bail!("Environment file not found: {}", path.display());
     }
 
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("Failed to stat env file: {}", path.display()))?;
+    if metadata.len() > MAX_ENV_FILE_SIZE {
+        anyhow::bail!(
+            "Environment file too large: size limit {} bytes exceeded (file is {} bytes): {}",
+            MAX_ENV_FILE_SIZE,
+            metadata.len(),
+            path.display()
+        );
+    }
+
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read env file: {}", path.display()))?;
 
     for line in content.lines() {
+        if line.len() > MAX_ENV_LINE_LENGTH {
+            anyhow::bail!(
+                "Environment file line too long: limit {} bytes exceeded (line is {} bytes): {}",
+                MAX_ENV_LINE_LENGTH,
+                line.len(),
+                path.display()
+            );
+        }
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -1324,6 +1355,48 @@ mod tests {
         tf.flush().unwrap();
         let result = load_env_file(&tf.path().to_path_buf());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_load_env_file_rejects_oversized_file() {
+        use std::io::Write;
+        let mut tf = tempfile::Builder::new().suffix(".env").tempfile().unwrap();
+        // Write content exceeding MAX_ENV_FILE_SIZE (1 MiB).
+        let chunk = "KEY=value\n".repeat(100_000); // ~1.0 MiB
+        let padding = "X".repeat(50_000); // push past the limit
+        tf.write_all(chunk.as_bytes()).unwrap();
+        tf.write_all(padding.as_bytes()).unwrap();
+        tf.flush().unwrap();
+
+        let result = load_env_file(&tf.path().to_path_buf());
+        let err = result.unwrap_err();
+        let msg = format!("{}", err);
+        assert!(
+            msg.contains("size limit") || msg.contains("too large"),
+            "expected size-limit error, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_load_env_file_rejects_oversized_line() {
+        use std::io::Write;
+        let mut tf = tempfile::Builder::new().suffix(".env").tempfile().unwrap();
+        // Single line exceeding MAX_ENV_LINE_LENGTH (16 KiB).
+        let long_value: String = "a".repeat(20_000);
+        writeln!(tf, "TOO_LONG_KEY={}", long_value).unwrap();
+        tf.flush().unwrap();
+
+        let result = load_env_file(&tf.path().to_path_buf());
+        let err = result.unwrap_err();
+        let msg = format!("{}", err);
+        assert!(
+            msg.contains("line") && msg.contains("too long"),
+            "expected line-too-long error, got: {}",
+            msg
+        );
     }
 
     // ============== find_value_by_key ==============
