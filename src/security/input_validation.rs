@@ -22,7 +22,10 @@ use std::sync::LazyLock;
 /// 默认危险模式 - 全局缓存
 static DEFAULT_DANGEROUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
-        Regex::new(r"[;<>&|`$()]").unwrap(),
+        // Note: & is excluded from the char class because it is a valid URL
+        // query-string separator. The && and || patterns below still catch
+        // shell logical operators. See M7 fix for details.
+        Regex::new(r"[;<>|`$()]").unwrap(),
         Regex::new(r"\$\{.*\}").unwrap(),
         Regex::new(r"`[^`]+`").unwrap(),
         Regex::new(r"\|").unwrap(),
@@ -1014,6 +1017,28 @@ mod tests {
         ));
         // 有效
         assert!(validator.validate_url("https://example.com/path").is_ok());
+    }
+
+    #[test]
+    fn test_url_with_ampersand_in_query_string() {
+        let validator = InputValidator::new();
+        // URL with & in query string should be accepted (standard query-string separator)
+        assert!(validator
+            .validate_url("https://example.com/config?key=val&key2=val2")
+            .is_ok());
+        // Shell metacharacters should still be rejected
+        assert!(validator
+            .validate_url("https://example.com/path;cmd")
+            .is_err());
+        assert!(validator
+            .validate_url("https://example.com/path|cmd")
+            .is_err());
+        assert!(validator
+            .validate_url("https://example.com/path`cmd`")
+            .is_err());
+        assert!(validator
+            .validate_url("https://example.com/path$(cmd)")
+            .is_err());
     }
 
     #[test]
