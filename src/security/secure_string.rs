@@ -319,18 +319,11 @@ impl Drop for SecureString {
 
 impl ZeroizeOnDrop for SecureString {}
 
-impl Clone for SecureString {
-    fn clone(&self) -> Self {
-        // Note: Cloning SecureString is generally discouraged but allowed
-        // for backward compatibility
-
-        Self {
-            data: self.data.clone(),
-            sensitivity: self.sensitivity.clone(),
-            display_name: self.display_name.clone(),
-        }
-    }
-}
+// Note: SecureString intentionally does NOT implement Clone.
+// The documentation states "防止克隆: 禁止 Clone" — allowing Clone would
+// contradict the security posture of this type (preventing sensitive data
+// from being duplicated in memory). Callers that need to share a
+// SecureString across threads should use Arc<SecureString> instead.
 
 impl fmt::Debug for SecureString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -573,9 +566,9 @@ mod tests {
         let secret3 = SecureString::from("different");
 
         let mut set = HashSet::new();
-        set.insert(secret1.clone());
-        set.insert(secret2.clone());
-        set.insert(secret3.clone());
+        set.insert(SecureString::from("password"));
+        set.insert(SecureString::from("password"));
+        set.insert(SecureString::from("different"));
 
         // secret1 和 secret2 应该被视为同一个元素
         assert_eq!(set.len(), 2);
@@ -827,14 +820,6 @@ mod tests {
             .push_str("default-builder")
             .build();
         assert_eq!(secret.as_str(), "default-builder");
-    }
-
-    #[test]
-    fn test_secure_string_clone_preserves_data() {
-        let original = SecureString::new("clone-me", SensitivityLevel::High);
-        let cloned = original.clone();
-        assert_eq!(original.as_str(), cloned.as_str());
-        assert_eq!(original.sensitivity(), cloned.sensitivity());
     }
 
     #[test]
