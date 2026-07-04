@@ -178,7 +178,7 @@ jobs:
       - name: Check minimum coverage (80%)
         run: cargo llvm-cov --features full --text -- | tee coverage.txt && (grep -E "^TOTAL.*[0-9]+%" coverage.txt | tail -1 | awk '{print $2}' | sed 's/%//' | awk '{if ($1 >= 80) exit 0; else {print "Coverage " $1 "% is below 80% minimum"; exit 1}}' || exit 1)
       - name: Upload coverage
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: lcov.info
           fail_ci_if_error: true
