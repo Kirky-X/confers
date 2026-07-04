@@ -243,7 +243,7 @@ cargo audit --fetch-index
 
 ### Minimum Supported Rust Version (MSRV)
 
-Confers requires Rust 1.81+ to ensure:
+Confers requires Rust 1.88+ to ensure:
 - Latest security fixes in the Rust standard library
 - Stable async trait support
 - Memory safety guarantees

@@ -26,7 +26,7 @@
   </a>
   <!-- Rust Version -->
   <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.81+-orange.svg" alt="Rust 1.81+" style="display:inline; margin:0 4px">
+    <img src="https://img.shields.io/badge/rust-1.88+-orange.svg" alt="Rust 1.88+" style="display:inline; margin:0 4px">
   </a>
   <!-- Coverage -->
   <a href="https://codecov.io/gh/Kirky-X/confers">

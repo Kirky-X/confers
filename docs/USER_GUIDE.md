@@ -87,7 +87,7 @@ Before you begin, make sure you have the following tools installed:
 <td width="50%" style="padding: 16px">
 
 **Required**
-- ✅ Rust 1.81+ (stable)
+- ✅ Rust 1.88+ (stable)
 - ✅ Cargo (installed with Rust)
 - ✅ Git
 
@@ -109,11 +109,11 @@ Before you begin, make sure you have the following tools installed:
 ```bash
 # Check Rust version
 rustc --version
-# Expected: rustc 1.81.0 (or higher)
+# Expected: rustc 1.88.0 (or higher)
 
 # Check Cargo version
 cargo --version
-# Expected: cargo 1.81.0 (or higher)
+# Expected: cargo 1.88.0 (or higher)
 ```
 
 </details>
