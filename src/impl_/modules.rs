@@ -143,7 +143,7 @@ impl ModuleConfig {
 ///
 /// # DI Patterns
 ///
-/// - [`new()`][ModuleRegistry::new] - Zero-config default
+/// - [`Default::default()`] - Zero-config default
 /// - [`with_capacity()`][ModuleRegistry::with_capacity] - Pre-allocate capacity
 #[derive(Debug, Default)]
 pub struct ModuleRegistry {

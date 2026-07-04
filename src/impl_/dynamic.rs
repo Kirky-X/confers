@@ -160,7 +160,7 @@ where
 /// deregister. Store the guard in your component's fields for
 /// persistent subscriptions.
 pub struct CallbackGuard {
-    /// Type-erased removal closure: captures Arc<DashMap> and CallbackId
+    /// Type-erased removal closure: captures `Arc<DashMap>` and CallbackId
     remover: Option<Box<dyn FnOnce() + Send>>,
 }
 
@@ -197,7 +197,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicFieldBuilder<T> {
     ///
     /// # Panics
     ///
-    /// Panics via `expect()` if no initial value was set via [`set_initial`].
+    /// Panics via `expect()` if no initial value was set via [`initial()`][DynamicFieldBuilder::initial].
     pub fn build(self) -> DynamicField<T> {
         DynamicField::new(
             self.initial

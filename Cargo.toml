@@ -2,7 +2,7 @@
 name = "confers"
 version = "0.4.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
 authors = ["Kirky <Kirky-X@outlook.com>"]
@@ -64,7 +64,7 @@ resolver = "2"
 [workspace.package]
 version = "0.4.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
 authors = ["Kirky <Kirky-X@outlook.com>"]
@@ -102,6 +102,9 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 trybuild = "1.0"
 serial_test = "3"
+
+[lib]
+bench = false
 
 [features]
 default = ["toml", "json", "env"]
