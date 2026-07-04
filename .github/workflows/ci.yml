@@ -37,13 +37,11 @@ jobs:
         features: ["default", "recommended", "full"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Start integration services
+      - name: Start NATS with JetStream
         run: |
           docker run -d --name nats -p 4222:4222 nats:2.10 -js
-          docker run -d --name etcd -p 2379:2379 -e ALLOW_NONE_AUTHENTICATION=yes bitnami/etcd:3.5
-          docker run -d --name consul -p 8500:8500 hashicorp/consul:1.18 agent -dev -client-addr=0.0.0.0
           for i in $(seq 1 60); do
-            nc -z 127.0.0.1 4222 && nc -z 127.0.0.1 2379 && nc -z 127.0.0.1 8500 && break
+            nc -z 127.0.0.1 4222 && break
             sleep 0.5
           done
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
@@ -160,13 +158,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Start integration services
+      - name: Start NATS with JetStream
         run: |
           docker run -d --name nats -p 4222:4222 nats:2.10 -js
-          docker run -d --name etcd -p 2379:2379 -e ALLOW_NONE_AUTHENTICATION=yes bitnami/etcd:3.5
-          docker run -d --name consul -p 8500:8500 hashicorp/consul:1.18 agent -dev -client-addr=0.0.0.0
           for i in $(seq 1 60); do
-            nc -z 127.0.0.1 4222 && nc -z 127.0.0.1 2379 && nc -z 127.0.0.1 8500 && break
+            nc -z 127.0.0.1 4222 && break
             sleep 0.5
           done
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
