@@ -112,7 +112,7 @@ We are committed to providing an inclusive and friendly environment. By particip
 Before you begin, make sure you have installed:
 
 - **Git** - Version control tool
-- **Rust 1.81+** - Programming language
+- **Rust 1.88+** - Programming language
 - **Cargo** - Rust package manager
 - **IDE** - VS Code (rust-analyzer plugin recommended), IntelliJ IDEA or similar
 

@@ -2,7 +2,7 @@
 name = "confers"
 version = "0.4.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
 authors = ["Kirky <Kirky-X@outlook.com>"]
@@ -11,6 +11,11 @@ homepage = "https://github.com/Kirky-X/confers"
 documentation = "https://docs.rs/confers"
 keywords = ["config", "configuration", "settings", "env"]
 categories = ["config", "development-tools::build-tools"]
+# Disable auto-discovery of bench targets: benches/common.rs is a shared
+# helper module (included via `mod common;`), not a benchmark. Auto-discovery
+# builds it as a libtest-harness bench that rejects criterion's --save-baseline.
+# All real benchmarks are declared explicitly below in [[bench]] blocks.
+autobenches = false
 
 [dependencies]
 arc-swap = { version = "1.9", optional = true }
@@ -64,7 +69,7 @@ resolver = "2"
 [workspace.package]
 version = "0.4.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
 authors = ["Kirky <Kirky-X@outlook.com>"]
@@ -102,6 +107,9 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 trybuild = "1.0"
 serial_test = "3"
+
+[lib]
+bench = false
 
 [features]
 default = ["toml", "json", "env"]
@@ -233,3 +241,4 @@ path = "benches/cow_efficiency_bench.rs"
 name = "confers"
 path = "src/cli/main.rs"
 required-features = ["cli"]
+bench = false
