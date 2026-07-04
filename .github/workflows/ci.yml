@@ -32,16 +32,20 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      nats:
-        image: nats:2.10
-        ports:
-          - 4222:4222
     strategy:
       matrix:
         features: ["default", "recommended", "full"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Start integration services
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10 -js
+          docker run -d --name etcd -p 2379:2379 -e ALLOW_NONE_AUTHENTICATION=yes bitnami/etcd:3.5
+          docker run -d --name consul -p 8500:8500 hashicorp/consul:1.18 agent -dev -client-addr=0.0.0.0
+          for i in $(seq 1 60); do
+            nc -z 127.0.0.1 4222 && nc -z 127.0.0.1 2379 && nc -z 127.0.0.1 8500 && break
+            sleep 0.5
+          done
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Install protoc
@@ -154,13 +158,17 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
-    services:
-      nats:
-        image: nats:2.10
-        ports:
-          - 4222:4222
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Start integration services
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10 -js
+          docker run -d --name etcd -p 2379:2379 -e ALLOW_NONE_AUTHENTICATION=yes bitnami/etcd:3.5
+          docker run -d --name consul -p 8500:8500 hashicorp/consul:1.18 agent -dev -client-addr=0.0.0.0
+          for i in $(seq 1 60); do
+            nc -z 127.0.0.1 4222 && nc -z 127.0.0.1 2379 && nc -z 127.0.0.1 8500 && break
+            sleep 0.5
+          done
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           components: llvm-tools-preview

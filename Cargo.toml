@@ -236,3 +236,4 @@ path = "benches/cow_efficiency_bench.rs"
 name = "confers"
 path = "src/cli/main.rs"
 required-features = ["cli"]
+bench = false
