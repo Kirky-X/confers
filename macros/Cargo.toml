@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "confers-macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 keywords.workspace = true
-categories.workspace = true
+categories = ["development-tools"]
 
 [lib]
 proc-macro = true
