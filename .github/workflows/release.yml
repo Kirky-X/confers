@@ -12,6 +12,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write # create-release and upload assets
+
 jobs:
   create-release:
     name: Create Release
