@@ -19,7 +19,7 @@ jobs:
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Create GitHub Release
         id: release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844  # v1
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: create-release
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30  # stable
       - name: Publish confers-macros
         run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p confers-macros
@@ -62,7 +62,7 @@ jobs:
             os: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30  # stable
         with:
           targets: ${{ matrix.target }}
