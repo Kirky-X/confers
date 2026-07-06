@@ -7,6 +7,7 @@ mod common;
 use confers::Config;
 use garde::Validate;
 use serde::Deserialize;
+use serial_test::serial;
 
 #[derive(Debug, Config, Deserialize, Validate)]
 #[config(validate)]
@@ -28,6 +29,7 @@ fn test_validated_config_defaults_pass() {
 }
 
 #[test]
+#[serial]
 fn test_validated_config_host_env_override() {
     common::with_env_var("HOST", "example.com", || {
         let config = ValidatedConfig::load_sync().unwrap();
@@ -63,6 +65,7 @@ fn test_email_validation_pass() {
 }
 
 #[test]
+#[serial]
 fn test_email_validation_fail() {
     common::with_env_var("EMAIL", "not-an-email", || {
         let config = EmailConfig::load_sync().unwrap();
@@ -114,6 +117,7 @@ struct AppConfig {
 }
 
 #[test]
+#[serial]
 fn test_nested_validation() {
     let config = AppConfig::default();
     assert!(config.validate().is_ok());
@@ -149,6 +153,7 @@ fn test_empty_string_validation() {
 }
 
 #[test]
+#[serial]
 fn test_long_string_validation() {
     #[derive(Debug, Clone, Config, Deserialize, Validate)]
     #[config(validate)]
@@ -172,6 +177,7 @@ fn test_long_string_validation() {
 }
 
 #[test]
+#[serial]
 fn test_special_characters_validation() {
     #[derive(Debug, Clone, Config, Deserialize, Validate)]
     #[config(validate)]
@@ -201,6 +207,7 @@ fn test_special_characters_validation() {
 }
 
 #[test]
+#[serial]
 fn test_unicode_validation() {
     #[derive(Debug, Clone, Config, Deserialize, Validate)]
     #[config(validate)]
