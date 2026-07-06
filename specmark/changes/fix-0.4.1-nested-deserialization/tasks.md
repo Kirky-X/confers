@@ -26,4 +26,27 @@
 - [x] [T016] [P1] 提交版本号变更：`git commit -m "chore: bump version to 0.4.1"`。
 
 ## Phase 4: Convergence
-（仅由 /specmark converge 追加，propose 不写本节）
+
+_由 /specmark converge 于 2026-07-07 生成。_
+
+**发现缺口：** 0 (CRITICAL: 0 | HIGH: 0 | MEDIUM: 0 | LOW: 3)
+**追加任务：** 0（跳过：3 个 LOW 测试覆盖观察，记录为叙述）
+**未请求范围已接受：** 无
+
+**收敛叙述：**
+
+4 个缺口类型 pass 结果：
+- **missing**：0 — R-format-conversion-001/002/003 与 R-env-source-001/002/003 的所有 code 实现均到位（convert.rs 三格式 bare key 修复、source.rs infer_config_value 5 分支推断、.env 与 real env 双路径调用、_FILE 内容走推断）。
+- **partial**：0 — 代码层面无缺失子 case/分支。
+- **contradicts**：0 — 推断顺序、大小写不敏感、f64 守卫（`.`/`e`/`E`）均与 spec 一致。
+- **unrequested**：0 — 无范围蔓延。
+
+**LOW 测试覆盖观察（不追加任务，仅记录）：**
+
+1. **R-env-source-002 验收标准 2 未独立测试**：spec 要求 "写入 .env 文件 `TESTCFG_NUM=42`，collect 后 map→num→I64(42)"，现有测试 `test_env_source_collect_infers_types` 只测真实 env 路径。.env 路径代码（[source.rs:329](file:///home/dev/projects/confers/src/impl_/config/source.rs#L329)）与真实 env 路径（[source.rs:346](file:///home/dev/projects/confers/src/impl_/config/source.rs#L346)）结构同构，均调用 `Self::infer_config_value(&resolved)`。代码正确，仅缺独立 .env 文件集成测试。
+
+2. **R-env-source-003 验收标准 2 未独立测试**：spec 要求 "_FILE 文件内容为 `true` 时 → Bool(true)"，现有 `test_env_source_file_suffix_infers_type` 只测 "8080"→I64。`infer_config_value` 的 bool 推断已在 `test_infer_config_value` 单元测试中验证，`_FILE` 路径已验证调用 `infer_config_value`，组合场景为两条已测代码路径的交集。
+
+3. **R-format-conversion-002 验收标准 2/3 未独立测试**：spec 要求 `with_field_strategy("write_url", ...)` 能匹配嵌套字段、`all_paths_internal` 输出无重复前缀。bare key 修复自然满足这两条（path 字段保持 bare key，map key 改为 bare key 使 `all_paths_internal` 重建路径时不再叠加父路径），代码行为正确，仅缺独立回归测试。
+
+**结论：** 代码与 spec 完全对齐，无 CRITICAL/HIGH/MEDIUM 缺口。3 个 LOW 观察为测试覆盖增强建议，可作为后续 follow-up 任务，不阻断本次变更归档。
