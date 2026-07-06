@@ -24,7 +24,7 @@ pub(crate) fn toml_table_to_config_value(
                 format!("{}.{}", prefix, k)
             };
             (
-                Arc::from(path.clone()),
+                Arc::from(k.clone()),
                 AnnotatedValue::new(
                     toml_value_to_config_value(v, source, &path),
                     source.clone(),
@@ -101,7 +101,7 @@ pub(crate) fn json_to_config_value(
                         format!("{}.{}", prefix, k)
                     };
                     (
-                        Arc::from(p.clone()),
+                        Arc::from(k.clone()),
                         AnnotatedValue::new(
                             json_to_config_value(v, source, &p),
                             source.clone(),
@@ -150,7 +150,7 @@ pub(crate) fn yaml_to_config_value(
                             format!("{}.{}", prefix, key)
                         };
                         (
-                            Arc::from(p.clone()),
+                            Arc::from(key),
                             AnnotatedValue::new(
                                 yaml_to_config_value(v, source, &p),
                                 source.clone(),
@@ -261,12 +261,12 @@ mod tests {
         let cv = toml_value_to_config_value(&v, &src(), "p");
         let map = cv.as_map().unwrap();
         assert_eq!(map.len(), 2);
-        // Map key is the full path "{prefix}.{key}", but AnnotatedValue.path
-        // stores the bare key from the table (not the prefixed path).
-        let a = map.get("p.a").unwrap();
+        // Map key is the bare key from the table; AnnotatedValue.path
+        // also stores the bare key (not the prefixed dotted path).
+        let a = map.get("a").unwrap();
         assert_eq!(a.inner.as_i64(), Some(1));
         assert_eq!(a.path.as_ref(), "a");
-        let b = map.get("p.b").unwrap();
+        let b = map.get("b").unwrap();
         assert_eq!(b.inner.as_str(), Some("x"));
         assert_eq!(b.path.as_ref(), "b");
     }
@@ -279,7 +279,8 @@ mod tests {
         let v: toml::Value = tbl.into();
         let cv = toml_value_to_config_value(&v, &src(), "prefix");
         let map = cv.as_map().unwrap();
-        let n = map.get("prefix.name").unwrap();
+        // Map key is bare "name"; prefix no longer contributes to the map key.
+        let n = map.get("name").unwrap();
         assert_eq!(n.inner.as_str(), Some("v"));
     }
 
@@ -304,7 +305,9 @@ mod tests {
         tbl.insert("k".to_string(), 5i64.into());
         let cv = toml_table_to_config_value(&tbl, &src(), "root");
         let map = cv.as_map().unwrap();
-        let v = map.get("root.k").unwrap();
+        // Map key is bare "k" (prefix only affects AnnotatedValue.path,
+        // which here is also "k" since path stores the bare key).
+        let v = map.get("k").unwrap();
         assert_eq!(v.inner.as_i64(), Some(5));
     }
 
@@ -326,12 +329,85 @@ mod tests {
         outer.insert("inner".to_string(), inner.into());
         let cv = toml_table_to_config_value(&outer, &src(), "root");
         let map = cv.as_map().unwrap();
-        // Outer key path: "root.inner"
-        let inner_av = map.get("root.inner").unwrap();
+        // Outer key: bare "inner" (not "root.inner")
+        let inner_av = map.get("inner").unwrap();
         let inner_map = inner_av.inner.as_map().unwrap();
-        // Inner key path: "root.inner.x" (constructed via recursive call with prefix="root.inner")
-        let x_av = inner_map.get("root.inner.x").unwrap();
+        // Inner key: bare "x" (not "root.inner.x")
+        let x_av = inner_map.get("x").unwrap();
         assert_eq!(x_av.inner.as_i64(), Some(1));
+    }
+
+    // ===== Regression: bare key for nested tables/objects/mappings (fix-0.4.1) =====
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_nested_table_uses_bare_key() {
+        // TOML equivalent of [database]\nwrite_url = "postgres://x"
+        let mut db = toml::value::Table::new();
+        db.insert(
+            "write_url".to_string(),
+            toml::Value::String("postgres://x".into()),
+        );
+        let mut root = toml::value::Table::new();
+        root.insert("database".to_string(), db.into());
+        let cv = toml_table_to_config_value(&root, &src(), "");
+        let map = cv.as_map().unwrap();
+        // Outer key is bare "database"
+        let db_av = map
+            .get("database")
+            .expect("outer key should be bare 'database'");
+        let db_map = db_av.inner.as_map().unwrap();
+        // Inner key is bare "write_url", NOT "database.write_url"
+        let wu = db_map
+            .get("write_url")
+            .expect("inner key should be bare 'write_url', not 'database.write_url'");
+        assert_eq!(wu.inner.as_str(), Some("postgres://x"));
+        // Dotted key must NOT exist
+        assert!(
+            db_map.get("database.write_url").is_none(),
+            "dotted-key should not exist as map key"
+        );
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_json_nested_object_uses_bare_key() {
+        let v = serde_json::json!({ "database": { "write_url": "postgres://x" } });
+        let cv = json_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let db_av = map
+            .get("database")
+            .expect("outer key should be bare 'database'");
+        let db_map = db_av.inner.as_map().unwrap();
+        let wu = db_map
+            .get("write_url")
+            .expect("inner key should be bare 'write_url', not 'database.write_url'");
+        assert_eq!(wu.inner.as_str(), Some("postgres://x"));
+        assert!(
+            db_map.get("database.write_url").is_none(),
+            "dotted-key should not exist as map key"
+        );
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_nested_mapping_uses_bare_key() {
+        let v: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str("database:\n  write_url: postgres://x\n").unwrap();
+        let cv = yaml_to_config_value(&v, &src(), "");
+        let map = cv.as_map().unwrap();
+        let db_av = map
+            .get("database")
+            .expect("outer key should be bare 'database'");
+        let db_map = db_av.inner.as_map().unwrap();
+        let wu = db_map
+            .get("write_url")
+            .expect("inner key should be bare 'write_url', not 'database.write_url'");
+        assert_eq!(wu.inner.as_str(), Some("postgres://x"));
+        assert!(
+            db_map.get("database.write_url").is_none(),
+            "dotted-key should not exist as map key"
+        );
     }
 
     // ===== json_to_config_value =====
@@ -425,7 +501,7 @@ mod tests {
         let v = serde_json::json!({ "a": 1 });
         let cv = json_to_config_value(&v, &src(), "root");
         let map = cv.as_map().unwrap();
-        let a = map.get("root.a").unwrap();
+        let a = map.get("a").unwrap();
         assert_eq!(a.inner.as_i64(), Some(1));
     }
 
@@ -437,7 +513,7 @@ mod tests {
         let map = cv.as_map().unwrap();
         let outer_av = map.get("outer").unwrap();
         let inner_map = outer_av.inner.as_map().unwrap();
-        let inner_av = inner_map.get("outer.inner").unwrap();
+        let inner_av = inner_map.get("inner").unwrap();
         assert_eq!(inner_av.inner.as_i64(), Some(1));
     }
 
@@ -539,7 +615,7 @@ mod tests {
         let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("a: 1").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "root");
         let map = cv.as_map().unwrap();
-        let a = map.get("root.a").unwrap();
+        let a = map.get("a").unwrap();
         assert_eq!(a.inner.as_i64(), Some(1));
     }
 
@@ -551,7 +627,7 @@ mod tests {
         let map = cv.as_map().unwrap();
         let outer_av = map.get("outer").unwrap();
         let inner_map = outer_av.inner.as_map().unwrap();
-        let inner_av = inner_map.get("outer.inner").unwrap();
+        let inner_av = inner_map.get("inner").unwrap();
         assert_eq!(inner_av.inner.as_i64(), Some(1));
     }
 

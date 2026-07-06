@@ -143,11 +143,11 @@ pub use loader::{
 };
 
 // Re-export derive macros
-pub use macros::Config;
-pub use macros::ConfigClap;
-pub use macros::ConfigMigration;
-pub use macros::ConfigModules;
-pub use macros::ConfigSchema;
+pub use confers_macros::Config;
+pub use confers_macros::ConfigClap;
+pub use confers_macros::ConfigMigration;
+pub use confers_macros::ConfigModules;
+pub use confers_macros::ConfigSchema;
 
 // ============== Feature-gated Re-exports ==============
 
