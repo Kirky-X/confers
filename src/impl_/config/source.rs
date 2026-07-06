@@ -326,7 +326,7 @@ impl Source for EnvSource {
                     if let Some(config_path) = self.parse_key(&item.0) {
                         let resolved = self.resolve_value(&item.1, &item.0)?;
                         let value = AnnotatedValue::new(
-                            ConfigValue::String(resolved),
+                            Self::infer_config_value(&resolved),
                             self.source_id.clone(),
                             std::sync::Arc::from(config_path.as_str()),
                         )
@@ -343,7 +343,7 @@ impl Source for EnvSource {
             if let Some(config_path) = self.parse_key(&key) {
                 let resolved = self.resolve_value(&value, &key)?;
                 let value = AnnotatedValue::new(
-                    ConfigValue::String(resolved),
+                    Self::infer_config_value(&resolved),
                     self.source_id.clone(),
                     std::sync::Arc::from(config_path.as_str()),
                 )
@@ -376,6 +376,48 @@ impl Source for EnvSource {
 }
 
 impl EnvSource {
+    /// Infer a `ConfigValue` from a raw string using deterministic type
+    /// inference (Rule 5: deterministic logic must be explicit code, not
+    /// delegated to a model).
+    ///
+    /// Inference order (first match wins):
+    /// 1. bool — `eq_ignore_ascii_case` against "true"/"false"
+    /// 2. i64 — `str::parse::<i64>()`
+    /// 3. u64 — `str::parse::<u64>()` (catches values above i64::MAX)
+    /// 4. f64 — only when the string contains `.`/`e`/`E`, then `str::parse::<f64>()`
+    /// 5. fallback — `ConfigValue::String`
+    pub(crate) fn infer_config_value(s: &str) -> ConfigValue {
+        // 1. bool
+        if s.eq_ignore_ascii_case("true") {
+            return ConfigValue::Bool(true);
+        }
+        if s.eq_ignore_ascii_case("false") {
+            return ConfigValue::Bool(false);
+        }
+
+        // 2. i64
+        if let Ok(v) = s.parse::<i64>() {
+            return ConfigValue::I64(v);
+        }
+
+        // 3. u64 (catches values above i64::MAX, e.g. 18446744073709551615)
+        if let Ok(v) = s.parse::<u64>() {
+            return ConfigValue::U64(v);
+        }
+
+        // 4. f64 — only attempt when the string looks like a float
+        //    (contains '.', 'e', or 'E'). This prevents "123abc" from
+        //    accidentally parsing via f64's permissive grammar.
+        if s.contains('.') || s.contains('e') || s.contains('E') {
+            if let Ok(v) = s.parse::<f64>() {
+                return ConfigValue::F64(v);
+            }
+        }
+
+        // 5. fallback
+        ConfigValue::String(s.to_string())
+    }
+
     /// Insert a value into a nested map structure.
     fn insert_nested(
         map: &mut indexmap::IndexMap<std::sync::Arc<str>, AnnotatedValue>,
@@ -1002,5 +1044,161 @@ mod tests {
         let result = source.collect();
         std::env::remove_var("MYTEST_NOPREFIX_FILE"); // pragma: allowlist secret
         assert!(result.is_ok());
+    }
+
+    // ===== infer_config_value (fix-0.4.1 Bug 2) =====
+
+    #[test]
+    fn test_infer_config_value() {
+        // bool
+        assert_eq!(
+            EnvSource::infer_config_value("true"),
+            ConfigValue::Bool(true)
+        );
+        assert_eq!(
+            EnvSource::infer_config_value("false"),
+            ConfigValue::Bool(false)
+        );
+        // bool is case-insensitive
+        assert_eq!(
+            EnvSource::infer_config_value("TRUE"),
+            ConfigValue::Bool(true)
+        );
+        assert_eq!(
+            EnvSource::infer_config_value("False"),
+            ConfigValue::Bool(false)
+        );
+
+        // i64
+        assert_eq!(
+            EnvSource::infer_config_value("5432"),
+            ConfigValue::I64(5432)
+        );
+        assert_eq!(EnvSource::infer_config_value("-7"), ConfigValue::I64(-7));
+        assert_eq!(EnvSource::infer_config_value("0"), ConfigValue::I64(0));
+
+        // u64 (above i64::MAX)
+        assert_eq!(
+            EnvSource::infer_config_value("18446744073709551615"),
+            ConfigValue::U64(u64::MAX)
+        );
+
+        // f64
+        assert_eq!(
+            EnvSource::infer_config_value("3.14"),
+            ConfigValue::F64(3.14)
+        );
+        assert_eq!(
+            EnvSource::infer_config_value("1e10"),
+            ConfigValue::F64(1e10)
+        );
+        assert_eq!(
+            EnvSource::infer_config_value("-2.5E-3"),
+            ConfigValue::F64(-2.5e-3)
+        );
+
+        // fallback: plain strings
+        assert_eq!(
+            EnvSource::infer_config_value("hello"),
+            ConfigValue::String("hello".to_string())
+        );
+        assert_eq!(
+            EnvSource::infer_config_value(""),
+            ConfigValue::String("".to_string())
+        );
+        assert_eq!(
+            EnvSource::infer_config_value("123abc"),
+            ConfigValue::String("123abc".to_string())
+        );
+        // "abc123" contains no float marker, not a valid int → string
+        assert_eq!(
+            EnvSource::infer_config_value("abc123"),
+            ConfigValue::String("abc123".to_string())
+        );
+    }
+
+    // ===== collect() type inference integration (fix-0.4.1 Bug 2) =====
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_collect_infers_types() {
+        // Set typed env vars under a unique prefix
+        std::env::set_var("TESTCFG_PORT", "5432");
+        std::env::set_var("TESTCFG_DEBUG", "true");
+        std::env::set_var("TESTCFG_HOST", "localhost");
+
+        let source = EnvSource::with_prefix("TESTCFG_");
+        let result = source.collect();
+
+        // Cleanup before assertions so panics don't leak env vars
+        std::env::remove_var("TESTCFG_PORT");
+        std::env::remove_var("TESTCFG_DEBUG");
+        std::env::remove_var("TESTCFG_HOST");
+
+        let result = result.expect("collect should succeed");
+        let map = match &result.inner {
+            ConfigValue::Map(m) => m,
+            _ => panic!("expected map, got {:?}", result.inner),
+        };
+
+        // port → I64(5432)
+        let port = map
+            .get("port")
+            .expect("map should contain 'port' key")
+            .inner
+            .as_i64()
+            .expect("port should be I64");
+        assert_eq!(port, 5432, "port should infer as i64 5432");
+
+        // debug → Bool(true)
+        let debug = map
+            .get("debug")
+            .expect("map should contain 'debug' key")
+            .inner
+            .as_bool()
+            .expect("debug should be Bool");
+        assert!(debug, "debug should infer as bool true");
+
+        // host → String("localhost")
+        let host = map
+            .get("host")
+            .expect("map should contain 'host' key")
+            .inner
+            .as_str()
+            .expect("host should be String");
+        assert_eq!(host, "localhost", "host should remain a string 'localhost'");
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_infers_type() {
+        // _FILE suffix reads file content, which should also go through
+        // type inference (specs/env-source R-003).
+        use std::io::Write;
+        let mut tmp = tempfile::Builder::new().suffix(".txt").tempfile().unwrap();
+        write!(tmp, "8080").unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+
+        std::env::set_var("MYTEST_PORT_FILE", &path); // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        std::env::remove_var("MYTEST_PORT_FILE"); // pragma: allowlist secret
+
+        let result = result.expect("collect should succeed");
+        let map = match &result.inner {
+            ConfigValue::Map(m) => m,
+            _ => panic!("expected map, got {:?}", result.inner),
+        };
+
+        let port = map
+            .get("port")
+            .expect("map should contain 'port' key (from _FILE suffix)")
+            .inner
+            .as_i64()
+            .expect("port from _FILE should infer as I64");
+        assert_eq!(
+            port, 8080,
+            "_FILE content '8080' should infer as i64 8080, not stay as string"
+        );
     }
 }
