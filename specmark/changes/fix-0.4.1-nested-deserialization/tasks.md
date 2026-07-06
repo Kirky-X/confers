@@ -21,8 +21,8 @@
 
 ## Phase 3: 版本号与全量验证
 
-- [ ] [T014] [P1] 修改 Cargo.toml：`[package] version = "0.4.0"` → `"0.4.1"`（L3）；`[workspace.package] version = "0.4.0"` → `"0.4.1"`（L70）；`confers-macros = { version = "0.4.0", path = "macros" }` → `"0.4.1"`（L30）。运行 `cargo build` 确认 confers-macros 依赖版本解析成功。
-- [ ] [T015] [P0] 全量验证：`cargo test --all-features`（全特性）、`cargo test --no-default-features --features minimal`（最小特性）、`cargo test --no-default-features --features tol,json,env`（默认特性子集）、`cargo clippy --all-features -- -D warnings`（lint 零警告）。任一失败则回滚到对应 Phase 修复。
+- [x] [T014] [P1] 修改 Cargo.toml：`[package] version = "0.4.0"` → `"0.4.1"`（L3）；`[workspace.package] version = "0.4.0"` → `"0.4.1"`（L70）；`confers-macros = { version = "0.4.0", path = "macros" }` → `"0.4.1"`（L30）。运行 `cargo build` 确认 confers-macros 依赖版本解析成功。
+- [x] [T015] [P0] 全量验证：`cargo test --all-features`（全特性）、`cargo test --no-default-features --features minimal`（最小特性）、`cargo test --no-default-features --features tol,json,env`（默认特性子集）、`cargo clippy --all-features -- -D warnings`（lint 零警告）。任一失败则回滚到对应 Phase 修复。
 - [ ] [T016] [P1] 提交版本号变更：`git commit -m "chore: bump version to 0.4.1"`。
 
 ## Phase 4: Convergence
