@@ -9,6 +9,7 @@
 mod common;
 
 use serde::Deserialize;
+use serial_test::serial;
 
 use confers::ConfigBuilder;
 
@@ -35,6 +36,7 @@ fn cleanup_test_env() {
 }
 
 #[test]
+#[serial]
 fn test_env_vars_deserialize_into_typed_struct() {
     set_test_env();
 

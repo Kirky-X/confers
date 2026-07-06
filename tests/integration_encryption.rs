@@ -11,6 +11,7 @@ mod tests {
         derive_field_key, CryptoError, EnvKeyProvider, SecretBytes, SecretKeyProvider,
         SecretString, XChaCha20Crypto,
     };
+    use serial_test::serial;
 
     // ========================================
     // SecretString Tests
@@ -245,6 +246,7 @@ mod tests {
     // ========================================
 
     #[test]
+    #[serial]
     fn test_env_key_provider() {
         common::with_env_var(
             "TEST_ENCRYPTION_KEY",
@@ -263,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_missing_var() {
         // Ensure the variable doesn't exist
         std::env::remove_var("NON_EXISTENT_KEY_12345");
@@ -274,6 +277,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_too_short_key() {
         common::with_env_var("SHORT_KEY_TEST", "short", || {
             let provider = EnvKeyProvider::new("SHORT_KEY_TEST");
@@ -285,6 +289,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_exact_length() {
         // 32 byte key - exactly correct
         common::with_env_var("EXACT_KEY_TEST", "12345678901234567890123456789012", || {
@@ -295,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_too_long_key() {
         // 33 byte key - too long
         common::with_env_var("LONG_KEY_TEST", "123456789012345678901234567890123", || {
@@ -305,6 +311,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_builder() {
         common::with_env_var(
             "BUILDER_TEST_KEY",
@@ -322,6 +329,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_key_provider_builder_missing_env_var() {
         // Use unique variable name to avoid conflicts with other tests
         let var_name = "BUILDER_MISSING_VAR_UNIQUE_12345";
