@@ -635,6 +635,7 @@ impl Source for DefaultSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_memory_source() {
@@ -666,6 +667,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_env_source_prefix() {
         // Set test environment variables
         std::env::set_var("TEST_APP_HOST", "localhost");

@@ -217,6 +217,7 @@ fn test_empty_url_rejected() {
 mod etcd_tests {
     use super::*;
     use confers::remote::{EtcdSourceBuilder, EtcdTlsConfig};
+    use serial_test::serial;
 
     /// Test EtcdSourceBuilder default configuration (4.1.1).
     #[test]
@@ -334,6 +335,7 @@ mod etcd_tests {
 
     /// Test Etcd environment variable authentication (4.1.2).
     #[test]
+    #[serial]
     fn test_etcd_auth_env_var() {
         // Test that auth can be set via environment
         common::with_env_var("ETCD_USERNAME", "env_user", || {
