@@ -42,6 +42,7 @@ fn test_validated_config_host_env_override() {
 }
 
 #[test]
+#[serial]
 fn test_host_validation_fail_empty() {
     // Empty host should fail validation
     common::with_env_var("HOST", "", || {
@@ -74,6 +75,7 @@ fn test_email_validation_fail() {
 }
 
 #[test]
+#[serial]
 fn test_email_validation_valid_override() {
     common::with_env_var("EMAIL", "valid@example.org", || {
         let config = EmailConfig::load_sync().unwrap();
