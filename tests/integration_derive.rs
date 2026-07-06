@@ -4,6 +4,7 @@ mod common;
 
 use confers::Config;
 use serde::Deserialize;
+use serial_test::serial;
 
 #[derive(Debug, Config, Deserialize, PartialEq)]
 struct SimpleConfig {
@@ -41,6 +42,7 @@ fn test_simple_config_default() {
 }
 
 #[test]
+#[serial]
 fn test_simple_config_load() {
     // Load with defaults (no env vars set)
     let config = SimpleConfig::load_sync().unwrap();
@@ -81,6 +83,7 @@ fn test_optional_config_default() {
 }
 
 #[test]
+#[serial]
 fn test_config_with_env_var() {
     common::with_env_var("HOST", "env-host", || {
         let config = SimpleConfig::load_sync().unwrap();
@@ -89,6 +92,7 @@ fn test_config_with_env_var() {
 }
 
 #[test]
+#[serial]
 fn test_prefixed_config_with_env_var() {
     common::with_env_var("MYAPP_NAME", "env-name", || {
         let config = PrefixedConfig::load_sync().unwrap();

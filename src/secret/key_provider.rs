@@ -86,8 +86,10 @@ impl EnvKeyProviderBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_key_length_exactly_32_bytes() {
         // 设置正确的 32 字节密钥
         std::env::set_var("TEST_VALID_KEY", "12345678901234567890123456789012");
@@ -103,6 +105,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_length_31_bytes_rejected() {
         // 设置 31 字节密钥（太短）
         std::env::set_var("TEST_SHORT_KEY", "1234567890123456789012345678901");
@@ -122,6 +125,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_length_33_bytes_rejected() {
         // 设置 33 字节密钥（太长）
         std::env::set_var("TEST_LONG_KEY", "123456789012345678901234567890123");
@@ -147,6 +151,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_provider_builder_valid() {
         std::env::set_var("BUILDER_TEST_KEY", "12345678901234567890123456789012");
 
@@ -162,6 +167,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_key_provider_builder_missing_env_var() {
         std::env::remove_var("NONEXISTENT_KEY");
 
