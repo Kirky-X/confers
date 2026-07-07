@@ -64,6 +64,9 @@ docker-compose.test.yml
 # Security audit
 .security-audit/
 
+# Specmark
+specmark/
+
 # AI agent guidelines (kept local only)
 AGENTS.md
 CLAUDE.md

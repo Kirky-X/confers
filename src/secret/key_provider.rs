@@ -1,8 +1,3 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
-
 //! Key provider implementations for secret management.
 //!
 //! This module provides various ways to supply encryption keys to the confers library.
