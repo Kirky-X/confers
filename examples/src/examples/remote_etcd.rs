@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Remote etcd 配置源示例
 //!
 //! 本示例展示如何使用 confers 的 etcd 集成从 etcd KV Store 加载配置：

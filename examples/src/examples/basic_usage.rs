@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Basic Usage - 基础配置加载示例
 //!
 //! 本示例展示如何使用 confers 加载和管理配置：

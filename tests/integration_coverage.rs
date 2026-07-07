@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Comprehensive coverage tests for confers library.
 //! These tests exercise core APIs across multiple modules.
 

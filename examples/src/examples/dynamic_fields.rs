@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 动态字段示例 - 运行时配置更新
 //!
 //! 本示例展示如何使用 DynamicField 实现运行时配置更新：

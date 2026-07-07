@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Validation code generation for the Config derive macro.
 //!
 //! When `#[config(validate)]` is set, we don't generate our own Validate impl.

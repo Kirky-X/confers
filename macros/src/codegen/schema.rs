@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Schema generation for Config derive macro.
 //!
 //! Generates JSON Schema and TypeScript type definitions from configuration structs.

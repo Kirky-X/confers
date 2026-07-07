@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Etcd remote configuration source.
 //!
 //! This module provides an etcd-backed implementation of the `PolledSource` trait,

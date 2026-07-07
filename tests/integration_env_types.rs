@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! End-to-end regression test for EnvSource type inference (fix-0.4.1 Bug 2).
 //!
 //! Prior to fix-0.4.1, `EnvSource::collect()` returned all values as

@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Security utilities for safe file path handling and sensitive data protection.
 //!
 //! This module provides path validation to prevent directory traversal attacks

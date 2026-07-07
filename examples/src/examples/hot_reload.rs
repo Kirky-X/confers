@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 热重载示例 - 配置文件变更监听
 //!
 //! 本示例展示如何使用 confers 的热重载功能：

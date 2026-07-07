@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 配置版本迁移示例 - 版本升级与数据迁移
 //!
 //! 本示例展示如何实现配置版本迁移：
