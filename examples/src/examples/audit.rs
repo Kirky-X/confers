@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 本示例展示 confers 的审计日志功能：
 //! - 使用 `AuditConfigBuilder` 构建 `AuditConfig`
 //! - 使用 `AuditWriterBuilder` 构建 `AuditWriter`

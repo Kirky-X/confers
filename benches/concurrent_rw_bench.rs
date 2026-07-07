@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 use confers::{new_in_memory, AnnotatedValue, ConfigReader, ConfigValue, ConfigWriter, SourceId};
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::sync::Arc;

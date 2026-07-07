@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! ConfigBus event rate limiter.
 //!
 //! Prevents event storms when multiple config change events arrive in rapid

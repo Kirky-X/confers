@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Attribute parsing for the Config derive macro.
 //!
 //! Uses darling for derive-aware attribute parsing with precise error spans.

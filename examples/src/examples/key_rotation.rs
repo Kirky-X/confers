@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 密钥轮转示例 - 加密密钥的安全轮转
 //!
 //! 本示例展示如何实现加密密钥的安全轮转：

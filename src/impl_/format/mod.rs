@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Format converter abstraction for configuration parsing.
 //!
 //! This module provides the `FormatConverter` trait, which abstracts over

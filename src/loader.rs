@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Configuration file loaders with precise error locations.
 //!
 //! Implementation lives in `crate::impl_::loader`. This module provides

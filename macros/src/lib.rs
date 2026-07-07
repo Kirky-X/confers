@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Procedural macros for the confers configuration library.
 //!
 //! This crate provides derive macros for zero-boilerplate configuration

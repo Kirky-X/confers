@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Confers CLI - Configuration diagnostics and inspection tool.
 //!
 //! This tool provides runtime configuration observability for confers,

@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 本示例展示 confers 的上下文感知配置功能：
 //! - 使用 `ContextAwareFieldBuilder` 构建上下文感知字段
 //! - 定义 `ContextRule` 针对不同环境/计划返回不同值

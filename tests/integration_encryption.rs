@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Integration tests for encryption module.
 //!
 //! Run with: cargo test --test integration_encryption --features encryption

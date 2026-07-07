@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Default configuration implementation.
 //!
 //! This module provides `ConfigImpl` - the primary configuration implementation

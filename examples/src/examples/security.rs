@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 本示例展示 confers 的安全模块功能：
 //! - 使用 `EncryptionPrefix` 识别与处理加密值
 //! - 展示 `Display` 与 `FromStr` trait 实现

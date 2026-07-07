@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! 配置快照持久化示例
 //!
 //! 本示例展示如何使用 confers 的 SnapshotManager 进行配置快照管理：

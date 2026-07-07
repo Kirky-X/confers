@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Configuration builder for creating configuration instances.
 //!
 //! The `ConfigBuilder` provides a fluent API for building configuration

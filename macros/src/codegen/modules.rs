@@ -1,3 +1,8 @@
+// Copyright (c) 2025 Kirky.X
+//
+// Licensed under the MIT License
+// See LICENSE file in the project root for full license information.
+
 //! Module registry code generation for Config derive macro.
 //!
 //! Generates module_registry function for composable config groups.
