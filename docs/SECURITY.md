@@ -34,9 +34,8 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 | Method | Contact | Response Time |
 |:-------|:--------|:--------------|
-| **Email** | security@confers.dev | Within 48 hours |
+| **Email** | Kirky-X@outlook.com | Within 48 hours |
 | **GitHub Security Advisories** | [Report via GH Advisory](https://github.com/Kirky-X/confers/security/advisories/new) | Within 48 hours |
-| **Encrypted Email** | PGP key available on our security page | Within 48 hours |
 
 ### What to Include
 
@@ -307,9 +306,8 @@ All security fixes follow this process:
 
 | Role | Contact |
 |:-----|:--------|
-| Security Team | security@confers.dev |
+| Security Team | Kirky-X@outlook.com |
 | Maintainer | Kirky-X@outlook.com |
-| PGP Key | Available on keys.openpgp.org |
 
 ---
 

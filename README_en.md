@@ -995,7 +995,7 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ### 📧 Reporting Security Issues
 
-Please report security vulnerabilities to: **security@confers.dev**
+Please report security vulnerabilities to: **Kirky-X@outlook.com**
 
 </details>
 

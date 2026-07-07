@@ -926,7 +926,7 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ### 📧 报告安全问题
 
-请将安全漏洞报告至：**security@confers.dev**
+请将安全漏洞报告至：**Kirky-X@outlook.com**
 
 </details>
 
