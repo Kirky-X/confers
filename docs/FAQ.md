@@ -450,7 +450,7 @@ Confers uses very little memory, typically **less than 1MB** for standard applic
 **Please report security issues responsibly:**
 
 1. **Do NOT** create a public GitHub issue
-2. **Email:** security@confers.io
+2. **Email:** Kirky-X@outlook.com
 3. **Include:**
     - Description of the vulnerability
     - Steps to reproduce
@@ -550,7 +550,6 @@ Error: Validation failed: ...
 |:--------|:------------|:-------------:|
 | 🐛 [GitHub Issues](https://github.com/Kirky-X/confers/issues) | Bug reports and feature requests | Critical bugs: 24 hours |
 | 💬 [GitHub Discussions](https://github.com/Kirky-X/confers/discussions) | Q&A and ideas | 2-3 days |
-| 💡 [Discord](https://discord.gg/project) | Real-time chat | Immediate |
 
 </details>
 
@@ -612,7 +611,7 @@ Error: Validation failed: ...
 
 | Create an Issue | Start a Discussion | Send Email |
 |:---------------:|:------------------:|:----------:|
-| [🐛 Report Issue](https://github.com/Kirky-X/confers/issues) | [💬 Community Discussion](https://github.com/Kirky-X/confers/discussions) | [📧 Contact Support](mailto:support@example.com) |
+| [🐛 Report Issue](https://github.com/Kirky-X/confers/issues) | [💬 Community Discussion](https://github.com/Kirky-X/confers/discussions) | [📧 Contact Support](mailto:Kirky-X@outlook.com) |
 
 ---
 

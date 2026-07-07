@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced input validation with length limits and character whitelists
 
 ### Fixed
-- Security vulnerability: Path traversal in secret file loading (CVE-2024-XXXX)
+- Security vulnerability: Path traversal in secret file loading
 - Memory leak in type string caching
 - Incorrect schema generation for nested Option types
 - Missing validation for encryption algorithms
