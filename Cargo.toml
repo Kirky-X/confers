@@ -96,7 +96,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_spanned = "1.1"
 serde_yaml_ng = "0.10"
-similar = "2"
+similar = "3"
 syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
