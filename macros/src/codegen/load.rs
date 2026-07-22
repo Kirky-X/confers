@@ -99,7 +99,7 @@ fn generate_load_method(
                             Ok(validated_path) => {
                                 if let Ok(content) = std::fs::read_to_string(&validated_path) {
                                     let val = content.trim().to_string();
-                                    env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                                    env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                                 }
                             }
                             Err(_) => {
@@ -107,13 +107,13 @@ fn generate_load_method(
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             } else {
                 quote! {
                     if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             }
@@ -199,7 +199,7 @@ fn generate_load_sync_method(
                             Ok(validated_path) => {
                                 if let Ok(content) = std::fs::read_to_string(&validated_path) {
                                     let val = content.trim().to_string();
-                                    env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                                    env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                                 }
                             }
                             Err(_) => {
@@ -207,13 +207,13 @@ fn generate_load_sync_method(
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             } else {
                 quote! {
                     if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::ConfigValue::string(val));
+                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             }
