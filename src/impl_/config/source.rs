@@ -386,7 +386,7 @@ impl EnvSource {
     /// 3. u64 — `str::parse::<u64>()` (catches values above i64::MAX)
     /// 4. f64 — only when the string contains `.`/`e`/`E`, then `str::parse::<f64>()`
     /// 5. fallback — `ConfigValue::String`
-    pub(crate) fn infer_config_value(s: &str) -> ConfigValue {
+    pub fn infer_config_value(s: &str) -> ConfigValue {
         // 1. bool
         if s.eq_ignore_ascii_case("true") {
             return ConfigValue::Bool(true);

@@ -99,3 +99,101 @@ fn test_prefixed_config_with_env_var() {
         assert_eq!(config.name, "env-name");
     });
 }
+
+// ===== Regression: env override for numeric fields (Bug 3) =====
+
+#[derive(Debug, Config, Deserialize, PartialEq)]
+struct NumericEnvConfig {
+    #[config(default = 0u32)]
+    port: u32,
+
+    #[config(default = 0.0f64)]
+    rate: f64,
+
+    #[config(default = false)]
+    enabled: bool,
+
+    #[config(default = "".to_string())]
+    host: String,
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_config_default() {
+    let config = NumericEnvConfig::load_sync().unwrap();
+    assert_eq!(config.port, 0);
+    assert_eq!(config.rate, 0.0);
+    assert_eq!(config.enabled, false);
+    assert_eq!(config.host, "");
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_override_u32() {
+    common::with_env_var("PORT", "8080", || {
+        let config = NumericEnvConfig::load_sync().unwrap();
+        assert_eq!(config.port, 8080);
+    });
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_override_f64() {
+    common::with_env_var("RATE", "3.14", || {
+        let config = NumericEnvConfig::load_sync().unwrap();
+        assert_eq!(config.rate, 3.14);
+    });
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_override_bool() {
+    common::with_env_var("ENABLED", "true", || {
+        let config = NumericEnvConfig::load_sync().unwrap();
+        assert_eq!(config.enabled, true);
+    });
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_override_all() {
+    std::env::set_var("PORT", "9090");
+    std::env::set_var("RATE", "2.718");
+    std::env::set_var("ENABLED", "true");
+    std::env::set_var("HOST", "example.com");
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let config = NumericEnvConfig::load_sync().unwrap();
+        assert_eq!(config.port, 9090);
+        assert_eq!(config.rate, 2.718);
+        assert_eq!(config.enabled, true);
+        assert_eq!(config.host, "example.com");
+    }));
+
+    std::env::remove_var("PORT");
+    std::env::remove_var("RATE");
+    std::env::remove_var("ENABLED");
+    std::env::remove_var("HOST");
+
+    match result {
+        Ok(()) => {}
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+// ===== Regression: env override with negative f64 (edge case) =====
+
+#[derive(Debug, Config, Deserialize, PartialEq)]
+struct SignedNumericConfig {
+    #[config(default = 0.0f64)]
+    temperature: f64,
+}
+
+#[test]
+#[serial]
+fn test_numeric_env_override_negative_f64() {
+    common::with_env_var("TEMPERATURE", "-5.5", || {
+        let config = SignedNumericConfig::load_sync().unwrap();
+        assert_eq!(config.temperature, -5.5);
+    });
+}
