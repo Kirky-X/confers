@@ -105,7 +105,7 @@ impl KeyRegistry {
         let mut keys = self.keys.write().unwrap_or_else(|e| e.into_inner());
 
         if is_primary {
-            for (_, v) in keys.iter_mut() {
+            for v in keys.values_mut() {
                 v.is_primary = false;
             }
             *self
