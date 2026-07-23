@@ -106,7 +106,7 @@ toml = { version = "1.1", features = ["preserve_order"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 trybuild = "1.0"
-serial_test = "3"
+serial_test = "3.5" # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
 
 [lib]
 bench = false
