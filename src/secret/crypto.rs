@@ -3,6 +3,21 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+//! Cryptographic operations for Confers.
+//!
+//! # Encryption Algorithm
+//!
+//! Confers uses **XChaCha20-Poly1305** as the sole encryption algorithm.
+//!
+//! ## Migration from AES-256-GCM
+//!
+//! Versions prior to 0.4.2 used AES-256-GCM. The legacy decryption path
+//! (`CryptoError::LegacyDecryptionFailed`) is now deprecated and will be
+//! removed in v0.5. To migrate:
+//!
+//! 1. Re-encrypt existing data with XChaCha20-Poly1305 using [`XChaCha20Crypto`].
+//! 2. Remove any code that matches on `CryptoError::LegacyDecryptionFailed`.
+
 use chacha20poly1305::aead::rand_core::RngCore;
 use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
@@ -19,6 +34,10 @@ pub enum CryptoError {
     DecryptionFailed,
     #[error("invalid key length: expected exactly 32 bytes for XChaCha20-Poly1305, got {0} bytes")]
     InvalidKeyLength(usize),
+    #[deprecated(
+        since = "0.4.2",
+        note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5"
+    )]
     #[error("legacy decryption failed (AES-256-GCM)")]
     LegacyDecryptionFailed,
 }
@@ -312,6 +331,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_crypto_error_display_messages() {
         assert_eq!(
             CryptoError::EncryptionFailed.to_string(),

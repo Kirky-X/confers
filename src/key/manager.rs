@@ -104,7 +104,7 @@ impl KeyManager {
             version: CURRENT_KEY_VERSION,
             created_at: now_timestamp(),
             status: KeyStatus::Active,
-            algorithm: "AES256-GCM".to_string(),
+            algorithm: "XChaCha20-Poly1305".to_string(),
         })
     }
 
@@ -176,7 +176,7 @@ impl KeyManager {
             version: CURRENT_KEY_VERSION,
             created_at: now_timestamp(),
             status: KeyStatus::Active,
-            algorithm: "AES256-GCM".to_string(),
+            algorithm: "XChaCha20-Poly1305".to_string(),
         })
     }
 
@@ -508,7 +508,7 @@ mod tests {
 
         assert_eq!(version.version, CURRENT_KEY_VERSION);
         assert_eq!(version.status, KeyStatus::Active);
-        assert_eq!(version.algorithm, "AES256-GCM");
+        assert_eq!(version.algorithm, "XChaCha20-Poly1305");
         assert_eq!(km.get_default_key_id(), "prod");
 
         let info = km.get_key_info("prod").expect("get_key_info");
@@ -894,13 +894,13 @@ mod tests {
             version: 1,
             created_at: 1234,
             status: KeyStatus::Active,
-            algorithm: "AES256-GCM".to_string(),
+            algorithm: "XChaCha20-Poly1305".to_string(),
         };
         assert_eq!(v.id, "k_v1");
         assert_eq!(v.version, 1);
         assert_eq!(v.created_at, 1234);
         assert_eq!(v.status, KeyStatus::Active);
-        assert_eq!(v.algorithm, "AES256-GCM");
+        assert_eq!(v.algorithm, "XChaCha20-Poly1305");
     }
 
     #[test]
@@ -910,7 +910,7 @@ mod tests {
             version: 1,
             created_at: 0,
             status: KeyStatus::Deprecated,
-            algorithm: "AES256-GCM".to_string(),
+            algorithm: "XChaCha20-Poly1305".to_string(),
         };
         let json = serde_json::to_string(&v).expect("serialize");
         let de: KeyVersion = serde_json::from_str(&json).expect("deserialize");
