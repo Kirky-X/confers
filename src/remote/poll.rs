@@ -22,6 +22,7 @@
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::{detect_format_from_content, parse_content, Format};
+use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -291,6 +292,7 @@ pub struct HttpPolledSource {
     last_etag: ArcSwap<Option<String>>,
     last_modified: ArcSwap<Option<String>>,
     source_id: SourceId,
+    circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
 /// Builder for `HttpPolledSource`.
@@ -300,6 +302,9 @@ pub struct HttpPolledSourceBuilder {
     format: Option<Format>,
     timeout: Option<Duration>,
     allowed_domains: Vec<String>,
+    cb_threshold: Option<u32>,
+    cb_base_delay: Option<Duration>,
+    cb_max_delay: Option<Duration>,
 }
 
 impl HttpPolledSourceBuilder {
@@ -311,6 +316,9 @@ impl HttpPolledSourceBuilder {
             format: None,
             timeout: None,
             allowed_domains: Vec::new(),
+            cb_threshold: None,
+            cb_base_delay: None,
+            cb_max_delay: None,
         }
     }
 
@@ -373,6 +381,29 @@ impl HttpPolledSourceBuilder {
         self
     }
 
+    /// Set the circuit breaker failure threshold.
+    ///
+    /// After this many consecutive failures, the circuit opens and polls
+    /// are skipped until the backoff timeout elapses. Default: 5.
+    pub fn circuit_breaker_threshold(mut self, failures: u32) -> Self {
+        self.cb_threshold = Some(failures);
+        self
+    }
+
+    /// Set the circuit breaker base delay for exponential backoff.
+    /// Default: 1 second.
+    pub fn circuit_breaker_base_delay(mut self, delay: Duration) -> Self {
+        self.cb_base_delay = Some(delay);
+        self
+    }
+
+    /// Set the circuit breaker maximum backoff delay.
+    /// Default: 60 seconds.
+    pub fn circuit_breaker_max_delay(mut self, delay: Duration) -> Self {
+        self.cb_max_delay = Some(delay);
+        self
+    }
+
     /// Build the `HttpPolledSource`.
     ///
     /// # Errors
@@ -409,6 +440,18 @@ impl HttpPolledSourceBuilder {
                 retryable: false,
             })?;
 
+        // Build circuit breaker with configured or default values
+        let mut cb = CircuitBreaker::new();
+        if let Some(threshold) = self.cb_threshold {
+            cb = cb.with_threshold(threshold);
+        }
+        if let Some(base_delay) = self.cb_base_delay {
+            cb = cb.with_base_delay(base_delay);
+        }
+        if let Some(max_delay) = self.cb_max_delay {
+            cb = cb.with_max_delay(max_delay);
+        }
+
         Ok(HttpPolledSource {
             url: url_arc,
             interval: self.interval.unwrap_or(DEFAULT_POLL_INTERVAL),
@@ -419,6 +462,7 @@ impl HttpPolledSourceBuilder {
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
             source_id,
+            circuit_breaker: std::sync::Mutex::new(cb),
         })
     }
 }
@@ -435,7 +479,48 @@ impl PolledSource for HttpPolledSource {
     ///
     /// Uses ETag and Last-Modified headers for conditional requests.
     /// Returns cached value on 304 Not Modified responses.
+    ///
+    /// The integrated circuit breaker skips polls when too many
+    /// consecutive failures have occurred, returning an error immediately
+    /// without making an HTTP request.
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+        // Check circuit breaker before making any HTTP request
+        {
+            let mut cb = self.circuit_breaker.lock().unwrap();
+            if !cb.can_execute() {
+                return Err(ConfigError::RemoteUnavailable {
+                    error_type: "CircuitBreakerOpen".to_string(),
+                    retryable: false,
+                });
+            }
+        }
+
+        let result = self.do_poll().await;
+
+        // Record outcome in circuit breaker
+        {
+            let mut cb = self.circuit_breaker.lock().unwrap();
+            match &result {
+                Ok(_) => cb.record_success(),
+                Err(_) => cb.record_failure(),
+            }
+        }
+
+        result
+    }
+
+    fn poll_interval(&self) -> Option<Duration> {
+        Some(self.interval)
+    }
+
+    fn source_id(&self) -> SourceId {
+        self.source_id.clone()
+    }
+}
+
+impl HttpPolledSource {
+    /// Internal poll implementation (without circuit breaker logic).
+    async fn do_poll(&self) -> ConfigResult<AnnotatedValue> {
         let mut request = self.client.get(self.url.as_ref());
 
         if let Some(etag) = self.last_etag.load().as_ref() {
@@ -504,14 +589,6 @@ impl PolledSource for HttpPolledSource {
         *self.cached.write().await = Some(value.clone());
 
         Ok(value)
-    }
-
-    fn poll_interval(&self) -> Option<Duration> {
-        Some(self.interval)
-    }
-
-    fn source_id(&self) -> SourceId {
-        self.source_id.clone()
     }
 }
 
