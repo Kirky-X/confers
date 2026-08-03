@@ -13,7 +13,7 @@ use confers::SourceId;
 use std::sync::Arc;
 
 /// Helper to create a simple AnnotatedValue.
-#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench
+#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench, merge_bench
 pub fn av(value: ConfigValue, path: &str) -> AnnotatedValue {
     AnnotatedValue::new(value, SourceId::new("bench"), path)
 }
@@ -67,7 +67,7 @@ pub fn create_large_map(key_count: usize, prefix: &str) -> ConfigValue {
 /// Create a map for override/testing purposes.
 ///
 /// Similar to `create_large_map` but uses "updated" prefix by default.
-#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench
+#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench, merge_bench
 pub fn create_override_map(key_count: usize) -> ConfigValue {
     let mut map = indexmap::IndexMap::new();
     for i in 0..key_count {
@@ -76,6 +76,43 @@ pub fn create_override_map(key_count: usize) -> ConfigValue {
             &format!("k{}", i),
         );
         map.insert(Arc::from(format!("key_{}", i)), value);
+    }
+    ConfigValue::Map(Arc::new(map))
+}
+
+/// Wrap a ConfigValue with source and path information.
+#[allow(dead_code)]
+pub fn annotated(value: ConfigValue, path: &str) -> AnnotatedValue {
+    AnnotatedValue::new(value, SourceId::new("bench"), path)
+}
+
+/// Build a ConfigValue::Map from (key, ConfigValue) pairs.
+#[allow(dead_code)]
+pub fn make_map(entries: Vec<(String, ConfigValue)>) -> ConfigValue {
+    let map: indexmap::IndexMap<Arc<str>, AnnotatedValue> = entries
+        .into_iter()
+        .map(|(k, v)| {
+            let arc_key: Arc<str> = Arc::from(k.as_str());
+            (arc_key, annotated(v, &k))
+        })
+        .collect();
+    ConfigValue::Map(Arc::new(map))
+}
+
+/// Create a flat map with sequential key-value pairs.
+#[allow(dead_code)]
+pub fn create_flat_map(key_count: usize) -> ConfigValue {
+    let mut map = indexmap::IndexMap::new();
+    for i in 0..key_count {
+        let key = format!("field_{}", i);
+        map.insert(
+            Arc::from(key.clone()),
+            AnnotatedValue::new(
+                ConfigValue::String(format!("value_{}", i)),
+                SourceId::new("bench"),
+                key,
+            ),
+        );
     }
     ConfigValue::Map(Arc::new(map))
 }

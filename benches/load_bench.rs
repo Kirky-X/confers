@@ -5,7 +5,7 @@
 
 //! Load benchmark for confers configuration library.
 //!
-//! Measures cold load performance for configurations with varying field counts.
+//! Measures cold load performance for configurations with varying field count.
 
 use confers::Source;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -29,52 +29,24 @@ fn create_temp_config(field_count: usize) -> PathBuf {
     config_path
 }
 
-/// Benchmark: 50 fields cold load
-fn bench_load_50_fields(c: &mut Criterion) {
-    let config_path = create_temp_config(50);
+fn bench_load(c: &mut Criterion) {
+    let mut group = c.benchmark_group("load");
 
-    c.bench_function("load_50_fields", |b| {
-        b.iter(|| {
-            let source = confers::FileSource::new(&config_path);
-            source.collect()
+    for field_count in [50, 100, 200] {
+        let config_path = create_temp_config(field_count);
+
+        group.bench_function(format!("{}_fields", field_count), |b| {
+            b.iter(|| {
+                let source = confers::FileSource::new(&config_path);
+                source.collect()
+            });
         });
-    });
 
-    std::fs::remove_file(config_path).ok();
+        std::fs::remove_file(config_path).ok();
+    }
+
+    group.finish();
 }
 
-/// Benchmark: 100 fields cold load
-fn bench_load_100_fields(c: &mut Criterion) {
-    let config_path = create_temp_config(100);
-
-    c.bench_function("load_100_fields", |b| {
-        b.iter(|| {
-            let source = confers::FileSource::new(&config_path);
-            source.collect()
-        });
-    });
-
-    std::fs::remove_file(config_path).ok();
-}
-
-/// Benchmark: 200 fields cold load
-fn bench_load_200_fields(c: &mut Criterion) {
-    let config_path = create_temp_config(200);
-
-    c.bench_function("load_200_fields", |b| {
-        b.iter(|| {
-            let source = confers::FileSource::new(&config_path);
-            source.collect()
-        });
-    });
-
-    std::fs::remove_file(config_path).ok();
-}
-
-criterion_group!(
-    benches,
-    bench_load_50_fields,
-    bench_load_100_fields,
-    bench_load_200_fields
-);
+criterion_group!(benches, bench_load);
 criterion_main!(benches);

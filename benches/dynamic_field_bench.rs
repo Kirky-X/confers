@@ -4,6 +4,10 @@
 // See LICENSE file in the project root for full license information.
 
 //! DynamicField benchmark for confers configuration library.
+//!
+//! Covers basic operations (get, get_ref, get_clone, update with callbacks)
+//! consolidated from the former dynamic_field_bench and hot_path_bench
+//! DynamicField sections.
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -15,6 +19,34 @@ fn bench_dynamic_field_get(c: &mut Criterion) {
 
     c.bench_function("dynamic_field_get", |b| {
         b.iter(|| field.get());
+    });
+}
+
+#[cfg(feature = "dynamic")]
+fn bench_dynamic_field_get_ref(c: &mut Criterion) {
+    use confers::dynamic::DynamicField;
+
+    let field = DynamicField::new(String::from("initial"));
+
+    c.bench_function("dynamic_field_get_ref", |b| {
+        b.iter(|| {
+            let _arc = field.get_ref();
+            std::hint::black_box(&_arc);
+        })
+    });
+}
+
+#[cfg(feature = "dynamic")]
+fn bench_dynamic_field_get_clone(c: &mut Criterion) {
+    use confers::dynamic::DynamicField;
+
+    let field = DynamicField::new(String::from("initial"));
+
+    c.bench_function("dynamic_field_get_clone", |b| {
+        b.iter(|| {
+            let _val = field.get();
+            std::hint::black_box(&_val);
+        })
     });
 }
 
@@ -59,8 +91,10 @@ fn bench_dynamic_field_disabled(_c: &mut Criterion) {}
 criterion_group!(
     benches,
     bench_dynamic_field_get,
+    bench_dynamic_field_get_ref,
+    bench_dynamic_field_get_clone,
     bench_dynamic_field_trigger,
-    bench_dynamic_field_trigger_multiple
+    bench_dynamic_field_trigger_multiple,
 );
 
 #[cfg(not(feature = "dynamic"))]
