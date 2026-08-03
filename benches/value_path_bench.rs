@@ -11,51 +11,12 @@ use confers::types::{AnnotatedValue, ConfigValue};
 use confers::SourceId;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use std::sync::Arc;
 
-/// Create a deeply nested config with a given depth and width.
-fn create_nested_map(depth: usize, width: usize, path: &str) -> ConfigValue {
-    if depth == 0 {
-        return ConfigValue::String("leaf_value".to_string());
-    }
-
-    let mut map = indexmap::IndexMap::new();
-    for i in 0..width {
-        let key = format!("key_{}", i);
-        let child_path = if path.is_empty() {
-            key.clone()
-        } else {
-            format!("{}.{}", path, key)
-        };
-        let child = create_nested_map(depth - 1, width, &child_path);
-        map.insert(
-            Arc::from(key),
-            AnnotatedValue::new(child, SourceId::new("bench"), child_path),
-        );
-    }
-    ConfigValue::Map(Arc::new(map))
-}
-
-/// Create a flat map with many keys.
-fn create_flat_map(key_count: usize) -> ConfigValue {
-    let mut map = indexmap::IndexMap::new();
-    for i in 0..key_count {
-        let key = format!("field_{}", i);
-        map.insert(
-            Arc::from(key.clone()),
-            AnnotatedValue::new(
-                ConfigValue::String(format!("value_{}", i)),
-                SourceId::new("bench"),
-                key,
-            ),
-        );
-    }
-    ConfigValue::Map(Arc::new(map))
-}
+mod common;
 
 /// Benchmark: Shallow wide tree - 1 level, 1000 keys
 fn bench_path_shallow_wide_1000(c: &mut Criterion) {
-    let value = AnnotatedValue::new(create_flat_map(1000), SourceId::new("bench"), "root");
+    let value = AnnotatedValue::new(common::create_flat_map(1000), SourceId::new("bench"), "root");
 
     c.bench_function("path_shallow_wide_1000", |b| {
         b.iter(|| value.all_paths());
@@ -64,7 +25,7 @@ fn bench_path_shallow_wide_1000(c: &mut Criterion) {
 
 /// Benchmark: Shallow wide tree - 1 level, 5000 keys
 fn bench_path_shallow_wide_5000(c: &mut Criterion) {
-    let value = AnnotatedValue::new(create_flat_map(5000), SourceId::new("bench"), "root");
+    let value = AnnotatedValue::new(common::create_flat_map(5000), SourceId::new("bench"), "root");
 
     c.bench_function("path_shallow_wide_5000", |b| {
         b.iter(|| value.all_paths());
@@ -77,11 +38,7 @@ fn bench_path_deep_narrow(c: &mut Criterion) {
     group.warm_up_time(std::time::Duration::from_secs(1));
 
     for depth in [5, 10, 20, 50] {
-        let value = AnnotatedValue::new(
-            create_nested_map(depth, 1, "root"),
-            SourceId::new("bench"),
-            "root",
-        );
+        let value = common::create_nested_config(depth, 1, "root");
 
         group.bench_with_input(format!("depth_{}", depth), &depth, |b, _| {
             b.iter(|| black_box(&value).all_paths());
@@ -97,11 +54,7 @@ fn bench_path_balanced(c: &mut Criterion) {
     group.warm_up_time(std::time::Duration::from_secs(1));
 
     for (depth, width) in [(2, 10), (3, 10), (4, 5), (5, 4)] {
-        let value = AnnotatedValue::new(
-            create_nested_map(depth, width, "root"),
-            SourceId::new("bench"),
-            "root",
-        );
+        let value = common::create_nested_config(depth, width, "root");
 
         group.bench_with_input(format!("d{}_w{}", depth, width), &(depth, width), |b, _| {
             b.iter(|| black_box(&value).all_paths())

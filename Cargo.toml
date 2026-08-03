@@ -195,10 +195,6 @@ harness = false
 required-features = ["interpolation"]
 
 [[bench]]
-name = "incremental_merge_bench"
-harness = false
-
-[[bench]]
 name = "load_bench"
 harness = false
 
@@ -231,11 +227,6 @@ required-features = ["interpolation"]
 name = "value_path_bench"
 harness = false
 required-features = ["interpolation"]
-
-[[bench]]
-name = "cow_efficiency_bench"
-harness = false
-path = "benches/cow_efficiency_bench.rs"
 
 [[bin]]
 name = "confers"
