@@ -543,7 +543,6 @@ let service = MyService::new(shared_config);
 | ❓ [FAQ](docs/FAQ.md)                                       | Frequently asked questions                      |
 | 📖 [Contributing Guide](docs/CONTRIBUTING.md)               | Code contribution guidelines                    |
 | 📘 [API Reference](docs/API_REFERENCE.md)                   | Complete API documentation                      |
-| 🏗️ [Architecture Decisions](docs/adr/) | ADR documentation                               |
 | 📚 [Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
 
 ### 🔄 BrickArchitecture Migration Guide
@@ -867,47 +866,33 @@ cargo test test_name
 
 ### ⚡ Benchmark Results
 
-> The following are **reference estimates**. Actual performance depends on configuration complexity and hardware. Run `cargo bench` to obtain measurements for your specific scenario.
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**📊 Throughput**
-
-| Operation   | Performance       |
-| ----------- | ----------------- |
-| Config Load | 1,000,000 ops/sec |
-| Validation  | 500,000 ops/sec   |
-| Schema Gen  | 2,000,000 ops/sec |
-
-</td>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**⏱️ Latency**
-
-| Percentile | Latency |
-| ---------- | ------- |
-| P50        | 0.5ms   |
-| P95        | 1.2ms   |
-| P99        | 2.5ms   |
-
-</td>
-</tr>
-</table>
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 Detailed Benchmarks</summary>
+> Actual performance depends on configuration complexity and hardware. Run `cargo bench` to obtain measurements for your specific setup.
 
 ```bash
-# Run benchmarks
+# Run all benchmarks
 cargo bench
 
-# Sample output:
-test bench_config_load  ... bench: 1,000 ns/iter (+/- 50)
-test bench_validate     ... bench: 2,000 ns/iter (+/- 100)
-test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
+# Run specific benchmarks
+cargo bench --bench merge_bench --features interpolation
+cargo bench --bench load_bench
+cargo bench --bench concurrent_access_bench
 ```
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 Available Benchmarks</summary>
+
+| Benchmark | Description |
+|-----------|-------------|
+| `merge_bench` | Config merge performance (COW optimization, deep nesting, large maps) |
+| `load_bench` | Config loading performance |
+| `concurrent_access_bench` | Concurrent access performance |
+| `concurrent_rw_bench` | Concurrent read/write performance |
+| `cow_efficiency_bench` | COW efficiency testing |
+| `dynamic_field_bench` | Dynamic field performance |
+| `hot_path_bench` | Hot path performance |
+| `incremental_merge_bench` | Incremental merge performance |
+| `interpolation_bench` | Interpolation computation performance |
+| `value_path_bench` | Value path access performance |
 
 </details>
 
