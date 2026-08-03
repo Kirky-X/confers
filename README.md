@@ -471,7 +471,6 @@ let service = MyService::new(shared_config);
 | ❓ [常见问题](docs/FAQ.md) | 常见问题解答 |
 | 📖 [贡献指南](docs/CONTRIBUTING.md) | 代码贡献指南 |
 | 📘 [API 参考](docs/API_REFERENCE.md) | 完整 API 文档 |
-| 🏗️ [架构决策](docs/adr/) | ADR 文档 |
 | 📚 [库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目中 |
 
 ### 🔄 BrickArchitecture 迁移指南
@@ -798,47 +797,33 @@ cargo test test_name
 
 ### ⚡ 基准测试结果
 
-> 以下为**参考预估值**。实际性能取决于配置复杂度和硬件环境。建议运行 `cargo bench` 获取针对您场景的真实数据。
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**📊 吞吐量**
-
-| 操作 | 性能 |
-|-----------|-------------|
-| 配置加载 | 1,000,000 次/秒 |
-| 验证 | 500,000 次/秒 |
-| Schema 生成 | 2,000,000 次/秒 |
-
-</td>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**⏱️ 延迟**
-
-| 百分位 | 延迟 |
-|------------|---------|
-| P50 | 0.5ms |
-| P95 | 1.2ms |
-| P99 | 2.5ms |
-
-</td>
-</tr>
-</table>
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 详细基准测试</summary>
+> 实际性能取决于配置复杂度和硬件环境。请运行 `cargo bench` 获取针对您硬件的实测数据。
 
 ```bash
-# 运行基准测试
+# 运行全部基准测试
 cargo bench
 
-# 示例输出：
-test bench_config_load  ... bench: 1,000 ns/iter (+/- 50)
-test bench_validate     ... bench: 2,000 ns/iter (+/- 100)
-test bench_schema_gen   ... bench: 500 ns/iter (+/- 25)
+# 运行特定基准测试
+cargo bench --bench merge_bench --features interpolation
+cargo bench --bench load_bench
+cargo bench --bench concurrent_access_bench
 ```
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 可用基准测试列表</summary>
+
+| 基准测试 | 描述 |
+|-----------|------|
+| `merge_bench` | 配置合并性能（含 COW 优化、深层嵌套、大规模 Map） |
+| `load_bench` | 配置加载性能 |
+| `concurrent_access_bench` | 并发访问性能 |
+| `concurrent_rw_bench` | 并发读写性能 |
+| `cow_efficiency_bench` | COW 效率测试 |
+| `dynamic_field_bench` | 动态字段性能 |
+| `hot_path_bench` | 热路径性能 |
+| `incremental_merge_bench` | 增量合并性能 |
+| `interpolation_bench` | 插值计算性能 |
+| `value_path_bench` | 值路径访问性能 |
 
 </details>
 
