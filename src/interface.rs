@@ -348,7 +348,7 @@ pub fn filter_sensitive_keys(keys: Vec<String>, sensitive_paths: &[&str]) -> Vec
         .filter(|key| {
             !sensitive_paths
                 .iter()
-                .any(|s| key == s || key.starts_with(s))
+                .any(|s| key == s || key.starts_with(&format!("{}.", s)))
         })
         .collect()
 }
@@ -1277,13 +1277,33 @@ mod tests {
 
     #[test]
     fn test_filter_sensitive_keys_substring_not_prefix() {
-        // "password" as a sensitive path should not filter "db.password"
-        // because "db.password" does not start with "password"
-        let keys = vec!["db.password".into(), "password".into(), "host".into()];
+        // sensitive path "password" should only match exact "password" and "password.*" sub-paths,
+        // NOT "db.password" (which is under "db", not under "password")
+        let keys = vec![
+            "db.password".into(),
+            "password".into(),
+            "passwordless".into(),
+            "host".into(),
+        ];
         let sensitive = &["password"];
         let filtered = filter_sensitive_keys(keys, sensitive);
-        // Only exact match "password" is filtered; "db.password" is kept
-        assert_eq!(filtered, vec!["db.password", "host"]);
+        // Only exact match "password" is filtered; "db.password" and "passwordless" are kept
+        assert_eq!(filtered, vec!["db.password", "passwordless", "host"]);
+    }
+
+    #[test]
+    fn test_filter_sensitive_keys_subpath_filtered() {
+        // sensitive path "db" should filter "db" and "db.password" (sub-path)
+        // but NOT "db_host" (not a sub-path, just a prefix string match)
+        let keys = vec![
+            "db".into(),
+            "db.password".into(),
+            "db_host".into(),
+            "database".into(),
+        ];
+        let sensitive = &["db"];
+        let filtered = filter_sensitive_keys(keys, sensitive);
+        assert_eq!(filtered, vec!["db_host", "database"]);
     }
 
     #[test]
