@@ -3,37 +3,44 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! Merge benchmark for confers configuration library.
+//! Unified merge benchmark for confers configuration library.
+//!
+//! Covers value construction, merge strategies, COW efficiency,
+//! deep/nested merges, and incremental merge scenarios.
+//! Consolidates the former merge_bench, cow_efficiency_bench, and
+//! incremental_merge_bench into a single file.
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use confers::merger::MergeEngine;
+use confers::merger::{MergeEngine, MergeStrategy};
 use confers::types::{AnnotatedValue, ConfigValue};
-use confers::SourceId;
-use indexmap::IndexMap;
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use std::sync::Arc;
 
-/// Benchmark: ConfigValue String construction
+mod common;
+use common::{annotated, av, create_large_map, create_nested_config, create_override_map, make_map};
+
+// =============================================================================
+// Value construction benchmarks
+// =============================================================================
+
 fn bench_config_value_string(c: &mut Criterion) {
     c.bench_function("config_value_string", |b| {
         b.iter(|| confers::ConfigValue::String("test_value".to_string()));
     });
 }
 
-/// Benchmark: ConfigValue I64 construction
 fn bench_config_value_i64(c: &mut Criterion) {
     c.bench_function("config_value_i64", |b| {
         b.iter(|| confers::ConfigValue::I64(42));
     });
 }
 
-/// Benchmark: ConfigValue Bool construction
 fn bench_config_value_bool(c: &mut Criterion) {
     c.bench_function("config_value_bool", |b| {
         b.iter(|| confers::ConfigValue::Bool(true));
     });
 }
 
-/// Benchmark: AnnotatedValue construction
 fn bench_annotated_value(c: &mut Criterion) {
     c.bench_function("annotated_value_construction", |b| {
         b.iter(|| {
@@ -46,41 +53,11 @@ fn bench_annotated_value(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    bench_config_value_string,
-    bench_config_value_i64,
-    bench_config_value_bool,
-    bench_annotated_value,
-    bench_merge_large_map,
-    bench_merge_deep_nested,
-    bench_merge_cow_hit,
-    bench_merge_cow_miss
-);
-criterion_main!(benches);
-
 // =============================================================================
-// Real merge benchmarks using MergeEngine::merge()
+// Basic merge benchmarks
 // =============================================================================
 
-/// Helper: create an AnnotatedValue wrapping a ConfigValue at a given path.
-fn annotated(value: ConfigValue, path: &str) -> AnnotatedValue {
-    AnnotatedValue::new(value, SourceId::new("bench"), path)
-}
-
-/// Helper: build a ConfigValue::Map from an iterator of (key, ConfigValue) pairs.
-fn make_map(entries: Vec<(String, ConfigValue)>) -> ConfigValue {
-    let map: IndexMap<Arc<str>, AnnotatedValue> = entries
-        .into_iter()
-        .map(|(k, v)| {
-            let arc_key: Arc<str> = Arc::from(k.as_str());
-            (arc_key, annotated(v, &k))
-        })
-        .collect();
-    ConfigValue::Map(Arc::new(map))
-}
-
-/// Benchmark: merge two 100-field flat maps (Replace strategy).
+/// Merge two 100-field flat maps (Replace strategy).
 fn bench_merge_large_map(c: &mut Criterion) {
     let engine = MergeEngine::new();
 
@@ -99,11 +76,10 @@ fn bench_merge_large_map(c: &mut Criterion) {
     });
 }
 
-/// Benchmark: merge two 5-level deeply nested maps (1 key per level).
+/// Merge two 5-level deeply nested maps (1 key per level).
 fn bench_merge_deep_nested(c: &mut Criterion) {
     let engine = MergeEngine::new();
 
-    // Build nested maps from inside out: level5 -> level4 -> ... -> level1
     let mut low_val = ConfigValue::String("low_leaf".to_string());
     let mut high_val = ConfigValue::String("high_leaf".to_string());
     for depth in 0..5 {
@@ -120,49 +96,283 @@ fn bench_merge_deep_nested(c: &mut Criterion) {
     });
 }
 
-/// Benchmark: COW fast path — both maps share the same Arc (identical pointers).
-fn bench_merge_cow_hit(c: &mut Criterion) {
+// =============================================================================
+// COW efficiency benchmarks
+// =============================================================================
+
+/// COW fast path — merging identical values (no modification).
+fn bench_cow_no_modification(c: &mut Criterion) {
+    let engine = MergeEngine::new();
+    let large = av(create_large_map(1000, "value"), "root");
+
+    c.bench_function("cow_no_modification_1000", |b| {
+        b.iter(|| engine.merge(black_box(&large), black_box(&large)));
+    });
+}
+
+/// Single key modification out of 1000.
+fn bench_cow_single_modification(c: &mut Criterion) {
+    let engine = MergeEngine::new();
+    let large = av(create_large_map(1000, "value"), "root");
+
+    let mut override_map = indexmap::IndexMap::new();
+    override_map.insert(
+        Arc::from("key_0"),
+        av(ConfigValue::String("changed".to_string()), "key_0"),
+    );
+    let small = av(ConfigValue::Map(Arc::new(override_map)), "root");
+
+    c.bench_function("cow_single_modification_1000", |b| {
+        b.iter(|| engine.merge(black_box(&large), black_box(&small)));
+    });
+}
+
+/// Ten key modifications out of 1000.
+fn bench_cow_ten_modifications(c: &mut Criterion) {
+    let engine = MergeEngine::new();
+    let large = av(create_large_map(1000, "value"), "root");
+
+    let mut override_map = indexmap::IndexMap::new();
+    for i in 0..10 {
+        override_map.insert(
+            Arc::from(format!("key_{}", i)),
+            av(
+                ConfigValue::String(format!("changed_{}", i)),
+                &format!("key_{}", i),
+            ),
+        );
+    }
+    let small = av(ConfigValue::Map(Arc::new(override_map)), "root");
+
+    c.bench_function("cow_ten_modifications_1000", |b| {
+        b.iter(|| engine.merge(black_box(&large), black_box(&small)));
+    });
+}
+
+/// No overlap between maps (all new keys).
+fn bench_cow_no_overlap(c: &mut Criterion) {
     let engine = MergeEngine::new();
 
-    let shared_map: Arc<IndexMap<Arc<str>, AnnotatedValue>> = Arc::new(
-        (0..50)
-            .map(|i| {
-                let key_str = format!("key_{:03}", i);
-                let key: Arc<str> = Arc::from(key_str.as_str());
-                let val = annotated(ConfigValue::I64(i as i64), &key_str);
-                (key, val)
-            })
-            .collect(),
+    let map_a = create_large_map(500, "value");
+    let a = av(map_a, "root");
+    let b = av(
+        ConfigValue::Map(Arc::new({
+            let mut m = indexmap::IndexMap::new();
+            for i in 500..1000 {
+                m.insert(
+                    Arc::from(format!("key_{}", i)),
+                    av(
+                        ConfigValue::String(format!("value_{}", i)),
+                        &format!("k{}", i),
+                    ),
+                );
+            }
+            m
+        })),
+        "root",
     );
 
-    let low = annotated(ConfigValue::Map(Arc::clone(&shared_map)), "root");
-    let high = annotated(ConfigValue::Map(Arc::clone(&shared_map)), "root");
-
-    c.bench_function("merge_cow_hit_same_arc", |b| {
-        b.iter(|| engine.merge(&low, &high).unwrap())
+    c.bench_function("cow_no_overlap_1000", |bencher| {
+        bencher.iter(|| engine.merge(black_box(&a), black_box(&b)));
     });
 }
 
-/// Benchmark: COW slow path — different Arc with only 2 fields different out of 50.
-fn bench_merge_cow_miss(c: &mut Criterion) {
+/// COW identity — merging with itself returns the same Arc.
+fn bench_cow_identity_check(c: &mut Criterion) {
     let engine = MergeEngine::new();
+    let large = av(create_large_map(1000, "value"), "root");
 
-    let build_map = |prefix: &str| -> ConfigValue {
-        let map: IndexMap<Arc<str>, AnnotatedValue> = (0..50)
-            .map(|i| {
-                let key_str = format!("key_{:03}", i);
-                let key: Arc<str> = Arc::from(key_str.as_str());
-                let val = annotated(ConfigValue::String(format!("{}_{}", prefix, i)), &key_str);
-                (key, val)
-            })
-            .collect();
-        ConfigValue::Map(Arc::new(map))
-    };
-
-    let low = annotated(build_map("low"), "root");
-    let high = annotated(build_map("high"), "root");
-
-    c.bench_function("merge_cow_miss_different_arc", |b| {
-        b.iter(|| engine.merge(&low, &high).unwrap())
+    c.bench_function("cow_identity_check", |b| {
+        b.iter(|| {
+            let result = engine.merge(&large, &large).unwrap();
+            black_box(result);
+        });
     });
 }
+
+/// Deep merge with nested structures (depth 3, 10 children per level).
+fn bench_cow_deep_merge(c: &mut Criterion) {
+    let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+
+    fn make_nested(depth: usize, prefix: &str) -> ConfigValue {
+        if depth == 0 {
+            return ConfigValue::String(format!("val_{}", prefix));
+        }
+        let mut map = indexmap::IndexMap::new();
+        for i in 0..10 {
+            let key = format!("{}_{}", prefix, i);
+            map.insert(
+                Arc::from(format!("child_{}", i)),
+                av(
+                    make_nested(depth - 1, &key),
+                    &format!("{}.child_{}", prefix, i),
+                ),
+            );
+        }
+        ConfigValue::Map(Arc::new(map))
+    }
+
+    let base = av(make_nested(3, "base"), "root");
+
+    c.bench_function("cow_deep_merge_depth3", |b| {
+        b.iter(|| engine.merge(black_box(&base), black_box(&base)));
+    });
+}
+
+// =============================================================================
+// Strategy comparison benchmarks
+// =============================================================================
+
+fn bench_merge_strategies(c: &mut Criterion) {
+    let mut group = c.benchmark_group("merge_strategies");
+
+    let base = create_nested_config(3, 50, "base");
+    let override_val = create_nested_config(3, 50, "override");
+
+    group.bench_function("replace", |b| {
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+    });
+
+    group.bench_function("deep_merge", |b| {
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+    });
+
+    group.bench_function("join", |b| {
+        let engine =
+            MergeEngine::new().with_default_strategy(MergeStrategy::Join { separator: "," });
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+    });
+
+    group.finish();
+}
+
+/// Replace strategy with a small override (no COW benefit).
+fn bench_replace_strategy(c: &mut Criterion) {
+    let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
+    let large = av(create_large_map(1000, "value"), "root");
+    let small = av(create_override_map(1), "root");
+
+    c.bench_function("replace_strategy_1000", |b| {
+        b.iter(|| engine.merge(black_box(&large), black_box(&small)));
+    });
+}
+
+// =============================================================================
+// Parameterized merge scale benchmarks
+// =============================================================================
+
+fn bench_merge_shallow(c: &mut Criterion) {
+    let mut group = c.benchmark_group("merge_shallow");
+
+    for size in [10, 100, 1000] {
+        group.bench_with_input(format!("size_{}", size), &size, |b, &size| {
+            let base = create_nested_config(1, size, "base");
+            let override_val = create_nested_config(1, size, "override");
+            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+
+            b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_merge_deep(c: &mut Criterion) {
+    let mut group = c.benchmark_group("merge_deep");
+
+    for depth in [2, 4, 6] {
+        group.bench_with_input(format!("depth_{}", depth), &depth, |b, &depth| {
+            let base = create_nested_config(depth, 10, "base");
+            let override_val = create_nested_config(depth, 10, "override");
+            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+
+            b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+        });
+    }
+
+    group.finish();
+}
+
+// =============================================================================
+// Incremental merge benchmarks
+// =============================================================================
+
+fn bench_incremental_merge(c: &mut Criterion) {
+    let mut group = c.benchmark_group("incremental_merge");
+
+    group.bench_function("single_key_update", |b| {
+        let base = create_nested_config(4, 20, "base");
+        let mut override_map = indexmap::IndexMap::new();
+        override_map.insert(
+            Arc::from("key_0"),
+            AnnotatedValue::new(
+                ConfigValue::String("updated".to_string()),
+                confers::SourceId::new("bench"),
+                "override.key_0",
+            ),
+        );
+        let override_val = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(override_map)),
+            confers::SourceId::new("bench"),
+            "override",
+        );
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+    });
+
+    group.bench_function("batch_update_10", |b| {
+        let base = create_nested_config(4, 20, "base");
+        let mut override_map = indexmap::IndexMap::new();
+        for i in 0..10 {
+            override_map.insert(
+                Arc::from(format!("key_{}", i)),
+                AnnotatedValue::new(
+                    ConfigValue::String("updated".to_string()),
+                    confers::SourceId::new("bench"),
+                    format!("override.key_{}", i),
+                ),
+            );
+        }
+        let override_val = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(override_map)),
+            confers::SourceId::new("bench"),
+            "override",
+        );
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+
+        b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    // Value construction
+    bench_config_value_string,
+    bench_config_value_i64,
+    bench_config_value_bool,
+    bench_annotated_value,
+    // Basic merge
+    bench_merge_large_map,
+    bench_merge_deep_nested,
+    // COW efficiency
+    bench_cow_no_modification,
+    bench_cow_single_modification,
+    bench_cow_ten_modifications,
+    bench_cow_no_overlap,
+    bench_cow_identity_check,
+    bench_cow_deep_merge,
+    // Strategy comparison
+    bench_merge_strategies,
+    bench_replace_strategy,
+    // Parameterized scale
+    bench_merge_shallow,
+    bench_merge_deep,
+    // Incremental
+    bench_incremental_merge,
+);
+criterion_main!(benches);
