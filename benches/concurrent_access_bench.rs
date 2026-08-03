@@ -4,7 +4,6 @@
 // See LICENSE file in the project root for full license information.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -60,23 +59,11 @@ fn bench_callback_many_fields(c: &mut Criterion) {
     });
 }
 
-fn bench_dynamic_get_many(c: &mut Criterion) {
-    let field = confers::DynamicField::new(42u32);
-    c.bench_function("dynamic_get_many", |b| {
-        b.iter(|| {
-            for _ in 0..1000 {
-                black_box(field.get());
-            }
-        });
-    });
-}
-
 criterion_group!(
     benches,
     bench_concurrent_reads,
     bench_concurrent_updates,
     bench_callback_registration,
-    bench_callback_many_fields,
-    bench_dynamic_get_many
+    bench_callback_many_fields
 );
 criterion_main!(benches);

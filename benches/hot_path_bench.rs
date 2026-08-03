@@ -31,24 +31,5 @@ fn bench_hot_path_get(c: &mut Criterion) {
     });
 }
 
-fn bench_dynamic_field_access(c: &mut Criterion) {
-    use confers::dynamic::DynamicField;
-    let field = DynamicField::new(String::from("initial"));
-
-    c.bench_function("dynamic_field_get_ref", |b| {
-        b.iter(|| {
-            let _arc = field.get_ref();
-            std::hint::black_box(&_arc);
-        })
-    });
-
-    c.bench_function("dynamic_field_get_clone", |b| {
-        b.iter(|| {
-            let _val = field.get();
-            std::hint::black_box(&_val);
-        })
-    });
-}
-
-criterion_group!(benches, bench_hot_path_get, bench_dynamic_field_access);
+criterion_group!(benches, bench_hot_path_get);
 criterion_main!(benches);
