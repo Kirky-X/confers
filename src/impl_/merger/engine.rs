@@ -57,25 +57,42 @@ impl MergeEngine {
         low: &AnnotatedValue,
         high: &AnnotatedValue,
     ) -> ConfigResult<AnnotatedValue> {
-        Self::merge_with_depth(low, high, *self.get_strategy(&low.path), 0)
+        Self::merge_with_depth(low.clone(), high.clone(), *self.get_strategy(&low.path), 0)
     }
 
     fn merge_with_depth(
-        low: &AnnotatedValue,
-        high: &AnnotatedValue,
+        low: AnnotatedValue,
+        high: AnnotatedValue,
         strategy: MergeStrategy,
         depth: usize,
     ) -> ConfigResult<AnnotatedValue> {
         check_merge_depth(depth, &high.path)?;
 
-        let merged = match (&low.inner, &high.inner, &strategy) {
-            (ConfigValue::Null, _, _) => high.inner.clone(),
-            (_, ConfigValue::Null, _) => low.inner.clone(),
+        // Extract metadata before moving inner values
+        let priority = high.priority.max(low.priority);
+        let version = high.version.max(low.version) + 1;
+        let location = high.location.clone().or(low.location.clone());
+        let source = high.source.clone();
+        let path = Arc::clone(&high.path);
+
+        let merged = match (low.inner, high.inner, &strategy) {
+            (ConfigValue::Null, high_inner, _) => high_inner,
+            (low_inner, ConfigValue::Null, _) => low_inner,
+            // Map+Map always recursive merges (regardless of strategy), preserving COW optimizations
             (ConfigValue::Map(l), ConfigValue::Map(r), _) => {
-                merge_maps_with_cow(l, r, &strategy, depth)?
+                merge_maps_with_cow(&l, &r, &strategy, depth)?
             }
-            (_, _, MergeStrategy::Custom { func, .. }) => func(&low.inner, &high.inner),
-            (_, _, MergeStrategy::Replace) => high.inner.clone(),
+            // Replace: non-Map high values are passed through without cloning
+            (ConfigValue::Array(_), ConfigValue::Array(high_arc), MergeStrategy::Replace) => {
+                ConfigValue::Array(high_arc)
+            }
+            (_, high_inner, MergeStrategy::Replace) => high_inner,
+            // high is Map but low is not Map: high wins entirely
+            (low_inner, ConfigValue::Map(high_arc), _) => {
+                drop(low_inner);
+                ConfigValue::Map(high_arc)
+            }
+            (low_inner, high_inner, MergeStrategy::Custom { func, .. }) => func(&low_inner, &high_inner),
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
                 ConfigValue::String(format!("{}{}{}", l, separator, r))
             }
@@ -92,10 +109,17 @@ impl MergeEngine {
             (ConfigValue::Array(l), ConfigValue::Array(r), MergeStrategy::Prepend) => {
                 ConfigValue::Array(r.iter().chain(l.iter()).cloned().collect())
             }
-            _ => high.inner.clone(),
+            (_, high_inner, _) => high_inner,
         };
 
-        Ok(build_annotated_value(merged, high, low))
+        Ok(AnnotatedValue {
+            inner: merged,
+            source,
+            path,
+            priority,
+            version,
+            location,
+        })
     }
 
     pub fn report_conflict(
@@ -226,10 +250,10 @@ fn merge_maps_with_cow(
 
             if needs_recursive {
                 let merged_inner =
-                    MergeEngine::merge_with_depth(v_low, v_high, *strategy, depth + 1)?;
+                    MergeEngine::merge_with_depth(v_low.clone(), v_high.clone(), *strategy, depth + 1)?;
                 result.insert(
                     k.clone(),
-                    build_annotated_value(merged_inner.inner.clone(), v_high, v_low),
+                    build_annotated_value(merged_inner.inner, v_high, v_low),
                 );
             } else {
                 let merged = apply_leaf_strategy(&v_low.inner, &v_high.inner, strategy);
@@ -959,5 +983,88 @@ mod tests {
         let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
         let merged = e.merge(&l, &h).unwrap();
         assert_eq!(merged.location, Some(loc));
+    }
+
+    #[test]
+    fn test_merge_replace_map_shared_arc_still_merges() {
+        // When both maps share the same Arc (strong_count > 1), the merge must
+        // still go through merge_maps_with_cow and return the same Arc (ptr_eq).
+        let e = MergeEngine::new();
+        let shared = Arc::new(IndexMap::from_iter([
+            (
+                Arc::from("a"),
+                AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "t.a"),
+            ),
+        ]));
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::clone(&shared)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::clone(&shared)),
+            SourceId::new("h"),
+            "t",
+        );
+        // strong_count is 3: shared + l + h
+        assert!(Arc::strong_count(&shared) >= 3);
+        let result = e.merge(&l, &h).unwrap();
+        if let ConfigValue::Map(result_arc) = &result.inner {
+            assert!(Arc::ptr_eq(result_arc, &shared));
+        } else {
+            panic!("expected Map");
+        }
+    }
+
+    #[test]
+    fn test_merge_replace_array_no_clone() {
+        // Replace strategy with Array+Array: the owned Arc is passed through
+        // without cloning at the merge level.
+        let e = MergeEngine::new();
+        let arr = Arc::from(vec![
+            AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("s"), "t.0"),
+        ]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Array(Arc::from(vec![AnnotatedValue::new(
+                ConfigValue::string("old"),
+                SourceId::new("l"),
+                "t.0",
+            )])),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Array(Arc::clone(&arr)),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        if let ConfigValue::Array(result_arc) = &result.inner {
+            // The result should contain the same elements as h's array
+            assert_eq!(result_arc.len(), 1);
+            assert_eq!(result_arc[0].as_str(), Some("x"));
+        } else {
+            panic!("expected Array");
+        }
+    }
+
+    #[test]
+    fn test_merge_non_map_low_map_high_returns_high() {
+        // When low is not a Map but high is a Map, high wins entirely
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(ConfigValue::string("scalar"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(IndexMap::from_iter([(
+                Arc::from("key"),
+                AnnotatedValue::new(ConfigValue::string("val"), SourceId::new("h"), "t.key"),
+            )]))),
+            SourceId::new("h"),
+            "t",
+        );
+        let result = e.merge(&l, &h).unwrap();
+        assert!(result.inner.is_map());
+        let map = result.inner.as_map().unwrap();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("key").unwrap().as_str(), Some("val"));
     }
 }
