@@ -168,7 +168,7 @@ impl KeyStorage {
             source: None,
         })?;
 
-        let key_manager = KeyManager::new(storage_path.join("keys.json"))?;
+        let key_manager = KeyManager::new()?;
 
         Ok(Self {
             storage_path,

@@ -10,7 +10,6 @@ use crate::key::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[cfg(feature = "encryption")]
 use rand::Rng;
@@ -37,28 +36,18 @@ pub struct KeyInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyManager {
-    /// Hash of the master key for integrity verification.
-    /// Reserved for future use in master key validation.
-    #[allow(dead_code)]
-    master_key_hash: String,
     key_rings: HashMap<String, KeyRing>,
     schedules: HashMap<String, KeyRotationSchedule>,
     default_key_id: String,
-    /// Path for persistent key storage.
-    /// Reserved for future use in key persistence.
-    #[allow(dead_code)]
-    storage_path: PathBuf,
 }
 
 impl KeyManager {
     #[cfg(feature = "encryption")]
-    pub fn new(storage_path: PathBuf) -> Result<Self, ConfigError> {
+    pub fn new() -> Result<Self, ConfigError> {
         Ok(Self {
-            master_key_hash: String::new(),
             key_rings: HashMap::new(),
             schedules: HashMap::new(),
             default_key_id: "default".to_string(),
-            storage_path,
         })
     }
 
@@ -76,9 +65,8 @@ impl KeyManager {
     ///
     /// ```rust,no_run
     /// # use confers::key::KeyManager;
-    /// # use std::path::PathBuf;
     /// # let master_key = [0u8; 32];
-    /// let mut km = KeyManager::new(PathBuf::from("./keys"))?;
+    /// let mut km = KeyManager::new()?;
     /// let version = km.initialize(
     ///     &master_key,
     ///     "production".to_string(),
@@ -129,8 +117,7 @@ impl KeyManager {
     /// ```rust,no_run
     /// # use confers::key::KeyManager;
     /// # use confers::secret::XChaCha20Crypto;
-    /// # use std::path::PathBuf;
-    /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
+    /// # let mut km = KeyManager::new().unwrap();
     /// let key = km.generate_key()?;
     /// let encryption = XChaCha20Crypto::new();
     /// # Ok::<(), confers::error::ConfigError>(())
@@ -200,8 +187,7 @@ impl KeyManager {
     ///
     /// ```rust,no_run
     /// # use confers::key::KeyManager;
-    /// # use std::path::PathBuf;
-    /// # let mut km = KeyManager::new(PathBuf::from("./keys")).unwrap();
+    /// # let mut km = KeyManager::new().unwrap();
     /// # let master_key = [0u8; 32];
     /// let result = km.rotate_key(
     ///     &master_key,
@@ -486,10 +472,9 @@ pub struct RotationStatus {
 #[cfg(all(test, feature = "encryption"))]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn make_manager() -> KeyManager {
-        KeyManager::new(PathBuf::from("./nonexistent_keys_for_tests")).expect("KeyManager::new")
+        KeyManager::new().expect("KeyManager::new")
     }
 
     fn make_manager_with_default_ring(master_key: &[u8; 32]) -> KeyManager {
