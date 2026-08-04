@@ -128,6 +128,7 @@ mod nats_bus_tests {
     use confers::bus::{ConfigBus, ConfigChangeEvent, NatsBusBuilder, NatsConfigBus};
     use confers::Lifecycle;
     use futures_util::StreamExt;
+    use serial_test::serial;
     use tokio::time::{timeout, Duration};
 
     /// TCP-probe a host:port (fast for localhost). Used instead of the
@@ -242,6 +243,7 @@ mod nats_bus_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_nats_bus_subject() {
         // No public subject() getter exists. We verify the subject() builder
         // setter by confirming a published event is delivered to a subscriber
@@ -275,6 +277,7 @@ mod nats_bus_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_nats_bus_with_stream_name() {
         // The actual builder method is `stream_name()` (not `with_stream_name()`).
         // We verify it by publishing/subscribing through the custom stream,
@@ -305,6 +308,7 @@ mod nats_bus_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_nats_bus_start_stop() {
         if !nats_ready() {
             eprintln!("Skipping test: NATS not available");
@@ -321,6 +325,7 @@ mod nats_bus_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_nats_bus_publish_subscribe() {
         if !nats_ready() {
             eprintln!("Skipping test: NATS not available");

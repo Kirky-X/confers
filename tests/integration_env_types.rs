@@ -51,8 +51,8 @@ fn test_env_vars_deserialize_into_typed_struct() {
             config.port, 8080,
             "u32 field 'port' should deserialize from string '8080'"
         );
-        assert_eq!(
-            config.debug, true,
+        assert!(
+            config.debug,
             "bool field 'debug' should deserialize from string 'true'"
         );
         assert_eq!(
