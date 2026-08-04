@@ -5,11 +5,57 @@
 
 //! Configuration snapshot module.
 
-use crate::error::ConfigResult;
+use crate::error::{ConfigError, ConfigResult};
 use crate::types::{AnnotatedValue, ConfigValue, SerializeMode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Monotonic counter to disambiguate snapshots saved within the same nanosecond.
+static SNAPSHOT_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Blocking prune implementation used by both sync and async (via spawn_blocking) paths.
+fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<usize> {
+    if !dir.exists() {
+        return Ok(0);
+    }
+    let mut snapshots: Vec<SnapshotInfo> = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().map(|e| e.to_string_lossy().to_string()) == Some(ext.to_string()) {
+            let metadata = entry.metadata()?;
+            let created_at = metadata
+                .created()
+                .map(DateTime::from)
+                .unwrap_or_else(|_| Utc::now());
+            snapshots.push(SnapshotInfo {
+                path,
+                created_at,
+                size_bytes: metadata.len(),
+            });
+        }
+    }
+    if snapshots.len() <= max_snapshots {
+        return Ok(0);
+    }
+    snapshots.sort_by_key(|s| std::cmp::Reverse(s.created_at));
+    let to_remove = snapshots.len() - max_snapshots;
+    let mut removed = 0;
+    let mut first_error: Option<std::io::Error> = None;
+    for snapshot in snapshots.into_iter().rev().take(to_remove) {
+        match std::fs::remove_file(&snapshot.path) {
+            Ok(()) => removed += 1,
+            Err(e) if first_error.is_none() => first_error = Some(e),
+            Err(_) => {} // Additional failures tracked via first_error
+        }
+    }
+    if let Some(e) = first_error {
+        return Err(ConfigError::IoError(e));
+    }
+    Ok(removed)
+}
 
 /// Snapshot file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -113,21 +159,7 @@ impl SnapshotManager {
     }
 
     pub fn prune_old_snapshots(&self) -> ConfigResult<usize> {
-        let snapshots = self.list_snapshots()?;
-        if snapshots.len() <= self.config.max_snapshots {
-            return Ok(0);
-        }
-
-        let to_remove = snapshots.len() - self.config.max_snapshots;
-        let mut removed = 0;
-
-        for snapshot in snapshots.into_iter().rev().take(to_remove) {
-            if std::fs::remove_file(&snapshot.path).is_ok() {
-                removed += 1;
-            }
-        }
-
-        Ok(removed)
+        prune_blocking(&self.config.dir, self.config.max_snapshots, self.config.format.ext())
     }
 
     pub async fn save(
@@ -141,12 +173,14 @@ impl SnapshotManager {
 
         let now = Utc::now();
         let timestamp = now.format("%Y%m%dT%H%M%SZ");
-        // 添加纳秒后缀防止同秒内多次快照发生文件名碰撞（后者覆盖前者）
+        // Nanosecond suffix + monotonic sequence to prevent filename collisions.
         let nanos = now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+        let seq = SNAPSHOT_SEQ.fetch_add(1, Ordering::Relaxed);
         let filename = format!(
-            "config-{}-{:09}.{}",
+            "config-{}-{:09}-{:04}.{}",
             timestamp,
             nanos,
+            seq % 10_000,
             self.config.format.ext()
         );
         let path = self.config.dir.join(&filename);
@@ -229,7 +263,17 @@ impl SnapshotManager {
             .await
             .map_err(crate::error::ConfigError::IoError)?;
 
-        self.prune_old_snapshots()?;
+        // Run prune on the blocking thread pool to avoid blocking the async runtime
+        let dir = self.config.dir.clone();
+        let max = self.config.max_snapshots;
+        let ext = self.config.format.ext().to_string();
+        tokio::task::spawn_blocking(move || {
+            prune_blocking(&dir, max, &ext)
+        })
+        .await
+        .map_err(|e| crate::error::ConfigError::IoError(
+            std::io::Error::other(format!("spawn_blocking: {}", e))
+        ))??;
 
         Ok(path)
     }

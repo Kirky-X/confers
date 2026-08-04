@@ -80,7 +80,7 @@ pub(crate) fn json_to_config_value(
             .map(ConfigValue::I64)
             .or_else(|| n.as_u64().map(ConfigValue::U64))
             .or_else(|| n.as_f64().map(ConfigValue::F64))
-            .unwrap_or(ConfigValue::Null),
+            .unwrap_or_else(|| ConfigValue::String(n.to_string())),
         serde_json::Value::String(s) => ConfigValue::String(s.clone()),
         serde_json::Value::Array(a) => ConfigValue::Array(
             a.iter()
@@ -128,7 +128,7 @@ pub(crate) fn yaml_to_config_value(
             .map(ConfigValue::I64)
             .or_else(|| n.as_u64().map(ConfigValue::U64))
             .or_else(|| n.as_f64().map(ConfigValue::F64))
-            .unwrap_or(ConfigValue::Null),
+            .unwrap_or_else(|| ConfigValue::String(n.to_string())),
         serde_yaml_ng::Value::String(s) => ConfigValue::String(s.clone()),
         serde_yaml_ng::Value::Sequence(s) => ConfigValue::Array(
             s.iter()

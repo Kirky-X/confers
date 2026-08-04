@@ -32,7 +32,10 @@ impl TypeScriptGenerator {
         }
 
         // Then, handle the main schema
-        if let Some(_properties) = schema.get("properties") {
+        let has_properties = schema.get("properties").is_some();
+        let has_type_object = schema.get("type").and_then(|t| t.as_str()) == Some("object");
+        let has_definitions = schema.get("definitions").is_some();
+        if has_properties || has_type_object {
             // Use the title from the schema if available, otherwise default to "Config"
             let interface_name = schema
                 .get("title")
@@ -41,6 +44,13 @@ impl TypeScriptGenerator {
 
             let main_interface = Self::generate_interface(interface_name, schema);
             interfaces.push(main_interface);
+        } else if !has_definitions && interfaces.is_empty() && has_type_object {
+            // Bare {"type": "object"} with no properties
+            let interface_name = schema
+                .get("title")
+                .and_then(|t| t.as_str())
+                .unwrap_or("Config");
+            interfaces.push(format!("export type {} = Record<string, any>;", interface_name));
         }
 
         if interfaces.is_empty() {
@@ -87,6 +97,9 @@ impl TypeScriptGenerator {
     fn get_typescript_type(schema: &Value) -> String {
         // Handle $ref references first as they are most specific
         if let Some(ref_name) = schema.get("$ref").and_then(|r| r.as_str()) {
+            if ref_name.is_empty() {
+                return "any".to_string();
+            }
             let parts: Vec<&str> = ref_name.split('/').collect();
             return parts.last().unwrap_or(&"any").to_string();
         }
@@ -391,9 +404,9 @@ mod tests {
 
     #[test]
     fn test_get_typescript_type_ref_empty_string() {
-        // An empty $ref string splits into [""], so parts.last() returns "" (not "any").
+        // An empty $ref string now returns "any" instead of empty string
         let s = serde_json::json!({ "$ref": "" });
-        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "");
+        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
     #[test]
@@ -753,10 +766,10 @@ mod tests {
 
     #[test]
     fn test_convert_invalid_schema_returns_comment() {
-        // No definitions, no properties -> empty interfaces -> invalid marker.
+        // {"type": "object"} is a valid JSON Schema, now generates a proper interface
         let s = serde_json::json!({ "type": "object" });
         let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
-        assert_eq!(out, "// Invalid schema format");
+        assert!(out.contains("Config"), "expected Config in output, got: {}", out);
     }
 
     #[test]

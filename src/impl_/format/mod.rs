@@ -248,7 +248,15 @@ mod toml_converter {
             ConfigValue::Null => toml::Value::String(String::new()),
             ConfigValue::Bool(b) => toml::Value::Boolean(*b),
             ConfigValue::I64(i) => toml::Value::Integer(*i),
-            ConfigValue::U64(u) => toml::Value::Integer(*u as i64),
+            ConfigValue::U64(u) => {
+                // TOML Integer is i64; values > i64::MAX serialize as string
+                // to avoid silent truncation.
+                if *u <= i64::MAX as u64 {
+                    toml::Value::Integer(*u as i64)
+                } else {
+                    toml::Value::String(u.to_string())
+                }
+            }
             ConfigValue::F64(f) => toml::Value::Float(*f),
             ConfigValue::String(s) => toml::Value::String(s.clone()),
             ConfigValue::Bytes(b) => {
@@ -495,7 +503,13 @@ mod yaml_converter {
             ConfigValue::Bool(b) => serde_yaml_ng::Value::Bool(*b),
             ConfigValue::I64(i) => serde_yaml_ng::Value::Number(serde_yaml_ng::Number::from(*i)),
             ConfigValue::U64(u) => {
-                serde_yaml_ng::Value::Number(serde_yaml_ng::Number::from(*u as i64))
+                // YAML Number via i64 cast; values > i64::MAX serialize as
+                // string to avoid silent truncation.
+                if *u <= i64::MAX as u64 {
+                    serde_yaml_ng::Value::Number(serde_yaml_ng::Number::from(*u as i64))
+                } else {
+                    serde_yaml_ng::Value::String(u.to_string())
+                }
             }
             ConfigValue::F64(f) => serde_yaml_ng::Value::String(f.to_string()),
             ConfigValue::String(s) => serde_yaml_ng::Value::String(s.clone()),
@@ -605,7 +619,14 @@ mod ini_converter {
             }
 
             if !invalid_lines.is_empty() {
-                // INI parsing issues found but continuing with valid lines only
+                // Report invalid INI lines to stderr so users can diagnose
+                // malformed configuration files instead of silently losing data.
+                for (line_num, line_text, reason) in &invalid_lines {
+                    eprintln!(
+                        "confers: INI parse warning: line {}: {} (skipped: {:?})",
+                        line_num, reason, line_text
+                    );
+                }
             }
 
             let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();

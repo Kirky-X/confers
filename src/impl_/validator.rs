@@ -86,6 +86,11 @@ impl ValidationRule {
                     }
                 }
 
+                // Validate min <= max
+                if min > max {
+                    return None;
+                }
+
                 return Some(Self::Length { min, max });
             }
         }
@@ -103,6 +108,11 @@ impl ValidationRule {
                     } else if let Some(v) = part.strip_prefix("max=") {
                         max = v.parse().ok()?;
                     }
+                }
+
+                // Validate min <= max
+                if min > max {
+                    return None;
                 }
 
                 return Some(Self::Range { min, max });
