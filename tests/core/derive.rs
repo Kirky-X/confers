@@ -1,6 +1,7 @@
 //! Integration test for the Config derive macro.
 
 
+use super::common;
 use confers::Config;
 use serde::Deserialize;
 use serial_test::serial;

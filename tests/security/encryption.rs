@@ -5,7 +5,7 @@
 
 #[cfg(feature = "encryption")]
 mod tests {
-    use super::*;
+    use super::super::common;
     use confers::secret::{
         derive_field_key, CryptoError, EnvKeyProvider, SecretBytes, SecretKeyProvider,
         SecretString, XChaCha20Crypto,

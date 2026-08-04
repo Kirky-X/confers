@@ -14,6 +14,7 @@
 
 #![cfg(feature = "watch")]
 
+use serial_test::serial;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -412,6 +413,7 @@ async fn test_fs_watcher_file_creation_detection() {
 
 /// Test FsWatcher detects file modification (2.1.3).
 #[tokio::test]
+#[serial]
 async fn test_fs_watcher_file_modification_detection() {
     let temp_dir = TempDir::new().unwrap();
     let config_file = temp_dir.path().join("config.toml");

@@ -7,7 +7,7 @@
 //! HTTP polled sources, etcd, consul, NATS bus, and Redis bus.
 
 #[path = "../common.rs"]
-mod common;
+pub mod common;
 
 mod bus;
 mod consul;

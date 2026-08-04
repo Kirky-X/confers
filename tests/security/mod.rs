@@ -6,7 +6,7 @@
 //! Security integration tests — encryption, audit, and key management.
 
 #[path = "../common.rs"]
-mod common;
+pub mod common;
 
 mod audit;
 mod encryption;

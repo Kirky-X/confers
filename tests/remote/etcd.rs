@@ -15,6 +15,7 @@
 #![cfg(feature = "etcd")]
 
 
+use super::common;
 use std::time::Duration;
 
 use confers::remote::{EtcdSourceBuilder, PolledSource};
