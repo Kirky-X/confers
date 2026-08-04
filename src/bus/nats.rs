@@ -175,18 +175,16 @@ impl ConfigBus for NatsConfigBus {
             (consumer, last_err)
         };
 
-        let consumer = consumer.ok_or_else(|| {
-            ConfigError::RemoteUnavailable {
-                error_type: format!(
-                    "nats_consumer: {} (after {} retries)",
-                    last_err
-                        .as_ref()
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "unknown error".into()),
-                    max_retries
-                ),
-                retryable: true,
-            }
+        let consumer = consumer.ok_or_else(|| ConfigError::RemoteUnavailable {
+            error_type: format!(
+                "nats_consumer: {} (after {} retries)",
+                last_err
+                    .as_ref()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown error".into()),
+                max_retries
+            ),
+            retryable: true,
         })?;
 
         let messages = consumer

@@ -14,7 +14,6 @@
 
 #![cfg(feature = "etcd")]
 
-
 use super::common;
 use std::time::Duration;
 

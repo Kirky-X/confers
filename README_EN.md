@@ -1,5 +1,11 @@
 <span id="top"></span>
 
+<div align="right">
+
+[中文](README.md) | [**English**](README_EN.md)
+
+</div>
+
 <div align="center">
 
 <img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">

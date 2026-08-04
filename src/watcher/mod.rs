@@ -154,10 +154,7 @@ impl WatcherGuard {
     /// Set the task handle for this guard (internal use).
     #[allow(dead_code)]
     pub(crate) fn set_task_handle(&self, handle: tokio::task::JoinHandle<()>) {
-        *self
-            .task_handle
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        *self.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
     }
 }
 
@@ -188,7 +185,12 @@ impl Drop for WatcherGuard {
     fn drop(&mut self) {
         self.stop();
         // Note: We can't await in Drop, so task cancellation is best-effort
-        if let Some(handle) = self.task_handle.get_mut().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(handle) = self
+            .task_handle
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             handle.abort();
         }
     }

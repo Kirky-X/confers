@@ -137,33 +137,30 @@ impl EtcdSourceBuilder {
         if let Some(ref tls_config) = self.tls {
             use etcd_client::{Certificate, Identity, TlsOptions};
 
-            let ca_pem = std::fs::read(&tls_config.ca_file).map_err(|e| {
-                ConfigError::InvalidValue {
+            let ca_pem =
+                std::fs::read(&tls_config.ca_file).map_err(|e| ConfigError::InvalidValue {
                     key: "etcd.tls.ca_file".to_string(),
                     expected_type: "readable PEM file".to_string(),
                     message: format!("Failed to read TLS CA file '{}': {}", tls_config.ca_file, e),
-                }
-            })?;
-            let cert_pem = std::fs::read(&tls_config.cert_file).map_err(|e| {
-                ConfigError::InvalidValue {
+                })?;
+            let cert_pem =
+                std::fs::read(&tls_config.cert_file).map_err(|e| ConfigError::InvalidValue {
                     key: "etcd.tls.cert_file".to_string(),
                     expected_type: "readable PEM file".to_string(),
                     message: format!(
                         "Failed to read TLS cert file '{}': {}",
                         tls_config.cert_file, e
                     ),
-                }
-            })?;
-            let key_pem = std::fs::read(&tls_config.key_file).map_err(|e| {
-                ConfigError::InvalidValue {
+                })?;
+            let key_pem =
+                std::fs::read(&tls_config.key_file).map_err(|e| ConfigError::InvalidValue {
                     key: "etcd.tls.key_file".to_string(),
                     expected_type: "readable PEM file".to_string(),
                     message: format!(
                         "Failed to read TLS key file '{}': {}",
                         tls_config.key_file, e
                     ),
-                }
-            })?;
+                })?;
 
             let tls_options = TlsOptions::new()
                 .ca_certificate(Certificate::from_pem(ca_pem))

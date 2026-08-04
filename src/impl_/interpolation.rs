@@ -69,7 +69,16 @@ where
     let mut visited = HashSet::new();
     let mut no_refs = None;
     let mut no_sens = None;
-    interpolate_inner_impl(template, resolver, &mut visited, &mut no_refs, &mut no_sens, false, 10, false)
+    interpolate_inner_impl(
+        template,
+        resolver,
+        &mut visited,
+        &mut no_refs,
+        &mut no_sens,
+        false,
+        10,
+        false,
+    )
 }
 
 /// Interpolate with sensitive field tracking.

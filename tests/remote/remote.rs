@@ -9,7 +9,6 @@
 
 #![cfg(feature = "remote")]
 
-
 use super::common;
 use std::time::Duration;
 

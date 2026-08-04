@@ -54,7 +54,10 @@ impl TypeScriptGenerator {
                 .get("title")
                 .and_then(|t| t.as_str())
                 .unwrap_or("Config");
-            interfaces.push(format!("export type {} = Record<string, any>;", interface_name));
+            interfaces.push(format!(
+                "export type {} = Record<string, any>;",
+                interface_name
+            ));
         }
 
         if interfaces.is_empty() {
@@ -773,7 +776,11 @@ mod tests {
         // {"type": "object"} is a valid JSON Schema, now generates a proper interface
         let s = serde_json::json!({ "type": "object" });
         let out = TypeScriptGenerator::convert_json_schema_to_typescript(&s);
-        assert!(out.contains("Config"), "expected Config in output, got: {}", out);
+        assert!(
+            out.contains("Config"),
+            "expected Config in output, got: {}",
+            out
+        );
     }
 
     #[test]

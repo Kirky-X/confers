@@ -1062,7 +1062,11 @@ mod tests {
         let source = ConsulSourceBuilder::new().build().unwrap();
         // The trait method now returns the dynamic source_id including prefix
         let id = <ConsulSource as AsyncSource>::source_id(&source);
-        assert!(id.as_str().starts_with("consul:"), "expected consul: prefix, got {}", id.as_str());
+        assert!(
+            id.as_str().starts_with("consul:"),
+            "expected consul: prefix, got {}",
+            id.as_str()
+        );
     }
 
     // --- H1 regression tests: response size & entry count limits ---

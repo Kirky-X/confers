@@ -5,7 +5,6 @@
 
 //! Integration tests for configuration loading.
 
-
 use confers::types::ConfigValue;
 use confers::ConfigBuilder;
 use std::io::Write;

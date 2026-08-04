@@ -2,7 +2,6 @@
 //!
 //! Run with: cargo test --test integration_encryption --features encryption
 
-
 #[cfg(feature = "encryption")]
 mod tests {
     use super::super::common;

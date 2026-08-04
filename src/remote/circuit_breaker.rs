@@ -192,11 +192,7 @@ impl CircuitBreaker {
 /// Formula: `min(base_delay × 2^failure_count, max_delay)`
 ///
 /// The exponent is capped to prevent overflow.
-pub fn backoff_duration(
-    base_delay: Duration,
-    max_delay: Duration,
-    failure_count: u32,
-) -> Duration {
+pub fn backoff_duration(base_delay: Duration, max_delay: Duration, failure_count: u32) -> Duration {
     // Cap the exponent so that base_delay * 2^exponent cannot overflow.
     // Duration::saturating_mul takes u32, so the multiplier must fit in u32.
     // 2^31 = 2,147,483,648 fits in u32; 2^32 does not.

@@ -5,8 +5,8 @@
 
 //! Remote configuration sources.
 
-pub(crate) mod common;
 pub(crate) mod circuit_breaker;
+pub(crate) mod common;
 mod interval;
 
 #[cfg(feature = "consul")]

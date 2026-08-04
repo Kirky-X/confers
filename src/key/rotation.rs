@@ -996,13 +996,14 @@ mod tests {
         let original_version = ring.current_version;
 
         let mut service = KeyRotationService::new(KeyRotationPolicy::default());
-        let result = service.execute_rotation(
-            &mut ring,
-            &master_key,
-            "rotator".to_string(),
-            Some("scheduled".to_string()),
-        )
-        .expect("execute_rotation");
+        let result = service
+            .execute_rotation(
+                &mut ring,
+                &master_key,
+                "rotator".to_string(),
+                Some("scheduled".to_string()),
+            )
+            .expect("execute_rotation");
 
         assert_eq!(result.previous_version, original_version);
         assert_eq!(result.new_version, original_version + 1);

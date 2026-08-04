@@ -7,7 +7,6 @@
 
 #![cfg(feature = "modules")]
 
-
 use confers::loader::LoaderConfig;
 use confers::modules::{ModuleConfig, ModuleRegistry};
 use std::path::PathBuf;

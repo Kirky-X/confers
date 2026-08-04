@@ -306,6 +306,9 @@ mod tests {
 
         // Durable event with no log_dir returns error
         let result = writer.log_key_access("key_without_log_dir");
-        assert!(result.is_err(), "Durable event should fail when log_dir is None");
+        assert!(
+            result.is_err(),
+            "Durable event should fail when log_dir is None"
+        );
     }
 }
