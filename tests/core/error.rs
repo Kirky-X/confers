@@ -15,7 +15,6 @@
 #![cfg(all(feature = "validation", feature = "interpolation"))]
 #![allow(dead_code)]
 
-mod common;
 
 use std::path::PathBuf;
 

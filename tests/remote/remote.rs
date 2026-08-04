@@ -9,7 +9,6 @@
 
 #![cfg(feature = "remote")]
 
-mod common;
 
 use std::time::Duration;
 

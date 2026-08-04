@@ -5,7 +5,6 @@
 
 //! Integration tests for configuration loading.
 
-mod common;
 
 use confers::types::ConfigValue;
 use confers::ConfigBuilder;

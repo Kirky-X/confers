@@ -3,9 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! Integration tests for confers-cli
-
-#![cfg(feature = "cli")]
+//! CLI command execution tests — inspect, validate, export, diff, snapshot.
 
 use serial_test::serial;
 use std::fs;

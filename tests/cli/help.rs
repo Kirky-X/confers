@@ -3,9 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! CLI integration tests.
-
-#![cfg(feature = "cli")]
+//! CLI binary help flag tests.
 
 use std::path::PathBuf;
 use std::process::Command;

@@ -14,7 +14,6 @@
 
 #![cfg(feature = "consul")]
 
-mod common;
 
 use std::time::Duration;
 
