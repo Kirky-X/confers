@@ -77,8 +77,13 @@ impl EnvKeyProviderBuilder {
 
     pub fn build(self) -> Result<EnvKeyProvider, CryptoError> {
         let env_var = self.env_var.ok_or(CryptoError::InvalidKeyLength(0))?;
-        // Validate that the environment variable exists
-        std::env::var(&env_var).map_err(|_| CryptoError::InvalidKeyLength(0))?;
+        // Validate that the environment variable exists and the key has the
+        // correct length eagerly, so errors surface at build time rather than
+        // lazily at get_key() time.
+        let key = std::env::var(&env_var).map_err(|_| CryptoError::InvalidKeyLength(0))?;
+        if key.len() != 32 {
+            return Err(CryptoError::InvalidKeyLength(key.len()));
+        }
         Ok(EnvKeyProvider::new(env_var))
     }
 }

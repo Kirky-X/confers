@@ -199,9 +199,12 @@ impl AsyncKeyProvider for VaultKeyProvider {
             })?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            // 502/503/504 are transient server errors that may succeed on retry.
+            let retryable = status == 502 || status == 503 || status == 504;
             return Err(ConfigError::RemoteUnavailable {
-                error_type: format!("vault_response: {}", response.status()),
-                retryable: false,
+                error_type: format!("vault_response: {}", status),
+                retryable,
             });
         }
 
