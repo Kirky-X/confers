@@ -102,8 +102,10 @@ impl Lifecycle for NatsConfigBus {
 #[async_trait]
 impl ConfigBus for NatsConfigBus {
     async fn publish(&self, event: ConfigChangeEvent) -> ConfigResult<()> {
-        let jetstream = jetstream::new(self.client.clone());
+        // Ensure the stream exists before publishing
+        let _stream = self.ensure_stream().await?;
 
+        let jetstream = jetstream::new(self.client.clone());
         let payload = serde_json::to_vec(&event).map_err(|e| ConfigError::SourceChainError {
             message: format!("serialize event: {}", e),
             source_index: 0,
@@ -152,16 +154,26 @@ impl ConfigBus for NatsConfigBus {
                 Ok(msg) => {
                     let payload = msg.message.payload.clone();
                     let event: Result<ConfigChangeEvent, _> = serde_json::from_slice(&payload);
-                    if let Ok(event) = event {
-                        let _ = msg.ack().await;
-                        return Some(event);
+                    match event {
+                        Ok(event) => {
+                            let _ = msg.ack().await;
+                            Some(event)
+                        }
+                        Err(_) => {
+                            // Deserialization failed — nak so the server can redeliver
+                            // or move to dead-letter. Ignore nak errors (best-effort).
+                            let _ = msg
+                                .ack_with(async_nats::jetstream::AckKind::Nak(None))
+                                .await;
+                            None
+                        }
                     }
                 }
                 Err(_e) => {
-                    // Silently ignore message errors and continue
+                    // Transport error — continue to next message
+                    None
                 }
             }
-            None
         });
 
         Ok(Box::pin(stream))

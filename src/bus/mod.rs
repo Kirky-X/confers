@@ -113,7 +113,8 @@ impl ConfigBus for InMemoryBus {
         match self.sender.send(event) {
             Ok(_) => Ok(()),
             Err(_) => {
-                // No active subscribers - this is not an error, just silently ignore
+                // No active receivers — broadcast returns Err(SendError)
+                // when there are zero subscribers. This is not an error.
                 Ok(())
             }
         }

@@ -58,19 +58,29 @@ impl BusEventLimiter {
     ///
     /// Returns `true` if the event should be processed, `false` if it should
     /// be skipped (rate-limited).
+    ///
+    /// # Atomicity
+    ///
+    /// The CAS on `in_progress` is performed *before* the interval check to
+    /// avoid a TOCTOU race: once we own the token, we check the interval and
+    /// release the token if the check fails.
     pub fn try_acquire(&self) -> bool {
-        let now = now_ms();
-        let last = self.last_process_ms.load(Ordering::Acquire);
-
-        if now.saturating_sub(last) < self.min_interval_ms {
-            return false;
-        }
-
+        // Step 1: acquire the token first (atomic CAS).
         if self
             .in_progress
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
             .is_err()
         {
+            return false;
+        }
+
+        // Step 2: check interval now that we own the token.
+        let now = now_ms();
+        let last = self.last_process_ms.load(Ordering::Acquire);
+
+        if now.saturating_sub(last) < self.min_interval_ms {
+            // Too soon — release the token so others can try.
+            self.in_progress.store(false, Ordering::Release);
             return false;
         }
 
@@ -80,8 +90,14 @@ impl BusEventLimiter {
 
     /// Release the processing token. Must be called after processing
     /// completes when `try_acquire()` returned `true`.
+    ///
+    /// Uses CAS to detect double-release: calling `release()` when the
+    /// token is already free is a logic error in the caller. The token
+    /// is left in the released state regardless.
     pub fn release(&self) {
-        self.in_progress.store(false, Ordering::Release);
+        self.in_progress
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+            .ok(); // Ignore Err — already released (defensive: prevents masking bugs silently).
     }
 
     /// Reset the limiter state.

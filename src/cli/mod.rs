@@ -103,10 +103,14 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
 
         if let Some((key, value)) = line.split_once('=') {
             let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
             let value = value.trim();
 
-            let value = if (value.starts_with('"') && value.ends_with('"'))
-                || (value.starts_with('\'') && value.ends_with('\''))
+            let value = if value.len() > 1
+                && ((value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\'')))
             {
                 &value[1..value.len() - 1]
             } else {
