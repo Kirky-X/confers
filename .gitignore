@@ -45,6 +45,7 @@ examples/target/
 
 # Logs
 *.log
+logs/
 
 # Temporary files
 tmp/
@@ -57,6 +58,7 @@ docs/superpowers/
 spec/
 
 # Docker
+docker-compose.yml
 docker-compose.test.yml
 .worktrees/
 .gitnexus
