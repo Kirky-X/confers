@@ -11,14 +11,7 @@ homepage = "https://github.com/Kirky-X/confers"
 documentation = "https://docs.rs/confers"
 keywords = ["config", "configuration", "settings", "env"]
 categories = ["config", "development-tools"]
-# Disable auto-discovery of bench targets: benches/common.rs is a shared
-# helper module (included via `mod common;`), not a benchmark. Auto-discovery
-# builds it as a libtest-harness bench that rejects criterion's --save-baseline.
-# All real benchmarks are declared explicitly below in [[bench]] blocks.
 autobenches = false
-# Disable auto-discovery of test targets: tests are organized into subdirectory
-# modules (core/, security/, remote/, watcher/, cli/) and must be declared
-# explicitly. tests/common.rs is a shared helper, not a standalone test.
 autotests = false
 
 [dependencies]
