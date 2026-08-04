@@ -269,6 +269,8 @@ impl EnvSource {
         ];
 
         for prefix in &sensitive_prefixes {
+            // Path::starts_with checks path components (not string prefix),
+            // so "/homework" does NOT match "/home" — this is correct.
             if canonical.starts_with(prefix) {
                 return Err(ConfigError::InvalidValue {
                     key: "file_path".to_string(),
@@ -322,9 +324,13 @@ impl Source for EnvSource {
         #[cfg(feature = "env")]
         {
             if let Ok(iter) = dotenvy::dotenv_iter() {
-                for item in iter.flatten() {
-                    if let Some(config_path) = self.parse_key(&item.0) {
-                        let resolved = self.resolve_value(&item.1, &item.0)?;
+                for item in iter {
+                    // Skip malformed .env lines silently
+                    let Ok((env_key, env_val)) = item else {
+                        continue;
+                    };
+                    if let Some(config_path) = self.parse_key(&env_key) {
+                        let resolved = self.resolve_value(&env_val, &env_key)?;
                         let value = AnnotatedValue::new(
                             Self::infer_config_value(&resolved),
                             self.source_id.clone(),

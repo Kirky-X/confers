@@ -50,12 +50,20 @@ impl ConfigLimits {
     /// Set the maximum file size.
     pub fn with_max_file_size_bytes(mut self, bytes: u64) -> Self {
         self.max_file_size_bytes = bytes;
+        // Clamp: file size must not exceed total size.
+        if self.max_file_size_bytes > self.max_total_size {
+            self.max_file_size_bytes = self.max_total_size;
+        }
         self
     }
 
     /// Set the maximum total size.
     pub fn with_max_total_size(mut self, bytes: u64) -> Self {
         self.max_total_size = bytes;
+        // Clamp: file size must not exceed total size.
+        if self.max_file_size_bytes > self.max_total_size {
+            self.max_file_size_bytes = self.max_total_size;
+        }
         self
     }
 
