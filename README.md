@@ -62,22 +62,6 @@ Confers 提供**声明式方法**进行配置管理：
 |:-------------:|:--------------:|:---------------------:|:-----------------:|
 | 编译时检查 | 热重载支持 | 敏感数据保护 | etcd、Consul、HTTP |
 
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-// 配置自动从文件、环境变量和命令行参数加载
-let config = AppConfig::load_sync()?;
-```
-
 </div>
 
 ---
