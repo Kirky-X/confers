@@ -6,16 +6,20 @@
 use schemars::{schema_for, JsonSchema};
 use serde_json::Value;
 
+use crate::error::{ConfigError, ConfigResult};
+
 pub struct TypeScriptGenerator;
 
 impl TypeScriptGenerator {
-    pub fn generate<T: JsonSchema>() -> String {
+    pub fn generate<T: JsonSchema>() -> ConfigResult<String> {
         let schema = schema_for!(T);
-        let schema_value = serde_json::to_value(schema).unwrap_or_else(|e| {
-            eprintln!("Failed to convert schema to JSON value: {}", e);
-            serde_json::Value::Null
-        });
-        Self::convert_json_schema_to_typescript(&schema_value)
+        let schema_value = serde_json::to_value(schema).map_err(|e| ConfigError::ParseError {
+            format: "schema".into(),
+            message: e.to_string(),
+            location: None,
+            source: None,
+        })?;
+        Ok(Self::convert_json_schema_to_typescript(&schema_value))
     }
 
     fn convert_json_schema_to_typescript(schema: &Value) -> String {
@@ -297,7 +301,7 @@ mod tests {
         println!("{}", schema_json);
         println!("--- End of JSON Schema ---");
 
-        let ts_output = TypeScriptGenerator::generate::<TestConfig>();
+        let ts_output = TypeScriptGenerator::generate::<TestConfig>().unwrap();
         println!("Generated TypeScript output:");
         println!("{}", ts_output);
         println!("--- End of output ---");
@@ -842,7 +846,7 @@ mod tests {
             name: String,
             count: i64,
         }
-        let ts = TypeScriptGenerator::generate::<Simple>();
+        let ts = TypeScriptGenerator::generate::<Simple>().unwrap();
         assert!(ts.contains("interface Simple"));
         assert!(ts.contains("name: string;"));
         assert!(ts.contains("count: number;"));
@@ -852,7 +856,7 @@ mod tests {
     fn test_generate_unit_struct_alias() {
         #[derive(Debug, Serialize, Deserialize, JsonSchema)]
         struct Unit;
-        let ts = TypeScriptGenerator::generate::<Unit>();
+        let ts = TypeScriptGenerator::generate::<Unit>().unwrap();
         assert!(!ts.is_empty());
     }
 
@@ -863,7 +867,7 @@ mod tests {
             tags: Vec<String>,
             counts: Vec<i32>,
         }
-        let ts = TypeScriptGenerator::generate::<WithArray>();
+        let ts = TypeScriptGenerator::generate::<WithArray>().unwrap();
         assert!(ts.contains("tags: string[]"));
         assert!(ts.contains("counts: number[]"));
     }
