@@ -154,6 +154,32 @@ mod nats_bus_tests {
         format!("confers{}{}", N.fetch_add(1, Ordering::SeqCst), clean)
     }
 
+    /// Clean up all confers-created streams from the NATS JetStream server
+    /// to prevent subject-overlap failures from previous test runs.
+    async fn cleanup_nats_streams() {
+        use async_nats::jetstream;
+        let client = match async_nats::connect("nats://127.0.0.1:4222").await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let js = jetstream::new(client);
+        let names: Vec<String> = js
+            .stream_names()
+            .filter_map(|r| async move { r.ok() })
+            .collect()
+            .await;
+        for name in names {
+            if name.starts_with("confers")
+                || name == "CONFIG_EVENTS"
+                || name == "UNITSTREAM"
+                || name == "CUSTOMSTREAM"
+                || name == "RTSTREAM"
+            {
+                let _ = js.delete_stream(&name).await;
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_nats_bus_connect() {
         if !nats_ready() {
@@ -300,6 +326,7 @@ mod nats_bus_tests {
             eprintln!("Skipping test: NATS not available");
             return;
         }
+        cleanup_nats_streams().await;
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(unique("pubsub.subject"))

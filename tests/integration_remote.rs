@@ -364,14 +364,12 @@ mod etcd_tests {
             .tls(tls_config)
             .prefix("test");
 
-        // Builder should accept the TLS config without error. TLS cert files
-        // are not validated at build time (only during connect), so build()
-        // succeeding verifies the builder stores the config correctly.
+        // Builder validates TLS files at build time (fail-loud, Rule 12).
+        // Nonexistent files must produce an error, not silently succeed.
         let result = builder.build().await;
         assert!(
-            result.is_ok(),
-            "builder should accept TLS config, but build failed: {:?}",
-            result.err()
+            result.is_err(),
+            "build() should fail when TLS files do not exist"
         );
     }
 }
