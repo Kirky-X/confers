@@ -61,22 +61,6 @@ Confers provides a **declarative approach** to configuration management with:
 | :-----------------: | :----------------: | :------------------------------: | :----------------: |
 | Compile-time checks | Hot reload support |    Sensitive data protection     | etcd, Consul, HTTP |
 
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-// Configuration loads automatically from files, env vars, and CLI args
-let config = AppConfig::load_sync()?;
-```
-
 ---
 
 ## 📋 Table of Contents
