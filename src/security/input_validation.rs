@@ -175,12 +175,6 @@ impl SensitivityResult {
 pub struct InputValidator {
     /// 最大字符串长度
     max_string_length: usize,
-    /// 最大数组长度
-    #[allow(dead_code)]
-    max_array_length: usize,
-    /// 最大深度
-    #[allow(dead_code)]
-    max_depth: usize,
     /// 允许的字符模式
     allowed_chars_pattern: Option<Regex>,
     /// 危险模式列表
@@ -200,8 +194,6 @@ impl InputValidator {
     pub fn new() -> Self {
         Self {
             max_string_length: 1024,
-            max_array_length: 100,
-            max_depth: 10,
             allowed_chars_pattern: None,
             dangerous_patterns: Self::default_dangerous_patterns(),
             whitelist_patterns: Vec::new(),
@@ -216,18 +208,6 @@ impl InputValidator {
     /// 设置最大字符串长度
     pub fn with_max_string_length(mut self, length: usize) -> Self {
         self.max_string_length = length;
-        self
-    }
-
-    /// 设置最大数组长度
-    pub fn with_max_array_length(mut self, length: usize) -> Self {
-        self.max_array_length = length;
-        self
-    }
-
-    /// 设置最大深度
-    pub fn with_max_depth(mut self, depth: usize) -> Self {
-        self.max_depth = depth;
         self
     }
 
@@ -426,12 +406,6 @@ pub enum InputValidationError {
     InvalidEmail,
     /// 不在白名单中
     NotInWhitelist,
-    /// 深度超出限制
-    #[allow(dead_code)]
-    DepthExceeded { max: usize, actual: usize },
-    /// 数组太长
-    #[allow(dead_code)]
-    ArrayTooLong { max: usize, actual: usize },
 }
 
 impl std::fmt::Display for InputValidationError {
@@ -463,12 +437,6 @@ impl std::fmt::Display for InputValidationError {
             }
             InputValidationError::NotInWhitelist => {
                 write!(f, "Input does not match any whitelist pattern")
-            }
-            InputValidationError::DepthExceeded { max, actual } => {
-                write!(f, "Nesting depth exceeded: max={}, actual={}", max, actual)
-            }
-            InputValidationError::ArrayTooLong { max, actual } => {
-                write!(f, "Array too long: max={}, actual={}", max, actual)
             }
         }
     }
@@ -632,12 +600,6 @@ pub enum ConfigValidationError {
         field: String,
         error: InputValidationError,
     },
-    /// 敏感数据警告
-    #[allow(dead_code)]
-    SensitiveDataWarning {
-        field: String,
-        sensitivity: SensitivityResult,
-    },
 }
 
 impl std::fmt::Display for ConfigValidationError {
@@ -645,9 +607,6 @@ impl std::fmt::Display for ConfigValidationError {
         match self {
             ConfigValidationError::FieldError { field, error } => {
                 write!(f, "Field '{}': {}", field, error)
-            }
-            ConfigValidationError::SensitiveDataWarning { field, sensitivity } => {
-                write!(f, "Field '{}': {}", field, sensitivity.description())
             }
         }
     }
@@ -1135,16 +1094,6 @@ mod tests {
         assert!(format!("{}", InputValidationError::InvalidUrlScheme).contains("scheme"));
         assert!(format!("{}", InputValidationError::InvalidEmail).contains("Email"));
         assert!(format!("{}", InputValidationError::NotInWhitelist).contains("whitelist"));
-        assert!(format!(
-            "{}",
-            InputValidationError::DepthExceeded { max: 1, actual: 2 }
-        )
-        .contains("depth"));
-        assert!(format!(
-            "{}",
-            InputValidationError::ArrayTooLong { max: 1, actual: 2 }
-        )
-        .contains("Array"));
     }
 
     #[test]
@@ -1213,15 +1162,5 @@ mod tests {
             error: InputValidationError::EmptyFieldName,
         };
         assert!(format!("{}", field_err).contains("f"));
-        let warn = ConfigValidationError::SensitiveDataWarning {
-            field: "pw".to_string(),
-            sensitivity: SensitivityResult::High {
-                field: "pw".to_string(),
-                reason: "r".to_string(),
-            },
-        };
-        let s = format!("{}", warn);
-        assert!(s.contains("pw"));
-        assert!(s.contains("high sensitivity"));
     }
 }
