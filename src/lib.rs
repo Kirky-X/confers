@@ -147,11 +147,15 @@ pub use loader::{
     LoaderConfig,
 };
 
-// Re-export derive macros
+// Re-export derive macros (feature-gated to match their generated code dependencies)
 pub use confers_macros::Config;
+#[cfg(feature = "cli")]
 pub use confers_macros::ConfigClap;
+#[cfg(feature = "migration")]
 pub use confers_macros::ConfigMigration;
+#[cfg(feature = "modules")]
 pub use confers_macros::ConfigModules;
+#[cfg(feature = "schema")]
 pub use confers_macros::ConfigSchema;
 
 // ============== Feature-gated Re-exports ==============

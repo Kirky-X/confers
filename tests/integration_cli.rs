@@ -13,7 +13,7 @@ use std::process::Command;
 fn get_cli_binary() -> PathBuf {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let target_dir = PathBuf::from(manifest_dir).join("target/debug");
-    target_dir.join("confers-cli")
+    target_dir.join("confers")
 }
 
 #[test]
