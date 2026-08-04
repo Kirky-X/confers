@@ -108,8 +108,68 @@ impl EtcdSourceBuilder {
         // Build connect options
         let mut options = ConnectOptions::new();
 
-        if let (Some(username), Some(password)) = (self.username, self.password) {
-            options = options.with_user(&username, &password);
+        // Validate that both or neither auth credentials are provided
+        match (&self.username, &self.password) {
+            (Some(username), Some(password)) => {
+                options = options.with_user(username, password);
+            }
+            (Some(_), None) => {
+                return Err(ConfigError::InvalidValue {
+                    key: "etcd.username".to_string(),
+                    expected_type: "both username and password".to_string(),
+                    message: "etcd auth requires both username and password; password is missing"
+                        .to_string(),
+                });
+            }
+            (None, Some(_)) => {
+                return Err(ConfigError::InvalidValue {
+                    key: "etcd.password".to_string(),
+                    expected_type: "both username and password".to_string(),
+                    message: "etcd auth requires both username and password; username is missing"
+                        .to_string(),
+                });
+            }
+            (None, None) => {}
+        }
+
+        // Apply TLS configuration if provided.
+        // Failing loudly when TLS files cannot be read (Rule 12).
+        if let Some(ref tls_config) = self.tls {
+            use etcd_client::{Certificate, Identity, TlsOptions};
+
+            let ca_pem = std::fs::read(&tls_config.ca_file).map_err(|e| {
+                ConfigError::InvalidValue {
+                    key: "etcd.tls.ca_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!("Failed to read TLS CA file '{}': {}", tls_config.ca_file, e),
+                }
+            })?;
+            let cert_pem = std::fs::read(&tls_config.cert_file).map_err(|e| {
+                ConfigError::InvalidValue {
+                    key: "etcd.tls.cert_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!(
+                        "Failed to read TLS cert file '{}': {}",
+                        tls_config.cert_file, e
+                    ),
+                }
+            })?;
+            let key_pem = std::fs::read(&tls_config.key_file).map_err(|e| {
+                ConfigError::InvalidValue {
+                    key: "etcd.tls.key_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!(
+                        "Failed to read TLS key file '{}': {}",
+                        tls_config.key_file, e
+                    ),
+                }
+            })?;
+
+            let tls_options = TlsOptions::new()
+                .ca_certificate(Certificate::from_pem(ca_pem))
+                .identity(Identity::from_pem(cert_pem, key_pem));
+
+            options = options.with_tls(tls_options);
         }
 
         // Connect to etcd using the SDK
@@ -124,11 +184,12 @@ impl EtcdSourceBuilder {
 
         Ok(EtcdSource {
             client: Arc::new(client),
-            prefix: Arc::from(self.prefix),
+            prefix: Arc::from(self.prefix.clone()),
             format: self.format,
             interval: self.interval.unwrap_or(DEFAULT_ETCD_POLL_INTERVAL),
             last_revision: AtomicI64::new(0),
             cached_value: ArcSwap::new(Arc::new(None)),
+            cached_source_id: SourceId::new(format!("etcd:{}", self.prefix)),
         })
     }
 }
@@ -148,6 +209,7 @@ pub struct EtcdSource {
     interval: Duration,
     last_revision: AtomicI64,
     cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
+    cached_source_id: SourceId,
 }
 
 impl EtcdSource {
@@ -290,8 +352,7 @@ impl crate::interface::AsyncSource for EtcdSource {
     }
 
     fn source_id(&self) -> &SourceId {
-        static SOURCE_ID: std::sync::OnceLock<SourceId> = std::sync::OnceLock::new();
-        SOURCE_ID.get_or_init(|| SourceId::new("etcd"))
+        &self.cached_source_id
     }
 
     fn priority(&self) -> u8 {

@@ -179,8 +179,7 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
                 // Wildcard match: *.example.com matches sub.example.com
                 if let Some(suffix) = allowed.strip_prefix("*.") {
                     // Domain must be a proper subdomain (e.g., sub.example.com, not example.com)
-                    return domain_str.ends_with(&format!(".{suffix}"))
-                        && !domain_str.ends_with(suffix);
+                    return domain_str.ends_with(&format!(".{suffix}"));
                 }
                 // Subdomain match for non-wildcard entries (e.g., "example.com" matches "sub.example.com")
                 domain_str.ends_with(&format!(".{allowed}"))

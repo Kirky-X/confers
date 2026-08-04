@@ -66,6 +66,8 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     candidate: ArcSwap<Option<Arc<T>>>,
     strategy: ReloadStrategy,
     health_check: Option<Arc<dyn ReloadHealthCheck>>,
+    /// Serializes concurrent `begin_reload` calls to prevent state corruption.
+    reload_lock: tokio::sync::Mutex<()>,
 }
 
 pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
@@ -88,6 +90,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 candidate: ArcSwap::new(Arc::new(None)),
                 strategy,
                 health_check: None,
+                reload_lock: tokio::sync::Mutex::new(()),
             }),
         }
     }
@@ -103,6 +106,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 candidate: ArcSwap::new(Arc::new(None)),
                 strategy,
                 health_check,
+                reload_lock: tokio::sync::Mutex::new(()),
             }),
         }
     }
@@ -116,11 +120,20 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner.current.load_full()
     }
 
-    pub fn with_health_check(mut self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
-        Arc::get_mut(&mut self.inner)
-            .expect("Cannot modify shared ProgressiveReloader")
-            .health_check = Some(health_check);
-        self
+    pub fn with_health_check(self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
+        // Build a new inner to avoid Arc::get_mut panic on cloned instances
+        let current_val = self.inner.current.load_full();
+        let candidate_val = self.inner.candidate.load_full();
+        let new_inner = ProgressiveReloaderInner {
+            current: ArcSwap::from_pointee(current_val.as_ref().clone()),
+            candidate: ArcSwap::from_pointee(candidate_val.as_ref().clone()),
+            strategy: self.inner.strategy.clone(),
+            health_check: Some(health_check),
+            reload_lock: tokio::sync::Mutex::new(()),
+        };
+        Self {
+            inner: Arc::new(new_inner),
+        }
     }
 
     pub async fn begin_reload(
@@ -128,6 +141,12 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         new_config: Arc<T>,
         provider: Arc<dyn ConfigProvider>,
     ) -> ConfigResult<ReloadOutcome> {
+        // Serialize concurrent reload operations to prevent state corruption.
+        let _guard = self
+            .inner
+            .reload_lock
+            .lock()
+            .await;
         match &self.inner.strategy {
             ReloadStrategy::Immediate => {
                 self.inner.current.store(new_config);

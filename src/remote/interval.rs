@@ -31,7 +31,11 @@ impl PollInterval {
             Self::Fast => Duration::from_secs(10),
             Self::Normal => Duration::from_secs(30),
             Self::Slow => Duration::from_secs(60),
-            Self::Custom(secs) => Duration::from_secs(*secs),
+            Self::Custom(secs) => {
+                // Clamp to valid range [1, 3600] to prevent busy-wait from Custom(0)
+                let clamped = (*secs).clamp(1, 3600);
+                Duration::from_secs(clamped)
+            }
         }
     }
 

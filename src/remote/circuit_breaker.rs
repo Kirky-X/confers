@@ -165,11 +165,13 @@ impl CircuitBreaker {
     }
 
     /// Returns the current circuit state.
+    #[allow(dead_code)]
     pub fn state(&self) -> CircuitState {
         self.state
     }
 
     /// Returns the current consecutive failure count.
+    #[allow(dead_code)]
     pub fn failure_count(&self) -> u32 {
         self.failure_count
     }
