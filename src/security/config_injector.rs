@@ -199,6 +199,9 @@ pub(crate) static TEST_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::
 /// 全局默认配置注入器
 pub(crate) static GLOBAL_INJECTOR: OnceLock<Arc<RwLock<ConfigInjector>>> = OnceLock::new();
 
+/// Maximum number of entries the injector can hold (default: 10_000).
+const DEFAULT_MAX_ENTRIES: usize = 10_000;
+
 /// 配置注入器
 ///
 /// 负责管理和注入运行时配置值。
@@ -208,6 +211,7 @@ pub(crate) static GLOBAL_INJECTOR: OnceLock<Arc<RwLock<ConfigInjector>>> = OnceL
 /// - **安全验证**: 所有注入的值都会经过安全验证
 /// - **敏感数据检测**: 自动检测敏感配置字段
 /// - **类型转换**: 安全类型转换，防止注入攻击
+/// - **容量限制**: 防止无界存储导致的内存耗尽
 ///
 /// # 使用示例
 ///
@@ -234,6 +238,8 @@ pub struct ConfigInjector {
     sensitive_patterns: Vec<Regex>,
     /// 注入历史记录
     injection_history: Arc<RwLock<Vec<InjectionRecord>>>,
+    /// 最大存储条目数
+    max_entries: usize,
 }
 
 impl Default for ConfigInjector {
@@ -255,7 +261,14 @@ impl ConfigInjector {
             validator,
             sensitive_patterns: Self::default_sensitive_patterns(),
             injection_history: Arc::new(RwLock::new(Vec::new())),
+            max_entries: DEFAULT_MAX_ENTRIES,
         }
+    }
+
+    /// Set the maximum number of entries the injector can hold.
+    pub fn max_entries(mut self, max: usize) -> Self {
+        self.max_entries = max;
+        self
     }
 
     /// 默认敏感字段模式
@@ -312,6 +325,12 @@ impl ConfigInjector {
                 .values
                 .write()
                 .map_err(|_| ConfigInjectionError::PoisonedLock)?;
+            // Capacity check: new key would exceed limit
+            if !values.contains_key(name) && values.len() >= self.max_entries {
+                return Err(ConfigInjectionError::CapacityExceeded {
+                    max: self.max_entries,
+                });
+            }
             values.insert(name.to_string(), value.to_string());
         }
 
@@ -562,6 +581,8 @@ pub enum ConfigInjectionError {
     InvalidValue(String),
     /// 速率限制
     RateLimited { retry_after_seconds: u64 },
+    /// 存储容量超限
+    CapacityExceeded { max: usize },
 }
 
 impl std::fmt::Display for ConfigInjectionError {
@@ -586,6 +607,13 @@ impl std::fmt::Display for ConfigInjectionError {
                     f,
                     "Rate limited. Retry after {} seconds",
                     retry_after_seconds
+                )
+            }
+            ConfigInjectionError::CapacityExceeded { max } => {
+                write!(
+                    f,
+                    "Configuration injector capacity exceeded (max {} entries)",
+                    max
                 )
             }
         }
