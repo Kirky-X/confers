@@ -163,6 +163,7 @@ impl ConfigError {
         // Check for sensitive patterns in the raw error
         JWT_RE.is_match(&raw)
             || AWS_AK_RE.is_match(&raw)
+            || AWS_SAK_RE.is_match(&raw)
             || URL_WITH_CREDS_RE.is_match(&raw)
             || (HEX_RE.is_match(&raw) && raw.len() > 50) // Long hex strings are more likely keys
             || {
