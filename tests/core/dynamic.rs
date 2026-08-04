@@ -10,7 +10,6 @@
 
 #![cfg(feature = "dynamic")]
 
-mod common;
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;

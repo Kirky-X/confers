@@ -1,6 +1,5 @@
 //! Integration test for the Config derive macro.
 
-mod common;
 
 use confers::Config;
 use serde::Deserialize;
