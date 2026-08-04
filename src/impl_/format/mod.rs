@@ -619,14 +619,8 @@ mod ini_converter {
             }
 
             if !invalid_lines.is_empty() {
-                // Report invalid INI lines to stderr so users can diagnose
-                // malformed configuration files instead of silently losing data.
-                for (line_num, line_text, reason) in &invalid_lines {
-                    eprintln!(
-                        "confers: INI parse warning: line {}: {} (skipped: {:?})",
-                        line_num, reason, line_text
-                    );
-                }
+                // Invalid INI lines are silently skipped; the caller receives
+                // only the successfully parsed entries.
             }
 
             let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();
