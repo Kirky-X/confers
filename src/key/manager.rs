@@ -37,10 +37,16 @@ pub struct KeyInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyManager {
+    /// Hash of the master key for integrity verification.
+    /// Reserved for future use in master key validation.
+    #[allow(dead_code)]
     master_key_hash: String,
     key_rings: HashMap<String, KeyRing>,
     schedules: HashMap<String, KeyRotationSchedule>,
     default_key_id: String,
+    /// Path for persistent key storage.
+    /// Reserved for future use in key persistence.
+    #[allow(dead_code)]
     storage_path: PathBuf,
 }
 
@@ -437,9 +443,12 @@ impl KeyManager {
         }
 
         let initial_count = key_ring.secondary_keys.len();
-        key_ring.secondary_keys.retain(|k| {
-            k.metadata.status == KeyStatus::Active || k.metadata.version > keep_versions
-        });
+        // Sort by version descending so we keep the newest keys
+        key_ring
+            .secondary_keys
+            .sort_by_key(|k| std::cmp::Reverse(k.metadata.version));
+        // Keep at most keep_versions secondary keys
+        key_ring.secondary_keys.truncate(keep_versions as usize);
 
         Ok((initial_count - key_ring.secondary_keys.len()) as u32)
     }
@@ -834,11 +843,9 @@ mod tests {
         }
         assert_eq!(km.get_key_info("k").unwrap().total_versions, 4);
 
-        // keep_versions=2 → inactive versions ≤ 2 are eligible for removal.
-        // Note: cleanup logic keeps Active versions OR versions > keep_versions.
+        // keep_versions=2 → keep at most 2 newest secondary keys, remove the rest.
         let removed = km.cleanup_old_keys("k", 2).expect("cleanup_old_keys");
-        // Active secondaries (v1, v2, v3 are all Active by default) are retained.
-        assert_eq!(removed, 0);
+        assert_eq!(removed, 1);
     }
 
     #[test]

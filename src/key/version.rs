@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 /// Key format version for tracking key format compatibility.
+///
+/// Serde and Display both use lowercase format (e.g., `"v1"`)
+/// to ensure round-trip compatibility between the two representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum KeyFormatVersion {
     /// Version 1 (current)
     V1,
@@ -217,8 +221,8 @@ mod tests {
     fn test_key_format_version_serialize_value() {
         let v = KeyFormatVersion::V1;
         let json = serde_json::to_string(&v).expect("serialize");
-        // Serde serializes the enum variant name as a string.
-        assert_eq!(json, "\"V1\"");
+        // Serde uses lowercase format matching Display (via rename_all).
+        assert_eq!(json, "\"v1\"");
     }
 
     #[test]

@@ -254,15 +254,30 @@ impl KeyRotationService {
 
     #[cfg(feature = "encryption")]
     pub fn execute_rotation(
+        &mut self,
         key_ring: &mut KeyRing,
         master_key: &[u8; 32],
         rotated_by: String,
         reason: Option<String>,
     ) -> Result<RotationResult, ConfigError> {
+        // Enforce max_versions bound before rotating to prevent unbounded version growth
+        let inactive_count = key_ring.secondary_keys.len() as u32;
+        if inactive_count >= self.policy.max_versions {
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!(
+                    "Cannot rotate: {} inactive versions already exist (max_versions={}). Clean up old keys first.",
+                    inactive_count, self.policy.max_versions
+                ),
+                location: None,
+                source: None,
+            });
+        }
+
         let old_version = key_ring.current_version;
         let new_key = key_ring.rotate(master_key, rotated_by.clone(), reason.clone())?;
 
-        let _history = RotationHistory {
+        let history = RotationHistory {
             rotation_id: format!("rot_{}_{}", key_ring.key_id, now_timestamp()),
             key_id: key_ring.key_id.clone(),
             from_version: old_version,
@@ -273,6 +288,7 @@ impl KeyRotationService {
             reencryption_count: 0,
             status: RotationStatus::Completed,
         };
+        self.history.push(history);
 
         Ok(RotationResult {
             key_id: key_ring.key_id.clone(),
@@ -979,7 +995,8 @@ mod tests {
         let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
         let original_version = ring.current_version;
 
-        let result = KeyRotationService::execute_rotation(
+        let mut service = KeyRotationService::new(KeyRotationPolicy::default());
+        let result = service.execute_rotation(
             &mut ring,
             &master_key,
             "rotator".to_string(),
