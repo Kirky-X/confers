@@ -179,8 +179,11 @@ impl MigrationRegistry {
         let boxed: MigrationFn = Box::new(f);
         self.migrations.insert((from, to), boxed);
 
-        // Update adjacency list - add 'from' -> 'to'
-        self.versions.entry(from).or_default().push(to);
+        // Update adjacency list - add 'from' -> 'to' (deduplicate)
+        let neighbors = self.versions.entry(from).or_default();
+        if !neighbors.contains(&to) {
+            neighbors.push(to);
+        }
         // Also ensure 'to' exists as a key (might be target-only)
         self.versions.entry(to).or_default();
 

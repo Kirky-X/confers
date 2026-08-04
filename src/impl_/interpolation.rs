@@ -67,7 +67,9 @@ where
     F: Fn(&str) -> Option<String>,
 {
     let mut visited = HashSet::new();
-    interpolate_inner(template, resolver, &mut visited)
+    let mut no_refs = None;
+    let mut no_sens = None;
+    interpolate_inner_impl(template, resolver, &mut visited, &mut no_refs, &mut no_sens, false, 10, false)
 }
 
 /// Interpolate with sensitive field tracking.
@@ -83,24 +85,50 @@ where
     F: Fn(&str) -> Option<String>,
 {
     let mut visited = HashSet::new();
-    let mut referenced_vars = HashSet::new();
-    let mut sensitive_refs = HashSet::new();
+    let mut referenced_vars = Some(HashSet::new());
+    let mut sensitive_refs = Some(HashSet::new());
 
-    let result = interpolate_inner_tracked(
+    let result = interpolate_inner_impl(
         template,
         resolver,
         &mut visited,
         &mut referenced_vars,
         &mut sensitive_refs,
         is_sensitive,
+        10,
+        false,
     )?;
 
     Ok(InterpolationResult {
         value: result,
-        referenced_vars,
-        sensitive_refs,
+        referenced_vars: referenced_vars.unwrap_or_default(),
+        sensitive_refs: sensitive_refs.unwrap_or_default(),
         is_sensitive,
     })
+}
+
+/// Interpolate with full configuration control.
+pub fn interpolate_with_config<F>(
+    template: &str,
+    resolver: &F,
+    config: &InterpolationConfig,
+) -> ConfigResult<String>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let mut visited = HashSet::new();
+    let mut no_refs = None;
+    let mut no_sens = None;
+    interpolate_inner_impl(
+        template,
+        resolver,
+        &mut visited,
+        &mut no_refs,
+        &mut no_sens,
+        false,
+        config.max_depth,
+        config.allow_unresolved,
+    )
 }
 
 /// Result of interpolation with tracking information.
@@ -142,6 +170,7 @@ impl InterpolationResult {
 /// - Byte-level iteration for faster '${' detection
 /// - Pre-allocated result buffer with estimated capacity
 /// - Reduced match overhead in inner loop
+#[allow(clippy::too_many_arguments)]
 fn interpolate_inner_impl<F>(
     template: &str,
     resolver: &F,
@@ -149,10 +178,19 @@ fn interpolate_inner_impl<F>(
     referenced_vars: &mut Option<HashSet<String>>,
     sensitive_refs: &mut Option<HashSet<String>>,
     is_sensitive: bool,
+    max_depth: usize,
+    allow_unresolved: bool,
 ) -> ConfigResult<String>
 where
     F: Fn(&str) -> Option<String>,
 {
+    // Depth guard: visited set tracks recursion depth
+    if visited.len() > max_depth {
+        return Err(ConfigError::InterpolationError {
+            variable: String::new(),
+            message: format!("maximum interpolation depth ({}) exceeded", max_depth),
+        });
+    }
     let mut result = String::with_capacity(template.len().saturating_mul(2).max(128));
     let bytes = template.as_bytes();
     let mut i = 0;
@@ -223,18 +261,25 @@ where
             let value = if let Some(val) = (*resolver)(var_name) {
                 val
             } else if let Some(default) = default_value {
-                // Default might contain interpolations too
-                visited.insert(var_name.to_string());
-                let resolved = interpolate_inner_impl(
+                // Default might contain interpolations too.
+                // Note: we intentionally do NOT insert var_name into `visited`
+                // here — a self-referential default like `${VAR:${VAR}}` is
+                // not a circular reference, it's just a fallback that itself
+                // references the same (unset) variable. The inner resolution
+                // will produce a clearer "variable not found" error.
+                interpolate_inner_impl(
                     default,
                     resolver,
                     visited,
                     referenced_vars,
                     sensitive_refs,
                     is_sensitive,
-                )?;
-                visited.remove(var_name);
-                resolved
+                    max_depth,
+                    allow_unresolved,
+                )?
+            } else if allow_unresolved {
+                // Leave the original ${VAR} text as-is
+                format!("${{{var_name}}}")
             } else {
                 return Err(ConfigError::InterpolationError {
                     variable: var_name.to_string(),
@@ -251,6 +296,8 @@ where
                 referenced_vars,
                 sensitive_refs,
                 is_sensitive,
+                max_depth,
+                allow_unresolved,
             )?;
             visited.remove(var_name);
 
@@ -290,6 +337,8 @@ where
         &mut ref_vars,
         &mut sens_refs,
         false,
+        10,
+        false,
     )
 }
 
@@ -319,6 +368,8 @@ where
         &mut ref_vars_opt,
         &mut sens_refs_opt,
         is_sensitive,
+        10,
+        false,
     )?;
 
     // Move the values back to the original HashSets

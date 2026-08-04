@@ -31,6 +31,19 @@ pub enum AuditEvent {
     },
 }
 
+impl AuditEvent {
+    /// Return the timestamp embedded in the event.
+    pub fn event_timestamp(&self) -> DateTime<Utc> {
+        match self {
+            AuditEvent::KeyAccess { timestamp, .. } => *timestamp,
+            AuditEvent::KeyRotation { timestamp, .. } => *timestamp,
+            AuditEvent::Decrypt { timestamp, .. } => *timestamp,
+            AuditEvent::LoadSuccess { timestamp, .. } => *timestamp,
+            AuditEvent::ReloadTrigger { timestamp, .. } => *timestamp,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuditLevel {
     BestEffort,
@@ -53,7 +66,11 @@ impl AuditLevel {
 pub struct AuditConfig {
     pub enabled: bool,
     pub log_dir: Option<std::path::PathBuf>,
+    /// Reserved for future WAL-based durability. Currently has no effect.
+    #[allow(dead_code)]
     pub durable_wal: bool,
+    /// Reserved for future async channel-based auditing. Currently has no effect.
+    #[allow(dead_code)]
     pub channel_size: usize,
 }
 
@@ -162,7 +179,25 @@ impl AuditWriter {
     }
 
     fn write_durable(&self, event: &AuditEvent) {
-        self.write_to_log(event);
+        // Durable events MUST be persisted; report error if log_dir is not configured.
+        let Some(ref dir) = self.config.log_dir else {
+            eprintln!("[confers audit] WARNING: durable audit event dropped — no log_dir configured");
+            return;
+        };
+        let sanitized = self.sanitize(event);
+        let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
+        let path = dir.join(filename);
+        if let Err(e) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut file| {
+                use std::io::Write;
+                writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
+            })
+        {
+            eprintln!("[confers audit] ERROR: failed to write durable audit event: {e}");
+        }
     }
 
     fn write_best_effort(&self, event: &AuditEvent) {
@@ -182,13 +217,16 @@ impl AuditWriter {
         let sanitized = self.sanitize(event);
         let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
         let path = dir.join(filename);
-        if let Ok(mut file) = std::fs::OpenOptions::new()
+        if let Err(e) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(path)
+            .and_then(|mut file| {
+                use std::io::Write;
+                writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
+            })
         {
-            use std::io::Write;
-            let _ = writeln!(file, "{} {:?}", Utc::now(), sanitized);
+            eprintln!("[confers audit] ERROR: failed to write audit event: {e}");
         }
     }
 
@@ -216,22 +254,39 @@ impl AuditWriter {
             "service_account",
         ];
 
+        let is_sensitive_field = |field: &str| {
+            let lower = field.to_lowercase();
+            SENSITIVE_KEYWORDS.iter().any(|kw| lower.contains(kw))
+        };
+
         match event {
             AuditEvent::Decrypt {
                 field,
                 success,
                 timestamp,
             } => {
-                let lower_field = field.to_lowercase();
-                let sanitized_field =
-                    if SENSITIVE_KEYWORDS.iter().any(|kw| lower_field.contains(kw)) {
-                        "***REDACTED***".to_string()
-                    } else {
-                        field.clone()
-                    };
+                let sanitized_field = if is_sensitive_field(field) {
+                    "***REDACTED***".to_string()
+                } else {
+                    field.clone()
+                };
                 AuditEvent::Decrypt {
                     field: sanitized_field,
                     success: *success,
+                    timestamp: *timestamp,
+                }
+            }
+            AuditEvent::KeyAccess {
+                key,
+                timestamp,
+            } => {
+                let sanitized_key = if is_sensitive_field(key) {
+                    "***REDACTED***".to_string()
+                } else {
+                    key.clone()
+                };
+                AuditEvent::KeyAccess {
+                    key: sanitized_key,
                     timestamp: *timestamp,
                 }
             }

@@ -96,7 +96,7 @@ mod async_impl {
         /// Reload configuration from a new chain.
         pub fn reload(&self, chain: SourceChain) -> ConfersResult<()> {
             let merged = chain.collect()?;
-            *self.merged.write().unwrap() = merged;
+            *self.merged.write().unwrap_or_else(|e| e.into_inner()) = merged;
             self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -107,7 +107,7 @@ mod async_impl {
             let mut keys: Vec<String> = self.overrides.iter().map(|(k, _)| k.to_string()).collect();
 
             // Then collect from the merged value
-            let merged = self.merged.read().unwrap();
+            let merged = self.merged.read().unwrap_or_else(|e| e.into_inner());
             keys.extend(merged.all_paths().iter().map(|p| p.to_string()));
 
             // Deduplicate
@@ -129,7 +129,7 @@ mod async_impl {
             }
 
             // Read from merged value
-            let merged = self.merged.read().unwrap();
+            let merged = self.merged.read().unwrap_or_else(|e| e.into_inner());
             if let Some(value) = Self::extract_value(&merged, key) {
                 return Ok(Some(value));
             }
@@ -360,7 +360,7 @@ mod sync_impl {
         /// Reload configuration from a new chain.
         pub fn reload(&self, chain: SourceChain) -> ConfersResult<()> {
             let merged = chain.collect()?;
-            *self.merged.write().unwrap() = merged;
+            *self.merged.write().unwrap_or_else(|e| e.into_inner()) = merged;
             self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -371,7 +371,7 @@ mod sync_impl {
             let mut keys: Vec<String> = self.overrides.iter().map(|(k, _)| k.to_string()).collect();
 
             // Then collect from the merged value
-            let merged = self.merged.read().unwrap();
+            let merged = self.merged.read().unwrap_or_else(|e| e.into_inner());
             keys.extend(merged.all_paths().iter().map(|p| p.to_string()));
 
             // Deduplicate
@@ -392,7 +392,7 @@ mod sync_impl {
             }
 
             // Read from merged value
-            let merged = self.merged.read().unwrap();
+            let merged = self.merged.read().unwrap_or_else(|e| e.into_inner());
             if let Some(value) = Self::extract_value(&merged, key) {
                 return Ok(Some(value));
             }

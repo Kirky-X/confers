@@ -61,8 +61,8 @@ impl PartialEq for MergeStrategy {
                 MergeStrategy::JoinAppend { separator: b },
             ) => a == b,
             (MergeStrategy::DeepMerge, MergeStrategy::DeepMerge) => true,
-            (MergeStrategy::Custom { name: a, .. }, MergeStrategy::Custom { name: b, .. }) => {
-                a == b
+            (MergeStrategy::Custom { name: a, func: fa }, MergeStrategy::Custom { name: b, func: fb }) => {
+                a == b && std::ptr::fn_addr_eq(*fa, *fb)
             }
             _ => false,
         }

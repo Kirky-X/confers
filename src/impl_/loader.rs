@@ -327,12 +327,24 @@ pub fn normalize_and_validate_path(
             }
         }
 
-        // Check that normalized path doesn't escape
-        if normalized.is_absolute() {
-            if !allow_absolute {
-                return Err(PathTraversalError::AbsolutePath);
-            }
-        } else if !normalized.starts_with(&current_dir) {
+        // The original path was already confirmed relative (line 263 check).
+        // The normalized path is absolute because it was joined with current_dir.
+        // Verify containment against current_dir (or allowed_dirs) instead of
+        // checking is_absolute() which would always be true here.
+        let is_allowed = if allowed_dirs.is_empty() {
+            normalized.starts_with(&current_dir) || normalized == current_dir
+        } else {
+            allowed_dirs.iter().any(|dir| {
+                let allowed = if dir.is_absolute() {
+                    dir.clone()
+                } else {
+                    current_dir.join(dir)
+                };
+                normalized.starts_with(&allowed) || normalized == allowed
+            })
+        };
+
+        if !is_allowed {
             return Err(PathTraversalError::OutsideAllowedDirectory);
         }
 
@@ -502,7 +514,7 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
         })?;
 
     let metadata = std::fs::metadata(&validated_path).map_err(|e| ConfigError::FileNotFound {
-        filename: path.to_path_buf(),
+        filename: validated_path.clone(),
         source: Some(e),
     })?;
     if metadata.len() as usize > config.max_size {
@@ -702,7 +714,7 @@ pub fn parse_ini(
     let mut sections: indexmap::IndexMap<String, indexmap::IndexMap<String, String>> =
         indexmap::IndexMap::new();
     let mut cur = String::new();
-    let mut invalid_lines = Vec::new();
+    let mut _invalid_lines = Vec::new();
 
     for (line_num, line) in content.lines().enumerate() {
         let l = line.trim();
@@ -721,7 +733,7 @@ pub fn parse_ini(
             let key = l[..eq].trim();
             let value = l[eq + 1..].trim();
             if key.is_empty() {
-                invalid_lines.push((line_num + 1, line.to_string(), "empty key"));
+                _invalid_lines.push((line_num + 1, line.to_string(), "empty key"));
                 continue;
             }
             sections
@@ -731,21 +743,11 @@ pub fn parse_ini(
             continue;
         }
         // Track invalid lines for debugging
-        invalid_lines.push((line_num + 1, line.to_string(), "invalid INI syntax"));
+        _invalid_lines.push((line_num + 1, line.to_string(), "invalid INI syntax"));
     }
 
-    // M2 (Rule 12: Fail Loud): Surface invalid lines instead of silently
-    // dropping them. The count and details go to stderr so callers can
-    // diagnose malformed INI files.
-    if !invalid_lines.is_empty() {
-        eprintln!(
-            "WARN: parse_ini skipped {} invalid line(s):",
-            invalid_lines.len()
-        );
-        for (line_num, line_text, reason) in &invalid_lines {
-            eprintln!("  line {}: {} — {}", line_num, line_text, reason);
-        }
-    }
+    // Invalid lines are silently skipped. Library callers should validate
+    // their INI files independently; we do not write to stderr (Rule 5).
 
     // Build the map manually to avoid closure borrow issues
     let mut entries: Vec<(Arc<str>, AnnotatedValue)> = Vec::new();
@@ -1224,17 +1226,18 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_no_symlink_check_rejects_when_absolute_disallowed() {
-        // Without symlink check, normalized path becomes absolute (joined with current_dir)
-        // and is rejected when allow_absolute is false.
+    fn test_normalize_no_symlink_check_allows_relative_when_in_allowed_dir() {
+        // With the fix for check_symlinks=false, relative paths that resolve
+        // within the allowed directory are correctly accepted even when
+        // allow_absolute=false. The old behavior incorrectly rejected ALL
+        // relative paths because the normalized path was always absolute.
         let result = normalize_and_validate_path(
             Path::new("any_relative_path.toml"),
             &[PathBuf::from(".")],
             false,
             false,
         );
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), PathTraversalError::AbsolutePath);
+        assert!(result.is_ok(), "relative path within allowed dir should succeed: {:?}", result.err());
     }
 
     #[test]
