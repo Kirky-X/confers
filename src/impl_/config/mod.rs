@@ -13,7 +13,7 @@ pub(crate) mod chain;
 pub(crate) mod limits;
 pub(crate) mod source;
 
-pub use builder::{config, ConfigBuilder, ReloadStrategy};
+pub use builder::{config, ConfigBuilder};
 pub use chain::{SourceChain, SourceChainBuilder};
 pub use limits::ConfigLimits;
 pub use source::{DefaultSource, EnvSource, FileSource, MemorySource};

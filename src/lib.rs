@@ -121,7 +121,7 @@ pub use lifecycle::Lifecycle;
 pub use config::SnapshotConfig;
 pub use config::{
     config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
-    ReloadStrategy, Source, SourceChain, SourceChainBuilder, SourceKind,
+    Source, SourceChain, SourceChainBuilder, SourceKind,
 };
 
 // Error types (BrickArchitecture compliant)

@@ -11,7 +11,7 @@
 
 pub use crate::impl_::config::{
     config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
-    ReloadStrategy, SourceChain, SourceChainBuilder,
+    SourceChain, SourceChainBuilder,
 };
 pub use crate::interface::Source;
 pub use crate::types::SourceKind;

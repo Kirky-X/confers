@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 #[cfg(any(
     feature = "remote",
@@ -28,8 +27,6 @@ use crate::error::{BuildResult, ConfigError, ConfigResult, SourceWarning, Warnin
 use crate::impl_::merger::MergeStrategy;
 #[cfg(feature = "snapshot")]
 use crate::impl_::snapshot::SnapshotConfig;
-use crate::interface::{KeyProvider, MetricsBackend};
-use crate::types::NoOpMetrics;
 use crate::types::{AnnotatedValue, ConfigValue};
 #[cfg(feature = "progressive-reload")]
 use crate::watcher::ReloadHealthCheck;
@@ -37,28 +34,6 @@ use crate::watcher::ReloadHealthCheck;
 use super::chain::SourceChainBuilder;
 use super::limits::ConfigLimits;
 use crate::interface::Source;
-
-/// Reload strategy for hot reload.
-#[derive(Debug, Clone, Default)]
-pub enum ReloadStrategy {
-    /// Immediate reload (default).
-    #[default]
-    Immediate,
-    /// Canary deployment with trial period.
-    Canary {
-        /// Trial duration before full commit.
-        trial_duration: Duration,
-        /// Health check interval during trial.
-        poll_interval: Duration,
-    },
-    /// Linear rollout.
-    Linear {
-        /// Number of steps.
-        steps: u8,
-        /// Interval between steps.
-        interval: Duration,
-    },
-}
 
 /// Builder for creating configuration instances.
 ///
@@ -69,35 +44,9 @@ pub struct ConfigBuilder<T> {
     chain_builder: SourceChainBuilder,
     /// Configuration limits.
     limits: ConfigLimits,
-    /// Encryption key provider (sync).
-    /// Reserved for future use: will drive decryption of encrypted config values
-    /// during the build pipeline.
-    #[allow(dead_code)]
-    key_provider: Option<Arc<dyn KeyProvider>>,
-    /// Metrics backend.
-    /// Reserved for future use: will provide metrics for config operations.
-    #[allow(dead_code)]
-    metrics: Arc<dyn MetricsBackend>,
-    /// Whether to validate on load.
-    /// Reserved for future use: will control whether post-load validation
-    /// is executed in the build pipeline.
-    #[allow(dead_code)]
-    validate: bool,
-    /// Reload strategy.
-    /// Reserved for future use: will control reload behavior in the build pipeline.
-    #[allow(dead_code)]
-    reload_strategy: ReloadStrategy,
-    /// Build timeout.
-    /// Reserved for future use: will limit build duration.
-    #[allow(dead_code)]
-    build_timeout: Option<Duration>,
     /// Snapshot configuration.
     #[cfg(feature = "snapshot")]
     snapshot_config: Option<SnapshotConfig>,
-    /// Whether to enable hot reload.
-    /// Reserved for future use: will enable watcher integration.
-    #[allow(dead_code)]
-    watch: bool,
     /// Accumulated default values.
     accumulated_defaults: HashMap<String, ConfigValue>,
     /// Accumulated memory values.
@@ -137,14 +86,8 @@ impl<T> ConfigBuilder<T> {
         Self {
             chain_builder: SourceChainBuilder::new(),
             limits: ConfigLimits::default(),
-            key_provider: None,
-            metrics: Arc::new(NoOpMetrics),
-            validate: true,
-            reload_strategy: ReloadStrategy::default(),
-            build_timeout: None,
             #[cfg(feature = "snapshot")]
             snapshot_config: None,
-            watch: false,
             accumulated_defaults: HashMap::new(),
             accumulated_memory: HashMap::new(),
             memory_priority: 50,
@@ -226,24 +169,6 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
-    /// Set the encryption key provider.
-    pub fn key_provider(mut self, provider: Arc<dyn KeyProvider>) -> Self {
-        self.key_provider = Some(provider);
-        self
-    }
-
-    /// Set the metrics backend.
-    pub fn metrics(mut self, metrics: Arc<dyn MetricsBackend>) -> Self {
-        self.metrics = metrics;
-        self
-    }
-
-    /// Set whether to validate on load.
-    pub fn validate(mut self, validate: bool) -> Self {
-        self.validate = validate;
-        self
-    }
-
     /// Set the merge strategy.
     pub fn strategy(mut self, strategy: MergeStrategy) -> Self {
         self.chain_builder = self.chain_builder.strategy(strategy);
@@ -256,29 +181,11 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
-    /// Set the reload strategy.
-    pub fn reload_strategy(mut self, strategy: ReloadStrategy) -> Self {
-        self.reload_strategy = strategy;
-        self
-    }
-
-    /// Set the build timeout.
-    pub fn build_timeout(mut self, timeout: Duration) -> Self {
-        self.build_timeout = Some(timeout);
-        self
-    }
-
     /// Enable snapshot configuration.
     #[cfg(feature = "snapshot")]
     #[cfg_attr(docsrs, doc(cfg(feature = "snapshot")))]
     pub fn with_snapshot(mut self, config: SnapshotConfig) -> Self {
         self.snapshot_config = Some(config);
-        self
-    }
-
-    /// Enable hot reload.
-    pub fn watch(mut self, watch: bool) -> Self {
-        self.watch = watch;
         self
     }
 
@@ -629,12 +536,6 @@ mod tests {
     }
 
     #[test]
-    fn test_reload_strategy_default() {
-        let strategy = ReloadStrategy::default();
-        assert!(matches!(strategy, ReloadStrategy::Immediate));
-    }
-
-    #[test]
     #[cfg(feature = "snapshot")]
     fn test_snapshot_config_default() {
         let config = SnapshotConfig::default();
@@ -673,13 +574,6 @@ mod tests {
     fn test_builder_limits_method() {
         let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().limits(ConfigLimits::strict());
-    }
-
-    #[test]
-    fn test_builder_metrics_method() {
-        use crate::types::NoOpMetrics;
-        let _builder: ConfigBuilder<TestConfig> =
-            ConfigBuilder::new().metrics(Arc::new(NoOpMetrics));
     }
 
     #[test]
@@ -731,44 +625,10 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_validate_false() {
-        let config = ConfigBuilder::<TestConfig>::new()
-            .validate(false)
-            .default("name", ConfigValue::string("no_validate"))
-            .build()
-            .unwrap();
-        assert_eq!(config.name, "no_validate");
-    }
-
-    #[test]
     fn test_builder_field_strategy_method() {
         use crate::impl_::merger::MergeStrategy;
         let _builder: ConfigBuilder<TestConfig> =
             ConfigBuilder::new().field_strategy("name", MergeStrategy::Replace);
-    }
-
-    #[test]
-    fn test_builder_reload_strategy_canary() {
-        let strategy = ReloadStrategy::Canary {
-            trial_duration: Duration::from_secs(30),
-            poll_interval: Duration::from_secs(5),
-        };
-        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().reload_strategy(strategy);
-    }
-
-    #[test]
-    fn test_builder_reload_strategy_linear() {
-        let strategy = ReloadStrategy::Linear {
-            steps: 5,
-            interval: Duration::from_secs(10),
-        };
-        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().reload_strategy(strategy);
-    }
-
-    #[test]
-    fn test_builder_build_timeout_setter() {
-        let _builder: ConfigBuilder<TestConfig> =
-            ConfigBuilder::new().build_timeout(Duration::from_secs(5));
     }
 
     #[cfg(feature = "snapshot")]
@@ -779,29 +639,8 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_watch_setter() {
-        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().watch(true);
-        let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().watch(false);
-    }
-
-    #[test]
     fn test_builder_allow_absolute_paths() {
         let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().allow_absolute_paths();
-    }
-
-    #[test]
-    fn test_builder_key_provider_setter() {
-        struct DummyKeyProvider;
-        impl crate::interface::KeyProvider for DummyKeyProvider {
-            fn get_key(&self) -> crate::error::ConfigResult<crate::types::ZeroizingBytes> {
-                Ok(crate::types::ZeroizingBytes::new(vec![0u8; 32]))
-            }
-            fn provider_type(&self) -> &'static str {
-                "dummy"
-            }
-        }
-        let _builder: ConfigBuilder<TestConfig> =
-            ConfigBuilder::new().key_provider(Arc::new(DummyKeyProvider));
     }
 
     #[test]
@@ -921,13 +760,6 @@ mod tests {
         let av = AnnotatedValue::new(ConfigValue::F64(f64::NAN), sid, "k");
         // NaN is preserved as a string instead of silently dropping to Null.
         assert_eq!(value_to_json(&av), serde_json::Value::String("NaN".to_string()));
-    }
-
-    #[test]
-    fn test_reload_strategy_clone() {
-        let strategy = ReloadStrategy::Immediate;
-        let cloned = strategy.clone();
-        assert!(matches!(cloned, ReloadStrategy::Immediate));
     }
 
     #[cfg(feature = "config-bus")]
