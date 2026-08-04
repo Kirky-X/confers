@@ -11,6 +11,41 @@ _No changes yet._
 
 ---
 
+## [0.5.0] - 2026-08-04
+
+### Breaking Changes
+
+- **ConfigBuilder**: Removed 6 dead methods: `watch()`, `validate()`, `key_provider()`, `metrics()`, `reload_strategy()`, `build_timeout()`. Also removed the `ReloadStrategy` enum.
+- **KeyManager**: `new(path: PathBuf)` simplified to `new()` (no parameters).
+- **AuditConfig/AuditWriterBuilder**: Removed `durable_wal()` and `channel_size()` methods and corresponding fields.
+- **AuditWriter**: `write()` and `log_*()` methods now return `ConfigResult<()>` instead of `()`.
+- **TypeScriptGenerator**: `generate()` now returns `ConfigResult<String>` instead of `String`.
+- **CryptoError**: Removed `InvalidKeyLength(0)` variant, added `KeyNotFound` variant.
+- **MergeStrategy**: `PartialEq` for `Custom` variant now compares by name only (not function pointer).
+
+### Added
+
+- **Circuit Breaker**: New `CircuitBreaker` and `CircuitState` for remote source resilience.
+- **Key Entropy Validation**: Enhanced key manager with entropy validation.
+- **Error Message Sanitization**: Prevents sensitive config values from leaking into error output.
+
+### Fixed
+
+- NATS JetStream test flakiness (added `#[serial]` to parallel tests).
+- Clippy warnings: replaced `assert_eq!` with literal bool, fixed approximate constant warnings.
+- `.env` parse errors now explicitly reported instead of silently discarded.
+- Interpolation self-referencing default value no longer falsely reports circular reference.
+- Security `allowed_patterns` now correctly applied.
+- Remote source `source_id` consistency fix.
+- `cleanup_old_keys` filters by version number instead of Active status.
+- Removed all `eprintln` side effects from library runtime code.
+
+### Performance
+
+- Merge engine owned-path optimization.
+
+---
+
 ## [0.4.0] - 2026-07-03
 
 ### Breaking Changes

@@ -1093,8 +1093,8 @@ mod tests {
 
         // f64
         assert_eq!(
-            EnvSource::infer_config_value("3.14"),
-            ConfigValue::F64(3.14)
+            EnvSource::infer_config_value("42.5"),
+            ConfigValue::F64(42.5)
         );
         assert_eq!(
             EnvSource::infer_config_value("1e10"),

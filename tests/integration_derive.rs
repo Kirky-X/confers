@@ -123,7 +123,7 @@ fn test_numeric_env_config_default() {
     let config = NumericEnvConfig::load_sync().unwrap();
     assert_eq!(config.port, 0);
     assert_eq!(config.rate, 0.0);
-    assert_eq!(config.enabled, false);
+    assert!(!config.enabled);
     assert_eq!(config.host, "");
 }
 
@@ -139,9 +139,9 @@ fn test_numeric_env_override_u32() {
 #[test]
 #[serial]
 fn test_numeric_env_override_f64() {
-    common::with_env_var("RATE", "3.14", || {
+    common::with_env_var("RATE", "42.5", || {
         let config = NumericEnvConfig::load_sync().unwrap();
-        assert_eq!(config.rate, 3.14);
+        assert_eq!(config.rate, 42.5);
     });
 }
 
@@ -150,7 +150,7 @@ fn test_numeric_env_override_f64() {
 fn test_numeric_env_override_bool() {
     common::with_env_var("ENABLED", "true", || {
         let config = NumericEnvConfig::load_sync().unwrap();
-        assert_eq!(config.enabled, true);
+        assert!(config.enabled);
     });
 }
 
@@ -158,15 +158,15 @@ fn test_numeric_env_override_bool() {
 #[serial]
 fn test_numeric_env_override_all() {
     std::env::set_var("PORT", "9090");
-    std::env::set_var("RATE", "2.718");
+    std::env::set_var("RATE", "99.9");
     std::env::set_var("ENABLED", "true");
     std::env::set_var("HOST", "example.com");
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let config = NumericEnvConfig::load_sync().unwrap();
         assert_eq!(config.port, 9090);
-        assert_eq!(config.rate, 2.718);
-        assert_eq!(config.enabled, true);
+        assert_eq!(config.rate, 99.9);
+        assert!(config.enabled);
         assert_eq!(config.host, "example.com");
     }));
 
