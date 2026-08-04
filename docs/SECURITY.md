@@ -4,11 +4,11 @@
 
 <div align="center">
 
-<img src="docs/image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
+<img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
 
 ### Security at Confers
 
-[🏠 Home](README.md) • [📖 User Guide](docs/USER_GUIDE.md) • [🐛 Report Vulnerability](#reporting)
+[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md) • [🐛 Report Vulnerability](#reporting)
 
 ---
 
