@@ -36,7 +36,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use std::sync::RwLock;
 
@@ -58,9 +58,6 @@ pub use crate::types::KeyCachePolicy;
 pub struct KeyRotationConfig {
     pub max_key_versions: usize,
     pub cache_policy: KeyCachePolicy,
-    /// Reserved for future use: grace period for key rotation safety.
-    #[allow(dead_code)]
-    pub rotation_grace_period: Duration,
 }
 
 impl Default for KeyRotationConfig {
@@ -68,7 +65,6 @@ impl Default for KeyRotationConfig {
         Self {
             max_key_versions: 3,
             cache_policy: KeyCachePolicy::default(),
-            rotation_grace_period: Duration::from_secs(300),
         }
     }
 }
@@ -163,10 +159,10 @@ impl KeyRegistry {
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
-            .ok_or(CryptoError::InvalidKeyLength(0))?;
+            .ok_or(CryptoError::KeyNotFound)?;
 
         let keys = self.keys.read().unwrap_or_else(|e| e.into_inner());
-        let key_version = keys.get(&version).ok_or(CryptoError::InvalidKeyLength(0))?;
+        let key_version = keys.get(&version).ok_or(CryptoError::KeyNotFound)?;
 
         Ok((
             version.clone(),
@@ -176,7 +172,7 @@ impl KeyRegistry {
 
     pub fn get_key(&self, version: &str) -> Result<ZeroizingBytes, CryptoError> {
         let keys = self.keys.read().unwrap_or_else(|e| e.into_inner());
-        let key_version = keys.get(version).ok_or(CryptoError::InvalidKeyLength(0))?;
+        let key_version = keys.get(version).ok_or(CryptoError::KeyNotFound)?;
         Ok(zeroizing_bytes(key_version.key.as_slice().to_vec()))
     }
 
@@ -260,7 +256,7 @@ impl KeyRegistry {
             }
         }
 
-        Err(CryptoError::InvalidKeyLength(0))
+        Err(CryptoError::KeyNotFound)
     }
 
     pub fn version_count(&self) -> usize {
@@ -343,6 +339,7 @@ impl Default for KeyRegistryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_register_and_get_key() {
@@ -549,7 +546,7 @@ mod tests {
 
     #[test]
     fn test_get_primary_key_no_keys() {
-        // No primary key registered → InvalidKeyLength(0) error.
+        // No primary key registered → KeyNotFound error.
         let registry = KeyRegistry::new(KeyRotationConfig::default());
         let result = registry.get_primary_key();
         assert!(result.is_err());

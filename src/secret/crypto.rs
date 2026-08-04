@@ -34,6 +34,8 @@ pub enum CryptoError {
     DecryptionFailed,
     #[error("invalid key length: expected exactly 32 bytes for XChaCha20-Poly1305, got {0} bytes")]
     InvalidKeyLength(usize),
+    #[error("key not found")]
+    KeyNotFound,
     #[deprecated(
         since = "0.4.2",
         note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5"

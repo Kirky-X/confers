@@ -50,7 +50,7 @@ impl EnvKeyProvider {
 
 impl SecretKeyProvider for EnvKeyProvider {
     fn get_key(&self) -> Result<SecretBytes, CryptoError> {
-        let key = std::env::var(&self.env_var).map_err(|_| CryptoError::InvalidKeyLength(0))?;
+        let key = std::env::var(&self.env_var).map_err(|_| CryptoError::KeyNotFound)?;
 
         // XChaCha20-Poly1305 requires exactly 32 bytes key
         if key.len() != 32 {
@@ -76,11 +76,11 @@ impl EnvKeyProviderBuilder {
     }
 
     pub fn build(self) -> Result<EnvKeyProvider, CryptoError> {
-        let env_var = self.env_var.ok_or(CryptoError::InvalidKeyLength(0))?;
+        let env_var = self.env_var.ok_or(CryptoError::KeyNotFound)?;
         // Validate that the environment variable exists and the key has the
         // correct length eagerly, so errors surface at build time rather than
         // lazily at get_key() time.
-        let key = std::env::var(&env_var).map_err(|_| CryptoError::InvalidKeyLength(0))?;
+        let key = std::env::var(&env_var).map_err(|_| CryptoError::KeyNotFound)?;
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
         }
@@ -188,8 +188,8 @@ mod tests {
 
         assert!(result.is_err());
         match result.unwrap_err() {
-            CryptoError::InvalidKeyLength(0) => {}
-            _ => panic!("Expected InvalidKeyLength(0) error"),
+            CryptoError::KeyNotFound => {}
+            _ => panic!("Expected KeyNotFound error"),
         }
     }
 }
