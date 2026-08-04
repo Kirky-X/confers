@@ -295,12 +295,18 @@ impl ConfigConfigError {
 
     /// Get a message suitable for audit logging.
     pub fn audit_message(&self) -> String {
-        format!(
+        let base = format!(
             "operation=config_init error_code={} error_type={} message={}",
             self.code() as u16,
             self.code(),
             self.user_message()
-        )
+        );
+        // Append root-cause source for parse errors so audit trails retain diagnostics.
+        if let ConfigConfigError::ParseError { source: Some(src), .. } = self {
+            format!("{} cause={}", base, src)
+        } else {
+            base
+        }
     }
 
     /// Create a validation error with custom details.

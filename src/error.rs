@@ -577,12 +577,16 @@ impl ConfigError {
     }
 
     /// Get a message suitable for audit logging.
+    ///
+    /// The message field is quoted and escaped to prevent structured log
+    /// parsers from splitting on `=` or whitespace inside the message.
     pub fn audit_message(&self) -> String {
+        let msg = self.user_message().replace('\\', "\\\\").replace('"', "\\\"");
         format!(
-            "operation=config error_code={} error_type={} message={}",
+            "operation=config error_code={} error_type={} message=\"{}\"",
             self.code() as u16,
             self.code(),
-            self.user_message()
+            msg
         )
     }
 }
@@ -745,6 +749,10 @@ pub enum WarningCode {
     UnencryptedSensitive,
     /// A configuration key is unused
     UnusedKey,
+    /// A source encountered an error during collection
+    SourceError,
+    /// A type mismatch or deserialization error occurred
+    TypeMismatch,
 }
 
 impl std::fmt::Display for WarningCode {
@@ -757,6 +765,8 @@ impl std::fmt::Display for WarningCode {
             WarningCode::RemoteFallback => write!(f, "REMOTE_FALLBACK"),
             WarningCode::UnencryptedSensitive => write!(f, "UNENCRYPTED_SENSITIVE"),
             WarningCode::UnusedKey => write!(f, "UNUSED_KEY"),
+            WarningCode::SourceError => write!(f, "SOURCE_ERROR"),
+            WarningCode::TypeMismatch => write!(f, "TYPE_MISMATCH"),
         }
     }
 }
