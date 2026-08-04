@@ -150,12 +150,17 @@ impl SourceChain {
             return Err(ConfigError::MultiSource { source: multi_err });
         }
 
-        // Sort by priority (lower priority first)
+        // Sort by priority (lower priority first), breaking ties by source id
+        // to ensure deterministic merge order across runs.
         let mut sorted_values: Vec<_> = values
             .into_iter()
             .filter_map(|(_, result)| result.ok())
             .collect();
-        sorted_values.sort_by_key(|v| v.priority);
+        sorted_values.sort_by(|a, b| {
+            a.priority
+                .cmp(&b.priority)
+                .then_with(|| a.source.as_str().cmp(b.source.as_str()))
+        });
 
         // Merge all values
         let mut merged = AnnotatedValue::new(

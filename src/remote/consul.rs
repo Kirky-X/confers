@@ -911,6 +911,23 @@ mod tests {
         if !consul_ready() {
             return;
         }
+        // Seed Consul KV with test data so the poll has something to read.
+        let client = reqwest::Client::new();
+        let base = "http://127.0.0.1:8500/v1/kv";
+        for (key, val) in &[("config/app/key1", "val1"), ("config/app/key2", "val2")] {
+            let resp = client
+                .put(format!("{}/{}", base, key))
+                .body(*val)
+                .send()
+                .await
+                .expect("consul seed put");
+            assert!(
+                resp.status().is_success(),
+                "consul seed failed for {}: {}",
+                key,
+                resp.status()
+            );
+        }
         let source = ConsulSourceBuilder::new()
             .address("127.0.0.1:8500")
             .prefix("config/app")

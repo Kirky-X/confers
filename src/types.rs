@@ -198,12 +198,12 @@ impl Serialize for ConfigValue {
             ConfigValue::F64(f) => serializer.serialize_f64(*f),
             ConfigValue::String(s) => serializer.serialize_str(s),
             ConfigValue::Bytes(b) => {
-                use serde::ser::SerializeSeq;
-                let mut seq = serializer.serialize_seq(Some(b.len()))?;
-                for byte in b {
-                    seq.serialize_element(byte)?;
-                }
-                seq.end()
+                // Serialize as a tagged map `{"$bytes": [u8...]}` so that
+                // deserialization can distinguish Bytes from Array.
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("$bytes", b)?;
+                map.end()
             }
             ConfigValue::Array(arr) => arr.serialize(serializer),
             ConfigValue::Map(map) => {
@@ -305,7 +305,22 @@ impl<'de> Deserialize<'de> for ConfigValue {
             where
                 A: de::MapAccess<'de>,
             {
+                // Peek at the first key to detect the `$bytes` tag used by
+                // `ConfigValue::Bytes` serialization.
+                let first_key: Option<String> = map.next_key()?;
+
+                if first_key.as_deref() == Some("$bytes") {
+                    // Tagged bytes payload — reconstruct Bytes variant.
+                    let bytes: Vec<u8> = map.next_value()?;
+                    return Ok(ConfigValue::Bytes(bytes));
+                }
+
+                // Regular map — collect remaining entries.
                 let mut m = IndexMap::new();
+                if let Some(k) = first_key {
+                    let v: AnnotatedValue = map.next_value()?;
+                    m.insert(Arc::from(k), v);
+                }
                 while let Some((k, v)) = map.next_entry::<String, AnnotatedValue>()? {
                     m.insert(Arc::from(k), v);
                 }
@@ -1507,11 +1522,14 @@ mod tests {
     #[test]
     fn test_config_value_bytes_ser_roundtrip() {
         let bytes = vec![0u8, 1, 255, 128];
-        let cv = ConfigValue::Bytes(bytes);
-        assert!(matches!(cv, ConfigValue::Bytes(_)));
-        // Verify serialization produces an array
+        let cv = ConfigValue::Bytes(bytes.clone());
+        // Verify serialization produces a tagged map
         let json = serde_json::to_value(&cv).unwrap();
-        assert!(json.is_array());
+        assert!(json.is_object());
+        assert!(json.get("$bytes").is_some());
+        // Verify round-trip: deserialize back to Bytes
+        let deser: ConfigValue = serde_json::from_value(json).unwrap();
+        assert!(matches!(deser, ConfigValue::Bytes(b) if b == bytes));
     }
 
     #[test]
@@ -1634,13 +1652,17 @@ mod tests {
 
     #[test]
     fn test_config_value_bytes_serialize_only() {
-        // Bytes serialize as a JSON array; deserialization produces Array (not Bytes).
-        // This test verifies the serialization path only.
+        // Bytes serialize as a tagged map {"$bytes": [...]};
+        // deserialization round-trips back to Bytes.
         let cv = ConfigValue::Bytes(vec![0u8, 127, 255, 1]);
         let json = serde_json::to_value(&cv).unwrap();
-        assert!(json.is_array());
-        assert_eq!(json[0], serde_json::json!(0));
-        assert_eq!(json[3], serde_json::json!(1));
+        assert!(json.is_object());
+        let arr = json.get("$bytes").unwrap().as_array().unwrap();
+        assert_eq!(arr[0], serde_json::json!(0));
+        assert_eq!(arr[3], serde_json::json!(1));
+        // Round-trip check
+        let deser: ConfigValue = serde_json::from_value(json).unwrap();
+        assert!(matches!(deser, ConfigValue::Bytes(b) if b == vec![0u8, 127, 255, 1]));
     }
 
     #[test]
