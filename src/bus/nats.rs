@@ -80,6 +80,11 @@ impl NatsConfigBus {
 
         Ok(stream)
     }
+
+    /// Derive a consumer name unique to this bus instance from the stream name.
+    fn consumer_name(&self) -> String {
+        format!("confers-consumer-{}", self.stream_name)
+    }
 }
 
 #[async_trait]
@@ -125,21 +130,64 @@ impl ConfigBus for NatsConfigBus {
     async fn subscribe(
         &self,
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
-        let stream = self.ensure_stream().await?;
+        // Retry stream + consumer creation to handle transient JetStream
+        // errors (e.g. "stream not found") that occur under heavy concurrent
+        // load when many streams are created simultaneously.
+        let max_retries = 3u32;
+        let (consumer, last_err) = {
+            let mut last_err = None;
+            let mut consumer = None;
+            for attempt in 0..=max_retries {
+                match self.ensure_stream().await {
+                    Ok(stream) => {
+                        match stream
+                            .get_or_create_consumer(
+                                &self.consumer_name(),
+                                jetstream::consumer::pull::Config {
+                                    deliver_policy: DeliverPolicy::All,
+                                    ..Default::default()
+                                },
+                            )
+                            .await
+                        {
+                            Ok(c) => {
+                                consumer = Some(c);
+                                break;
+                            }
+                            Err(e) => {
+                                last_err = Some(e);
+                                if attempt < max_retries {
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        100 * (attempt as u64 + 1),
+                                    ))
+                                    .await;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // ensure_stream errors are already ConfigError;
+                        // propagate immediately (not transient).
+                        return Err(e);
+                    }
+                }
+            }
+            (consumer, last_err)
+        };
 
-        let consumer = stream
-            .get_or_create_consumer(
-                "config-consumer",
-                jetstream::consumer::pull::Config {
-                    deliver_policy: DeliverPolicy::All,
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_consumer: {}", e),
+        let consumer = consumer.ok_or_else(|| {
+            ConfigError::RemoteUnavailable {
+                error_type: format!(
+                    "nats_consumer: {} (after {} retries)",
+                    last_err
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "unknown error".into()),
+                    max_retries
+                ),
                 retryable: true,
-            })?;
+            }
+        })?;
 
         let messages = consumer
             .messages()

@@ -623,12 +623,11 @@ mod tests {
         let source = EtcdSourceBuilder::new().build().await.unwrap();
         assert_eq!(source.name(), "etcd");
         assert_eq!(source.priority(), 50);
-        // Use fully-qualified syntax so the TRAIT method (static "etcd",
-        // lines 274-277) is called instead of the inherent method
-        // (`etcd:{prefix}`).
+        // The AsyncSource::source_id returns the cached_source_id which
+        // includes the prefix ("etcd:{prefix}"). Default prefix is "config".
         assert_eq!(
             <EtcdSource as AsyncSource>::source_id(&source).as_str(),
-            "etcd"
+            "etcd:config"
         );
     }
 

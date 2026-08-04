@@ -208,15 +208,19 @@ impl FsWatcher {
                                 EventKind::Create(_)
                                 | EventKind::Modify(_)
                                 | EventKind::Remove(_) => {
-                                    // Forward all file-system events. The is_file() check
-                                    // was removed because it drops deletion events (the
-                                    // path no longer exists) and can race with creation
-                                    // events on some platforms. Callers decide what to
-                                    // do with the event.
+                                    // Forward all file-system events for paths
+                                    // within the watched directory. The is_file()
+                                    // check was removed because it drops deletion
+                                    // events (the path no longer exists) and can
+                                    // race with creation events on some platforms.
                                     for event_path in &event.paths {
                                         match tx.try_send(event_path.clone()) {
                                             Ok(_) => {}
-                                            Err(mpsc::error::TrySendError::Full(_)) => {}
+                                            Err(mpsc::error::TrySendError::Full(_)) => {
+                                                eprintln!(
+                                                    "[confers watcher] WARNING: event dropped — channel full (path: {event_path:?})"
+                                                );
+                                            }
                                             Err(mpsc::error::TrySendError::Closed(_)) => {
                                                 running.store(
                                                     false,
@@ -454,32 +458,22 @@ impl MultiFsWatcher {
                     if let Ok(events) = result {
                         for event in events {
                             match event.kind {
-                                EventKind::Create(_) | EventKind::Modify(_) => {
-                                    for event_path in &event.paths {
-                                        if event_path.is_file() && paths.contains(event_path) {
-                                            match tx.try_send(event_path.clone()) {
-                                                Ok(_) => {}
-                                                Err(mpsc::error::TrySendError::Full(_)) => {}
-                                                Err(mpsc::error::TrySendError::Closed(_)) => {
-                                                    running.store(
-                                                        false,
-                                                        std::sync::atomic::Ordering::SeqCst,
-                                                    );
-                                                    return;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                EventKind::Remove(_) => {
-                                    // For Remove, the path no longer exists so
-                                    // is_file() returns false. Check only
-                                    // paths.contains() to forward deletions.
+                                EventKind::Create(_)
+                                | EventKind::Modify(_)
+                                | EventKind::Remove(_) => {
+                                    // Forward events for paths in the watched set.
+                                    // Do NOT call is_file() here — after a deletion
+                                    // the path no longer exists and is_file() returns
+                                    // false, silently dropping the Remove event.
                                     for event_path in &event.paths {
                                         if paths.contains(event_path) {
                                             match tx.try_send(event_path.clone()) {
                                                 Ok(_) => {}
-                                                Err(mpsc::error::TrySendError::Full(_)) => {}
+                                                Err(mpsc::error::TrySendError::Full(_)) => {
+                                                    eprintln!(
+                                                        "[confers watcher] WARNING: event dropped — channel full (path: {event_path:?})"
+                                                    );
+                                                }
                                                 Err(mpsc::error::TrySendError::Closed(_)) => {
                                                     running.store(
                                                         false,
