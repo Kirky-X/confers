@@ -217,9 +217,7 @@ impl FsWatcher {
                                         match tx.try_send(event_path.clone()) {
                                             Ok(_) => {}
                                             Err(mpsc::error::TrySendError::Full(_)) => {
-                                                eprintln!(
-                                                    "[confers watcher] WARNING: event dropped — channel full (path: {event_path:?})"
-                                                );
+                                                // Channel full — event silently dropped.
                                             }
                                             Err(mpsc::error::TrySendError::Closed(_)) => {
                                                 running.store(
@@ -470,9 +468,7 @@ impl MultiFsWatcher {
                                             match tx.try_send(event_path.clone()) {
                                                 Ok(_) => {}
                                                 Err(mpsc::error::TrySendError::Full(_)) => {
-                                                    eprintln!(
-                                                        "[confers watcher] WARNING: event dropped — channel full (path: {event_path:?})"
-                                                    );
+                                                    // Channel full — event silently dropped.
                                                 }
                                                 Err(mpsc::error::TrySendError::Closed(_)) => {
                                                     running.store(

@@ -312,42 +312,42 @@ impl SecureLogger {
         self
     }
 
-    /// 记录调试日志
-    pub fn debug(&self, message: &str) {
-        self.log(LogLevel::Debug, message);
+    /// Format and return a sanitized debug-level log entry.
+    pub fn debug(&self, message: &str) -> String {
+        self.log(LogLevel::Debug, message)
     }
 
-    /// 记录信息日志
-    pub fn info(&self, message: &str) {
-        self.log(LogLevel::Info, message);
+    /// Format and return a sanitized info-level log entry.
+    pub fn info(&self, message: &str) -> String {
+        self.log(LogLevel::Info, message)
     }
 
-    /// 记录警告日志
-    pub fn warn(&self, message: &str) {
-        self.log(LogLevel::Warn, message);
+    /// Format and return a sanitized warn-level log entry.
+    pub fn warn(&self, message: &str) -> String {
+        self.log(LogLevel::Warn, message)
     }
 
-    /// 记录错误日志
-    pub fn error(&self, message: &str) {
-        self.log(LogLevel::Error, message);
+    /// Format and return a sanitized error-level log entry.
+    pub fn error(&self, message: &str) -> String {
+        self.log(LogLevel::Error, message)
     }
 
-    /// 记录错误（带上下文）
-    pub fn error_with_context(&self, context: &str, error: &str) {
+    /// Format and return a sanitized error-level log entry with context.
+    pub fn error_with_context(&self, context: &str, error: &str) -> String {
         let safe_message = self.sanitizer.safe_message(error, context);
-        self.log(LogLevel::Error, &safe_message);
+        self.log(LogLevel::Error, &safe_message)
     }
 
-    /// 内部日志记录
-    fn log(&self, level: LogLevel, message: &str) {
+    /// Internal: format and return the sanitized log entry.
+    /// Returns empty string if `level` is below `min_level`.
+    /// The caller decides what to do with the output (write to file, forward to
+    /// application logger, discard, etc.).
+    fn log(&self, level: LogLevel, message: &str) -> String {
         if level < self.min_level {
-            return;
+            return String::new();
         }
-
         let sanitized = self.sanitizer.sanitize(message);
-        let log_entry = format!("[{}] {}", level.as_str(), sanitized);
-        // All levels write to stderr; level filtering is done above.
-        eprintln!("{log_entry}");
+        format!("[{}] {}", level.as_str(), sanitized)
     }
 
     /// 获取脱敏器引用
