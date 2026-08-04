@@ -66,12 +66,6 @@ impl AuditLevel {
 pub struct AuditConfig {
     pub enabled: bool,
     pub log_dir: Option<std::path::PathBuf>,
-    /// Reserved for future WAL-based durability. Currently has no effect.
-    #[allow(dead_code)]
-    pub durable_wal: bool,
-    /// Reserved for future async channel-based auditing. Currently has no effect.
-    #[allow(dead_code)]
-    pub channel_size: usize,
 }
 
 impl Default for AuditConfig {
@@ -79,8 +73,6 @@ impl Default for AuditConfig {
         Self {
             enabled: true,
             log_dir: None,
-            durable_wal: false,
-            channel_size: 1024,
         }
     }
 }
@@ -94,8 +86,6 @@ impl AuditConfig {
 pub struct AuditConfigBuilder {
     enabled: bool,
     log_dir: Option<std::path::PathBuf>,
-    durable_wal: bool,
-    channel_size: usize,
 }
 
 impl AuditConfigBuilder {
@@ -103,8 +93,6 @@ impl AuditConfigBuilder {
         Self {
             enabled: true,
             log_dir: None,
-            durable_wal: false,
-            channel_size: 1024,
         }
     }
 
@@ -118,22 +106,10 @@ impl AuditConfigBuilder {
         self
     }
 
-    pub fn durable_wal(mut self, enabled: bool) -> Self {
-        self.durable_wal = enabled;
-        self
-    }
-
-    pub fn channel_size(mut self, size: usize) -> Self {
-        self.channel_size = size;
-        self
-    }
-
     pub fn build(self) -> AuditConfig {
         AuditConfig {
             enabled: self.enabled,
             log_dir: self.log_dir,
-            durable_wal: self.durable_wal,
-            channel_size: self.channel_size,
         }
     }
 }
@@ -349,11 +325,6 @@ impl AuditWriterBuilder {
 
     pub fn log_dir(mut self, dir: std::path::PathBuf) -> Self {
         self.config.log_dir = Some(dir);
-        self
-    }
-
-    pub fn durable_wal(mut self, enabled: bool) -> Self {
-        self.config.durable_wal = enabled;
         self
     }
 
