@@ -32,7 +32,6 @@ mod tests {
         let writer = AuditWriter::builder()
             .enabled(true)
             .log_dir(log_dir.clone())
-            .durable_wal(true)
             .build();
 
         assert!(writer.is_enabled(), "Audit writer should be enabled");
@@ -199,11 +198,6 @@ mod tests {
         let config = AuditConfig::default();
         assert!(config.enabled, "Enabled should be true by default");
         assert!(
-            !config.durable_wal,
-            "Durable WAL should be false by default"
-        );
-        assert_eq!(config.channel_size, 1024, "Channel size should be 1024");
-        assert!(
             config.log_dir.is_none(),
             "Log dir should be None by default"
         );
@@ -218,14 +212,10 @@ mod tests {
         let config = AuditConfig::builder()
             .enabled(false)
             .log_dir(log_dir.clone())
-            .durable_wal(true)
-            .channel_size(2048)
             .build();
 
         assert!(!config.enabled);
         assert_eq!(config.log_dir, Some(log_dir));
-        assert!(config.durable_wal);
-        assert_eq!(config.channel_size, 2048);
     }
 
     /// Test 11: Verify BestEffort events are actually persisted to log file.
