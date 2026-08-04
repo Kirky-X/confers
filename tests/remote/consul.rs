@@ -15,6 +15,7 @@
 #![cfg(feature = "consul")]
 
 
+use super::common;
 use std::time::Duration;
 
 use confers::remote::{ConsulSourceBuilder, PolledSource};

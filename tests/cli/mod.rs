@@ -7,5 +7,8 @@
 
 #![cfg(feature = "cli")]
 
+#[path = "../common.rs"]
+pub mod common;
+
 mod commands;
 mod help;

@@ -8,7 +8,7 @@
 //! nested deserialization, env type inference, and progressive reload.
 
 #[path = "../common.rs"]
-mod common;
+pub mod common;
 
 mod context;
 mod coverage;
