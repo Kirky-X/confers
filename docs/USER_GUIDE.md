@@ -126,17 +126,17 @@ Add `confers` to your `Cargo.toml`:
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.4.0"` | Includes toml, json, env |
-| **Minimal** | `confers = { version = "0.4.0", default-features = false, features = ["minimal"] }` | Environment variables only |
-| **Recommended** | `confers = { version = "0.4.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
-| **Full** | `confers = { version = "0.4.0", features = ["full"] }` | All features |
+| **Default** | `confers = "0.4.1"` | Includes toml, json, env |
+| **Minimal** | `confers = { version = "0.4.1", default-features = false, features = ["minimal"] }` | Environment variables only |
+| **Recommended** | `confers = { version = "0.4.1", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
+| **Full** | `confers = { version = "0.4.1", features = ["full"] }` | All features |
 
 **Available Feature Presets:**
 
 | Preset | Features | Use Case |
 |--------|----------|----------|
 | <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | Environment variables + JSON |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `env`, `validation` | Config loading + validation |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | Config loading + validation |
 | <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Development with all tools |
 | <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration |
 | <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
@@ -424,7 +424,7 @@ confers --help
 ### Command Reference
 
 ```bash
-confers 0.4.0
+confers 0.4.1
 A powerful Rust configuration management library
 
 USAGE:

@@ -95,6 +95,7 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `yaml` | YAML format support | ❌ |
 | `ini` | INI format support | ❌ |
 | `env` | Environment variable support | ✅ |
+| `dotenv` | `.env` file support (alias for `env`) | ❌ |
 | **Core Features** |||
 | `validation` | Configuration validation (garde) | ❌ |
 | `watch` | File monitoring and hot reload | ❌ |
@@ -116,9 +117,11 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `remote` | HTTP polling | ❌ |
 | `etcd` | Etcd integration | ❌ |
 | `consul` | Consul integration | ❌ |
-| `cache-redis` | Redis cache | ❌ |
-| **Others** |||
+| **Message Bus** |||
 | `config-bus` | Configuration event bus | ❌ |
+| `nats-bus` | NATS message bus | ❌ |
+| `redis-bus` | Redis message bus | ❌ |
+| **Others** |||
 | `context-aware` | Context-aware configuration | ❌ |
 | `modules` | Modular configuration | ❌ |
 
@@ -285,23 +288,14 @@ let builder = ConfigBuilder::<AppConfig>::new()
 
 **Note:** Environment variables have higher priority than configuration files, but lower than memory sources.
 
-##### `watch(enabled: bool)`
+##### `with_snapshot(config: SnapshotConfig)` (requires `snapshot` feature)
 
-Enable or disable file watching for automatic configuration reloading. Configuration will be automatically reloaded when configuration files change.
-
-```rust
-pub fn watch(mut self, watch: bool) -> Self
-```
-
-**Example:**
+Enable snapshot configuration for rollback support.
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
-    .file("config.toml")
-    .watch(true);
+#[cfg(feature = "snapshot")]
+pub fn with_snapshot(mut self, config: SnapshotConfig) -> Self
 ```
-
-**Note:** Enabling file watching requires the `watch` feature.
 
 ##### `fail_fast(enabled: bool)`
 
@@ -311,13 +305,7 @@ Enable or disable fail-fast mode. In fail-fast mode, any configuration error wil
 pub fn fail_fast(mut self, fail_fast: bool) -> Self
 ```
 
-##### `validate(enabled: bool)`
-
-Enable or disable validation on load.
-
-```rust
-pub fn validate(mut self, validate: bool) -> Self
-```
+> **Note**: The `watch()`, `validate()`, and `with_audit*()` methods were removed in earlier versions. File watching is now handled via `FsWatcher`/`MultiFsWatcher` directly, validation is controlled via the `validation` feature and `#[config(validate)]` attribute, and audit logging is configured through the `AuditWriter` builder.
 
 ##### `limits(limits: ConfigLimits)`
 
@@ -393,50 +381,6 @@ let config = ConfigBuilder::<AppConfig>::new()
     .build()?;
 ```
 
-#### Audit Features
-
-<div style="padding:16px; margin: 16px 0">
-
-📝 **Tip**: The following methods require enabling the `audit` feature.
-
-</div>
-
-##### `with_audit(enabled: bool)`
-
-Enable or disable audit logging for configuration loading.
-
-```rust
-#[cfg(feature = "audit")]
-pub fn with_audit(mut self, enabled: bool) -> Self
-```
-
-##### `with_audit_file(path: impl Into<String>)`
-
-Configure the path for the audit log file.
-
-```rust
-#[cfg(feature = "audit")]
-pub fn with_audit_file(mut self, path: impl Into<String>) -> Self
-```
-
-##### `with_audit_log(enabled: bool)`
-
-Enable or disable audit logging.
-
-```rust
-#[cfg(feature = "audit")]
-pub fn with_audit_log(mut self, enabled: bool) -> Self
-```
-
-##### `with_audit_log_path(path: impl Into<String>)`
-
-Configure the audit log file path and enable auditing.
-
-```rust
-#[cfg(feature = "audit")]
-pub fn with_audit_log_path(mut self, path: impl Into<String>) -> Self
-```
-
 #### Building Methods
 
 ##### `build()`
@@ -478,11 +422,14 @@ Build resiliently, collecting warnings instead of failing.
 pub fn build_resilient(self) -> ConfigResult<BuildResult<T>>
 ```
 
-##### `build_with_watcher()` (async)
+##### `build_with_watcher()` (async, deprecated)
 
-Build with hot reload support. Returns a receiver for configuration updates and a watcher guard. Requires `watch` feature.
+> **Deprecated** (since 0.3.0): This method does NOT perform hot reload when file changes are detected. Use `FsWatcher`/`MultiFsWatcher` directly for full hot reload support.
+
+Build with watcher support. Returns a receiver for configuration updates and a watcher guard. Requires `watch` feature.
 
 ```rust
+#[deprecated(since = "0.3.0", note = "Does not reload on file changes. Use FsWatcher/MultiFsWatcher directly.")]
 #[cfg(feature = "watch")]
 pub async fn build_with_watcher(
     self,
@@ -490,13 +437,6 @@ pub async fn build_with_watcher(
     tokio::sync::watch::Receiver<Arc<T>>,
     WatcherGuard,
 )>
-```
-
-**Example:**
-
-```rust
-let (mut rx, _guard) = builder.build_with_watcher().await?;
-let config = rx.borrow().clone();
 ```
 
 #### Format Detection
@@ -1286,9 +1226,21 @@ static DB_PORT: TypedConfigKey<u16> =
 
 ## Error Handling
 
-### `ConfigError`
+### `ConfigConfigError` (Configuration Phase)
 
-Common error variants encountered during operations.
+Configuration phase errors encountered during initialization. These errors indicate fundamental issues that prevent configuration from being loaded.
+
+| Variant | Description | Handling Suggestion |
+|---------|-------------|---------------------|
+| `MissingField { field: String }` | Required configuration field missing | Add the missing field to config source |
+| `ParseError { message: String, location: Option<ParseLocation> }` | Parse error in config source | Check config file syntax |
+| `ValidationError { field: String, rule: String, message: String }` | Validation constraint failed | Fix config value to meet constraints |
+| `IoError(String)` | IO operation error | Check file permissions and disk space |
+| `InvalidDefault { field: String, message: String }` | Invalid default value expression | Check default value syntax |
+
+### `ConfigError` / `ConfersError` (Runtime Phase)
+
+Runtime configuration errors encountered during operation. `ConfersError` is a type alias for `ConfigError`.
 
 <div style="padding:16px; margin: 16px 0">
 
@@ -1296,13 +1248,29 @@ Common error variants encountered during operations.
 |---------|-------------|---------------------|
 | `FileNotFound { filename: PathBuf, source: Option<std::io::Error> }` | Configuration file not found | Check if file path is correct |
 | `ParseError { format: String, message: String, location: Option<ParseLocation>, source: Option<Box<dyn Error>> }` | Error parsing configuration | Check configuration file syntax |
-| `InvalidValue { key: String, expected_type: String, message: String }` | Invalid value for key | Check value type and format |
-| `SizeLimitExceeded { actual: usize, limit: usize }` | File size exceeds limit | Increase size limit or optimize file |
-| `IoError(std::io::Error)` | IO operation error | Check file permissions and disk space |
-| `MergeConflict { path: String, message: String }` | Merge conflict between sources | Check source priorities |
-| `MissingRequiredKey { key: String }` | Required key not found | Ensure all required keys are provided |
-| `LockPoisoned { resource: String }` | Mutex/RwLock poisoned due to panic | Retry operation or restart service |
+| `ValidationFailed { field: String, rule: String, message: String }` | Validation failed for a field | Check field value constraints |
+| `SchemaValidationFailed { count: usize }` | Schema validation failed | Check config matches schema |
+| `DecryptionFailed { message: String }` | Decryption failed | Check encryption key and data |
+| `RemoteUnavailable { error_type: String, retryable: bool }` | Remote source unavailable | Retry if retryable, check network |
+| `VersionMismatch { found: u32, expected: u32 }` | Version mismatch | Update config version |
+| `MigrationFailed { from: u32, to: u32, reason: String, source: Option<Box<dyn Error>> }` | Migration failed | Check migration functions |
 | `ModuleNotFound { group: String, module: String }` | Module or profile not found | Check module/profile name |
+| `ReloadRolledBack { reason: String }` | Reload rolled back | Check health check validators |
+| `IoError(std::io::Error)` | IO operation error | Check file permissions and disk space |
+| `InvalidValue { key: String, expected_type: String, message: String }` | Invalid value for key | Check value type and format |
+| `SourceChainError { message: String, source_index: usize }` | Source chain error | Check source configuration |
+| `Timeout { duration_ms: u64 }` | Operation timed out | Increase timeout or check network |
+| `SizeLimitExceeded { actual: usize, limit: usize }` | File size exceeds limit | Increase size limit or optimize file |
+| `InterpolationError { variable: String, message: String }` | Interpolation error | Check variable syntax |
+| `KeyError { message: String }` | Encryption key error | Check key configuration |
+| `CircularReference { path: String }` | Circular reference detected | Fix variable reference chain |
+| `LockPoisoned { resource: String }` | Mutex/RwLock poisoned | Retry operation or restart service |
+| `MultiSource { source: MultiSourceError }` | Multiple sources failed | Check individual source errors |
+| `ConcurrencyConflict { key: String, message: String, expected_type: Option<String> }` | Concurrency conflict | Retry the operation |
+| `KeyRotationFailed { from_version: String, to_version: String, reason: String }` | Key rotation failed | Check key versions and permissions |
+| `WatcherError { message: String, path: Option<PathBuf>, recoverable: bool }` | Watcher error | Check file paths and permissions |
+| `OverrideBlocked { key: String, reason: String, override_source: Option<String> }` | Override blocked | Check protection rules |
+| `HealthCheckFailed { reason: String }` | Health check failed | Check health check configuration |
 
 </div>
 
@@ -2104,24 +2072,44 @@ RUST_LOG=confers=debug ./myapp
 
 | Feature | Description | Default |
 |---------|-------------|---------|
-| `derive` | Derive macro for configuration structs | Yes |
-| `validation` | Configuration validation support | No |
+| `toml` | TOML format support | Yes |
+| `json` | JSON format support | Yes |
+| `env` | Environment variable support | Yes |
+| `yaml` | YAML format support | No |
+| `ini` | INI format support | No |
+| `dotenv` | `.env` file support (alias for `env`) | No |
+| `validation` | Configuration validation (garde) | No |
 | `watch` | File monitoring and hot reload | No |
-| `audit` | Configuration loading audit log | No |
-| `schema` | JSON Schema generation | No |
-| `remote` | Remote configuration (etcd, Consul, HTTP) | No |
-| `encryption` | Configuration encryption functionality | No |
+| `encryption` | XChaCha20-Poly1305 encryption | No |
 | `cli` | Command-line tool | No |
-| `full` | Enable all features | No |
+| `schema` | JSON Schema generation | No |
+| `typescript-schema` | TypeScript type generation (alias for `schema`) | No |
+| `security` | Security module | No |
+| `key` | Key management system | No |
+| `audit` | Audit logging | No |
+| `dynamic` | Dynamic fields | No |
+| `progressive-reload` | Progressive deployment | No |
+| `migration` | Configuration migration | No |
+| `snapshot` | Snapshot rollback | No |
+| `interpolation` | Variable interpolation | No |
+| `remote` | HTTP polling remote source | No |
+| `etcd` | Etcd integration | No |
+| `consul` | Consul integration | No |
+| `config-bus` | Configuration event bus | No |
+| `nats-bus` | NATS message bus | No |
+| `redis-bus` | Redis message bus | No |
+| `context-aware` | Context-aware configuration | No |
+| `modules` | Modular configuration | No |
 
 **Feature Presets:**
 
 | Preset | Included Features | Use Case |
 |--------|-------------------|----------|
-| `minimal` | `derive` | Configuration loading only (minimal dependencies) |
-| `recommended` | `derive`, `validation` | Configuration loading + validation (recommended for most applications) |
-| `dev` | `derive`, `validation`, `cli`, `schema`, `audit` | Development configuration |
-| `production` | `derive`, `validation`, `watch`, `encryption`, `remote` | Production configuration |
+| `minimal` | `env`, `json` | Minimal dependencies (environment variables + JSON) |
+| `recommended` | `toml`, `json`, `env`, `validation` | Configuration loading + validation (recommended for most applications) |
+| `dev` | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Development configuration |
+| `production` | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production configuration |
+| `distributed` | `toml`, `json`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
 | `full` | All features | Complete feature set |
 
 ---

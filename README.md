@@ -193,11 +193,11 @@ graph LR
 
 | 安装方式 | 配置方式 | 使用场景 |
 |-------------------|---------------|----------|
-| **默认** | `confers = "0.4.0"` | 包含 `toml`、`json`、`env`（默认特性） |
-| **最小化** | `confers = { version = "0.4.0", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
-| **推荐** | `confers = { version = "0.4.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
-| **CLI 工具** | `confers = { version = "0.4.0", features = ["cli"] }` | CLI 工具（不含验证/加密） |
-| **完整** | `confers = { version = "0.4.0", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.4.1"` | 包含 `toml`、`json`、`env`（默认特性） |
+| **最小化** | `confers = { version = "0.4.1", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
+| **推荐** | `confers = { version = "0.4.1", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
+| **CLI 工具** | `confers = { version = "0.4.1", features = ["cli"] }` | CLI 工具（不含验证/加密） |
+| **完整** | `confers = { version = "0.4.1", features = ["full"] }` | 所有功能 |
 
 **单独功能说明：**
 
@@ -818,10 +818,8 @@ cargo bench --bench concurrent_access_bench
 | `load_bench` | 配置加载性能 |
 | `concurrent_access_bench` | 并发访问性能 |
 | `concurrent_rw_bench` | 并发读写性能 |
-| `cow_efficiency_bench` | COW 效率测试 |
 | `dynamic_field_bench` | 动态字段性能 |
 | `hot_path_bench` | 热路径性能 |
-| `incremental_merge_bench` | 增量合并性能 |
 | `interpolation_bench` | 插值计算性能 |
 | `value_path_bench` | 值路径访问性能 |
 

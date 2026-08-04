@@ -269,11 +269,11 @@ cd examples && ./verify_examples.sh
 
 | Installation Type  | Configuration                                                                           | Use Case                                          |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Default**        | `confers = "0.4.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
-| **Minimal**        | `confers = { version = "0.4.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
-| **Recommended**    | `confers = { version = "0.4.0", default-features = false, features = ["recommended"] }` | TOML + Env + validation                           |
-| **CLI with Tools** | `confers = { version = "0.4.0", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
-| **Full**           | `confers = { version = "0.4.0", features = ["full"] }`                                  | All features                                      |
+| **Default**        | `confers = "0.4.1"`                                                                     | Includes `toml`, `json`, `env` (default features) |
+| **Minimal**        | `confers = { version = "0.4.1", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
+| **Recommended**    | `confers = { version = "0.4.1", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
+| **CLI with Tools** | `confers = { version = "0.4.1", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
+| **Full**           | `confers = { version = "0.4.1", features = ["full"] }`                                  | All features                                      |
 
 **Individual Features:**
 
@@ -887,10 +887,8 @@ cargo bench --bench concurrent_access_bench
 | `load_bench` | Config loading performance |
 | `concurrent_access_bench` | Concurrent access performance |
 | `concurrent_rw_bench` | Concurrent read/write performance |
-| `cow_efficiency_bench` | COW efficiency testing |
 | `dynamic_field_bench` | Dynamic field performance |
 | `hot_path_bench` | Hot path performance |
-| `incremental_merge_bench` | Incremental merge performance |
 | `interpolation_bench` | Interpolation computation performance |
 | `value_path_bench` | Value path access performance |
 
