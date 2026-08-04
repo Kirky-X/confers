@@ -21,7 +21,7 @@ use crate::secret::XChaCha20Crypto;
 #[cfg(feature = "encryption")]
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "encryption")]
 use rand::Rng;
@@ -174,14 +174,14 @@ impl KeyBundle {
             .decode(
                 String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
                     format: "key".to_string(),
-                    message: format!("Invalid key bytes: {}", e),
+                    message: format!("Invalid plaintext UTF-8: {}", e),
                     location: None,
                     source: None,
                 })?,
             )
             .map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
-                message: format!("Invalid key bytes: {}", e),
+                message: format!("Invalid base64 in plaintext: {}", e),
                 location: None,
                 source: None,
             })?;
@@ -329,10 +329,14 @@ impl KeyRotationSchedule {
 }
 
 pub(crate) fn now_timestamp() -> u64 {
+    // If the system clock is before UNIX epoch, return u64::MAX as a safe
+    // default: this makes is_expired() treat all keys as expired and
+    // is_rotation_due() treat rotation as overdue, which is the safer
+    // fail-open behavior compared to returning 0.
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_secs()
+        .map(|d| d.as_secs())
+        .unwrap_or(u64::MAX)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
