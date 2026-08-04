@@ -48,7 +48,7 @@ mod tests {
             .log_dir(log_dir.clone())
             .build();
 
-        writer.log_load("test_source");
+        writer.log_load("test_source").unwrap();
 
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -68,7 +68,7 @@ mod tests {
             .log_dir(log_dir.clone())
             .build();
 
-        writer.log_key_access("database.password");
+        writer.log_key_access("database.password").unwrap();
 
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -89,9 +89,9 @@ mod tests {
             .build();
 
         // Test with sensitive field name
-        writer.log_decrypt("database.password", true);
-        writer.log_decrypt("api_secret_key", true);
-        writer.log_decrypt("regular_field", true);
+        writer.log_decrypt("database.password", true).unwrap();
+        writer.log_decrypt("api_secret_key", true).unwrap();
+        writer.log_decrypt("regular_field", true).unwrap();
 
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -111,7 +111,7 @@ mod tests {
             .log_dir(log_dir.clone())
             .build();
 
-        writer.log_key_rotation("v1.0.0", "v1.0.1");
+        writer.log_key_rotation("v1.0.0", "v1.0.1").unwrap();
 
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -128,10 +128,10 @@ mod tests {
         assert!(!writer.is_enabled(), "Audit writer should be disabled");
 
         // These should be no-ops when disabled
-        writer.log_load("test_source");
-        writer.log_key_access("test_key");
-        writer.log_decrypt("test_field", true);
-        writer.log_key_rotation("v1", "v2");
+        writer.log_load("test_source").unwrap();
+        writer.log_key_access("test_key").unwrap();
+        writer.log_decrypt("test_field", true).unwrap();
+        writer.log_key_rotation("v1", "v2").unwrap();
     }
 
     /// Test 8: Verify event level classification
@@ -232,7 +232,7 @@ mod tests {
             .build();
 
         // LoadSuccess is classified as BestEffort
-        writer.log_load("test_source_for_best_effort");
+        writer.log_load("test_source_for_best_effort").unwrap();
 
         // Give time for sync write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -275,7 +275,7 @@ mod tests {
             .build();
 
         // KeyAccess is classified as Durable
-        writer.log_key_access("test.key.durable");
+        writer.log_key_access("test.key.durable").unwrap();
 
         std::thread::sleep(std::time::Duration::from_millis(100));
 
@@ -296,13 +296,16 @@ mod tests {
         );
     }
 
-    /// Test 13: Verify no log file is created when log_dir is None.
-    /// Ensures write_best_effort does not panic or write to a phantom path.
+    /// Test 13: Verify Durable events return Err when log_dir is None.
     #[test]
-    fn test_audit_no_log_dir_does_not_panic() {
+    fn test_audit_no_log_dir_returns_error_for_durable() {
         let writer = AuditWriter::new(); // log_dir defaults to None
-        writer.log_load("source_without_log_dir");
-        writer.log_key_access("key_without_log_dir");
-        // No assertion needed - test passes if no panic occurs.
+
+        // BestEffort event with no log_dir silently succeeds
+        writer.log_load("source_without_log_dir").unwrap();
+
+        // Durable event with no log_dir returns error
+        let result = writer.log_key_access("key_without_log_dir");
+        assert!(result.is_err(), "Durable event should fail when log_dir is None");
     }
 }

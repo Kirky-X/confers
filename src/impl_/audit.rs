@@ -5,6 +5,8 @@
 
 use chrono::{DateTime, Utc};
 
+use crate::error::{ConfigError, ConfigResult};
+
 #[derive(Debug, Clone)]
 pub enum AuditEvent {
     KeyAccess {
@@ -141,9 +143,9 @@ impl AuditWriter {
         self.config.enabled
     }
 
-    pub fn write(&self, event: AuditEvent) {
+    pub fn write(&self, event: AuditEvent) -> ConfigResult<()> {
         if !self.config.enabled {
-            return;
+            return Ok(());
         }
 
         let level = AuditLevel::for_event(&event);
@@ -154,56 +156,54 @@ impl AuditWriter {
         }
     }
 
-    fn write_durable(&self, event: &AuditEvent) {
-        // Durable events MUST be persisted; report error if log_dir is not configured.
+    fn write_durable(&self, event: &AuditEvent) -> ConfigResult<()> {
+        // Durable events MUST be persisted; error if log_dir is not configured.
         let Some(ref dir) = self.config.log_dir else {
-            eprintln!("[confers audit] WARNING: durable audit event dropped — no log_dir configured");
-            return;
+            return Err(ConfigError::InvalidValue {
+                key: "audit.log_dir".into(),
+                expected_type: "path".into(),
+                message: "durable audit event requires log_dir to be configured".into(),
+            });
         };
         let sanitized = self.sanitize(event);
         let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
         let path = dir.join(filename);
-        if let Err(e) = std::fs::OpenOptions::new()
+        std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(path)
             .and_then(|mut file| {
                 use std::io::Write;
                 writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
-            })
-        {
-            eprintln!("[confers audit] ERROR: failed to write durable audit event: {e}");
-        }
+            })?;
+        Ok(())
     }
 
-    fn write_best_effort(&self, event: &AuditEvent) {
+    fn write_best_effort(&self, event: &AuditEvent) -> ConfigResult<()> {
         // Best-effort: attempt to persist if log_dir is configured.
-        // If log_dir is not configured or write fails, silently drop the event
-        // (do NOT waste CPU on sanitize() when the result will be discarded).
-        self.write_to_log(event);
+        // If log_dir is not configured, silently drop the event.
+        self.write_to_log(event)
     }
 
     /// Shared write path for both Durable and BestEffort events.
     /// Writes the sanitized event to `audit_YYYYMMDD.log` in `log_dir` if configured.
-    /// Silently drops the event if `log_dir` is None or the write fails.
-    fn write_to_log(&self, event: &AuditEvent) {
+    /// Silently returns Ok if `log_dir` is None.
+    fn write_to_log(&self, event: &AuditEvent) -> ConfigResult<()> {
         let Some(ref dir) = self.config.log_dir else {
-            return;
+            return Ok(());
         };
         let sanitized = self.sanitize(event);
         let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
         let path = dir.join(filename);
-        if let Err(e) = std::fs::OpenOptions::new()
+        std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(path)
             .and_then(|mut file| {
                 use std::io::Write;
                 writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
-            })
-        {
-            eprintln!("[confers audit] ERROR: failed to write audit event: {e}");
-        }
+            })?;
+        Ok(())
     }
 
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {
@@ -270,34 +270,34 @@ impl AuditWriter {
         }
     }
 
-    pub fn log_load(&self, source: &str) {
+    pub fn log_load(&self, source: &str) -> ConfigResult<()> {
         self.write(AuditEvent::LoadSuccess {
             source: source.to_string(),
             timestamp: Utc::now(),
-        });
+        })
     }
 
-    pub fn log_key_access(&self, key: &str) {
+    pub fn log_key_access(&self, key: &str) -> ConfigResult<()> {
         self.write(AuditEvent::KeyAccess {
             key: key.to_string(),
             timestamp: Utc::now(),
-        });
+        })
     }
 
-    pub fn log_decrypt(&self, field: &str, success: bool) {
+    pub fn log_decrypt(&self, field: &str, success: bool) -> ConfigResult<()> {
         self.write(AuditEvent::Decrypt {
             field: field.to_string(),
             success,
             timestamp: Utc::now(),
-        });
+        })
     }
 
-    pub fn log_key_rotation(&self, old_ver: &str, new_ver: &str) {
+    pub fn log_key_rotation(&self, old_ver: &str, new_ver: &str) -> ConfigResult<()> {
         self.write(AuditEvent::KeyRotation {
             old_version: old_ver.to_string(),
             new_version: new_ver.to_string(),
             timestamp: Utc::now(),
-        });
+        })
     }
 }
 
