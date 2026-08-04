@@ -278,8 +278,34 @@ impl EnvSecurityValidator {
         name: &str,
         value: Option<&str>,
     ) -> Result<(), EnvSecurityError> {
-        let blocked_patterns = get_blocked_patterns()?;
-        let allowed_patterns = get_allowed_patterns()?;
+        // Use custom patterns if configured, otherwise fall back to global patterns
+        let custom_blocked: Vec<regex::Regex> = if !self.config.blocked_patterns.is_empty() {
+            self.config.blocked_patterns.iter()
+                .filter_map(|p| regex::Regex::new(p).ok())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let custom_allowed: Vec<regex::Regex> = if !self.config.allowed_patterns.is_empty() {
+            self.config.allowed_patterns.iter()
+                .filter_map(|p| regex::Regex::new(p).ok())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let blocked_patterns = if !custom_blocked.is_empty() {
+            custom_blocked.iter().collect::<Vec<&regex::Regex>>()
+        } else {
+            let global = get_blocked_patterns()?;
+            global.iter().collect()
+        };
+        let allowed_patterns = if !custom_allowed.is_empty() {
+            custom_allowed.iter().collect::<Vec<&regex::Regex>>()
+        } else {
+            let global = get_allowed_patterns()?;
+            global.iter().collect()
+        };
 
         if self.config.enable_length_validation && name.len() > self.max_name_length {
             return Err(EnvSecurityError::NameTooLong {

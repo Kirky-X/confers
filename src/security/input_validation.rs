@@ -176,8 +176,10 @@ pub struct InputValidator {
     /// 最大字符串长度
     max_string_length: usize,
     /// 最大数组长度
+    #[allow(dead_code)]
     max_array_length: usize,
     /// 最大深度
+    #[allow(dead_code)]
     max_depth: usize,
     /// 允许的字符模式
     allowed_chars_pattern: Option<Regex>,
@@ -425,8 +427,10 @@ pub enum InputValidationError {
     /// 不在白名单中
     NotInWhitelist,
     /// 深度超出限制
+    #[allow(dead_code)]
     DepthExceeded { max: usize, actual: usize },
     /// 数组太长
+    #[allow(dead_code)]
     ArrayTooLong { max: usize, actual: usize },
 }
 
@@ -629,6 +633,7 @@ pub enum ConfigValidationError {
         error: InputValidationError,
     },
     /// 敏感数据警告
+    #[allow(dead_code)]
     SensitiveDataWarning {
         field: String,
         sensitivity: SensitivityResult,

@@ -150,7 +150,10 @@ impl ErrorSanitizer {
 
     /// 添加敏感关键词
     pub fn add_sensitive_keyword(&self, keyword: &str) {
-        let mut keywords = self.sensitive_keywords.write().unwrap();
+        let mut keywords = self
+            .sensitive_keywords
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         keywords.insert(keyword.to_lowercase());
     }
 
@@ -164,7 +167,10 @@ impl ErrorSanitizer {
         }
 
         // 应用自定义规则
-        let custom_rules = self.custom_rules.read().unwrap();
+        let custom_rules = self
+            .custom_rules
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         for (ref pattern, ref replacement) in custom_rules.iter() {
             result = pattern
                 .replace_all(&result, replacement.as_str())
@@ -173,7 +179,10 @@ impl ErrorSanitizer {
 
         // 如果在严格模式，替换所有敏感关键词
         if self.strict_mode {
-            let keywords = self.sensitive_keywords.read().unwrap();
+            let keywords = self
+                .sensitive_keywords
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
             for keyword in keywords.iter() {
                 let pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(keyword))).unwrap();
                 result = pattern.replace_all(&result, "***").to_string();
@@ -200,7 +209,10 @@ impl ErrorSanitizer {
         }
 
         // 检查敏感关键词
-        let keywords = self.sensitive_keywords.read().unwrap();
+        let keywords = self
+            .sensitive_keywords
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let message_lower = message.to_lowercase();
         keywords
             .iter()
@@ -334,10 +346,8 @@ impl SecureLogger {
 
         let sanitized = self.sanitizer.sanitize(message);
         let log_entry = format!("[{}] {}", level.as_str(), sanitized);
-        match level {
-            LogLevel::Error | LogLevel::Warn => eprintln!("{log_entry}"),
-            LogLevel::Info | LogLevel::Debug => eprintln!("{log_entry}"),
-        }
+        // All levels write to stderr; level filtering is done above.
+        eprintln!("{log_entry}");
     }
 
     /// 获取脱敏器引用
@@ -498,6 +508,13 @@ impl SensitiveDataFilter {
 
     /// 过滤消息
     pub fn filter(&self, message: &str) -> FilterResult {
+        // Check allowed patterns first — if any match, skip sanitization entirely
+        for pattern in &self.allowed_patterns {
+            if pattern.is_match(message) {
+                return FilterResult::Allowed(message.to_string());
+            }
+        }
+
         // 先检查是否包含敏感数据
         if !self.sanitizer.contains_sensitive(message) {
             return FilterResult::Allowed(message.to_string());

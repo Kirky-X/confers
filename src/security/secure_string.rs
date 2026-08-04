@@ -175,15 +175,15 @@ impl SecureString {
         &self.data
     }
 
-    /// 转换为 String（注意：这会复制数据）
+    /// 转换为 String（消耗 self，原始数据在 drop 时自动清零）。
     ///
     /// # 警告
     ///
-    /// 调用此方法后，原始 SecureString 仍然包含敏感数据。
-    /// 仅在必要时使用，并确保妥善处理返回的 String。
+    /// 返回的 `String` 不会自动清零，请确保妥善处理。调用后原始 SecureString
+    /// 被移动并 drop，内部缓冲区会被安全清零。
     #[allow(clippy::wrong_self_convention)] // Consumes self intentionally for conversion
     pub fn to_plain_string(self) -> String {
-        // 将数据转换为字符串（复制数据以避免所有权问题）
+        // Convert to String; self is dropped (and zeroed) at end of this function.
         String::from_utf8(self.data.clone()).unwrap_or_default()
     }
 
@@ -410,9 +410,11 @@ impl SecureStringBuilder {
 
     /// 构建 SecureString
     pub fn build(self) -> SecureString {
+        // Default display_name to a masked placeholder instead of the raw
+        // secret data to prevent sensitive content leaking into logs/telemetry.
         let display_name = self
             .display_name
-            .unwrap_or_else(|| String::from_utf8_lossy(&self.data).into_owned());
+            .unwrap_or_else(|| format!("[... {} chars]", self.data.len()));
 
         ALLOCATED_SECURE_STRINGS.fetch_add(1, Ordering::SeqCst);
 
