@@ -1,6 +1,6 @@
 [package]
 name = "confers-examples"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 description.workspace = true
 license.workspace = true
@@ -114,7 +114,7 @@ sha2 = "0.11"
 garde = { version = "0.22", features = ["derive", "email", "url", "regex"] }
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
-notify = "8"
+notify = "8.0"
 
 [features]
 default = []

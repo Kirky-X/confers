@@ -24,7 +24,7 @@ chacha20poly1305 = { version = "0.10", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 compact_str = { version = "0.9", features = ["serde"] }
-confers-macros = { version = "0.5.0", path = "macros" }
+confers-macros = { version = "0.5", path = "macros" }
 dashmap = { version = "6.1", optional = true }
 garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
@@ -43,7 +43,7 @@ dotenvy = { version = "0.15", optional = true }
 aes-gcm = { version = "0.10", optional = true }
 serde_ini = { version = "0.1", optional = true }
 regex = "1.11"
-anyhow = "1"
+anyhow = "1.0"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.1", features = ["preserve_order"], optional = true }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
@@ -54,10 +54,10 @@ redis = { version = "1.1", features = ["tokio-comp"], optional = true }
 url = "2.5"
 hex = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
-similar = { version = "2", optional = true }
+similar = { version = "3.1", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
 getset = "0.1"
-itoa = "1"
+itoa = "1.0"
 
 [workspace]
 members = ["macros", "examples", "fuzz"]
@@ -77,7 +77,7 @@ keywords = ["config", "configuration", "settings", "env"]
 categories = ["config", "development-tools"]
 
 [workspace.dependencies]
-anyhow = "1"
+anyhow = "1.0"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"] }
@@ -85,16 +85,16 @@ compact_str = { version = "0.9", features = ["serde"] }
 darling = "0.23"
 futures = "0.3"
 indexmap = { version = "2.13", features = ["serde"] }
-proc-macro2 = "1"
+proc-macro2 = "1.0"
 proptest = "1.11"
-quote = "1"
+quote = "1.0"
 regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_spanned = "1.1"
 serde_yaml_ng = "0.10"
-similar = "3"
-syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+similar = "3.1"
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"] }
