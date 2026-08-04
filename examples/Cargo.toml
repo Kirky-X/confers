@@ -97,7 +97,7 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
-tracing = { workspace = true }
+tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = { workspace = true }
 reqwest = { version = "0.13", features = ["json"] }
