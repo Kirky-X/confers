@@ -35,6 +35,14 @@ impl Debug for SecretString {
     }
 }
 
+/// Display is intentionally redacted to prevent accidental secret leakage
+/// via `format!("{}", s)` or `.to_string()`.
+impl std::fmt::Display for SecretString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
 impl std::ops::Deref for SecretString {
     type Target = str;
 

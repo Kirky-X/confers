@@ -58,6 +58,8 @@ pub use crate::types::KeyCachePolicy;
 pub struct KeyRotationConfig {
     pub max_key_versions: usize,
     pub cache_policy: KeyCachePolicy,
+    /// Reserved for future use: grace period for key rotation safety.
+    #[allow(dead_code)]
     pub rotation_grace_period: Duration,
 }
 
@@ -230,11 +232,11 @@ impl KeyRegistry {
         {
             if let Ok(key) = provider.get_key() {
                 let key_bytes = key.as_slice().to_vec();
-                let _ = self.register_key(
+                self.register_key(
                     version.to_string(),
                     SecretBytes::new(key_bytes.clone()),
                     false,
-                );
+                )?;
                 return Ok(key_bytes);
             }
         }
@@ -249,11 +251,11 @@ impl KeyRegistry {
         for provider in async_providers {
             if let Ok(key) = provider.get_key().await {
                 let key_bytes = key.as_slice().to_vec();
-                let _ = self.register_key(
+                self.register_key(
                     version.to_string(),
                     SecretBytes::new(key_bytes.clone()),
                     false,
-                );
+                )?;
                 return Ok(key_bytes);
             }
         }
