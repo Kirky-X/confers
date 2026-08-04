@@ -114,15 +114,7 @@ fn test_event_serialization() {
     assert_eq!(decoded.changed_keys, event.changed_keys);
 }
 
-// ==================== NATS bus integration tests ====================
-//
-// Requires a running NATS server on 127.0.0.1:4222. Start via:
-//   docker-compose -f docker-compose.test.yml up -d nats
-//
-// NOTE: `common::is_service_available` (HTTP check on monitoring port 8222)
-// cannot be used here because `nats-bus` does not enable the `remote` feature,
-// and the NATS monitoring port (8222) is not exposed in this environment.
-// We fall back to a TCP probe on the actual connection port (4222).
+// NATS bus integration tests (requires NATS on 127.0.0.1:4222)
 #[cfg(feature = "nats-bus")]
 mod nats_bus_tests {
     use confers::bus::{ConfigBus, ConfigChangeEvent, NatsBusBuilder, NatsConfigBus};
@@ -212,9 +204,6 @@ mod nats_bus_tests {
 
     #[tokio::test]
     async fn test_nats_bus_url_method() {
-        // No public url() getter exists on NatsConfigBus / NatsBusBuilder.
-        // The url() builder setter is therefore verified by observing a
-        // successful connection through the configured URL.
         if !nats_ready() {
             eprintln!("Skipping test: NATS not available");
             return;
@@ -245,9 +234,6 @@ mod nats_bus_tests {
     #[tokio::test]
     #[serial]
     async fn test_nats_bus_subject() {
-        // No public subject() getter exists. We verify the subject() builder
-        // setter by confirming a published event is delivered to a subscriber
-        // on the configured subject (routing correctness).
         if !nats_ready() {
             eprintln!("Skipping test: NATS not available");
             return;
@@ -279,9 +265,6 @@ mod nats_bus_tests {
     #[tokio::test]
     #[serial]
     async fn test_nats_bus_with_stream_name() {
-        // The actual builder method is `stream_name()` (not `with_stream_name()`).
-        // We verify it by publishing/subscribing through the custom stream,
-        // which only works if the stream name was actually applied.
         if !nats_ready() {
             eprintln!("Skipping test: NATS not available");
             return;
@@ -363,13 +346,7 @@ mod nats_bus_tests {
     }
 }
 
-// ==================== Redis bus integration tests ====================
-//
-// Requires a running Redis server on 127.0.0.1:16379. Start via:
-//   docker-compose -f docker-compose.test.yml up -d redis
-//
-// NOTE: Redis has no HTTP health endpoint, so availability is probed via a
-// raw TCP connect (std::net::TcpStream) rather than `common::is_service_available`.
+// Redis bus integration tests (requires Redis on 127.0.0.1:16379)
 #[cfg(feature = "redis-bus")]
 mod redis_bus_tests {
     use confers::bus::{ConfigBus, ConfigChangeEvent, RedisBusBuilder};
@@ -411,8 +388,6 @@ mod redis_bus_tests {
 
     #[tokio::test]
     async fn test_redis_bus_url_method() {
-        // No public url() getter exists. The url() builder setter is verified
-        // by observing a successful connection through the configured URL.
         if !redis_ready() {
             eprintln!("Skipping test: Redis not available");
             return;
@@ -427,7 +402,6 @@ mod redis_bus_tests {
 
     #[tokio::test]
     async fn test_redis_bus_with_pool_size() {
-        // The actual builder method is `pool_size()` (not `with_pool_size()`).
         if !redis_ready() {
             eprintln!("Skipping test: Redis not available");
             return;
