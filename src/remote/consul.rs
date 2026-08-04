@@ -161,7 +161,7 @@ impl ConsulSourceBuilder {
         Ok(ConsulSource {
             client: Arc::new(client),
             address: Arc::from(self.address),
-            prefix: Arc::from(self.prefix),
+            prefix: Arc::from(self.prefix.clone()),
             format: self.format,
             interval: self.interval.unwrap_or(DEFAULT_CONSUL_POLL_INTERVAL),
             token: self.token.map(Arc::from),
@@ -169,6 +169,7 @@ impl ConsulSourceBuilder {
             cached_value: Arc::new(std::sync::RwLock::new(None)),
             max_response_bytes: self.max_response_bytes,
             max_kv_entries: self.max_kv_entries,
+            cached_source_id: SourceId::new(format!("consul:{}", self.prefix)),
         })
     }
 }
@@ -192,6 +193,7 @@ pub struct ConsulSource {
     cached_value: Arc<std::sync::RwLock<Option<AnnotatedValue>>>,
     max_response_bytes: usize,
     max_kv_entries: usize,
+    cached_source_id: SourceId,
 }
 
 impl ConsulSource {
@@ -462,8 +464,7 @@ impl crate::interface::AsyncSource for ConsulSource {
     }
 
     fn source_id(&self) -> &SourceId {
-        static SOURCE_ID: std::sync::OnceLock<SourceId> = std::sync::OnceLock::new();
-        SOURCE_ID.get_or_init(|| SourceId::new("consul"))
+        &self.cached_source_id
     }
 
     fn priority(&self) -> u8 {
@@ -1042,10 +1043,9 @@ mod tests {
     fn test_async_source_trait_source_id_ref() {
         use crate::interface::AsyncSource;
         let source = ConsulSourceBuilder::new().build().unwrap();
-        // Call the TRAIT method AsyncSource::source_id (returns &SourceId to
-        // a static "consul"), not the inherent source_id.
+        // The trait method now returns the dynamic source_id including prefix
         let id = <ConsulSource as AsyncSource>::source_id(&source);
-        assert_eq!(id.as_str(), "consul");
+        assert!(id.as_str().starts_with("consul:"), "expected consul: prefix, got {}", id.as_str());
     }
 
     // --- H1 regression tests: response size & entry count limits ---

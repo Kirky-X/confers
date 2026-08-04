@@ -28,12 +28,12 @@ impl AdaptiveDebouncer {
     pub fn should_process(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(std::time::Duration::ZERO)
             .as_millis() as u64;
 
-        let last = self.last_event.load(Ordering::Relaxed);
+        let last = self.last_event.load(Ordering::Acquire);
         if now.saturating_sub(last) >= self.window_ms {
-            self.last_event.store(now, Ordering::Relaxed);
+            self.last_event.store(now, Ordering::Release);
             true
         } else {
             false
