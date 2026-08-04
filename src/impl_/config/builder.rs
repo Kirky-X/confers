@@ -759,7 +759,10 @@ mod tests {
         let sid = crate::types::SourceId::new("test");
         let av = AnnotatedValue::new(ConfigValue::F64(f64::NAN), sid, "k");
         // NaN is preserved as a string instead of silently dropping to Null.
-        assert_eq!(value_to_json(&av), serde_json::Value::String("NaN".to_string()));
+        assert_eq!(
+            value_to_json(&av),
+            serde_json::Value::String("NaN".to_string())
+        );
     }
 
     #[cfg(feature = "config-bus")]

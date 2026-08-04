@@ -159,7 +159,11 @@ impl SnapshotManager {
     }
 
     pub fn prune_old_snapshots(&self) -> ConfigResult<usize> {
-        prune_blocking(&self.config.dir, self.config.max_snapshots, self.config.format.ext())
+        prune_blocking(
+            &self.config.dir,
+            self.config.max_snapshots,
+            self.config.format.ext(),
+        )
     }
 
     pub async fn save(
@@ -267,13 +271,14 @@ impl SnapshotManager {
         let dir = self.config.dir.clone();
         let max = self.config.max_snapshots;
         let ext = self.config.format.ext().to_string();
-        tokio::task::spawn_blocking(move || {
-            prune_blocking(&dir, max, &ext)
-        })
-        .await
-        .map_err(|e| crate::error::ConfigError::IoError(
-            std::io::Error::other(format!("spawn_blocking: {}", e))
-        ))??;
+        tokio::task::spawn_blocking(move || prune_blocking(&dir, max, &ext))
+            .await
+            .map_err(|e| {
+                crate::error::ConfigError::IoError(std::io::Error::other(format!(
+                    "spawn_blocking: {}",
+                    e
+                )))
+            })??;
 
         Ok(path)
     }

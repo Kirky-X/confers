@@ -302,7 +302,10 @@ impl ConfigConfigError {
             self.user_message()
         );
         // Append root-cause source for parse errors so audit trails retain diagnostics.
-        if let ConfigConfigError::ParseError { source: Some(src), .. } = self {
+        if let ConfigConfigError::ParseError {
+            source: Some(src), ..
+        } = self
+        {
             format!("{} cause={}", base, src)
         } else {
             base

@@ -16,7 +16,11 @@ mod common;
 
 /// Benchmark: Shallow wide tree - 1 level, 1000 keys
 fn bench_path_shallow_wide_1000(c: &mut Criterion) {
-    let value = AnnotatedValue::new(common::create_flat_map(1000), SourceId::new("bench"), "root");
+    let value = AnnotatedValue::new(
+        common::create_flat_map(1000),
+        SourceId::new("bench"),
+        "root",
+    );
 
     c.bench_function("path_shallow_wide_1000", |b| {
         b.iter(|| value.all_paths());
@@ -25,7 +29,11 @@ fn bench_path_shallow_wide_1000(c: &mut Criterion) {
 
 /// Benchmark: Shallow wide tree - 1 level, 5000 keys
 fn bench_path_shallow_wide_5000(c: &mut Criterion) {
-    let value = AnnotatedValue::new(common::create_flat_map(5000), SourceId::new("bench"), "root");
+    let value = AnnotatedValue::new(
+        common::create_flat_map(5000),
+        SourceId::new("bench"),
+        "root",
+    );
 
     c.bench_function("path_shallow_wide_5000", |b| {
         b.iter(|| value.all_paths());

@@ -6,7 +6,6 @@
 //! purely from environment variables and verifies that `port` (u32) and
 //! `debug` (bool) deserialize correctly.
 
-
 use serde::Deserialize;
 use serial_test::serial;
 

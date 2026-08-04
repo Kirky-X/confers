@@ -167,10 +167,7 @@ impl ErrorSanitizer {
         }
 
         // 应用自定义规则
-        let custom_rules = self
-            .custom_rules
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let custom_rules = self.custom_rules.read().unwrap_or_else(|e| e.into_inner());
         for (ref pattern, ref replacement) in custom_rules.iter() {
             result = pattern
                 .replace_all(&result, replacement.as_str())

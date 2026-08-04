@@ -92,7 +92,9 @@ impl MergeEngine {
                 drop(low_inner);
                 ConfigValue::Map(high_arc)
             }
-            (low_inner, high_inner, MergeStrategy::Custom { func, .. }) => func(&low_inner, &high_inner),
+            (low_inner, high_inner, MergeStrategy::Custom { func, .. }) => {
+                func(&low_inner, &high_inner)
+            }
             (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
                 ConfigValue::String(format!("{}{}{}", l, separator, r))
             }
@@ -249,8 +251,12 @@ fn merge_maps_with_cow(
             );
 
             if needs_recursive {
-                let merged_inner =
-                    MergeEngine::merge_with_depth(v_low.clone(), v_high.clone(), *strategy, depth + 1)?;
+                let merged_inner = MergeEngine::merge_with_depth(
+                    v_low.clone(),
+                    v_high.clone(),
+                    *strategy,
+                    depth + 1,
+                )?;
                 result.insert(
                     k.clone(),
                     build_annotated_value(merged_inner.inner, v_high, v_low),
@@ -990,12 +996,10 @@ mod tests {
         // When both maps share the same Arc (strong_count > 1), the merge must
         // still go through merge_maps_with_cow and return the same Arc (ptr_eq).
         let e = MergeEngine::new();
-        let shared = Arc::new(IndexMap::from_iter([
-            (
-                Arc::from("a"),
-                AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "t.a"),
-            ),
-        ]));
+        let shared = Arc::new(IndexMap::from_iter([(
+            Arc::from("a"),
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "t.a"),
+        )]));
         let l = AnnotatedValue::new(
             ConfigValue::Map(Arc::clone(&shared)),
             SourceId::new("l"),
@@ -1021,9 +1025,11 @@ mod tests {
         // Replace strategy with Array+Array: the owned Arc is passed through
         // without cloning at the merge level.
         let e = MergeEngine::new();
-        let arr = Arc::from(vec![
-            AnnotatedValue::new(ConfigValue::string("x"), SourceId::new("s"), "t.0"),
-        ]);
+        let arr = Arc::from(vec![AnnotatedValue::new(
+            ConfigValue::string("x"),
+            SourceId::new("s"),
+            "t.0",
+        )]);
         let l = AnnotatedValue::new(
             ConfigValue::Array(Arc::from(vec![AnnotatedValue::new(
                 ConfigValue::string("old"),

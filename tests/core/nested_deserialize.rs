@@ -8,7 +8,6 @@
 //! loading real TOML / JSON / YAML files containing nested tables into a
 //! typed `AppConfig` struct.
 
-
 use serde::Deserialize;
 use std::io::Write;
 use std::path::PathBuf;

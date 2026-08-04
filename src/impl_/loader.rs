@@ -1237,7 +1237,11 @@ mod tests {
             false,
             false,
         );
-        assert!(result.is_ok(), "relative path within allowed dir should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "relative path within allowed dir should succeed: {:?}",
+            result.err()
+        );
     }
 
     #[test]

@@ -252,10 +252,7 @@ impl AuditWriter {
                     timestamp: *timestamp,
                 }
             }
-            AuditEvent::KeyAccess {
-                key,
-                timestamp,
-            } => {
+            AuditEvent::KeyAccess { key, timestamp } => {
                 let sanitized_key = if is_sensitive_field(key) {
                     "***REDACTED***".to_string()
                 } else {

@@ -280,14 +280,18 @@ impl EnvSecurityValidator {
     ) -> Result<(), EnvSecurityError> {
         // Use custom patterns if configured, otherwise fall back to global patterns
         let custom_blocked: Vec<regex::Regex> = if !self.config.blocked_patterns.is_empty() {
-            self.config.blocked_patterns.iter()
+            self.config
+                .blocked_patterns
+                .iter()
                 .filter_map(|p| regex::Regex::new(p).ok())
                 .collect()
         } else {
             Vec::new()
         };
         let custom_allowed: Vec<regex::Regex> = if !self.config.allowed_patterns.is_empty() {
-            self.config.allowed_patterns.iter()
+            self.config
+                .allowed_patterns
+                .iter()
                 .filter_map(|p| regex::Regex::new(p).ok())
                 .collect()
         } else {

@@ -142,11 +142,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         provider: Arc<dyn ConfigProvider>,
     ) -> ConfigResult<ReloadOutcome> {
         // Serialize concurrent reload operations to prevent state corruption.
-        let _guard = self
-            .inner
-            .reload_lock
-            .lock()
-            .await;
+        let _guard = self.inner.reload_lock.lock().await;
         match &self.inner.strategy {
             ReloadStrategy::Immediate => {
                 self.inner.current.store(new_config);

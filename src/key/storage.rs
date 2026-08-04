@@ -1520,9 +1520,7 @@ mod tests {
         let export_path = temp_dir.path().join("empty_export.json");
         std::fs::write(&export_path, serde_json::to_string(&export).unwrap()).unwrap();
 
-        let err = storage
-            .import_keys(&export_path, &master_key)
-            .unwrap_err();
+        let err = storage.import_keys(&export_path, &master_key).unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("empty or corrupt"),

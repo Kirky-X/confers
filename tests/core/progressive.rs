@@ -10,7 +10,6 @@
 
 #![cfg(feature = "progressive-reload")]
 
-
 use super::common;
 use std::sync::Arc;
 use std::time::Duration;

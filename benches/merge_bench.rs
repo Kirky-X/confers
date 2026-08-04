@@ -17,7 +17,9 @@ use std::hint::black_box;
 use std::sync::Arc;
 
 mod common;
-use common::{annotated, av, create_large_map, create_nested_config, create_override_map, make_map};
+use common::{
+    annotated, av, create_large_map, create_nested_config, create_override_map, make_map,
+};
 
 // =============================================================================
 // Value construction benchmarks
@@ -62,10 +64,20 @@ fn bench_merge_large_map(c: &mut Criterion) {
     let engine = MergeEngine::new();
 
     let low_entries: Vec<(String, ConfigValue)> = (0..100)
-        .map(|i| (format!("field_{:03}", i), ConfigValue::String(format!("low_{}", i))))
+        .map(|i| {
+            (
+                format!("field_{:03}", i),
+                ConfigValue::String(format!("low_{}", i)),
+            )
+        })
         .collect();
     let high_entries: Vec<(String, ConfigValue)> = (0..100)
-        .map(|i| (format!("field_{:03}", i), ConfigValue::String(format!("high_{}", i))))
+        .map(|i| {
+            (
+                format!("field_{:03}", i),
+                ConfigValue::String(format!("high_{}", i)),
+            )
+        })
         .collect();
 
     let low = annotated(make_map(low_entries), "root");

@@ -581,7 +581,10 @@ impl ConfigError {
     /// The message field is quoted and escaped to prevent structured log
     /// parsers from splitting on `=` or whitespace inside the message.
     pub fn audit_message(&self) -> String {
-        let msg = self.user_message().replace('\\', "\\\\").replace('"', "\\\"");
+        let msg = self
+            .user_message()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
         format!(
             "operation=config error_code={} error_type={} message=\"{}\"",
             self.code() as u16,
