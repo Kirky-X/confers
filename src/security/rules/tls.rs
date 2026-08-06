@@ -109,12 +109,10 @@ impl SecurityValidator for TlsConfigValidator {
                     if suite.is_empty() {
                         continue;
                     }
-                    // Case-insensitive comparison
+                    // Both suite_upper and WEAK_CIPHER_SUITES entries are uppercase;
+                    // direct comparison suffices (no need for eq_ignore_ascii_case)
                     let suite_upper = suite.to_uppercase();
-                    if WEAK_CIPHER_SUITES
-                        .iter()
-                        .any(|&weak| weak.eq_ignore_ascii_case(&suite_upper))
-                    {
+                    if WEAK_CIPHER_SUITES.iter().any(|&weak| weak == suite_upper) {
                         violations.push(SecurityViolation {
                             validator: self.name().to_string(),
                             field: Some("tls.cipher_suites".to_string()),

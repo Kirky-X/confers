@@ -344,7 +344,6 @@ fn test_merge_strategies() {
 #[cfg(feature = "validation")]
 #[test]
 fn test_validation_rule_parse() {
-    // Can't call Validate::validate directly without derive,
-    // but we can verify the module exports are accessible
+    // TODO: Add actual validation logic tests when derive macros are available
     let _validate_type: Option<confers::validator::ValidationRule> = None;
 }
