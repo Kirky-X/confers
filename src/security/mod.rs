@@ -7,6 +7,9 @@ pub(crate) mod patterns;
 mod prefix;
 pub use prefix::EncryptionPrefix;
 
+#[cfg(feature = "security-rules")]
+pub mod rules;
+
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
