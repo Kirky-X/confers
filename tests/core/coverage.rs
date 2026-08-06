@@ -342,8 +342,63 @@ fn test_merge_strategies() {
 // ============ Validator Module ============
 
 #[cfg(feature = "validation")]
-#[test]
-fn test_validation_rule_parse() {
-    // TODO: Add actual validation logic tests when derive macros are available
-    let _validate_type: Option<confers::validator::ValidationRule> = None;
+mod validation_tests {
+    use confers::validator::{ValidationResult, ValidationRule};
+
+    #[test]
+    fn test_validation_rule_from_str_length() {
+        let rule = ValidationRule::from_str("length(min=1, max=100)");
+        assert!(matches!(rule, Some(ValidationRule::Length { min: 1, max: 100 })));
+    }
+
+    #[test]
+    fn test_validation_rule_from_str_range() {
+        let rule = ValidationRule::from_str("range(min=1, max=65535)");
+        assert!(matches!(rule, Some(ValidationRule::Range { min: 1, max: 65535 })));
+    }
+
+    #[test]
+    fn test_validation_rule_from_str_simple() {
+        assert!(matches!(ValidationRule::from_str("email"), Some(ValidationRule::Email)));
+        assert!(matches!(ValidationRule::from_str("url"), Some(ValidationRule::Url)));
+        assert!(matches!(ValidationRule::from_str("ip"), Some(ValidationRule::Ip)));
+    }
+
+    #[test]
+    fn test_validation_rule_from_str_invalid() {
+        assert!(ValidationRule::from_str("unknown").is_none());
+        assert!(ValidationRule::from_str("length(min=abc)").is_none());
+        assert!(ValidationRule::from_str("length(min=10, max=1)").is_none()); // min > max
+        assert!(ValidationRule::from_str("range(min=100, max=1)").is_none()); // min > max
+    }
+
+    #[test]
+    fn test_validation_rule_equality() {
+        assert_eq!(ValidationRule::Email, ValidationRule::Email);
+        assert_ne!(ValidationRule::Email, ValidationRule::Url);
+        assert_eq!(ValidationRule::MinLength(5), ValidationRule::MinLength(5));
+        assert_ne!(ValidationRule::MinLength(5), ValidationRule::MinLength(10));
+    }
+
+    #[test]
+    fn test_validation_rule_clone_and_debug() {
+        let rule = ValidationRule::Length { min: 1, max: 50 };
+        let cloned = rule.clone();
+        assert_eq!(rule, cloned);
+        let debug = format!("{:?}", rule);
+        assert!(debug.contains("Length"));
+    }
+
+    #[test]
+    fn test_validate_trait_is_accessible() {
+        // Verify the Validate trait is re-exported and usable as a bound
+        fn _assert_validate_trait_exists<T: garde::Validate>() {}
+    }
+
+    #[test]
+    fn test_validation_result_type_alias() {
+        // Verify ValidationResult is a proper Result type
+        let ok_result: ValidationResult = Ok(());
+        assert!(ok_result.is_ok());
+    }
 }
