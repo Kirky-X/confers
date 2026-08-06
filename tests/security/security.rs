@@ -54,12 +54,9 @@ fn test_key_registry_try_all_keys() {
     let crypto = XChaCha20Crypto::new();
     let plaintext = b"test data";
 
-    // Generate the same key pattern for encryption
-    let mut k2_bytes = vec![2u8; 32];
-    for (i, byte) in k2_bytes.iter_mut().enumerate() {
-        *byte = byte.wrapping_add(i as u8);
-    }
-    let (nonce, ciphertext) = crypto.encrypt(plaintext, &k2_bytes).unwrap();
+    // Use the same helper to get the v2 key bytes
+    let k2 = make_test_key(2);
+    let (nonce, ciphertext) = crypto.encrypt(plaintext, k2.as_slice()).unwrap();
 
     let (version, decrypted) = registry
         .try_decrypt_with_all_keys(&nonce, &ciphertext)
@@ -77,7 +74,7 @@ fn test_error_sanitization() {
     };
 
     let user_message = error.user_message();
-    assert!(user_message.contains("not found") || user_message.contains("file"));
+    assert!(user_message.contains("not found"), "expected 'not found' in message, got: {user_message}");
 }
 
 // =============================================================================
@@ -147,11 +144,13 @@ mod security_rules_tests {
 
         let report = registry.validate_all(&config);
 
-        // Should have critical violations
+        // Verify specific expected violations
+        let validators: Vec<&str> = report.violations.iter().map(|v| v.validator.as_str()).collect();
+        assert!(validators.contains(&"jwt_secret"), "expected jwt_secret violation");
+        assert!(validators.contains(&"cors"), "expected cors violation");
+        assert!(validators.contains(&"tls_config"), "expected tls_config violation, got: {:?}", validators);
+        assert!(validators.contains(&"ssrf"), "expected ssrf violation");
         assert!(report.critical_count() > 0);
-        // Should have warnings too
-        assert!(report.warning_count() > 0);
-        // is_ok should be false (has criticals)
         assert!(!report.is_ok(false));
     }
 

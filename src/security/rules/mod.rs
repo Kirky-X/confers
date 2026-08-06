@@ -33,7 +33,7 @@ pub enum ViolationSeverity {
 }
 
 /// A single security violation found during validation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityViolation {
     /// Name of the validator that produced this violation.
     pub validator: String,

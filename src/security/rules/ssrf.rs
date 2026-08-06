@@ -185,7 +185,16 @@ impl SecurityValidator for SsrfValidator {
             // Check host against blocked IP ranges
             if let Some(host) = parsed.host_str() {
                 // Strip brackets from IPv6 addresses (e.g. "[::1]" -> "::1")
-                let host = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host);
+                // Malformed brackets (e.g. "[::1") → report as violation, don't silently skip
+                let (host, malformed_ipv6) = if let Some(inner) = host.strip_prefix('[') {
+                    match inner.strip_suffix(']') {
+                        Some(stripped) => (stripped, false),
+                        None => (inner, true), // missing closing bracket
+                    }
+                } else {
+                    (host, false)
+                };
+
                 if let Ok(ip) = IpAddr::from_str(host) {
                     if Self::is_blocked_ip(&ip) {
                         violations.push(SecurityViolation {
@@ -197,6 +206,16 @@ impl SecurityValidator for SsrfValidator {
                             severity: ViolationSeverity::Critical,
                         });
                     }
+                } else if malformed_ipv6 {
+                    // Malformed IPv6 address that can't be parsed — flag as warning
+                    violations.push(SecurityViolation {
+                        validator: self.name().to_string(),
+                        field: Some(self.config_key.clone()),
+                        message: format!(
+                            "Malformed IPv6 address in URL (missing closing bracket): {url_str}"
+                        ),
+                        severity: ViolationSeverity::Warning,
+                    });
                 }
                 // Note: DNS resolution is not performed here (sync, no IO).
                 // Hostnames are checked only if they are literal IP addresses.
