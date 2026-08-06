@@ -153,6 +153,8 @@ impl SecurityReport {
 pub struct SecurityValidatorRegistry {
     validators: Vec<Box<dyn SecurityValidator>>,
     /// Whether to treat warnings as failures in `validate_all`.
+    /// Accessible via [`SecurityReport::is_ok`] rather than checked internally,
+    /// so callers decide the policy when evaluating the report.
     fail_on_warning: bool,
 }
 

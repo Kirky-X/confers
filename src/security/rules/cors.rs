@@ -47,8 +47,7 @@ impl SecurityValidator for CorsValidator {
 
         // Check allowed_origins for wildcard
         if let Some(value) = config.get_raw("cors.allowed_origins") {
-            #[allow(deprecated)]
-            if let Some(origins_str) = value.as_string() {
+            if let Some(origins_str) = value.as_str() {
                 if origins_str.contains('*') {
                     violations.push(SecurityViolation {
                         validator: self.name().to_string(),
@@ -62,8 +61,7 @@ impl SecurityValidator for CorsValidator {
 
         // Check allowed_methods is non-empty
         if let Some(value) = config.get_raw("cors.allowed_methods") {
-            #[allow(deprecated)]
-            if let Some(methods_str) = value.as_string() {
+            if let Some(methods_str) = value.as_str() {
                 let trimmed = methods_str.trim();
                 if trimmed.is_empty() || trimmed == "[]" {
                     violations.push(SecurityViolation {
@@ -87,8 +85,8 @@ impl SecurityValidator for CorsValidator {
 
         // Check max_age
         if let Some(value) = config.get_raw("cors.max_age") {
-            #[allow(deprecated)]
-            if let Some(age_str) = value.as_string() {
+            // Try string representation first (e.g. "172800")
+            if let Some(age_str) = value.as_str() {
                 if let Ok(age) = age_str.parse::<u64>() {
                     if age > MAX_AGE_LIMIT {
                         violations.push(SecurityViolation {
@@ -102,10 +100,9 @@ impl SecurityValidator for CorsValidator {
                         });
                     }
                 }
-            }
-            #[allow(deprecated)]
-            if let Some(age) = value.as_i64() {
-                if age as u64 > MAX_AGE_LIMIT {
+            } else if let Some(age) = value.as_i64() {
+                // Try native i64 representation
+                if age >= 0 && age as u64 > MAX_AGE_LIMIT {
                     violations.push(SecurityViolation {
                         validator: self.name().to_string(),
                         field: Some("cors.max_age".to_string()),

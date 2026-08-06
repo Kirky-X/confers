@@ -92,8 +92,39 @@ impl SsrfValidator {
     }
 
     /// Check if a URL is in the whitelist.
+    ///
+    /// Parses both whitelist entries and the candidate URL, then compares
+    /// scheme + host (exact) + path (prefix). This prevents bypasses like
+    /// `https://127.0.0.1.evil.com` matching whitelist entry `https://127.0.0.1`.
     fn is_whitelisted(&self, url_str: &str) -> bool {
-        self.whitelist.iter().any(|w| url_str.starts_with(w.as_str()))
+        let parsed = match url::Url::parse(url_str) {
+            Ok(u) => u,
+            Err(_) => return false,
+        };
+
+        self.whitelist.iter().any(|w| {
+            let w_parsed = match url::Url::parse(w) {
+                Ok(u) => u,
+                Err(_) => return false,
+            };
+            // Scheme and host must match exactly
+            if parsed.scheme() != w_parsed.scheme() {
+                return false;
+            }
+            if parsed.host() != w_parsed.host() {
+                return false;
+            }
+            // Path must be exact match or start with whitelist path + '/'
+            // Note: url crate returns "/" for URLs without explicit path (e.g. "https://example.com")
+            let w_path = w_parsed.path();
+            let path = parsed.path();
+            if w_path.is_empty() || w_path == "/" {
+                // Whitelist entry has no specific path — any path is allowed
+                true
+            } else {
+                path == w_path || path.starts_with(&format!("{w_path}/"))
+            }
+        })
     }
 }
 
@@ -111,8 +142,7 @@ impl SecurityValidator for SsrfValidator {
             return Ok(());
         };
 
-        #[allow(deprecated)]
-        let Some(urls_str) = value.as_string() else {
+        let Some(urls_str) = value.as_str() else {
             return Ok(());
         };
 
@@ -314,12 +344,25 @@ mod tests {
     }
 
     #[test]
-    fn test_whitelist_bypass() {
+    fn test_whitelist_exact_host_match() {
         let validator = SsrfValidator::new()
             .with_whitelist(vec!["https://127.0.0.1".to_string()]);
-        let config =
-            TestProvider::new().with_value("ssrf.allowed_urls", "https://127.0.0.1/admin");
-        assert!(validator.validate(&config).is_ok());
+        // Exact host match with subpath — should be whitelisted
+        assert!(validator.is_whitelisted("https://127.0.0.1/admin"));
+        // Exact host, no subpath
+        assert!(validator.is_whitelisted("https://127.0.0.1"));
+    }
+
+    #[test]
+    fn test_whitelist_prefix_bypass_prevented() {
+        let validator = SsrfValidator::new()
+            .with_whitelist(vec!["https://127.0.0.1".to_string()]);
+        // Different host (127.0.0.1.evil.com) must NOT match whitelist entry for 127.0.0.1
+        assert!(!validator.is_whitelisted("https://127.0.0.1.evil.com/admin"));
+        // Different scheme must NOT match
+        assert!(!validator.is_whitelisted("http://127.0.0.1/admin"));
+        // Completely different host must NOT match
+        assert!(!validator.is_whitelisted("https://evil.com/"));
     }
 
     #[test]

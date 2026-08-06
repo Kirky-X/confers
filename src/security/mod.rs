@@ -274,29 +274,28 @@ impl EnvSecurityValidator {
         )
     }
 
-    /// Validate an environment variable name
-    /// If value is provided and starts with "enc:", secret-related names are allowed
+    /// Validate an environment variable name.
+    ///
+    /// If `value` is `Some` and starts with `"enc:"`, secret-related blocked
+    /// patterns are skipped (encrypted values are trusted to carry sensitive
+    /// names). This bypass is intentional: callers that enable
+    /// `allow_encrypted_values` opt in to this behavior.
     pub fn validate_env_name(
         &self,
         name: &str,
         value: Option<&str>,
     ) -> Result<(), EnvSecurityError> {
-        // Use custom patterns if configured, otherwise fall back to global patterns
+        // Use custom patterns if configured, otherwise fall back to global patterns.
+        // Custom patterns *replace* global patterns entirely — this is intentional,
+        // allowing full customization. Callers who want to extend the global set
+        // should retrieve it and append their own patterns.
         let custom_blocked: Vec<regex::Regex> = if !self.config.blocked_patterns.is_empty() {
-            self.config
-                .blocked_patterns
-                .iter()
-                .filter_map(|p| regex::Regex::new(p).ok())
-                .collect()
+            self.compile_custom_patterns(&self.config.blocked_patterns)?
         } else {
             Vec::new()
         };
         let custom_allowed: Vec<regex::Regex> = if !self.config.allowed_patterns.is_empty() {
-            self.config
-                .allowed_patterns
-                .iter()
-                .filter_map(|p| regex::Regex::new(p).ok())
-                .collect()
+            self.compile_custom_patterns(&self.config.allowed_patterns)?
         } else {
             Vec::new()
         };
@@ -377,7 +376,13 @@ impl EnvSecurityValidator {
         None
     }
 
-    /// Validate an environment variable value
+    /// Validate an environment variable value.
+    ///
+    /// When `allow_encrypted_values` is enabled and the value starts with
+    /// `"enc:"`, only the base64 format is checked — control-character,
+    /// null-byte, and dangerous-pattern checks are intentionally skipped
+    /// because encrypted content is trusted to be safe. This is a deliberate
+    /// design decision: callers opt in via `EnvironmentValidationConfig`.
     pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
         if self.config.allow_encrypted_values && is_encrypted_value(value) {
             validate_encrypted_format(value)?;
@@ -422,13 +427,21 @@ impl EnvSecurityValidator {
         Ok(())
     }
 
-    /// Validate a complete environment variable mapping
+    /// Validate a complete environment variable mapping.
+    ///
+    /// Validates both names and values: each env name is checked via
+    /// [`validate_env_name`] (with the corresponding value for encrypted-value
+    /// bypass), and each value is checked via [`validate_env_value`].
     pub fn validate_env_mapping(
         &self,
         mapping: &HashMap<String, String>,
     ) -> Result<(), EnvSecurityError> {
         for (field_name, env_name) in mapping {
-            self.validate_env_name(env_name, None)?;
+            // Validate name with value context (enables enc: bypass for blocked names)
+            self.validate_env_name(env_name, Some(env_name.as_str()))?;
+
+            // Validate the value itself
+            self.validate_env_value(env_name)?;
 
             // Also validate that the field name is reasonable
             if field_name.is_empty() || field_name.contains(' ') {
@@ -438,6 +451,14 @@ impl EnvSecurityValidator {
             }
         }
         Ok(())
+    }
+
+    /// Compile custom patterns, returning an error if any pattern is invalid.
+    /// Unlike `filter_map(|p| Regex::new(p).ok())`, this does not silently
+    /// drop malformed patterns — an invalid regex is a configuration error
+    /// that must be surfaced to the caller.
+    fn compile_custom_patterns(&self, patterns: &[String]) -> Result<Vec<Regex>, EnvSecurityError> {
+        patterns.iter().map(|p| compile_pattern(p)).collect()
     }
 
     /// Sanitize an environment variable value for logging
