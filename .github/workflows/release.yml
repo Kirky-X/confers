@@ -35,16 +35,18 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: create-release
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30  # stable
       - name: Publish confers-macros
         working-directory: macros
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
       - name: Wait for crates.io index
         run: sleep 30
       - name: Publish confers
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} -p confers
+        run: cargo publish -p confers
 
   build-binaries:
     name: Build Binary (${{ matrix.target }})
