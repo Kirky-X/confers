@@ -79,3 +79,137 @@ fn test_error_sanitization() {
     let user_message = error.user_message();
     assert!(user_message.contains("not found") || user_message.contains("file"));
 }
+
+// =============================================================================
+// Security Rules Integration Tests
+// =============================================================================
+
+#[cfg(feature = "security-rules")]
+mod security_rules_tests {
+    use confers::security::rules::{
+        SecurityValidatorRegistry, SecurityViolation, ViolationSeverity,
+    };
+    use confers::types::{AnnotatedValue, ConfigValue, SourceId};
+    use confers::interface::ConfigProvider;
+    use std::collections::HashMap;
+
+    struct TestProvider(HashMap<String, AnnotatedValue>);
+
+    impl TestProvider {
+        fn new() -> Self {
+            Self(HashMap::new())
+        }
+
+        fn with_value(mut self, key: &str, value: &str) -> Self {
+            self.0.insert(
+                key.to_string(),
+                AnnotatedValue::new(ConfigValue::string(value), SourceId::new("test"), key),
+            );
+            self
+        }
+    }
+
+    impl ConfigProvider for TestProvider {
+        fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+            self.0.get(key)
+        }
+
+        fn keys(&self) -> Vec<String> {
+            self.0.keys().cloned().collect()
+        }
+    }
+
+    #[test]
+    fn test_registry_with_defaults_validates_all() {
+        let registry = SecurityValidatorRegistry::with_defaults();
+        assert_eq!(registry.validator_count(), 4);
+
+        // Empty config — JWT missing (warning), CORS skipped, SSRF skipped, TLS skipped
+        let config = TestProvider::new();
+        let report = registry.validate_all(&config);
+
+        // JWT missing produces a warning
+        assert!(report.violations.iter().any(|v| {
+            v.validator == "jwt_secret" && v.severity == ViolationSeverity::Warning
+        }));
+    }
+
+    #[test]
+    fn test_registry_detects_multiple_violations() {
+        let registry = SecurityValidatorRegistry::with_defaults();
+
+        let config = TestProvider::new()
+            .with_value("jwt.secret", "short") // too short + weak
+            .with_value("cors.allowed_origins", "*") // wildcard
+            .with_value("cors.allowed_methods", "GET,POST")
+            .with_value("tls.min_version", "1.0") // too old
+            .with_value("ssrf.allowed_urls", "https://127.0.0.1/admin"); // SSRF
+
+        let report = registry.validate_all(&config);
+
+        // Should have critical violations
+        assert!(report.critical_count() > 0);
+        // Should have warnings too
+        assert!(report.warning_count() > 0);
+        // is_ok should be false (has criticals)
+        assert!(!report.is_ok(false));
+    }
+
+    #[test]
+    fn test_registry_clean_config_passes() {
+        let registry = SecurityValidatorRegistry::with_defaults();
+
+        let config = TestProvider::new()
+            .with_value("jwt.secret", "this_is_a_very_long_secret_that_is_at_least_32_bytes!")
+            .with_value("cors.allowed_origins", "https://example.com")
+            .with_value("cors.allowed_methods", "GET,POST")
+            .with_value("cors.max_age", "3600")
+            .with_value("tls.min_version", "1.3")
+            .with_value("tls.cipher_suites", "TLS_AES_128_GCM_SHA256")
+            .with_value("ssrf.allowed_urls", "https://api.example.com/webhook");
+
+        let report = registry.validate_all(&config);
+        assert!(report.is_ok(false));
+        assert_eq!(report.critical_count(), 0);
+    }
+
+    #[test]
+    fn test_fail_on_warning_mode() {
+        let registry = SecurityValidatorRegistry::with_defaults().with_fail_on_warning(true);
+
+        // Config with only a warning (JWT missing)
+        let config = TestProvider::new();
+        let report = registry.validate_all(&config);
+
+        // With fail_on_warning=true, warning-only violations cause failure
+        assert!(!report.is_ok(true));
+    }
+
+    #[test]
+    fn test_custom_validator_registration() {
+        use confers::security::rules::SecurityValidator;
+
+        struct AlwaysFailValidator;
+        impl SecurityValidator for AlwaysFailValidator {
+            fn validate(&self, _config: &dyn ConfigProvider) -> Result<(), Vec<SecurityViolation>> {
+                Err(vec![SecurityViolation {
+                    validator: "always_fail".to_string(),
+                    field: None,
+                    message: "always fails".to_string(),
+                    severity: ViolationSeverity::Critical,
+                }])
+            }
+            fn name(&self) -> &'static str { "always_fail" }
+            fn category(&self) -> &'static str { "custom" }
+            fn description(&self) -> &'static str { "Always fails for testing" }
+        }
+
+        let mut registry = SecurityValidatorRegistry::new();
+        registry.register(Box::new(AlwaysFailValidator));
+
+        let config = TestProvider::new();
+        let report = registry.validate_all(&config);
+        assert_eq!(report.violations.len(), 1);
+        assert_eq!(report.violations[0].validator, "always_fail");
+    }
+}
