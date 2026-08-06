@@ -1080,7 +1080,97 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
 - ✅ Treat validation failures as potential security incidents
 - ❌ Don't bypass validation for convenience
 
-### 7. Production Security Checklist
+### 7. Security Validation Rules
+
+<div style="padding:16px; margin: 16px 0">
+
+The `security-rules` feature provides a standardized security validation rule library. Built-in validators check JWT secret strength, CORS configuration, SSRF protection, and TLS settings — all executed automatically at startup.
+
+</div>
+
+```toml
+# Cargo.toml
+[dependencies]
+confers = { version = "0.5", features = ["security-rules"] }
+```
+
+```rust
+use confers::security::rules::SecurityValidatorRegistry;
+
+// Create registry with all built-in validators
+let registry = SecurityValidatorRegistry::with_defaults();
+
+// Run all validators against your config
+let report = registry.validate_all(&config);
+
+// Check results
+if !report.is_ok(false) {
+    for v in &report.violations {
+        eprintln!("[{}] {}: {}", v.severity, v.validator, v.message);
+    }
+    // Fail fast on critical issues
+    if report.critical_count() > 0 {
+        std::process::exit(1);
+    }
+}
+```
+
+**Built-in Validators:**
+
+| Validator | Checks | Severity |
+|-----------|--------|----------|
+| JWT Secret | Length ≥ 32 bytes, weak password detection | Critical |
+| CORS | Wildcard `*`, empty methods, max_age > 86400s | Critical/Warning |
+| SSRF | 18 blocked CIDR ranges, whitelist support | Critical |
+| TLS | min_version ≥ 1.2, weak cipher suites | Critical/Warning |
+
+**Custom Validators:** Implement the `SecurityValidator` trait and register with `SecurityValidatorRegistry::register()`.
+
+### 8. Runtime Feature Toggle
+
+<div style="padding:16px; margin: 16px 0">
+
+The `feature-toggle` feature provides runtime feature toggling, complementing compile-time `cfg(feature = ...)` flags. This enables gradual rollouts and hot-switching without recompilation.
+
+</div>
+
+```toml
+# Cargo.toml
+[dependencies]
+confers = { version = "0.5", features = ["feature-toggle"] }
+```
+
+```rust
+use confers::toggle::FeatureToggleRegistry;
+
+let registry = FeatureToggleRegistry::new();
+
+// Register features with default state
+registry.register("new_dashboard", "New Dashboard UI", false);
+registry.register("beta_api", "Beta API Endpoint", false);
+
+// Load overrides from configuration
+registry.load_from_config(&config, "features");
+
+// Check in application code
+if registry.is_enabled("new_dashboard") {
+    // Use new dashboard logic
+} else {
+    // Use legacy logic
+}
+```
+
+Configuration file (`config.toml`):
+
+```toml
+[features]
+new_dashboard = true
+beta_api = false
+```
+
+> **Tip:** Use compile-time features for code inclusion/exclusion (e.g., `encryption`), and runtime toggles for behavior switching (e.g., A/B testing, gradual rollouts).
+
+### 9. Production Security Checklist
 
 <div style="padding:16px; margin: 16px 0">
 
@@ -1133,6 +1223,16 @@ Before deploying to production, check the following security items:
 <td style="padding: 12px">Log Masking</td>
 <td style="padding: 12px">☐</td>
 <td style="padding: 12px">Sensitive fields marked as sensitive</td>
+</tr>
+<tr>
+<td style="padding: 12px">Security Validation Rules</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">Security rules validators pass at startup</td>
+</tr>
+<tr>
+<td style="padding: 12px">Feature Toggles</td>
+<td style="padding: 12px">☐</td>
+<td style="padding: 12px">Runtime feature toggles reviewed and configured</td>
 </tr>
 </table>
 
