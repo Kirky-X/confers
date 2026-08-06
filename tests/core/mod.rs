@@ -21,3 +21,4 @@ mod migration;
 mod modules;
 mod nested_deserialize;
 mod progressive;
+mod toggle;
