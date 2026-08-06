@@ -78,7 +78,8 @@ impl SecurityValidator for CorsValidator {
             violations.push(SecurityViolation {
                 validator: self.name().to_string(),
                 field: Some("cors.allowed_methods".to_string()),
-                message: "CORS allowed_origins configured but allowed_methods is missing".to_string(),
+                message: "CORS allowed_origins configured but allowed_methods is missing"
+                    .to_string(),
                 severity: ViolationSeverity::Critical,
             });
         }
@@ -186,8 +187,7 @@ mod tests {
         let violations = result.unwrap_err();
         assert!(violations
             .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning
-                && v.message.contains("wildcard")));
+            .any(|v| v.severity == ViolationSeverity::Warning && v.message.contains("wildcard")));
     }
 
     #[test]
@@ -201,8 +201,7 @@ mod tests {
         let violations = result.unwrap_err();
         assert!(violations
             .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical
-                && v.message.contains("empty")));
+            .any(|v| v.severity == ViolationSeverity::Critical && v.message.contains("empty")));
     }
 
     #[test]
@@ -225,8 +224,7 @@ mod tests {
         let violations = result.unwrap_err();
         assert!(violations
             .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning
-                && v.message.contains("max_age")));
+            .any(|v| v.severity == ViolationSeverity::Warning && v.message.contains("max_age")));
     }
 
     #[test]

@@ -79,12 +79,7 @@ impl FeatureToggleRegistry {
     ///
     /// If a toggle with the same name already exists, it is updated with
     /// the new description but the enabled state is preserved.
-    pub fn register(
-        &self,
-        name: impl Into<String>,
-        description: impl Into<String>,
-        default: bool,
-    ) {
+    pub fn register(&self, name: impl Into<String>, description: impl Into<String>, default: bool) {
         let name = name.into();
         let description = description.into();
 

@@ -16,29 +16,29 @@ use std::sync::LazyLock;
 static BLOCKED_NETWORKS: LazyLock<Vec<IpNet>> = LazyLock::new(|| {
     vec![
         // IPv4 private ranges
-        IpNet::from_str("127.0.0.0/8").unwrap(),     // Loopback
-        IpNet::from_str("10.0.0.0/8").unwrap(),      // Class A private
-        IpNet::from_str("172.16.0.0/12").unwrap(),   // Class B private
-        IpNet::from_str("192.168.0.0/16").unwrap(),  // Class C private
-        IpNet::from_str("169.254.0.0/16").unwrap(),  // Link-local
-        IpNet::from_str("0.0.0.0/8").unwrap(),       // Current network
-        IpNet::from_str("100.64.0.0/10").unwrap(),   // Shared address space (CGN)
-        IpNet::from_str("192.0.0.0/24").unwrap(),    // IETF protocol assignments
-        IpNet::from_str("192.0.2.0/24").unwrap(),    // TEST-NET-1
+        IpNet::from_str("127.0.0.0/8").unwrap(),   // Loopback
+        IpNet::from_str("10.0.0.0/8").unwrap(),    // Class A private
+        IpNet::from_str("172.16.0.0/12").unwrap(), // Class B private
+        IpNet::from_str("192.168.0.0/16").unwrap(), // Class C private
+        IpNet::from_str("169.254.0.0/16").unwrap(), // Link-local
+        IpNet::from_str("0.0.0.0/8").unwrap(),     // Current network
+        IpNet::from_str("100.64.0.0/10").unwrap(), // Shared address space (CGN)
+        IpNet::from_str("192.0.0.0/24").unwrap(),  // IETF protocol assignments
+        IpNet::from_str("192.0.2.0/24").unwrap(),  // TEST-NET-1
         IpNet::from_str("198.51.100.0/24").unwrap(), // TEST-NET-2
-        IpNet::from_str("203.0.113.0/24").unwrap(),  // TEST-NET-3
-        IpNet::from_str("224.0.0.0/4").unwrap(),     // Multicast
-        IpNet::from_str("240.0.0.0/4").unwrap(),     // Reserved
+        IpNet::from_str("203.0.113.0/24").unwrap(), // TEST-NET-3
+        IpNet::from_str("224.0.0.0/4").unwrap(),   // Multicast
+        IpNet::from_str("240.0.0.0/4").unwrap(),   // Reserved
         IpNet::from_str("255.255.255.255/32").unwrap(), // Broadcast
         // IPv6 private/reserved ranges
-        IpNet::from_str("::1/128").unwrap(),                         // Loopback
-        IpNet::from_str("fc00::/7").unwrap(),                        // Unique local
-        IpNet::from_str("fe80::/10").unwrap(),                       // Link-local
-        IpNet::from_str("::ffff:127.0.0.0/104").unwrap(),            // IPv4-mapped loopback
-        IpNet::from_str("::ffff:10.0.0.0/104").unwrap(),             // IPv4-mapped private
-        IpNet::from_str("::ffff:172.16.0.0/108").unwrap(),           // IPv4-mapped private
-        IpNet::from_str("::ffff:192.168.0.0/112").unwrap(),          // IPv4-mapped private
-        IpNet::from_str("::ffff:169.254.0.0/112").unwrap(),          // IPv4-mapped link-local
+        IpNet::from_str("::1/128").unwrap(),   // Loopback
+        IpNet::from_str("fc00::/7").unwrap(),  // Unique local
+        IpNet::from_str("fe80::/10").unwrap(), // Link-local
+        IpNet::from_str("::ffff:127.0.0.0/104").unwrap(), // IPv4-mapped loopback
+        IpNet::from_str("::ffff:10.0.0.0/104").unwrap(), // IPv4-mapped private
+        IpNet::from_str("::ffff:172.16.0.0/108").unwrap(), // IPv4-mapped private
+        IpNet::from_str("::ffff:192.168.0.0/112").unwrap(), // IPv4-mapped private
+        IpNet::from_str("::ffff:169.254.0.0/112").unwrap(), // IPv4-mapped link-local
     ]
 });
 
@@ -200,9 +200,7 @@ impl SecurityValidator for SsrfValidator {
                         violations.push(SecurityViolation {
                             validator: self.name().to_string(),
                             field: Some(self.config_key.clone()),
-                            message: format!(
-                                "URL points to private/reserved IP range: {url_str}"
-                            ),
+                            message: format!("URL points to private/reserved IP range: {url_str}"),
                             severity: ViolationSeverity::Critical,
                         });
                     }
@@ -285,16 +283,15 @@ mod tests {
     #[test]
     fn test_valid_https_url() {
         let validator = SsrfValidator::new();
-        let config = TestProvider::new()
-            .with_value("ssrf.allowed_urls", "https://api.example.com/webhook");
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "https://api.example.com/webhook");
         assert!(validator.validate(&config).is_ok());
     }
 
     #[test]
     fn test_loopback_blocked() {
         let validator = SsrfValidator::new();
-        let config =
-            TestProvider::new().with_value("ssrf.allowed_urls", "https://127.0.0.1/admin");
+        let config = TestProvider::new().with_value("ssrf.allowed_urls", "https://127.0.0.1/admin");
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
@@ -315,32 +312,31 @@ mod tests {
     #[test]
     fn test_private_172_blocked() {
         let validator = SsrfValidator::new();
-        let config = TestProvider::new()
-            .with_value("ssrf.allowed_urls", "https://172.16.0.1/internal");
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "https://172.16.0.1/internal");
         assert!(validator.validate(&config).is_err());
     }
 
     #[test]
     fn test_private_192_blocked() {
         let validator = SsrfValidator::new();
-        let config = TestProvider::new()
-            .with_value("ssrf.allowed_urls", "https://192.168.1.1/router");
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "https://192.168.1.1/router");
         assert!(validator.validate(&config).is_err());
     }
 
     #[test]
     fn test_ipv6_loopback_blocked() {
         let validator = SsrfValidator::new();
-        let config =
-            TestProvider::new().with_value("ssrf.allowed_urls", "https://[::1]/admin");
+        let config = TestProvider::new().with_value("ssrf.allowed_urls", "https://[::1]/admin");
         assert!(validator.validate(&config).is_err());
     }
 
     #[test]
     fn test_non_https_warning() {
         let validator = SsrfValidator::new();
-        let config = TestProvider::new()
-            .with_value("ssrf.allowed_urls", "http://api.example.com/webhook");
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "http://api.example.com/webhook");
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
@@ -352,20 +348,18 @@ mod tests {
     #[test]
     fn test_invalid_url_critical() {
         let validator = SsrfValidator::new();
-        let config =
-            TestProvider::new().with_value("ssrf.allowed_urls", "not-a-valid-url");
+        let config = TestProvider::new().with_value("ssrf.allowed_urls", "not-a-valid-url");
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical && v.message.contains("Invalid URL")));
+        assert!(violations.iter().any(
+            |v| v.severity == ViolationSeverity::Critical && v.message.contains("Invalid URL")
+        ));
     }
 
     #[test]
     fn test_whitelist_exact_host_match() {
-        let validator = SsrfValidator::new()
-            .with_whitelist(vec!["https://127.0.0.1".to_string()]);
+        let validator = SsrfValidator::new().with_whitelist(vec!["https://127.0.0.1".to_string()]);
         // Exact host match with subpath — should be whitelisted
         assert!(validator.is_whitelisted("https://127.0.0.1/admin"));
         // Exact host, no subpath
@@ -374,8 +368,7 @@ mod tests {
 
     #[test]
     fn test_whitelist_prefix_bypass_prevented() {
-        let validator = SsrfValidator::new()
-            .with_whitelist(vec!["https://127.0.0.1".to_string()]);
+        let validator = SsrfValidator::new().with_whitelist(vec!["https://127.0.0.1".to_string()]);
         // Different host (127.0.0.1.evil.com) must NOT match whitelist entry for 127.0.0.1
         assert!(!validator.is_whitelisted("https://127.0.0.1.evil.com/admin"));
         // Different scheme must NOT match
@@ -403,16 +396,15 @@ mod tests {
     #[test]
     fn test_custom_config_key() {
         let validator = SsrfValidator::with_config_key("webhooks.urls");
-        let config = TestProvider::new()
-            .with_value("webhooks.urls", "https://127.0.0.1/hook");
+        let config = TestProvider::new().with_value("webhooks.urls", "https://127.0.0.1/hook");
         assert!(validator.validate(&config).is_err());
     }
 
     #[test]
     fn test_enforce_https_disabled() {
         let validator = SsrfValidator::new().with_enforce_https(false);
-        let config = TestProvider::new()
-            .with_value("ssrf.allowed_urls", "http://api.example.com/webhook");
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "http://api.example.com/webhook");
         assert!(validator.validate(&config).is_ok());
     }
 
