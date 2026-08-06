@@ -110,6 +110,9 @@ pub mod security;
 #[cfg(feature = "key")]
 pub mod key;
 
+#[cfg(feature = "feature-toggle")]
+pub mod toggle;
+
 #[cfg(feature = "remote")]
 pub mod remote;
 
@@ -212,6 +215,15 @@ pub use bus::{BusBuilder, BusEventLimiter, ConfigBus, ConfigChangeEvent, InMemor
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 
+#[cfg(feature = "security-rules")]
+pub use security::rules::{
+    CorsValidator, JwtSecretValidator, SecurityReport, SecurityValidator, SecurityValidatorRegistry,
+    SecurityViolation, SsrfValidator, TlsConfigValidator, ViolationSeverity,
+};
+
+#[cfg(feature = "feature-toggle")]
+pub use toggle::{FeatureInfo, FeatureToggle, FeatureToggleRegistry};
+
 // ============== Factory Functions (BrickArchitecture) ==============
 
 /// Create an in-memory configuration store.
@@ -263,4 +275,13 @@ pub mod prelude {
 
     #[cfg(feature = "dynamic")]
     pub use crate::dynamic::{CallbackGuard, DynamicField, DynamicFieldBuilder};
+
+    #[cfg(feature = "security-rules")]
+    pub use crate::security::rules::{
+        SecurityReport, SecurityValidator, SecurityValidatorRegistry, SecurityViolation,
+        ViolationSeverity,
+    };
+
+    #[cfg(feature = "feature-toggle")]
+    pub use crate::toggle::{FeatureInfo, FeatureToggle, FeatureToggleRegistry};
 }
