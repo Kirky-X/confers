@@ -105,8 +105,10 @@ confers provides flexible feature configuration, allowing users to select the fu
 | `typescript-schema` | TypeScript type generation | ❌ |
 | **Security** |||
 | `security` | Security module | ❌ |
+| `security-rules` | Security validation rules | ❌ |
 | `key` | Key management system | ❌ |
 | **Advanced Features** |||
+| `feature-toggle` | Runtime feature toggle | ❌ |
 | `audit` | Audit logging | ❌ |
 | `dynamic` | Dynamic fields | ❌ |
 | `progressive-reload` | Progressive deployment | ❌ |
@@ -848,6 +850,80 @@ Secure configuration injector.
 > declared `pub(crate)` in `src/security/mod.rs`). It is tracked as internal
 > infrastructure; if you need to integrate configuration injection into your
 > own pipeline, open an issue so the maintainers can expose a stable surface.
+
+#### SecurityValidatorRegistry
+
+The `security-rules` feature provides a standardized security validation rule library with built-in validators and a registry for automatic execution at startup.
+
+```rust
+use confers::security::rules::{SecurityValidatorRegistry, SecurityValidator};
+
+// Use built-in validators (JWT, CORS, SSRF, TLS)
+let registry = SecurityValidatorRegistry::with_defaults();
+let report = registry.validate_all(&config);
+
+if !report.is_ok(false) {
+    for v in &report.violations {
+        eprintln!("[{}] {}: {}", v.severity, v.validator, v.message);
+    }
+}
+```
+
+**Built-in Validators:**
+
+| Validator | Category | Checks |
+|-----------|----------|--------|
+| `JwtSecretValidator` | `jwt` | Secret length ≥ 32 bytes, weak password detection |
+| `CorsValidator` | `cors` | Wildcard `*` detection, methods non-empty, max_age ≤ 86400s |
+| `SsrfValidator` | `ssrf` | 18 blocked CIDR ranges (IPv4 + IPv6), whitelist support |
+| `TlsConfigValidator` | `tls` | min_version ≥ 1.2, 12 weak cipher suites |
+
+**Custom Validator:**
+
+```rust
+use confers::security::rules::{SecurityValidator, SecurityViolation, ViolationSeverity};
+use confers::interface::ConfigProvider;
+
+struct MyValidator;
+
+impl SecurityValidator for MyValidator {
+    fn validate(&self, config: &dyn ConfigProvider) -> Result<(), Vec<SecurityViolation>> {
+        // Custom validation logic
+        Ok(())
+    }
+    fn name(&self) -> &'static str { "my_validator" }
+    fn category(&self) -> &'static str { "custom" }
+    fn description(&self) -> &'static str { "My custom validator" }
+}
+
+let mut registry = SecurityValidatorRegistry::new();
+registry.register(Box::new(MyValidator));
+```
+
+#### FeatureToggleRegistry
+
+The `feature-toggle` feature provides runtime feature toggling alongside compile-time `cfg` features.
+
+```rust
+use confers::toggle::FeatureToggleRegistry;
+
+let registry = FeatureToggleRegistry::new();
+
+// Register and control features
+registry.register("new_ui", "New UI Design", false);
+registry.enable("new_ui");
+assert!(registry.is_enabled("new_ui"));
+
+// Toggle from configuration
+registry.load_from_config(&config, "features");
+
+// List all toggles
+for info in registry.list() {
+    println!("{}: enabled={}, desc={}", info.name, info.enabled, info.description);
+}
+```
+
+> **Note:** Runtime toggles complement compile-time `cfg(feature = ...)` flags. Compile-time flags control code inclusion; runtime toggles control behavior without recompilation.
 
 ---
 
