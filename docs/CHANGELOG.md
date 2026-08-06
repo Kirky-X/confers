@@ -11,6 +11,33 @@ _No changes yet._
 
 ---
 
+## [0.5.1] - 2026-08-06
+
+### Added
+
+- **Security Rules**: New `SecurityValidator` trait and built-in validators (JWT secret strength, CORS configuration, SSRF protection, TLS settings).
+- **Security Validator Registry**: `SecurityValidatorRegistry` with `with_defaults()` for out-of-the-box security checks.
+- **Feature Toggle**: Runtime `FeatureToggleRegistry` with `DashMap` for thread-safe concurrent toggle management.
+- **Feature Toggle Config Loading**: `load_from_config()` method to populate toggles from `ConfigProvider`.
+
+### Fixed
+
+- **SSRF Whitelist Bypass**: `starts_with` prefix check replaced with proper URL-boundary matching to prevent `https://127.0.0.1.evil.com` bypass.
+- **TLS Version Comparison**: Lexicographic string comparison replaced with integer tuple comparison (fixes false positives like `"1.12" < "1.2"`).
+- **CORS Duplicate Violations**: `max_age` validator now uses `else if` to prevent duplicate violations for the same config value.
+- **CORS Negative Integer Wrap**: Added `age >= 0` guard to prevent negative `i64` → `u64` overflow.
+- **Silent Regex Compilation**: Invalid custom patterns now return errors instead of being silently dropped.
+- **Deprecated API Migration**: Replaced all `as_string()` calls with `as_str()` across security rules.
+- **IPv6 Bracket Edge Case**: Malformed IPv6 addresses (missing closing bracket) now report a Warning instead of silently passing.
+- **Environment Mapping Validation**: `validate_env_mapping` now validates both keys and values.
+
+### Performance
+
+- **JWT Weak Secret Lookup**: Changed from `O(n)` linear scan to `O(1)` `HashSet` lookup.
+- **TLS Cipher Comparison**: Simplified redundant `eq_ignore_ascii_case` to direct `==` (both sides already uppercase).
+
+---
+
 ## [0.5.0] - 2026-08-04
 
 ### Breaking Changes
