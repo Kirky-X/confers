@@ -30,18 +30,14 @@ fn main() -> anyhow::Result<()> {
     let config = AuditConfig::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
-        .durable_wal(true)
-        .channel_size(2048)
         .build();
     println!("  enabled: {}", config.enabled);
-    println!("  channel_size: {}", config.channel_size);
 
     // 2. 使用 AuditWriterBuilder 构建 AuditWriter
     println!("\n[构建 AuditWriter]");
     let writer = AuditWriter::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
-        .durable_wal(true)
         .build();
     println!("  已启用: {}", writer.is_enabled());
 
@@ -83,12 +79,12 @@ fn main() -> anyhow::Result<()> {
 
     // 4. 使用便捷方法写入审计事件
     println!("\n[写入审计事件]");
-    writer.log_load("config.toml");
-    writer.log_key_access("master-key");
-    writer.log_decrypt("api_token", true);
-    writer.log_decrypt("password_field", false); // 敏感字段名会被脱敏
-    writer.log_key_rotation("v1", "v2");
-    writer.write(AuditEvent::ReloadTrigger {
+    let _ = writer.log_load("config.toml");
+    let _ = writer.log_key_access("master-key");
+    let _ = writer.log_decrypt("api_token", true);
+    let _ = writer.log_decrypt("password_field", false); // 敏感字段名会被脱敏
+    let _ = writer.log_key_rotation("v1", "v2");
+    let _ = writer.write(AuditEvent::ReloadTrigger {
         source: "watcher".to_string(),
         timestamp: Utc::now(),
     });

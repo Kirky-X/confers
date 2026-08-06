@@ -430,8 +430,8 @@ impl EnvSecurityValidator {
     /// Validate a complete environment variable mapping.
     ///
     /// Validates both names and values: each env name is checked via
-    /// [`validate_env_name`] (with the corresponding value for encrypted-value
-    /// bypass), and each value is checked via [`validate_env_value`].
+    /// [`Self::validate_env_name`] (with the corresponding value for encrypted-value
+    /// bypass), and each value is checked via [`Self::validate_env_value`].
     pub fn validate_env_mapping(
         &self,
         mapping: &HashMap<String, String>,
