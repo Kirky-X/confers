@@ -185,7 +185,6 @@ impl FeatureToggleRegistry {
 
                 // Try to parse value as boolean
                 if let Some(value) = config.get_raw(&key) {
-                    #[allow(deprecated)]
                     if let Some(bool_val) = value.as_bool() {
                         self.set_from_config(toggle_name, bool_val);
                     } else if let Some(str_val) = value.as_str() {
@@ -197,7 +196,7 @@ impl FeatureToggleRegistry {
                                 self.set_from_config(toggle_name, false);
                             }
                             _ => {
-                                // Non-boolean value — skip silently
+                                // Non-boolean value for toggle — skip (documented behavior)
                             }
                         }
                     }

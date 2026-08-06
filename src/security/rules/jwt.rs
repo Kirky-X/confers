@@ -7,26 +7,30 @@
 
 use super::{SecurityValidator, SecurityViolation, ViolationSeverity};
 use crate::interface::ConfigProvider;
+use std::collections::HashSet;
+use std::sync::LazyLock;
 
-/// Known weak secrets that should be rejected.
-const WEAK_SECRETS: &[&str] = &[
-    "secret",
-    "changeme",
-    "change_me",
-    "password",
-    "test",
-    "test123",
-    "key",
-    "default",
-    "admin",
-    "letmein",
-    "welcome",
-    "qwerty",
-    "abc123",
-    "123456",
-    "12345678",
-    "1234567890",
-];
+/// Known weak secrets that should be rejected (O(1) lookup via HashSet).
+static WEAK_SECRETS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        "secret",
+        "changeme",
+        "change_me",
+        "password",
+        "test",
+        "test123",
+        "key",
+        "default",
+        "admin",
+        "letmein",
+        "welcome",
+        "qwerty",
+        "abc123",
+        "123456",
+        "12345678",
+        "1234567890",
+    ])
+});
 
 /// Minimum acceptable length for JWT secrets (in bytes).
 const MIN_SECRET_LENGTH: usize = 32;
@@ -66,8 +70,7 @@ impl SecurityValidator for JwtSecretValidator {
 
         match config.get_raw("jwt.secret") {
             Some(value) => {
-                #[allow(deprecated)]
-                if let Some(secret) = value.as_string() {
+                if let Some(secret) = value.as_str() {
                     // Check length
                     if secret.len() < self.min_length {
                         violations.push(SecurityViolation {
@@ -82,9 +85,9 @@ impl SecurityValidator for JwtSecretValidator {
                         });
                     }
 
-                    // Check weak secrets (case-insensitive)
+                    // Check weak secrets (case-insensitive, O(1) lookup)
                     let lower = secret.to_lowercase();
-                    if WEAK_SECRETS.iter().any(|&weak| lower == weak) {
+                    if WEAK_SECRETS.contains(lower.as_str()) {
                         violations.push(SecurityViolation {
                             validator: self.name().to_string(),
                             field: Some("jwt.secret".to_string()),
@@ -191,17 +194,19 @@ mod tests {
     #[test]
     fn test_weak_secret_case_insensitive() {
         let validator = JwtSecretValidator::new();
-        // 32+ bytes but still a weak secret
+        // 32+ bytes, uppercase — but NOT an exact match for any weak secret
         let config = TestProvider::new().with_value("jwt.secret", "CHANGE_ME_PLEASE_DO_IT_NOW_1234567890");
         let result = validator.validate(&config);
-        // Length is fine but it matches "change_me" pattern — wait, "CHANGE_ME_PLEASE_DO_IT_NOW_1234567890" != "changeme"
-        // Actually the check is exact match against the list, so this won't match.
-        // Let me test with exact weak secret padded to 32 bytes:
-        let config2 = TestProvider::new().with_value("jwt.secret", "changeme________________________");
-        // "changeme________________________" is 32 bytes, but not in the weak list (exact match)
-        // This should pass
+        // Exact-match only: padded/extended weak strings are not caught
         assert!(result.is_ok());
-        assert!(validator.validate(&config2).is_ok());
+    }
+
+    #[test]
+    fn test_padded_weak_secret_not_detected() {
+        // Demonstrates limitation: exact-match only, so padding a weak secret evades detection.
+        let validator = JwtSecretValidator::new();
+        let config = TestProvider::new().with_value("jwt.secret", "changeme________________________");
+        assert!(validator.validate(&config).is_ok());
     }
 
     #[test]

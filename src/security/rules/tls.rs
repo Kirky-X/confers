@@ -67,15 +67,27 @@ impl SecurityValidator for TlsConfigValidator {
 
         // Check min_version
         if let Some(value) = config.get_raw("tls.min_version") {
-            #[allow(deprecated)]
-            if let Some(version_str) = value.as_string() {
+            if let Some(version_str) = value.as_str() {
                 let normalized = version_str.trim().to_lowercase();
                 // Accept "1.2", "1.3", "TLSv1.2", "TLSv1.3", etc.
                 let version_num = normalized
                     .strip_prefix("tlsv")
                     .unwrap_or(&normalized);
 
-                if version_num < MIN_TLS_VERSION {
+                // Parse version components as integers for correct numeric comparison
+                // (avoids both lexicographic bugs like "1.12" < "1.2" and f64 bugs like 1.12 < 1.2)
+                let is_below = version_num.split('.').map(|p| p.parse::<u32>().ok()).collect::<Option<Vec<_>>>()
+                    .and_then(|parts| {
+                        let min_parts: Vec<u32> = MIN_TLS_VERSION.split('.').filter_map(|p| p.parse().ok()).collect();
+                        if parts.len() >= 2 && min_parts.len() >= 2 {
+                            Some((parts[0], parts[1]) < (min_parts[0], min_parts[1]))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if is_below {
                     violations.push(SecurityViolation {
                         validator: self.name().to_string(),
                         field: Some("tls.min_version".to_string()),
@@ -91,8 +103,7 @@ impl SecurityValidator for TlsConfigValidator {
 
         // Check cipher suites
         if let Some(value) = config.get_raw("tls.cipher_suites") {
-            #[allow(deprecated)]
-            if let Some(suites_str) = value.as_string() {
+            if let Some(suites_str) = value.as_str() {
                 for suite in suites_str.split(',') {
                     let suite = suite.trim();
                     if suite.is_empty() {
@@ -244,6 +255,15 @@ mod tests {
             .with_value("tls.cipher_suites", "TLS_RSA_WITH_NULL_SHA256");
         let result = validator.validate(&config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tls_version_numeric_comparison() {
+        // Regression test: "1.12" must NOT be flagged as below "1.2"
+        // (lexicographic comparison would incorrectly say "1.12" < "1.2")
+        let validator = TlsConfigValidator::new();
+        let config = TestProvider::new().with_value("tls.min_version", "1.12");
+        assert!(validator.validate(&config).is_ok());
     }
 
     #[test]
