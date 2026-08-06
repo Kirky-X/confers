@@ -74,7 +74,10 @@ fn test_error_sanitization() {
     };
 
     let user_message = error.user_message();
-    assert!(user_message.contains("not found"), "expected 'not found' in message, got: {user_message}");
+    assert!(
+        user_message.contains("not found"),
+        "expected 'not found' in message, got: {user_message}"
+    );
 }
 
 // =============================================================================
@@ -83,11 +86,11 @@ fn test_error_sanitization() {
 
 #[cfg(feature = "security-rules")]
 mod security_rules_tests {
+    use confers::interface::ConfigProvider;
     use confers::security::rules::{
         SecurityValidatorRegistry, SecurityViolation, ViolationSeverity,
     };
     use confers::types::{AnnotatedValue, ConfigValue, SourceId};
-    use confers::interface::ConfigProvider;
     use std::collections::HashMap;
 
     struct TestProvider(HashMap<String, AnnotatedValue>);
@@ -126,9 +129,10 @@ mod security_rules_tests {
         let report = registry.validate_all(&config);
 
         // JWT missing produces a warning
-        assert!(report.violations.iter().any(|v| {
-            v.validator == "jwt_secret" && v.severity == ViolationSeverity::Warning
-        }));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| { v.validator == "jwt_secret" && v.severity == ViolationSeverity::Warning }));
     }
 
     #[test]
@@ -145,10 +149,21 @@ mod security_rules_tests {
         let report = registry.validate_all(&config);
 
         // Verify specific expected violations
-        let validators: Vec<&str> = report.violations.iter().map(|v| v.validator.as_str()).collect();
-        assert!(validators.contains(&"jwt_secret"), "expected jwt_secret violation");
+        let validators: Vec<&str> = report
+            .violations
+            .iter()
+            .map(|v| v.validator.as_str())
+            .collect();
+        assert!(
+            validators.contains(&"jwt_secret"),
+            "expected jwt_secret violation"
+        );
         assert!(validators.contains(&"cors"), "expected cors violation");
-        assert!(validators.contains(&"tls_config"), "expected tls_config violation, got: {:?}", validators);
+        assert!(
+            validators.contains(&"tls_config"),
+            "expected tls_config violation, got: {:?}",
+            validators
+        );
         assert!(validators.contains(&"ssrf"), "expected ssrf violation");
         assert!(report.critical_count() > 0);
         assert!(!report.is_ok(false));
@@ -159,7 +174,10 @@ mod security_rules_tests {
         let registry = SecurityValidatorRegistry::with_defaults();
 
         let config = TestProvider::new()
-            .with_value("jwt.secret", "this_is_a_very_long_secret_that_is_at_least_32_bytes!")
+            .with_value(
+                "jwt.secret",
+                "this_is_a_very_long_secret_that_is_at_least_32_bytes!",
+            )
             .with_value("cors.allowed_origins", "https://example.com")
             .with_value("cors.allowed_methods", "GET,POST")
             .with_value("cors.max_age", "3600")
@@ -198,9 +216,15 @@ mod security_rules_tests {
                     severity: ViolationSeverity::Critical,
                 }])
             }
-            fn name(&self) -> &'static str { "always_fail" }
-            fn category(&self) -> &'static str { "custom" }
-            fn description(&self) -> &'static str { "Always fails for testing" }
+            fn name(&self) -> &'static str {
+                "always_fail"
+            }
+            fn category(&self) -> &'static str {
+                "custom"
+            }
+            fn description(&self) -> &'static str {
+                "Always fails for testing"
+            }
         }
 
         let mut registry = SecurityValidatorRegistry::new();

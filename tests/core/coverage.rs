@@ -348,20 +348,35 @@ mod validation_tests {
     #[test]
     fn test_validation_rule_from_str_length() {
         let rule = ValidationRule::from_str("length(min=1, max=100)");
-        assert!(matches!(rule, Some(ValidationRule::Length { min: 1, max: 100 })));
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Length { min: 1, max: 100 })
+        ));
     }
 
     #[test]
     fn test_validation_rule_from_str_range() {
         let rule = ValidationRule::from_str("range(min=1, max=65535)");
-        assert!(matches!(rule, Some(ValidationRule::Range { min: 1, max: 65535 })));
+        assert!(matches!(
+            rule,
+            Some(ValidationRule::Range { min: 1, max: 65535 })
+        ));
     }
 
     #[test]
     fn test_validation_rule_from_str_simple() {
-        assert!(matches!(ValidationRule::from_str("email"), Some(ValidationRule::Email)));
-        assert!(matches!(ValidationRule::from_str("url"), Some(ValidationRule::Url)));
-        assert!(matches!(ValidationRule::from_str("ip"), Some(ValidationRule::Ip)));
+        assert!(matches!(
+            ValidationRule::from_str("email"),
+            Some(ValidationRule::Email)
+        ));
+        assert!(matches!(
+            ValidationRule::from_str("url"),
+            Some(ValidationRule::Url)
+        ));
+        assert!(matches!(
+            ValidationRule::from_str("ip"),
+            Some(ValidationRule::Ip)
+        ));
     }
 
     #[test]

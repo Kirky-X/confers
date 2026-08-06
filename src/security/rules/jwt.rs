@@ -162,7 +162,10 @@ mod tests {
     #[test]
     fn test_valid_secret() {
         let validator = JwtSecretValidator::new();
-        let config = TestProvider::new().with_value("jwt.secret", "a]very_long_secret_that_is_at_least_32_bytes!");
+        let config = TestProvider::new().with_value(
+            "jwt.secret",
+            "a]very_long_secret_that_is_at_least_32_bytes!",
+        );
         assert!(validator.validate(&config).is_ok());
     }
 
@@ -186,16 +189,15 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.message.contains("weak secret")));
+        assert!(violations.iter().any(|v| v.message.contains("weak secret")));
     }
 
     #[test]
     fn test_weak_secret_case_insensitive() {
         let validator = JwtSecretValidator::new();
         // 32+ bytes, uppercase — but NOT an exact match for any weak secret
-        let config = TestProvider::new().with_value("jwt.secret", "CHANGE_ME_PLEASE_DO_IT_NOW_1234567890");
+        let config =
+            TestProvider::new().with_value("jwt.secret", "CHANGE_ME_PLEASE_DO_IT_NOW_1234567890");
         let result = validator.validate(&config);
         // Exact-match only: padded/extended weak strings are not caught
         assert!(result.is_ok());
@@ -205,7 +207,8 @@ mod tests {
     fn test_padded_weak_secret_not_detected() {
         // Demonstrates limitation: exact-match only, so padding a weak secret evades detection.
         let validator = JwtSecretValidator::new();
-        let config = TestProvider::new().with_value("jwt.secret", "changeme________________________");
+        let config =
+            TestProvider::new().with_value("jwt.secret", "changeme________________________");
         assert!(validator.validate(&config).is_ok());
     }
 

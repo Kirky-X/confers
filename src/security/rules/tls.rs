@@ -70,15 +70,19 @@ impl SecurityValidator for TlsConfigValidator {
             if let Some(version_str) = value.as_str() {
                 let normalized = version_str.trim().to_lowercase();
                 // Accept "1.2", "1.3", "TLSv1.2", "TLSv1.3", etc.
-                let version_num = normalized
-                    .strip_prefix("tlsv")
-                    .unwrap_or(&normalized);
+                let version_num = normalized.strip_prefix("tlsv").unwrap_or(&normalized);
 
                 // Parse version components as integers for correct numeric comparison
                 // (avoids both lexicographic bugs like "1.12" < "1.2" and f64 bugs like 1.12 < 1.2)
-                let is_below = version_num.split('.').map(|p| p.parse::<u32>().ok()).collect::<Option<Vec<_>>>()
+                let is_below = version_num
+                    .split('.')
+                    .map(|p| p.parse::<u32>().ok())
+                    .collect::<Option<Vec<_>>>()
                     .and_then(|parts| {
-                        let min_parts: Vec<u32> = MIN_TLS_VERSION.split('.').filter_map(|p| p.parse().ok()).collect();
+                        let min_parts: Vec<u32> = MIN_TLS_VERSION
+                            .split('.')
+                            .filter_map(|p| p.parse().ok())
+                            .collect();
                         if parts.len() >= 2 && min_parts.len() >= 2 {
                             Some((parts[0], parts[1]) < (min_parts[0], min_parts[1]))
                         } else {
@@ -227,30 +231,36 @@ mod tests {
     #[test]
     fn test_weak_cipher_warning() {
         let validator = TlsConfigValidator::new();
-        let config = TestProvider::new()
-            .with_value("tls.cipher_suites", "TLS_RSA_WITH_RC4_128_SHA,TLS_AES_128_GCM_SHA256");
+        let config = TestProvider::new().with_value(
+            "tls.cipher_suites",
+            "TLS_RSA_WITH_RC4_128_SHA,TLS_AES_128_GCM_SHA256",
+        );
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning
-                && v.message.contains("Weak cipher")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Warning
+                    && v.message.contains("Weak cipher"))
+        );
     }
 
     #[test]
     fn test_strong_cipher_ok() {
         let validator = TlsConfigValidator::new();
-        let config = TestProvider::new()
-            .with_value("tls.cipher_suites", "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384");
+        let config = TestProvider::new().with_value(
+            "tls.cipher_suites",
+            "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384",
+        );
         assert!(validator.validate(&config).is_ok());
     }
 
     #[test]
     fn test_null_cipher_warning() {
         let validator = TlsConfigValidator::new();
-        let config = TestProvider::new()
-            .with_value("tls.cipher_suites", "TLS_RSA_WITH_NULL_SHA256");
+        let config =
+            TestProvider::new().with_value("tls.cipher_suites", "TLS_RSA_WITH_NULL_SHA256");
         let result = validator.validate(&config);
         assert!(result.is_err());
     }
