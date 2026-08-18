@@ -1,0 +1,9 @@
+edition              = "2021"
+max_width            = 100
+tab_spaces           = 4
+hard_tabs            = false
+use_small_heuristics = "Default"
+# NOTE: imports_granularity and group_imports require nightly Rust.
+# Uncomment when MSRV >= nightly for these features.
+# imports_granularity  = "Module"
+# group_imports        = "StdExternalCrate"
