@@ -8,21 +8,27 @@
 //! loading real TOML / JSON / YAML files containing nested tables into a
 //! typed `AppConfig` struct.
 
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use serde::Deserialize;
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use std::io::Write;
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use std::path::PathBuf;
 
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use confers::ConfigBuilder;
 
 /// Nested sub-struct — exercises the bug: serde must be able to find `host`
 /// and `port` as bare keys inside the inner map, not as `database.host` /
 /// `database.port` dotted keys.
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 #[derive(Debug, Default, PartialEq, Deserialize)]
 struct DbConfig {
     host: String,
     port: u16,
 }
 
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 #[derive(Debug, Default, PartialEq, Deserialize)]
 struct AppConfig {
     database: DbConfig,
@@ -30,6 +36,7 @@ struct AppConfig {
 
 /// Create a temp config file in the current working directory (relative path)
 /// so the loader's absolute-path security check does not reject it.
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 fn create_local_temp_config(content: &str, extension: &str) -> (tempfile::NamedTempFile, PathBuf) {
     let current_dir = std::env::current_dir().unwrap();
     let ext = extension.trim_start_matches('.');
@@ -49,6 +56,7 @@ fn create_local_temp_config(content: &str, extension: &str) -> (tempfile::NamedT
     (file, relative_path)
 }
 
+#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 fn assert_app_config(config: &AppConfig) {
     assert_eq!(
         config.database.host, "localhost",
