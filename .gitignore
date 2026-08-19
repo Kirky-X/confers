@@ -72,3 +72,6 @@ specmark/
 # AI agent guidelines (kept local only)
 AGENTS.md
 CLAUDE.md
+
+# Reviews (security/quality scan artifacts)
+reviews/
