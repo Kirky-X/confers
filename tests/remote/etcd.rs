@@ -7,10 +7,10 @@
 //!
 //! These tests require a running Etcd instance. Use Docker Compose to start:
 //! ```bash
-//! docker-compose -f docker-compose.test.yml up -d etcd
+//! docker compose -f docker-compose.test.yml up -d etcd
 //! ```
 //!
-//! Run tests with: `cargo test --features etcd --test integration_etcd`
+//! Run tests with: `cargo test --features etcd --test remote`
 
 #![cfg(feature = "etcd")]
 

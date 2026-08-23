@@ -2479,7 +2479,10 @@ mod tests {
         let old_file = dir.path().join("old_snapshot.json");
         std::fs::write(&old_file, r#"{"k":1}"#).unwrap();
         let two_days_ago = SystemTime::now() - std::time::Duration::from_secs(2 * 24 * 60 * 60);
-        let f = std::fs::File::open(&old_file).unwrap();
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&old_file)
+            .unwrap();
         f.set_modified(two_days_ago).unwrap();
         drop(f);
 

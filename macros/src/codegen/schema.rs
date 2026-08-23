@@ -72,6 +72,18 @@ fn generate_field_schemas(fields: &Fields) -> TokenStream {
 fn generate_type_schema(ty: &Type) -> TokenStream {
     let type_str = quote!(#ty).to_string();
 
+    // Handle container types first so that generic params are not mistaken
+    // for scalar types (e.g. `Vec<String>` must be "array", not "string").
+    if type_str.contains("Vec") || type_str.contains("Array") {
+        return quote! { { "type": "array" } };
+    }
+    if type_str.contains("HashMap") || type_str.contains("Map") || type_str.contains("BTreeMap") {
+        return quote! { { "type": "object" } };
+    }
+    if type_str.contains("Option") {
+        return quote! { { "type": ["string", "null"] } };
+    }
+
     // Handle common types
     if type_str.contains("String") || type_str.contains("str") {
         return quote! { { "type": "string" } };
@@ -97,15 +109,6 @@ fn generate_type_schema(ty: &Type) -> TokenStream {
     }
     if type_str.contains("bool") {
         return quote! { { "type": "boolean" } };
-    }
-    if type_str.contains("Vec") || type_str.contains("Array") {
-        return quote! { { "type": "array" } };
-    }
-    if type_str.contains("HashMap") || type_str.contains("Map") || type_str.contains("BTreeMap") {
-        return quote! { { "type": "object" } };
-    }
-    if type_str.contains("Option") {
-        return quote! { { "type": ["string", "null"] } };
     }
 
     // Default to string for unknown types

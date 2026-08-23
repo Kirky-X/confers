@@ -167,11 +167,43 @@ async fn test_field_watcher_changed_for() {
     assert_eq!(config.timeout_ms, 200);
 }
 
-// Test that FieldWatcher detects field changes (requires watch feature).
+// Test that FieldWatcher does not report a change when a watched field's
+// value is unchanged (requires watch feature). The baseline is seeded from
+// the initial configuration, so updates that keep the watched field's value
+// identical must not trigger changed_for.
 #[tokio::test]
 #[cfg(feature = "watch")]
-#[ignore = "FieldWatcher has edge cases with empty baseline"]
-async fn test_field_watcher_no_trigger_if_field_unchanged() {}
+async fn test_field_watcher_no_trigger_if_field_unchanged() {
+    use tokio::sync::watch;
+
+    let (tx, rx) = watch::channel(Arc::new(common::TestConfig::new(100, 50)));
+
+    let fields = vec!["timeout_ms".into()];
+    let mut watcher = confers::dynamic::FieldWatcher::new(rx, fields);
+
+    // Update with the SAME timeout_ms (100): no trigger expected. Wrap the
+    // await with a timeout so an erroneous trigger can be detected without
+    // hanging the test.
+    tx.send(Arc::new(common::TestConfig::new(100, 50))).unwrap();
+
+    let unchanged =
+        tokio::time::timeout(std::time::Duration::from_millis(100), watcher.changed_for()).await;
+    assert!(
+        unchanged.is_err(),
+        "unchanged watched field must not trigger changed_for"
+    );
+
+    // Now a real change must be reported.
+    tx.send(Arc::new(common::TestConfig::new(300, 50))).unwrap();
+    let (config, changed) =
+        tokio::time::timeout(std::time::Duration::from_secs(1), watcher.changed_for())
+            .await
+            .expect("changed_for should return after a real change");
+
+    assert_eq!(changed.len(), 1);
+    assert_eq!(&*changed[0], "timeout_ms");
+    assert_eq!(config.timeout_ms, 300);
+}
 
 // Test with complex types.
 #[test]

@@ -365,7 +365,8 @@ impl Source for EnvSource {
             ConfigValue::Map(std::sync::Arc::new(map)),
             self.source_id.clone(),
             "",
-        ))
+        )
+        .with_priority(self.priority))
     }
 
     fn priority(&self) -> u8 {
@@ -1001,8 +1002,10 @@ mod tests {
     #[serial_test::serial]
     #[test]
     fn test_env_source_file_suffix_rejects_directory() {
-        // /tmp is a directory, not a regular file
-        std::env::set_var("MYTEST_DIR_FILE", "/tmp"); // pragma: allowlist secret
+        // A directory is not a regular file, so it must be rejected.
+        let dir = tempfile::tempdir().unwrap();
+        let dir_path = dir.path().to_str().unwrap().to_string();
+        std::env::set_var("MYTEST_DIR_FILE", &dir_path); // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
         std::env::remove_var("MYTEST_DIR_FILE"); // pragma: allowlist secret

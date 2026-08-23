@@ -57,9 +57,8 @@ docs/adr/
 docs/superpowers/
 spec/
 
-# Docker
+# Docker（docker-compose.test.yml 是 tests/remote 真实环境基座，纳入版本控制）
 docker-compose.yml
-docker-compose.test.yml
 .worktrees/
 .gitnexus
 

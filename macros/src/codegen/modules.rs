@@ -65,7 +65,7 @@ pub fn generate_modules_impl(
             /// }
             /// ```
             pub fn module_registry() -> confers::modules::ModuleRegistry {
-                let mut registry = confers::modules::ModuleRegistry::new();
+                let mut registry = confers::modules::ModuleRegistry::default();
                 #(#register_calls)*
                 registry
             }

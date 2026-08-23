@@ -215,11 +215,12 @@ fn check_path_components(path: &Path) -> Result<(), PathTraversalError> {
             Component::ParentDir => {
                 return Err(PathTraversalError::ParentDirectoryReference);
             }
-            Component::Prefix(_) => {
-                return Err(PathTraversalError::InvalidComponent);
-            }
-            // Note: RootDir is handled by the allow_absolute check in normalize_and_validate_path
-            Component::RootDir | Component::CurDir | Component::Normal(_) => {}
+            // Note: Prefix (Windows drive) and RootDir are handled by the
+            // allow_absolute check in normalize_and_validate_path.
+            Component::Prefix(_)
+            | Component::RootDir
+            | Component::CurDir
+            | Component::Normal(_) => {}
         }
     }
     Ok(())
@@ -259,8 +260,12 @@ pub fn normalize_and_validate_path(
     // 2. Component check: look for unsafe components
     check_path_components(path)?;
 
-    // 3. Handle absolute paths
-    if path.is_absolute() {
+    // 3. Handle absolute paths. A path is absolute if it has a drive prefix
+    // (Windows) or starts at the filesystem root (e.g. `/etc/passwd` on Unix,
+    // which on Windows is a root-relative path anchored to the current drive).
+    let is_absolute =
+        path.is_absolute() || matches!(path.components().next(), Some(Component::RootDir));
+    if is_absolute {
         if !allow_absolute {
             return Err(PathTraversalError::AbsolutePath);
         }
@@ -315,7 +320,7 @@ pub fn normalize_and_validate_path(
         for component in full_path.components() {
             match component {
                 Component::Prefix(_) | Component::RootDir => {
-                    normalized = component.as_os_str().into();
+                    normalized.push(component.as_os_str());
                 }
                 Component::CurDir => {}
                 Component::ParentDir => {
@@ -340,7 +345,24 @@ pub fn normalize_and_validate_path(
                 } else {
                     current_dir.join(dir)
                 };
-                normalized.starts_with(&allowed) || normalized == allowed
+                // Lexically normalize the allowed dir (drop `..`/`.` components)
+                // so it can be compared with the normalized path via starts_with.
+                let mut allowed_norm = PathBuf::new();
+                for component in allowed.components() {
+                    match component {
+                        Component::Prefix(_) | Component::RootDir => {
+                            allowed_norm.push(component.as_os_str());
+                        }
+                        Component::CurDir => {}
+                        Component::ParentDir => {
+                            allowed_norm.pop();
+                        }
+                        Component::Normal(s) => {
+                            allowed_norm.push(s);
+                        }
+                    }
+                }
+                normalized.starts_with(&allowed_norm) || normalized == allowed_norm
             })
         };
 

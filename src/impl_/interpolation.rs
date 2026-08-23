@@ -653,6 +653,51 @@ mod tests {
     }
 
     #[test]
+    fn test_max_depth_exceeded_returns_error() {
+        // A chain deeper than the configured max_depth must error instead of
+        // recursing forever (resource-limit guard: R-scenario-coverage depth).
+        let config = InterpolationConfig {
+            max_depth: 3,
+            ..InterpolationConfig::default()
+        };
+        // Chain: A -> B -> C -> D -> E (5 levels, exceeds max_depth 3)
+        let r = resolver(&[
+            ("A", "${B}"),
+            ("B", "${C}"),
+            ("C", "${D}"),
+            ("D", "${E}"),
+            ("E", "leaf"),
+        ]);
+        let result = interpolate_with_config("${A}", &r, &config);
+        match result {
+            Err(ConfigError::InterpolationError { message, .. }) => {
+                assert!(
+                    message.contains("maximum interpolation depth"),
+                    "expected depth error, got: {message}"
+                );
+            }
+            other => panic!("expected InterpolationError for depth exceeded, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_max_depth_within_limit_ok() {
+        let config = InterpolationConfig {
+            max_depth: 10,
+            ..InterpolationConfig::default()
+        };
+        let r = resolver(&[
+            ("A", "${B}"),
+            ("B", "${C}"),
+            ("C", "${D}"),
+            ("D", "${E}"),
+            ("E", "leaf"),
+        ]);
+        let result = interpolate_with_config("${A}", &r, &config).unwrap();
+        assert_eq!(result, "leaf");
+    }
+
+    #[test]
     fn test_default_value() {
         let r = resolver(&[]);
         let result = interpolate("Port: ${PORT:8080}", &r).unwrap();
