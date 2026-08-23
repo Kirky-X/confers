@@ -1009,4 +1009,306 @@ mod tests {
         }
         // If network is unavailable, test is skipped
     }
+
+    // =============================================================================
+    // Real Local HTTP Interaction (R-real-env-001: HTTP 远程源真实本地交互)
+    // =============================================================================
+
+    /// Serve one HTTP/1.1 response with the given status, headers and body,
+    /// then close the connection.
+    async fn serve_one(
+        listener: tokio::net::TcpListener,
+        status: &'static str,
+        headers: &'static str,
+        body: &'static str,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let (mut stream, _) = listener.accept().await.expect("accept connection");
+        let mut buf = [0u8; 4096];
+        // Read the request line + headers (ignore body for GET).
+        let _n = stream.read(&mut buf).await.expect("read request");
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream
+            .write_all(response.as_bytes())
+            .await
+            .expect("write response");
+        stream.flush().await.expect("flush response");
+    }
+
+    /// Construct an `HttpPolledSource` pointing at a real local HTTP server.
+    ///
+    /// The builder intentionally blocks loopback URLs (SSRF protection), so the
+    /// struct is constructed directly here to exercise the real HTTP fetch path
+    /// (`do_poll` → reqwest → local TCP server) against a live local service.
+    fn source_against_local(addr: std::net::SocketAddr) -> HttpPolledSource {
+        source_against_local_with_cb(addr, CircuitBreaker::new())
+    }
+
+    /// Like [`source_against_local`] but with a caller-supplied circuit breaker
+    /// so recovery tests can control the failure threshold and backoff.
+    fn source_against_local_with_cb(
+        addr: std::net::SocketAddr,
+        circuit_breaker: CircuitBreaker,
+    ) -> HttpPolledSource {
+        let url = format!("http://{addr}/config.json");
+        HttpPolledSource {
+            url: url.clone().into(),
+            interval: Duration::from_secs(1),
+            client: Client::builder().build().expect("client build"),
+            format: None,
+            cache_generation: AtomicU64::new(0),
+            cached: RwLock::new(None),
+            last_etag: ArcSwap::new(Arc::new(None)),
+            last_modified: ArcSwap::new(Arc::new(None)),
+            source_id: SourceId::new(format!("http:{url}")),
+            circuit_breaker: std::sync::Mutex::new(circuit_breaker),
+        }
+    }
+
+    /// Real local HTTP interaction with explicit value assertions.
+    #[tokio::test]
+    async fn test_poll_live_local_http_asserts_values() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"app":{"host":"localhost","port":8080}}"#;
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _n = stream.read(&mut buf).await.expect("read");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+        });
+
+        let source = source_against_local(addr);
+
+        let value = source.poll().await.expect("poll should succeed");
+
+        let app = value.inner.as_map().expect("top-level map");
+        let host = app
+            .get("app")
+            .expect("app key")
+            .inner
+            .as_map()
+            .expect("app map");
+        assert_eq!(
+            host.get("host").and_then(|v| v.as_str()),
+            Some("localhost"),
+            "host value from live HTTP response"
+        );
+        assert_eq!(
+            host.get("port").and_then(|v| v.as_i64()),
+            Some(8080),
+            "port value from live HTTP response"
+        );
+
+        server.await.expect("server task");
+    }
+
+    /// Real local HTTP interaction: 304 Not Modified must return the cached
+    /// value from the first successful poll.
+    #[tokio::test]
+    async fn test_poll_live_local_http_etag_cached_304() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"app":{"host":"localhost","port":8080}}"#;
+
+        let server = tokio::spawn(async move {
+            // First request: 200 with ETag. Second request: 304 (cached).
+            for (idx, _) in (0..2).enumerate() {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut buf = [0u8; 4096];
+                let _n = stream.read(&mut buf).await.expect("read");
+                let (status, headers, payload) = if idx == 0 {
+                    ("200 OK", "ETag: \"v1\"", body)
+                } else {
+                    ("304 Not Modified", "ETag: \"v1\"", "")
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+                    payload.len()
+                );
+                stream.write_all(response.as_bytes()).await.expect("write");
+                stream.flush().await.expect("flush");
+            }
+        });
+
+        let source = source_against_local(addr);
+
+        let first = source.poll().await.expect("first poll succeeds");
+        assert!(
+            first.inner.as_map().expect("map").get("app").is_some(),
+            "first poll returned config"
+        );
+
+        // Second poll sends If-None-Match; server replies 304 → cached value.
+        let second = source.poll().await.expect("second poll succeeds");
+        assert!(
+            second.inner.as_map().expect("map").get("app").is_some(),
+            "304 must return the cached config"
+        );
+
+        server.await.expect("server task");
+    }
+
+    /// Real local HTTP interaction: HTTP 500 must surface a RemoteUnavailable
+    /// error (fail loud, Rule 12), not panic or return stale data.
+    #[tokio::test]
+    async fn test_poll_live_local_http_500_errors() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let server = tokio::spawn(serve_one(listener, "500 Internal Server Error", "", ""));
+
+        let source = source_against_local(addr);
+
+        let result = source.poll().await;
+        assert!(
+            result.is_err(),
+            "HTTP 500 must surface a RemoteUnavailable error"
+        );
+        assert!(
+            matches!(result.unwrap_err(), ConfigError::RemoteUnavailable { .. }),
+            "expected RemoteUnavailable error"
+        );
+
+        server.await.expect("server task");
+    }
+
+    /// Integrated circuit-breaker recovery against a real local HTTP service
+    /// (R-scenario-coverage: 远程源轮询失败熔断与恢复).
+    ///
+    /// Sequence: success → threshold failures (500s) → circuit opens and polls
+    /// are skipped without touching the network → backoff elapses → HalfOpen
+    /// probe succeeds → circuit closes and normal polls resume.
+    #[tokio::test]
+    async fn test_poll_live_local_http_circuit_breaker_open_and_recovers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc as StdArc;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+
+        // Track how many HTTP requests the server actually receives so we can
+        // prove that once the circuit is open, polls are skipped without
+        // touching the network (no connection is accepted).
+        let connections = StdArc::new(AtomicUsize::new(0));
+        let conns = connections.clone();
+
+        let server = tokio::spawn(async move {
+            // Accept up to 6 connections: 1 success + 3 failures (threshold 3)
+            // + 1 HalfOpen probe + 1 post-recovery poll. Any request beyond
+            // that would mean the circuit failed to block polls while Open.
+            for _ in 0..6 {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                conns.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _n = stream.read(&mut buf).await.expect("read");
+                // First request succeeds; failures until the circuit opens,
+                // then any connection from the HalfOpen probe onward succeeds
+                // again (recovery).
+                let n = conns.load(Ordering::SeqCst);
+                let (status, body) = if n == 1 || n >= 5 {
+                    ("200 OK", r#"{"app":{"host":"localhost","port":8080}}"#)
+                } else {
+                    ("500 Internal Server Error", "")
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream.write_all(response.as_bytes()).await.expect("write");
+                stream.flush().await.expect("flush");
+            }
+        });
+
+        // Threshold 3 with a tiny base delay so the backoff elapses quickly.
+        let cb = CircuitBreaker::new()
+            .with_threshold(3)
+            .with_base_delay(Duration::from_millis(50))
+            .with_max_delay(Duration::from_millis(100));
+        let source = source_against_local_with_cb(addr, cb);
+
+        // 1. First poll succeeds and records a success (circuit stays Closed).
+        let first = source.poll().await.expect("first poll succeeds");
+        assert!(
+            first.inner.as_map().expect("map").get("app").is_some(),
+            "first poll returned config"
+        );
+
+        // 2. Three consecutive 500s push the circuit from Closed to Open.
+        for _ in 0..3 {
+            let result = source.poll().await;
+            assert!(
+                matches!(result, Err(ConfigError::RemoteUnavailable { .. })),
+                "500 must surface RemoteUnavailable"
+            );
+        }
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            4,
+            "exactly 4 HTTP requests made before the circuit opens"
+        );
+
+        // 3. While Open, polls are skipped entirely — no network traffic.
+        let result = source.poll().await;
+        assert!(
+            matches!(
+                result,
+                Err(ConfigError::RemoteUnavailable { error_type, .. })
+                    if error_type == "CircuitBreakerOpen"
+            ),
+            "open circuit must short-circuit the poll before any HTTP request"
+        );
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            4,
+            "no additional HTTP request while the circuit is open"
+        );
+
+        // 4. Wait for the backoff to elapse, then the HalfOpen probe is sent and
+        //    the server replies 200 → the circuit recovers to Closed.
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        let probe = source.poll().await.expect("HalfOpen probe succeeds");
+        assert!(
+            probe.inner.as_map().expect("map").get("app").is_some(),
+            "recovered poll returned config"
+        );
+
+        // 5. A normal poll after recovery succeeds and is served by the real HTTP
+        //    server (connection 6).
+        let recovered = source.poll().await.expect("poll after recovery succeeds");
+        assert!(
+            recovered.inner.as_map().expect("map").get("app").is_some(),
+            "normal poll after recovery returned config"
+        );
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            6,
+            "recovered circuit resumes making real HTTP requests"
+        );
+
+        server.await.expect("server task");
+    }
 }

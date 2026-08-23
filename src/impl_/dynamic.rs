@@ -249,11 +249,17 @@ mod watcher {
         /// * `rx` - The watch receiver for configuration changes
         /// * `fields` - The list of field names to watch (in dot-notation, e.g., "database.host")
         pub fn new(rx: watch::Receiver<Arc<T>>, fields: Vec<Arc<str>>) -> Self {
-            Self {
-                rx,
-                fields,
-                last: HashMap::new(),
+            // Seed the baseline from the current configuration so that an
+            // initial value (or the first update that equals it) is never
+            // reported as a change.
+            let cfg = rx.borrow().clone();
+            let mut last = HashMap::new();
+            for f in &fields {
+                if let Some(v) = cfg.get_raw(f) {
+                    last.insert(f.clone(), v.inner.clone());
+                }
             }
+            Self { rx, fields, last }
         }
 
         /// Waits until one of the watched fields actually changes.

@@ -89,7 +89,7 @@ pub struct SourceLocation {
     /// Column number (1-based)
     pub column: usize,
     /// Full file path for internal diagnostics (not exposed to end users)
-    pub(crate) file_path: Option<std::path::PathBuf>,
+    pub(crate) file_path: Option<Box<std::path::PathBuf>>,
 }
 
 impl Serialize for SourceLocation {
@@ -145,7 +145,7 @@ impl SourceLocation {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown");
-        let fp = Some(path.to_path_buf());
+        let fp = Some(Box::new(path.to_path_buf()));
         Self {
             source_name: Arc::from(source_name),
             line,
@@ -1289,7 +1289,7 @@ mod tests {
         assert_eq!(loc.column, 5);
         assert_eq!(
             loc.file_path,
-            Some(std::path::PathBuf::from("/etc/config/app.toml"))
+            Some(Box::new(std::path::PathBuf::from("/etc/config/app.toml")))
         );
     }
 

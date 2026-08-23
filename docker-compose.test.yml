@@ -1,0 +1,58 @@
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: confers-test-nats
+    ports:
+      - "4222:4222"
+    command: ["-js", "-m", "8222"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: confers-test-redis
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.16
+    container_name: confers-test-etcd
+    ports:
+      - "2379:2379"
+    command:
+      - /usr/local/bin/etcd
+      - --advertise-client-urls=http://127.0.0.1:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=default=http://127.0.0.1:2380
+      - --data-dir=/etcd-data
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "endpoint", "health", "--endpoints=http://127.0.0.1:2379"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  consul:
+    image: hashicorp/consul:1.19
+    container_name: confers-test-consul
+    ports:
+      - "8500:8500"
+    command:
+      - agent
+      - -dev
+      - -client=0.0.0.0
+      - -ui
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8500/v1/status/leader >/dev/null 2>&1 || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20

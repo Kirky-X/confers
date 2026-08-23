@@ -7,10 +7,10 @@
 //!
 //! These tests require a running Consul instance. Use Docker Compose to start:
 //! ```bash
-//! docker-compose -f docker-compose.test.yml up -d consul
+//! docker compose -f docker-compose.test.yml up -d consul
 //! ```
 //!
-//! Run tests with: `cargo test --features consul --test integration_consul`
+//! Run tests with: `cargo test --features consul --test remote`
 
 #![cfg(feature = "consul")]
 
