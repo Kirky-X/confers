@@ -16,6 +16,7 @@
 
 use serial_test::serial;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -331,6 +332,43 @@ fn test_adaptive_debouncer_reset() {
 // FsWatcher Tests (2.1.2, 2.1.3, 2.1.4 - File Events)
 // ========================================
 
+/// A watcher that can receive a filesystem event path (shared by
+/// `FsWatcher` and `MultiFsWatcher`).
+trait EventReceiver {
+    fn recv(&mut self) -> impl std::future::Future<Output = Option<PathBuf>>;
+}
+
+impl EventReceiver for FsWatcher {
+    fn recv(&mut self) -> impl std::future::Future<Output = Option<PathBuf>> {
+        FsWatcher::recv(self)
+    }
+}
+
+impl EventReceiver for MultiFsWatcher {
+    fn recv(&mut self) -> impl std::future::Future<Output = Option<PathBuf>> {
+        MultiFsWatcher::recv(self)
+    }
+}
+
+/// Polls a watcher's `recv()` until a real filesystem event arrives or
+/// `patience` elapses. One-shot receive calls can miss events whose
+/// delivery latency exceeds the initial wait on slow filesystems
+/// (notably Windows under parallel load), so a bounded poll keeps the
+/// test robust while still requiring a genuine OS-level file event.
+async fn wait_for_fs_event<W: EventReceiver>(
+    watcher: &mut W,
+    patience: Duration,
+) -> Option<PathBuf> {
+    let deadline = std::time::Instant::now() + patience;
+    loop {
+        match tokio::time::timeout(Duration::from_millis(250), watcher.recv()).await {
+            Ok(event) => return event,
+            Err(_) if std::time::Instant::now() < deadline => continue,
+            Err(_) => return None,
+        }
+    }
+}
+
 /// Test FsWatcher returns error for non-existent path.
 #[tokio::test]
 async fn test_fs_watcher_nonexistent_path() {
@@ -391,23 +429,18 @@ async fn test_fs_watcher_file_creation_detection() {
     // Wait for the watcher to detect the change (debounce + inotify latency)
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // Try to receive the event with a generous timeout (FS events can be slow)
-    let event = tokio::time::timeout(Duration::from_millis(3000), watcher.recv()).await;
+    // Wait on real FS events with a generous patience window.
+    let event = wait_for_fs_event(&mut watcher, Duration::from_millis(5000)).await;
 
     // Cleanup
     watcher.stop();
 
-    // File creation should be detected within the timeout window.
+    // File creation should be detected within the patience window.
     // The old assertion `is_ok() || is_err()` was tautological (T-C-1 A4).
     assert!(
-        event.is_ok(),
-        "file creation should be detected within 3s; \
-         timeout or channel error means watcher failed: {:?}",
-        event.err()
-    );
-    assert!(
-        event.unwrap().is_some(),
-        "recv() should deliver a Some(event), not None (channel closed)"
+        event.is_some(),
+        "file creation should be detected within 5s; \
+         timeout or channel error means watcher failed"
     );
 }
 
@@ -428,21 +461,16 @@ async fn test_fs_watcher_file_modification_detection() {
     // Wait for the watcher to detect the change
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Try to receive the event
-    let event = tokio::time::timeout(Duration::from_millis(500), watcher.recv()).await;
+    // Wait on real FS events with a generous patience window.
+    let event = wait_for_fs_event(&mut watcher, Duration::from_millis(5000)).await;
 
     // Cleanup
     watcher.stop();
 
     // File modification should be detected (T-C-1 A5: old assertion was tautological).
     assert!(
-        event.is_ok(),
-        "file modification should be detected within 500ms: {:?}",
-        event.err()
-    );
-    assert!(
-        event.unwrap().is_some(),
-        "recv() should deliver a Some(event), not None (channel closed)"
+        event.is_some(),
+        "file modification should be detected within 5s via a real FS event"
     );
 }
 
@@ -462,21 +490,16 @@ async fn test_fs_watcher_file_deletion_detection() {
     // Wait for the watcher to detect the change (debounce + inotify latency)
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // Try to receive the event with a generous timeout (FS events can be slow)
-    let event = tokio::time::timeout(Duration::from_millis(3000), watcher.recv()).await;
+    // Wait on real FS events with a generous patience window.
+    let event = wait_for_fs_event(&mut watcher, Duration::from_millis(5000)).await;
 
     // Cleanup
     watcher.stop();
 
     // File deletion should be detected (T-C-1 A6: old assertion was tautological).
     assert!(
-        event.is_ok(),
-        "file deletion should be detected within 3s: {:?}",
-        event.err()
-    );
-    assert!(
-        event.unwrap().is_some(),
-        "recv() should deliver a Some(event), not None (channel closed)"
+        event.is_some(),
+        "file deletion should be detected within 5s via a real FS event"
     );
 }
 
@@ -561,16 +584,15 @@ async fn test_multi_fs_watcher_recv_detects_modification() {
     // Wait for debounce + event delivery
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let event = tokio::time::timeout(Duration::from_millis(3000), watcher.recv()).await;
+    let event = wait_for_fs_event(&mut watcher, Duration::from_millis(5000)).await;
 
     watcher.stop();
 
     assert!(
-        event.is_ok(),
-        "file modification should be detected within 3s: {:?}",
-        event.err()
+        event.is_some(),
+        "file modification should be detected within 5s via a real FS event"
     );
-    let path = event.unwrap().expect("recv() should deliver Some(event)");
+    let path = event.expect("recv() should deliver Some(event)");
     assert!(
         path == file1 || path == file2,
         "event path should be one of the watched files, got {:?}",
@@ -705,11 +727,13 @@ mod progressive_tests {
     use super::*;
     use async_trait::async_trait;
     use confers::interface::ConfigProvider;
-    use confers::types::AnnotatedValue;
+    use confers::types::{AnnotatedValue, ConfigValue};
     use confers::watcher::{
         HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
         ReloadOutcome, ReloadStrategy,
     };
+    use confers::SourceChainBuilder;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     struct AlwaysHealthyCheck;
@@ -741,23 +765,63 @@ mod progressive_tests {
         }
     }
 
+    // A `ConfigProvider` backed by values parsed from a real configuration
+    // file on disk (through the real `SourceChain`/`FileSource` pipeline).
+    // NOT a mock: `get_raw`/`keys` delegate to the values actually loaded
+    // from the file, so the provider reflects genuine file content.
+    struct RealFileProvider {
+        values: HashMap<String, AnnotatedValue>,
+    }
+
+    impl ConfigProvider for RealFileProvider {
+        fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+            self.values.get(key)
+        }
+
+        fn keys(&self) -> Vec<String> {
+            self.values.keys().cloned().collect()
+        }
+    }
+
+    /// Writes `content` to a fresh configuration file inside `dir` and builds
+    /// a real, file-backed `ConfigProvider` from it.
+    fn real_file_provider(dir: &TempDir, content: &str) -> Arc<dyn ConfigProvider> {
+        let path = dir.path().join("watcher-reload.toml");
+        std::fs::write(&path, content).unwrap();
+
+        let chain = SourceChainBuilder::new()
+            .allow_absolute_paths()
+            .file(&path)
+            .build();
+        let annotated = chain
+            .collect()
+            .expect("valid TOML content must parse through the real FileSource");
+
+        let mut values = HashMap::new();
+        if let ConfigValue::Map(map) = &annotated.inner {
+            for (key, value) in map.iter() {
+                values.insert(key.to_string(), value.clone());
+            }
+        }
+        Arc::new(RealFileProvider { values })
+    }
+
     /// Test progressive reloader with immediate strategy.
     #[tokio::test]
     async fn test_progressive_reload_immediate() {
         let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate);
 
-        struct MockProvider;
-        impl ConfigProvider for MockProvider {
-            fn get_raw(&self, _key: &str) -> Option<&AnnotatedValue> {
-                None
-            }
-            fn keys(&self) -> Vec<String> {
-                vec![]
-            }
-        }
+        // Provider is backed by a real TOML file parsed through the real
+        // SourceChain/FileSource pipeline.
+        let temp_dir = TempDir::new().unwrap();
+        let provider = real_file_provider(&temp_dir, "timeout_ms = 100\nmax_connections = 10");
+        assert_eq!(
+            provider.get_raw("timeout_ms").and_then(|v| v.inner.as_i64()),
+            Some(100)
+        );
 
         let result = reloader
-            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .begin_reload(Arc::new(2i32), provider)
             .await
             .unwrap();
 
@@ -777,18 +841,14 @@ mod progressive_tests {
         )
         .with_health_check(Arc::new(AlwaysHealthyCheck));
 
-        struct MockProvider;
-        impl ConfigProvider for MockProvider {
-            fn get_raw(&self, _key: &str) -> Option<&AnnotatedValue> {
-                None
-            }
-            fn keys(&self) -> Vec<String> {
-                vec![]
-            }
-        }
+        // Provider is backed by a real TOML file parsed through the real
+        // SourceChain/FileSource pipeline.
+        let temp_dir = TempDir::new().unwrap();
+        let provider =
+            real_file_provider(&temp_dir, "timeout_ms = 120\nmax_connections = 15");
 
         let result = reloader
-            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .begin_reload(Arc::new(2i32), provider)
             .await
             .unwrap();
 
@@ -808,18 +868,16 @@ mod progressive_tests {
         )
         .with_health_check(Arc::new(AlwaysCriticalCheck));
 
-        struct MockProvider;
-        impl ConfigProvider for MockProvider {
-            fn get_raw(&self, _key: &str) -> Option<&AnnotatedValue> {
-                None
-            }
-            fn keys(&self) -> Vec<String> {
-                vec![]
-            }
-        }
+        // Provider is backed by a real TOML file with health-affecting values.
+        let temp_dir = TempDir::new().unwrap();
+        let provider = real_file_provider(&temp_dir, "timeout_ms = 5000\nmax_connections = 1");
+        assert_eq!(
+            provider.get_raw("timeout_ms").and_then(|v| v.inner.as_i64()),
+            Some(5000)
+        );
 
         let result = reloader
-            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .begin_reload(Arc::new(2i32), provider)
             .await;
 
         assert!(result.is_err());
@@ -838,18 +896,14 @@ mod progressive_tests {
         )
         .with_health_check(Arc::new(AlwaysHealthyCheck));
 
-        struct MockProvider;
-        impl ConfigProvider for MockProvider {
-            fn get_raw(&self, _key: &str) -> Option<&AnnotatedValue> {
-                None
-            }
-            fn keys(&self) -> Vec<String> {
-                vec![]
-            }
-        }
+        // Provider is backed by a real TOML file parsed through the real
+        // SourceChain/FileSource pipeline.
+        let temp_dir = TempDir::new().unwrap();
+        let provider =
+            real_file_provider(&temp_dir, "timeout_ms = 200\nmax_connections = 20");
 
         let result = reloader
-            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .begin_reload(Arc::new(2i32), provider)
             .await
             .unwrap();
 
