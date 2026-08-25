@@ -24,7 +24,7 @@ chacha20poly1305 = { version = "0.10", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 compact_str = { version = "0.9", features = ["serde"] }
-confers-macros = { version = "0.5", path = "macros" }
+confers-macros = { version = "0.6.0-rc.1", path = "macros" }
 dashmap = { version = "6.1", optional = true }
 garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
@@ -64,7 +64,7 @@ members = ["macros", "examples", "fuzz"]
 resolver = "2"
 
 [workspace.package]
-version = "0.5.1"
+version = "0.6.0-rc.1"
 edition = "2021"
 rust-version = "1.88"
 description = "Production-ready Rust configuration library with zero boilerplate"

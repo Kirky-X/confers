@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "confers-examples"
-version = "0.5.1"
+version = "0.6.0-rc.1"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "confers-macros"
-version = "0.5.1"
+version = "0.6.0-rc.1"
 dependencies = [
  "confers",
  "darling",
