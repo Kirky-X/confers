@@ -816,7 +816,9 @@ mod progressive_tests {
         let temp_dir = TempDir::new().unwrap();
         let provider = real_file_provider(&temp_dir, "timeout_ms = 100\nmax_connections = 10");
         assert_eq!(
-            provider.get_raw("timeout_ms").and_then(|v| v.inner.as_i64()),
+            provider
+                .get_raw("timeout_ms")
+                .and_then(|v| v.inner.as_i64()),
             Some(100)
         );
 
@@ -844,8 +846,7 @@ mod progressive_tests {
         // Provider is backed by a real TOML file parsed through the real
         // SourceChain/FileSource pipeline.
         let temp_dir = TempDir::new().unwrap();
-        let provider =
-            real_file_provider(&temp_dir, "timeout_ms = 120\nmax_connections = 15");
+        let provider = real_file_provider(&temp_dir, "timeout_ms = 120\nmax_connections = 15");
 
         let result = reloader
             .begin_reload(Arc::new(2i32), provider)
@@ -872,13 +873,13 @@ mod progressive_tests {
         let temp_dir = TempDir::new().unwrap();
         let provider = real_file_provider(&temp_dir, "timeout_ms = 5000\nmax_connections = 1");
         assert_eq!(
-            provider.get_raw("timeout_ms").and_then(|v| v.inner.as_i64()),
+            provider
+                .get_raw("timeout_ms")
+                .and_then(|v| v.inner.as_i64()),
             Some(5000)
         );
 
-        let result = reloader
-            .begin_reload(Arc::new(2i32), provider)
-            .await;
+        let result = reloader.begin_reload(Arc::new(2i32), provider).await;
 
         assert!(result.is_err());
         assert_eq!(*reloader.current(), 1);
@@ -899,8 +900,7 @@ mod progressive_tests {
         // Provider is backed by a real TOML file parsed through the real
         // SourceChain/FileSource pipeline.
         let temp_dir = TempDir::new().unwrap();
-        let provider =
-            real_file_provider(&temp_dir, "timeout_ms = 200\nmax_connections = 20");
+        let provider = real_file_provider(&temp_dir, "timeout_ms = 200\nmax_connections = 20");
 
         let result = reloader
             .begin_reload(Arc::new(2i32), provider)
