@@ -4,8 +4,11 @@ use super::common;
 use confers::Config;
 #[cfg(feature = "cli")]
 use confers::ConfigClap;
+#[cfg(feature = "migration")]
 use confers::ConfigMigration;
+#[cfg(feature = "modules")]
 use confers::ConfigModules;
+#[cfg(feature = "schema")]
 use confers::ConfigSchema;
 use serde::Deserialize;
 use serial_test::serial;
@@ -206,6 +209,7 @@ fn test_numeric_env_override_negative_f64() {
 
 #[derive(Debug, ConfigSchema)]
 #[allow(dead_code)] // Fields are exercised only through the derive-generated schema.
+#[cfg(feature = "schema")]
 struct SchemaConfig {
     #[config(name = "host")]
     pub host: String,
@@ -221,6 +225,7 @@ struct SchemaConfig {
 }
 
 #[test]
+#[cfg(feature = "schema")]
 fn test_config_schema_derive_generates_json_schema() {
     let schema = SchemaConfig::json_schema();
     let obj = schema.as_object().expect("schema is an object");
@@ -267,6 +272,7 @@ fn test_config_schema_derive_generates_json_schema() {
 }
 
 #[test]
+#[cfg(feature = "schema")]
 fn test_config_schema_derive_generates_typescript_type() {
     let ts = SchemaConfig::typescript_type();
     assert!(
@@ -278,12 +284,14 @@ fn test_config_schema_derive_generates_typescript_type() {
 #[derive(Debug, ConfigMigration)]
 #[config(version = 3)]
 #[allow(dead_code)] // Fields are exercised only through the derive-generated versioning.
+#[cfg(feature = "migration")]
 struct MigrationConfig {
     pub name: String,
     pub port: u16,
 }
 
 #[test]
+#[cfg(feature = "migration")]
 fn test_config_migration_derive_generates_versioned() {
     use confers::migration::Versioned;
     assert_eq!(MigrationConfig::VERSION, 3);
@@ -294,6 +302,7 @@ fn test_config_migration_derive_generates_versioned() {
 
 #[derive(Debug, ConfigModules)]
 #[allow(dead_code)] // Fields are exercised only through the derive-generated registry.
+#[cfg(feature = "modules")]
 struct ModularConfig {
     #[config(module_group = "core")]
     pub name: String,
@@ -306,6 +315,7 @@ struct ModularConfig {
 }
 
 #[test]
+#[cfg(feature = "modules")]
 fn test_config_modules_derive_generates_registry() {
     let registry = ModularConfig::module_registry();
     let groups: Vec<String> = registry
@@ -341,6 +351,7 @@ struct CliConfig {
 
 #[cfg(feature = "cli")]
 #[test]
+#[cfg(feature = "cli")]
 fn test_config_clap_derive_parses_args() {
     use std::ffi::OsString;
 
@@ -369,6 +380,7 @@ fn test_config_clap_derive_parses_args() {
 
 #[cfg(feature = "cli")]
 #[test]
+#[cfg(feature = "cli")]
 fn test_config_clap_derive_clap_app() {
     let app = CliConfig::clap_app();
     let name = app.get_name();
