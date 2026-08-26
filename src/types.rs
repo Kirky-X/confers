@@ -1010,9 +1010,7 @@ impl ZeroizingBytes {
 impl Drop for ZeroizingBytes {
     fn drop(&mut self) {
         // Zeroize the bytes on drop
-        for byte in &mut self.0 {
-            *byte = 0;
-        }
+        self.0.fill(0);
     }
 }
 
