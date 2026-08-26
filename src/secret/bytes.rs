@@ -33,9 +33,7 @@ impl Debug for SecretBytes {
 
 impl Drop for SecretBytes {
     fn drop(&mut self) {
-        for byte in &mut self.0 {
-            *byte = 0;
-        }
+        self.0.fill(0);
     }
 }
 
