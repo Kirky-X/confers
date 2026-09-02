@@ -800,6 +800,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_poll_internal_connection_refused() {
+        if super::super::test_support::localhost_proxy_intercept().await {
+            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            return;
+        }
         // Reserve a port then drop it to get a guaranteed-closed port.
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -843,6 +847,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_poll_internal_empty_returns_cached_value() {
+        if super::super::test_support::localhost_proxy_intercept().await {
+            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            return;
+        }
         // First response caches a value (ModifyIndex=10); second response is
         // empty, exercising the "return cached value" branch (lines 230-246).
         let non_empty =
@@ -862,6 +870,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_poll_internal_token_and_blocking_wait() {
+        if super::super::test_support::localhost_proxy_intercept().await {
+            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            return;
+        }
         // Two polls: the second has current_index > 0, exercising the blocking
         // wait URL path and the token header re-attachment (lines 193-200).
         let body = r#"[{"Value":"aGVsbG8=","ModifyIndex":7}]"#.to_string();

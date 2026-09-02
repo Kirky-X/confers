@@ -1122,6 +1122,10 @@ mod tests {
     /// value from the first successful poll.
     #[tokio::test]
     async fn test_poll_live_local_http_etag_cached_304() {
+        if super::super::test_support::localhost_proxy_intercept().await {
+            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，localhost 网络断言不可靠");
+            return;
+        }
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -1201,6 +1205,10 @@ mod tests {
     /// probe succeeds → circuit closes and normal polls resume.
     #[tokio::test]
     async fn test_poll_live_local_http_circuit_breaker_open_and_recovers() {
+        if super::super::test_support::localhost_proxy_intercept().await {
+            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，localhost 网络断言不可靠");
+            return;
+        }
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc as StdArc;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
