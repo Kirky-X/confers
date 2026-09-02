@@ -613,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "confers"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "confers-examples"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "anyhow",
  "async-nats",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "confers-macros"
-version = "0.6.0-rc.1"
+version = "0.6.0-rc.2"
 dependencies = [
  "confers",
  "darling",
