@@ -74,3 +74,6 @@ CLAUDE.md
 
 # Reviews (security/quality scan artifacts)
 reviews/
+
+# WorkBuddy AI local notes
+.workbuddy-ai/
