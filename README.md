@@ -184,11 +184,11 @@ graph LR
 
 | 安装方式 | 配置方式 | 使用场景 |
 |-------------------|---------------|----------|
-| **默认** | `confers = "0.5.0"` | 包含 `toml`、`json`、`env`（默认特性） |
-| **最小化** | `confers = { version = "0.5.0", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
-| **推荐** | `confers = { version = "0.5.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
-| **CLI 工具** | `confers = { version = "0.5.0", features = ["cli"] }` | CLI 工具（不含验证/加密） |
-| **完整** | `confers = { version = "0.5.0", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.6"` | 包含 `toml`、`json`、`env`（默认特性） |
+| **最小化** | `confers = { version = "0.6", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
+| **推荐** | `confers = { version = "0.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
+| **CLI 工具** | `confers = { version = "0.6", features = ["cli"] }` | CLI 工具（不含验证/加密） |
+| **完整** | `confers = { version = "0.6", features = ["full"] }` | 所有功能 |
 
 **单独功能说明：**
 

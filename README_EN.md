@@ -191,7 +191,6 @@ graph LR
 | `migration`           |   ❌    | Configuration migration                              | Stable    |
 | `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
 | `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
-| `hot-reload`          |   ❌    | Hot reload (removed; use `watch` feature)            | Removed   |
 | **Remote Sources**    |         |                                                      |           |
 | `remote`              |   ❌    | HTTP polling                                         | Beta      |
 | `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
@@ -259,11 +258,11 @@ cd examples && ./verify_examples.sh
 
 | Installation Type  | Configuration                                                                           | Use Case                                          |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Default**        | `confers = "0.5.0"`                                                                     | Includes `toml`, `json`, `env` (default features) |
-| **Minimal**        | `confers = { version = "0.5.0", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
-| **Recommended**    | `confers = { version = "0.5.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
-| **CLI with Tools** | `confers = { version = "0.5.0", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
-| **Full**           | `confers = { version = "0.5.0", features = ["full"] }`                                  | All features                                      |
+| **Default**        | `confers = "0.6"`                                                                     | Includes `toml`, `json`, `env` (default features) |
+| **Minimal**        | `confers = { version = "0.6", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
+| **Recommended**    | `confers = { version = "0.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
+| **CLI with Tools** | `confers = { version = "0.6", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
+| **Full**           | `confers = { version = "0.6", features = ["full"] }`                                  | All features                                      |
 
 **Individual Features:**
 
@@ -308,8 +307,11 @@ cd examples && ./verify_examples.sh
 
 | Command    | Required Features | Optional Features | Description                  |
 | ---------- | ----------------- | ----------------- | ---------------------------- |
-| `validate` | `cli`             | -                 | Validate configuration files |
-| `diff`     | `cli`             | -                 | Compare configuration files  |
+| `inspect`    | `cli`             | -                 | List all configuration keys with sources            |
+| `export`     | `cli`             | -                 | Export resolved configuration                       |
+| `validate`   | `cli`             | -                 | Validate configuration files                        |
+| `diff`       | `cli`             | -                 | Compare configuration files                         |
+| `snapshot`   | `cli`             | -                 | Snapshot rollback (list/diff/prune)                 |
 
 **Note**: The `cli` feature provides command-line tools for configuration management.
 
