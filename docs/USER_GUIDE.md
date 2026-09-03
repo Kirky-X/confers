@@ -126,10 +126,10 @@ Add `confers` to your `Cargo.toml`:
 
 | Installation Type | Configuration | Use Case |
 |-------------------|---------------|----------|
-| **Default** | `confers = "0.5.0"` | Includes toml, json, env |
-| **Minimal** | `confers = { version = "0.5.0", default-features = false, features = ["minimal"] }` | Environment variables only |
-| **Recommended** | `confers = { version = "0.5.0", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
-| **Full** | `confers = { version = "0.5.0", features = ["full"] }` | All features |
+| **Default** | `confers = "0.6.0-rc.2"` | Includes toml, json, env |
+| **Minimal** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }` | Environment variables only |
+| **Recommended** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation |
+| **Full** | `confers = { version = "0.6.0-rc.2", features = ["full"] }` | All features |
 
 **Available Feature Presets:**
 
@@ -195,17 +195,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Or use async method with watcher (for hot reload)
+// Or use FsWatcher for true hot reload (recommended)
 #[tokio::main]
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
-    let (rx, guard) = ConfigBuilder::<AppConfig>::new()
+    use confers::watcher::FsWatcher;
+    let config = ConfigBuilder::<AppConfig>::new()
         .file("config.toml")
-        .watch(true)
-        .build_with_watcher()
-        .await?;
+        .build()?;
 
-    // Get initial config from the watch receiver
-    let config = rx.borrow().clone();
+    let mut watcher = FsWatcher::new("config.toml", 200).await?;
+    while watcher.recv().await.is_some() {
+        // Config file changed - rebuild and apply
+        let _new_config = ConfigBuilder::<AppConfig>::new()
+            .file("config.toml")
+            .build()?;
+    }
+
     println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
@@ -213,8 +218,8 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
 **Note:** The `Config` derive macro enables type-safe configuration. Use `ConfigBuilder` for loading:
 - `ConfigBuilder::<T>::new().build()` - Synchronous loading
-- `ConfigBuilder::<T>::new().build_with_watcher().await` - Async with hot reload
 - `ConfigBuilder::<T>::new().build_with_fallback(fallback)` - With fallback config
+- `ConfigBuilder::<T>::new().build_with_watcher().await` - **⚠️ Deprecated since 0.3.0** (no longer reloads on file changes; use `FsWatcher`/`MultiFsWatcher` directly for hot reload)
 
 ---
 
@@ -424,7 +429,7 @@ confers --help
 ### Command Reference
 
 ```bash
-confers 0.5.0
+confers 0.6.0-rc.2
 A powerful Rust configuration management library
 
 USAGE:
@@ -661,13 +666,16 @@ let config = ConfigBuilder::<MyConfig>::new()
     .validate(true)
     .build()?;
 
-// With hot reload support (async)
+// With hot reload support (async) - 使用 FsWatcher（推荐）
 #[cfg(feature = "watch")]
-let (rx, guard) = ConfigBuilder::<MyConfig>::new()
+use confers::watcher::FsWatcher;
+#[cfg(feature = "watch")]
+let initial = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
-    .watch(true)
-    .build_with_watcher()
-    .await?;
+    .validate(true)
+    .build()?;
+#[cfg(feature = "watch")]
+let mut watcher = FsWatcher::new("config.toml", 200).await?;
 ```
 
 ### Default Values and Environment Variables
@@ -762,26 +770,32 @@ struct SecureConfig {
 
 ```rust
 use confers::ConfigBuilder;
+use confers::watcher::FsWatcher;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Build with watcher - returns a receiver and guard
-    let (rx, guard) = ConfigBuilder::<MyConfig>::new()
+    // Build initial config synchronously
+    let config = ConfigBuilder::<MyConfig>::new()
         .file("config.toml")
-        .watch(true)
-        .build_with_watcher()
-        .await?;
+        .build()?;
 
-    // Get initial config
-    let config = rx.borrow().clone();
-    println!("Initial configuration loaded: {:?}", config);
+    // Set up FsWatcher for hot reload (recommended since 0.3.0+)
+    let mut watcher = FsWatcher::new("config.toml", 200).await?;
 
-    // The receiver will be updated when config file changes
-    // Use rx.changed() to wait for updates
+    // Listen for file changes and rebuild config
+    while let Some(changed_path) = watcher.recv().await {
+        println!("Config file changed: {:?}", changed_path);
+        let new_config = ConfigBuilder::<MyConfig>::new()
+            .file("config.toml")
+            .build()?;
+        // Apply new_config to your application state
+    }
 
     Ok(())
 }
 ```
+
+> **Note:** The legacy `ConfigBuilder::build_with_watcher()` method is deprecated since v0.3.0. It only built the initial config and silently dropped file changes. Use `FsWatcher` / `MultiFsWatcher` directly as shown above for true hot reload support.
 
 ### Sensitive Data Encryption
 
@@ -1091,7 +1105,7 @@ The `security-rules` feature provides a standardized security validation rule li
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.5", features = ["security-rules"] }
+confers = { version = "0.6.0-rc.2", features = ["security-rules"] }
 ```
 
 ```rust
@@ -1137,7 +1151,7 @@ The `feature-toggle` feature provides runtime feature toggling, complementing co
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.5", features = ["feature-toggle"] }
+confers = { version = "0.6.0-rc.2", features = ["feature-toggle"] }
 ```
 
 ```rust
