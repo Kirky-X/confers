@@ -801,7 +801,7 @@ fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.3", features = ["recommended"] }
+confers = { version = "0.6.0-rc.2", features = ["recommended"] }
 garde = { version = "0.22", features = ["derive"] }
 ```
 
@@ -812,7 +812,7 @@ The `recommended` feature includes: `toml`, `json`, `env`, `validation`
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.3", features = ["dev"] }
+confers = { version = "0.6.0-rc.2", features = ["dev"] }
 garde = { version = "0.22", features = ["derive"] }
 ```
 
@@ -823,7 +823,7 @@ The `dev` feature includes most features for development convenience.
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.3", features = ["production"] }
+confers = { version = "0.6.0-rc.2", features = ["production"] }
 garde = { version = "0.22", features = ["derive"] }
 ```
 
