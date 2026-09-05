@@ -271,6 +271,16 @@ path = "tests/e2e/audit_e2e.rs"
 required-features = ["audit"]
 
 [[test]]
+name = "bus_e2e"
+path = "tests/e2e/bus_e2e.rs"
+required-features = ["nats-bus", "redis-bus"]
+
+[[test]]
+name = "remote_e2e"
+path = "tests/e2e/remote_e2e.rs"
+required-features = ["etcd", "consul"]
+
+[[test]]
 name = "dynamic_e2e"
 path = "tests/e2e/dynamic_e2e.rs"
 required-features = ["dynamic", "watch", "toml"]
