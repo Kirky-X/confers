@@ -266,6 +266,11 @@ path = "tests/e2e/interpolation_e2e.rs"
 required-features = ["interpolation"]
 
 [[test]]
+name = "audit_e2e"
+path = "tests/e2e/audit_e2e.rs"
+required-features = ["audit"]
+
+[[test]]
 name = "encryption_e2e"
 path = "tests/e2e/encryption_e2e.rs"
 required-features = ["security"]
