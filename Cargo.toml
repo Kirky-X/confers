@@ -271,6 +271,11 @@ path = "tests/e2e/audit_e2e.rs"
 required-features = ["audit"]
 
 [[test]]
+name = "combo_e2e"
+path = "tests/e2e/combo_e2e.rs"
+required-features = ["full"]
+
+[[test]]
 name = "bus_e2e"
 path = "tests/e2e/bus_e2e.rs"
 required-features = ["nats-bus", "redis-bus"]
