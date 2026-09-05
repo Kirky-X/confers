@@ -275,9 +275,15 @@ where
                 .memory_with_priority(self.accumulated_memory, self.memory_priority);
         }
 
+        #[cfg(feature = "snapshot")]
+        let snapshot_config = self.snapshot_config.as_ref();
+        #[cfg(not(feature = "snapshot"))]
+        let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
+
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
         self.limits.validate_value(&merged)?;
+        Self::save_snapshot(snapshot_config, &merged)?;
 
         let json = value_to_json(&merged);
         let config: T = serde_json::from_value(json).map_err(|e| ConfigError::InvalidValue {
@@ -300,11 +306,42 @@ where
                 .memory_with_priority(self.accumulated_memory, self.memory_priority);
         }
 
+        #[cfg(feature = "snapshot")]
+        let snapshot_config = self.snapshot_config.as_ref();
+        #[cfg(not(feature = "snapshot"))]
+        let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
+
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
         self.limits.validate_value(&merged)?;
+        Self::save_snapshot(snapshot_config, &merged)?;
 
         Ok(merged)
+    }
+
+    /// Persist the built configuration via `with_snapshot`, when configured.
+    #[cfg(feature = "snapshot")]
+    fn save_snapshot(
+        snapshot_config: Option<&SnapshotConfig>,
+        merged: &AnnotatedValue,
+    ) -> ConfigResult<()> {
+        match snapshot_config {
+            Some(snapshot_config) => {
+                crate::impl_::snapshot::SnapshotManager::new(snapshot_config.clone())
+                    .save_blocking(merged, &[])
+                    .map(|_| ())
+            }
+            None => Ok(()),
+        }
+    }
+
+    /// No-op when the `snapshot` feature is disabled.
+    #[cfg(not(feature = "snapshot"))]
+    fn save_snapshot<Cfg>(
+        _snapshot_config: Option<&Cfg>,
+        _merged: &AnnotatedValue,
+    ) -> ConfigResult<()> {
+        Ok(())
     }
 
     /// Build with a fallback configuration.

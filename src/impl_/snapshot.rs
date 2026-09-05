@@ -12,6 +12,62 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// Rebuild an [`AnnotatedValue`] tree from the plain (non-annotated) JSON a
+/// snapshot file contains. Returns `None` when the value looks like the legacy
+/// AnnotatedValue envelope ({"inner": .., "source": .., ...}) so the caller can
+/// fall back to serde deserialization.
+fn plain_json_to_annotated(
+    value: &serde_json::Value,
+    source: &crate::types::SourceId,
+    path: &str,
+) -> Option<AnnotatedValue> {
+    let inner = match value {
+        serde_json::Value::Null => ConfigValue::Null,
+        serde_json::Value::Bool(b) => ConfigValue::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                ConfigValue::I64(i)
+            } else if let Some(u) = n.as_u64() {
+                ConfigValue::U64(u)
+            } else {
+                ConfigValue::F64(n.as_f64()?)
+            }
+        }
+        serde_json::Value::String(s) => ConfigValue::String(s.clone()),
+        serde_json::Value::Array(items) => {
+            let mut arr = Vec::with_capacity(items.len());
+            for (index, item) in items.iter().enumerate() {
+                let child_path = format!("{path}[{index}]");
+                arr.push(plain_json_to_annotated(item, source, &child_path)?);
+            }
+            ConfigValue::Array(arr.into())
+        }
+        serde_json::Value::Object(map) => {
+            if map.contains_key("inner")
+                && map.contains_key("source")
+                && map.contains_key("priority")
+                && map.contains_key("version")
+            {
+                return None; // legacy annotated envelope
+            }
+            let mut entries = indexmap::IndexMap::new();
+            for (key, child) in map {
+                let child_path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                entries.insert(
+                    std::sync::Arc::<str>::from(key.as_str()),
+                    plain_json_to_annotated(child, source, &child_path)?,
+                );
+            }
+            ConfigValue::Map(std::sync::Arc::new(entries))
+        }
+    };
+    Some(AnnotatedValue::new(inner, source.clone(), path))
+}
+
 /// Monotonic counter to disambiguate snapshots saved within the same nanosecond.
 static SNAPSHOT_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -283,6 +339,74 @@ impl SnapshotManager {
         Ok(path)
     }
 
+    /// Synchronous counterpart of [`SnapshotManager::save`].
+    ///
+    /// Identical file layout and pruning semantics, usable from non-async
+    /// contexts such as `ConfigBuilder::build()`.
+    pub fn save_blocking(
+        &self,
+        value: &AnnotatedValue,
+        sensitive_paths: &[&str],
+    ) -> ConfigResult<PathBuf> {
+        std::fs::create_dir_all(&self.config.dir).map_err(crate::error::ConfigError::IoError)?;
+
+        let now = Utc::now();
+        let timestamp = now.format("%Y%m%dT%H%M%SZ");
+        let nanos = now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+        let seq = SNAPSHOT_SEQ.fetch_add(1, Ordering::Relaxed);
+        let filename = format!(
+            "config-{}-{:09}-{:04}.{}",
+            timestamp,
+            nanos,
+            seq % 10_000,
+            self.config.format.ext()
+        );
+        let path = self.config.dir.join(&filename);
+
+        let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);
+        let output = if self.config.include_provenance {
+            self.attach_provenance(serialized, value)
+        } else {
+            serialized
+        };
+
+        let content = match self.config.format {
+            SnapshotFormat::Json => serde_json::to_string_pretty(&output).map_err(|e| {
+                crate::error::ConfigError::ParseError {
+                    format: "json".to_string(),
+                    message: e.to_string(),
+                    location: None,
+                    source: Some(Box::new(e)),
+                }
+            }),
+            SnapshotFormat::Toml => {
+                toml::to_string_pretty(&output).map_err(|e| crate::error::ConfigError::ParseError {
+                    format: "toml".to_string(),
+                    message: e.to_string(),
+                    location: None,
+                    source: Some(Box::new(e)),
+                })
+            }
+            SnapshotFormat::Yaml => serde_yaml_ng::to_string(&output).map_err(|e| {
+                crate::error::ConfigError::ParseError {
+                    format: "yaml".to_string(),
+                    message: e.to_string(),
+                    location: None,
+                    source: Some(Box::new(e)),
+                }
+            }),
+        }?;
+
+        std::fs::write(&path, content).map_err(crate::error::ConfigError::IoError)?;
+        prune_blocking(
+            &self.config.dir,
+            self.config.max_snapshots,
+            self.config.format.ext(),
+        )?;
+
+        Ok(path)
+    }
+
     fn attach_provenance(
         &self,
         mut serialized: serde_json::Value,
@@ -405,6 +529,15 @@ impl SnapshotManager {
         } else {
             value
         };
+
+        // Snapshots written by `save` hold the plain config tree (plus optional
+        // `_provenance`). Older versions wrote the AnnotatedValue envelope
+        // ({"inner": .., "source": ..}); accept both shapes.
+        if let Some(annotated) =
+            plain_json_to_annotated(&clean_value, &crate::types::SourceId::new("snapshot"), "")
+        {
+            return Ok(annotated);
+        }
 
         let annotated: AnnotatedValue = serde_json::from_value(clean_value).map_err(|e| {
             crate::error::ConfigError::ParseError {
