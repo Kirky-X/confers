@@ -255,6 +255,21 @@ name = "builder_e2e"
 path = "tests/e2e/builder_e2e.rs"
 required-features = ["toml", "json"]
 
+[[test]]
+name = "validation_e2e"
+path = "tests/e2e/validation_e2e.rs"
+required-features = ["validation", "toml"]
+
+[[test]]
+name = "interpolation_e2e"
+path = "tests/e2e/interpolation_e2e.rs"
+required-features = ["interpolation"]
+
+[[test]]
+name = "schema_e2e"
+path = "tests/e2e/schema_e2e.rs"
+required-features = ["typescript-schema"]
+
 [[bin]]
 name = "confers"
 path = "src/cli/main.rs"
