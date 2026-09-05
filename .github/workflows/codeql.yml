@@ -23,6 +23,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       security-events: write
       actions: read
@@ -30,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v7
 
       # 不传 languages → CodeQL 自动检测仓库语言
       - name: Initialize CodeQL

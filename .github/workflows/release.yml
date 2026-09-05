@@ -19,13 +19,14 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v7
       - name: Create GitHub Release
         id: release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3.0.2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           draft: false
@@ -34,23 +35,37 @@ jobs:
   publish-crates:
     name: Publish to crates.io
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: create-release
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30  # stable
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - name: Resolve version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      - name: Skip if already on crates.io (idempotent)
+        id: published
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" https://crates.io/api/v1/crates/confers/${{ steps.ver.outputs.version }})
+          echo "crates.io responded $CODE for confers ${{ steps.ver.outputs.version }}"
+          echo "exists=$([[ "$CODE" == "200" ]] && echo true || echo false)" >> $GITHUB_OUTPUT
       - name: Publish confers-macros
+        if: steps.published.outputs.exists == 'false'
         working-directory: macros
         run: cargo publish
       - name: Wait for crates.io index
+        if: steps.published.outputs.exists == 'false'
         run: sleep 30
       - name: Publish confers
+        if: steps.published.outputs.exists == 'false'
         run: cargo publish -p confers
 
   build-binaries:
     name: Build Binary (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     needs: create-release
     strategy:
       matrix:
@@ -68,8 +83,8 @@ jobs:
             os: windows-latest
             archive: zip
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30  # stable
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: ${{ matrix.target }}
       - name: Build
@@ -85,6 +100,6 @@ jobs:
           cd target/${{ matrix.target }}/release
           7z a confers-${{ matrix.target }}.zip confers.exe
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3.0.2
+        uses: softprops/action-gh-release@v3
         with:
           files: target/${{ matrix.target }}/release/confers-${{ matrix.target }}.${{ matrix.archive }}

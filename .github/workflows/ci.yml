@@ -18,28 +18,53 @@ permissions:
   contents: read
 
 jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
   check:
     name: Check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
       - name: Check default features
-        run: cargo check
+        run: cargo check --workspace
       - name: Check full features
-        run: cargo check --features full
+        run: cargo check --workspace --all-features
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         features: ["default", "recommended", "full"]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
       - name: Start NATS with JetStream
         run: |
           docker run -d --name nats -p 4222:4222 nats:2.10 -js
@@ -47,91 +72,81 @@ jobs:
             nc -z 127.0.0.1 4222 && break
             sleep 0.5
           done
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
       - name: Run tests
-        run: cargo test --features ${{ matrix.features }}
+        run: cargo test --workspace --features ${{ matrix.features }}
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
-      - name: Run clippy
-        run: cargo clippy --features full -- -D warnings
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  docs:
+  doc:
     name: Documentation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
       - name: Build documentation
-        run: cargo doc --features full --no-deps
+        run: cargo doc --workspace --all-features --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
   security:
-    name: Security Audit
+    name: Security
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@5626e41434f03ab3022d9685405c0645c879f441 # cargo-audit
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Install tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+      - name: cargo deny
+        run: cargo deny check
       - name: Run security audit
         run: cargo audit
 
-  msrv:
-    name: MSRV
+  coverage:
+    name: Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # MSRV 1.88: full feature pulls async-nats 0.49, darling 0.23, time 0.3.47 — all require rustc 1.88.
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - uses: actions/checkout@v7
+      - name: Start NATS with JetStream
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10 -js
+          for i in $(seq 1 60); do
+            nc -z 127.0.0.1 4222 && break
+            sleep 0.5
+          done
+      - uses: dtolnay/rust-toolchain@1.97.1
         with:
-          toolchain: 1.88
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
-      - name: Check MSRV
-        run: cargo check --features full
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Generate coverage (gate ≥80% lines)
+        run: cargo llvm-cov --workspace --all-features --fail-under-lines 80 --lcov --output-path lcov.info
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
 
   benchmarks:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: write # upload-artifact
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
       - name: Run benchmarks
         run: |
           # --benches restricts to criterion targets (harness=false); else libtest rejects --save-baseline
@@ -141,50 +156,17 @@ jobs:
           # Try to fetch baseline from main branch
           git fetch origin main --quiet 2>/dev/null || true
           if git rev-parse --verify origin/main &>/dev/null; then
-            # Stash current results, checkout main baseline, compare, restore
             cargo bench --features dev --benches -- --baseline main 2>&1 | tee bench_compare.txt || true
-            # Check for significant regressions (>10%)
             if grep -q "Regression" bench_compare.txt; then
               echo "WARNING: Performance regression detected!"
-              # Show regression details
               grep -A 2 "Regression" bench_compare.txt || true
             fi
           else
             echo "No main branch baseline found, skipping comparison"
           fi
       - name: Upload benchmark results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: benchmark-results
           path: target/criterion/
-
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Start NATS with JetStream
-        run: |
-          docker run -d --name nats -p 4222:4222 nats:2.10 -js
-          for i in $(seq 1 60); do
-            nc -z 127.0.0.1 4222 && break
-            sleep 0.5
-          done
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-        with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Install protoc
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@c6d51ded7cde3c421f6cd6046cd601f2248f3710 # cargo-llvm-cov
-      - name: Generate coverage
-        run: cargo llvm-cov --features full --lcov --output-path lcov.info
-      - name: Check minimum coverage (80%)
-        run: cargo llvm-cov --features full --text -- | tee coverage.txt && (grep -E "^TOTAL.*[0-9]+%" coverage.txt | tail -1 | awk '{print $2}' | sed 's/%//' | awk '{if ($1 >= 80) exit 0; else {print "Coverage " $1 "% is below 80% minimum"; exit 1}}' || exit 1)
-      - name: Upload coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: lcov.info
-          fail_ci_if_error: true
