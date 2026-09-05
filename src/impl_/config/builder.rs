@@ -277,6 +277,7 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
+        self.limits.validate_value(&merged)?;
 
         let json = value_to_json(&merged);
         let config: T = serde_json::from_value(json).map_err(|e| ConfigError::InvalidValue {
@@ -301,6 +302,7 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
+        self.limits.validate_value(&merged)?;
 
         Ok(merged)
     }

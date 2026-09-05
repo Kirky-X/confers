@@ -126,6 +126,87 @@ impl ConfigLimits {
         size <= self.max_file_size_bytes
     }
 
+    /// Validate a merged configuration tree against these limits.
+    ///
+    /// Walks the merged [`AnnotatedValue`] and enforces the structural limits:
+    /// `max_nesting_depth`, `max_total_fields`, `max_array_length` and
+    /// `max_string_length`. The first violation is returned as a
+    /// [`ConfigError::InvalidValue`] describing the offending path.
+    pub fn validate_value(
+        &self,
+        value: &crate::types::AnnotatedValue,
+    ) -> crate::error::ConfigResult<()> {
+        let fields = std::cell::Cell::new(0usize);
+        self.walk(value, 0, value.path.as_ref(), &fields)
+    }
+
+    fn walk(
+        &self,
+        value: &crate::types::AnnotatedValue,
+        depth: usize,
+        path: &str,
+        fields: &std::cell::Cell<usize>,
+    ) -> crate::error::ConfigResult<()> {
+        use crate::types::ConfigValue;
+
+        if depth > self.max_nesting_depth {
+            return Err(limit_violation(
+                path,
+                "nesting depth",
+                depth,
+                self.max_nesting_depth,
+            ));
+        }
+
+        match &value.inner {
+            ConfigValue::Map(map) => {
+                let total = fields.get() + map.len();
+                if total > self.max_total_fields {
+                    return Err(limit_violation(
+                        path,
+                        "total field count",
+                        total,
+                        self.max_total_fields,
+                    ));
+                }
+                fields.set(total);
+                for (key, child) in map.iter() {
+                    let child_path = if path.is_empty() {
+                        key.to_string()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    self.walk(child, depth + 1, &child_path, fields)?;
+                }
+            }
+            ConfigValue::Array(items) => {
+                if items.len() > self.max_array_length {
+                    return Err(limit_violation(
+                        path,
+                        "array length",
+                        items.len(),
+                        self.max_array_length,
+                    ));
+                }
+                for (index, child) in items.iter().enumerate() {
+                    let child_path = format!("{path}[{index}]");
+                    self.walk(child, depth + 1, &child_path, fields)?;
+                }
+            }
+            ConfigValue::String(s) if s.len() > self.max_string_length => {
+                return Err(limit_violation(
+                    path,
+                    "string length",
+                    s.len(),
+                    self.max_string_length,
+                ));
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     /// Check if total size is within limits.
     pub fn is_total_size_ok(&self, size: u64) -> bool {
         size <= self.max_total_size
@@ -159,6 +240,21 @@ impl ConfigLimits {
             allow_remote: true,
             max_sources: 100,
         }
+    }
+}
+
+/// Build a descriptive [`ConfigError::InvalidValue`] for a limit violation.
+fn limit_violation(
+    path: &str,
+    kind: &str,
+    actual: usize,
+    limit: usize,
+) -> crate::error::ConfigError {
+    let path = if path.is_empty() { "<root>" } else { path };
+    crate::error::ConfigError::InvalidValue {
+        key: path.to_string(),
+        expected_type: format!("{kind} within limit"),
+        message: format!("{kind} {actual} exceeds configured limit {limit}"),
     }
 }
 
@@ -236,5 +332,96 @@ mod tests {
     fn test_limits_array_length() {
         let l = ConfigLimits::default().with_max_array_length(50);
         assert_eq!(l.max_array_length, 50);
+    }
+
+    fn leaf(value: crate::types::ConfigValue, path: &str) -> crate::types::AnnotatedValue {
+        crate::types::AnnotatedValue::new(value, crate::types::SourceId::new("test"), path)
+    }
+
+    fn annotated_map(
+        entries: Vec<(&str, crate::types::AnnotatedValue)>,
+    ) -> crate::types::AnnotatedValue {
+        leaf(crate::types::ConfigValue::map(entries), "")
+    }
+
+    #[test]
+    fn test_validate_value_accepts_within_limits() {
+        let value = annotated_map(vec![
+            (
+                "name",
+                leaf(crate::types::ConfigValue::string("app"), "name"),
+            ),
+            (
+                "tags",
+                leaf(
+                    crate::types::ConfigValue::array(vec![leaf(
+                        crate::types::ConfigValue::string("a"),
+                        "tags[0]",
+                    )]),
+                    "tags",
+                ),
+            ),
+        ]);
+        assert!(ConfigLimits::default().validate_value(&value).is_ok());
+    }
+
+    #[test]
+    fn test_validate_value_rejects_deep_nesting() {
+        let limits = ConfigLimits::default().with_max_nesting_depth(2);
+        let deep = annotated_map(vec![(
+            "a",
+            leaf(
+                crate::types::ConfigValue::map(vec![(
+                    "b",
+                    leaf(
+                        crate::types::ConfigValue::map(vec![(
+                            "c",
+                            leaf(crate::types::ConfigValue::string("too-deep"), "a.b.c"),
+                        )]),
+                        "a.b",
+                    ),
+                )]),
+                "a",
+            ),
+        )]);
+        let err = limits.validate_value(&deep).unwrap_err();
+        assert!(err.to_string().contains("nesting depth"), "{err}");
+    }
+
+    #[test]
+    fn test_validate_value_rejects_total_fields() {
+        let limits = ConfigLimits::default().with_max_total_fields(2);
+        let value = annotated_map(vec![
+            ("a", leaf(crate::types::ConfigValue::integer(1), "a")),
+            ("b", leaf(crate::types::ConfigValue::integer(2), "b")),
+            ("c", leaf(crate::types::ConfigValue::integer(3), "c")),
+        ]);
+        let err = limits.validate_value(&value).unwrap_err();
+        assert!(err.to_string().contains("total field count"), "{err}");
+    }
+
+    #[test]
+    fn test_validate_value_rejects_array_length() {
+        let limits = ConfigLimits::default().with_max_array_length(1);
+        let value = annotated_map(vec![(
+            "items",
+            leaf(
+                crate::types::ConfigValue::array(vec![
+                    leaf(crate::types::ConfigValue::integer(1), "items[0]"),
+                    leaf(crate::types::ConfigValue::integer(2), "items[1]"),
+                ]),
+                "items",
+            ),
+        )]);
+        let err = limits.validate_value(&value).unwrap_err();
+        assert!(err.to_string().contains("array length"), "{err}");
+    }
+
+    #[test]
+    fn test_validate_value_rejects_string_length() {
+        let limits = ConfigLimits::default().with_max_string_length(4);
+        let value = leaf(crate::types::ConfigValue::string("too-long"), "s");
+        let err = limits.validate_value(&value).unwrap_err();
+        assert!(err.to_string().contains("string length"), "{err}");
     }
 }
