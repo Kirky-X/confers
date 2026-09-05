@@ -266,6 +266,16 @@ path = "tests/e2e/interpolation_e2e.rs"
 required-features = ["interpolation"]
 
 [[test]]
+name = "toggle_e2e"
+path = "tests/e2e/toggle_e2e.rs"
+required-features = ["feature-toggle"]
+
+[[test]]
+name = "modules_e2e"
+path = "tests/e2e/modules_e2e.rs"
+required-features = ["modules", "toml"]
+
+[[test]]
 name = "schema_e2e"
 path = "tests/e2e/schema_e2e.rs"
 required-features = ["typescript-schema"]
