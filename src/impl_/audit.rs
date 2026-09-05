@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 
 use crate::error::{ConfigError, ConfigResult};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum AuditEvent {
     KeyAccess {
         key: String,
@@ -124,6 +124,8 @@ impl Default for AuditConfigBuilder {
 
 pub struct AuditWriter {
     config: AuditConfig,
+    /// Serializes writes so concurrent events never interleave in the log file.
+    write_lock: std::sync::Mutex<()>,
 }
 
 impl AuditWriter {
@@ -136,7 +138,10 @@ impl AuditWriter {
     }
 
     pub fn with_config(config: AuditConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            write_lock: std::sync::Mutex::new(()),
+        }
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -168,13 +173,25 @@ impl AuditWriter {
         let sanitized = self.sanitize(event);
         let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
         let path = dir.join(filename);
+        let line = serde_json::to_string(&sanitized).map_err(|e| ConfigError::InvalidValue {
+            key: "audit.event".into(),
+            expected_type: "serializable audit event".into(),
+            message: e.to_string(),
+        })?;
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned {
+                resource: "audit.writer".into(),
+            })?;
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(path)
             .and_then(|mut file| {
                 use std::io::Write;
-                writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
+                file.write_all(line.as_bytes())?;
+                file.write_all(b"\n")
             })?;
         Ok(())
     }
@@ -195,13 +212,25 @@ impl AuditWriter {
         let sanitized = self.sanitize(event);
         let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
         let path = dir.join(filename);
+        let line = serde_json::to_string(&sanitized).map_err(|e| ConfigError::InvalidValue {
+            key: "audit.event".into(),
+            expected_type: "serializable audit event".into(),
+            message: e.to_string(),
+        })?;
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| ConfigError::LockPoisoned {
+                resource: "audit.writer".into(),
+            })?;
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(path)
             .and_then(|mut file| {
                 use std::io::Write;
-                writeln!(file, "{} {:?}", sanitized.event_timestamp(), sanitized)
+                file.write_all(line.as_bytes())?;
+                file.write_all(b"\n")
             })?;
         Ok(())
     }
