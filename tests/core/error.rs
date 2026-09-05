@@ -15,7 +15,6 @@
 #![cfg(all(feature = "validation", feature = "interpolation"))]
 #![allow(dead_code)]
 
-
 use super::common;
 use std::path::PathBuf;
 
@@ -683,8 +682,8 @@ fn test_error_sanitized_chain() {
 /// Test MultiSourceError.
 #[test]
 fn test_multi_source_error() {
-    use confers::error::MultiSourceError;
     use confers::ConfigError;
+    use confers::error::MultiSourceError;
 
     let errors: Vec<(&str, ConfigError)> = vec![
         ("source_1", ConfigError::Timeout { duration_ms: 1000 }),
@@ -709,8 +708,8 @@ fn test_multi_source_error() {
 /// Test MultiSourceError with partial config.
 #[test]
 fn test_multi_source_error_partial_config() {
-    use confers::error::MultiSourceError;
     use confers::ConfigError;
+    use confers::error::MultiSourceError;
 
     let errors: Vec<(&str, ConfigError)> = vec![(
         "source_1",

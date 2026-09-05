@@ -15,6 +15,7 @@ mod coverage;
 mod derive;
 mod dynamic;
 mod env_types;
+mod error;
 mod load;
 mod merge;
 mod migration;
