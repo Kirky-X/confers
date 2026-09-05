@@ -266,6 +266,11 @@ path = "tests/e2e/interpolation_e2e.rs"
 required-features = ["interpolation"]
 
 [[test]]
+name = "snapshot_e2e"
+path = "tests/e2e/snapshot_e2e.rs"
+required-features = ["snapshot"]
+
+[[test]]
 name = "watch_e2e"
 path = "tests/e2e/watch_e2e.rs"
 required-features = ["watch", "dynamic", "toml"]
