@@ -1,0 +1,6 @@
+error: unsupported encryption algorithm 'rot13'
+       supported algorithms: "xchacha20", "aes256-gcm"
+ --> tests/compile_fail/encrypt_rot13.rs:7:5
+  |
+7 |     secret: String,
+  |     ^^^^^^

@@ -271,6 +271,16 @@ path = "tests/e2e/audit_e2e.rs"
 required-features = ["audit"]
 
 [[test]]
+name = "dynamic_e2e"
+path = "tests/e2e/dynamic_e2e.rs"
+required-features = ["dynamic", "watch", "toml"]
+
+[[test]]
+name = "macro_e2e"
+path = "tests/e2e/macro_e2e.rs"
+required-features = ["watch"]
+
+[[test]]
 name = "encryption_e2e"
 path = "tests/e2e/encryption_e2e.rs"
 required-features = ["security"]

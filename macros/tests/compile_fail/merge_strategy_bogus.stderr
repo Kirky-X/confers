@@ -1,0 +1,6 @@
+error: invalid merge strategy 'bogus'
+       valid strategies: replace, join, append, prepend, join_append, deep_merge
+ --> tests/compile_fail/merge_strategy_bogus.rs:7:5
+  |
+7 |     tags: Vec<String>,
+  |     ^^^^
