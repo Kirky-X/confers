@@ -266,6 +266,11 @@ path = "tests/e2e/interpolation_e2e.rs"
 required-features = ["interpolation"]
 
 [[test]]
+name = "cli_e2e"
+path = "tests/e2e/cli_e2e.rs"
+required-features = ["cli"]
+
+[[test]]
 name = "toggle_e2e"
 path = "tests/e2e/toggle_e2e.rs"
 required-features = ["feature-toggle"]
