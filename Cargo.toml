@@ -245,6 +245,16 @@ name = "cli"
 path = "tests/cli/mod.rs"
 required-features = ["cli"]
 
+[[test]]
+name = "format_e2e"
+path = "tests/e2e/format_e2e.rs"
+required-features = ["toml", "json", "ini"]
+
+[[test]]
+name = "builder_e2e"
+path = "tests/e2e/builder_e2e.rs"
+required-features = ["toml", "json"]
+
 [[bin]]
 name = "confers"
 path = "src/cli/main.rs"
