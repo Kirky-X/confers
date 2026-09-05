@@ -8,8 +8,8 @@
 //! This module provides shared utility functions used across multiple
 //! benchmark files to reduce code duplication.
 
-use confers::types::{AnnotatedValue, ConfigValue};
 use confers::SourceId;
+use confers::types::{AnnotatedValue, ConfigValue};
 use std::sync::Arc;
 
 /// Helper to create a simple AnnotatedValue.

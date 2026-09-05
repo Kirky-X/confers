@@ -5,8 +5,8 @@
 
 use crate::error::ConfigError;
 use crate::key::{
-    now_timestamp, KeyBundle, KeyRing, KeyRotationSchedule, KeyStatus, RotationPlan,
-    RotationResult, CURRENT_KEY_VERSION, SECONDS_PER_DAY,
+    CURRENT_KEY_VERSION, KeyBundle, KeyRing, KeyRotationSchedule, KeyStatus, RotationPlan,
+    RotationResult, SECONDS_PER_DAY, now_timestamp,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -151,10 +151,10 @@ impl KeyManager {
 
         self.key_rings.insert(key_id.clone(), key_ring);
 
-        if let Some(desc) = description {
-            if let Some(key) = self.key_rings.get_mut(&key_id) {
-                key.primary_key.metadata.description = Some(desc);
-            }
+        if let Some(desc) = description
+            && let Some(key) = self.key_rings.get_mut(&key_id)
+        {
+            key.primary_key.metadata.description = Some(desc);
         }
 
         let schedule = KeyRotationSchedule::new(key_id.clone(), 90, now_timestamp(), 5);

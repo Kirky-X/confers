@@ -10,8 +10,8 @@
 //! and resource limits.
 
 pub use crate::impl_::config::{
-    config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
-    SourceChain, SourceChainBuilder,
+    ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource, SourceChain,
+    SourceChainBuilder, config,
 };
 pub use crate::interface::Source;
 pub use crate::types::SourceKind;

@@ -292,7 +292,7 @@ impl Default for NatsBusBuilder {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     /// Probe whether the local NATS test service is accepting connections.
     fn nats_ready() -> bool {

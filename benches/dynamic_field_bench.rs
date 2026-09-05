@@ -9,7 +9,7 @@
 //! consolidated from the former dynamic_field_bench and hot_path_bench
 //! DynamicField sections.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 #[cfg(feature = "dynamic")]
 fn bench_dynamic_field_get(c: &mut Criterion) {

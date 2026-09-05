@@ -15,8 +15,8 @@ use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use etcd_client::{Client, ConnectOptions};
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 /// Default poll interval for etcd (30 seconds).

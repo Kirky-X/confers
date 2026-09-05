@@ -6,8 +6,8 @@
 mod tests {
     use super::super::common;
     use confers::secret::{
-        derive_field_key, CryptoError, EnvKeyProvider, SecretBytes, SecretKeyProvider,
-        SecretString, XChaCha20Crypto,
+        CryptoError, EnvKeyProvider, SecretBytes, SecretKeyProvider, SecretString, XChaCha20Crypto,
+        derive_field_key,
     };
     use serial_test::serial;
 
@@ -266,7 +266,8 @@ mod tests {
     #[serial]
     fn test_env_key_provider_missing_var() {
         // Ensure the variable doesn't exist
-        std::env::remove_var("NON_EXISTENT_KEY_12345");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("NON_EXISTENT_KEY_12345") };
 
         let provider = EnvKeyProvider::new("NON_EXISTENT_KEY_12345");
         let result = provider.get_key();
@@ -331,7 +332,8 @@ mod tests {
     fn test_env_key_provider_builder_missing_env_var() {
         // Use unique variable name to avoid conflicts with other tests
         let var_name = "BUILDER_MISSING_VAR_UNIQUE_12345";
-        std::env::remove_var(var_name);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(var_name) };
 
         let result = EnvKeyProvider::builder().env_var(var_name).build();
 

@@ -11,7 +11,7 @@
 //! - 检查点恢复机制
 //! - 零停机轮转
 
-use confers::secret::{derive_field_key, EnvKeyProvider, SecretKeyProvider, XChaCha20Crypto};
+use confers::secret::{EnvKeyProvider, SecretKeyProvider, XChaCha20Crypto, derive_field_key};
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -50,7 +50,8 @@ fn main() {
 
     tracing::info!("密钥轮换示例程序启动");
 
-    env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     demonstrate_key_version_derivation();
     demonstrate_encryption_with_version();
@@ -318,7 +319,8 @@ fn demonstrate_env_key_provider_with_version() {
         }
     }
 
-    env::remove_var("APP_ENCRYPTION_KEY");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { env::remove_var("APP_ENCRYPTION_KEY") };
 }
 
 /// 演示回滚机制：当密钥轮换出现问题时，可以快速回滚到旧版本

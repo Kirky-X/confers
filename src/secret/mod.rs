@@ -21,7 +21,7 @@ pub(crate) mod zeroizing;
 #[cfg(feature = "encryption")]
 pub use bytes::SecretBytes;
 #[cfg(feature = "encryption")]
-pub use crypto::{derive_field_key, CryptoError, XChaCha20Crypto, NONCE_SIZE};
+pub use crypto::{CryptoError, NONCE_SIZE, XChaCha20Crypto, derive_field_key};
 #[cfg(feature = "encryption")]
 pub use key_provider::{EnvKeyProvider, EnvKeyProviderBuilder, SecretKeyProvider};
 #[cfg(feature = "encryption")]
@@ -33,4 +33,4 @@ pub use providers::{VaultKeyProvider, VaultKeyProviderBuilder};
 #[cfg(feature = "encryption")]
 pub use string::SecretString;
 #[cfg(feature = "encryption")]
-pub use zeroizing::{zeroizing_bytes, ZeroizingBytes};
+pub use zeroizing::{ZeroizingBytes, zeroizing_bytes};

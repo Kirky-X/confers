@@ -1,10 +1,15 @@
 [package]
 name = "confers-fuzz"
 version = "0.0.0"
-edition = "2021"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
 
 [package.metadata]
 cargo-fuzz = true
+
+[lints]
+workspace = true
 
 [dependencies]
 confers = { path = "..", features = ["full"] }

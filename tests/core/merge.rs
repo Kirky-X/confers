@@ -3,9 +3,9 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
+use confers::SourceId;
 use confers::merger::*;
 use confers::types::*;
-use confers::SourceId;
 use std::sync::Arc;
 
 mod tests {
@@ -63,13 +63,17 @@ mod tests {
     const PRECEDENCE_PREFIX: &str = "PRECEDENCE_CFG_";
 
     fn set_precedence_env() {
-        std::env::set_var(format!("{PRECEDENCE_PREFIX}HOST"), "env-host");
-        std::env::set_var(format!("{PRECEDENCE_PREFIX}PORT"), "9001");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(format!("{PRECEDENCE_PREFIX}HOST"), "env-host") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(format!("{PRECEDENCE_PREFIX}PORT"), "9001") };
     }
 
     fn clear_precedence_env() {
-        std::env::remove_var(format!("{PRECEDENCE_PREFIX}HOST"));
-        std::env::remove_var(format!("{PRECEDENCE_PREFIX}PORT"));
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(format!("{PRECEDENCE_PREFIX}HOST")) };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(format!("{PRECEDENCE_PREFIX}PORT")) };
     }
 
     fn write_precedence_file() -> (tempfile::NamedTempFile, std::path::PathBuf) {

@@ -126,13 +126,15 @@ fn main() -> anyhow::Result<()> {
 
     // 9. 环境变量解析
     println!("\n[环境变量解析]");
-    std::env::set_var("APP_DATABASE_PROFILE", "mysql");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("APP_DATABASE_PROFILE", "mysql") };
     registry.resolve_from_env(Some("APP_"));
     println!(
         "  环境变量解析后 database 活动: {:?}",
         registry.get_active_profile("database")
     );
-    std::env::remove_var("APP_DATABASE_PROFILE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("APP_DATABASE_PROFILE") };
 
     // 10. 验证活动配置文件存在性
     println!("\n[验证活动配置]");

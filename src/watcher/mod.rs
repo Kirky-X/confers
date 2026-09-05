@@ -24,9 +24,9 @@ pub use progressive::{
 #[cfg(feature = "watch")]
 pub use fs_watcher::{FsWatcher, MultiFsWatcher};
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::error::{ConfersResult, ConfigConfigError};
@@ -199,8 +199,8 @@ impl Drop for WatcherGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
 
     /// Regression test for A-H-10: shutdown with no task handle returns Ok(true)
     /// and does not block on the timeout.

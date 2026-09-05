@@ -12,6 +12,9 @@ documentation.workspace = true
 keywords.workspace = true
 categories = ["development-tools"]
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 
@@ -22,5 +25,5 @@ syn = { workspace = true }
 darling = { workspace = true }
 
 [dev-dependencies]
-confers = { path = ".." }
+confers = { path = "..", version = "0.6.0-rc.2" }
 trybuild = { workspace = true }

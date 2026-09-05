@@ -20,8 +20,8 @@
 
 use chacha20poly1305::aead::rand_core::RngCore;
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng},
     XChaCha20Poly1305, XNonce,
+    aead::{Aead, KeyInit, OsRng},
 };
 use hkdf::Hkdf;
 use sha2::Sha256;

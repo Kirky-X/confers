@@ -84,13 +84,13 @@ impl StructAttrs {
         let mut errors = darling::Error::accumulator();
 
         // Validate version
-        if let Some(version) = self.version {
-            if version == 0 {
-                errors.push(
-                    darling::Error::custom("version must be a positive integer (1 or greater)")
-                        .with_span(&input.ident),
-                );
-            }
+        if let Some(version) = self.version
+            && version == 0
+        {
+            errors.push(
+                darling::Error::custom("version must be a positive integer (1 or greater)")
+                    .with_span(&input.ident),
+            );
         }
 
         // Validate env_prefix
@@ -285,32 +285,33 @@ impl FieldAttrs {
                 "join_append",
                 "deep_merge",
             ];
-            if !valid_strategies.contains(&strategy.as_str()) {
-                if let Some(ident) = self.ident.as_ref() {
-                    errors.push(
-                        darling::Error::custom(format!(
-                            "invalid merge strategy '{}'\n\
-                             valid strategies: {}",
-                            strategy,
-                            valid_strategies.join(", ")
-                        ))
-                        .with_span(ident),
-                    );
-                }
-            }
-        }
-
-        // Validate sensitive field type
-        if self.sensitive && !self.is_secret_string() {
-            if let Some(ident) = self.ident.as_ref() {
+            if !valid_strategies.contains(&strategy.as_str())
+                && let Some(ident) = self.ident.as_ref()
+            {
                 errors.push(
                     darling::Error::custom(format!(
-                        "sensitive field '{}' should use SecretString or SecretBytes type for security",
-                        ident
+                        "invalid merge strategy '{}'\n\
+                         valid strategies: {}",
+                        strategy,
+                        valid_strategies.join(", ")
                     ))
                     .with_span(ident),
                 );
             }
+        }
+
+        // Validate sensitive field type
+        if self.sensitive
+            && !self.is_secret_string()
+            && let Some(ident) = self.ident.as_ref()
+        {
+            errors.push(
+                darling::Error::custom(format!(
+                    "sensitive field '{}' should use SecretString or SecretBytes type for security",
+                    ident
+                ))
+                .with_span(ident),
+            );
         }
 
         errors.finish()
@@ -319,10 +320,10 @@ impl FieldAttrs {
 
 /// Check if a type is SecretString or SecretBytes (optimized version)
 pub fn is_secret_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "SecretString" || segment.ident == "SecretBytes";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "SecretString" || segment.ident == "SecretBytes";
     }
     false
 }
@@ -346,20 +347,20 @@ impl TypeCategory {
     /// Determine the category of a type (optimized version)
     #[allow(dead_code)]
     pub fn from_type(ty: &Type) -> Self {
-        if let Type::Path(type_path) = ty {
-            if let Some(segment) = type_path.path.segments.last() {
-                match segment.ident.to_string().as_str() {
-                    "String" | "str" => return Self::String,
-                    "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return Self::Integer,
-                    "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return Self::Integer,
-                    "f32" | "f64" => return Self::Float,
-                    "bool" => return Self::Boolean,
-                    "Option" => return Self::Option,
-                    "Vec" => return Self::Vec,
-                    "HashMap" | "BTreeMap" | "Map" => return Self::Map,
-                    "SecretString" | "SecretBytes" => return Self::Secret,
-                    _ => {}
-                }
+        if let Type::Path(type_path) = ty
+            && let Some(segment) = type_path.path.segments.last()
+        {
+            match segment.ident.to_string().as_str() {
+                "String" | "str" => return Self::String,
+                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return Self::Integer,
+                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return Self::Integer,
+                "f32" | "f64" => return Self::Float,
+                "bool" => return Self::Boolean,
+                "Option" => return Self::Option,
+                "Vec" => return Self::Vec,
+                "HashMap" | "BTreeMap" | "Map" => return Self::Map,
+                "SecretString" | "SecretBytes" => return Self::Secret,
+                _ => {}
             }
         }
         Self::Custom
@@ -368,20 +369,20 @@ impl TypeCategory {
 
 /// Check if a type is Option<T>
 pub fn is_option_type(ty: &Type) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Option";
-        }
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Option";
     }
     false
 }
 
 /// Check if a type is Vec<T>
 pub fn is_vec_type(ty: &Type) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Vec";
-        }
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Vec";
     }
     false
 }
@@ -389,14 +390,12 @@ pub fn is_vec_type(ty: &Type) -> bool {
 /// Extract the inner type from Option<T> or Vec<T>
 #[allow(dead_code)]
 pub fn extract_inner_type(ty: &Type) -> Option<&Type> {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(GenericArgument::Type(inner)) = args.args.first() {
-                    return Some(inner);
-                }
-            }
-        }
+    if let syn::Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(GenericArgument::Type(inner)) = args.args.first()
+    {
+        return Some(inner);
     }
     None
 }

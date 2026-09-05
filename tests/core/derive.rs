@@ -164,10 +164,14 @@ fn test_numeric_env_override_bool() {
 #[test]
 #[serial]
 fn test_numeric_env_override_all() {
-    std::env::set_var("PORT", "9090");
-    std::env::set_var("RATE", "99.9");
-    std::env::set_var("ENABLED", "true");
-    std::env::set_var("HOST", "example.com");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("PORT", "9090") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("RATE", "99.9") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("ENABLED", "true") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("HOST", "example.com") };
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let config = NumericEnvConfig::load_sync().unwrap();
@@ -177,10 +181,14 @@ fn test_numeric_env_override_all() {
         assert_eq!(config.host, "example.com");
     }));
 
-    std::env::remove_var("PORT");
-    std::env::remove_var("RATE");
-    std::env::remove_var("ENABLED");
-    std::env::remove_var("HOST");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("PORT") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("RATE") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("ENABLED") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("HOST") };
 
     match result {
         Ok(()) => {}

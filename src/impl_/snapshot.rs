@@ -511,11 +511,13 @@ mod tests {
     fn test_snapshot_manager_path() {
         let config = SnapshotConfig::new("./mysnapshots");
         let manager = SnapshotManager::new(config);
-        assert!(manager
-            .config()
-            .dir
-            .to_string_lossy()
-            .contains("mysnapshots"));
+        assert!(
+            manager
+                .config()
+                .dir
+                .to_string_lossy()
+                .contains("mysnapshots")
+        );
     }
 
     // ---- SnapshotFormat::default ----

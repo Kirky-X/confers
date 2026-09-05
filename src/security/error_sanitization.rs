@@ -162,13 +162,13 @@ impl ErrorSanitizer {
         let mut result = message.to_string();
 
         // 应用内置规则
-        for (ref pattern, ref replacement) in get_sensitive_patterns().iter() {
+        for (pattern, replacement) in get_sensitive_patterns().iter() {
             result = apply_replacement(&result, pattern, replacement);
         }
 
         // 应用自定义规则
         let custom_rules = self.custom_rules.read().unwrap_or_else(|e| e.into_inner());
-        for (ref pattern, ref replacement) in custom_rules.iter() {
+        for (pattern, replacement) in custom_rules.iter() {
             result = pattern
                 .replace_all(&result, replacement.as_str())
                 .to_string();
@@ -199,7 +199,7 @@ impl ErrorSanitizer {
     /// 检查消息是否包含敏感信息
     pub fn contains_sensitive(&self, message: &str) -> bool {
         // 检查是否匹配任何敏感模式
-        for (ref pattern, _) in get_sensitive_patterns().iter() {
+        for (pattern, _) in get_sensitive_patterns().iter() {
             if pattern.is_match(message) {
                 return true;
             }
@@ -769,7 +769,7 @@ mod tests {
         // 能检测到该消息含敏感信息，safe_message 返回安全指示而不泄露原值
         let sanitizer = ErrorSanitizer::new();
         let msg = "access_key: AKIAIOSFODNN7EXAMPLE"; // pragma: allowlist secret
-                                                      // 关键词检测：含 "key" 子串即视为敏感
+        // 关键词检测：含 "key" 子串即视为敏感
         assert!(sanitizer.contains_sensitive(msg));
         // safe_message 应返回安全指示消息，且不泄露原值
         let safe = sanitizer.safe_message(msg, "AWS");

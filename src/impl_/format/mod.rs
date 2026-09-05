@@ -1238,52 +1238,58 @@ key = "value""#
         use crate::types::ConfigValue;
         let conv = json_converter::JsonConverter::new();
         // Null
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::Null,
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // Bool
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::Bool(true),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // I64 / U64
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::I64(42),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+            .is_ok()
+        );
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::U64(100),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // F64
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::F64(2.5),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // String
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::String("hello".into()),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // Bytes → base64-encoded string
         let r = conv.serialize(&AnnotatedValue::new(
             ConfigValue::Bytes(vec![1, 2, 3]),
@@ -1371,25 +1377,27 @@ key = "value""#
         let s = conv.serialize(&v).unwrap();
         assert!(s.contains("2.5"));
         // U64
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::U64(8),
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // Bytes → "<binary: N bytes>"
         let v = AnnotatedValue::new(ConfigValue::Bytes(vec![10, 20]), SourceId::new("t"), "");
         let s = conv.serialize(&v).unwrap();
         assert!(s.contains("binary"));
         // Null
-        assert!(conv
-            .serialize(&AnnotatedValue::new(
+        assert!(
+            conv.serialize(&AnnotatedValue::new(
                 ConfigValue::Null,
                 SourceId::new("t"),
                 ""
             ))
-            .is_ok());
+            .is_ok()
+        );
         // Array
         let v = AnnotatedValue::new(
             ConfigValue::Array(

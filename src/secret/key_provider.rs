@@ -97,7 +97,8 @@ mod tests {
     #[serial]
     fn test_key_length_exactly_32_bytes() {
         // 设置正确的 32 字节密钥
-        std::env::set_var("TEST_VALID_KEY", "12345678901234567890123456789012");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TEST_VALID_KEY", "12345678901234567890123456789012") };
 
         let provider = EnvKeyProvider::new("TEST_VALID_KEY");
         let result = provider.get_key();
@@ -106,14 +107,16 @@ mod tests {
         let key = result.unwrap();
         assert_eq!(key.as_slice().len(), 32);
 
-        std::env::remove_var("TEST_VALID_KEY");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TEST_VALID_KEY") };
     }
 
     #[test]
     #[serial]
     fn test_key_length_31_bytes_rejected() {
         // 设置 31 字节密钥（太短）
-        std::env::set_var("TEST_SHORT_KEY", "1234567890123456789012345678901");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TEST_SHORT_KEY", "1234567890123456789012345678901") };
 
         let provider = EnvKeyProvider::new("TEST_SHORT_KEY");
         let result = provider.get_key();
@@ -126,14 +129,16 @@ mod tests {
             _ => panic!("Expected InvalidKeyLength error"),
         }
 
-        std::env::remove_var("TEST_SHORT_KEY");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TEST_SHORT_KEY") };
     }
 
     #[test]
     #[serial]
     fn test_key_length_33_bytes_rejected() {
         // 设置 33 字节密钥（太长）
-        std::env::set_var("TEST_LONG_KEY", "123456789012345678901234567890123");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TEST_LONG_KEY", "123456789012345678901234567890123") };
 
         let provider = EnvKeyProvider::new("TEST_LONG_KEY");
         let result = provider.get_key();
@@ -146,7 +151,8 @@ mod tests {
             _ => panic!("Expected InvalidKeyLength error"),
         }
 
-        std::env::remove_var("TEST_LONG_KEY");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TEST_LONG_KEY") };
     }
 
     #[test]
@@ -158,7 +164,8 @@ mod tests {
     #[test]
     #[serial]
     fn test_key_provider_builder_valid() {
-        std::env::set_var("BUILDER_TEST_KEY", "12345678901234567890123456789012");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("BUILDER_TEST_KEY", "12345678901234567890123456789012") };
 
         let provider = EnvKeyProvider::builder()
             .env_var("BUILDER_TEST_KEY")
@@ -168,13 +175,15 @@ mod tests {
         let result = provider.get_key();
         assert!(result.is_ok());
 
-        std::env::remove_var("BUILDER_TEST_KEY");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("BUILDER_TEST_KEY") };
     }
 
     #[test]
     #[serial]
     fn test_key_provider_builder_missing_env_var() {
-        std::env::remove_var("NONEXISTENT_KEY");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("NONEXISTENT_KEY") };
 
         let result = EnvKeyProvider::builder().env_var("NONEXISTENT_KEY").build();
 

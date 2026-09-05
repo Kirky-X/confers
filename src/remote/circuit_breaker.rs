@@ -200,11 +200,7 @@ pub fn backoff_duration(base_delay: Duration, max_delay: Duration, failure_count
     let multiplier = (1u64 << exponent) as u32;
 
     let delay = base_delay.saturating_mul(multiplier);
-    if delay > max_delay {
-        max_delay
-    } else {
-        delay
-    }
+    if delay > max_delay { max_delay } else { delay }
 }
 
 #[cfg(test)]

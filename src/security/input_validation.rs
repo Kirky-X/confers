@@ -236,10 +236,10 @@ impl InputValidator {
         }
 
         // 检查允许的字符
-        if let Some(ref pattern) = self.allowed_chars_pattern {
-            if !pattern.is_match(value) {
-                return Err(InputValidationError::InvalidCharacters);
-            }
+        if let Some(ref pattern) = self.allowed_chars_pattern
+            && !pattern.is_match(value)
+        {
+            return Err(InputValidationError::InvalidCharacters);
         }
 
         // 检查危险模式
@@ -621,25 +621,35 @@ mod tests {
         let detector = SensitiveDataDetector::new();
 
         // 高敏感度字段
-        assert!(detector
-            .is_sensitive("password", "value")
-            .needs_protection());
-        assert!(detector
-            .is_sensitive("secret_key", "value")
-            .needs_protection());
+        assert!(
+            detector
+                .is_sensitive("password", "value")
+                .needs_protection()
+        );
+        assert!(
+            detector
+                .is_sensitive("secret_key", "value")
+                .needs_protection()
+        );
 
         // 中敏感度字段
-        assert!(detector
-            .is_sensitive("api_token", "value")
-            .needs_protection());
-        assert!(detector
-            .is_sensitive("user_token", "value")
-            .needs_protection());
+        assert!(
+            detector
+                .is_sensitive("api_token", "value")
+                .needs_protection()
+        );
+        assert!(
+            detector
+                .is_sensitive("user_token", "value")
+                .needs_protection()
+        );
 
         // 低敏感度字段
-        assert!(!detector
-            .is_sensitive("username", "value")
-            .needs_protection());
+        assert!(
+            !detector
+                .is_sensitive("username", "value")
+                .needs_protection()
+        );
         assert!(!detector.is_sensitive("port", "8080").needs_protection());
     }
 
@@ -717,9 +727,11 @@ mod tests {
         let mut custom_detector = detector.clone();
         custom_detector.add_custom_sensitive_field("custom_field");
 
-        assert!(custom_detector
-            .is_sensitive("custom_field", "value")
-            .needs_protection());
+        assert!(
+            custom_detector
+                .is_sensitive("custom_field", "value")
+                .needs_protection()
+        );
     }
 
     #[test]
@@ -781,12 +793,16 @@ mod tests {
         let mut detector = SensitiveDataDetector::new();
         detector.add_custom_sensitive_field("MyCustomField");
         // 添加时小写化，检测时字段名大小写均应命中
-        assert!(detector
-            .is_sensitive("mycustomfield", "v")
-            .needs_protection());
-        assert!(detector
-            .is_sensitive("MYCUSTOMFIELD", "v")
-            .needs_protection());
+        assert!(
+            detector
+                .is_sensitive("mycustomfield", "v")
+                .needs_protection()
+        );
+        assert!(
+            detector
+                .is_sensitive("MYCUSTOMFIELD", "v")
+                .needs_protection()
+        );
         // 自定义字段标记为 Medium
         let r = detector.is_sensitive("mycustomfield", "v");
         assert!(matches!(r, SensitivityResult::Medium { .. }));
@@ -796,14 +812,18 @@ mod tests {
     fn test_xss_input_rejected() {
         let validator = InputValidator::new();
         // < > ( ) 属于危险字符集合
-        assert!(validator
-            .validate_string("<script>alert(1)</script>")
-            .is_err());
+        assert!(
+            validator
+                .validate_string("<script>alert(1)</script>")
+                .is_err()
+        );
         assert!(validator.validate_string("<img onerror=alert(1)>").is_err());
         assert!(validator.validate_string("<svg onload=alert(1)>").is_err());
-        assert!(validator
-            .validate_string("javascript:alert(document.cookie)")
-            .is_err());
+        assert!(
+            validator
+                .validate_string("javascript:alert(document.cookie)")
+                .is_err()
+        );
         // 清理后应剥离 <>
         let sanitized = validator
             .sanitize_string("<script>alert(1)</script>")
@@ -819,9 +839,11 @@ mod tests {
         // 分号 + DROP
         assert!(validator.validate_string("1; DROP TABLE users").is_err());
         // UNION SELECT
-        assert!(validator
-            .validate_string("1 UNION SELECT password FROM users")
-            .is_err());
+        assert!(
+            validator
+                .validate_string("1 UNION SELECT password FROM users")
+                .is_err()
+        );
         // 引号 + OR
         assert!(validator.validate_string("' OR '1'='1").is_err());
         // SQL 注释结尾
@@ -834,13 +856,17 @@ mod tests {
     fn test_path_traversal_rejected() {
         let validator = InputValidator::new();
         assert!(validator.validate_string("../../etc/passwd").is_err());
-        assert!(validator
-            .validate_string("..\\..\\windows\\system32")
-            .is_err());
+        assert!(
+            validator
+                .validate_string("..\\..\\windows\\system32")
+                .is_err()
+        );
         assert!(validator.validate_string("/etc/../passwd").is_err());
-        assert!(validator
-            .validate_string("var/log/../../etc/shadow")
-            .is_err());
+        assert!(
+            validator
+                .validate_string("var/log/../../etc/shadow")
+                .is_err()
+        );
     }
 
     #[test]
@@ -987,22 +1013,32 @@ mod tests {
     fn test_url_with_ampersand_in_query_string() {
         let validator = InputValidator::new();
         // URL with & in query string should be accepted (standard query-string separator)
-        assert!(validator
-            .validate_url("https://example.com/config?key=val&key2=val2")
-            .is_ok());
+        assert!(
+            validator
+                .validate_url("https://example.com/config?key=val&key2=val2")
+                .is_ok()
+        );
         // Shell metacharacters should still be rejected
-        assert!(validator
-            .validate_url("https://example.com/path;cmd")
-            .is_err());
-        assert!(validator
-            .validate_url("https://example.com/path|cmd")
-            .is_err());
-        assert!(validator
-            .validate_url("https://example.com/path`cmd`")
-            .is_err());
-        assert!(validator
-            .validate_url("https://example.com/path$(cmd)")
-            .is_err());
+        assert!(
+            validator
+                .validate_url("https://example.com/path;cmd")
+                .is_err()
+        );
+        assert!(
+            validator
+                .validate_url("https://example.com/path|cmd")
+                .is_err()
+        );
+        assert!(
+            validator
+                .validate_url("https://example.com/path`cmd`")
+                .is_err()
+        );
+        assert!(
+            validator
+                .validate_url("https://example.com/path$(cmd)")
+                .is_err()
+        );
     }
 
     #[test]
@@ -1032,9 +1068,11 @@ mod tests {
             InputValidationError::TooLong { .. }
         ));
         // 有效
-        assert!(validator
-            .validate_email("user.name+tag@example.com")
-            .is_ok());
+        assert!(
+            validator
+                .validate_email("user.name+tag@example.com")
+                .is_ok()
+        );
     }
 
     #[test]
@@ -1081,13 +1119,15 @@ mod tests {
         assert!(s.contains("actual=2"));
 
         assert!(format!("{}", InputValidationError::InvalidCharacters).contains("invalid"));
-        assert!(format!(
-            "{}",
-            InputValidationError::DangerousPattern {
-                pattern: "x".into()
-            }
-        )
-        .contains("x"));
+        assert!(
+            format!(
+                "{}",
+                InputValidationError::DangerousPattern {
+                    pattern: "x".into()
+                }
+            )
+            .contains("x")
+        );
         assert!(format!("{}", InputValidationError::EmptyFieldName).contains("empty"));
         assert!(format!("{}", InputValidationError::InvalidFieldNameFormat).contains("invalid"));
         assert!(format!("{}", InputValidationError::InvalidUrl).contains("URL"));

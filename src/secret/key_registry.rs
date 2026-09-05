@@ -41,7 +41,7 @@ use std::time::Instant;
 use std::sync::RwLock;
 
 use crate::interface::{AsyncKeyProvider, KeyProvider};
-use crate::secret::{zeroizing_bytes, CryptoError, SecretBytes, ZeroizingBytes};
+use crate::secret::{CryptoError, SecretBytes, ZeroizingBytes, zeroizing_bytes};
 
 #[derive(Debug)]
 pub struct KeyVersion {

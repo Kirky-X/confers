@@ -7,10 +7,10 @@
 //!
 //! This example demonstrates the comprehensive capabilities of confers.
 
-use confers::dynamic::DynamicField;
-use confers::secret::{derive_field_key, SecretString, XChaCha20Crypto};
-use confers::watcher::WatcherConfig;
 use confers::Config;
+use confers::dynamic::DynamicField;
+use confers::secret::{SecretString, XChaCha20Crypto, derive_field_key};
+use confers::watcher::WatcherConfig;
 use serde::Deserialize;
 use tracing::info;
 
@@ -52,7 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Full Stack - Complete Feature Set Example");
     info!("============================================================");
 
-    std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     demo_config_loading()?;
     demo_encryption()?;

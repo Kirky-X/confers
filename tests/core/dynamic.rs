@@ -11,8 +11,8 @@
 #![cfg(feature = "dynamic")]
 
 use super::common;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use confers::dynamic::{DynamicField, DynamicFieldBuilder};
 use confers::{ConfigProvider, ConfigProviderExt};

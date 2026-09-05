@@ -12,8 +12,8 @@
 //! - 使用 `InterpolationConfig` 与 `InterpolationContext` 管理敏感变量
 
 use confers::interpolation::{
-    interpolate, interpolate_tracked, InterpolationConfig, InterpolationContext,
-    InterpolationWarning,
+    InterpolationConfig, InterpolationContext, InterpolationWarning, interpolate,
+    interpolate_tracked,
 };
 use std::collections::HashMap;
 

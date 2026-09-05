@@ -17,8 +17,8 @@
 
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Callback ID type for tracking registered callbacks.
 type CallbackId = u64;

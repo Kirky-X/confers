@@ -1,18 +1,21 @@
 [package]
 name = "confers"
-version = "0.6.0-rc.2"
-edition = "2021"
-rust-version = "1.88"
-description = "Production-ready Rust configuration library with zero boilerplate"
-license = "MIT"
-authors = ["Kirky <Kirky-X@outlook.com>"]
-repository = "https://github.com/Kirky-X/confers"
-homepage = "https://github.com/Kirky-X/confers"
-documentation = "https://docs.rs/confers"
-keywords = ["config", "configuration", "settings", "env"]
-categories = ["config", "development-tools"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
 autobenches = false
 autotests = false
+
+[lints]
+workspace = true
 
 [dependencies]
 arc-swap = { version = "1.9", optional = true }
@@ -65,8 +68,8 @@ resolver = "2"
 
 [workspace.package]
 version = "0.6.0-rc.2"
-edition = "2021"
-rust-version = "1.88"
+edition = "2024"
+rust-version = "1.97.1"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
 authors = ["Kirky <Kirky-X@outlook.com>"]
@@ -102,6 +105,10 @@ tokio-stream = "0.1"
 toml = { version = "1.1", features = ["preserve_order"] }
 trybuild = "1.0"
 serial_test = "3.5" # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
+
+[workspace.lints.rust]
+
+[workspace.lints.clippy]
 
 [lib]
 bench = false
@@ -177,12 +184,6 @@ strip = true
 
 [profile.bench]
 inherits = "release"
-
-[profile.dev]
-opt-level = 0
-
-[profile.dev.package]
-confers = { opt-level = 2 }
 
 [[bench]]
 name = "merge_bench"

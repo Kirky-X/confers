@@ -19,7 +19,7 @@ use crate::error::ConfigError;
 #[cfg(feature = "encryption")]
 use crate::secret::XChaCha20Crypto;
 #[cfg(feature = "encryption")]
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 

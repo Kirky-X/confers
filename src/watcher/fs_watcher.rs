@@ -172,7 +172,7 @@ impl FsWatcher {
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
         use notify_debouncer_full::{
-            new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
+            DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
         };
 
         // Create a bridge channel for the debouncer callback
@@ -418,7 +418,7 @@ impl MultiFsWatcher {
         running: Arc<std::sync::atomic::AtomicBool>,
     ) {
         use notify_debouncer_full::{
-            new_debouncer, notify::EventKind, notify::RecursiveMode, DebounceEventResult,
+            DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
         };
 
         // Create a bridge channel for the debouncer callback
@@ -440,10 +440,10 @@ impl MultiFsWatcher {
         for path in paths {
             if path.is_dir() {
                 let _ = debouncer.watch(path.as_path(), RecursiveMode::Recursive);
-            } else if path.is_file() {
-                if let Some(parent) = path.parent() {
-                    let _ = debouncer.watch(parent, RecursiveMode::Recursive);
-                }
+            } else if path.is_file()
+                && let Some(parent) = path.parent()
+            {
+                let _ = debouncer.watch(parent, RecursiveMode::Recursive);
             }
         }
 

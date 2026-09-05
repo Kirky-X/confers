@@ -3,9 +3,9 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn bench_concurrent_reads(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();

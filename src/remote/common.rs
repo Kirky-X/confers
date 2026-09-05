@@ -8,7 +8,7 @@
 use crate::types::AnnotatedValue;
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
-use crate::loader::{detect_format_from_content, Format};
+use crate::loader::{Format, detect_format_from_content};
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use crate::types::SourceId;

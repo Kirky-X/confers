@@ -2,9 +2,13 @@
 name = "confers-examples"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description.workspace = true
 license.workspace = true
 publish = false
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "basic_usage"

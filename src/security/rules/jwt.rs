@@ -176,9 +176,12 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical && v.message.contains("too short")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Critical
+                    && v.message.contains("too short"))
+        );
     }
 
     #[test]
@@ -219,10 +222,12 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning
-                && v.message.contains("not configured")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Warning
+                    && v.message.contains("not configured"))
+        );
     }
 
     #[test]

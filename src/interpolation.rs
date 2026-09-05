@@ -8,6 +8,6 @@
 //! Implementation lives in `crate::impl_::interpolation`.
 
 pub use crate::impl_::interpolation::{
-    interpolate, interpolate_tracked, InterpolationConfig, InterpolationContext,
-    InterpolationResult, InterpolationWarning,
+    InterpolationConfig, InterpolationContext, InterpolationResult, InterpolationWarning,
+    interpolate, interpolate_tracked,
 };

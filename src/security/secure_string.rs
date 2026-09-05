@@ -212,11 +212,7 @@ impl SecureString {
         for (a, b) in self.data.iter().zip(other_bytes) {
             result |= a ^ b;
         }
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(())
-        }
+        if result == 0 { Ok(()) } else { Err(()) }
     }
 
     /// 获取敏感度级别

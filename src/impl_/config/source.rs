@@ -415,10 +415,10 @@ impl EnvSource {
         // 4. f64 — only attempt when the string looks like a float
         //    (contains '.', 'e', or 'E'). This prevents "123abc" from
         //    accidentally parsing via f64's permissive grammar.
-        if s.contains('.') || s.contains('e') || s.contains('E') {
-            if let Ok(v) = s.parse::<f64>() {
-                return ConfigValue::F64(v);
-            }
+        if (s.contains('.') || s.contains('e') || s.contains('E'))
+            && let Ok(v) = s.parse::<f64>()
+        {
+            return ConfigValue::F64(v);
         }
 
         // 5. fallback
@@ -677,8 +677,10 @@ mod tests {
     #[serial]
     fn test_env_source_prefix() {
         // Set test environment variables
-        std::env::set_var("TEST_APP_HOST", "localhost");
-        std::env::set_var("TEST_APP_PORT", "5432");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TEST_APP_HOST", "localhost") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TEST_APP_PORT", "5432") };
 
         let source = EnvSource::with_prefix("TEST_APP_");
         let result = source.collect().unwrap();
@@ -686,8 +688,10 @@ mod tests {
         assert!(result.is_map());
 
         // Cleanup
-        std::env::remove_var("TEST_APP_HOST");
-        std::env::remove_var("TEST_APP_PORT");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TEST_APP_HOST") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TEST_APP_PORT") };
     }
 
     #[test]
@@ -955,20 +959,21 @@ mod tests {
         let mut tmp = tempfile::Builder::new().suffix(".txt").tempfile().unwrap();
         write!(tmp, "the_secret_content").unwrap(); // pragma: allowlist secret
         let path = tmp.path().to_str().unwrap().to_string();
-        std::env::set_var("MYTEST_VAL_FILE", &path); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_VAL_FILE", &path) }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_VAL_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_VAL_FILE") }; // pragma: allowlist secret
         let result = result.unwrap();
 
         // Verify the value was read from the file
-        if let ConfigValue::Map(map) = &result.inner {
-            if let Some(av) = map.get("val") {
-                if let ConfigValue::String(s) = &av.inner {
-                    assert_eq!(s, "the_secret_content"); // pragma: allowlist secret
-                    return;
-                }
-            }
+        if let ConfigValue::Map(map) = &result.inner
+            && let Some(av) = map.get("val")
+            && let ConfigValue::String(s) = &av.inner
+        {
+            assert_eq!(s, "the_secret_content"); // pragma: allowlist secret
+            return;
         }
         panic!("expected val key with string value read from file");
     }
@@ -976,10 +981,12 @@ mod tests {
     #[serial_test::serial]
     #[test]
     fn test_env_source_file_suffix_nonexistent_file() {
-        std::env::set_var("MYTEST_MISSING_FILE", "/nonexistent/path.txt"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_MISSING_FILE", "/nonexistent/path.txt") }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_MISSING_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_MISSING_FILE") }; // pragma: allowlist secret
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -991,11 +998,13 @@ mod tests {
     #[test]
     fn test_env_source_file_suffix_blocks_sensitive_path() {
         // /etc/passwd is in the sensitive path list and should be blocked
-        std::env::set_var("MYTEST_BLOCK_FILE", "/etc/passwd"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_BLOCK_FILE", "/etc/passwd") }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_BLOCK_FILE"); // pragma: allowlist secret
-                                                   // May fail with FileNotFound (if /etc/passwd missing) or InvalidValue (sensitive)
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_BLOCK_FILE") }; // pragma: allowlist secret
+        // May fail with FileNotFound (if /etc/passwd missing) or InvalidValue (sensitive)
         assert!(result.is_err());
     }
 
@@ -1005,10 +1014,12 @@ mod tests {
         // A directory is not a regular file, so it must be rejected.
         let dir = tempfile::tempdir().unwrap();
         let dir_path = dir.path().to_str().unwrap().to_string();
-        std::env::set_var("MYTEST_DIR_FILE", &dir_path); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_DIR_FILE", &dir_path) }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_DIR_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_DIR_FILE") }; // pragma: allowlist secret
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -1023,10 +1034,12 @@ mod tests {
         let mut tmp = tempfile::Builder::new().suffix(".exe").tempfile().unwrap();
         write!(tmp, "data").unwrap();
         let path = tmp.path().to_str().unwrap().to_string();
-        std::env::set_var("MYTEST_EXT_FILE", &path); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_EXT_FILE", &path) }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_EXT_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_EXT_FILE") }; // pragma: allowlist secret
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -1037,11 +1050,13 @@ mod tests {
     #[serial_test::serial]
     #[test]
     fn test_env_source_file_suffix_empty_path() {
-        std::env::set_var("MYTEST_EMPTY_FILE", ""); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_EMPTY_FILE", "") }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_EMPTY_FILE"); // pragma: allowlist secret
-                                                   // Empty path → validate returns Ok, then read_to_string("") fails
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_EMPTY_FILE") }; // pragma: allowlist secret
+        // Empty path → validate returns Ok, then read_to_string("") fails
         assert!(result.is_err());
     }
 
@@ -1049,11 +1064,13 @@ mod tests {
     #[test]
     fn test_env_source_skips_file_suffix_without_prefix() {
         // Without prefix, _FILE vars are skipped (returns None from parse_key)
-        std::env::set_var("MYTEST_NOPREFIX_FILE", "/tmp/x.txt"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_NOPREFIX_FILE", "/tmp/x.txt") }; // pragma: allowlist secret
         let source = EnvSource::new(); // no prefix
-                                       // This should not error — _FILE vars without prefix are skipped
+        // This should not error — _FILE vars without prefix are skipped
         let result = source.collect();
-        std::env::remove_var("MYTEST_NOPREFIX_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_NOPREFIX_FILE") }; // pragma: allowlist secret
         assert!(result.is_ok());
     }
 
@@ -1134,17 +1151,23 @@ mod tests {
     #[test]
     fn test_env_source_collect_infers_types() {
         // Set typed env vars under a unique prefix
-        std::env::set_var("TESTCFG_PORT", "5432");
-        std::env::set_var("TESTCFG_DEBUG", "true");
-        std::env::set_var("TESTCFG_HOST", "localhost");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TESTCFG_PORT", "5432") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TESTCFG_DEBUG", "true") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("TESTCFG_HOST", "localhost") };
 
         let source = EnvSource::with_prefix("TESTCFG_");
         let result = source.collect();
 
         // Cleanup before assertions so panics don't leak env vars
-        std::env::remove_var("TESTCFG_PORT");
-        std::env::remove_var("TESTCFG_DEBUG");
-        std::env::remove_var("TESTCFG_HOST");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TESTCFG_PORT") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TESTCFG_DEBUG") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("TESTCFG_HOST") };
 
         let result = result.expect("collect should succeed");
         let map = match &result.inner {
@@ -1190,10 +1213,12 @@ mod tests {
         write!(tmp, "8080").unwrap();
         let path = tmp.path().to_str().unwrap().to_string();
 
-        std::env::set_var("MYTEST_PORT_FILE", &path); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_PORT_FILE", &path) }; // pragma: allowlist secret
         let source = EnvSource::with_prefix("MYTEST_");
         let result = source.collect();
-        std::env::remove_var("MYTEST_PORT_FILE"); // pragma: allowlist secret
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_PORT_FILE") }; // pragma: allowlist secret
 
         let result = result.expect("collect should succeed");
         let map = match &result.inner {

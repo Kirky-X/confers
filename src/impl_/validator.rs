@@ -72,51 +72,51 @@ impl ValidationRule {
         let s = s.trim();
 
         // Check for length rules
-        if let Some(inner) = s.strip_prefix("length(") {
-            if let Some(inner) = inner.strip_suffix(')') {
-                let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-                let mut min = 0;
-                let mut max = usize::MAX;
+        if let Some(inner) = s.strip_prefix("length(")
+            && let Some(inner) = inner.strip_suffix(')')
+        {
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            let mut min = 0;
+            let mut max = usize::MAX;
 
-                for part in parts {
-                    if let Some(v) = part.strip_prefix("min=") {
-                        min = v.parse().ok()?;
-                    } else if let Some(v) = part.strip_prefix("max=") {
-                        max = v.parse().ok()?;
-                    }
+            for part in parts {
+                if let Some(v) = part.strip_prefix("min=") {
+                    min = v.parse().ok()?;
+                } else if let Some(v) = part.strip_prefix("max=") {
+                    max = v.parse().ok()?;
                 }
-
-                // Validate min <= max
-                if min > max {
-                    return None;
-                }
-
-                return Some(Self::Length { min, max });
             }
+
+            // Validate min <= max
+            if min > max {
+                return None;
+            }
+
+            return Some(Self::Length { min, max });
         }
 
         // Check for range rules
-        if let Some(inner) = s.strip_prefix("range(") {
-            if let Some(inner) = inner.strip_suffix(')') {
-                let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-                let mut min = i64::MIN;
-                let mut max = i64::MAX;
+        if let Some(inner) = s.strip_prefix("range(")
+            && let Some(inner) = inner.strip_suffix(')')
+        {
+            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
+            let mut min = i64::MIN;
+            let mut max = i64::MAX;
 
-                for part in parts {
-                    if let Some(v) = part.strip_prefix("min=") {
-                        min = v.parse().ok()?;
-                    } else if let Some(v) = part.strip_prefix("max=") {
-                        max = v.parse().ok()?;
-                    }
+            for part in parts {
+                if let Some(v) = part.strip_prefix("min=") {
+                    min = v.parse().ok()?;
+                } else if let Some(v) = part.strip_prefix("max=") {
+                    max = v.parse().ok()?;
                 }
-
-                // Validate min <= max
-                if min > max {
-                    return None;
-                }
-
-                return Some(Self::Range { min, max });
             }
+
+            // Validate min <= max
+            if min > max {
+                return None;
+            }
+
+            return Some(Self::Range { min, max });
         }
 
         // Check for simple rules

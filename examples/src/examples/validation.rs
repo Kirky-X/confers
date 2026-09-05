@@ -452,80 +452,80 @@ impl ValidationContext {
         let mut errors = Vec::new();
 
         // 主机验证
-        if !self.should_ignore("host") {
-            if let Err(msg) = ValidationEngine::validate_host(&config.host) {
-                errors.push(ValidationErrorDetail {
-                    path: "host".to_string(),
-                    message: msg,
-                    error_type: "format".to_string(),
-                });
-            }
+        if !self.should_ignore("host")
+            && let Err(msg) = ValidationEngine::validate_host(&config.host)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "host".to_string(),
+                message: msg,
+                error_type: "format".to_string(),
+            });
         }
 
         // 端口验证
-        if !self.should_ignore("port") {
-            if let Err(msg) = ValidationEngine::validate_port(config.port) {
-                errors.push(ValidationErrorDetail {
-                    path: "port".to_string(),
-                    message: msg,
-                    error_type: "range".to_string(),
-                });
-            }
+        if !self.should_ignore("port")
+            && let Err(msg) = ValidationEngine::validate_port(config.port)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "port".to_string(),
+                message: msg,
+                error_type: "range".to_string(),
+            });
         }
 
         // 日志级别验证
-        if !self.should_ignore("log_level") {
-            if let Err(msg) = ValidationEngine::validate_log_level(&config.log_level) {
-                errors.push(ValidationErrorDetail {
-                    path: "log_level".to_string(),
-                    message: msg,
-                    error_type: "enum".to_string(),
-                });
-            }
+        if !self.should_ignore("log_level")
+            && let Err(msg) = ValidationEngine::validate_log_level(&config.log_level)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "log_level".to_string(),
+                message: msg,
+                error_type: "enum".to_string(),
+            });
         }
 
         // 邮箱验证
-        if !self.should_ignore("admin_email") {
-            if let Err(msg) = ValidationEngine::validate_email(&config.admin_email) {
-                errors.push(ValidationErrorDetail {
-                    path: "admin_email".to_string(),
-                    message: msg,
-                    error_type: "format".to_string(),
-                });
-            }
+        if !self.should_ignore("admin_email")
+            && let Err(msg) = ValidationEngine::validate_email(&config.admin_email)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "admin_email".to_string(),
+                message: msg,
+                error_type: "format".to_string(),
+            });
         }
 
         // URL 验证
-        if !self.should_ignore("database_url") {
-            if let Err(msg) = ValidationEngine::validate_url(&config.database_url) {
-                errors.push(ValidationErrorDetail {
-                    path: "database_url".to_string(),
-                    message: msg,
-                    error_type: "format".to_string(),
-                });
-            }
+        if !self.should_ignore("database_url")
+            && let Err(msg) = ValidationEngine::validate_url(&config.database_url)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "database_url".to_string(),
+                message: msg,
+                error_type: "format".to_string(),
+            });
         }
 
         // 超时验证
-        if !self.should_ignore("timeout_seconds") {
-            if let Err(msg) = ValidationEngine::validate_timeout(config.timeout_seconds) {
-                errors.push(ValidationErrorDetail {
-                    path: "timeout_seconds".to_string(),
-                    message: msg,
-                    error_type: "range".to_string(),
-                });
-            }
+        if !self.should_ignore("timeout_seconds")
+            && let Err(msg) = ValidationEngine::validate_timeout(config.timeout_seconds)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "timeout_seconds".to_string(),
+                message: msg,
+                error_type: "range".to_string(),
+            });
         }
 
         // 最大连接数验证
-        if !self.should_ignore("max_connections") {
-            if let Err(msg) = ValidationEngine::validate_max_connections(config.max_connections) {
-                errors.push(ValidationErrorDetail {
-                    path: "max_connections".to_string(),
-                    message: msg,
-                    error_type: "range".to_string(),
-                });
-            }
+        if !self.should_ignore("max_connections")
+            && let Err(msg) = ValidationEngine::validate_max_connections(config.max_connections)
+        {
+            errors.push(ValidationErrorDetail {
+                path: "max_connections".to_string(),
+                message: msg,
+                error_type: "range".to_string(),
+            });
         }
 
         ValidationReport::from_errors(errors)

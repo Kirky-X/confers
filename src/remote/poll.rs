@@ -21,16 +21,16 @@
 //! - IPv6 support: handles IPv6 addresses and IPv4-mapped IPv6 addresses
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::loader::{detect_format_from_content, parse_content, Format};
+use crate::loader::{Format, detect_format_from_content, parse_content};
 use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use reqwest::Client;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicU64;
 
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -557,17 +557,17 @@ impl HttpPolledSource {
             });
         }
 
-        if let Some(etag) = response.headers().get("etag") {
-            if let Ok(etag_str) = etag.to_str() {
-                self.last_etag.store(Arc::new(Some(etag_str.to_string())));
-            }
+        if let Some(etag) = response.headers().get("etag")
+            && let Ok(etag_str) = etag.to_str()
+        {
+            self.last_etag.store(Arc::new(Some(etag_str.to_string())));
         }
 
-        if let Some(modified) = response.headers().get("last-modified") {
-            if let Ok(modified_str) = modified.to_str() {
-                self.last_modified
-                    .store(Arc::new(Some(modified_str.to_string())));
-            }
+        if let Some(modified) = response.headers().get("last-modified")
+            && let Ok(modified_str) = modified.to_str()
+        {
+            self.last_modified
+                .store(Arc::new(Some(modified_str.to_string())));
         }
 
         let body = response
@@ -1209,8 +1209,8 @@ mod tests {
             eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，localhost 网络断言不可靠");
             return;
         }
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc as StdArc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")

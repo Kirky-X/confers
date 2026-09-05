@@ -324,10 +324,11 @@ impl EnvSecurityValidator {
         if self.config.enable_blocked_patterns {
             for pattern in blocked_patterns {
                 if pattern.is_match(name) {
-                    if let Some(val) = value {
-                        if self.config.allow_encrypted_values && val.starts_with("enc:") {
-                            continue;
-                        }
+                    if let Some(val) = value
+                        && self.config.allow_encrypted_values
+                        && val.starts_with("enc:")
+                    {
+                        continue;
                     }
                     return Err(EnvSecurityError::BlockedName {
                         name: name.to_string(),
@@ -787,9 +788,11 @@ mod tests {
         assert!(validator.validate_env_value(encrypted_value).is_ok());
 
         let secret_with_encrypted = "MY_SECRET"; // pragma: allowlist secret
-        assert!(validator
-            .validate_env_name(secret_with_encrypted, Some(encrypted_value))
-            .is_ok());
+        assert!(
+            validator
+                .validate_env_name(secret_with_encrypted, Some(encrypted_value))
+                .is_ok()
+        );
     }
 
     #[test]

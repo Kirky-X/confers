@@ -340,9 +340,11 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning && v.message.contains("non-HTTPS")));
+        assert!(
+            violations.iter().any(
+                |v| v.severity == ViolationSeverity::Warning && v.message.contains("non-HTTPS")
+            )
+        );
     }
 
     #[test]
@@ -388,9 +390,11 @@ mod tests {
         assert!(result.is_err());
         let violations = result.unwrap_err();
         // Should have at least 1 critical for the private IP
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Critical)
+        );
     }
 
     #[test]

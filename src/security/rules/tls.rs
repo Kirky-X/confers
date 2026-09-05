@@ -66,64 +66,64 @@ impl SecurityValidator for TlsConfigValidator {
         }
 
         // Check min_version
-        if let Some(value) = config.get_raw("tls.min_version") {
-            if let Some(version_str) = value.as_str() {
-                let normalized = version_str.trim().to_lowercase();
-                // Accept "1.2", "1.3", "TLSv1.2", "TLSv1.3", etc.
-                let version_num = normalized.strip_prefix("tlsv").unwrap_or(&normalized);
+        if let Some(value) = config.get_raw("tls.min_version")
+            && let Some(version_str) = value.as_str()
+        {
+            let normalized = version_str.trim().to_lowercase();
+            // Accept "1.2", "1.3", "TLSv1.2", "TLSv1.3", etc.
+            let version_num = normalized.strip_prefix("tlsv").unwrap_or(&normalized);
 
-                // Parse version components as integers for correct numeric comparison
-                // (avoids both lexicographic bugs like "1.12" < "1.2" and f64 bugs like 1.12 < 1.2)
-                let is_below = version_num
-                    .split('.')
-                    .map(|p| p.parse::<u32>().ok())
-                    .collect::<Option<Vec<_>>>()
-                    .and_then(|parts| {
-                        let min_parts: Vec<u32> = MIN_TLS_VERSION
-                            .split('.')
-                            .filter_map(|p| p.parse().ok())
-                            .collect();
-                        if parts.len() >= 2 && min_parts.len() >= 2 {
-                            Some((parts[0], parts[1]) < (min_parts[0], min_parts[1]))
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(false);
+            // Parse version components as integers for correct numeric comparison
+            // (avoids both lexicographic bugs like "1.12" < "1.2" and f64 bugs like 1.12 < 1.2)
+            let is_below = version_num
+                .split('.')
+                .map(|p| p.parse::<u32>().ok())
+                .collect::<Option<Vec<_>>>()
+                .and_then(|parts| {
+                    let min_parts: Vec<u32> = MIN_TLS_VERSION
+                        .split('.')
+                        .filter_map(|p| p.parse().ok())
+                        .collect();
+                    if parts.len() >= 2 && min_parts.len() >= 2 {
+                        Some((parts[0], parts[1]) < (min_parts[0], min_parts[1]))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(false);
 
-                if is_below {
-                    violations.push(SecurityViolation {
-                        validator: self.name().to_string(),
-                        field: Some("tls.min_version".to_string()),
-                        message: format!(
-                            "TLS minimum version '{}' is below recommended minimum of '{}'",
-                            version_str, MIN_TLS_VERSION
-                        ),
-                        severity: ViolationSeverity::Critical,
-                    });
-                }
+            if is_below {
+                violations.push(SecurityViolation {
+                    validator: self.name().to_string(),
+                    field: Some("tls.min_version".to_string()),
+                    message: format!(
+                        "TLS minimum version '{}' is below recommended minimum of '{}'",
+                        version_str, MIN_TLS_VERSION
+                    ),
+                    severity: ViolationSeverity::Critical,
+                });
             }
         }
 
         // Check cipher suites
-        if let Some(value) = config.get_raw("tls.cipher_suites") {
-            if let Some(suites_str) = value.as_str() {
-                for suite in suites_str.split(',') {
-                    let suite = suite.trim();
-                    if suite.is_empty() {
-                        continue;
-                    }
-                    // Both suite_upper and WEAK_CIPHER_SUITES entries are uppercase;
-                    // direct comparison suffices (no need for eq_ignore_ascii_case)
-                    let suite_upper = suite.to_uppercase();
-                    if WEAK_CIPHER_SUITES.iter().any(|&weak| weak == suite_upper) {
-                        violations.push(SecurityViolation {
-                            validator: self.name().to_string(),
-                            field: Some("tls.cipher_suites".to_string()),
-                            message: format!("Weak cipher suite detected: {suite}"),
-                            severity: ViolationSeverity::Warning,
-                        });
-                    }
+        if let Some(value) = config.get_raw("tls.cipher_suites")
+            && let Some(suites_str) = value.as_str()
+        {
+            for suite in suites_str.split(',') {
+                let suite = suite.trim();
+                if suite.is_empty() {
+                    continue;
+                }
+                // Both suite_upper and WEAK_CIPHER_SUITES entries are uppercase;
+                // direct comparison suffices (no need for eq_ignore_ascii_case)
+                let suite_upper = suite.to_uppercase();
+                if WEAK_CIPHER_SUITES.iter().any(|&weak| weak == suite_upper) {
+                    violations.push(SecurityViolation {
+                        validator: self.name().to_string(),
+                        field: Some("tls.cipher_suites".to_string()),
+                        message: format!("Weak cipher suite detected: {suite}"),
+                        severity: ViolationSeverity::Warning,
+                    });
                 }
             }
         }
@@ -215,10 +215,12 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical
-                && v.message.contains("below recommended")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Critical
+                    && v.message.contains("below recommended"))
+        );
     }
 
     #[test]

@@ -9,9 +9,9 @@
 //! the public API surface for configuration file loading.
 
 pub use crate::impl_::loader::{
-    check_path_traversal_attempt, detect_format_from_content, detect_format_from_path, load_file,
-    normalize_and_validate_path, parse_content, validate_path_with_config, Format, LoaderConfig,
-    PathTraversalError,
+    Format, LoaderConfig, PathTraversalError, check_path_traversal_attempt,
+    detect_format_from_content, detect_format_from_path, load_file, normalize_and_validate_path,
+    parse_content, validate_path_with_config,
 };
 
 #[cfg(feature = "toml")]

@@ -749,7 +749,7 @@ pub(crate) mod macros {
     /// ```
     #[macro_export]
     macro_rules! safe_inject {
-        ($injector:expr, { $($name:expr => $value:expr),+ }) => {
+        ($injector:expr_2021, { $($name:expr_2021 => $value:expr_2021),+ }) => {
             vec![
                 $(
                     $injector.inject($name, $value).map_err(|e| ($name, e))
@@ -774,7 +774,7 @@ pub(crate) mod macros {
     /// ```
     #[macro_export]
     macro_rules! inject_from_env {
-        ($injector:expr, $prefix:expr, [$($name:expr),+]) => {
+        ($injector:expr_2021, $prefix:expr_2021, [$($name:expr_2021),+]) => {
             vec![
                 $(
                     if let Ok(value) = std::env::var(format!("{}{}", $prefix, $name)) {

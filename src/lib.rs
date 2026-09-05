@@ -123,8 +123,8 @@ pub use lifecycle::Lifecycle;
 #[cfg(feature = "snapshot")]
 pub use config::SnapshotConfig;
 pub use config::{
-    config, ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource,
-    Source, SourceChain, SourceChainBuilder, SourceKind,
+    ConfigBuilder, ConfigLimits, DefaultSource, EnvSource, FileSource, MemorySource, Source,
+    SourceChain, SourceChainBuilder, SourceKind, config,
 };
 
 // Error types (BrickArchitecture compliant)
@@ -146,8 +146,8 @@ pub use types::{
 };
 
 pub use loader::{
-    detect_format_from_content, detect_format_from_path, load_file, parse_content, Format,
-    LoaderConfig,
+    Format, LoaderConfig, detect_format_from_content, detect_format_from_path, load_file,
+    parse_content,
 };
 
 // Re-export derive macros (feature-gated to match their generated code dependencies)
@@ -168,8 +168,8 @@ pub use validator::{Validate, ValidationResult, ValidationRule};
 
 #[cfg(feature = "interpolation")]
 pub use interpolation::{
-    interpolate, interpolate_tracked, InterpolationConfig, InterpolationContext,
-    InterpolationResult, InterpolationWarning,
+    InterpolationConfig, InterpolationContext, InterpolationResult, InterpolationWarning,
+    interpolate, interpolate_tracked,
 };
 
 #[cfg(feature = "watch")]
@@ -184,7 +184,7 @@ pub use watcher::{
 
 #[cfg(feature = "encryption")]
 pub use secret::{
-    crypto::CryptoError, derive_field_key, SecretBytes, SecretString, XChaCha20Crypto,
+    SecretBytes, SecretString, XChaCha20Crypto, crypto::CryptoError, derive_field_key,
 };
 
 #[cfg(feature = "audit")]
@@ -255,7 +255,8 @@ pub fn new_in_memory() -> impl ConfigConnector {
 
 /// Prelude for common imports.
 pub mod prelude {
-    pub use crate::config::{config, ConfigBuilder, ConfigLimits};
+    pub use crate::Config;
+    pub use crate::config::{ConfigBuilder, ConfigLimits, config};
     pub use crate::error::{
         BuildResult, ConfersError, ConfigConfigError, ConfigError, ConfigResult, ErrorCode,
     };
@@ -266,13 +267,12 @@ pub mod prelude {
     pub use crate::lifecycle::Lifecycle;
     pub use crate::loader::{Format, LoaderConfig};
     pub use crate::types::{AnnotatedValue, ConfigValue};
-    pub use crate::Config;
 
     #[cfg(feature = "validation")]
     pub use crate::validator::Validate;
 
     #[cfg(feature = "interpolation")]
-    pub use crate::interpolation::{interpolate, InterpolationConfig};
+    pub use crate::interpolation::{InterpolationConfig, interpolate};
 
     #[cfg(feature = "dynamic")]
     pub use crate::dynamic::{CallbackGuard, DynamicField, DynamicFieldBuilder};

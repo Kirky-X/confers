@@ -118,7 +118,8 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
             };
 
             if std::env::var(key).is_err() {
-                std::env::set_var(key, value);
+                // FIXME: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var(key, value) };
             }
         }
     }
@@ -557,21 +558,21 @@ fn check_required_keys(
     issues: &mut Vec<String>,
 ) {
     // Check for server configuration
-    if let Some(server) = obj.get("server") {
-        if let crate::types::ConfigValue::Map(server_map) = &server.inner {
-            if !server_map.contains_key("host") && !server_map.contains_key("port") {
-                issues.push("Server configuration missing host/port".to_string());
-            }
-        }
+    if let Some(server) = obj.get("server")
+        && let crate::types::ConfigValue::Map(server_map) = &server.inner
+        && !server_map.contains_key("host")
+        && !server_map.contains_key("port")
+    {
+        issues.push("Server configuration missing host/port".to_string());
     }
 
     // Check for database configuration
-    if let Some(db) = obj.get("database") {
-        if let crate::types::ConfigValue::Map(db_map) = &db.inner {
-            if !db_map.contains_key("url") && !db_map.contains_key("host") {
-                issues.push("Database configuration missing connection details".to_string());
-            }
-        }
+    if let Some(db) = obj.get("database")
+        && let crate::types::ConfigValue::Map(db_map) = &db.inner
+        && !db_map.contains_key("url")
+        && !db_map.contains_key("host")
+    {
+        issues.push("Database configuration missing connection details".to_string());
     }
 
     // Check for empty required sections
@@ -1157,9 +1158,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_types(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("boolean") || i.contains("true")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("boolean") || i.contains("true"))
+        );
     }
 
     #[test]
@@ -1300,7 +1303,8 @@ mod tests {
             "CONFERS_TEST_LIT_SINGLE",
             "CONFERS_TEST_LIT_SPACED",
         ] {
-            std::env::remove_var(k);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::remove_var(k) };
         }
 
         let result = load_env_file(&tf.path().to_path_buf());
@@ -1329,7 +1333,8 @@ mod tests {
             "CONFERS_TEST_LIT_SINGLE",
             "CONFERS_TEST_LIT_SPACED",
         ] {
-            std::env::remove_var(k);
+            // FIXME: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::remove_var(k) };
         }
     }
 
@@ -1337,13 +1342,15 @@ mod tests {
     #[serial_test::serial]
     fn test_load_env_file_preserves_existing() {
         use std::io::Write;
-        std::env::set_var("CONFERS_TEST_PRESERVE", "original");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("CONFERS_TEST_PRESERVE", "original") };
         let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         writeln!(tf, "CONFERS_TEST_PRESERVE=should_not_overwrite").unwrap();
         tf.flush().unwrap();
         load_env_file(&tf.path().to_path_buf()).unwrap();
         assert_eq!(std::env::var("CONFERS_TEST_PRESERVE").unwrap(), "original");
-        std::env::remove_var("CONFERS_TEST_PRESERVE");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("CONFERS_TEST_PRESERVE") };
     }
 
     #[test]
@@ -1546,9 +1553,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("Server configuration missing host/port")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("Server configuration missing host/port"))
+        );
     }
 
     #[test]
@@ -1576,9 +1585,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .all(|i| !i.contains("Server configuration missing host/port")));
+        assert!(
+            issues
+                .iter()
+                .all(|i| !i.contains("Server configuration missing host/port"))
+        );
     }
 
     #[test]
@@ -1606,9 +1617,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .all(|i| !i.contains("Server configuration missing host/port")));
+        assert!(
+            issues
+                .iter()
+                .all(|i| !i.contains("Server configuration missing host/port"))
+        );
     }
 
     #[test]
@@ -1628,9 +1641,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("Database configuration missing connection details")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("Database configuration missing connection details"))
+        );
     }
 
     #[test]
@@ -1658,9 +1673,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .all(|i| !i.contains("Database configuration missing connection")));
+        assert!(
+            issues
+                .iter()
+                .all(|i| !i.contains("Database configuration missing connection"))
+        );
     }
 
     #[test]
@@ -1675,9 +1692,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("null value") && i.contains("empty_key")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("null value") && i.contains("empty_key"))
+        );
     }
 
     #[test]
@@ -1697,9 +1716,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .all(|i| !i.contains("Server configuration missing")));
+        assert!(
+            issues
+                .iter()
+                .all(|i| !i.contains("Server configuration missing"))
+        );
     }
 
     #[test]
@@ -1763,9 +1784,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_types(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("3.14") && i.contains("number")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("3.14") && i.contains("number"))
+        );
     }
 
     #[test]
@@ -1780,9 +1803,11 @@ mod tests {
         );
         let mut issues = Vec::new();
         check_types(&map, &mut issues);
-        assert!(issues
-            .iter()
-            .any(|i| i.contains("-5") && i.contains("number")));
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("-5") && i.contains("number"))
+        );
     }
 
     #[test]

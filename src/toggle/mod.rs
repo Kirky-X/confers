@@ -84,17 +84,20 @@ impl FeatureToggleRegistry {
         let description = description.into();
 
         // Only insert if not already present; if present, update description only
-        if let Some(mut entry) = self.toggles.get_mut(&name) {
-            entry.description = description;
-        } else {
-            self.toggles.insert(
-                name,
-                ToggleEntry {
-                    enabled: default,
-                    description,
-                    updated_at: Instant::now(),
-                },
-            );
+        match self.toggles.get_mut(&name) {
+            Some(mut entry) => {
+                entry.description = description;
+            }
+            _ => {
+                self.toggles.insert(
+                    name,
+                    ToggleEntry {
+                        enabled: default,
+                        description,
+                        updated_at: Instant::now(),
+                    },
+                );
+            }
         }
     }
 
@@ -102,13 +105,14 @@ impl FeatureToggleRegistry {
     ///
     /// Returns the previous enabled state, or `false` if the toggle was not registered.
     pub fn enable(&self, name: &str) -> bool {
-        if let Some(mut entry) = self.toggles.get_mut(name) {
-            let prev = entry.enabled;
-            entry.enabled = true;
-            entry.updated_at = Instant::now();
-            prev
-        } else {
-            false
+        match self.toggles.get_mut(name) {
+            Some(mut entry) => {
+                let prev = entry.enabled;
+                entry.enabled = true;
+                entry.updated_at = Instant::now();
+                prev
+            }
+            _ => false,
         }
     }
 
@@ -116,13 +120,14 @@ impl FeatureToggleRegistry {
     ///
     /// Returns the previous enabled state, or `false` if the toggle was not registered.
     pub fn disable(&self, name: &str) -> bool {
-        if let Some(mut entry) = self.toggles.get_mut(name) {
-            let prev = entry.enabled;
-            entry.enabled = false;
-            entry.updated_at = Instant::now();
-            prev
-        } else {
-            false
+        match self.toggles.get_mut(name) {
+            Some(mut entry) => {
+                let prev = entry.enabled;
+                entry.enabled = false;
+                entry.updated_at = Instant::now();
+                prev
+            }
+            _ => false,
         }
     }
 
@@ -140,12 +145,13 @@ impl FeatureToggleRegistry {
     ///
     /// Returns the new state after flipping, or `false` if not registered.
     pub fn toggle(&self, name: &str) -> bool {
-        if let Some(mut entry) = self.toggles.get_mut(name) {
-            entry.enabled = !entry.enabled;
-            entry.updated_at = Instant::now();
-            entry.enabled
-        } else {
-            false
+        match self.toggles.get_mut(name) {
+            Some(mut entry) => {
+                entry.enabled = !entry.enabled;
+                entry.updated_at = Instant::now();
+                entry.enabled
+            }
+            _ => false,
         }
     }
 
@@ -202,18 +208,21 @@ impl FeatureToggleRegistry {
 
     /// Internal helper: set toggle state from config, registering if needed.
     fn set_from_config(&self, name: &str, enabled: bool) {
-        if let Some(mut entry) = self.toggles.get_mut(name) {
-            entry.enabled = enabled;
-            entry.updated_at = Instant::now();
-        } else {
-            self.toggles.insert(
-                name.to_string(),
-                ToggleEntry {
-                    enabled,
-                    description: format!("Auto-registered from configuration: {name}"),
-                    updated_at: Instant::now(),
-                },
-            );
+        match self.toggles.get_mut(name) {
+            Some(mut entry) => {
+                entry.enabled = enabled;
+                entry.updated_at = Instant::now();
+            }
+            _ => {
+                self.toggles.insert(
+                    name.to_string(),
+                    ToggleEntry {
+                        enabled,
+                        description: format!("Auto-registered from configuration: {name}"),
+                        updated_at: Instant::now(),
+                    },
+                );
+            }
         }
     }
 

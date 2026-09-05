@@ -422,10 +422,10 @@ impl ValidationResult {
         if let Some(obj) = value.as_object() {
             if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
                 for (key, prop_schema) in props {
-                    if let Some(value) = obj.get(key) {
-                        if let Some(prop_err) = Self::validate_property(key, value, prop_schema) {
-                            errors.push(prop_err);
-                        }
+                    if let Some(value) = obj.get(key)
+                        && let Some(prop_err) = Self::validate_property(key, value, prop_schema)
+                    {
+                        errors.push(prop_err);
                     }
                 }
             }
@@ -433,10 +433,10 @@ impl ValidationResult {
             // 检查必需字段
             if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
                 for req in required {
-                    if let Some(req_str) = req.as_str() {
-                        if !obj.contains_key(req_str) {
-                            errors.push(format!("Missing required field: {}", req_str));
-                        }
+                    if let Some(req_str) = req.as_str()
+                        && !obj.contains_key(req_str)
+                    {
+                        errors.push(format!("Missing required field: {}", req_str));
                     }
                 }
             }
@@ -476,53 +476,49 @@ impl ValidationResult {
         }
 
         // 范围检查
-        if let Some(min) = schema.get("minimum").and_then(|m| m.as_i64()) {
-            if let Some(num) = value.as_i64() {
-                if num < min {
-                    return Some(format!(
-                        "Field '{}': value {} is less than minimum {}",
-                        name, num, min
-                    ));
-                }
-            }
+        if let Some(min) = schema.get("minimum").and_then(|m| m.as_i64())
+            && let Some(num) = value.as_i64()
+            && num < min
+        {
+            return Some(format!(
+                "Field '{}': value {} is less than minimum {}",
+                name, num, min
+            ));
         }
 
-        if let Some(max) = schema.get("maximum").and_then(|m| m.as_i64()) {
-            if let Some(num) = value.as_i64() {
-                if num > max {
-                    return Some(format!(
-                        "Field '{}': value {} is greater than maximum {}",
-                        name, num, max
-                    ));
-                }
-            }
+        if let Some(max) = schema.get("maximum").and_then(|m| m.as_i64())
+            && let Some(num) = value.as_i64()
+            && num > max
+        {
+            return Some(format!(
+                "Field '{}': value {} is greater than maximum {}",
+                name, num, max
+            ));
         }
 
         // 字符串长度检查
-        if let Some(min) = schema.get("minLength").and_then(|m| m.as_i64()) {
-            if let Some(s) = value.as_str() {
-                if (s.len() as i64) < min {
-                    return Some(format!(
-                        "Field '{}': string length {} is less than minLength {}",
-                        name,
-                        s.len(),
-                        min
-                    ));
-                }
-            }
+        if let Some(min) = schema.get("minLength").and_then(|m| m.as_i64())
+            && let Some(s) = value.as_str()
+            && (s.len() as i64) < min
+        {
+            return Some(format!(
+                "Field '{}': string length {} is less than minLength {}",
+                name,
+                s.len(),
+                min
+            ));
         }
 
-        if let Some(max) = schema.get("maxLength").and_then(|m| m.as_i64()) {
-            if let Some(s) = value.as_str() {
-                if (s.len() as i64) > max {
-                    return Some(format!(
-                        "Field '{}': string length {} is greater than maxLength {}",
-                        name,
-                        s.len(),
-                        max
-                    ));
-                }
-            }
+        if let Some(max) = schema.get("maxLength").and_then(|m| m.as_i64())
+            && let Some(s) = value.as_str()
+            && (s.len() as i64) > max
+        {
+            return Some(format!(
+                "Field '{}': string length {} is greater than maxLength {}",
+                name,
+                s.len(),
+                max
+            ));
         }
 
         None

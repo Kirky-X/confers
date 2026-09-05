@@ -17,8 +17,8 @@
 use serial_test::serial;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tempfile::TempDir;
@@ -726,13 +726,13 @@ fn test_watcher_config_builder_chaining() {
 mod progressive_tests {
     use super::*;
     use async_trait::async_trait;
+    use confers::SourceChainBuilder;
     use confers::interface::ConfigProvider;
     use confers::types::{AnnotatedValue, ConfigValue};
     use confers::watcher::{
         HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
         ReloadOutcome, ReloadStrategy,
     };
-    use confers::SourceChainBuilder;
     use std::collections::HashMap;
     use std::sync::Arc;
 

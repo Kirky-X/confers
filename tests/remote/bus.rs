@@ -9,7 +9,7 @@
 
 use confers::bus::{BusBuilder, ConfigBus, ConfigChangeEvent, InMemoryBus};
 use futures_util::StreamExt;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 #[tokio::test]
 async fn test_config_change_event_creation() {
@@ -117,11 +117,11 @@ fn test_event_serialization() {
 // NATS bus integration tests (requires NATS on 127.0.0.1:4222)
 #[cfg(feature = "nats-bus")]
 mod nats_bus_tests {
-    use confers::bus::{ConfigBus, ConfigChangeEvent, NatsBusBuilder, NatsConfigBus};
     use confers::Lifecycle;
+    use confers::bus::{ConfigBus, ConfigChangeEvent, NatsBusBuilder, NatsConfigBus};
     use futures_util::StreamExt;
     use serial_test::serial;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     /// TCP-probe a host:port (fast for localhost). Used instead of the
     /// `remote`-gated `common::is_service_available` HTTP helper.
@@ -349,10 +349,10 @@ mod nats_bus_tests {
 // Redis bus integration tests (requires Redis on 127.0.0.1:16379)
 #[cfg(feature = "redis-bus")]
 mod redis_bus_tests {
-    use confers::bus::{ConfigBus, ConfigChangeEvent, RedisBusBuilder};
     use confers::Lifecycle;
+    use confers::bus::{ConfigBus, ConfigChangeEvent, RedisBusBuilder};
     use futures_util::StreamExt;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     fn port_open(host: &str, port: u16) -> bool {
         std::net::TcpStream::connect((host, port)).is_ok()

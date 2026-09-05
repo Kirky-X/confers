@@ -1145,22 +1145,30 @@ mod tests {
     fn test_path_traversal_error_display_all_variants() {
         assert!(!PathTraversalError::TooLong.to_string().is_empty());
         assert!(!PathTraversalError::AbsolutePath.to_string().is_empty());
-        assert!(!PathTraversalError::ParentDirectoryReference
-            .to_string()
-            .is_empty());
+        assert!(
+            !PathTraversalError::ParentDirectoryReference
+                .to_string()
+                .is_empty()
+        );
         assert!(!PathTraversalError::InvalidComponent.to_string().is_empty());
         assert!(!PathTraversalError::EncodedTraversal.to_string().is_empty());
         assert!(!PathTraversalError::NotFound.to_string().is_empty());
-        assert!(!PathTraversalError::CurrentDirUnavailable
-            .to_string()
-            .is_empty());
-        assert!(!PathTraversalError::OutsideAllowedDirectory
-            .to_string()
-            .is_empty());
+        assert!(
+            !PathTraversalError::CurrentDirUnavailable
+                .to_string()
+                .is_empty()
+        );
+        assert!(
+            !PathTraversalError::OutsideAllowedDirectory
+                .to_string()
+                .is_empty()
+        );
         assert!(!PathTraversalError::SymlinkTraversal.to_string().is_empty());
-        assert!(!PathTraversalError::IoError("disk error".to_string())
-            .to_string()
-            .is_empty());
+        assert!(
+            !PathTraversalError::IoError("disk error".to_string())
+                .to_string()
+                .is_empty()
+        );
     }
 
     #[test]

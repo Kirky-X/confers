@@ -159,7 +159,7 @@ impl Default for BusBuilder {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     #[tokio::test]
     async fn test_config_change_event_creation() {

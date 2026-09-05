@@ -5,7 +5,7 @@
 
 #![no_main]
 
-use confers::{parse_content, Format, SourceId};
+use confers::{Format, SourceId, parse_content};
 use libfuzzer_sys::fuzz_target;
 use std::path::Path;
 

@@ -8,7 +8,7 @@
 //! Measures interpolation performance for various patterns.
 
 use confers::interpolation::{interpolate, interpolate_tracked};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
 /// Create a resolver from a static slice of key-value pairs.

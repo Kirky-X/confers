@@ -267,13 +267,13 @@ impl ConsulSource {
         // H1 (CWE-400 + CWE-502): Enforce response size limit BEFORE
         // deserialization to prevent DoS/OOM from oversized responses.
         // 1. Check Content-Length header first (fail fast, no body read).
-        if let Some(content_length) = response.content_length() {
-            if (content_length as usize) > self.max_response_bytes {
-                return Err(ConfigError::SizeLimitExceeded {
-                    actual: content_length as usize,
-                    limit: self.max_response_bytes,
-                });
-            }
+        if let Some(content_length) = response.content_length()
+            && (content_length as usize) > self.max_response_bytes
+        {
+            return Err(ConfigError::SizeLimitExceeded {
+                actual: content_length as usize,
+                limit: self.max_response_bytes,
+            });
         }
 
         // 2. Read body in chunks, enforcing the size limit as we go.

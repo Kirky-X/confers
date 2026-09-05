@@ -9,9 +9,9 @@
 use serde::Deserialize;
 use serial_test::serial;
 
-use confers::config::Source;
 use confers::ConfigBuilder;
 use confers::ConfigValue;
+use confers::config::Source;
 
 #[derive(Debug, Default, PartialEq, Deserialize)]
 struct TypedConfig {
@@ -24,15 +24,21 @@ struct TypedConfig {
 const PREFIX: &str = "TYPEDCFG_";
 
 fn set_test_env() {
-    std::env::set_var(format!("{PREFIX}PORT"), "8080");
-    std::env::set_var(format!("{PREFIX}DEBUG"), "true");
-    std::env::set_var(format!("{PREFIX}HOST"), "localhost");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(format!("{PREFIX}PORT"), "8080") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(format!("{PREFIX}DEBUG"), "true") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(format!("{PREFIX}HOST"), "localhost") };
 }
 
 fn cleanup_test_env() {
-    std::env::remove_var(format!("{PREFIX}PORT"));
-    std::env::remove_var(format!("{PREFIX}DEBUG"));
-    std::env::remove_var(format!("{PREFIX}HOST"));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(format!("{PREFIX}PORT")) };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(format!("{PREFIX}DEBUG")) };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(format!("{PREFIX}HOST")) };
 }
 
 #[test]
@@ -208,13 +214,17 @@ struct ArrayEnvConfig {
 const ARRAY_PREFIX: &str = "ARRCFG_";
 
 fn set_array_env() {
-    std::env::set_var(format!("{ARRAY_PREFIX}TAGS"), r#"["a","b","c"]"#);
-    std::env::set_var(format!("{ARRAY_PREFIX}PORTS"), r#"[8080,9090]"#);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(format!("{ARRAY_PREFIX}TAGS"), r#"["a","b","c"]"#) };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(format!("{ARRAY_PREFIX}PORTS"), r#"[8080,9090]"#) };
 }
 
 fn clear_array_env() {
-    std::env::remove_var(format!("{ARRAY_PREFIX}TAGS"));
-    std::env::remove_var(format!("{ARRAY_PREFIX}PORTS"));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(format!("{ARRAY_PREFIX}TAGS")) };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(format!("{ARRAY_PREFIX}PORTS")) };
 }
 
 #[test]
@@ -289,11 +299,13 @@ const DEEP_PREFIX: &str = "DEEPCFG_";
 
 fn set_deep_env() {
     // a_b_c_value = "nested" → 4 levels deep
-    std::env::set_var("DEEPCFG_A_B_C_VALUE", "deep-value");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("DEEPCFG_A_B_C_VALUE", "deep-value") };
 }
 
 fn clear_deep_env() {
-    std::env::remove_var("DEEPCFG_A_B_C_VALUE");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("DEEPCFG_A_B_C_VALUE") };
 }
 
 #[test]
@@ -358,8 +370,10 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
     // Each underscore becomes a segment: A__C → a..c → a -> { "" -> { c } };
     // A___B → a...b → a -> { "" -> { "" -> { b } } }. This is the pinned
     // deterministic behavior of EnvSource key parsing.
-    std::env::set_var("DEEPCFG_A___B", "empty-mid");
-    std::env::set_var("DEEPCFG_A__C", "empty-trailing");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("DEEPCFG_A___B", "empty-mid") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("DEEPCFG_A__C", "empty-trailing") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let raw = confers::config::EnvSource::with_prefix(DEEP_PREFIX)
             .collect()
@@ -394,8 +408,10 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
             .expect("leaf b under two empty segments (A___B)");
         assert_eq!(b.inner.as_str(), Some("empty-mid"));
     }));
-    std::env::remove_var("DEEPCFG_A___B");
-    std::env::remove_var("DEEPCFG_A__C");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("DEEPCFG_A___B") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("DEEPCFG_A__C") };
     match result {
         Ok(()) => {}
         Err(panic) => std::panic::resume_unwind(panic),
@@ -407,8 +423,10 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
 fn test_env_parse_key_unicode_and_case() {
     // Unicode keys survive parsing; lowercasing applies. A leading underscore
     // after the prefix becomes an empty first segment → empty-keyed map.
-    std::env::set_var("DEEPCFG_HOSTNAME", "srv1");
-    std::env::set_var("DEEPCFG__TAG", "underscore-prefixed");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("DEEPCFG_HOSTNAME", "srv1") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("DEEPCFG__TAG", "underscore-prefixed") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let raw = confers::config::EnvSource::with_prefix(DEEP_PREFIX)
             .collect()
@@ -425,8 +443,10 @@ fn test_env_parse_key_unicode_and_case() {
             "leading underscore becomes empty-keyed map"
         );
     }));
-    std::env::remove_var("DEEPCFG_HOSTNAME");
-    std::env::remove_var("DEEPCFG__TAG");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("DEEPCFG_HOSTNAME") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("DEEPCFG__TAG") };
     match result {
         Ok(()) => {}
         Err(panic) => std::panic::resume_unwind(panic),

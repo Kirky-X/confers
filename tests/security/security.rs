@@ -9,8 +9,8 @@
 
 #![cfg(feature = "encryption")]
 
-use confers::secret::{KeyRegistry, KeyRotationConfig, SecretBytes, XChaCha20Crypto};
 use confers::ConfigError;
+use confers::secret::{KeyRegistry, KeyRotationConfig, SecretBytes, XChaCha20Crypto};
 
 /// Generate a test key with a specific pattern.
 /// NOTE: This is for testing only, never use in production!
@@ -129,10 +129,11 @@ mod security_rules_tests {
         let report = registry.validate_all(&config);
 
         // JWT missing produces a warning
-        assert!(report
-            .violations
-            .iter()
-            .any(|v| { v.validator == "jwt_secret" && v.severity == ViolationSeverity::Warning }));
+        assert!(
+            report.violations.iter().any(|v| {
+                v.validator == "jwt_secret" && v.severity == ViolationSeverity::Warning
+            })
+        );
     }
 
     #[test]

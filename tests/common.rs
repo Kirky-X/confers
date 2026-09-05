@@ -155,9 +155,11 @@ pub fn with_env_var<F, R>(key: &str, value: &str, f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    std::env::set_var(key, value);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(key, value) };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-    std::env::remove_var(key);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var(key) };
 
     match result {
         Ok(value) => value,

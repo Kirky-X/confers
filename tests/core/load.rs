@@ -5,8 +5,8 @@
 
 //! Integration tests for configuration loading.
 
-use confers::types::ConfigValue;
 use confers::ConfigBuilder;
+use confers::types::ConfigValue;
 use std::io::Write;
 
 fn create_local_temp_config(

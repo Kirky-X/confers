@@ -10,9 +10,9 @@
 //! - 演示 Immediate / Canary / Linear 三种重载策略
 //! - 查看重载结果与当前配置
 
+use confers::AnnotatedValue;
 use confers::interface::ConfigProvider;
 use confers::watcher::{ProgressiveReloader, ReloadOutcome, ReloadStrategy};
-use confers::AnnotatedValue;
 use std::sync::Arc;
 use std::time::Duration;
 

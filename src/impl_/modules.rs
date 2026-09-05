@@ -46,7 +46,7 @@
 //! ```
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::impl_::loader::{load_file, LoaderConfig};
+use crate::impl_::loader::{LoaderConfig, load_file};
 #[allow(unused_imports)]
 use crate::types::{AnnotatedValue, ConfigValue};
 use std::collections::HashMap;
@@ -453,12 +453,12 @@ impl ModuleRegistry {
         for (name, module) in self.groups.iter_mut() {
             let env_key = format!("{}{}_PROFILE", prefix_str, name.to_uppercase());
 
-            if let Ok(profile) = std::env::var(&env_key) {
-                if module.has_profile(&profile) {
-                    module.set_active_profile(&profile).ok();
-                }
-                // Silently ignore non-existent profile - not an error condition
+            if let Ok(profile) = std::env::var(&env_key)
+                && module.has_profile(&profile)
+            {
+                module.set_active_profile(&profile).ok();
             }
+            // Silently ignore non-existent profile - not an error condition
         }
 
         self
@@ -491,13 +491,13 @@ impl ModuleRegistry {
         let prefix_str = prefix.unwrap_or("");
         let env_key = format!("{}{}_PROFILE", prefix_str, group_name.to_uppercase());
 
-        if let Ok(profile) = std::env::var(&env_key) {
-            if module.has_profile(&profile) {
-                module.set_active_profile(&profile).ok();
-                return Ok(true);
-            }
-            // Silently ignore non-existent profile - not an error condition
+        if let Ok(profile) = std::env::var(&env_key)
+            && module.has_profile(&profile)
+        {
+            module.set_active_profile(&profile).ok();
+            return Ok(true);
         }
+        // Silently ignore non-existent profile - not an error condition
 
         Ok(false)
     }
@@ -1172,7 +1172,8 @@ mod tests {
         // Use a unique group name to avoid collision with other env-var tests.
         let unique_group = "envresolve_single_ok";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "postgresql");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "postgresql") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1193,7 +1194,8 @@ mod tests {
             "postgresql"
         );
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]
@@ -1201,7 +1203,8 @@ mod tests {
     fn test_resolve_module_from_env_no_env_var_returns_false() {
         let unique_group = "envresolve_single_novar";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1250,7 +1253,8 @@ mod tests {
         // error — it silently ignores the invalid profile and returns false.
         let unique_group = "envresolve_single_bad_profile";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "nonexistent-profile");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "nonexistent-profile") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1271,7 +1275,8 @@ mod tests {
             "mysql"
         );
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]
@@ -1279,7 +1284,8 @@ mod tests {
     fn test_resolve_module_from_env_with_prefix() {
         let unique_group = "envresolve_prefix";
         let env_key = format!("PREFIX_{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "postgresql");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "postgresql") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1300,7 +1306,8 @@ mod tests {
             "postgresql"
         );
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]
@@ -1310,8 +1317,10 @@ mod tests {
         let unique_b = "envresolve_batch_b";
         let env_a = format!("{}_PROFILE", unique_a.to_uppercase());
         let env_b = format!("{}_PROFILE", unique_b.to_uppercase());
-        std::env::set_var(&env_a, "postgresql");
-        std::env::set_var(&env_b, "redis");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_a, "postgresql") };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_b, "redis") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1341,8 +1350,10 @@ mod tests {
             "redis"
         );
 
-        std::env::remove_var(&env_a);
-        std::env::remove_var(&env_b);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_a) };
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_b) };
     }
 
     #[test]
@@ -1350,7 +1361,8 @@ mod tests {
     fn test_resolve_from_env_ignores_nonexistent_profile() {
         let unique_group = "envresolve_batch_ignore";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "does-not-exist");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "does-not-exist") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1366,7 +1378,8 @@ mod tests {
             "mysql"
         );
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]
@@ -1374,7 +1387,8 @@ mod tests {
     fn test_resolve_from_env_no_env_vars_is_noop() {
         let unique_group = "envresolve_batch_noop";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1398,7 +1412,8 @@ mod tests {
     fn test_resolve_from_env_with_prefix() {
         let unique_group = "envresolve_batch_prefix";
         let env_key = format!("APP_{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "postgresql");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "postgresql") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1416,7 +1431,8 @@ mod tests {
             "postgresql"
         );
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]
@@ -1424,7 +1440,8 @@ mod tests {
     fn test_resolve_from_env_returns_self_for_chaining() {
         let unique_group = "envresolve_chain";
         let env_key = format!("{}_PROFILE", unique_group.to_uppercase());
-        std::env::set_var(&env_key, "postgresql");
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(&env_key, "postgresql") };
 
         let mut registry = ModuleRegistry::default();
         registry.register_group(
@@ -1442,7 +1459,8 @@ mod tests {
             .register_group("added-after-resolve", vec![], None);
         assert!(registry.contains("added-after-resolve"));
 
-        std::env::remove_var(&env_key);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(&env_key) };
     }
 
     #[test]

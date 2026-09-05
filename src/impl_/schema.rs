@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-use schemars::{schema_for, JsonSchema};
+use schemars::{JsonSchema, schema_for};
 use serde_json::Value;
 
 use crate::error::{ConfigError, ConfigResult};
@@ -26,12 +26,12 @@ impl TypeScriptGenerator {
         let mut interfaces = Vec::new();
 
         // First, handle definitions if they exist
-        if let Some(definitions) = schema.get("definitions") {
-            if let Some(defs_obj) = definitions.as_object() {
-                for (name, def_schema) in defs_obj {
-                    let interface = Self::generate_interface(name, def_schema);
-                    interfaces.push(interface);
-                }
+        if let Some(definitions) = schema.get("definitions")
+            && let Some(defs_obj) = definitions.as_object()
+        {
+            for (name, def_schema) in defs_obj {
+                let interface = Self::generate_interface(name, def_schema);
+                interfaces.push(interface);
             }
         }
 

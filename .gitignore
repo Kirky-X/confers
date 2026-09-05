@@ -77,3 +77,6 @@ reviews/
 
 # WorkBuddy AI local notes
 .workbuddy-ai/
+
+# mimosa 安全扫描工具产物
+.mimosa/

@@ -253,10 +253,8 @@ where
             }
 
             // Track sensitive references (if tracking is enabled)
-            if is_sensitive {
-                if let Some(sens_refs) = sensitive_refs.as_mut() {
-                    sens_refs.insert(var_name.to_string());
-                }
+            if is_sensitive && let Some(sens_refs) = sensitive_refs.as_mut() {
+                sens_refs.insert(var_name.to_string());
             }
 
             // Check for circular reference

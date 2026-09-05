@@ -4,9 +4,9 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::error::ConfigError;
-use crate::key::{now_timestamp, KeyManager};
+use crate::key::{KeyManager, now_timestamp};
 use crate::secret::{SecretBytes, XChaCha20Crypto};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
@@ -611,21 +611,22 @@ impl KeyStorage {
         if let Ok(entries) = fs::read_dir(backup_path) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if file_name.starts_with("keys_backup_") && file_name.ends_with(".json") {
-                        let timestamp_str = file_name
-                            .strip_prefix("keys_backup_")
-                            .and_then(|s| s.strip_suffix(".json"))
-                            .and_then(|s| s.parse::<u64>().ok());
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+                    && file_name.starts_with("keys_backup_")
+                    && file_name.ends_with(".json")
+                {
+                    let timestamp_str = file_name
+                        .strip_prefix("keys_backup_")
+                        .and_then(|s| s.strip_suffix(".json"))
+                        .and_then(|s| s.parse::<u64>().ok());
 
-                        if let Some(timestamp) = timestamp_str {
-                            let backup_path = path.clone();
-                            backups.push(BackupInfo {
-                                path: backup_path,
-                                timestamp,
-                                file_name: file_name.to_string(),
-                            });
-                        }
+                    if let Some(timestamp) = timestamp_str {
+                        let backup_path = path.clone();
+                        backups.push(BackupInfo {
+                            path: backup_path,
+                            timestamp,
+                            file_name: file_name.to_string(),
+                        });
                     }
                 }
             }

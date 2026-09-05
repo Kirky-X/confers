@@ -46,17 +46,18 @@ impl SecurityValidator for CorsValidator {
         }
 
         // Check allowed_origins for wildcard
-        if let Some(value) = config.get_raw("cors.allowed_origins") {
-            if let Some(origins_str) = value.as_str() {
-                if origins_str.contains('*') {
-                    violations.push(SecurityViolation {
-                        validator: self.name().to_string(),
-                        field: Some("cors.allowed_origins".to_string()),
-                        message: "CORS allowed_origins contains wildcard '*' — any origin can access the API".to_string(),
-                        severity: ViolationSeverity::Warning,
-                    });
-                }
-            }
+        if let Some(value) = config.get_raw("cors.allowed_origins")
+            && let Some(origins_str) = value.as_str()
+            && origins_str.contains('*')
+        {
+            violations.push(SecurityViolation {
+                validator: self.name().to_string(),
+                field: Some("cors.allowed_origins".to_string()),
+                message:
+                    "CORS allowed_origins contains wildcard '*' — any origin can access the API"
+                        .to_string(),
+                severity: ViolationSeverity::Warning,
+            });
         }
 
         // Check allowed_methods is non-empty
@@ -88,18 +89,18 @@ impl SecurityValidator for CorsValidator {
         if let Some(value) = config.get_raw("cors.max_age") {
             // Try string representation first (e.g. "172800")
             if let Some(age_str) = value.as_str() {
-                if let Ok(age) = age_str.parse::<u64>() {
-                    if age > MAX_AGE_LIMIT {
-                        violations.push(SecurityViolation {
-                            validator: self.name().to_string(),
-                            field: Some("cors.max_age".to_string()),
-                            message: format!(
-                                "CORS max_age {}s exceeds recommended maximum of {}s (24h)",
-                                age, MAX_AGE_LIMIT
-                            ),
-                            severity: ViolationSeverity::Warning,
-                        });
-                    }
+                if let Ok(age) = age_str.parse::<u64>()
+                    && age > MAX_AGE_LIMIT
+                {
+                    violations.push(SecurityViolation {
+                        validator: self.name().to_string(),
+                        field: Some("cors.max_age".to_string()),
+                        message: format!(
+                            "CORS max_age {}s exceeds recommended maximum of {}s (24h)",
+                            age, MAX_AGE_LIMIT
+                        ),
+                        severity: ViolationSeverity::Warning,
+                    });
                 }
             } else if let Some(age) = value.as_i64() {
                 // Try native i64 representation
@@ -199,9 +200,11 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Critical && v.message.contains("empty")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Critical && v.message.contains("empty"))
+        );
     }
 
     #[test]
@@ -222,9 +225,11 @@ mod tests {
         let result = validator.validate(&config);
         assert!(result.is_err());
         let violations = result.unwrap_err();
-        assert!(violations
-            .iter()
-            .any(|v| v.severity == ViolationSeverity::Warning && v.message.contains("max_age")));
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.severity == ViolationSeverity::Warning && v.message.contains("max_age"))
+        );
     }
 
     #[test]

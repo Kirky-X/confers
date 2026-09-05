@@ -262,7 +262,7 @@ impl Default for RedisBusBuilder {
 mod tests {
     use super::*;
     use futures_util::StreamExt;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     /// Probe whether the local Redis test service is accepting connections.
     fn redis_ready() -> bool {

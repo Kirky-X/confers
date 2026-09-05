@@ -12,7 +12,7 @@
 //! - 清理超出上限的旧快照
 
 use confers::snapshot::{SnapshotConfig, SnapshotFormat, SnapshotManager};
-use confers::{new_in_memory, AnnotatedValue, ConfigValue, ConfigWriter, SourceId};
+use confers::{AnnotatedValue, ConfigValue, ConfigWriter, SourceId, new_in_memory};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -337,11 +337,13 @@ fn test_load_module_success_toml() {
 
     assert!(result.is_ok());
     let value = result.unwrap();
-    assert!(value
-        .inner
-        .as_map()
-        .map(|m| m.contains_key("host"))
-        .unwrap_or(false));
+    assert!(
+        value
+            .inner
+            .as_map()
+            .map(|m| m.contains_key("host"))
+            .unwrap_or(false)
+    );
 }
 
 #[cfg(feature = "json")]
@@ -361,16 +363,20 @@ fn test_load_module_success_json() {
 
     assert!(result.is_ok());
     let value = result.unwrap();
-    assert!(value
-        .inner
-        .as_map()
-        .map(|m| m.contains_key("host"))
-        .unwrap_or(false));
-    assert!(value
-        .inner
-        .as_map()
-        .map(|m| m.contains_key("port"))
-        .unwrap_or(false));
+    assert!(
+        value
+            .inner
+            .as_map()
+            .map(|m| m.contains_key("host"))
+            .unwrap_or(false)
+    );
+    assert!(
+        value
+            .inner
+            .as_map()
+            .map(|m| m.contains_key("port"))
+            .unwrap_or(false)
+    );
 }
 
 #[test]
@@ -409,11 +415,13 @@ fn test_load_active_success() {
     let result = registry.load_active("database", &LoaderConfig::default());
     assert!(result.is_ok());
     let value = result.unwrap();
-    assert!(value
-        .inner
-        .as_map()
-        .map(|m| m.contains_key("host"))
-        .unwrap_or(false));
+    assert!(
+        value
+            .inner
+            .as_map()
+            .map(|m| m.contains_key("host"))
+            .unwrap_or(false)
+    );
 
     // Change active profile and load again
     registry
@@ -423,11 +431,13 @@ fn test_load_active_success() {
     let result = registry.load_active("database", &LoaderConfig::default());
     assert!(result.is_ok());
     let value = result.unwrap();
-    assert!(value
-        .inner
-        .as_map()
-        .map(|m| m.contains_key("host"))
-        .unwrap_or(false));
+    assert!(
+        value
+            .inner
+            .as_map()
+            .map(|m| m.contains_key("host"))
+            .unwrap_or(false)
+    );
 }
 
 // ============================================================================

@@ -12,10 +12,10 @@
 //! - Field-level key derivation
 //! - EnvKeyProvider for key management
 
-use confers::secret::{
-    derive_field_key, EnvKeyProvider, SecretBytes, SecretKeyProvider, SecretString, XChaCha20Crypto,
-};
 use confers::Config;
+use confers::secret::{
+    EnvKeyProvider, SecretBytes, SecretKeyProvider, SecretString, XChaCha20Crypto, derive_field_key,
+};
 use serde::Deserialize;
 
 #[derive(Config, Deserialize, Debug, Clone)]
@@ -52,7 +52,8 @@ fn main() {
     // For production, use secure key management (e.g., HashiCorp Vault, AWS KMS)
     // Key must be 32 bytes for XChaCha20-Poly1305
     let demo_key = "12345678901234567890123456789012";
-    std::env::set_var("APP_ENCRYPTION_KEY", demo_key);
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("APP_ENCRYPTION_KEY", demo_key) };
     tracing::warn!("⚠️ Using DEMO encryption key - DO NOT use in production!");
 
     // Example 1: Basic SecretString usage
@@ -285,7 +286,8 @@ fn demonstrate_env_key_provider() {
     }
 
     // Clean up environment variable
-    std::env::remove_var("APP_ENCRYPTION_KEY");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("APP_ENCRYPTION_KEY") };
 
     // Test when key doesn't exist
     println!("\nTesting non-existent key:");
@@ -297,20 +299,23 @@ fn demonstrate_env_key_provider() {
 
     // Test with short key
     println!("\nTesting short key:");
-    std::env::set_var("SHORT_KEY", "short");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("SHORT_KEY", "short") };
     let short_key_provider = EnvKeyProvider::new("SHORT_KEY");
     match short_key_provider.get_key() {
         Ok(_) => println!("ERROR: Should have returned error!"),
         Err(e) => println!("Correctly returned error for short key: {:?}", e),
     }
-    std::env::remove_var("SHORT_KEY");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("SHORT_KEY") };
 }
 
 fn demonstrate_config_loading() {
     println!("\n=== Example 6: Basic Config Loading ===");
 
     // Set the key again for this demo
-    std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     // Load config with defaults
     let config = AppConfig::load_sync().expect("Failed to load config");

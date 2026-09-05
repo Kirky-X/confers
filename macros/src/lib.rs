@@ -108,7 +108,7 @@ use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Type};
+use syn::{Data, DeriveInput, Ident, Type, parse_macro_input};
 
 mod codegen;
 mod parse;
@@ -241,7 +241,7 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
             return Err(syn::Error::new_spanned(
                 input,
                 "Config can only be derived for named structs",
-            ))
+            ));
         }
     };
 
@@ -324,7 +324,7 @@ fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::To
             return Err(syn::Error::new_spanned(
                 input,
                 "ConfigSchema can only be derived for named structs",
-            ))
+            ));
         }
     };
 
@@ -347,7 +347,7 @@ fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2:
             return Err(syn::Error::new_spanned(
                 input,
                 "ConfigMigration can only be derived for named structs",
-            ))
+            ));
         }
     };
 
@@ -370,7 +370,7 @@ fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::T
             return Err(syn::Error::new_spanned(
                 input,
                 "ConfigModules can only be derived for named structs",
-            ))
+            ));
         }
     };
 
@@ -393,7 +393,7 @@ fn impl_config_clap_derive(input: &DeriveInput) -> syn::Result<proc_macro2::Toke
             return Err(syn::Error::new_spanned(
                 input,
                 "ConfigClap can only be derived for named structs",
-            ))
+            ));
         }
     };
 

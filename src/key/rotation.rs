@@ -4,7 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 use crate::error::ConfigError;
-use crate::key::{now_timestamp, KeyMetadata, KeyRing, KeyStatus, RotationPlan, SECONDS_PER_DAY};
+use crate::key::{KeyMetadata, KeyRing, KeyStatus, RotationPlan, SECONDS_PER_DAY, now_timestamp};
 use serde::{Deserialize, Serialize};
 
 const CRITICAL_EXPIRY_DAYS: u64 = 7;
@@ -789,7 +789,7 @@ mod tests {
             None,
         );
         let policy = KeyRotationPolicy::default(); // max_versions = 5
-                                                   // inactive_versions = [v1] (len 1) < 5-1=4 → Ok
+        // inactive_versions = [v1] (len 1) < 5-1=4 → Ok
         KeyRotationService::can_rotate(&ring, &policy).expect("can_rotate should pass");
     }
 
@@ -807,7 +807,7 @@ mod tests {
             None,
         );
         let policy = KeyRotationPolicy::new(5, 90, 14, false); // max_versions = 5
-                                                               // inactive = 4, threshold = max_versions - 1 = 4 → 4 >= 4 → error
+        // inactive = 4, threshold = max_versions - 1 = 4 → 4 >= 4 → error
         let err = KeyRotationService::can_rotate(&ring, &policy).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("inactive key versions"), "got: {}", msg);

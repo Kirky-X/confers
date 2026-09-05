@@ -6,6 +6,9 @@
 //! Comprehensive coverage tests for confers library.
 //! These tests exercise core APIs across multiple modules.
 
+use confers::ConfigValue;
+#[cfg(feature = "progressive-reload")]
+use confers::HealthStatus;
 use confers::config;
 use confers::config::Source;
 use confers::error;
@@ -13,9 +16,6 @@ use confers::interface;
 use confers::loader;
 #[cfg(feature = "snapshot")]
 use confers::snapshot::SnapshotFormat;
-use confers::ConfigValue;
-#[cfg(feature = "progressive-reload")]
-use confers::HealthStatus;
 
 // ============ Loader Module ============
 
