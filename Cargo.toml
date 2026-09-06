@@ -19,19 +19,19 @@ workspace = true
 
 [dependencies]
 arc-swap = { version = "1.9", optional = true }
-async-nats = { version = "0.49", optional = true }
+async-nats = { version = "0.50", optional = true }
 async-stream = { version = "0.3", optional = true }
 async-trait = { version = "0.1", optional = true }
-base64 = "0.22"
-chacha20poly1305 = { version = "0.10", optional = true }
+base64 = "0.23"
+chacha20poly1305 = { version = "0.11", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
-compact_str = { version = "0.9", features = ["serde"] }
+compact_str = { version = "0.10", features = ["serde"] }
 confers-macros = { version = "0.6.0-rc.2", path = "macros" }
 dashmap = { version = "6.1", optional = true }
-garde = { version = "0.22", optional = true, features = ["derive", "email", "url", "regex"] }
+garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
-hkdf = { version = "0.12", optional = true }
+hkdf = { version = "0.13", optional = true }
 indexmap = { version = "2.13", features = ["serde"] }
 notify-debouncer-full = { version = "0.7", optional = true }
 reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
@@ -40,23 +40,24 @@ secrecy = { version = "0.10", features = ["serde"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml_ng = { version = "0.10", optional = true }
-sha2 = { version = "0.10", optional = true }
+sha2 = { version = "0.11", optional = true }
+getrandom = { version = "0.4", optional = true }
 thiserror = "2.0"
 dotenvy = { version = "0.15", optional = true }
-aes-gcm = { version = "0.10", optional = true }
-serde_ini = { version = "0.1", optional = true }
+aes-gcm = { version = "0.11", optional = true }
+serde_ini = { version = "0.2", optional = true }
 regex = "1.11"
 anyhow = "1.0"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.1", features = ["preserve_order"], optional = true }
 zeroize = { version = "1.8", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
-etcd-client = { version = "0.18", features = ["tls"], optional = true }
+etcd-client = { version = "0.20", features = ["tls"], optional = true }
 ipnet = { version = "2.11", optional = true }
 redis = { version = "1.1", features = ["tokio-comp"], optional = true }
 url = "2.5"
 hex = { version = "0.4", optional = true }
-rand = { version = "0.8", optional = true }
+rand = { version = "0.10", optional = true }
 similar = { version = "3.1", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
 getset = "0.1"
@@ -84,7 +85,7 @@ anyhow = "1.0"
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"] }
-compact_str = { version = "0.9", features = ["serde"] }
+compact_str = { version = "0.10", features = ["serde"] }
 darling = "0.23"
 futures = "0.3"
 indexmap = { version = "2.13", features = ["serde"] }
@@ -131,7 +132,7 @@ security = ["encryption", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait"]
-encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm"]
+encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm", "dep:getrandom"]
 cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono"]
 schema = ["dep:schemars"]
 dynamic = ["dep:arc-swap", "dep:tokio", "dep:dashmap"]
@@ -169,12 +170,12 @@ minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
 [dev-dependencies]
-criterion = { version = "0.7", features = ["async_tokio"] }
+criterion = { version = "0.8", features = ["async_tokio"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }
-async-nats = "0.49"  # for test_nats_bus_options
+async-nats = "0.50"  # for test_nats_bus_options
 
 [profile.release]
 opt-level = 3

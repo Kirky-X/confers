@@ -125,8 +125,7 @@ impl KeyManager {
     #[cfg(feature = "encryption")]
     pub fn generate_key(&mut self) -> Result<[u8; 32], ConfigError> {
         let mut key_bytes = [0u8; 32];
-        let mut rng = rand::thread_rng();
-        rng.fill(&mut key_bytes);
+        rand::rng().fill_bytes(&mut key_bytes);
         Ok(key_bytes)
     }
 

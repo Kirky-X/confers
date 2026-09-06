@@ -104,8 +104,7 @@ impl KeyBundle {
         description: Option<String>,
     ) -> Result<Self, ConfigError> {
         let mut key_bytes = [0u8; 32];
-        let mut rng = rand::thread_rng();
-        rng.fill(&mut key_bytes);
+        rand::rng().fill_bytes(&mut key_bytes);
 
         let encryptor = XChaCha20Crypto::new();
         let (nonce, ciphertext) = encryptor

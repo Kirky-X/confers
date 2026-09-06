@@ -18,11 +18,11 @@
 //! 1. Re-encrypt existing data with XChaCha20-Poly1305 using [`XChaCha20Crypto`].
 //! 2. Remove any code that matches on `CryptoError::LegacyDecryptionFailed`.
 
-use chacha20poly1305::aead::rand_core::RngCore;
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
 };
+use getrandom::fill as fill_from_os_rng;
 use hkdf::Hkdf;
 use sha2::Sha256;
 
@@ -62,11 +62,13 @@ impl XChaCha20Crypto {
             XChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::EncryptionFailed)?;
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce_bytes);
-        let nonce = XNonce::from_slice(&nonce_bytes);
+        // OS 熵源填充（等价旧 OsRng::fill_bytes；getrandom 0.4 显式返回 Result，
+        // 失败时不得降级为静默默认值）
+        fill_from_os_rng(&mut nonce_bytes).map_err(|_| CryptoError::EncryptionFailed)?;
+        let nonce = XNonce::try_from(&nonce_bytes[..]).map_err(|_| CryptoError::EncryptionFailed)?;
 
         let ciphertext = cipher
-            .encrypt(nonce, plaintext)
+            .encrypt(&nonce, plaintext)
             .map_err(|_| CryptoError::EncryptionFailed)?;
 
         Ok((nonce_bytes.to_vec(), ciphertext))
@@ -89,10 +91,10 @@ impl XChaCha20Crypto {
         let cipher =
             XChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::DecryptionFailed)?;
 
-        let nonce = XNonce::from_slice(nonce);
+        let nonce = XNonce::try_from(nonce).map_err(|_| CryptoError::DecryptionFailed)?;
 
         cipher
-            .decrypt(nonce, ciphertext)
+            .decrypt(&nonce, ciphertext)
             .map_err(|_| CryptoError::DecryptionFailed)
     }
 }
