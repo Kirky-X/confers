@@ -11,6 +11,23 @@ _暂无变更。_
 
 ---
 
+## [0.6.0-rc.2] - 2026-09-07
+
+### Changed
+
+- 依赖升级：12+ 项 0.x 依赖刷新（async-nats 0.50、base64 0.23、chacha20poly1305 0.11、aead 0.6（适配 getrandom 0.4）、compact_str 0.10、garde 0.23、hkdf 0.13、sha2 0.11、aes-gcm 0.11、serde_ini 0.2、etcd-client 0.20、rand 0.10、criterion 0.8）+ darling 0.24 / syn 3.0 工具链 + indexmap/ipnet/redis 刷新
+- 版本号递增至 `0.6.0-rc.2`（下一个 minor 预发布）
+
+### 测试
+
+- 测试金字塔 + E2E 固化：补齐 7 个缺失 e2e 测试文件并 `[[test]]` 注册；NATS 容器集成测试容器化验证（测毕零残留）；docs/TEST_SCENARIOS.md 场景固化
+
+### 文档
+
+- 安装示例版本统一 0.6.0-rc.2（10 处）；MSRV 文字声明对齐 1.97.1；SECURITY 文档 CHANGELOG 断链修复
+
+---
+
 ## [0.5.1] - 2026-08-06
 
 ### 新增
