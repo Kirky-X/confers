@@ -430,7 +430,8 @@ impl ModuleRegistry {
     /// use std::path::PathBuf;
     ///
     /// // Given environment variable APP_DATABASE_PROFILE=postgresql
-    /// std::env::set_var("APP_DATABASE_PROFILE", "postgresql");
+    /// // (edition 2024: set_var/remove_var are unsafe)
+    /// unsafe { std::env::set_var("APP_DATABASE_PROFILE", "postgresql") };
     ///
     /// let mut registry = ModuleRegistry::default();
     /// registry.register_group(
@@ -445,7 +446,7 @@ impl ModuleRegistry {
     /// registry.resolve_from_env(Some("APP_"));
     /// // Active profile for "database" is now "postgresql"
     ///
-    /// std::env::remove_var("APP_DATABASE_PROFILE");
+    /// unsafe { std::env::remove_var("APP_DATABASE_PROFILE") };
     /// ```
     pub fn resolve_from_env(&mut self, prefix: Option<&str>) -> &mut Self {
         let prefix_str = prefix.unwrap_or("");

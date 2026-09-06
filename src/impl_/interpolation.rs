@@ -29,8 +29,8 @@
 //! use confers::interpolation::interpolate;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // With HOST=localhost (set env var for test)
-//!     std::env::set_var("HOST", "localhost");
+//!     // With HOST=localhost (set env var for test; unsafe since edition 2024)
+//!     unsafe { std::env::set_var("HOST", "localhost") };
 //!     let result = interpolate("Server: ${HOST}", &|k| std::env::var(k).ok())?;
 //!     assert_eq!(result, "Server: localhost");
 //!
