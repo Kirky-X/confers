@@ -1,127 +1,191 @@
-# Security Policy
+# 🔒 Confers 安全文档
 
-<span id="top"></span>
+Confers 将安全性作为核心设计目标。本文档介绍 Confers 的安全策略、漏洞报告流程、内置安全机制与安全最佳实践。
 
-<div align="center">
+## 📋 目录
 
-<img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
+<details open>
+<summary>📑 目录（点击展开）</summary>
 
-### Security at Confers
+- [支持版本](#-支持版本)
+- [漏洞报告流程](#-漏洞报告流程)
+- [安全设计概览](#️-安全设计概览)
+- [安全最佳实践](#-安全最佳实践)
 
-[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md) • [🐛 Report Vulnerability](#reporting)
-
----
-
-</div>
-
-## Table of Contents
-
-- [Reporting Security Vulnerabilities](#reporting)
-- [Security Features](#features)
-- [Best Practices](#best-practices)
-- [Dependency Security](#dependencies)
-- [Security Audit Process](#audit-process)
+</details>
 
 ---
 
-## <span id="reporting">Reporting Security Vulnerabilities</span>
+## 📌 支持版本
 
-We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly.
+我们建议所有用户始终使用最新发布版本，以获得完整的安全修复。各版本的安全修复情况请查阅 [CHANGELOG](../CHANGELOG.md)。
 
-### How to Report
+### 最低支持 Rust 版本（MSRV）
 
-**Please DO NOT file a public GitHub issue for security vulnerabilities.**
+Confers 要求 Rust 1.97.1+，以确保：
 
-| Method | Contact | Response Time |
-|:-------|:--------|:--------------|
-| **Email** | Kirky-X@outlook.com | Within 48 hours |
-| **GitHub Security Advisories** | [Report via GH Advisory](https://github.com/Kirky-X/confers/security/advisories/new) | Within 48 hours |
+- Rust 标准库包含最新安全修复
+- 稳定的 async trait 支持
+- 完整的内存安全保证
 
-### What to Include
+### 依赖安全
 
-When reporting, please include:
+我们使用 `cargo-audit` 监控依赖中的已知漏洞：
 
-1. **Description**: Clear description of the vulnerability
-2. **Steps to Reproduce**: Detailed steps to reproduce the issue
-3. **Impact Assessment**: How this vulnerability could be exploited
-4. **Affected Versions**: Which versions are affected
-5. **Suggested Fix** (optional): If you have identified a potential fix
+```bash
+# 运行安全审计
+cargo audit
 
-### Our Commitment
+# 更新漏洞通告数据库
+cargo audit --fetch-index
+```
 
-| Stage | Timeline | Action |
-|:------|:---------|:-------|
-| **Acknowledgment** | Within 48 hours | Confirm receipt of report |
-| **Initial Assessment** | Within 7 days | Severity classification |
-| **Fix Development** | Varies by severity | Priority fix implementation |
-| **Coordinated Disclosure** | After fix available | Public announcement |
+### 依赖审批流程
 
-### Severity Classification
+所有新增依赖必须满足：
 
-| Severity | Examples | Response |
-|:---------|:---------|:---------|
-| **Critical** | Remote code execution, data exfiltration | Fix within 72 hours |
-| **High** | Privilege escalation, denial of service | Fix within 7 days |
-| **Medium** | Information disclosure, bypass | Fix within 30 days |
-| **Low** | Minor security improvements | Fix in next release |
+1. **活跃维护**：近期有提交（6 个月内）
+2. **安全历史**：无已知未修复漏洞
+3. **最小依赖**：优先选择小而专注的 crate
+4. **许可证兼容**：优先 MIT 或 Apache-2.0
+
+### 已知且可接受的风险
+
+| 依赖 | 风险 | 缓解措施 |
+|:-----|:-----|:---------|
+| `serde` | 复杂序列化逻辑 | 经过广泛审计，必不可少 |
+| `tokio` | 二进制体积较大 | 仅在启用异步相关特性时引入 |
+| `reqwest` | HTTP 客户端攻击面 | 显式启用 TLS |
 
 ---
 
-## <span id="features">Security Features</span>
+## 🐛 漏洞报告流程
 
-Confers includes multiple layers of security to protect your configuration data.
+我们非常重视安全漏洞。如果您发现安全问题，请负责任地进行报告。
 
-### Encryption (XChaCha20-Poly1305)
+### 如何报告
 
-All sensitive configuration data can be encrypted at rest using XChaCha20-Poly1305:
+**请勿针对安全漏洞创建公开的 GitHub Issue。**
+
+| 方式 | 联系渠道 | 响应时间 |
+|:-----|:---------|:---------|
+| **邮件** | Kirky-X@outlook.com | 48 小时内 |
+| **GitHub 安全通告** | [通过 GH Advisory 报告](https://github.com/Kirky-X/confers/security/advisories/new) | 48 小时内 |
+
+### 报告内容
+
+报告时请包含：
+
+1. **描述**：清晰描述漏洞本身
+2. **复现步骤**：详细的问题复现步骤
+3. **影响评估**：该漏洞可能如何被利用
+4. **受影响版本**：哪些版本受到影响
+5. **修复建议**（可选）：如果您已想到潜在修复方案
+
+### 我们的承诺
+
+| 阶段 | 时间线 | 动作 |
+|:-----|:-------|:-----|
+| **确认收到** | 48 小时内 | 确认收到报告 |
+| **初步评估** | 7 天内 | 完成严重程度定级 |
+| **修复开发** | 视严重程度而定 | 按优先级实施修复 |
+| **协同披露** | 修复可用之后 | 发布公开公告 |
+
+### 严重程度分级
+
+| 严重程度 | 示例 | 响应要求 |
+|:---------|:-----|:---------|
+| **Critical（严重）** | 远程代码执行、数据外泄 | 72 小时内修复 |
+| **High（高危）** | 权限提升、拒绝服务 | 7 天内修复 |
+| **Medium（中危）** | 信息泄露、安全绕过 | 30 天内修复 |
+| **Low（低危）** | 一般性安全改进 | 在下个版本修复 |
+
+### 漏洞披露时间线
+
+```
+Day 0：发现漏洞
+Day 1-2：确认收到报告
+Day 3-10：完成定级，开发修复
+Day 11-30：发布修复（视严重程度允许的情况）
+Day 31+：公开披露（若仍未修复）
+```
+
+### 安全相关提交流程
+
+所有安全修复遵循以下流程：
+
+1. **私有分支**：修复在私有分支中开发
+2. **CVE 申报**：如适用，向 MITRE 申报 CVE
+3. **协同发布**：修复与披露同步发布
+4. **复盘**：内部复盘漏洞产生的原因
+
+---
+
+## 🛡️ 安全设计概览
+
+Confers 通过多层安全机制保护您的配置数据。
+
+### 加密（XChaCha20-Poly1305）
+
+所有敏感配置数据都可以使用 XChaCha20-Poly1305 进行静态加密：
 
 ```rust,ignore
-use confers::{Config, encryption::EncryptionManager};
+use confers::{Config, XChaCha20Crypto};
 
-// Enable encryption feature in Cargo.toml
+// 在 Cargo.toml 中启用 encryption 特性
 // features = ["encryption"]
 
 #[derive(Config)]
 pub struct SecureConfig {
     #[config(sensitive = true)]
     pub database_url: String,
-    #[config(sensitive = true)]
+    #[config(sensitive = true, encrypt = "xchacha20")]
     pub api_key: String,
 }
 
-// Encrypt configuration
-let manager = EncryptionManager::new(key);
-let encrypted = manager.encrypt(&config)?;
+// 低层加密 API：XChaCha20-Poly1305 要求 32 字节密钥
+let crypto = XChaCha20Crypto::new();
+let key: &[u8] = &[0u8; 32]; // 实际应从密钥服务或环境变量读取
+
+// 加密：返回 (密文, nonce)
+let (ciphertext, nonce) = crypto.encrypt(b"敏感数据", key)?;
+
+// 解密：注意参数顺序为 nonce 在前
+let plaintext = crypto.decrypt(&nonce, &ciphertext, key)?;
 ```
 
-### Memory Safety
+### 内存安全
 
-Sensitive data is automatically zeroized when dropped:
+敏感数据在被丢弃时自动清零（zeroize）：
 
 ```rust,ignore
 use confers::security::SecureString;
 
 let secret = SecureString::new("api-key-12345", SensitivityLevel::High);
-// Automatically zeroized when dropped
+// 丢弃时自动清零
 ```
 
-### Input Validation
+### 配置安全校验
 
-All user inputs are validated to prevent injection attacks:
+对配置内容执行内置安全规则校验（SSRF、TLS 配置、JWT 密钥强度、CORS），启用 `security-rules` 特性后可用：
 
 ```rust,ignore
-use confers::validator::{InputValidator, ValidationConfig};
+use confers::security::rules::SecurityValidatorRegistry;
 
-let validator = InputValidator::new()
-    .enable_sql_injection_check()
-    .enable_command_injection_check();
+let registry = SecurityValidatorRegistry::with_defaults();
 
-let result = validator.validate(user_input);
+// 对任意 ConfigProvider 执行全部已注册校验器，返回 SecurityReport
+let report = registry.validate_all(&config_provider);
+
+// is_ok(false)：存在任何违规（含警告）即返回 false
+if !report.is_ok(false) {
+    // 处理安全违规……
+}
 ```
 
-### SSRF Protection
+### SSRF 防护
 
-Remote configuration URLs are validated to prevent Server-Side Request Forgery:
+对远程配置 URL 进行校验，防止服务端请求伪造（SSRF）：
 
 ```rust,ignore
 use confers::remote::HttpProvider;
@@ -131,9 +195,9 @@ let provider = HttpProvider::new()
     .validate_remote_url("https://config.example.com/app.toml")?;
 ```
 
-### Audit Logging
+### 审计日志
 
-All configuration access and changes are logged:
+所有配置访问与变更都会被记录：
 
 ```rust,ignore
 use confers::audit::{AuditConfig, AuditLevel};
@@ -145,46 +209,64 @@ let audit = AuditConfig::new()
 audit.log_access("config.load", "user@example.com")?;
 ```
 
-### Security Module APIs
+### security 模块 API
 
 ```rust,ignore
-// EnvSecurityValidator - Environment variable security
+// EnvSecurityValidator - 环境变量安全校验
 use confers::security::EnvSecurityValidator;
 let validator = EnvSecurityValidator::new();
 validator.validate_env_vars()?;
 
-// ErrorSanitizer - Sensitive data redaction in errors
+// ErrorSanitizer - 错误信息中的敏感数据脱敏
 use confers::security::ErrorSanitizer;
 let sanitizer = ErrorSanitizer::default();
 let safe_error = sanitizer.sanitize(&error_message);
 
-// ConfigInjector - Secure runtime injection
+// ConfigInjector - 安全的运行时注入
 use confers::security::ConfigInjector;
 let injector = ConfigInjector::new()
     .enable_input_validation();
 ```
 
+### 安全审计流程
+
+**内部审计**
+
+我们定期开展内部安全评审：
+
+- **频率**：每季度
+- **范围**：新特性、依赖更新、API 变更
+- **记录**：审计发现记录在安全通告数据库中
+
+**外部审计**
+
+针对重要版本，我们会邀请外部安全研究人员参与：
+
+- **触发条件**：主版本发布（0.x.0）
+- **范围**：全代码库审计
+- **结果**：修复完成后发布
+
 ---
 
-## <span id="best-practices">Security Best Practices</span>
+## ✅ 安全最佳实践
 
-### For Library Users
+### 面向库使用者
 
-| Practice | Description | Priority |
-|:---------|:------------|:---------|
-| **Use HTTPS** | Always use HTTPS for remote configuration | Required |
-| **Limit Key Scope** | Use least-privilege keys for remote access | Required |
-| **Enable Audit Logging** | Track all configuration access in production | Required |
-| **Rotate Keys** | Regularly rotate encryption keys | Required |
-| **Validate Inputs** | Never trust user-provided configuration | Required |
-| **Secure File Permissions** | Set restrictive permissions on config files | Recommended |
-| **Use Encryption** | Encrypt sensitive config at rest | Recommended |
+| 实践 | 说明 | 优先级 |
+|:-----|:-----|:-------|
+| **使用 HTTPS** | 远程配置始终使用 HTTPS | 必须执行 |
+| **限制密钥作用域** | 远程访问使用最小权限密钥 | 必须执行 |
+| **启用审计日志** | 在生产环境中记录所有配置访问 | 必须执行 |
+| **轮换密钥** | 定期轮换加密密钥 | 必须执行 |
+| **校验输入** | 永远不要信任用户提供的配置 | 必须执行 |
+| **收紧文件权限** | 为配置文件设置 restrictive 权限 | 推荐 |
+| **启用加密** | 对敏感配置进行静态加密 | 推荐 |
 
-### Configuration Example (Production)
+### 生产环境配置示例
 
 ```toml
 [security]
-# Enable all security features
+# 启用全部安全特性
 encryption = true
 audit = true
 ssrf_protection = true
@@ -200,121 +282,35 @@ include_sensitive = false
 retention_days = 90
 ```
 
-### Environment Variables
+### 环境变量
 
 ```bash
-# Required for production
+# 生产环境必填
 CONFERS_ENCRYPTION_KEY=your-256-bit-key
 CONFERS_AUDIT_ENABLED=true
 
-# Optional security hardening
+# 可选的安全加固
 CONFERS_MAX_MEMORY_MB=512
 CONFERS_TIMEOUT_SECONDS=30
 CONFERS_SSRF_BLOCKLIST=/etc/confers/blocklist.txt
 ```
 
-### Hardening Checklist
+### 安全加固清单
 
-- [ ] Enable encryption for sensitive configuration
-- [ ] Configure TLS for all remote sources
-- [ ] Set up audit logging
-- [ ] Implement key rotation
-- [ ] Enable SSRF protection
-- [ ] Configure input validation
-- [ ] Set appropriate memory limits
-- [ ] Review security events regularly
-
----
-
-## <span id="dependencies">Dependency Security</span>
-
-### Dependency Management
-
-We use `cargo-audit` to monitor known vulnerabilities in dependencies:
-
-```bash
-# Run security audit
-cargo audit
-
-# Update advisory database
-cargo audit --fetch-index
-```
-
-### Minimum Supported Rust Version (MSRV)
-
-Confers requires Rust 1.88+ to ensure:
-- Latest security fixes in the Rust standard library
-- Stable async trait support
-- Memory safety guarantees
-
-### Dependency Approval Process
-
-All new dependencies must meet:
-1. **Active Maintenance**: Recent commits (within 6 months)
-2. **Security History**: No known unfixed vulnerabilities
-3. **Minimal Dependencies**: Prefer small, focused crates
-4. **License Compatibility**: MIT or Apache-2.0 preferred
-
-### Known and Accepted Risks
-
-| Dependency | Risk | Mitigation |
-|:-----------|:-----|:----------|
-| `serde` | Complex serialization | Widely audited, essential |
-| `tokio` | Large binary | Only when async features used |
-| `reqwest` | HTTP client surface | Enable TLS explicitly |
+- [ ] 为敏感配置启用加密
+- [ ] 为所有远程来源配置 TLS
+- [ ] 配置审计日志
+- [ ] 实施密钥轮换
+- [ ] 启用 SSRF 防护
+- [ ] 配置输入校验
+- [ ] 设置合理的内存上限
+- [ ] 定期审查安全事件
 
 ---
 
-## <span id="audit-process">Security Audit Process</span>
+## 安全联系方式
 
-### Internal Audits
-
-We conduct regular internal security reviews:
-- **Frequency**: Quarterly
-- **Scope**: New features, dependency updates, API changes
-- **Documentation**: Findings tracked in security advisory DB
-
-### External Audits
-
-For major releases, we engage external security researchers:
-- **Trigger**: Major version releases (0.x.0)
-- **Scope**: Full codebase audit
-- **Results**: Published after remediation
-
-### Vulnerability Disclosure Timeline
-
-```
-Day 0: Vulnerability discovered
-Day 1-2: Report acknowledged
-Day 3-10: Severity assessed, fix developed
-Day 11-30: Fix released (if severity allows)
-Day 31+: Public disclosure (if still unfixed)
-```
-
-### Security-Related Commits
-
-All security fixes follow this process:
-
-1. **Private Branch**: Fix developed in private branch
-2. **CVE Filing**: If applicable, file CVE with MITRE
-3. **Coordinated Release**: Fix released simultaneously with disclosure
-4. **Post-Mortem**: Internal review of how vulnerability occurred
-
----
-
-## Security Contacts
-
-| Role | Contact |
-|:-----|:--------|
-| Security Team | Kirky-X@outlook.com |
-| Maintainer | Kirky-X@outlook.com |
-
----
-
-<div align="center">
-
-**[⬆ Back to Top](#top)**
-
-Built with security in mind by Kirky.X
-
-</div>
+| 角色 | 联系方式 |
+|:-----|:---------|
+| 安全团队 | Kirky-X@outlook.com |
+| 维护者 | Kirky-X@outlook.com |

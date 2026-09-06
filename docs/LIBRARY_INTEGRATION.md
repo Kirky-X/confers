@@ -1,25 +1,38 @@
-# Library Integration Guide
+# 🔌 Confers 库集成指南
 
-This guide explains how to embed `confers` in another Rust project using the
-public library API. The CLI binary (`confers` command) is shipped as a thin
-wrapper around the same library API, so the patterns below also describe what
-the CLI does internally.
+本指南介绍如何通过公开的库 API 将 `confers` 嵌入到其他 Rust 项目中。CLI 可执行文件（`confers` 命令）只是同一套库 API 之上的薄封装，因此下文的模式同样描述了 CLI 内部的实现方式。
 
-> **Note:** `confers::cli` is gated behind the `cli` feature flag and the
-> types it exposes (`Cli`, `Commands`) are **crate-private**. There is no
-> public `ConfersCli` struct and no `confers::commands` module. To drive
-> confers programmatically, use the library API documented below.
+> **注意**：`confers::cli` 由 `cli` 特性门控，其暴露的类型（`Cli`、`Commands`）是 **crate 内私有的**。不存在公开的 `ConfersCli` 结构体，也没有 `confers::commands` 模块。若要以编程方式驱动 confers，请使用下文记载的库 API。
 
-## Quick Start
+## 📋 目录
 
-### 1. Add Dependency
+<details open>
+<summary>📑 目录（点击展开）</summary>
+
+- [快速开始](#-快速开始)
+- [加载配置](#-加载配置)
+- [校验](#-校验)
+- [加密](#-加密)
+- [远程来源](#️-远程来源)
+- [特性标志](#-特性标志)
+- [错误处理](#-错误处理)
+- [从旧版 ConfersCli 快照迁移](#-从旧版-conferscli-快照迁移)
+- [故障排查](#-故障排查)
+
+</details>
+
+---
+
+## 🚀 快速开始
+
+### 1. 添加依赖
 
 ```toml
 [dependencies]
 confers = { version = "0.6.0-rc.2", features = ["toml", "json", "env"] }
 ```
 
-### 2. Basic Usage
+### 2. 基本用法
 
 ```rust
 use confers::{ConfigBuilder, ConfigConnector, ConfigReader};
@@ -37,18 +50,16 @@ fn main() -> confers::BuildResult<()> {
         .env()
         .build()?;
 
-    // Access the typed configuration
+    // 访问带类型的配置
     println!("name = {}", config.name);
     println!("port = {}", config.port);
     Ok(())
 }
 ```
 
-## Loading Configuration
+## 📥 加载配置
 
-`ConfigBuilder` is the entry point for assembling a configuration from
-multiple sources. Each source contributes a layer, and later sources
-override earlier ones according to the merge strategy.
+`ConfigBuilder` 是从多个来源组装配置的入口。每个来源贡献一个配置层，后加入的来源按合并策略覆盖先加入的来源。
 
 ```rust
 use confers::ConfigBuilder;
@@ -57,12 +68,12 @@ let value = ConfigBuilder::<serde_json::Value>::new()
     .file("base.toml")
     .file("override.toml")
     .env()
-    .build_annotated()?; // Returns an AnnotatedValue with provenance
+    .build_annotated()?; // 返回带有来源信息的 AnnotatedValue
 ```
 
-### Source Chain
+### 来源链
 
-For finer control over priority, use `SourceChainBuilder`:
+如需更精细的优先级控制，请使用 `SourceChainBuilder`：
 
 ```rust
 use confers::{SourceChainBuilder, FileSource, EnvSource};
@@ -73,10 +84,9 @@ let chain = SourceChainBuilder::new()
     .build();
 ```
 
-## Validation
+## ✅ 校验
 
-Enable the `validation` feature and derive `Validate` (from `garde`) on the
-config struct:
+启用 `validation` 特性，并在配置结构体上派生 `Validate`（来自 `garde`）：
 
 ```rust
 use confers::Config;
@@ -92,10 +102,9 @@ struct ServerConfig {
 }
 ```
 
-## Encryption
+## 🔐 加密
 
-For sensitive fields, enable the `encryption` feature and use
-`XChaCha20Crypto`:
+对于敏感字段，启用 `encryption` 特性并使用 `XChaCha20Crypto`：
 
 ```rust
 use confers::XChaCha20Crypto;
@@ -104,9 +113,9 @@ let crypto = XChaCha20Crypto::new();
 let ciphertext = crypto.encrypt(b"secret value", &key)?;
 ```
 
-## Remote Sources
+## ☁️ 远程来源
 
-The `remote` feature provides HTTP-polled remote configuration sources:
+`remote` 特性提供基于 HTTP 轮询的远程配置来源：
 
 ```rust
 use confers::remote::HttpPolledSourceBuilder;
@@ -117,36 +126,30 @@ let source = HttpPolledSourceBuilder::new()
     .build()?;
 ```
 
-For etcd or Consul backends, enable the `etcd` or `consul` feature and use
-`EtcdSourceBuilder` / `ConsulSourceBuilder` respectively.
+如需 etcd 或 Consul 后端，请启用 `etcd` 或 `consul` 特性，并分别使用 `EtcdSourceBuilder` / `ConsulSourceBuilder`。
 
-## Feature Flags
+## 🎨 特性标志
 
-The library is feature-gated. See `Cargo.toml` for the full list of feature
-presets (`default`, `recommended`, `dev`, `production`, `full`). Common
-features:
+本库按特性门控。完整的特性预设列表（`default`、`recommended`、`dev`、`production`、`full`）见 `Cargo.toml`。常用特性：
 
-| Feature        | Description                              |
+| 特性 | 说明 |
 | -------------- | ---------------------------------------- |
-| `toml`         | TOML format support                      |
-| `json`         | JSON format support                      |
-| `yaml`         | YAML format support                      |
-| `env`          | Environment variable source              |
-| `validation`   | Schema validation via `garde`           |
-| `watch`        | File watching for hot reload            |
-| `encryption`   | Field-level encryption (XChaCha20)      |
-| `audit`        | Audit logging                            |
-| `cli`          | CLI binary (does not expose a public API) |
+| `toml`         | TOML 格式支持                            |
+| `json`         | JSON 格式支持                            |
+| `yaml`         | YAML 格式支持                            |
+| `env`          | 环境变量来源                             |
+| `validation`   | 基于 `garde` 的模式校验                  |
+| `watch`        | 文件监听与热重载                         |
+| `encryption`   | 字段级加密（XChaCha20）                  |
+| `audit`        | 审计日志                                 |
+| `cli`          | CLI 可执行文件（不暴露公开 API）         |
 
-## Error Handling
+## 🚨 错误处理
 
-The library distinguishes **configuration phase** errors from **runtime**
-errors:
+本库区分**配置阶段**错误与**运行时**错误：
 
-- `ConfigConfigError` — initialization-time failures (missing fields, parse
-  errors, validation failures).
-- `ConfersError` — runtime failures (timeouts, remote unavailable, decryption
-  failures).
+- `ConfigConfigError` —— 初始化阶段失败（缺少字段、解析错误、校验失败）。
+- `ConfersError` —— 运行时失败（超时、远程不可用、解密失败）。
 
 ```rust
 use confers::{ConfigConfigError, ConfersError};
@@ -162,30 +165,24 @@ match result {
 }
 ```
 
-## Migration from Earlier `ConfersCli` Snapshots
+## 🔄 从旧版 ConfersCli 快照迁移
 
-If you previously relied on snippets referencing `confers::ConfersCli`,
-`confers::commands::key::KeySubcommand`, or
-`confers::commands::validate::{ValidateCommand, ValidateLevel}`, please
-migrate to the public API above. Those types were never part of the public
-export surface and have been removed from the documentation; the CLI binary
-internally uses `clap` and the types remain crate-private.
+如果您以前依赖过引用 `confers::ConfersCli`、`confers::commands::key::KeySubcommand` 或 `confers::commands::validate::{ValidateCommand, ValidateLevel}` 的代码片段，请迁移到上文的公开 API。这些类型从来不属于公开导出面，现已从文档中移除；CLI 可执行文件内部使用 `clap`，相关类型保持 crate 内私有。
 
-## Troubleshooting
+## 🔧 故障排查
 
-### Feature Not Enabled
+### 特性未启用
 
-If a symbol is missing, verify the corresponding feature is enabled:
+如果找不到某个符号，请确认对应特性已启用：
 
 ```toml
 [dependencies]
 confers = { version = "0.6.0-rc.2", features = ["validation", "encryption"] }
 ```
 
-### Encryption Key Issues
+### 加密密钥问题
 
-`derive_field_key` requires a 32-byte master key. Use `KeyManager` (under the
-`key` feature) to manage key material securely:
+`derive_field_key` 要求 32 字节主密钥。请使用 `KeyManager`（位于 `key` 特性下）安全管理密钥材料：
 
 ```rust
 use confers::key::KeyManager;
@@ -194,8 +191,6 @@ use std::path::PathBuf;
 let mut km = KeyManager::new(PathBuf::from("./secure_keys"))?;
 ```
 
-### Validation Failures
+### 校验失败
 
-Inspect `ValidationResult` for the list of failing rules and the offending
-field paths. Each `ValidationRule` reports the field path, the rule name, and
-a human-readable message.
+请检查 `ValidationResult`，其中包含未通过的规则列表与出错的字段路径。每个 `ValidationRule` 会报告字段路径、规则名称以及人类可读的错误消息。

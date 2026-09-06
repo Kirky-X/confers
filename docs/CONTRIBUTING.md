@@ -1,144 +1,71 @@
-<span id="top"></span>
-<div align="center">
+# 🤝 Confers 贡献指南
 
-<img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
+<img src="docs/assets/confers.png" alt="Confers Logo" width="150">
 
-### Join Us to Build Something Great!
+感谢您关注 **confers**！无论您是在修复缺陷、添加新特性、改进文档还是帮助他人，您的贡献都弥足珍贵。
 
-[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md) • [❓ FAQ](FAQ.md)
+## 📋 目录
 
----
+<details open>
+<summary>📑 目录（点击展开）</summary>
 
-</div>
-
-## 🎯 Welcome Contributors!
-
-Thank you for your interest in **confers**! We're excited to have you join us. Whether you're fixing bugs, adding new features, improving documentation, or helping others, your contributions are invaluable.
-
-<div align="center" style="margin: 24px 0">
-
-### 🌟 Ways to Contribute
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#166534">Code</b><br>
-<span style="color:#166534">Fix bugs & add features</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/documentation.png" width="48" height="48"><br>
-<b style="color:#1E40AF">Documentation</b><br>
-<span style="color:#1E40AF">Improve docs & guides</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/test-tube.png" width="48" height="48"><br>
-<b style="color:#92400E">Testing</b><br>
-<span style="color:#92400E">Write tests & find bugs</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="48" height="48"><br>
-<b style="color:#5B21B6">Community</b><br>
-<span style="color:#5B21B6">Help & support others</span>
-</td>
-</tr>
-</table>
-
-</div>
-
----
-
-## 📋 Table of Contents
-
-<details open style="padding:16px">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (click to expand)</summary>
-
-- [Code of Conduct](#code-of-conduct)
-- [Quick Start](#quick-start)
-- [Development Workflow](#development-workflow)
-- [Coding Standards](#coding-standards)
-- [Testing Guidelines](#testing-guidelines)
-- [Documentation Standards](#documentation-standards)
-- [Submitting Changes](#submitting-changes)
-- [Review Process](#review-process)
+- [欢迎](#-欢迎)
+- [环境准备](#-环境准备)
+- [开发工作流（TDD）](#-开发工作流tdd)
+- [代码规范](#-代码规范)
+- [提交与 PR 流程](#-提交与-pr-流程)
+- [行为准则](#-行为准则)
 
 </details>
 
 ---
 
-## Code of Conduct
+## 👋 欢迎
 
-<div align="center" style="margin: 24px 0">
+欢迎参与 **confers** 的建设！
 
-### 🤗 Be Friendly and Respectful
+**贡献方式：**
 
-</div>
-
-We are committed to providing an inclusive and friendly environment. By participating in this project, you agree to:
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-**✅ Expected Behavior**
-
-- Be respectful and considerate
-- Welcome newcomers
-- Accept constructive criticism
-- Focus on what's best for the community
-- Show empathy towards others
-
-</td>
-<td width="50%" style="padding: 16px">
-
-**❌ Unacceptable Behavior**
-
-- Using offensive language
-- Harassing or insulting others
-- Publishing private information
-- Personal attacks
-- Disrupting discussions
-
-</td>
-</tr>
-</table>
+| 代码 | 文档 | 测试 | 社区 |
+|:-----|:-----|:-----|:-----|
+| 修复缺陷、添加特性 | 改进文档与指南 | 编写测试、发现问题 | 帮助与支持他人 |
 
 ---
 
-## Quick Start
+## 🧰 环境准备
 
-### Prerequisites
+### 前置条件
 
-Before you begin, make sure you have installed:
+开始之前，请确认已安装：
 
-- **Git** - Version control tool
-- **Rust 1.88+** - Programming language
-- **Cargo** - Rust package manager
-- **IDE** - VS Code (rust-analyzer plugin recommended), IntelliJ IDEA or similar
+- **Git** - 版本控制工具
+- **Rust 1.97.1+** - 编程语言
+- **Cargo** - Rust 包管理器
+- **IDE** - VS Code（推荐 rust-analyzer 插件）、IntelliJ IDEA 或同类工具
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 Environment Setup Steps</summary>
+<details>
+<summary>🔧 环境安装步骤</summary>
 
-**1. Install Rust:**
+**1. 安装 Rust：**
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-**2. Install auxiliary tools:**
+**2. 安装辅助工具：**
 
 ```bash
-# Code formatter
+# 代码格式化工具
 rustup component add rustfmt
 
-# Static analysis tool
+# 静态分析工具
 rustup component add clippy
 
-# Code coverage tool (optional)
+# 代码覆盖率工具（可选）
 cargo install cargo-llvm-cov
 ```
 
-**3. Verify installation:**
+**3. 验证安装：**
 
 ```bash
 rustc --version
@@ -147,374 +74,347 @@ cargo --version
 
 </details>
 
-### Fork and Clone
+### Fork 与 Clone
 
-<div style="padding:16px; margin: 16px 0">
-
-| Step | Action |
-|:----:|:-------|
-| **1. Fork repository** | Click the "Fork" button on GitHub |
+| 步骤 | 操作 |
+|:----:|:-----|
+| **1. Fork 仓库** | 在 GitHub 上点击 "Fork" 按钮 |
 | **2. Clone** | `git clone https://github.com/YOUR_USERNAME/confers` |
-| **3. Add upstream** | `git remote add upstream https://github.com/Kirky-X/confers` |
-| **4. Verify** | `git remote -v` |
+| **3. 添加 upstream** | `git remote add upstream https://github.com/Kirky-X/confers` |
+| **4. 验证** | `git remote -v` |
 
-</div>
+### 完成环境搭建
 
-### Environment Setup
-
-Before starting development, make sure you have set up the development environment:
+开始开发前，请确认开发环境就绪：
 
 ```bash
-# Install Rust toolchain
+# 安装 Rust 工具链
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install necessary components
+# 安装必要组件
 rustup component add rustfmt clippy
 
-# Install project dependencies
+# 安装项目依赖
 cargo build
 ```
 
-### Feature Flags
+### 特性标志
 
-This project uses feature flags to enable different functionalities. During development, please note:
+本项目使用特性标志启用不同功能。开发时请注意：
 
-**Default features:** `toml`, `json`, `env`
+**默认特性：** `toml`、`json`、`env`
 
-**Format support:**
-- `toml`: TOML format support (default)
-- `json`: JSON format support (default)
-- `yaml`: YAML format support
-- `ini`: INI format support
-- `env`: Environment variable support (default)
+**格式支持：**
+- `toml`：TOML 格式支持（默认）
+- `json`：JSON 格式支持（默认）
+- `yaml`：YAML 格式支持
+- `ini`：INI 格式支持
+- `env`：环境变量支持（默认）
 
-**Core features:**
-- `validation`: Configuration validation (garde)
-- `watch`: File monitoring and hot reload
-- `encryption`: Configuration encryption (XChaCha20-Poly1305)
-- `cli`: Command-line tool
-- `schema`: JSON Schema generation
+**核心特性：**
+- `validation`：配置校验（garde）
+- `watch`：文件监听与热重载
+- `encryption`：配置加密（XChaCha20-Poly1305）
+- `cli`：命令行工具
+- `schema`：JSON Schema 生成
 
-**Advanced features:**
-- `audit`: Audit logging
-- `dynamic`: Dynamic fields
-- `progressive-reload`: Progressive reload
-- `migration`: Configuration migration
-- `snapshot`: Snapshot rollback
-- `interpolation`: Variable interpolation
+**进阶特性：**
+- `audit`：审计日志
+- `dynamic`：动态字段
+- `progressive-reload`：渐进式重载
+- `migration`：配置迁移
+- `snapshot`：快照回滚
+- `interpolation`：变量插值
 
-**Remote sources:**
-- `remote`: HTTP polling
-- `etcd`: Etcd integration
-- `consul`: Consul integration
+**远程来源：**
+- `remote`：HTTP 轮询
+- `etcd`：Etcd 集成
+- `consul`：Consul 集成
 
-**Message bus:**
-- `config-bus`: Configuration event bus
-- `nats-bus`: NATS message bus
-- `redis-bus`: Redis message bus
+**消息总线：**
+- `config-bus`：配置事件总线
+- `nats-bus`：NATS 消息总线
+- `redis-bus`：Redis 消息总线
 
-When running tests, you can use different feature combinations:
+运行测试时可以使用不同的特性组合：
 
 ```bash
-cargo test --all-features  # Run tests for all features
-cargo test --features cli  # Run only CLI-related tests
-cargo test --features remote  # Run only remote configuration-related tests
+cargo test --all-features  # 运行全部特性的测试
+cargo test --features cli  # 仅运行 CLI 相关测试
+cargo test --features remote  # 仅运行远程配置相关测试
 ```
 
-### Build and Test
+### 构建与测试
 
 ```bash
-# Build project
+# 构建项目
 cargo build
 
-# Run all tests
+# 运行全部测试
 cargo test --all-features
 
-# Run examples
+# 运行示例
 cargo run --example basic --features watch
 ```
 
 ---
 
-## Development Workflow
+## 🔄 开发工作流（TDD）
 
-<div align="center" style="margin: 24px 0">
-
-### 🔄 Standard Contribution Process
-
-</div>
+本项目采用测试驱动开发（TDD）：先写测试，再写实现，用测试驱动代码演进。
 
 ```mermaid
 graph LR
-    A[Fork Repository] --> B[Create Branch]
-    B --> C[Make Changes]
-    C --> D[Write Tests]
-    D --> E[Run Tests]
-    E --> F{Tests Pass?}
-    F -->|No| C
-    F -->|Yes| G[Commit Code]
-    G --> H[Push to Fork]
-    H --> I[Create PR]
-    I --> J[Code Review]
-    J --> K{Review Passed?}
-    K -->|Needs Changes| C
-    K -->|Yes| L[Merged!]
-
-    style A fill:#DBEAFE,stroke:#1E40AF
-    style L fill:#DCFCE7,stroke:#166534
+    A[Fork 仓库] --> B[创建分支]
+    B --> C[修改代码]
+    C --> D[编写测试]
+    D --> E[运行测试]
+    E --> F{测试通过?}
+    F -->|否| C
+    F -->|是| G[提交代码]
+    G --> H[推送到 Fork]
+    H --> I[创建 PR]
+    I --> J[代码评审]
+    J --> K{评审通过?}
+    K -->|需要修改| C
+    K -->|是| L[已合并!]
 ```
 
-### Detailed Steps
+### 详细步骤
 
-#### 1️⃣ Create Branch
+#### 1️⃣ 创建分支
 
-Branches should be created based on the `main` branch.
+分支应基于 `main` 分支创建。
 
 ```bash
-# Sync upstream main branch
+# 同步 upstream 的 main 分支
 git fetch upstream
 git checkout main
 git merge upstream/main
 
-# Create feature branch
+# 创建特性分支
 git checkout -b feature/TICKET-ID-description
 
-# Or create bug fix branch
+# 或创建缺陷修复分支
 git checkout -b bugfix/TICKET-ID-description
 ```
 
-**Branch Naming Convention:**
+**分支命名规范：**
 
-| Type | Prefix | Example |
-|:-----|:-------|:--------|
-| New feature | `feature/*` | `feature/add-encryption` |
-| Bug fix | `bugfix/*` | `bugfix/fix-memory-leak` |
-| Hot fix | `hotfix/*` | `hotfix/critical-security` |
-| Release | `release/*` | `release/v1.0.0` |
-| Refactoring | `refactor/*` | `refactor/improve-perf` |
-| Documentation | `docs/*` | `docs/update-readme` |
+| 类型 | 前缀 | 示例 |
+|:-----|:-----|:-----|
+| 新特性 | `feature/*` | `feature/add-encryption` |
+| 缺陷修复 | `bugfix/*` | `bugfix/fix-memory-leak` |
+| 紧急修复 | `hotfix/*` | `hotfix/critical-security` |
+| 发布 | `release/*` | `release/v1.0.0` |
+| 重构 | `refactor/*` | `refactor/improve-perf` |
+| 文档 | `docs/*` | `docs/update-readme` |
 
-#### 2️⃣ Run Static Analysis and Tests
+#### 2️⃣ 编写测试并运行静态检查
 
-Before committing, make sure your code passes all local checks.
+提交之前，确保代码通过全部本地检查。
 
 ```bash
-# Format code
+# 格式化代码
 cargo fmt
 
-# Run Clippy static analysis (must have no warnings)
+# 运行 Clippy 静态分析（必须零警告）
 cargo clippy -- -D warnings
 
-# Run all tests
+# 运行全部测试
 cargo test --all-features
 ```
 
-#### 3️⃣ Commit Code
+#### 3️⃣ 提交代码
 
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+我们遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
 
-**Commit Format:**
+**提交格式：**
 `<type>(<scope>): <subject>`
 
-**Common Types:**
+**常用类型：**
 
-| Type | Description | Example |
-|:-----|:------------|:--------|
-| `feat` | New feature | `feat(auth): add JWT token refresh` |
-| `fix` | Bug fix | `fix(loader): resolve memory leak` |
-| `docs` | Documentation change | `docs: update README` |
-| `style` | Code formatting | `style: format code` |
-| `refactor` | Code refactoring | `refactor: improve performance` |
-| `perf` | Performance optimization | `perf: optimize hot path` |
-| `test` | Test related | `test: add unit tests` |
-| `chore` | Build tools | `chore: update dependencies` |
+| 类型 | 说明 | 示例 |
+|:-----|:-----|:-----|
+| `feat` | 新特性 | `feat(auth): add JWT token refresh` |
+| `fix` | 缺陷修复 | `fix(loader): resolve memory leak` |
+| `docs` | 文档变更 | `docs: update README` |
+| `style` | 代码格式 | `style: format code` |
+| `refactor` | 代码重构 | `refactor: improve performance` |
+| `perf` | 性能优化 | `perf: optimize hot path` |
+| `test` | 测试相关 | `test: add unit tests` |
+| `chore` | 构建工具 | `chore: update dependencies` |
 
-**Example:**
+**示例：**
 
 ```bash
 git commit -m "feat(auth): add JWT token refresh mechanism"
 ```
 
-#### 4️⃣ Merge and Cleanup (Mandatory)
+#### 4️⃣ 合并与清理（强制）
 
-After completing development or bug fixes, you **MUST** follow this mandatory process to merge back and clean up:
+完成开发或缺陷修复后，**必须**按以下强制流程合并回主分支并清理：
 
-**Step 1: Pre-merge Quality Checks**
+**第 1 步：合并前质量检查**
 
-Before merging, ensure all quality checks pass:
+合并前确保全部质量检查通过：
 
 ```bash
-# Ensure code formatting
+# 确保代码格式化
 cargo fmt
 
-# Run Clippy static analysis (zero warnings required)
+# 运行 Clippy 静态分析（要求零警告）
 cargo clippy -- -D warnings
 
-# Run all tests with all features enabled
+# 启用全部特性运行全部测试
 cargo test --all-features
 ```
 
-**All checks must pass before proceeding to merge.**
+**全部检查通过后才能进行合并。**
 
-**Step 2: Merge to Main Branch**
+**第 2 步：合并到 main 分支**
 
 ```bash
-# Switch to main branch
+# 切换到 main 分支
 git checkout main
 
-# Sync with upstream
+# 与 upstream 同步
 git fetch upstream
 git merge upstream/main
 
-# Merge your feature/bugfix branch
+# 合并你的 feature/bugfix 分支
 git merge --no-ff feature/TICKET-ID-description
 
-# Resolve any conflicts if necessary
-# After resolving conflicts, run quality checks again
+# 如有冲突则需要解决
+# 解决冲突后重新运行质量检查
 cargo fmt && cargo clippy -- -D warnings && cargo test --all-features
 
-# Push merged changes
+# 推送合并结果
 git push origin main
 ```
 
-**Step 3: Clean Up Completed Branches**
+**第 3 步：清理已完成分支**
 
-After successful merge, **you MUST clean up**:
+合并成功后，**必须清理**：
 
 ```bash
-# Delete local branch
+# 删除本地分支
 git branch -d feature/TICKET-ID-description
 
-# Delete remote branch (if pushed)
+# 删除远程分支（如已推送）
 git push origin --delete feature/TICKET-ID-description
 
-# If using git worktree, remove it
+# 如果使用了 git worktree，将其移除
 git worktree remove /path/to/worktree
 ```
 
-**Important Notes:**
-- ✅ Always delete branches after successful merge to keep repository clean
-- ✅ Never leave completed branches lingering in the repository
-- ✅ If merge fails, fix issues and re-run quality checks before retrying
-- ✅ For worktree-based development, always remove worktree after merge
-- ❌ Do NOT skip cleanup - accumulated branches clutter the repository
+**重要提示：**
+- ✅ 合并成功后务必删除分支，保持仓库整洁
+- ✅ 不要让已完成的分支滞留在仓库中
+- ✅ 如果合并失败，先修复问题并重跑质量检查后再重试
+- ✅ 基于 worktree 的开发，合并后务必移除 worktree
+- ❌ 不要跳过清理 —— 分支堆积会让仓库变得混乱
 
----
+### 测试要求
 
-## Coding Standards
-
-### Rust Best Practices
-
-<div style="padding:16px; margin: 16px 0">
-
-| Category | Requirement |
-|:---------|:------------|
-| **Ownership and Borrowing** | Prefer borrowing over ownership transfer, use `&` for immutable borrowing |
-| **Type System** | Prefer `Option<T>` over null values, use `Result<T, E>` for error handling |
-| **Concurrency and Async** | Use `Arc<RwLock<T>>` for shared mutable data, prefer channels for inter-thread communication |
-| **Performance Optimization** | Use `Vec::with_capacity()` for pre-allocation, prefer iterator chains |
-
-</div>
-
-### Naming Conventions
-
-| Type | Convention | Example |
-|:-----|:-----------|:--------|
-| Modules, functions, variables | `snake_case` | `load_config()` |
-| Types, Traits | `PascalCase` | `ConfigLoader` |
-| Constants, static variables | `SCREAMING_SNAKE_CASE` | `MAX_CACHE_SIZE` |
-
-### Code Quality Requirements
-
-| Requirement | Description |
-|:------------|:------------|
-| **Zero Warning Status** | Never ignore compiler warnings |
-| **Clippy** | Must pass `cargo clippy -- -D warnings` |
-| **Code Format** | Use `cargo fmt` to ensure consistent formatting |
-| **Documentation Comments** | All public APIs (`pub`) must include `///` documentation |
-
----
-
-## Testing Guidelines
-
-### Testing Pyramid
-
-<div align="center" style="margin: 24px 0">
+#### 测试金字塔
 
 ```mermaid
 graph TD
-    A[Unit Tests] --> B[Integration Tests]
-    B --> C[E2E Tests]
-
-    style A fill:#DCFCE7,stroke:#166534
-    style B fill:#DBEAFE,stroke:#1E40AF
-    style C fill:#FEF3C7,stroke:#92400E
+    A[单元测试] --> B[集成测试]
+    B --> C[E2E 测试]
 ```
 
-</div>
+| 测试类型 | 说明 | 要求 |
+|:---------|:-----|:-----|
+| **单元测试** | 快速、独立、验证核心逻辑 | 覆盖率 ≥ 80% |
+| **集成测试** | 验证模块间交互 | 全部通过 |
+| **E2E 测试** | 验证关键业务流程 | 核心路径 100% |
 
-| Test Type | Description | Requirement |
-|:----------|:------------|:------------|
-| **Unit Tests** | Fast, independent, verify core logic | ≥ 80% coverage |
-| **Integration Tests** | Verify module interactions | All pass |
-| **E2E Tests** | Verify critical business flows | Core paths 100% |
+#### 覆盖率要求
 
-### Coverage Requirements
+依据 ADR-044（测试覆盖率目标），执行以下覆盖率要求：
 
-Per [ADR-044](adr/ADR-044-test-coverage-targets.md), the following coverage targets are enforced:
+| 模块 | 目标 | 关键要求 |
+|:-----|:----:|:---------|
+| 核心（loader、merger、value） | >= 90% | 包含边界条件 |
+| 加密 | >= 90% | 全部攻击路径必须覆盖 |
+| 校验 | >= 85% | 覆盖全部规则类型 |
+| 迁移 | >= 85% | 覆盖升级与降级路径 |
+| 快照 | >= 85% | 一致性保证 |
+| 其他模块 | >= 80% | 总体平均 |
+| **总体目标** | **>= 80%** | 全部代码平均 |
 
-| Module | Target | Critical Requirements |
-|:-------|:------:|:---------------------|
-| Core (loader, merger, value) | >= 90% | Includes boundary conditions |
-| Encryption | >= 90% | All attack paths must be tested |
-| Validation | >= 85% | All rule types covered |
-| Migration | >= 85% | Upgrade and downgrade paths |
-| Snapshot | >= 85% | Consistency guarantees |
-| Other modules | >= 80% | Overall average |
-| **Overall target** | **>= 80%** | All code average |
-
-**Coverage verification commands:**
+**覆盖率验证命令：**
 
 ```bash
-# Generate coverage report (HTML)
+# 生成覆盖率报告（HTML）
 cargo llvm-cov --all-features --open
 
-# Generate LCOV format for CI integration
+# 生成 LCOV 格式供 CI 集成
 cargo llvm-cov --all-features --lcov --output-path lcov.info
 
-# Run all tests
+# 运行全部测试
 cargo test --all-features
 
-# Quick coverage check
+# 快速覆盖率检查
 cargo llvm-cov --all-features --summary-only
 ```
 
-**CI enforcement:**
-- Codecov is integrated via GitHub Actions
-- PRs failing below the 80% threshold will be blocked
-- Coverage reports are generated on every PR
+**CI 强制执行：**
+- 通过 GitHub Actions 集成 Codecov
+- PR 覆盖率低于 80% 阈值将被阻止
+- 每个 PR 都会生成覆盖率报告
 
 ---
 
-## Documentation Standards
+## 📐 代码规范
 
-| Requirement | Description |
-|:------------|:------------|
-| **Public API** | All `pub` items must include `///` documentation comments |
-| **Example Code** | Documentation comments should include runnable example code |
-| **Sync Updates** | Documentation in README and API docs must be updated when code changes |
+### Rust 最佳实践
+
+| 类别 | 要求 |
+|:-----|:-----|
+| **所有权与借用** | 优先借用而非转移所有权，使用 `&` 进行不可变借用 |
+| **类型系统** | 用 `Option<T>` 取代空值，用 `Result<T, E>` 处理错误 |
+| **并发与异步** | 共享可变数据使用 `Arc<RwLock<T>>`，线程间通信优先使用 channel |
+| **性能优化** | 使用 `Vec::with_capacity()` 预分配，优先使用迭代器链 |
+
+### 命名约定
+
+| 类型 | 约定 | 示例 |
+|:-----|:-----|:-----|
+| 模块、函数、变量 | `snake_case` | `load_config()` |
+| 类型、Trait | `PascalCase` | `ConfigLoader` |
+| 常量、静态变量 | `SCREAMING_SNAKE_CASE` | `MAX_CACHE_SIZE` |
+
+### 代码质量要求
+
+| 要求 | 说明 |
+|:-----|:-----|
+| **零警告状态** | 永远不要忽略编译器警告 |
+| **Clippy** | 必须通过 `cargo clippy -- -D warnings` |
+| **代码格式** | 使用 `cargo fmt` 保证格式一致 |
+| **文档注释** | 所有公开 API（`pub`）必须包含 `///` 文档 |
+
+### 文档规范
+
+| 要求 | 说明 |
+|:-----|:-----|
+| **公开 API** | 所有 `pub` 项必须包含 `///` 文档注释 |
+| **示例代码** | 文档注释应包含可运行的示例代码 |
+| **同步更新** | 代码变更时必须同步更新 README 与 API 文档 |
 
 ---
 
-## Submitting Changes
+## 📤 提交与 PR 流程
 
-### PR Submission Standards
+### PR 提交标准
 
-- **Atomic**: Each commit/PR should contain only one logical change
-- **Size Limit**: PR change lines should ideally be under 400 lines
-- **Linked Issue**: Must link related Issue in PR description
+- **原子性**：每个 commit/PR 只包含一个逻辑变更
+- **体量限制**：PR 变更行数尽量控制在 400 行以内
+- **关联 Issue**：PR 描述中必须关联相关 Issue
 
-### PR Template
+### PR 模板
 
 ```markdown
 ## Change Type
@@ -542,33 +442,39 @@ Briefly describe the purpose and content of this change.
 Closes #123
 ```
 
----
+### 评审标准
 
-## Review Process
-
-<div style="padding:16px; margin: 16px 0">
-
-### Review Criteria
-
-| Dimension | Description |
-|:----------|:------------|
-| **Functionality** | Meets requirements, correct logic |
-| **Code Quality** | Follows SOLID principles, good readability, no duplicate code |
-| **Security** | No hardcoded sensitive information, input validation present |
-| **Performance** | No obvious performance issues |
-
-</div>
+| 维度 | 说明 |
+|:-----|:-----|
+| **功能性** | 满足需求，逻辑正确 |
+| **代码质量** | 遵循 SOLID 原则，可读性好，无重复代码 |
+| **安全性** | 无硬编码敏感信息，具备输入校验 |
+| **性能** | 无明显性能问题 |
 
 ---
 
-<div align="center" style="margin: 32px 0; padding: 24px">
+## 🤗 行为准则
 
-### 💝 Thank You for Contributing to Confers!
+我们致力于提供包容友好的环境。参与本项目即表示您同意：
 
-**[📖 User Guide](USER_GUIDE.md)** • **[❓ FAQ](FAQ.md)** • **[🐛 Report Issue](https://github.com/Kirky-X/confers/issues)**
+**✅ 期望的行为**
 
-Made with ❤️ by Kirky.X
+- 相互尊重、体贴待人
+- 欢迎新人
+- 接受建设性批评
+- 以社区利益为重
+- 对他人抱有同理心
 
-**[⬆ Back to Top](#top)**
+**❌ 不可接受的行为**
 
-</div>
+- 使用攻击性语言
+- 骚扰或侮辱他人
+- 发布他人隐私信息
+- 人身攻击
+- 干扰讨论
+
+---
+
+### 💝 感谢您为 Confers 做出贡献！
+
+**[📖 用户指南](USER_GUIDE.md)** • **[❓ FAQ](FAQ.md)** • **[🐛 报告问题](https://github.com/Kirky-X/confers/issues)**

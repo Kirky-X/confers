@@ -1,155 +1,135 @@
-<span id="top"></span>
-<div align="center">
+# ❓ Confers FAQ
 
-<img src="image/confers.png" alt="Confers Logo" width="150" style="margin-bottom: 16px">
+本页汇总 Confers 的常见问题与解答，按主题分组。没有找到答案？欢迎前往 [GitHub Issues](https://github.com/Kirky-X/confers/issues) 提问。
 
-# ❓ Frequently Asked Questions (FAQ)
+## 📋 目录
 
+<details open>
+<summary>📑 目录（点击展开）</summary>
 
-[🏠 Home](../README.md) • [📖 User Guide](USER_GUIDE.md) • [🔧 API Reference](API_REFERENCE.md)
-
----
-
-</div>
-
-## 📋 Table of Contents
-
-<details open style="padding:16px">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (click to expand)</summary>
-
-- [General Questions](#general-questions)
-- [Installation and Configuration](#installation-and-configuration)
-- [Usage and Features](#usage-and-features)
-- [Performance](#performance)
-- [Security](#security)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [Licensing](#licensing)
+- [通用问题](#-通用问题)
+- [安装与配置](#-安装与配置)
+- [使用与特性](#️-使用与特性)
+- [性能](#-性能)
+- [故障排查](#-故障排查)
 
 </details>
 
 ---
 
-## General Questions
+## 🧭 通用问题
 
-<div align="center" style="margin: 24px 0">
+### ❓ 什么是 Confers？
 
-### 🤔 About the Project
+**Confers** 是一个现代化的类型安全 Rust 配置管理库。它提供：
 
-</div>
+| ✨ 特性 | 说明 |
+|:-------:|:-----|
+| **零样板代码** | 只需 `#[derive(Config)]` 即可定义配置 |
+| **类型安全** | 在编译期对配置结构进行类型检查 |
+| **多来源支持** | 自动合并文件、环境变量与远程来源 |
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What is Confers?</summary>
+它面向需要健壮、生产级配置管理方案的 **Rust 开发者**。
 
-**Confers** is a modern, type-safe Rust configuration management library. It provides:
+**了解更多**：[用户指南](USER_GUIDE.md)
 
-| ✨ Feature | Description |
-|:----------:|:------------|
-| **Zero Boilerplate** | Define configuration with just `#[derive(Config)]` |
-| **Type Safe** | Compile-time type checking for configuration structures |
-| **Multi-source Support** | Automatic merging of files, environment variables, and remote sources |
+### ❓ 为什么要使用 Confers？
 
-It is designed for **Rust developers** who need a robust, production-grade approach to configuration management.
+| 特性 | Confers | Figment | Config-rs |
+|:-----|:-------:|:-------:|:---------:|
+| 类型安全 | ✅ **强** | ✅ 良好 | ⚠️ 手动 |
+| 热重载 | ✅ **内置** | ⚠️ 手动 | ⚠️ 手动 |
+| 校验 | ✅ **集成** | ⚠️ 手动 | ⚠️ 手动 |
+| 审计日志 | ✅ **包含** | ❌ 无 | ❌ 无 |
 
-**Learn more:** [User Guide](USER_GUIDE.md)
+**核心优势：**
 
-</details>
+- 🚀 **零样板代码**：用最少的代码加载复杂配置
+- 🔄 **智能合并**：自动处理多来源之间的优先级
+- 🛡️ **安全**：内置敏感字段加密与脱敏支持
+- 📊 **可观测**：详细的审计日志，追踪每个配置值的来源
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Why should I use Confers?</summary>
+### ❓ Confers 可以用于生产环境吗？
 
-<div style="padding:16px">
+**当前状态**：✅ **可用于生产！**
 
-| Feature | Confers | Figment | Config-rs |
-|:--------|:-------:|:-------:|:---------:|
-| Type Safety | ✅ **Strong** | ✅ Good | ⚠️ Manual |
-| Hot Reload | ✅ **Built-in** | ⚠️ Manual | ⚠️ Manual |
-| Validation | ✅ **Integrated** | ⚠️ Manual | ⚠️ Manual |
-| Audit Logging | ✅ **Included** | ❌ No | ❌ No |
+**已就绪的特性：**
 
-</div>
+- ✅ 核心加载逻辑稳定
+- ✅ 支持主流格式（TOML、JSON、YAML）
+- ✅ 环境变量覆盖
+- ✅ 校验框架
+- ✅ 远程来源（Etcd、Consul）
 
-**Key Advantages:**
+**成熟度指标：**
 
-- 🚀 **Zero Boilerplate**: Load complex configurations with minimal code
-- 🔄 **Smart Merging**: Automatically handles priority between multiple sources
-- 🛡️ **Security**: Built-in support for sensitive field encryption and masking
-- 📊 **Observability**: Detailed audit logs tracking the source of every configuration value
+- 📊 覆盖广泛的测试套件
+- 🔄 持续维护
+- 🛡️ 以安全为中心的设计
+- 📖 文档持续完善
 
-</details>
+> **注意**：升级版本前请务必查阅[更新日志](CHANGELOG.md)。
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Is Confers ready for production?</summary>
+### ❓ 支持哪些平台？
 
-<div style="padding:16px; margin: 16px 0">
+| 平台 | 架构 | 状态 | 说明 |
+|:-----|:-----|:----:|:-----|
+| **Linux** | x86_64 | ✅ 完整支持 | 主力平台 |
+| | ARM64 | ✅ 完整支持 | 已在 ARM 服务器上测试 |
+| **macOS** | x86_64 | ✅ 完整支持 | Intel Mac |
+| | ARM64 | ✅ 完整支持 | Apple Silicon（M1/M2/M3） |
+| **Windows** | x86_64 | ✅ 完整支持 | Windows 10+ |
 
-**Current Status:** ✅ **Production Ready!**
+### ❓ 如何参与贡献？
 
-</div>
+**参与方式：**
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
+| 代码贡献 | 非代码贡献 |
+|:---------|:-----------|
+| 🐛 修复缺陷 | 📖 编写教程 |
+| ✨ 添加特性 | 🎨 设计素材 |
+| 📝 改进文档 | 🌍 翻译文档 |
+| ✅ 编写测试 | 💬 解答问题 |
 
-**Ready Features:**
+**上手步骤：**
 
-- ✅ Core loading logic is stable
-- ✅ Supports major formats (TOML, JSON, YAML)
-- ✅ Environment variable override
-- ✅ Validation framework
-- ✅ Remote sources (Etcd, Consul)
+1. 🍴 Fork 仓库
+2. 🌱 创建分支
+3. ✏️ 修改代码
+4. ✅ 补充测试
+5. 📤 提交 PR
 
-</td>
-<td width="50%" style="padding: 16px">
+**指南**：[贡献指南](CONTRIBUTING.md)
 
-**Maturity Indicators:**
+### ❓ 在哪里可以获得帮助？
 
-- 📊 Extensive test suite
-- 🔄 Regular maintenance
-- 🛡️ Security-focused design
-- 📖 Growing documentation
+**支持渠道：**
 
-</td>
-</tr>
-</table>
+| 渠道 | 说明 | 响应时间 |
+|:-----|:-----|:--------:|
+| 🐛 [GitHub Issues](https://github.com/Kirky-X/confers/issues) | 缺陷报告与特性请求 | 关键缺陷：48 小时内确认 |
+| 💬 [GitHub Discussions](https://github.com/Kirky-X/confers/discussions) | 问答与想法交流 | 2-3 天 |
 
-> **Note:** Always check the [CHANGELOG](../CHANGELOG.md) before upgrading versions.
+### ❓ 项目采用什么许可证？
 
-</details>
+本项目基于 [MIT 许可证](../LICENSE) 发布。
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What platforms are supported?</summary>
+**您获得的权利：**
 
-<div style="padding:16px">
-
-| Platform | Architecture | Status | Notes |
-|:---------|:-------------|:------:|:------|
-| **Linux** | x86_64 | ✅ Fully Supported | Primary platform |
-| | ARM64 | ✅ Fully Supported | Tested on ARM servers |
-| **macOS** | x86_64 | ✅ Fully Supported | Intel Mac |
-| | ARM64 | ✅ Fully Supported | Apple Silicon (M1/M2/M3) |
-| **Windows** | x86_64 | ✅ Fully Supported | Windows 10+ |
-
-</div>
-
-</details>
+- ✅ 商业使用
+- ✅ 修改
+- ✅ 分发
+- ✅ 私有使用
 
 ---
 
-## Installation and Configuration
+## 📦 安装与配置
 
-<div align="center" style="margin: 24px 0">
+### ❓ 如何安装？
 
-### 🚀 Quick Start
+**Rust 项目：**
 
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How do I install it?</summary>
-
-**For Rust Projects:**
-
-Add to your `Cargo.toml`:
+在 `Cargo.toml` 中添加：
 
 ```toml
 [dependencies]
@@ -157,19 +137,19 @@ confers = "0.6.0-rc.2"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
-Or use cargo:
+或使用 cargo：
 
 ```bash
 cargo add confers serde --features serde/derive
 ```
 
-**Optional Features:**
+**可选特性：**
 
 ```toml
 confers = { version = "0.6.0-rc.2", features = ["watch", "remote", "cli"] }
 ```
 
-**Verification:**
+**安装验证：**
 
 ```rust
 use confers::Config;
@@ -186,112 +166,86 @@ fn main() {
 }
 ```
 
-</details>
+### ❓ 如何选择合适的特性组合？
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How do I choose the right feature combination?</summary>
+**特性预设（推荐）：**
 
-<div style="padding:16px">
+| 预设 | 说明 | 适用场景 |
+|:----:|:-----|:---------|
+| `minimal` | 环境变量 + JSON | 只需要基础配置加载 |
+| `recommended` | TOML + JSON + Env + 校验 | 大多数应用（推荐） |
+| `dev` | 开发配置（含 watch、snapshot） | 开发与调试 |
+| `production` | 生产配置（含加密） | 生产环境 |
+| `distributed` | 分布式系统配置 | 微服务与分布式系统 |
+| `full` | 全部特性 | 需要完整功能 |
 
-**Feature Presets (Recommended):**
-
-| Preset | Description | Use Case |
-|:------:|:------------|:---------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | Environment variables + JSON | Only need basic config loading |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | TOML + JSON + Env + Validation | Most applications (recommended) |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | Development config (with watch, snapshot) | Development and debugging |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | Production config (with encryption) | Production environments |
-| <span style="color:#5B21B6; padding:4px 8px">distributed</span> | Distributed systems config | Microservices and distributed systems |
-| <span style="color:#166534; padding:4px 8px">full</span> | All features | Need complete functionality |
-
-**Usage Examples:**
+**用法示例：**
 
 ```toml
-# Minimal usage
+# 最小化使用
 [dependencies]
 confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }
 
-# Recommended configuration
+# 推荐配置
 [dependencies]
 confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }
 
-# Production configuration
+# 生产配置
 [dependencies]
 confers = { version = "0.6.0-rc.2", default-features = false, features = ["production"] }
 
-# Distributed systems configuration
+# 分布式系统配置
 [dependencies]
 confers = { version = "0.6.0-rc.2", default-features = false, features = ["distributed"] }
 
-# Full feature configuration
+# 全量特性配置
 [dependencies]
 confers = { version = "0.6.0-rc.2", features = ["full"] }
 ```
 
-</div>
+> 💡 **提示**：默认特性为 `toml`、`json`、`env`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
 
-> 💡 **Tip**: Default features are `toml`, `json`, and `env`. For validation functionality, use the `recommended` preset or explicitly enable the `validation` feature.
+### ❓ 不同特性组合的依赖数量差别有多大？
 
-</details>
+| 特性组合 | 依赖数量 | 编译时间 | 二进制体积 |
+|:--------|:--------:|:--------:|:----------:|
+| `minimal` | 约 15 | 最短 | 最小 |
+| `recommended` | 约 20 | 短 | 小 |
+| `dev` | 约 30 | 中 | 中 |
+| `production` | 约 35 | 中 | 中 |
+| `cli` | 约 25 | 中 | 小 |
+| `full` | 50+ | 长 | 大 |
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How do dependency counts differ across feature combinations?</summary>
+选择合适的特性组合可以显著降低编译时间与二进制体积。
 
-<div style="padding:16px">
+### ❓ 系统要求是什么？
 
-| Feature Combination | Dependencies | Compile Time | Binary Size |
-|:--------------------|:------------:|:------------:|:-----------:|
-| `minimal` | ~15 | Shortest | Smallest |
-| `recommended` | ~20 | Short | Small |
-| `dev` | ~30 | Medium | Medium |
-| `production` | ~35 | Medium | Medium |
-| `cli` | ~25 | Medium | Small |
-| `full` | ~50+ | Long | Large |
+**最低要求：**
 
-</div>
+| 组件 | 要求 | 推荐配置 |
+|:-----|:----:|:--------:|
+| Rust 版本 | 1.97.1+ | 最新稳定版 |
+| 内存 | 极低 | - |
+| 磁盘空间 | 极低 | - |
 
-Choosing the right feature combination can significantly reduce compile time and binary size.
+**可选条件：**
 
-</details>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What are the system requirements?</summary>
-
-**Minimum Requirements:**
-
-| Component | Requirement | Recommended |
-|:----------|:-----------:|:-----------:|
-| Rust Version | 1.75+ | Latest stable |
-| Memory | Minimal | - |
-| Disk Space | Minimal | - |
-
-**Optional:**
-
-- 🔧 `watch` feature requires OS-level file notification support
-- ☁️ `remote` feature requires network access to configuration centers
-
-</details>
+- 🔧 `watch` 特性需要操作系统级文件通知支持
+- ☁️ `remote` 特性需要能够访问配置中心的网络
 
 ---
 
-## Usage and Features
+## 🛠️ 使用与特性
 
-<div align="center" style="margin: 24px 0">
+### ❓ 如何快速上手基本用法？
 
-### 💡 Using the API
-
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How do I get started with basic usage?</summary>
-
-**5-Minute Quick Start:**
+**5 分钟快速开始：**
 
 ```rust
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
-// 1. Define configuration structure
+// 1. 定义配置结构
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "APP_")]
 struct AppConfig {
@@ -301,7 +255,7 @@ struct AppConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    // 2. Load configuration from default sources
+    // 2. 从默认来源加载配置
     let config = AppConfig::load_sync()?;
 
     println!("Host: {}, Port: {}", config.host, config.port);
@@ -309,46 +263,40 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-</details>
+### ❓ 支持哪些格式和来源？
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What formats and sources are supported?</summary>
+**支持的格式：**
 
-**Supported Formats:**
+| ✅ 格式 | 说明 |
+|:-------:|:-----|
+| TOML | 首选格式 |
+| JSON | 通用格式 |
+| YAML | 人类可读 |
+| INI | 简单格式 |
 
-| ✅ Format | Description |
-|:---------:|:------------|
-| TOML | Preferred format |
-| JSON | Universal format |
-| YAML | Human-readable |
-| INI | Simple format |
+**支持的来源：**
 
-**Supported Sources:**
+| ✅ 来源 | 说明 |
+|:-------:|:-----|
+| 文件 | 自动探测 `config.{toml,json,yaml,ini}` |
+| 环境变量 | 支持自定义前缀 |
+| CLI 参数 | 与 `clap` 集成 |
+| 远程 | Etcd、Consul、HTTP |
+| 默认值 | 在结构体定义中指定 |
+| 内存 | 通过编程方式设置 |
 
-| ✅ Source | Description |
-|:---------:|:------------|
-| File | Auto-detects `config.{toml,json,yaml,ini}` |
-| Environment Variables | Supports custom prefixes |
-| CLI Arguments | Integrates with `clap` |
-| Remote | Etcd, Consul, HTTP |
-| Default Values | Specified in struct definition |
-| Memory | Set programmatically |
+**支持的远程配置：**
 
-**Supported Remote Configuration:**
-
-| ✅ Remote Source | Description |
+| ✅ 远程来源 | 说明 |
 |:----------------:|:------------|
-| Etcd | Distributed key-value store |
-| Consul | Service discovery and configuration |
-| HTTP | Fetch configuration via HTTP(S) |
-| Redis | Cache backend (with `cache-redis` feature) |
+| Etcd | 分布式键值存储 |
+| Consul | 服务发现与配置 |
+| HTTP | 通过 HTTP(S) 拉取配置 |
+| Redis | 配置变更广播（`redis-bus` 特性） |
 
-</details>
+### ❓ 可以校验配置吗？
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Can I validate configuration?</summary>
-
-**Yes!** Confers integrates with the `garde` validation crate.
+**可以！** Confers 与 `garde` 校验库集成。
 
 ```rust
 use confers::Config;
@@ -366,259 +314,107 @@ struct AppConfig {
 }
 ```
 
-**Note:** Add `garde = { version = "0.22", features = ["derive"] }` to your dependencies.
+**注意**：请在依赖中添加 `garde = { version = "0.22", features = ["derive"] }`。
 
-</details>
+### ❓ Confers 安全吗？
+
+**安全！** 安全是 Confers 的核心关注点。
+
+**安全特性：**
+
+| 实现 | 防护效果 |
+|:-----|:---------|
+| ✅ 内存安全（Rust） | ✅ 防缓冲区溢出 |
+| ✅ 敏感字段脱敏 | ✅ 抗侧信道攻击 |
+| ✅ 常量时间加密 | ✅ 内存清零（zeroize） |
+| ✅ 安全路径校验 | ✅ 静态加密（v0.5.0+） |
+
+### ❓ 如何报告安全漏洞？
+
+**请负责任地报告安全问题：**
+
+1. **不要**创建公开的 GitHub Issue
+2. **邮件**：Kirky-X@outlook.com
+3. **请包含：**
+    - 漏洞描述
+    - 复现步骤
+    - 潜在影响
+
+**响应时间线：**
+
+- 📧 首次响应：48 小时内确认
+- 🔍 初步评估：7 天内
+- 📢 公开披露：修复发布之后
 
 ---
 
-## Performance
+## ⚡ 性能
 
-<div align="center" style="margin: 24px 0">
+### ❓ Confers 有多快？
 
-### ⚡ Speed and Optimization
+**基准测试结果（加载 100+ 个键）：**
 
-</div>
+| 来源 | 格式 | 延迟（平均） |
+|:-----|:-----|:------------:|
+| 本地文件 | TOML | 约 0.5 ms |
+| 环境变量 | - | 约 0.1 ms |
+| 远程（Etcd） | JSON | 约 5-20 ms |
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How fast is Confers?</summary>
-
-**Benchmark Results (loading 100+ keys):**
-
-| Source | Format | Latency (Average) |
-|:-------|:-------|:-----------------:|
-| Local File | TOML | ~0.5 ms |
-| Environment Variables | - | ~0.1 ms |
-| Remote (Etcd) | JSON | ~5-20 ms |
-
-**Run benchmarks yourself:**
+**自行运行基准测试：**
 
 ```bash
 cargo bench
 ```
 
-</details>
+### ❓ 内存占用如何？
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What about memory usage?</summary>
+**典型内存占用：**
 
-**Typical Memory Usage:**
+Confers 的内存占用非常低，标准应用配置通常**小于 1MB**。它尽可能使用 `serde` 进行零拷贝反序列化。
 
-Confers uses very little memory, typically **less than 1MB** for standard application configurations. It uses `serde` for zero-copy deserialization whenever possible.
+**内存安全：**
 
-**Memory Safety:**
-
-- ✅ No memory leaks (verified through continuous testing)
-- ✅ Sensitive data can be zeroed after use
-- ✅ Leverages Rust's ownership model for safety
-
-</details>
+- ✅ 无内存泄漏（经持续测试验证）
+- ✅ 敏感数据可在使用后清零
+- ✅ 充分利用 Rust 的所有权模型保证安全
 
 ---
 
-## Security
+## 🔧 故障排查
 
-<div align="center" style="margin: 24px 0">
+### ❓ 出现 "FileNotFound" 错误
 
-### 🔒 Security Features
-
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Is Confers secure?</summary>
-
-**Yes!** Security is a core focus of Confers.
-
-<div style="padding:16px; margin: 16px 0">
-
-**Security Features:**
-
-| Implementation | Protection |
-|:---------------|:-----------|
-| ✅ Memory Safety (Rust) | ✅ Buffer overflow protection |
-| ✅ Sensitive field masking | ✅ Side-channel attack resistance |
-| ✅ Constant-time encryption | ✅ Memory zeroization (zeroize) |
-| ✅ Secure path validation | ✅ Encryption at rest (v0.5.0+) |
-
-</div>
-
-</details>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How do I report a security vulnerability?</summary>
-
-**Please report security issues responsibly:**
-
-1. **Do NOT** create a public GitHub issue
-2. **Email:** Kirky-X@outlook.com
-3. **Include:**
-    - Description of the vulnerability
-    - Steps to reproduce
-    - Potential impact
-
-**Response Timeline:**
-
-- 📧 Initial response: 24 hours
-- 🔍 Evaluation: 72 hours
-- 📢 Public disclosure: After fix is released
-
-</details>
-
----
-
-## Troubleshooting
-
-<div align="center" style="margin: 24px 0">
-
-### 🔧 Common Issues
-
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#991B1B">❓ I'm getting a "FileNotFound" error</summary>
-
-**Problem:**
+**问题：**
 
 ```
 Error: Configuration file not found: config.toml
 ```
 
-**Solution:**
+**解决方案：**
 
-1. Ensure the file is in the root directory or `config/` directory
-2. Check the filename (supported: `config.toml`, `config.json`, `config.yaml`, `config.ini`)
-3. If using a custom path, ensure the path is correct
+1. 确认文件位于根目录或 `config/` 目录
+2. 检查文件名（支持：`config.toml`、`config.json`、`config.yaml`、`config.ini`）
+3. 如果使用自定义路径，请确认路径正确
 
-</details>
+### ❓ 出现 "ValidationError"
 
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#92400E">❓ I'm getting a "ValidationError"</summary>
-
-**Problem:**
+**问题：**
 
 ```
 Error: Validation failed: ...
 ```
 
-**Solution:**
+**解决方案：**
 
-1. Review the error message to see which field failed and why
-2. Ensure your configuration file or environment variables match the expected format and constraints
-
-</details>
+1. 查看错误信息，确认是哪个字段未通过以及原因
+2. 确保配置文件或环境变量符合预期的格式与约束
 
 ---
 
-## Contributing
+## 🎯 还有其他问题？
 
-<div align="center" style="margin: 24px 0">
-
-### 🤝 Join the Community
-
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ How can I contribute?</summary>
-
-**Ways to Contribute:**
-
-| Code Contributions | Non-Code Contributions |
-|:-------------------|:-----------------------|
-| 🐛 Fix bugs | 📖 Write tutorials |
-| ✨ Add features | 🎨 Design assets |
-| 📝 Improve documentation | 🌍 Translate documentation |
-| ✅ Write tests | 💬 Answer questions |
-
-**Getting Started:**
-
-1. 🍴 Fork the repository
-2. 🌱 Create a branch
-3. ✏️ Make changes
-4. ✅ Add tests
-5. 📤 Submit PR
-
-**Guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
-
-</details>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ Where can I get help?</summary>
-
-**Support Channels:**
-
-| Channel | Description | Response Time |
-|:--------|:------------|:-------------:|
-| 🐛 [GitHub Issues](https://github.com/Kirky-X/confers/issues) | Bug reports and feature requests | Critical bugs: 24 hours |
-| 💬 [GitHub Discussions](https://github.com/Kirky-X/confers/discussions) | Q&A and ideas | 2-3 days |
-
-</details>
-
----
-
-## Licensing
-
-<div align="center" style="margin: 24px 0">
-
-### 📄 License Information
-
-</div>
-
-<details style="padding:16px; margin: 8px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">❓ What license is this?</summary>
-
-**Dual Licensed:**
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**MIT License**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE-MIT)
-
-**Permissions:**
-- ✅ Commercial use
-- ✅ Modification
-- ✅ Distribution
-- ✅ Private use
-
-</td>
-<td width="50%" style="padding: 16px; text-align:center">
-
-**Apache License 2.0**
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../LICENSE-APACHE)
-
-**Permissions:**
-- ✅ Commercial use
-- ✅ Modification
-- ✅ Distribution
-- ✅ Patent grant
-
-</td>
-</tr>
-</table>
-
-**You may use either license.**
-
-</details>
-
----
-
-<div align="center" style="margin: 32px 0; padding: 24px">
-
-### 🎯 Still have questions?
-
-| Create an Issue | Start a Discussion | Send Email |
+| 提交 Issue | 发起讨论 | 发送邮件 |
 |:---------------:|:------------------:|:----------:|
-| [🐛 Report Issue](https://github.com/Kirky-X/confers/issues) | [💬 Community Discussion](https://github.com/Kirky-X/confers/discussions) | [📧 Contact Support](mailto:Kirky-X@outlook.com) |
+| [🐛 报告问题](https://github.com/Kirky-X/confers/issues) | [💬 社区讨论](https://github.com/Kirky-X/confers/discussions) | [📧 联系支持](mailto:Kirky-X@outlook.com) |
 
----
-
-**[📖 User Guide](USER_GUIDE.md)** • **[🔧 API Documentation](https://docs.rs/confers)** • **[🏠 Home](../README.md)**
-
-Made with ❤️ by Kirky.X
-
-**[⬆ Back to Top](#top)**
-
-</div>
+**[📖 用户指南](USER_GUIDE.md)** • **[🔧 在线 API 文档](https://docs.rs/confers)** • **[🏠 返回首页](../README.md)**

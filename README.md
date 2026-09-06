@@ -1,57 +1,14 @@
-<span id="top"></span>
-
-<div align="right">
-
-[**中文**](README.md) | [English](README_EN.md)
-
-</div>
-
 <div align="center">
 
-<img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
+<img src="docs/assets/confers.png" alt="Confers Logo" width="200">
 
-<p>
-  <!-- CI/CD Status -->
-  <a href="https://github.com/Kirky-X/confers/actions/workflows/ci.yml">
-    <img src="https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg" alt="CI Status" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Version -->
-  <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/v/confers.svg" alt="Version" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Documentation -->
-  <a href="https://docs.rs/confers">
-    <img src="https://docs.rs/confers/badge.svg" alt="Documentation" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Downloads -->
-  <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads" style="display:inline; margin:0 4px">
-  </a>
-  <!-- License -->
-  <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE">
-    <img src="https://img.shields.io/crates/l/confers.svg" alt="License" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Rust Version -->
-  <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.88+-orange.svg" alt="Rust 1.88+" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Coverage -->
-  <a href="https://codecov.io/gh/Kirky-X/confers">
-    <img src="https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg" alt="Coverage" style="display:inline; margin:0 4px">
-  </a>
-</p>
+[![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
 
-<p align="center">
-  <strong>生产级 Rust 配置库，零样板代码</strong>
-</p>
+**中文** | [English](README_EN.md)
 
-<p align="center">
-  <a href="#features" style="color:#3B82F6">✨ 功能特性</a> •
-  <a href="#quick-start" style="color:#3B82F6">🚀 快速开始</a> •
-  <a href="#documentation" style="color:#3B82F6">📚 文档</a> •
-  <a href="#examples" style="color:#3B82F6">💻 示例</a> •
-  <a href="#contributing" style="color:#3B82F6">🤝 参与贡献</a>
-</p>
+**生产级 Rust 配置库，零样板代码**
+
+[✨ 功能特性](#-功能特性) • [🚀 快速开始](#-快速开始) • [📚 文档](#-文档) • [💻 示例](#-示例) • [🤝 参与贡献](#-参与贡献)
 
 </div>
 
@@ -78,27 +35,32 @@ Confers 提供**声明式方法**进行配置管理：
 <details open style="padding:16px">
 <summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
 
-- [✨ 功能特性](#features)
-- [🚀 快速开始](#quick-start)
-  - [📦 安装](#installation)
-  - [💡 基本用法](#basic-usage)
-- [📚 文档](#documentation)
-- [💻 示例](#examples)
-- [🏗️ 架构设计](#architecture)
-- [⚙️ 配置选项](#configuration)
-- [🧪 测试](#testing)
-- [📊 性能](#performance)
-- [🔒 安全](#security)
-- [🗺️ 开发路线图](#roadmap)
-- [🤝 参与贡献](#contributing)
-- [📄 许可证](#license)
-- [🙏 致谢](#acknowledgments)
+- [📋 目录](#-目录)
+- [✨ 功能特性](#-功能特性)
+- [🚀 快速开始](#-快速开始)
+  - [📦 安装](#-安装)
+  - [💡 基本用法](#-基本用法)
+- [🎨 特性标志](#-特性标志)
+- [📚 文档](#-文档)
+- [💻 示例](#-示例)
+- [🏗️ 架构](#️-架构)
+- [🤖 CLI 工具](#-cli-工具)
+- [🧪 测试](#-测试)
+- [📊 性能](#-性能)
+- [🔒 安全](#-安全)
+- [🗺️ 开发路线图](#️-开发路线图)
+- [🤝 参与贡献](#-参与贡献)
+- [📋 更新日志](#-更新日志)
+- [📄 许可证](#-许可证)
+- [🙏 致谢](#-致谢)
+- [📞 联系与支持](#-联系与支持)
+- [⭐ Star 历史](#-star-历史)
 
 </details>
 
 ---
 
-## <span id="features">✨ 功能特性</span>
+## ✨ 功能特性
 
 | 🎯 核心功能 | ⚡ 可选功能 |
 |:-----------------|:--------------------|
@@ -138,47 +100,11 @@ Confers 提供**声明式方法**进行配置管理：
 </tr>
 </table>
 
-### 📦 功能预设
-
-| 预设 | 包含功能 | 使用场景 |
-|--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | 最小化配置加载（无验证、无 CLI） |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | 分布式系统 |
-| <span style="color:#5B21B6; padding:4px 8px">full</span>        | 所有功能 | 完整功能集 |
-
-
-### 🎨 功能架构
-
-
-```mermaid
-graph LR
-    A["<b>配置源</b><br/>文件 • 环境变量 • CLI"] --> B["<b>ConfigLoader</b><br/>核心引擎"]
-    B --> C["<b>验证</b><br/>类型和业务规则"]
-    B --> D["<b>Schema</b><br/>JSON Schema 生成"]
-    B --> E["<b>加密</b><br/>XChaCha20-Poly1305"]
-    B --> F["<b>审计</b><br/>访问日志"]
-    C --> H["<b>应用配置</b><br/>可直接使用"]
-    D --> H
-    E --> H
-    F --> H
-
-    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
-    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
-    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
-```
-
 ---
 
-## <span id="quick-start">🚀 快速开始</span>
+## 🚀 快速开始
 
-### <span id="installation">📦 安装</span>
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="100%" style="padding: 16px">
+### 📦 安装
 
 #### 🦀 Rust 安装
 
@@ -190,63 +116,7 @@ graph LR
 | **CLI 工具** | `confers = { version = "0.6", features = ["cli"] }` | CLI 工具（不含验证/加密） |
 | **完整** | `confers = { version = "0.6", features = ["full"] }` | 所有功能 |
 
-**单独功能说明：**
-
-| 功能 | 描述 | 默认启用 |
-|---------|-------------|---------|
-| **格式支持** |||
-| `toml` | TOML 格式支持 | ✅ |
-| `json` | JSON 格式支持 | ✅ |
-| `yaml` | YAML 格式支持 | ❌ |
-| `ini` | INI 格式支持 | ❌ |
-| `env` | 环境变量支持 | ✅ |
-| `dotenv` | `.env` 文件支持（`env` 的别名） | ❌ |
-| **核心功能** |||
-| `validation` | 配置验证（garde） | ❌ |
-| `watch` | 文件监控和热重载 | ❌ |
-| `encryption` | XChaCha20-Poly1305 加密 | ❌ |
-| `cli` | 命令行工具 | ❌ |
-| `schema` | JSON Schema 生成 | ❌ |
-| `typescript-schema` | TypeScript 类型生成（`schema` 的别名） | ❌ |
-| **高级功能** |||
-| `audit` | 审计日志 | ❌ |
-| `dynamic` | 动态字段 | ❌ |
-| `progressive-reload` | 渐进式重载 | ❌ |
-| `migration` | 配置迁移 | ❌ |
-| `snapshot` | 快照回滚 | ❌ |
-| `interpolation` | 变量插值 | ❌ |
-| **远程源** |||
-| `remote` | HTTP 轮询 | ❌ |
-| `etcd` | Etcd 集成 | ❌ |
-| `consul` | Consul 集成 | ❌ |
-| **消息总线** |||
-| `config-bus` | 配置事件总线 | ❌ |
-| `nats-bus` | NATS 消息总线 | ❌ |
-| `redis-bus` | Redis 消息总线 | ❌ |
-| **其他** |||
-| `security` | 安全模块 | ❌ |
-| `key` | 密钥管理系统 | ❌ |
-| `modules` | 模块化配置 | ❌ |
-| `context-aware` | 上下文感知配置 | ❌ |
-
-### 🔧 CLI 命令功能依赖
-
-| 命令 | 必需功能 | 可选功能 | 描述 |
-|---------|------------------|------------------|-------------|
-| `inspect` | `cli` | - | 查看配置键及来源 |
-| `validate` | `cli` | - | 验证配置文件 |
-| `diff` | `cli` | - | 比较配置文件 |
-| `export` | `cli` | - | 导出合并后的配置 |
-| `snapshot` | `cli` | `snapshot` | 管理配置快照 |
-
-**注意**：`cli` 功能提供用于配置管理的命令行工具。
-
-</td>
-</tr>
-</table>
-
-### <span id="basic-usage">💡 基本用法</span>
-
+### 💡 基本用法
 
 #### 🎬 5 分钟快速入门
 
@@ -354,11 +224,11 @@ debug = true
 
 </details>
 
-### 🎨 三种使用模式
+#### 🎨 三种使用模式
 
 Confers 提供三种灵活的使用模式以满足不同需求：
 
-#### 1️⃣ 简单模式（推荐）
+**1️⃣ 简单模式（推荐）**
 
 适用于大多数应用程序，代码简洁：
 
@@ -378,7 +248,7 @@ pub struct AppConfig {
 let config = AppConfig::load_sync()?;
 ```
 
-#### 2️⃣ 构建器模式
+**2️⃣ 构建器模式**
 
 更好地控制配置来源：
 
@@ -395,7 +265,7 @@ let name = config.get_string("app.name");
 let port = config.get_int("app.port");
 ```
 
-#### 3️⃣ 依赖注入模式
+**3️⃣ 依赖注入模式**
 
 便于集成到框架中，支持运行时灵活性：
 
@@ -421,91 +291,216 @@ let service = MyService::new(shared_config);
 
 ---
 
-## <span id="documentation">📚 文档</span>
+## 🎨 特性标志
 
-<table style="width:100%; max-width: 800px">
+### 📦 功能预设
+
+| 预设 | 包含功能 | 使用场景 |
+|--------|----------|----------|
+| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | 最小化配置加载（无验证、无 CLI） |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
+| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
+| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | 分布式系统 |
+| <span style="color:#5B21B6; padding:4px 8px">full</span>        | 所有功能 | 完整功能集 |
+
+**说明**：默认特性包含 `toml`、`json`、`env`。
+
+### 🎨 功能架构
+
+```mermaid
+graph LR
+    A["<b>配置源</b><br/>文件 • 环境变量 • CLI"] --> B["<b>ConfigLoader</b><br/>核心引擎"]
+    B --> C["<b>验证</b><br/>类型和业务规则"]
+    B --> D["<b>Schema</b><br/>JSON Schema 生成"]
+    B --> E["<b>加密</b><br/>XChaCha20-Poly1305"]
+    B --> F["<b>审计</b><br/>访问日志"]
+    C --> H["<b>应用配置</b><br/>可直接使用"]
+    D --> H
+    E --> H
+    F --> H
+
+    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
+    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
+    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
+```
+
+### 📋 功能矩阵
+
+| 功能 | 默认 | 说明 | 稳定性 |
+| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
+| **格式支持** |         |                                                      |           |
+| `toml`                |   ✅    | TOML 配置文件                             | 稳定    |
+| `json`                |   ✅    | JSON 配置文件                             | 稳定    |
+| `yaml`                |   ❌    | YAML 配置文件                             | 稳定    |
+| `ini`                 |   ❌    | INI 配置文件                              | 稳定    |
+| `env`                 |   ✅    | 环境变量支持                         | 稳定    |
+| `dotenv`              |   ❌    | `.env` 文件支持（`env` 的别名）                 | 稳定    |
+| **核心功能**     |         |                                                      |           |
+| `validation`          |   ❌    | 配置验证（garde）                     | 稳定    |
+| `watch`               |   ❌    | 文件监控和热重载                         | 稳定    |
+| `encryption`          |   ❌    | XChaCha20-Poly1305 加密                        | 稳定    |
+| `cli`                 |   ❌    | 命令行工具（含子命令）                              | 稳定    |
+| `schema`              |   ❌    | JSON Schema 生成                               | 稳定    |
+| `typescript-schema`   |   ❌    | TypeScript 类型生成（`schema` 的别名）       | 稳定    |
+| **高级功能** |         |                                                      |           |
+| `audit`               |   ❌    | 审计日志                                        | 稳定    |
+| `dynamic`             |   ❌    | 动态字段                                       | 稳定    |
+| `progressive-reload`  |   ❌    | 金丝雀/线性渐进发布                                | 稳定    |
+| `migration`           |   ❌    | 配置迁移                              | 稳定    |
+| `snapshot`            |   ❌    | 快照回滚                                    | 稳定    |
+| `interpolation`       |   ❌    | 变量插值                               | 稳定    |
+| **远程源**    |         |                                                      |           |
+| `remote`              |   ❌    | HTTP 轮询                                         | 测试版      |
+| `etcd`                |   ❌    | Etcd v3 集成                             | 测试版      |
+| `consul`              |   ❌    | Consul 集成                             | 测试版      |
+| **消息总线**    |         |                                                      |           |
+| `config-bus`          |   ❌    | 配置事件总线                                     | 稳定    |
+| `nats-bus`            |   ❌    | NATS 集成                                     | 稳定    |
+| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | 稳定    |
+| **安全**    |         |                                                      |           |
+| `security`            |   ❌    | 安全模块（环境变量验证、错误信息清理） | 稳定    |
+| `key`                 |   ❌    | 密钥管理与轮换                          | 稳定    |
+| **上下文与模块** |         |                                                      |           |
+| `context-aware`       |   ❌    | 租户感知配置                           | 稳定    |
+| `modules`             |   ❌    | 模块化配置                                | 稳定    |
+
+### 🧩 单独功能说明
+
+| 功能 | 描述 | 默认启用 |
+|---------|-------------|---------|
+| **格式支持** |||
+| `toml` | TOML 格式支持 | ✅ |
+| `json` | JSON 格式支持 | ✅ |
+| `yaml` | YAML 格式支持 | ❌ |
+| `ini` | INI 格式支持 | ❌ |
+| `env` | 环境变量支持 | ✅ |
+| `dotenv` | `.env` 文件支持（`env` 的别名） | ❌ |
+| **核心功能** |||
+| `validation` | 配置验证（garde） | ❌ |
+| `watch` | 文件监控和热重载 | ❌ |
+| `encryption` | XChaCha20-Poly1305 加密 | ❌ |
+| `cli` | 命令行工具 | ❌ |
+| `schema` | JSON Schema 生成 | ❌ |
+| `typescript-schema` | TypeScript 类型生成（`schema` 的别名） | ❌ |
+| **高级功能** |||
+| `audit` | 审计日志 | ❌ |
+| `dynamic` | 动态字段 | ❌ |
+| `progressive-reload` | 渐进式重载 | ❌ |
+| `migration` | 配置迁移 | ❌ |
+| `snapshot` | 快照回滚 | ❌ |
+| `interpolation` | 变量插值 | ❌ |
+| **远程源** |||
+| `remote` | HTTP 轮询 | ❌ |
+| `etcd` | Etcd 集成 | ❌ |
+| `consul` | Consul 集成 | ❌ |
+| **消息总线** |||
+| `config-bus` | 配置事件总线 | ❌ |
+| `nats-bus` | NATS 消息总线 | ❌ |
+| `redis-bus` | Redis 消息总线 | ❌ |
+| **其他** |||
+| `security` | 安全模块 | ❌ |
+| `key` | 密钥管理系统 | ❌ |
+| `modules` | 模块化配置 | ❌ |
+| `context-aware` | 上下文感知配置 | ❌ |
+
+### 🔧 CLI 命令功能依赖
+
+| 命令 | 必需功能 | 可选功能 | 描述 |
+|---------|------------------|------------------|-------------|
+| `inspect` | `cli` | - | 查看配置键及来源 |
+| `validate` | `cli` | - | 验证配置文件 |
+| `diff` | `cli` | - | 比较配置文件 |
+| `export` | `cli` | - | 导出合并后的配置 |
+| `snapshot` | `cli` | `snapshot` | 管理配置快照 |
+
+**注意**：`cli` 功能提供用于配置管理的命令行工具。
+
+### 🎛️ 配置选项
+
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="33%" style="padding: 16px">
-<a href="docs/USER_GUIDE.md" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/book.png" width="48" height="48"><br>
-<b style="color:#1E293B">用户指南</b>
-</div>
-</a>
-<br><span style="color:#64748B">完整使用指南</span>
+<td width="50%" style="padding: 16px">
+
+**基本配置**
+
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[server]
+host = "localhost"
+port = 8080
+
+[features]
+debug = true
+logging = true
+```
+
 </td>
-<td align="center" width="33%" style="padding: 16px">
-<a href="https://docs.rs/confers" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/api.png" width="48" height="48"><br>
-<b style="color:#1E293B">API 参考</b>
-</div>
-</a>
-<br><span style="color:#64748B">完整 API 文档</span>
-</td>
-<td align="center" width="33%" style="padding: 16px">
-<a href="examples/" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#1E293B">示例代码</b>
-</div>
-</a>
-<br><span style="color:#64748B">代码示例</span>
+<td width="50%" style="padding: 16px">
+
+**高级配置**
+
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+[database]
+url = "postgres://localhost/db"
+pool_size = 10
+
+[performance]
+cache_size = 1000
+```
+
 </td>
 </tr>
 </table>
 
-### 📖 更多资源
-
-| 资源 | 描述 |
-|----------|-------------|
-| ❓ [常见问题](docs/FAQ.md) | 常见问题解答 |
-| 📖 [贡献指南](docs/CONTRIBUTING.md) | 代码贡献指南 |
-| 📘 [API 参考](docs/API_REFERENCE.md) | 完整 API 文档 |
-| 📚 [库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目中 |
-
-### 🔄 BrickArchitecture 迁移指南
-
-Confers 遵循 **BrickArchitecture** 错误分离模式：
-
-| 错误类型           | 阶段     | 出现时机     | 示例                                        |
-| ------------------ | -------- | ------------ | ------------------------------------------- |
-| `ConfigConfigError` | 配置阶段 | 初始化时     | 缺失字段、解析错误、验证失败                |
-| `ConfersError`     | 运行时   | 使用时       | 超时、远程不可用、解密失败                  |
-
-**向后兼容：** 现有的 `ConfigError` 和 `ConfigResult<T>` 别名仍然可用。
-
 <details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 迁移示例</summary>
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 所有配置选项</summary>
 
-```rust
-// 旧：所有错误都用 ConfigError
-use confers::ConfigError;
-
-// 新：使用 BrickArchitecture 错误分离
-use confers::{ConfigConfigError, ConfersError};
-
-// 配置阶段 - 使用 ConfigConfigError
-fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
-    use confers::impl_::memory::InMemoryConfig;
-    let config = InMemoryConfig::new_validated(1000)?; // 返回 ConfigConfigError
-    Ok(config)
-}
-
-// 运行时阶段 - 使用 ConfersError
-async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
-    let value = config.get_string("key").await?;  // 返回 ConfersError
-    Ok(())
-}
-```
+| 选项 | 类型 | 默认值 | 描述 |
+|--------|------|---------|-------------|
+| `name` | String | - | 项目名称 |
+| `version` | String | "1.0.0" | 版本号 |
+| `host` | String | "localhost" | 服务器主机 |
+| `port` | u16 | 8080 | 服务器端口 |
+| `debug` | Boolean | false | 启用调试模式 |
+| `workers` | usize | 4 | 工作线程数 |
+| `cache_size` | usize | 1000 | 缓存大小（MB） |
 
 </details>
 
 ---
 
+## 📚 文档
+
+| 文档 | 说明 |
+|------|------|
+| [📖 用户指南](docs/USER_GUIDE.md) | 从安装到进阶的完整使用教程 |
+| [📘 API 参考](docs/API_REFERENCE.md) | 全部公开 API 的详细说明 |
+| [🏗️ 架构文档](docs/ARCHITECTURE.md) | 设计理念与内部实现 |
+| [🔒 安全文档](docs/SECURITY.md) | 安全设计与最佳实践 |
+| [❓ FAQ](docs/FAQ.md) | 常见问题解答 |
+| [📈 性能优化指南](docs/PERFORMANCE.md) | 基准测试说明与性能优化建议 |
+| [🧭 宏配置指南](docs/CONFIG_MACRO_GUIDE.md) | `Config` 派生宏与属性的完整用法 |
+| [📚 库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目中 |
+| [📋 更新日志](docs/CHANGELOG.md) | 每个版本的变更记录 |
+| [🤝 贡献指南](docs/CONTRIBUTING.md) | 如何参与项目开发 |
+| [📦 在线 API 文档](https://docs.rs/confers) | docs.rs 自动生成的最新文档 |
+
 ---
 
-## <span id="examples">💻 示例</span>
+## 💻 示例
 
 ### 🗂️ 示例目录
 
@@ -625,7 +620,9 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ---
 
-## <span id="architecture">🏗️ 架构设计</span>
+## 🏗️ 架构
+
+> 完整的架构设计说明见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
 
 ### 🏗️ 系统架构
 
@@ -677,77 +674,83 @@ graph TB
 | **加密存储** | XChaCha20-Poly1305 加密存储 | ✅ 稳定 |
 | **配置对比** | 多种输出格式 | ✅ 稳定 |
 
----
+### 🔄 BrickArchitecture 迁移指南
 
-## <span id="configuration">⚙️ 配置选项</span>
+Confers 遵循 **BrickArchitecture** 错误分离模式：
 
-### 🎛️ 配置选项
+| 错误类型           | 阶段     | 出现时机     | 示例                                        |
+| ------------------ | -------- | ------------ | ------------------------------------------- |
+| `ConfigConfigError` | 配置阶段 | 初始化时     | 缺失字段、解析错误、验证失败                |
+| `ConfersError`     | 运行时   | 使用时       | 超时、远程不可用、解密失败                  |
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-**基本配置**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "localhost"
-port = 8080
-
-[features]
-debug = true
-logging = true
-```
-
-</td>
-<td width="50%" style="padding: 16px">
-
-**高级配置**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "0.0.0.0"
-port = 8080
-workers = 4
-
-[database]
-url = "postgres://localhost/db"
-pool_size = 10
-
-[performance]
-cache_size = 1000
-```
-
-</td>
-</tr>
-</table>
+**向后兼容：** 现有的 `ConfigError` 和 `ConfigResult<T>` 别名仍然可用。
 
 <details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 所有配置选项</summary>
+<summary style="cursor:pointer; font-weight:600; color:#166534">📖 迁移示例</summary>
 
-| 选项 | 类型 | 默认值 | 描述 |
-|--------|------|---------|-------------|
-| `name` | String | - | 项目名称 |
-| `version` | String | "1.0.0" | 版本号 |
-| `host` | String | "localhost" | 服务器主机 |
-| `port` | u16 | 8080 | 服务器端口 |
-| `debug` | Boolean | false | 启用调试模式 |
-| `workers` | usize | 4 | 工作线程数 |
-| `cache_size` | usize | 1000 | 缓存大小（MB） |
+```rust
+// 旧：所有错误都用 ConfigError
+use confers::ConfigError;
+
+// 新：使用 BrickArchitecture 错误分离
+use confers::{ConfigConfigError, ConfersError};
+
+// 配置阶段 - 使用 ConfigConfigError
+fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
+    use confers::impl_::memory::InMemoryConfig;
+    let config = InMemoryConfig::new_validated(1000)?; // 返回 ConfigConfigError
+    Ok(config)
+}
+
+// 运行时阶段 - 使用 ConfersError
+async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
+    let value = config.get_string("key").await?;  // 返回 ConfersError
+    Ok(())
+}
+```
 
 </details>
 
 ---
 
-## <span id="testing">🧪 测试</span>
+## 🤖 CLI 工具
+
+Confers 提供独立的命令行工具 `confers` 用于配置管理：
+
+### 安装 CLI 工具
+
+```bash
+cargo install confers
+```
+
+### 基本命令
+
+```bash
+# 查看帮助
+confers --help
+
+# 查看配置 - 列出所有配置键及其来源
+confers --config config.toml inspect
+
+# 验证配置文件
+confers --config config.toml validate
+
+# 比较配置文件
+confers diff --base config1.toml --overlay config2.toml
+
+# 导出合并后的配置
+confers --config config.toml export --format json
+
+# 管理配置快照
+confers --config config.toml snapshot list
+confers --config config.toml snapshot diff --latest 2
+```
+
+**注意**：CLI 工具需要启用 `cli` 特性。
+
+---
+
+## 🧪 测试
 
 ### 🎯 测试覆盖率
 
@@ -784,7 +787,7 @@ cargo test test_name
 
 ---
 
-## <span id="performance">📊 性能</span>
+## 📊 性能
 
 ### ⚡ 基准测试结果
 
@@ -816,11 +819,15 @@ cargo bench --bench concurrent_access_bench
 
 </details>
 
+更详细的基准测试说明与性能优化建议，请参阅 [📈 性能优化指南](docs/PERFORMANCE.md)。
+
 ---
 
-## <span id="security">🔒 安全</span>
+## 🔒 安全
 
 ### 🛡️ 安全特性
+
+完整的安全政策、漏洞报告流程与安全最佳实践，请参阅 [🔒 安全文档](docs/SECURITY.md)。
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -906,8 +913,7 @@ let audit = AuditConfig::new().enable_sensitive_field_tracking();
 
 ---
 
-## <span id="roadmap">🗺️ 开发路线图</span>
-
+## 🗺️ 开发路线图
 
 ### 🎯 开发路线图
 
@@ -987,8 +993,9 @@ gantt
 
 ---
 
-## <span id="contributing">🤝 参与贡献</span>
+## 🤝 参与贡献
 
+详细的贡献流程、开发环境准备与代码规范，请参阅 [🤝 贡献指南](docs/CONTRIBUTING.md)。
 
 ### 💖 感谢所有贡献者！
 
@@ -1049,17 +1056,27 @@ gantt
 
 ---
 
-## <span id="license">📄 许可证</span>
+## 📋 更新日志
 
+完整版本历史请参阅 [📋 更新日志](docs/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式）。
 
-本项目采用 **MIT 许可证**：
+### 🕘 最近版本
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE-MIT)
+| 版本 | 发布日期 | 主要变更 |
+|------|----------|----------|
+| v0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时特性开关；修复 SSRF 白名单绕过、TLS 版本比较等多项问题 |
+| v0.5.0 | 2026-08-04 | 精简 `ConfigBuilder`（移除 6 个无效方法）；新增熔断器（Circuit Breaker）；增强密钥熵值校验与错误信息清理 |
+| v0.4.0 | 2026-07-03 | 错误类型分离（`ConfigConfigError` / `ConfersError`）；`SecureString` 不再实现 `Clone`；修复插值嵌套默认值解析等问题 |
 
 ---
 
-## <span id="acknowledgments">🙏 致谢</span>
+## 📄 许可证
 
+本项目基于 [MIT 许可证](LICENSE) 发布。
+
+---
+
+## 🙏 致谢
 
 ### 🌟 基于优秀工具构建
 
@@ -1110,7 +1127,6 @@ gantt
 
 ## 📞 联系与支持
 
-
 <table style="width:100%; max-width: 600px">
 <tr>
 <td align="center" width="33%">
@@ -1143,24 +1159,17 @@ gantt
 </tr>
 </table>
 
-
 ---
 
 ## ⭐ Star 历史
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
----
-
 ### 💝 支持本项目
 
 如果您觉得这个项目有用，请考虑给它一个 ⭐️！
 
 **由 Kirky.X 用 ❤️ 构建**
-
----
-
-**[⬆ 返回顶部](#top)**
 
 ---
 

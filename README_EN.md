@@ -1,63 +1,22 @@
-<span id="top"></span>
-
-<div align="right">
-
-[中文](README.md) | [**English**](README_EN.md)
-
-</div>
-
 <div align="center">
 
-<img src="docs/image/confers.png" alt="Confers Logo" width="200" style="margin-bottom: 16px">
+<img src="docs/assets/confers.png" alt="Confers Logo" width="200">
 
-<p>
-  <!-- CI/CD Status -->
-  <a href="https://github.com/Kirky-X/confers/actions/workflows/ci.yml">
-    <img src="https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg" alt="CI Status" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Version -->
-  <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/v/confers.svg" alt="Version" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Documentation -->
-  <a href="https://docs.rs/confers">
-    <img src="https://docs.rs/confers/badge.svg" alt="Documentation" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Downloads -->
-  <a href="https://crates.io/crates/confers">
-    <img src="https://img.shields.io/crates/d/confers.svg" alt="Downloads" style="display:inline; margin:0 4px">
-  </a>
-  <!-- License -->
-  <a href="https://github.com/Kirky-X/confers/blob/main/LICENSE">
-    <img src="https://img.shields.io/crates/l/confers.svg" alt="License" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Rust Version -->
-  <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.88+-orange.svg" alt="Rust 1.88+" style="display:inline; margin:0 4px">
-  </a>
-  <!-- Coverage -->
-  <a href="https://codecov.io/gh/Kirky-X/confers">
-    <img src="https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg" alt="Coverage" style="display:inline; margin:0 4px">
-  </a>
-</p>
+[![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
 
-<p align="center">
-  <strong>A production-ready Rust configuration library with zero boilerplate</strong>
-</p>
+**[中文](README.md)** | English
 
-<p align="center">
-  <a href="#features" style="color:#3B82F6">✨ Features</a> •
-  <a href="#quick-start" style="color:#3B82F6">🚀 Quick Start</a> •
-  <a href="#documentation" style="color:#3B82F6">📚 Documentation</a> •
-  <a href="#examples" style="color:#3B82F6">💻 Examples</a> •
-  <a href="#contributing" style="color:#3B82F6">🤝 Contributing</a>
-</p>
+**A production-ready Rust configuration library with zero boilerplate**
+
+[✨ Features](#-features) • [🚀 Quick Start](#-quick-start) • [📚 Documentation](#-documentation) • [💻 Examples](#-examples) • [🤝 Contributing](#-contributing)
 
 </div>
 
 ---
 
 <!-- Hero Section -->
+
+<div align="center" style="padding: 32px; margin: 24px 0">
 
 ### 🎯 Zero-Boilerplate Configuration Management
 
@@ -67,6 +26,8 @@ Confers provides a **declarative approach** to configuration management with:
 | :-----------------: | :----------------: | :------------------------------: | :----------------: |
 | Compile-time checks | Hot reload support |    Sensitive data protection     | etcd, Consul, HTTP |
 
+</div>
+
 ---
 
 ## 📋 Table of Contents
@@ -74,27 +35,32 @@ Confers provides a **declarative approach** to configuration management with:
 <details open style="padding:16px">
 <summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (Click to expand)</summary>
 
-- [✨ Features](#features)
-- [🚀 Quick Start](#quick-start)
-  - [📦 Installation](#installation)
-  - [💡 Basic Usage](#basic-usage)
-- [📚 Documentation](#documentation)
-- [💻 Examples](#examples)
-- [🏗️ Architecture](#architecture)
-- [⚙️ Configuration](#configuration)
-- [🧪 Testing](#testing)
-- [📊 Performance](#performance)
-- [🔒 Security](#security)
-- [🗺️ Roadmap](#roadmap)
-- [🤝 Contributing](#contributing)
-- [📄 License](#license)
-- [🙏 Acknowledgments](#acknowledgments)
+- [📋 Table of Contents](#-table-of-contents)
+- [✨ Features](#-features)
+- [🚀 Quick Start](#-quick-start)
+  - [📦 Installation](#-installation)
+  - [💡 Basic Usage](#-basic-usage)
+- [🎨 Feature Flags](#-feature-flags)
+- [📚 Documentation](#-documentation)
+- [💻 Examples](#-examples)
+- [🏗️ Architecture](#️-architecture)
+- [🔧 CLI Tool](#-cli-tool)
+- [🧪 Testing](#-testing)
+- [📊 Performance](#-performance)
+- [🔒 Security](#-security)
+- [🗺️ Roadmap](#️-roadmap)
+- [🤝 Contributing](#-contributing)
+- [📋 Changelog](#-changelog)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
+- [📞 Contact & Support](#-contact--support)
+- [⭐ Star History](#-star-history)
 
 </details>
 
 ---
 
-## <span id="features">✨ Features</span>
+## ✨ Features
 
 | 🎯 Core Features | ⚡ Optional Features |
 | :--------------- | :------------------- |
@@ -134,125 +100,11 @@ Confers provides a **declarative approach** to configuration management with:
 </tr>
 </table>
 
-### 📦 Feature Presets
-
-| Preset                                                          | Features                                                                                                                                                     | Use Case                              |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| <span style="color:#166534; padding:4px 8px">minimal</span>     | `env`, `json`                                                                                                                                                | Environment variables + JSON          |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation`                                                                                                                          | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
-| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit`                                                                 | Distributed systems                   |
-| <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
-
-**Note:** Default features include `toml`, `json`, `env`.
-
-### 🎨 Feature Architecture
-
-```mermaid
-graph LR
-    A["<b>Configuration Sources</b><br/>Files • Env • CLI"] --> B["<b>ConfigLoader</b><br/>Core Engine"]
-    B --> C["<b>Validation</b><br/>Type & Business Rules"]
-    B --> D["<b>Schema</b><br/>JSON Schema Gen"]
-    B --> E["<b>Encryption</b><br/>XChaCha20-Poly1305"]
-    B --> F["<b>Audit</b><br/>Access Logs"]
-    C --> H["<b>Application Config</b><br/>Ready to Use"]
-    D --> H
-    E --> H
-    F --> H
-
-    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
-    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
-    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
-```
-
-### 📋 Feature Matrix
-
-| Feature               | Default | Description                                          | Stability |
-| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
-| **Format Support**    |         |                                                      |           |
-| `toml`                |   ✅    | TOML configuration files                             | Stable    |
-| `json`                |   ✅    | JSON configuration files                             | Stable    |
-| `yaml`                |   ❌    | YAML configuration files                             | Stable    |
-| `ini`                 |   ❌    | INI configuration files                              | Stable    |
-| `env`                 |   ✅    | Environment variable support                         | Stable    |
-| `dotenv`              |   ❌    | `.env` file support (alias of `env`)                 | Stable    |
-| **Core Features**     |         |                                                      |           |
-| `validation`          |   ❌    | Configuration validation (garde)                     | Stable    |
-| `watch`               |   ❌    | File watching and hot reload                         | Stable    |
-| `encryption`          |   ❌    | XChaCha20-Poly1305 encryption                        | Stable    |
-| `cli`                 |   ❌    | CLI tool with commands                               | Stable    |
-| `schema`              |   ❌    | JSON Schema generation                               | Stable    |
-| `typescript-schema`   |   ❌    | TypeScript type generation (alias of `schema`)       | Stable    |
-| **Advanced Features** |         |                                                      |           |
-| `audit`               |   ❌    | Audit logging                                        | Stable    |
-| `dynamic`             |   ❌    | Dynamic fields                                       | Stable    |
-| `progressive-reload`  |   ❌    | Canary/linear rollout                                | Stable    |
-| `migration`           |   ❌    | Configuration migration                              | Stable    |
-| `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
-| `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
-| **Remote Sources**    |         |                                                      |           |
-| `remote`              |   ❌    | HTTP polling                                         | Beta      |
-| `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
-| `consul`              |   ❌    | Consul integration                                   | Beta      |
-| **Message Bus**       |         |                                                      |           |
-| `config-bus`          |   ❌    | Config event bus                                     | Stable    |
-| `nats-bus`            |   ❌    | NATS integration                                     | Stable    |
-| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | Stable    |
-| **Security**          |         |                                                      |           |
-| `security`            |   ❌    | Security module (env validation, error sanitization) | Stable    |
-| `key`                 |   ❌    | Key management and rotation                          | Stable    |
-| **Context & Modules** |         |                                                      |           |
-| `context-aware`       |   ❌    | Tenant-aware configuration                           | Stable    |
-| `modules`             |   ❌    | Modular configuration                                | Stable    |
-
-### 🗂️ Examples Directory
-
-Complete, runnable examples demonstrating all major features. All examples can be found in the [`examples/`](examples/) directory.
-
-| Example                | File                                          | Features             | Description                                                     |
-| :--------------------- | :-------------------------------------------- | :------------------- | :-------------------------------------------------------------- |
-| **basic_usage**        | `examples/src/examples/basic_usage.rs`        | `toml`, `env`        | Basic configuration loading from TOML and environment variables |
-| **hot_reload**         | `examples/src/examples/hot_reload.rs`         | `watch`              | Real-time file monitoring with automatic reload                 |
-| **encryption**         | `examples/src/examples/encryption.rs`         | `encryption`         | Sensitive field encryption with XChaCha20-Poly1305              |
-| **key_rotation**       | `examples/src/examples/key_rotation.rs`       | `key`                | Key lifecycle management and rotation                           |
-| **migration**          | `examples/src/examples/migration.rs`          | `migration`          | Configuration version migration                                 |
-| **dynamic_fields**     | `examples/src/examples/dynamic_fields.rs`     | `dynamic`            | Lock-free dynamic field updates with callbacks                  |
-| **config_groups**      | `examples/src/examples/config_groups.rs`      | `modules`            | Modular configuration groups                                    |
-| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout                |
-| **config_bus**         | `examples/src/examples/config_bus.rs`         | `config-bus`         | Multi-instance config broadcast via NATS/Redis                  |
-| **snapshot**           | `examples/src/examples/snapshot.rs`           | `snapshot`           | Configuration snapshots with diff and rollback                  |
-| **remote_consul**      | `examples/src/examples/remote_consul.rs`      | `consul`             | Remote config from HashiCorp Consul                             |
-| **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
-| **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
-| **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
-| **interpolation**      | `examples/src/examples/interpolation.rs`      | `interpolation`      | Configuration string interpolation with ${VAR} syntax           |
-| **audit**              | `examples/src/examples/audit.rs`              | `audit`              | Audit logging with AuditWriter and AuditEvent                   |
-| **context_aware**      | `examples/src/examples/context_aware.rs`      | `context-aware`      | Context-aware configuration with ContextAwareField              |
-| **security**           | `examples/src/examples/security.rs`           | `security`           | Security features: encryption prefix detection, env validation  |
-| **modules_demo**       | `examples/src/examples/modules_demo.rs`       | `modules`            | Module registry for feature-based configuration loading         |
-| **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
-| **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
-
-```bash
-# Run any example from the examples directory
-cd examples && cargo run --bin basic_usage
-cd examples && cargo run --bin encryption
-cd examples && cargo run --bin full_stack
-
-# Verify all examples compile
-cd examples && ./verify_examples.sh
-```
-
 ---
 
-## <span id="quick-start">🚀 Quick Start</span>
+## 🚀 Quick Start
 
-### <span id="installation">📦 Installation</span>
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="100%" style="padding: 16px">
+### 📦 Installation
 
 #### 🦀 Rust Installation
 
@@ -264,62 +116,7 @@ cd examples && ./verify_examples.sh
 | **CLI with Tools** | `confers = { version = "0.6", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
 | **Full**           | `confers = { version = "0.6", features = ["full"] }`                                  | All features                                      |
 
-**Individual Features:**
-
-| Feature               | Description                      | Default |
-| --------------------- | -------------------------------- | ------- |
-| **Format Support**    |                                  |         |
-| `toml`                | TOML format support              | ✅      |
-| `json`                | JSON format support              | ✅      |
-| `yaml`                | YAML format support              | ❌      |
-| `ini`                 | INI format support               | ❌      |
-| `env`                 | Environment variable support     | ✅      |
-| `dotenv`              | `.env` file support (alias of `env`) | ❌      |
-| **Core Features**     |                                  |         |
-| `validation`          | Configuration validation (garde) | ❌      |
-| `watch`               | File watching and hot reload     | ❌      |
-| `encryption`          | XChaCha20-Poly1305 encryption    | ❌      |
-| `cli`                 | Command-line tool                | ❌      |
-| `schema`              | JSON Schema generation           | ❌      |
-| `typescript-schema`   | TypeScript type generation (alias of `schema`) | ❌      |
-| **Advanced Features** |                                  |         |
-| `audit`               | Audit logging                    | ❌      |
-| `dynamic`             | Dynamic fields                   | ❌      |
-| `progressive-reload`  | Progressive reload               | ❌      |
-| `migration`           | Configuration migration          | ❌      |
-| `snapshot`            | Snapshot rollback                | ❌      |
-| `interpolation`       | Variable interpolation           | ❌      |
-| **Remote Sources**    |                                  |         |
-| `remote`              | HTTP polling                     | ❌      |
-| `etcd`                | Etcd integration                 | ❌      |
-| `consul`              | Consul integration               | ❌      |
-| **Message Bus**       |                                  |         |
-| `config-bus`          | Configuration event bus          | ❌      |
-| `nats-bus`            | NATS message bus                 | ❌      |
-| `redis-bus`           | Redis message bus                | ❌      |
-| **Others**            |                                  |         |
-| `security`            | Security module                  | ❌      |
-| `key`                 | Key management system            | ❌      |
-| `modules`             | Modular configuration            | ❌      |
-| `context-aware`       | Context-aware configuration      | ❌      |
-
-### 🔧 CLI Command Feature Dependencies
-
-| Command    | Required Features | Optional Features | Description                  |
-| ---------- | ----------------- | ----------------- | ---------------------------- |
-| `inspect`    | `cli`             | -                 | List all configuration keys with sources            |
-| `export`     | `cli`             | -                 | Export resolved configuration                       |
-| `validate`   | `cli`             | -                 | Validate configuration files                        |
-| `diff`       | `cli`             | -                 | Compare configuration files                         |
-| `snapshot`   | `cli`             | -                 | Snapshot rollback (list/diff/prune)                 |
-
-**Note**: The `cli` feature provides command-line tools for configuration management.
-
-</td>
-</tr>
-</table>
-
-### <span id="basic-usage">💡 Basic Usage</span>
+### 💡 Basic Usage
 
 #### 🎬 5-Minute Quick Start
 
@@ -427,11 +224,11 @@ debug = true
 
 </details>
 
-### 🎨 Three Usage Patterns
+#### 🎨 Three Usage Patterns
 
 Confers provides three flexible usage patterns to suit different needs:
 
-#### 1️⃣ Simple Mode (Recommended)
+**1️⃣ Simple Mode (Recommended)**
 
 Perfect for most applications with minimal boilerplate:
 
@@ -451,7 +248,7 @@ pub struct AppConfig {
 let config = AppConfig::load_sync()?;
 ```
 
-#### 2️⃣ Builder Mode
+**2️⃣ Builder Mode**
 
 For more control over configuration sources:
 
@@ -468,7 +265,7 @@ let name = config.get_string("app.name");
 let port = config.get_int("app.port");
 ```
 
-#### 3️⃣ DI Mode (Dependency Injection)
+**3️⃣ DI Mode (Dependency Injection)**
 
 For integration into frameworks and runtime flexibility:
 
@@ -494,126 +291,254 @@ let service = MyService::new(shared_config);
 
 ---
 
-## <span id="documentation">📚 Documentation</span>
+## 🎨 Feature Flags
 
-<table style="width:100%; max-width: 800px">
+### 📦 Feature Presets
+
+| Preset                                                          | Features                                                                                                                                                     | Use Case                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| <span style="color:#166534; padding:4px 8px">minimal</span>     | `env`, `json`                                                                                                                                                | Environment variables + JSON          |
+| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation`                                                                                                                          | **Recommended for most applications** |
+| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
+| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
+| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit`                                                                 | Distributed systems                   |
+| <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
+
+**Note:** Default features include `toml`, `json`, `env`.
+
+### 🎨 Feature Architecture
+
+```mermaid
+graph LR
+    A["<b>Configuration Sources</b><br/>Files • Env • CLI"] --> B["<b>ConfigLoader</b><br/>Core Engine"]
+    B --> C["<b>Validation</b><br/>Type & Business Rules"]
+    B --> D["<b>Schema</b><br/>JSON Schema Gen"]
+    B --> E["<b>Encryption</b><br/>XChaCha20-Poly1305"]
+    B --> F["<b>Audit</b><br/>Access Logs"]
+    C --> H["<b>Application Config</b><br/>Ready to Use"]
+    D --> H
+    E --> H
+    F --> H
+
+    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
+    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
+    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
+```
+
+### 📋 Feature Matrix
+
+| Feature               | Default | Description                                          | Stability |
+| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
+| **Format Support**    |         |                                                      |           |
+| `toml`                |   ✅    | TOML configuration files                             | Stable    |
+| `json`                |   ✅    | JSON configuration files                             | Stable    |
+| `yaml`                |   ❌    | YAML configuration files                             | Stable    |
+| `ini`                 |   ❌    | INI configuration files                              | Stable    |
+| `env`                 |   ✅    | Environment variable support                         | Stable    |
+| `dotenv`              |   ❌    | `.env` file support (alias of `env`)                 | Stable    |
+| **Core Features**     |         |                                                      |           |
+| `validation`          |   ❌    | Configuration validation (garde)                     | Stable    |
+| `watch`               |   ❌    | File watching and hot reload                         | Stable    |
+| `encryption`          |   ❌    | XChaCha20-Poly1305 encryption                        | Stable    |
+| `cli`                 |   ❌    | CLI tool with commands                               | Stable    |
+| `schema`              |   ❌    | JSON Schema generation                               | Stable    |
+| `typescript-schema`   |   ❌    | TypeScript type generation (alias of `schema`)       | Stable    |
+| **Advanced Features** |         |                                                      |           |
+| `audit`               |   ❌    | Audit logging                                        | Stable    |
+| `dynamic`             |   ❌    | Dynamic fields                                       | Stable    |
+| `progressive-reload`  |   ❌    | Canary/linear rollout                                | Stable    |
+| `migration`           |   ❌    | Configuration migration                              | Stable    |
+| `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
+| `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
+| **Remote Sources**    |         |                                                      |           |
+| `remote`              |   ❌    | HTTP polling                                         | Beta      |
+| `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
+| `consul`              |   ❌    | Consul integration                                   | Beta      |
+| **Message Bus**       |         |                                                      |           |
+| `config-bus`          |   ❌    | Config event bus                                     | Stable    |
+| `nats-bus`            |   ❌    | NATS integration                                     | Stable    |
+| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | Stable    |
+| **Security**          |         |                                                      |           |
+| `security`            |   ❌    | Security module (env validation, error sanitization) | Stable    |
+| `key`                 |   ❌    | Key management and rotation                          | Stable    |
+| **Context & Modules** |         |                                                      |           |
+| `context-aware`       |   ❌    | Tenant-aware configuration                           | Stable    |
+| `modules`             |   ❌    | Modular configuration                                | Stable    |
+
+### 🧩 Individual Features
+
+| Feature               | Description                      | Default |
+| --------------------- | -------------------------------- | ------- |
+| **Format Support**    |                                  |         |
+| `toml`                | TOML format support              | ✅      |
+| `json`                | JSON format support              | ✅      |
+| `yaml`                | YAML format support              | ❌      |
+| `ini`                 | INI format support               | ❌      |
+| `env`                 | Environment variable support     | ✅      |
+| `dotenv`              | `.env` file support (alias of `env`) | ❌      |
+| **Core Features**     |                                  |         |
+| `validation`          | Configuration validation (garde) | ❌      |
+| `watch`               | File watching and hot reload     | ❌      |
+| `encryption`          | XChaCha20-Poly1305 encryption    | ❌      |
+| `cli`                 | Command-line tool                | ❌      |
+| `schema`              | JSON Schema generation           | ❌      |
+| `typescript-schema`   | TypeScript type generation (alias of `schema`) | ❌      |
+| **Advanced Features** |                                  |         |
+| `audit`               | Audit logging                    | ❌      |
+| `dynamic`             | Dynamic fields                   | ❌      |
+| `progressive-reload`  | Progressive reload               | ❌      |
+| `migration`           | Configuration migration          | ❌      |
+| `snapshot`            | Snapshot rollback                | ❌      |
+| `interpolation`       | Variable interpolation           | ❌      |
+| **Remote Sources**    |                                  |         |
+| `remote`              | HTTP polling                     | ❌      |
+| `etcd`                | Etcd integration                 | ❌      |
+| `consul`              | Consul integration               | ❌      |
+| **Message Bus**       |                                  |         |
+| `config-bus`          | Configuration event bus          | ❌      |
+| `nats-bus`            | NATS message bus                 | ❌      |
+| `redis-bus`           | Redis message bus                | ❌      |
+| **Others**            |                                  |         |
+| `security`            | Security module                  | ❌      |
+| `key`                 | Key management system            | ❌      |
+| `modules`             | Modular configuration            | ❌      |
+| `context-aware`       | Context-aware configuration      | ❌      |
+
+### 🔧 CLI Command Feature Dependencies
+
+| Command    | Required Features | Optional Features | Description                  |
+| ---------- | ----------------- | ----------------- | ---------------------------- |
+| `inspect`    | `cli`             | -                 | List all configuration keys with sources            |
+| `export`     | `cli`             | -                 | Export resolved configuration                       |
+| `validate`   | `cli`             | -                 | Validate configuration files                        |
+| `diff`       | `cli`             | -                 | Compare configuration files                         |
+| `snapshot`   | `cli`             | -                 | Snapshot rollback (list/diff/prune)                 |
+
+**Note**: The `cli` feature provides command-line tools for configuration management.
+
+### 🎛️ Configuration Options
+
+<table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="33%" style="padding: 16px">
-<a href="docs/USER_GUIDE.md" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/book.png" width="48" height="48"><br>
-<b style="color:#1E293B">User Guide</b>
-</div>
-</a>
-<br><span style="color:#64748B">Complete usage guide</span>
+<td width="50%" style="padding: 16px">
+
+**Basic Configuration**
+
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[server]
+host = "localhost"
+port = 8080
+
+[features]
+debug = true
+logging = true
+```
+
 </td>
-<td align="center" width="33%" style="padding: 16px">
-<a href="https://docs.rs/confers" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/api.png" width="48" height="48"><br>
-<b style="color:#1E293B">API Reference</b>
-</div>
-</a>
-<br><span style="color:#64748B">Complete API docs</span>
-</td>
-<td align="center" width="33%" style="padding: 16px">
-<a href="examples/" style="text-decoration:none">
-<div style="padding: 24px; transition: transform 0.2s">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b style="color:#1E293B">Examples</b>
-</div>
-</a>
-<br><span style="color:#64748B">Code examples</span>
+<td width="50%" style="padding: 16px">
+
+**Advanced Configuration**
+
+```toml
+[project]
+name = "my-app"
+version = "1.0.0"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+[database]
+url = "postgres://localhost/db"
+pool_size = 10
+
+[performance]
+cache_size = 1000
+```
+
 </td>
 </tr>
 </table>
 
-### 📖 Additional Resources
-
-| Resource                                                    | Description                                     |
-| ----------------------------------------------------------- | ----------------------------------------------- |
-| ❓ [FAQ](docs/FAQ.md)                                       | Frequently asked questions                      |
-| 📖 [Contributing Guide](docs/CONTRIBUTING.md)               | Code contribution guidelines                    |
-| 📘 [API Reference](docs/API_REFERENCE.md)                   | Complete API documentation                      |
-| 📚 [Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
-
-### 🔄 BrickArchitecture Migration Guide
-
-Confers now follows **BrickArchitecture** error separation patterns:
-
-| Error Type           | Phase         | When It Occurs      | Example                                        |
-| -------------------- | ------------- | ------------------- | ---------------------------------------------- |
-| `ConfigConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
-| `ConfersError`       | Runtime       | Use time            | Timeout, remote unavailable, decryption failed |
-
-**Backward Compatibility:** Existing `ConfigError` and `ConfigResult<T>` aliases remain available.
-
 <details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Migration Example</summary>
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 All Configuration Options</summary>
 
-```rust
-// OLD: ConfigError for all errors
-use confers::ConfigError;
-
-// NEW: Use BrickArchitecture error separation
-use confers::{ConfigConfigError, ConfersError};
-
-// Configuration phase - use ConfigConfigError
-fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
-    use confers::impl_::memory::InMemoryConfig;
-    let config = InMemoryConfig::new_validated(1000)?; // Returns ConfigConfigError
-    Ok(config)
-}
-
-// Runtime phase - use ConfersError
-async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
-    let value = config.get_string("key").await?;  // Returns ConfersError
-    Ok(())
-}
-```
+| Option       | Type    | Default     | Description              |
+| ------------ | ------- | ----------- | ------------------------ |
+| `name`       | String  | -           | Project name             |
+| `version`    | String  | "1.0.0"     | Version number           |
+| `host`       | String  | "localhost" | Server host              |
+| `port`       | u16     | 8080        | Server port              |
+| `debug`      | Boolean | false       | Enable debug mode        |
+| `workers`    | usize   | 4           | Number of worker threads |
+| `cache_size` | usize   | 1000        | Cache size in MB         |
 
 </details>
 
 ---
 
-## 🔧 CLI Tool
+## 📚 Documentation
 
-Confers provides a standalone command-line tool `confers` for configuration management:
-
-### Install CLI Tool
-
-```bash
-cargo install confers
-```
-
-### Basic Commands
-
-```bash
-# View help
-confers --help
-
-# Inspect configuration - list all keys with their sources
-confers --config config.toml inspect
-
-# Validate configuration file
-confers --config config.toml validate
-
-# Compare configuration files
-confers diff --base config1.toml --overlay config2.toml
-
-# Export merged configuration
-confers --config config.toml export --format json
-
-# Manage configuration snapshots
-confers --config config.toml snapshot list
-confers --config config.toml snapshot diff --latest 2
-```
-
-**Note**: The CLI tool requires the `cli` feature to be enabled.
+| Document | Description |
+|------|------|
+| [📖 User Guide](docs/USER_GUIDE.md) | Complete tutorial from installation to advanced usage |
+| [📘 API Reference](docs/API_REFERENCE.md) | Detailed description of all public APIs |
+| [🏗️ Architecture](docs/ARCHITECTURE.md) | Design philosophy and internal implementation |
+| [🔒 Security](docs/SECURITY.md) | Security design and best practices |
+| [❓ FAQ](docs/FAQ.md) | Frequently asked questions |
+| [📈 Performance Guide](docs/PERFORMANCE.md) | Benchmark notes and performance optimization tips |
+| [🧭 Config Macro Guide](docs/CONFIG_MACRO_GUIDE.md) | Complete usage of the `Config` derive macro and its attributes |
+| [📚 Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
+| [📋 Changelog](docs/CHANGELOG.md) | Change records for every release |
+| [🤝 Contributing Guide](docs/CONTRIBUTING.md) | How to participate in project development |
+| [📦 Online API Docs](https://docs.rs/confers) | Latest documentation auto-generated on docs.rs |
 
 ---
 
-## <span id="examples">💻 Examples</span>
+## 💻 Examples
+
+### 🗂️ Examples Directory
+
+Complete, runnable examples demonstrating all major features. All examples can be found in the [`examples/`](examples/) directory.
+
+| Example                | File                                          | Features             | Description                                                     |
+| :--------------------- | :-------------------------------------------- | :------------------- | :-------------------------------------------------------------- |
+| **basic_usage**        | `examples/src/examples/basic_usage.rs`        | `toml`, `env`        | Basic configuration loading from TOML and environment variables |
+| **hot_reload**         | `examples/src/examples/hot_reload.rs`         | `watch`              | Real-time file monitoring with automatic reload                 |
+| **encryption**         | `examples/src/examples/encryption.rs`         | `encryption`         | Sensitive field encryption with XChaCha20-Poly1305              |
+| **key_rotation**       | `examples/src/examples/key_rotation.rs`       | `key`                | Key lifecycle management and rotation                           |
+| **migration**          | `examples/src/examples/migration.rs`          | `migration`          | Configuration version migration                                 |
+| **dynamic_fields**     | `examples/src/examples/dynamic_fields.rs`     | `dynamic`            | Lock-free dynamic field updates with callbacks                  |
+| **config_groups**      | `examples/src/examples/config_groups.rs`      | `modules`            | Modular configuration groups                                    |
+| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout                |
+| **config_bus**         | `examples/src/examples/config_bus.rs`         | `config-bus`         | Multi-instance config broadcast via NATS/Redis                  |
+| **snapshot**           | `examples/src/examples/snapshot.rs`           | `snapshot`           | Configuration snapshots with diff and rollback                  |
+| **remote_consul**      | `examples/src/examples/remote_consul.rs`      | `consul`             | Remote config from HashiCorp Consul                             |
+| **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
+| **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
+| **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
+| **interpolation**      | `examples/src/examples/interpolation.rs`      | `interpolation`      | Configuration string interpolation with ${VAR} syntax           |
+| **audit**              | `examples/src/examples/audit.rs`              | `audit`              | Audit logging with AuditWriter and AuditEvent                   |
+| **context_aware**      | `examples/src/examples/context_aware.rs`      | `context-aware`      | Context-aware configuration with ContextAwareField              |
+| **security**           | `examples/src/examples/security.rs`           | `security`           | Security features: encryption prefix detection, env validation  |
+| **modules_demo**       | `examples/src/examples/modules_demo.rs`       | `modules`            | Module registry for feature-based configuration loading         |
+| **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
+| **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
+
+```bash
+# Run any example from the examples directory
+cd examples && cargo run --bin basic_usage
+cd examples && cargo run --bin encryption
+cd examples && cargo run --bin full_stack
+
+# Verify all examples compile
+cd examples && ./verify_examples.sh
+```
 
 ### 💡 Real-World Examples
 
@@ -695,7 +620,9 @@ fn advanced_example() -> anyhow::Result<()> {
 
 ---
 
-## <span id="architecture">🏗️ Architecture</span>
+## 🏗️ Architecture
+
+> See the [🏗️ Architecture doc](docs/ARCHITECTURE.md) for the full design document.
 
 ### 🏗️ System Architecture
 
@@ -747,77 +674,83 @@ graph TB
 | **Encrypted Storage**        | XChaCha20-Poly1305 encrypted storage  | ✅ Stable |
 | **Configuration Diff**       | Multiple output formats               | ✅ Stable |
 
----
+### 🔄 BrickArchitecture Migration Guide
 
-## <span id="configuration">⚙️ Configuration</span>
+Confers now follows **BrickArchitecture** error separation patterns:
 
-### 🎛️ Configuration Options
+| Error Type           | Phase         | When It Occurs      | Example                                        |
+| -------------------- | ------------- | ------------------- | ---------------------------------------------- |
+| `ConfigConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
+| `ConfersError`       | Runtime       | Use time            | Timeout, remote unavailable, decryption failed |
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-**Basic Configuration**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "localhost"
-port = 8080
-
-[features]
-debug = true
-logging = true
-```
-
-</td>
-<td width="50%" style="padding: 16px">
-
-**Advanced Configuration**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "0.0.0.0"
-port = 8080
-workers = 4
-
-[database]
-url = "postgres://localhost/db"
-pool_size = 10
-
-[performance]
-cache_size = 1000
-```
-
-</td>
-</tr>
-</table>
+**Backward Compatibility:** Existing `ConfigError` and `ConfigResult<T>` aliases remain available.
 
 <details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 All Configuration Options</summary>
+<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Migration Example</summary>
 
-| Option       | Type    | Default     | Description              |
-| ------------ | ------- | ----------- | ------------------------ |
-| `name`       | String  | -           | Project name             |
-| `version`    | String  | "1.0.0"     | Version number           |
-| `host`       | String  | "localhost" | Server host              |
-| `port`       | u16     | 8080        | Server port              |
-| `debug`      | Boolean | false       | Enable debug mode        |
-| `workers`    | usize   | 4           | Number of worker threads |
-| `cache_size` | usize   | 1000        | Cache size in MB         |
+```rust
+// OLD: ConfigError for all errors
+use confers::ConfigError;
+
+// NEW: Use BrickArchitecture error separation
+use confers::{ConfigConfigError, ConfersError};
+
+// Configuration phase - use ConfigConfigError
+fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
+    use confers::impl_::memory::InMemoryConfig;
+    let config = InMemoryConfig::new_validated(1000)?; // Returns ConfigConfigError
+    Ok(config)
+}
+
+// Runtime phase - use ConfersError
+async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
+    let value = config.get_string("key").await?;  // Returns ConfersError
+    Ok(())
+}
+```
 
 </details>
 
 ---
 
-## <span id="testing">🧪 Testing</span>
+## 🔧 CLI Tool
+
+Confers provides a standalone command-line tool `confers` for configuration management:
+
+### Install CLI Tool
+
+```bash
+cargo install confers
+```
+
+### Basic Commands
+
+```bash
+# View help
+confers --help
+
+# Inspect configuration - list all keys with their sources
+confers --config config.toml inspect
+
+# Validate configuration file
+confers --config config.toml validate
+
+# Compare configuration files
+confers diff --base config1.toml --overlay config2.toml
+
+# Export merged configuration
+confers --config config.toml export --format json
+
+# Manage configuration snapshots
+confers --config config.toml snapshot list
+confers --config config.toml snapshot diff --latest 2
+```
+
+**Note**: The CLI tool requires the `cli` feature to be enabled.
+
+---
+
+## 🧪 Testing
 
 ### 🎯 Test Coverage
 
@@ -854,7 +787,7 @@ cargo test test_name
 
 ---
 
-## <span id="performance">📊 Performance</span>
+## 📊 Performance
 
 ### ⚡ Benchmark Results
 
@@ -886,11 +819,15 @@ cargo bench --bench concurrent_access_bench
 
 </details>
 
+For detailed benchmark notes and performance optimization tips, see the [📈 Performance Guide](docs/PERFORMANCE.md).
+
 ---
 
-## <span id="security">🔒 Security</span>
+## 🔒 Security
 
 ### 🛡️ Security Features
+
+For the full security policy, vulnerability reporting process, and security best practices, see the [🔒 Security document](docs/SECURITY.md).
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -976,7 +913,7 @@ Please report security vulnerabilities to: **Kirky-X@outlook.com**
 
 ---
 
-## <span id="roadmap">🗺️ Roadmap</span>
+## 🗺️ Roadmap
 
 ### 🎯 Development Roadmap
 
@@ -1056,7 +993,9 @@ gantt
 
 ---
 
-## <span id="contributing">🤝 Contributing</span>
+## 🤝 Contributing
+
+For the detailed contribution workflow, development environment setup, and code standards, see the [🤝 Contributing Guide](docs/CONTRIBUTING.md).
 
 ### 💖 Thank You to All Contributors!
 
@@ -1115,13 +1054,27 @@ Want to contribute code?<br>
 
 ---
 
-## <span id="license">📄 License</span>
+## 📋 Changelog
 
-This project is licensed under **MIT License**:
+For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format).
+
+### 🕘 Recent Releases
+
+| Version | Date       | Highlights |
+| ------- | ---------- | ---------- |
+| v0.5.1  | 2026-08-06 | New `SecurityValidator` security rules and `FeatureToggleRegistry` runtime feature toggles; fixed SSRF whitelist bypass, TLS version comparison, and more |
+| v0.5.0  | 2026-08-04 | Slimmed `ConfigBuilder` (6 dead methods removed); new Circuit Breaker; enhanced key entropy validation and error message sanitization |
+| v0.4.0  | 2026-07-03 | Error type separation (`ConfigConfigError` / `ConfersError`); `SecureString` no longer implements `Clone`; fixed interpolation nested default-value parsing and more |
 
 ---
 
-## <span id="acknowledgments">🙏 Acknowledgments</span>
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 🙏 Acknowledgments
 
 ### 🌟 Built With Amazing Tools
 
@@ -1210,8 +1163,6 @@ This project is licensed under **MIT License**:
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
----
-
 ### 💝 Support This Project
 
 If you find this project useful, please consider giving it a ⭐️!
@@ -1220,10 +1171,4 @@ If you find this project useful, please consider giving it a ⭐️!
 
 ---
 
-**[⬆ Back to Top](#top)**
-
----
-
 <sub>© 2026 Kirky.X. All rights reserved.</sub>
-
-</div>
