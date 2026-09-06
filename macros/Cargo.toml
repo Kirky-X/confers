@@ -25,5 +25,7 @@ syn = { workspace = true }
 darling = { workspace = true }
 
 [dev-dependencies]
-confers = { path = "..", version = "0.6.0-rc.2" }
+# path-only：publish 时 dev-deps 被剔除、不参与 registry 解析（带 version 会在
+# 主包同名版本发布前形成循环解析失败）；本地联调走 path 取主仓工作区码
+confers = { path = ".." }
 trybuild = { workspace = true }
