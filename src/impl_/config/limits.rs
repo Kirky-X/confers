@@ -132,6 +132,9 @@ impl ConfigLimits {
     /// `max_nesting_depth`, `max_total_fields`, `max_array_length` and
     /// `max_string_length`. The first violation is returned as a
     /// [`ConfigError::InvalidValue`] describing the offending path.
+    ///
+    /// [`AnnotatedValue`]: crate::types::AnnotatedValue
+    /// [`ConfigError::InvalidValue`]: crate::error::ConfigError::InvalidValue
     pub fn validate_value(
         &self,
         value: &crate::types::AnnotatedValue,
