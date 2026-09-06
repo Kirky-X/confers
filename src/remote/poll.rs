@@ -1070,6 +1070,10 @@ mod tests {
     }
 
     /// Real local HTTP interaction with explicit value assertions.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
     #[tokio::test]
     async fn test_poll_live_local_http_asserts_values() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1120,6 +1124,10 @@ mod tests {
 
     /// Real local HTTP interaction: 304 Not Modified must return the cached
     /// value from the first successful poll.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
     #[tokio::test]
     async fn test_poll_live_local_http_etag_cached_304() {
         if super::super::test_support::localhost_proxy_intercept().await {
@@ -1203,6 +1211,10 @@ mod tests {
     /// Sequence: success → threshold failures (500s) → circuit opens and polls
     /// are skipped without touching the network → backoff elapses → HalfOpen
     /// probe succeeds → circuit closes and normal polls resume.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
     #[tokio::test]
     async fn test_poll_live_local_http_circuit_breaker_open_and_recovers() {
         if super::super::test_support::localhost_proxy_intercept().await {
