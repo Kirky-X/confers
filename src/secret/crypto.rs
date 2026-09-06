@@ -65,7 +65,8 @@ impl XChaCha20Crypto {
         // OS 熵源填充（等价旧 OsRng::fill_bytes；getrandom 0.4 显式返回 Result，
         // 失败时不得降级为静默默认值）
         fill_from_os_rng(&mut nonce_bytes).map_err(|_| CryptoError::EncryptionFailed)?;
-        let nonce = XNonce::try_from(&nonce_bytes[..]).map_err(|_| CryptoError::EncryptionFailed)?;
+        let nonce =
+            XNonce::try_from(&nonce_bytes[..]).map_err(|_| CryptoError::EncryptionFailed)?;
 
         let ciphertext = cipher
             .encrypt(&nonce, plaintext)
