@@ -81,7 +81,12 @@ fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<u
         let entry = entry?;
         let path = entry.path();
         if path.extension().map(|e| e.to_string_lossy().to_string()) == Some(ext.to_string()) {
-            let metadata = entry.metadata()?;
+            // 并发 prune 下,列出的文件可能刚被其他调用方删除;跳过即可。
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(ConfigError::IoError(e)),
+            };
             let created_at = metadata
                 .created()
                 .map(DateTime::from)
@@ -103,6 +108,9 @@ fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<u
     for snapshot in snapshots.into_iter().rev().take(to_remove) {
         match std::fs::remove_file(&snapshot.path) {
             Ok(()) => removed += 1,
+            // 并发 save 各自触发 prune 时,同一最旧文件可能已被其他调用方删除;
+            // NotFound 视为清理目标已达成(幂等),不应让本次 save 失败。
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) if first_error.is_none() => first_error = Some(e),
             Err(_) => {} // Additional failures tracked via first_error
         }
