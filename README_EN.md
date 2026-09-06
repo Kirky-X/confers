@@ -1070,7 +1070,7 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT + Commons Clause License. Commercial use requires separate authorization. See [LICENSE](LICENSE).
 
 ---
 
