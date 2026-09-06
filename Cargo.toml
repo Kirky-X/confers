@@ -327,6 +327,41 @@ path = "tests/e2e/modules_e2e.rs"
 required-features = ["modules", "toml"]
 
 [[test]]
+name = "key_e2e"
+path = "tests/e2e/key_e2e.rs"
+required-features = ["key", "encryption"]
+
+[[test]]
+name = "security_rules_e2e"
+path = "tests/e2e/security_rules_e2e.rs"
+required-features = ["security", "security-rules"]
+
+[[test]]
+name = "progressive_e2e"
+path = "tests/e2e/progressive_e2e.rs"
+required-features = ["progressive-reload", "toml"]
+
+[[test]]
+name = "migration_e2e"
+path = "tests/e2e/migration_e2e.rs"
+required-features = ["migration", "toml"]
+
+[[test]]
+name = "context_e2e"
+path = "tests/e2e/context_e2e.rs"
+required-features = ["context-aware"]
+
+[[test]]
+name = "concurrency_e2e"
+path = "tests/e2e/concurrency_e2e.rs"
+required-features = ["watch", "snapshot", "config-bus", "feature-toggle", "progressive-reload", "toml"]
+
+[[test]]
+name = "presets_e2e"
+path = "tests/e2e/presets_e2e.rs"
+# 无 required-features:所有特性组合(含 --no-default-features)都会编译运行,即 PRS-01 门禁。
+
+[[test]]
 name = "schema_e2e"
 path = "tests/e2e/schema_e2e.rs"
 required-features = ["typescript-schema"]
