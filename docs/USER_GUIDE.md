@@ -82,7 +82,7 @@ rustc --version
 
 # 检查 Cargo 版本
 cargo --version
-# 期望输出：cargo 1.88.0（或更高）
+# 期望输出：cargo 1.97.1（或更高）
 ```
 
 </details>

@@ -110,11 +110,11 @@ Confers provides a **declarative approach** to configuration management with:
 
 | Installation Type  | Configuration                                                                           | Use Case                                          |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Default**        | `confers = "0.6"`                                                                     | Includes `toml`, `json`, `env` (default features) |
-| **Minimal**        | `confers = { version = "0.6", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
-| **Recommended**    | `confers = { version = "0.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
-| **CLI with Tools** | `confers = { version = "0.6", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
-| **Full**           | `confers = { version = "0.6", features = ["full"] }`                                  | All features                                      |
+| **Default**        | `confers = "0.6.0-rc.2"`                                                                     | Includes `toml`, `json`, `env` (default features) |
+| **Minimal**        | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
+| **Recommended**    | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
+| **CLI with Tools** | `confers = { version = "0.6.0-rc.2", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
+| **Full**           | `confers = { version = "0.6.0-rc.2", features = ["full"] }`                                  | All features                                      |
 
 ### 💡 Basic Usage
 

@@ -110,11 +110,11 @@ Confers 提供**声明式方法**进行配置管理：
 
 | 安装方式 | 配置方式 | 使用场景 |
 |-------------------|---------------|----------|
-| **默认** | `confers = "0.6"` | 包含 `toml`、`json`、`env`（默认特性） |
-| **最小化** | `confers = { version = "0.6", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
-| **推荐** | `confers = { version = "0.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
-| **CLI 工具** | `confers = { version = "0.6", features = ["cli"] }` | CLI 工具（不含验证/加密） |
-| **完整** | `confers = { version = "0.6", features = ["full"] }` | 所有功能 |
+| **默认** | `confers = "0.6.0-rc.2"` | 包含 `toml`、`json`、`env`（默认特性） |
+| **最小化** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
+| **推荐** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
+| **CLI 工具** | `confers = { version = "0.6.0-rc.2", features = ["cli"] }` | CLI 工具（不含验证/加密） |
+| **完整** | `confers = { version = "0.6.0-rc.2", features = ["full"] }` | 所有功能 |
 
 ### 💡 基本用法
 
