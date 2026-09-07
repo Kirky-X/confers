@@ -828,19 +828,33 @@ mod tests {
     }
 }
 
-// Feature gates cause dead_code warnings for security primitives not yet
-// wired to the public API. Each module is annotated with `#[allow(dead_code)]`
-// as needed.
-#[allow(dead_code)]
+// Security primitives wired to the public API via feature gates.
+// `config_injector` and `input_validation` are gated behind `security-rules`;
+// `secure_string` is gated behind `encryption`.
+#[cfg(feature = "security-rules")]
 pub(crate) mod config_injector;
 pub(crate) mod error_sanitization;
-#[allow(dead_code)]
+#[cfg(feature = "security-rules")]
 pub(crate) mod input_validation;
 #[cfg(feature = "encryption")]
-#[allow(dead_code)]
 pub(crate) mod secure_string;
+
 #[cfg(feature = "encryption")]
 pub use error_sanitization::{
     Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
     SensitiveDataFilter,
+};
+
+// ── Public API re-exports ──────────────────────────────────────────────
+#[cfg(feature = "security-rules")]
+pub use config_injector::{ConfigInjector, ConfigInjectionError, EnvironmentConfig};
+#[cfg(feature = "security-rules")]
+pub use input_validation::{
+    ConfigValidator, ConfigValidatorBuilder, ConfigValidationError, ConfigValidationResult,
+    InputValidator, InputValidationError, SensitiveDataDetector, SensitivityResult,
+};
+#[cfg(feature = "encryption")]
+pub use secure_string::{
+    SensitiveData, SensitivityLevel, SecureString, SecureStringBuilder,
+    allocated_secure_strings, deallocated_secure_strings,
 };

@@ -30,7 +30,6 @@ use reqwest::Client;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::atomic::AtomicU64;
 
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -285,8 +284,6 @@ pub struct HttpPolledSource {
     interval: Duration,
     client: Client,
     format: Option<Format>,
-    #[allow(dead_code)] // reserved for cache invalidation tracking
-    cache_generation: AtomicU64,
     cached: RwLock<Option<AnnotatedValue>>,
     last_etag: ArcSwap<Option<String>>,
     last_modified: ArcSwap<Option<String>>,
@@ -456,7 +453,6 @@ impl HttpPolledSourceBuilder {
             interval: self.interval.unwrap_or(DEFAULT_POLL_INTERVAL),
             client,
             format: self.format,
-            cache_generation: AtomicU64::new(0),
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
@@ -1060,7 +1056,6 @@ mod tests {
             interval: Duration::from_secs(1),
             client: Client::builder().build().expect("client build"),
             format: None,
-            cache_generation: AtomicU64::new(0),
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),

@@ -187,6 +187,8 @@ impl InjectionRateLimiter {
     }
 }
 
+// `GLOBAL_RATE_LIMITER` is used by `inject()` under `#[cfg(not(test))]`;
+// test builds use `TEST_RATE_LIMITER` instead, so allow dead_code for test cfg.
 #[allow(dead_code)]
 /// Global rate limiter instance (enabled by default)
 pub(crate) static GLOBAL_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
