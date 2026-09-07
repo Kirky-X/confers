@@ -42,7 +42,7 @@ license-files = [{ path = "LICENSE", hash = 0x4f94917e }]
 
 [bans]
 multiple-versions = "warn"
-wildcards = "deny"
+wildcards = "warn"  # confers-macros dev-dep 故意 path-only（注释见 macros/Cargo.toml）
 
 [[bans.deny]]
 name = "serde_yaml" # deprecated, use serde_yaml_ng
