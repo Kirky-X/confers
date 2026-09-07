@@ -38,7 +38,7 @@ license-files = [{ path = "LICENSE", hash = 0x4f94917e }]
 [[licenses.clarify]]
 name = "confers-macros"
 expression = "MIT"
-license-files = [{ path = "../LICENSE", hash = 0x4f94917e }]
+license-files = [{ path = "LICENSE", hash = 0x4f94917e }]
 
 [bans]
 multiple-versions = "warn"
