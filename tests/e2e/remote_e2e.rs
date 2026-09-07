@@ -174,6 +174,7 @@ async fn rem10_half_open_probes_then_reopens_on_failure() {
 
 /// ETC-09:写 KV → poll 读到 → 改 KV → poll 读到新值。
 #[tokio::test]
+#[ignore] // 需要 etcd 服务，CI 未配置
 async fn etc09_etcd_kv_changes_reflected_across_polls() {
     assert!(etcd_ready().await, "etcd must be up (compose)");
 
@@ -206,6 +207,7 @@ async fn etc09_etcd_kv_changes_reflected_across_polls() {
 
 /// ETC-10:并发写多个 key 后轮询读取,prefix 树完整。
 #[tokio::test]
+#[ignore] // 需要 etcd 服务，CI 未配置
 async fn etc10_concurrent_kv_writes_yield_complete_prefix_tree() {
     assert!(etcd_ready().await, "etcd must be up (compose)");
 
@@ -241,6 +243,7 @@ async fn etc10_concurrent_kv_writes_yield_complete_prefix_tree() {
 
 /// CSL-07:Consul 写 KV → poll 读到 → 删除 KV → 空配置处理。
 #[tokio::test]
+#[ignore] // 需要 consul 服务，CI 未配置
 async fn csl07_consul_kv_write_poll_delete() {
     assert!(consul_ready().await, "consul must be up (compose)");
 
@@ -300,6 +303,7 @@ async fn csl07_consul_kv_write_poll_delete() {
 
 /// CSL-08:DoS 防护 —— max_kv_entries 超限拒绝。
 #[tokio::test]
+#[ignore] // 需要 consul 服务，CI 未配置
 async fn csl08_max_kv_entries_rejects_oversized_response() {
     assert!(consul_ready().await, "consul must be up (compose)");
 
