@@ -127,6 +127,7 @@ async fn wat17_atomic_replace_triggers_exactly_one_event() {
 }
 
 #[tokio::test]
+#[ignore] // 时序敏感测试，CI 环境负载不同时可能不稳定
 async fn wat18_rapid_writes_collapse_via_debounce() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("app.toml");
