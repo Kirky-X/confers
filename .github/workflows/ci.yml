@@ -1,10 +1,14 @@
+# CI 质量门禁:fmt / clippy / check / test / cross-platform / doc / security / coverage
 name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, develop]
   pull_request:
-    branches: [main, master]
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,9 +17,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-
-permissions:
-  contents: read
 
 jobs:
   fmt:
@@ -57,10 +58,11 @@ jobs:
         run: cargo check --workspace --all-features
 
   test:
-    name: Test
+    name: Test (${{ matrix.features }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         features: ["default", "recommended", "full"]
     steps:
@@ -76,6 +78,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: cargo test --workspace --features ${{ matrix.features }}
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: cross-${{ runner.os }}
+      - name: Build (all features)
+        run: cargo build --workspace --all-features
+      - name: Build (no default features)
+        run: cargo build --workspace --no-default-features
 
   doc:
     name: Documentation
@@ -104,7 +125,7 @@ jobs:
           tool: cargo-audit,cargo-deny
       - name: cargo deny
         run: cargo deny check
-      - name: Run security audit
+      - name: cargo audit
         run: cargo audit
 
   coverage:
@@ -142,18 +163,16 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      actions: write # upload-artifact
+      actions: write
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.97.1
       - uses: Swatinem/rust-cache@v2
       - name: Run benchmarks
         run: |
-          # --benches restricts to criterion targets (harness=false); else libtest rejects --save-baseline
           cargo bench --features dev --benches -- --save-baseline current
       - name: Compare with main branch baseline
         run: |
-          # Try to fetch baseline from main branch
           git fetch origin main --quiet 2>/dev/null || true
           if git rev-parse --verify origin/main &>/dev/null; then
             cargo bench --features dev --benches -- --baseline main 2>&1 | tee bench_compare.txt || true

@@ -2,7 +2,7 @@
 # Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
-  # Rust 依赖更新(Cargo.toml / Cargo.lock)
+  # Rust 依赖更新(Cargo.toml / Cargo.lock)— workspace 根
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
@@ -28,6 +28,7 @@ updates:
       minor-updates:
         update-types:
           - "minor"
+
 
   # GitHub Actions 版本更新
   - package-ecosystem: "github-actions"

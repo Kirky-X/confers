@@ -3,7 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,20 +16,14 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-permissions:
-  contents: write # create-release and upload assets
-
 jobs:
   create-release:
-    name: Create Release
+    name: Create GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v7
       - name: Create GitHub Release
-        id: release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
@@ -34,9 +32,9 @@ jobs:
 
   publish-crates:
     name: Publish to crates.io
+    needs: create-release
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: create-release
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
@@ -64,9 +62,9 @@ jobs:
 
   build-binaries:
     name: Build Binary (${{ matrix.target }})
+    needs: create-release
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    needs: create-release
     strategy:
       matrix:
         include:
