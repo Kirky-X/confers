@@ -4,8 +4,16 @@
 // See LICENSE file in the project root for full license information.
 
 //! NATS-based ConfigBus implementation.
+//!
+//! Every `subscribe()` call creates its own ephemeral JetStream consumer so
+//! that all bus instances receive every published event (broadcast semantics,
+//! see the module-level "Multi-instance configuration change broadcast"
+//! goal). Ephemeral consumers are removed by the NATS server once pull
+//! requests stop arriving, so dropped subscriptions leave no server state.
 
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_nats::jetstream::{self, consumer::DeliverPolicy};
 use async_trait::async_trait;
@@ -14,6 +22,18 @@ use futures_util::{Stream, StreamExt};
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
 use crate::lifecycle::Lifecycle;
+
+/// How long the NATS server may leave a pull consumer idle before removing
+/// it. Must stay comfortably above the 30s pull-request expiry used by
+/// `consumer.messages()` so a slowly-polled subscription is not reaped early,
+/// while still cleaning up consumers of dropped subscriptions.
+const CONSUMER_INACTIVE_THRESHOLD: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Upper bound on how long the events stream retains messages. Subscribers
+/// start at `DeliverPolicy::New`, so old events are never replayed; without a
+/// retention limit the stream would grow without bound over the lifetime of
+/// the deployment.
+const STREAM_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
 pub struct NatsConfigBus {
     client: async_nats::Client,
@@ -70,6 +90,10 @@ impl NatsConfigBus {
             .get_or_create_stream(jetstream::stream::Config {
                 name: self.stream_name.clone(),
                 subjects: vec![self.subject.clone()],
+                // Bound message retention: subscribers start at
+                // `DeliverPolicy::New` and never replay history, so keeping
+                // events longer than `STREAM_MAX_AGE` serves no purpose.
+                max_age: STREAM_MAX_AGE,
                 ..Default::default()
             })
             .await
@@ -81,9 +105,34 @@ impl NatsConfigBus {
         Ok(stream)
     }
 
-    /// Derive a consumer name unique to this bus instance from the stream name.
-    fn consumer_name(&self) -> String {
-        format!("confers-consumer-{}", self.stream_name)
+    /// Build a NATS-safe consumer name unique to a single `subscribe()` call.
+    ///
+    /// A JetStream consumer delivers each message to exactly one consumer, so
+    /// a consumer shared across instances would distribute configuration
+    /// change events instead of broadcasting them. The name embeds the
+    /// subject, the process id, a millisecond timestamp and a per-process
+    /// sequence number, keeping it collision-free across processes and across
+    /// repeated subscriptions.
+    fn subscriber_consumer_name(subject: &str) -> String {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        // Consumer names only allow alphanumeric characters plus `-`/`_`;
+        // map every other character (e.g. `.` in subjects) to `_` and cap the
+        // subject-derived portion to keep names compact.
+        const MAX_SUBJECT_PART: usize = 32;
+        let subject_part: String = subject
+            .chars()
+            .take(MAX_SUBJECT_PART)
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        let timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+        format!(
+            "confers-{subject_part}-pid{}-t{timestamp_ms}-s{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        )
     }
 }
 
@@ -133,6 +182,20 @@ impl ConfigBus for NatsConfigBus {
         // Retry stream + consumer creation to handle transient JetStream
         // errors (e.g. "stream not found") that occur under heavy concurrent
         // load when many streams are created simultaneously.
+        // Each subscription gets its own ephemeral consumer (unique name,
+        // `durable_name: None`): JetStream delivers every message to exactly
+        // one consumer, so a shared consumer would distribute events across
+        // instances instead of broadcasting them. With no durability and a
+        // bounded `inactive_threshold`, the server removes the consumer
+        // automatically once the subscription is dropped.
+        //
+        // `DeliverPolicy::New` matches `InMemoryBus` semantics: subscribers
+        // receive only events published *after* they subscribe. Replaying the
+        // full stream history (`DeliverPolicy::All`) would make a late or
+        // restarting instance re-process every historical change as if it
+        // were current — current configuration state comes from the config
+        // sources, not from replayed events.
+        let consumer_name = Self::subscriber_consumer_name(&self.subject);
         let max_retries = 3u32;
         let (consumer, last_err) = {
             let mut last_err = None;
@@ -141,13 +204,13 @@ impl ConfigBus for NatsConfigBus {
                 match self.ensure_stream().await {
                     Ok(stream) => {
                         match stream
-                            .get_or_create_consumer(
-                                &self.consumer_name(),
-                                jetstream::consumer::pull::Config {
-                                    deliver_policy: DeliverPolicy::All,
-                                    ..Default::default()
-                                },
-                            )
+                            .create_consumer(jetstream::consumer::pull::Config {
+                                deliver_policy: DeliverPolicy::New,
+                                durable_name: None,
+                                name: Some(consumer_name.clone()),
+                                inactive_threshold: CONSUMER_INACTIVE_THRESHOLD,
+                                ..Default::default()
+                            })
                             .await
                         {
                             Ok(c) => {
@@ -215,8 +278,14 @@ impl ConfigBus for NatsConfigBus {
                         }
                     }
                 }
-                Err(_e) => {
-                    // Transport error — continue to next message
+                Err(e) => {
+                    // Transport error while polling the consumer (the bus may
+                    // be offline). The async-nats client reconnects
+                    // automatically; log so the outage is visible instead of
+                    // silently dropping the error.
+                    log::warn!(
+                        "NATS config-bus consumer error (bus may be offline; the client will reconnect automatically): {e}"
+                    );
                     None
                 }
             }
@@ -415,6 +484,32 @@ mod tests {
         ));
     }
 
+    // ==================== consumer naming (no service needed) ====================
+
+    #[test]
+    fn test_subscriber_consumer_name_unique_per_subscription() {
+        let a = NatsConfigBus::subscriber_consumer_name("config.events");
+        let b = NatsConfigBus::subscriber_consumer_name("config.events");
+        assert_ne!(
+            a, b,
+            "every subscribe() call must own its own consumer name"
+        );
+    }
+
+    #[test]
+    fn test_subscriber_consumer_name_is_nats_safe_and_subject_derived() {
+        let name = NatsConfigBus::subscriber_consumer_name("cfg.events.*.>");
+        assert!(
+            name.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            "consumer names must only contain alphanumerics, '-' and '_': {name}"
+        );
+        assert!(
+            name.starts_with("confers-cfg_events_"),
+            "subject must be embedded (sanitized) for debuggability: {name}"
+        );
+    }
+
     // ==================== with_stream_name (not exercised by builder path) ====================
 
     #[tokio::test]
@@ -507,6 +602,39 @@ mod tests {
         assert_eq!(received.source, ev.source);
         assert_eq!(received.changed_keys, ev.changed_keys);
         assert_eq!(received.checksum, ev.checksum);
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_broadcasts_to_all_subscribers() {
+        // JetStream delivers each message to exactly one consumer, so this
+        // only passes when every subscribe() call creates its own consumer
+        // (issue #11: the previous shared durable consumer distributed
+        // events across instances instead of broadcasting them).
+        assert!(
+            nats_ready(),
+            "NATS service required at 127.0.0.1:4222 for this test"
+        );
+        let bus = NatsBusBuilder::new()
+            .url("nats://127.0.0.1:4222")
+            .subject(unique("bcast"))
+            .stream_name(unique("BCAST"))
+            .build()
+            .await
+            .expect("build");
+
+        let mut rx1 = bus.subscribe().await.expect("subscribe 1");
+        let mut rx2 = bus.subscribe().await.expect("subscribe 2");
+
+        let ev = event("bcast-ck");
+        bus.publish(ev.clone()).await.expect("publish");
+
+        for rx in [&mut rx1, &mut rx2] {
+            let received = timeout(Duration::from_secs(5), rx.next())
+                .await
+                .expect("timed out waiting for message")
+                .expect("stream ended");
+            assert_eq!(received.checksum, "bcast-ck");
+        }
     }
 
     #[tokio::test]

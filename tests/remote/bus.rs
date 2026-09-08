@@ -401,36 +401,6 @@ mod redis_bus_tests {
     }
 
     #[tokio::test]
-    async fn test_redis_bus_with_pool_size() {
-        if !redis_ready() {
-            eprintln!("Skipping test: Redis not available");
-            return;
-        }
-        let bus = RedisBusBuilder::new()
-            .url("redis://127.0.0.1:16379")
-            .pool_size(10)
-            .build()
-            .await
-            .expect("pool_size() setter must yield a usable connection");
-        let _ = bus;
-    }
-
-    #[tokio::test]
-    async fn test_redis_bus_pool_size_method() {
-        if !redis_ready() {
-            eprintln!("Skipping test: Redis not available");
-            return;
-        }
-        let bus = RedisBusBuilder::new()
-            .url("redis://127.0.0.1:16379")
-            .pool_size(5)
-            .build()
-            .await
-            .expect("pool_size() setter must yield a usable connection");
-        let _ = bus;
-    }
-
-    #[tokio::test]
     async fn test_redis_bus_start_stop() {
         if !redis_ready() {
             eprintln!("Skipping test: Redis not available");

@@ -13,7 +13,7 @@
 //! - BUS-09 Lifecycle start/stop(InMemory 为 no-op):stop 后 publish/subscribe 仍可用(行为固化)
 //! - BUS-10 订阅者 drop → subscriber_count 递减;零订阅者 publish 不 panic
 //! - NAT-06 连接不可达 NATS → 明确错误不 panic;换真实服务后收发恢复
-//! - RDS-06 pool_size>1 并发发布不丢消息
+//! - RDS-06 并发发布不丢消息(单条多路复用连接,无连接池)
 //! - RDS-07 连接不可达 Redis → 明确错误;真实服务恢复收发
 //!
 //! BUS-01…03/05…07、NAT-01…05、RDS-01…05 已有覆盖(tests/remote/bus.rs);
@@ -170,9 +170,9 @@ async fn nat06_unreachable_nats_errors_then_real_service_recovers() {
     assert_eq!(ev.instance_id, "nat06-recovered");
 }
 
-/// RDS-06:pool_size>1 并发发布不丢消息。
+/// RDS-06:并发发布不丢消息(单条多路复用连接,无连接池)。
 #[tokio::test]
-async fn rds06_concurrent_publish_with_pool_delivers_all() {
+async fn rds06_concurrent_publish_delivers_all() {
     use confers::bus::RedisBusBuilder;
 
     if !redis_ready().await {
@@ -183,7 +183,6 @@ async fn rds06_concurrent_publish_with_pool_delivers_all() {
     let bus = RedisBusBuilder::new()
         .url("redis://127.0.0.1:16379")
         .channel(unique("rds06.channel"))
-        .pool_size(4)
         .build()
         .await
         .expect("redis bus builds");

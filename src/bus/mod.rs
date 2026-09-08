@@ -17,6 +17,7 @@ use futures_util::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::error::{ConfigConfigError, ConfigResult};
 use crate::lifecycle::Lifecycle;
@@ -124,7 +125,20 @@ impl ConfigBus for InMemoryBus {
         &self,
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         let receiver = self.sender.subscribe();
-        let stream = BroadcastStream::new(receiver).filter_map(|r| async move { r.ok() });
+        let stream = BroadcastStream::new(receiver).filter_map(|r| async move {
+            match r {
+                Ok(event) => Some(event),
+                Err(BroadcastStreamRecvError::Lagged(skipped)) => {
+                    // A subscriber fell behind and missed `skipped` events.
+                    // This must not be swallowed silently: the instance may
+                    // now hold stale configuration and should re-sync.
+                    log::warn!(
+                        "InMemoryBus subscriber lagged; {skipped} configuration change event(s) were dropped"
+                    );
+                    None
+                }
+            }
+        });
         Ok(Box::pin(stream))
     }
 }
@@ -160,6 +174,53 @@ mod tests {
     use super::*;
     use futures_util::StreamExt;
     use tokio::time::{Duration, timeout};
+
+    /// Test-only logger that captures `warn!` (and above) records so tests
+    /// can assert that important events are logged rather than swallowed.
+    ///
+    /// Installed lazily and at most once per process (the `log` facade allows
+    /// a single global logger); records accumulate in a shared buffer.
+    pub(crate) mod log_capture {
+        use std::sync::{Mutex, OnceLock};
+
+        static RECORDS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+        static INIT: OnceLock<()> = OnceLock::new();
+
+        struct CaptureLogger;
+
+        impl log::Log for CaptureLogger {
+            fn enabled(&self, metadata: &log::Metadata) -> bool {
+                metadata.level() <= log::Level::Warn
+            }
+
+            fn log(&self, record: &log::Record) {
+                if self.enabled(record.metadata())
+                    && let Some(records) = RECORDS.get()
+                {
+                    records
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .push(format!("{}", record.args()));
+                }
+            }
+
+            fn flush(&self) {}
+        }
+
+        /// Install the capture logger (no-op if already installed) and return
+        /// the shared record buffer.
+        pub(crate) fn install() -> &'static Mutex<Vec<String>> {
+            let records = RECORDS.get_or_init(|| Mutex::new(Vec::new()));
+            INIT.get_or_init(|| {
+                // Leak the logger to obtain a 'static reference; the global
+                // logger lives for the rest of the process anyway.
+                let logger: &'static CaptureLogger = Box::leak(Box::new(CaptureLogger));
+                let _ = log::set_logger(logger);
+                log::set_max_level(log::LevelFilter::Warn);
+            });
+            records
+        }
+    }
 
     #[tokio::test]
     async fn test_config_change_event_creation() {
@@ -227,6 +288,46 @@ mod tests {
 
         let _sub2 = bus.subscribe().await.unwrap();
         assert_eq!(bus.subscriber_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_bus_lagged_subscriber_warns_and_continues() {
+        // A slow subscriber that misses events must produce a warning log
+        // (issue: Lagged errors were silently dropped) and the stream must
+        // stay usable, delivering the events still buffered afterwards.
+        let records = log_capture::install();
+        records.lock().unwrap().clear();
+
+        let bus = InMemoryBus::with_capacity(2);
+        let mut events = bus.subscribe().await.unwrap();
+
+        for i in 0..4 {
+            let ev = ConfigChangeEvent::new("instance-1", "test", vec![], format!("ck-{i}"));
+            bus.publish(ev).await.unwrap();
+        }
+
+        // With capacity 2 and 4 published events the subscriber missed ck-0
+        // and ck-1. `next()` transparently skips the Lagged item, so the
+        // buffered tail events are delivered directly — the lag is surfaced
+        // through the warning log, not the stream output.
+        let first = timeout(Duration::from_millis(100), events.next())
+            .await
+            .unwrap()
+            .expect("stream ended");
+        assert_eq!(first.checksum, "ck-2");
+
+        let logged = records.lock().unwrap().join("\n");
+        assert!(
+            logged.contains("lagged") && logged.contains('2'),
+            "expected a warning naming the number of dropped events, got: {logged}"
+        );
+
+        // The stream must remain usable after the lag.
+        let second = timeout(Duration::from_millis(100), events.next())
+            .await
+            .unwrap()
+            .expect("stream ended");
+        assert_eq!(second.checksum, "ck-3");
     }
 
     #[tokio::test]

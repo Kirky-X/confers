@@ -63,14 +63,6 @@ impl RedisConfigBus {
         .await
     }
 
-    pub async fn connect_with_pool(
-        url: &str,
-        channel: impl Into<String>,
-        _pool_size: usize,
-    ) -> ConfigResult<Self> {
-        Self::connect(url, channel).await
-    }
-
     /// Connect with custom retry wait times.
     pub async fn connect_with_config(
         url: &str,
@@ -184,7 +176,6 @@ impl ConfigBus for RedisConfigBus {
 pub struct RedisBusBuilder {
     url: Option<String>,
     channel: Option<String>,
-    pool_size: Option<usize>,
     /// Retry wait time in milliseconds when no message available.
     retry_wait_ms: u64,
     /// Error retry wait time in seconds.
@@ -196,7 +187,6 @@ impl RedisBusBuilder {
         Self {
             url: None,
             channel: None,
-            pool_size: None,
             retry_wait_ms: DEFAULT_RETRY_WAIT_MS,
             error_retry_wait_secs: DEFAULT_ERROR_RETRY_WAIT_SECS,
         }
@@ -209,11 +199,6 @@ impl RedisBusBuilder {
 
     pub fn channel(mut self, channel: impl Into<String>) -> Self {
         self.channel = Some(channel.into());
-        self
-    }
-
-    pub fn pool_size(mut self, size: usize) -> Self {
-        self.pool_size = Some(size);
         self
     }
 
@@ -328,7 +313,6 @@ mod tests {
         let b = RedisBusBuilder::new();
         assert!(b.url.is_none());
         assert!(b.channel.is_none());
-        assert!(b.pool_size.is_none());
         assert_eq!(b.retry_wait_ms, DEFAULT_RETRY_WAIT_MS);
         assert_eq!(b.error_retry_wait_secs, DEFAULT_ERROR_RETRY_WAIT_SECS);
     }
@@ -347,12 +331,10 @@ mod tests {
         let b = RedisBusBuilder::new()
             .url("redis://127.0.0.1:16379")
             .channel("unit-chan")
-            .pool_size(8)
             .retry_wait_ms(42)
             .error_retry_wait_secs(3);
         assert_eq!(b.url.as_deref(), Some("redis://127.0.0.1:16379"));
         assert_eq!(b.channel.as_deref(), Some("unit-chan"));
-        assert_eq!(b.pool_size, Some(8));
         assert_eq!(b.retry_wait_ms, 42);
         assert_eq!(b.error_retry_wait_secs, 3);
     }
@@ -404,21 +386,6 @@ mod tests {
             }
             other => panic!("expected RemoteUnavailable, got {:?}", other),
         }
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_pool_invalid_url_is_retryable() {
-        let err = RedisConfigBus::connect_with_pool("not-a-valid-url", "chan", 4)
-            .await
-            .err()
-            .expect("connect_with_pool should error");
-        assert!(matches!(
-            err,
-            ConfigError::RemoteUnavailable {
-                retryable: true,
-                ..
-            }
-        ));
     }
 
     #[tokio::test]
@@ -503,18 +470,6 @@ mod tests {
             .await
             .expect("build should succeed with live Redis");
         assert_eq!(bus.channel, "config:events");
-    }
-
-    #[tokio::test]
-    async fn test_connect_with_pool_live_service() {
-        if !redis_ready() {
-            eprintln!("Skipping test: Redis not available");
-            return;
-        }
-        let bus = RedisConfigBus::connect_with_pool("redis://127.0.0.1:16379", "p", 4)
-            .await
-            .expect("connect_with_pool should succeed");
-        assert_eq!(bus.channel, "p");
     }
 
     #[tokio::test]
