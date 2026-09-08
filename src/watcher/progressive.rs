@@ -63,10 +63,25 @@ pub trait ReloadHealthCheck: Send + Sync {
 
 struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     current: ArcSwap<T>,
+    /// Configuration under trial during a canary/linear reload.
+    ///
+    /// A reload cancelled mid-flight (its future dropped) may leave the
+    /// candidate set. That residue is unobservable through the public API
+    /// and harmless: the next completed reload overwrites it, and a
+    /// committed or rolled-back reload always clears it.
     candidate: ArcSwap<Option<Arc<T>>>,
     strategy: ReloadStrategy,
-    health_check: Option<Arc<dyn ReloadHealthCheck>>,
+    /// Health check used by canary/linear reloads.
+    ///
+    /// Stored in a shared, atomically swappable slot so
+    /// [`ProgressiveReloader::with_health_check`] can replace it in place
+    /// for all clones of the reloader instead of forking the state.
+    health_check: ArcSwap<Option<Arc<dyn ReloadHealthCheck>>>,
     /// Serializes concurrent `begin_reload` calls to prevent state corruption.
+    ///
+    /// The guard is intentionally held across the whole canary/linear
+    /// rollout, including its sleeps and health-check polling: a staged
+    /// deployment must never interleave with another reload.
     reload_lock: tokio::sync::Mutex<()>,
 }
 
@@ -89,7 +104,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 current: ArcSwap::new(initial),
                 candidate: ArcSwap::new(Arc::new(None)),
                 strategy,
-                health_check: None,
+                health_check: ArcSwap::new(Arc::new(None)),
                 reload_lock: tokio::sync::Mutex::new(()),
             }),
         }
@@ -105,7 +120,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 current: ArcSwap::new(initial),
                 candidate: ArcSwap::new(Arc::new(None)),
                 strategy,
-                health_check,
+                health_check: ArcSwap::new(Arc::new(health_check)),
                 reload_lock: tokio::sync::Mutex::new(()),
             }),
         }
@@ -120,22 +135,35 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner.current.load_full()
     }
 
+    /// Attach (or replace) the health check used by canary/linear reloads.
+    ///
+    /// The health check lives in an atomically swappable slot shared by all
+    /// clones of the reloader, so installing it through any handle (including
+    /// clones taken before this call) affects every clone. The `current` and
+    /// `candidate` snapshots and the reload lock are equally shared and stay
+    /// intact — this method never forks the reloader state.
     pub fn with_health_check(self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
-        // Build a new inner to avoid Arc::get_mut panic on cloned instances
-        let current_val = self.inner.current.load_full();
-        let candidate_val = self.inner.candidate.load_full();
-        let new_inner = ProgressiveReloaderInner {
-            current: ArcSwap::from_pointee(current_val.as_ref().clone()),
-            candidate: ArcSwap::from_pointee(candidate_val.as_ref().clone()),
-            strategy: self.inner.strategy.clone(),
-            health_check: Some(health_check),
-            reload_lock: tokio::sync::Mutex::new(()),
-        };
-        Self {
-            inner: Arc::new(new_inner),
-        }
+        // Swap the slot in place instead of rebuilding `inner`: rebuilding
+        // would fork `current`/`candidate` snapshots and install a fresh
+        // reload lock, breaking serialization between clones.
+        self.inner.health_check.store(Arc::new(Some(health_check)));
+        self
     }
 
+    /// Begin a staged reload of the configuration.
+    ///
+    /// The reload lock is held for the entire duration of the call: for
+    /// [`ReloadStrategy::Canary`] and [`ReloadStrategy::Linear`] that
+    /// includes the whole trial/rollout window with its health-check
+    /// polling. This is intentional — a staged rollout must not be
+    /// interleaved with another reload — but callers should be aware that a
+    /// long trial delays concurrent `begin_reload` calls (including those
+    /// started through clones of this handle).
+    ///
+    /// If the future is cancelled (dropped) mid-reload, any canary/linear
+    /// candidate left in the candidate slot stays there; it is not
+    /// observable through the public API and the next completed reload
+    /// clears it.
     pub async fn begin_reload(
         &self,
         new_config: Arc<T>,
@@ -176,7 +204,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
 
         while Instant::now() < deadline {
             tokio::time::sleep(poll_interval).await;
-            if let Some(hc) = &self.inner.health_check {
+            let health_check = self.inner.health_check.load_full();
+            if let Some(hc) = health_check.as_ref() {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
@@ -209,7 +238,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
 
         for step in 0..steps {
             tokio::time::sleep(interval).await;
-            if let Some(hc) = &self.inner.health_check {
+            let health_check = self.inner.health_check.load_full();
+            if let Some(hc) = health_check.as_ref() {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
@@ -399,5 +429,107 @@ mod tests {
             .unwrap();
         assert!(matches!(result, ReloadOutcome::Committed));
         assert_eq!(*reloader.current(), 2);
+    }
+
+    /// Regression test for issue #478: `with_health_check` used to rebuild
+    /// the inner state, so a clone taken before the call forked from the
+    /// original (separate `current`/`candidate` snapshots and reload lock).
+    /// The health check must land in a shared slot: installing it through
+    /// the clone has to roll back a reload started through the original
+    /// handle.
+    #[tokio::test]
+    async fn test_with_health_check_after_clone_shares_state() {
+        struct CriticalCheck;
+        #[async_trait]
+        impl ReloadHealthCheck for CriticalCheck {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+                HealthStatus::Critical {
+                    reason: "clone must share the health check".to_string(),
+                }
+            }
+        }
+
+        let reloader = ProgressiveReloader::new(
+            Arc::new(1i32),
+            ReloadStrategy::Canary {
+                trial_duration: Duration::from_millis(100),
+                poll_interval: Duration::from_millis(10),
+            },
+        );
+        let cloned = reloader.clone().with_health_check(Arc::new(CriticalCheck));
+
+        // The check installed through `cloned` must be visible to `reloader`
+        // and roll its reload back — proving the state is shared, not forked.
+        let result = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await;
+        assert!(matches!(result, Err(ConfigError::ReloadRolledBack { .. })));
+        assert_eq!(*reloader.current(), 1);
+        assert_eq!(*cloned.current(), 1);
+    }
+
+    /// Regression test for issue #478 (reload serialization): reloads
+    /// started through different clones must be serialized by the single
+    /// shared reload lock, so health checks from distinct reloads never
+    /// overlap.
+    #[tokio::test]
+    async fn test_clones_share_reload_lock() {
+        use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+        // Records the maximum number of health checks observed in flight.
+        struct OverlapCheck {
+            in_flight: Arc<AtomicUsize>,
+            max_in_flight: Arc<AtomicUsize>,
+        }
+        #[async_trait]
+        impl ReloadHealthCheck for OverlapCheck {
+            async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
+                let now = self.in_flight.fetch_add(1, AtomicOrdering::SeqCst) + 1;
+                self.max_in_flight.fetch_max(now, AtomicOrdering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                self.in_flight.fetch_sub(1, AtomicOrdering::SeqCst);
+                HealthStatus::Healthy
+            }
+        }
+
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_in_flight = Arc::new(AtomicUsize::new(0));
+        let reloader = ProgressiveReloader::new(
+            Arc::new(1i32),
+            ReloadStrategy::Canary {
+                trial_duration: Duration::from_millis(60),
+                poll_interval: Duration::from_millis(5),
+            },
+        )
+        .with_health_check(Arc::new(OverlapCheck {
+            in_flight: Arc::clone(&in_flight),
+            max_in_flight: Arc::clone(&max_in_flight),
+        }));
+
+        async fn reload_through(
+            reloader: ProgressiveReloader<i32>,
+            value: i32,
+        ) -> ConfigResult<ReloadOutcome> {
+            reloader
+                .begin_reload(Arc::new(value), Arc::new(MockProvider))
+                .await
+        }
+
+        let a = reloader.clone();
+        let b = reloader.clone();
+        let h1 = tokio::spawn(reload_through(a, 2));
+        let h2 = tokio::spawn(reload_through(b, 3));
+
+        let (r1, r2) = tokio::join!(h1, h2);
+        assert!(matches!(r1.unwrap().unwrap(), ReloadOutcome::Committed));
+        assert!(matches!(r2.unwrap().unwrap(), ReloadOutcome::Committed));
+
+        // One reload holds the shared lock across its whole canary trial,
+        // so the second reload's health checks cannot overlap the first's.
+        assert_eq!(
+            max_in_flight.load(AtomicOrdering::SeqCst),
+            1,
+            "the shared reload lock must serialize reloads across clones"
+        );
     }
 }
