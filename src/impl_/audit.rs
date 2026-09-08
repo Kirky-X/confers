@@ -64,19 +64,20 @@ impl AuditLevel {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Configuration for audit logging.
+///
+/// Auditing is **disabled by default**: it must be explicitly enabled and
+/// given a `log_dir`. Durable events (key access, key rotation, decryption)
+/// return an error when `log_dir` is not configured, so a default of
+/// `enabled: true` with no `log_dir` made every durable audit call fail out
+/// of the box. Keep auditing off until it is deliberately set up.
+#[derive(Debug, Clone, Default)]
 pub struct AuditConfig {
+    /// Whether audit logging is enabled. Defaults to `false`.
     pub enabled: bool,
+    /// Directory the audit log files are written to. Required for durable
+    /// events once auditing is enabled.
     pub log_dir: Option<std::path::PathBuf>,
-}
-
-impl Default for AuditConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            log_dir: None,
-        }
-    }
 }
 
 impl AuditConfig {
@@ -92,8 +93,10 @@ pub struct AuditConfigBuilder {
 
 impl AuditConfigBuilder {
     pub fn new() -> Self {
+        // Mirrors `AuditConfig::default()`: auditing stays off until it is
+        // explicitly enabled (and given a log_dir).
         Self {
-            enabled: true,
+            enabled: false,
             log_dir: None,
         }
     }
@@ -170,52 +173,33 @@ impl AuditWriter {
                 message: "durable audit event requires log_dir to be configured".into(),
             });
         };
-        let sanitized = self.sanitize(event);
-        let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
-        let path = dir.join(filename);
-        let line = serde_json::to_string(&sanitized).map_err(|e| ConfigError::InvalidValue {
-            key: "audit.event".into(),
-            expected_type: "serializable audit event".into(),
-            message: e.to_string(),
-        })?;
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned {
-                resource: "audit.writer".into(),
-            })?;
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .and_then(|mut file| {
-                use std::io::Write;
-                file.write_all(line.as_bytes())?;
-                file.write_all(b"\n")
-            })?;
-        Ok(())
+        self.append_event(event, dir)
     }
 
     fn write_best_effort(&self, event: &AuditEvent) -> ConfigResult<()> {
         // Best-effort: attempt to persist if log_dir is configured.
         // If log_dir is not configured, silently drop the event.
-        self.write_to_log(event)
-    }
-
-    /// Shared write path for both Durable and BestEffort events.
-    /// Writes the sanitized event to `audit_YYYYMMDD.log` in `log_dir` if configured.
-    /// Silently returns Ok if `log_dir` is None.
-    fn write_to_log(&self, event: &AuditEvent) -> ConfigResult<()> {
         let Some(ref dir) = self.config.log_dir else {
             return Ok(());
         };
-        let sanitized = self.sanitize(event);
-        let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
+        self.append_event(event, dir)
+    }
+
+    /// Shared append path for both Durable and BestEffort events.
+    ///
+    /// Writes the sanitized event to `audit_YYYYMMDD.log` in `dir`. The file
+    /// name date is derived from the event's own timestamp — captured once
+    /// per `log_*` call — so the embedded timestamp and the file name can
+    /// never disagree across midnight.
+    fn append_event(&self, event: &AuditEvent, dir: &std::path::Path) -> ConfigResult<()> {
+        let filename = format!("audit_{}.log", event.event_timestamp().format("%Y%m%d"));
         let path = dir.join(filename);
-        let line = serde_json::to_string(&sanitized).map_err(|e| ConfigError::InvalidValue {
-            key: "audit.event".into(),
-            expected_type: "serializable audit event".into(),
-            message: e.to_string(),
+        let line = serde_json::to_string(&self.sanitize(event)).map_err(|e| {
+            ConfigError::InvalidValue {
+                key: "audit.event".into(),
+                expected_type: "serializable audit event".into(),
+                message: e.to_string(),
+            }
         })?;
         let _guard = self
             .write_lock
@@ -362,5 +346,66 @@ impl AuditWriterBuilder {
 impl Default for AuditWriterBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(all(test, feature = "audit"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config_is_disabled() {
+        // Regression: the default used to be `enabled: true` with no
+        // log_dir, so every Durable event failed out of the box. Auditing
+        // must now be explicitly enabled and configured.
+        let config = AuditConfig::default();
+        assert!(!config.enabled, "audit must be disabled by default");
+        assert!(config.log_dir.is_none(), "log_dir starts unset");
+
+        let writer = AuditWriter::new();
+        assert!(!writer.is_enabled(), "default writer must be disabled");
+
+        let built = AuditConfig::builder().build();
+        assert_eq!(built.enabled, config.enabled);
+        assert_eq!(built.log_dir, config.log_dir);
+    }
+
+    #[test]
+    fn test_disabled_writer_is_silent_without_log_dir() {
+        // With the default (disabled) config, log_* calls are silent no-ops
+        // even though log_dir is not configured — a Durable event must NOT
+        // error.
+        let writer = AuditWriter::new();
+        writer.log_load("source").unwrap();
+        writer.log_key_access("some.key").unwrap();
+        writer.log_decrypt("some.field", true).unwrap();
+        writer.log_key_rotation("v1", "v2").unwrap();
+    }
+
+    #[test]
+    fn test_log_file_date_matches_event_timestamp() {
+        // Regression: the file name date must come from the event's single
+        // timestamp, not from a second Utc::now() taken at write time (the
+        // two could straddle midnight).
+        let dir = tempfile::tempdir().unwrap();
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build();
+
+        let timestamp = Utc::now() - chrono::Duration::days(3);
+        writer
+            .write(AuditEvent::KeyAccess {
+                key: "test.key".to_string(),
+                timestamp,
+            })
+            .unwrap();
+
+        let expected = format!("audit_{}.log", timestamp.format("%Y%m%d"));
+        assert!(
+            dir.path().join(&expected).exists(),
+            "expected audit file {} named after the event timestamp",
+            expected
+        );
     }
 }

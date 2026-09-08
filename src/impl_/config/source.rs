@@ -18,15 +18,14 @@ use std::sync::Arc;
 pub struct FileSource {
     /// Path to the configuration file.
     path: PathBuf,
-    /// Format of the file (auto-detected if None).
-    format: Option<Format>,
     /// Priority of this source.
     priority: u8,
     /// Whether this source is optional.
     optional: bool,
     /// Source ID for tracking.
     source_id: SourceId,
-    /// Loader configuration for security settings.
+    /// Loader configuration for security settings (and any explicit format
+    /// override set via [`FileSource::with_format`]).
     loader_config: loader::LoaderConfig,
 }
 
@@ -37,7 +36,6 @@ impl FileSource {
         let source_id = SourceId::new(path.file_name().and_then(|n| n.to_str()).unwrap_or("file"));
         Self {
             path,
-            format: None,
             priority: 0,
             optional: false,
             source_id,
@@ -46,8 +44,12 @@ impl FileSource {
     }
 
     /// Set the format explicitly.
+    ///
+    /// The explicit format overrides the loader's extension-based format
+    /// detection, which also enables loading files that have no recognized
+    /// (or no) extension.
     pub fn with_format(mut self, format: Format) -> Self {
-        self.format = Some(format);
+        self.loader_config = self.loader_config.with_format(format);
         self
     }
 
@@ -227,16 +229,35 @@ impl EnvSource {
     /// Resolve the value, handling _FILE suffix mode for Docker secrets.
     ///
     /// When `env_key` ends with `_FILE`, the `raw` value is treated as a file path,
-    /// validated for security, and its contents are read instead.
+    /// validated for security, and its contents are read instead. Policy
+    /// validation happens before the open; the content itself is read through
+    /// the opened file handle so a concurrent replacement of the path cannot
+    /// swap in a different file between validation and read (TOCTOU).
     fn resolve_value(&self, raw: &str, env_key: &str) -> ConfigResult<String> {
         if self.file_suffix_enabled && env_key.ends_with(self.file_suffix) {
             // Docker secrets convention: value is a file path, read its content
             self.validate_file_path(raw)?;
-            std::fs::read_to_string(raw).map_err(|_| ConfigError::InvalidValue {
+            let cannot_read = || ConfigError::InvalidValue {
                 key: raw.to_string(),
                 expected_type: "readable file".to_string(),
                 message: format!("Cannot read file referenced by {}", env_key),
-            })
+            };
+            let mut file = std::fs::File::open(raw).map_err(|_| cannot_read())?;
+            // Re-check the regular-file constraint against the opened
+            // handle's metadata: it describes the file we are about to read,
+            // not whatever the path may point to after a concurrent swap.
+            if !file.metadata().map_err(|_| cannot_read())?.is_file() {
+                return Err(ConfigError::InvalidValue {
+                    key: "file_path".to_string(),
+                    expected_type: "regular file".to_string(),
+                    message: "Only regular files can be read".to_string(),
+                });
+            }
+            let mut content = String::new();
+            use std::io::Read;
+            file.read_to_string(&mut content)
+                .map_err(|_| cannot_read())?;
+            Ok(content)
         } else {
             Ok(raw.to_string())
         }
@@ -244,9 +265,14 @@ impl EnvSource {
 
     /// Validate file path for security (prevent path traversal).
     fn validate_file_path(&self, file_path: &str) -> ConfigResult<()> {
-        // Skip empty file paths
+        // Reject empty paths up front with a clear error instead of letting
+        // them through and failing later with a confusing read error.
         if file_path.is_empty() {
-            return Ok(());
+            return Err(ConfigError::InvalidValue {
+                key: "file_path".to_string(),
+                expected_type: "non-empty file path".to_string(),
+                message: "file path must not be empty".to_string(),
+            });
         }
 
         let path = Path::new(file_path);
@@ -260,17 +286,16 @@ impl EnvSource {
             )),
         })?;
 
-        // Block access to sensitive paths
+        // Block access to sensitive system paths.
         let sensitive_prefixes = [
             std::path::Path::new("/etc/shadow"),
             std::path::Path::new("/etc/passwd"),
             std::path::Path::new("/root"),
-            std::path::Path::new("/home"),
         ];
 
         for prefix in &sensitive_prefixes {
             // Path::starts_with checks path components (not string prefix),
-            // so "/homework" does NOT match "/home" — this is correct.
+            // so "/rootkit" does NOT match "/root" — this is correct.
             if canonical.starts_with(prefix) {
                 return Err(ConfigError::InvalidValue {
                     key: "file_path".to_string(),
@@ -278,6 +303,27 @@ impl EnvSource {
                     message: format!("Access to {:?} is not allowed", prefix),
                 });
             }
+        }
+
+        // Well-known credential directories, matched per path component so
+        // they are blocked wherever they appear (e.g. /home/alice/.ssh/...)
+        // without denying every file under /home.
+        const CREDENTIAL_DIR_COMPONENTS: &[&str] =
+            &[".ssh", ".aws", ".gnupg", ".kube", ".gcloud", ".env"];
+        let hits_credential_dir = canonical.components().any(|component| {
+            component
+                .as_os_str()
+                .to_str()
+                .is_some_and(|s| CREDENTIAL_DIR_COMPONENTS.contains(&s))
+        });
+        if hits_credential_dir {
+            return Err(ConfigError::InvalidValue {
+                key: "file_path".to_string(),
+                expected_type: "safe file path".to_string(),
+                message: "access to credential directories (.ssh, .aws, .gnupg, .kube, .gcloud, \
+                          .env) is not allowed"
+                    .to_string(),
+            });
         }
 
         // Only allow reading regular files
@@ -763,8 +809,53 @@ mod tests {
 
     #[test]
     fn test_file_source_format() {
-        let source = FileSource::new("config.toml").with_format(crate::impl_::loader::Format::Toml);
-        assert_eq!(source.name(), "config.toml");
+        // An explicit format must take effect: a file with no recognizable
+        // extension is rejected by extension-based detection, but loads when
+        // the format is provided — and is really parsed, not kept as strings.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings");
+        std::fs::write(&path, "port = 8080\n").unwrap();
+
+        // Without with_format, extension detection cannot name a format.
+        let plain = FileSource::new(&path).allow_absolute_paths();
+        assert!(
+            plain.collect().is_err(),
+            "extensionless file must fail without an explicit format"
+        );
+
+        // With with_format the file is parsed as TOML with typed values.
+        let source = FileSource::new(&path)
+            .with_format(crate::impl_::loader::Format::Toml)
+            .allow_absolute_paths();
+        let result = source.collect().expect("explicit format must load");
+        if let ConfigValue::Map(map) = &result.inner
+            && let Some(av) = map.get("port")
+        {
+            assert_eq!(av.inner.as_i64(), Some(8080), "TOML value must be typed");
+            return;
+        }
+        panic!("expected 'port' parsed as an integer via the explicit format");
+    }
+
+    #[test]
+    fn test_file_source_format_overrides_extension() {
+        // The explicit format also wins over extension-based detection: a
+        // .txt file with TOML content parses as TOML.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.txt");
+        std::fs::write(&path, "count = 3\n").unwrap();
+
+        let source = FileSource::new(&path)
+            .with_format(crate::impl_::loader::Format::Toml)
+            .allow_absolute_paths();
+        let result = source.collect().expect("explicit format must win");
+        if let ConfigValue::Map(map) = &result.inner
+            && let Some(av) = map.get("count")
+        {
+            assert_eq!(av.inner.as_i64(), Some(3));
+            return;
+        }
+        panic!("expected 'count' parsed as an integer despite the .txt extension");
     }
 
     #[test]
@@ -1056,8 +1147,75 @@ mod tests {
         let result = source.collect();
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("MYTEST_EMPTY_FILE") }; // pragma: allowlist secret
-        // Empty path → validate returns Ok, then read_to_string("") fails
+        // An empty _FILE path now fails validation with an explicit error
+        // instead of passing validation and failing with a confusing read
+        // error.
         assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::InvalidValue { .. }
+        ));
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_allows_regular_home_files() {
+        // The sensitive-path blocklist covers system paths and credential
+        // directories only — ordinary files under a home-like path must
+        // remain readable (previously ALL of /home was blocked).
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home").join("alice").join("docs");
+        std::fs::create_dir_all(&home).unwrap();
+        let file = home.join("app_settings.txt");
+        let mut f = std::fs::File::create(&file).unwrap();
+        write!(f, "plain_value").unwrap();
+
+        let path = file.to_str().unwrap().to_string();
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_HOME_FILE", &path) };
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_HOME_FILE") };
+
+        let result = result.expect("regular files under a home-like path must be readable");
+        if let ConfigValue::Map(map) = &result.inner
+            && let Some(av) = map.get("home")
+            && let ConfigValue::String(s) = &av.inner
+        {
+            assert_eq!(s, "plain_value");
+            return;
+        }
+        panic!("expected home_file key with content read from a home-like path");
+    }
+
+    #[serial_test::serial]
+    #[test]
+    fn test_env_source_file_suffix_blocks_credential_dirs() {
+        // Well-known credential directories are blocked per path component,
+        // wherever they appear (including under a user home).
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let ssh = dir.path().join("home").join("alice").join(".ssh");
+        std::fs::create_dir_all(&ssh).unwrap();
+        let file = ssh.join("id_rsa.txt");
+        let mut f = std::fs::File::create(&file).unwrap();
+        write!(f, "not-a-real-key").unwrap(); // pragma: allowlist secret
+
+        let path = file.to_str().unwrap().to_string();
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("MYTEST_SSH_FILE", &path) }; // pragma: allowlist secret
+        let source = EnvSource::with_prefix("MYTEST_");
+        let result = source.collect();
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("MYTEST_SSH_FILE") }; // pragma: allowlist secret
+
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ConfigError::InvalidValue { .. }
+        ));
     }
 
     #[serial_test::serial]

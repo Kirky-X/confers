@@ -61,7 +61,7 @@ fn test_context_value_from_primitives() {
     assert!(matches!(cv, ContextValue::Boolean(true)));
 
     let cv: ContextValue = 42i64.into();
-    assert!(matches!(cv, ContextValue::Number(n) if n == 42.0));
+    assert!(matches!(cv, ContextValue::Integer(42)));
 
     let cv: ContextValue = std::f64::consts::PI.into();
     assert!(matches!(cv, ContextValue::Number(n) if (n - std::f64::consts::PI).abs() < 0.001));

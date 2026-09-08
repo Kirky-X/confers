@@ -18,8 +18,9 @@ mod tests {
     fn test_audit_writer_default() {
         let writer = AuditWriter::new();
         assert!(
-            writer.is_enabled(),
-            "Audit writer should be enabled by default"
+            !writer.is_enabled(),
+            "Audit writer should be disabled by default; \
+             auditing must be explicitly enabled together with a log_dir"
         );
     }
 
@@ -196,7 +197,11 @@ mod tests {
     #[test]
     fn test_audit_config_default() {
         let config = AuditConfig::default();
-        assert!(config.enabled, "Enabled should be true by default");
+        assert!(
+            !config.enabled,
+            "Enabled should be false by default; \
+             durable events would fail without a configured log_dir"
+        );
         assert!(
             config.log_dir.is_none(),
             "Log dir should be None by default"
@@ -299,7 +304,9 @@ mod tests {
     /// Test 13: Verify Durable events return Err when log_dir is None.
     #[test]
     fn test_audit_no_log_dir_returns_error_for_durable() {
-        let writer = AuditWriter::new(); // log_dir defaults to None
+        // Auditing is disabled by default; enable it explicitly while leaving
+        // log_dir unset to exercise the durable failure path.
+        let writer = AuditWriter::builder().enabled(true).build();
 
         // BestEffort event with no log_dir silently succeeds
         writer.log_load("source_without_log_dir").unwrap();

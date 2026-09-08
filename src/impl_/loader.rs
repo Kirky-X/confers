@@ -55,6 +55,12 @@ pub struct LoaderConfig {
     pub allow_absolute: bool,
     /// Whether to check for symlink traversal (default: true).
     pub check_symlinks: bool,
+    /// Explicit format override (default: None).
+    ///
+    /// When set, `load_file` parses the file with this format instead of
+    /// inferring the format from the file extension. Useful for files whose
+    /// extension is missing or not one of the recognized ones.
+    pub format: Option<Format>,
 }
 
 impl Default for LoaderConfig {
@@ -67,6 +73,7 @@ impl Default for LoaderConfig {
                 .collect(),
             allow_absolute: false,
             check_symlinks: true,
+            format: None,
         }
     }
 }
@@ -101,6 +108,15 @@ impl LoaderConfig {
     /// Allow absolute paths (not recommended for security).
     pub fn allow_absolute(mut self) -> Self {
         self.allow_absolute = true;
+        self
+    }
+
+    /// Override format detection with an explicit format.
+    ///
+    /// When set, `load_file` skips extension-based format inference and
+    /// parses the file with this format.
+    pub fn with_format(mut self, format: Format) -> Self {
+        self.format = Some(format);
         self
     }
 
@@ -507,6 +523,17 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
     if trimmed.contains('[') && trimmed.contains(']') {
         // Check for INI section header pattern [section]
         if trimmed.starts_with('[') {
+            // A leading `[section]` is also how TOML tables start, and TOML
+            // permits unspaced `key=value` assignments, so text like
+            // `[section]\nkey=5432` is valid TOML that the INI parser would
+            // silently degrade to strings. When the `toml` feature is
+            // available, probe TOML first and only fall back to INI when the
+            // content does not parse as TOML. Without the feature the
+            // original INI heuristic applies unchanged.
+            #[cfg(feature = "toml")]
+            if toml::from_str::<toml::Table>(trimmed).is_ok() {
+                return Some(Format::Toml);
+            }
             return Some(Format::Ini);
         }
     }
@@ -518,7 +545,12 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
 /// Load and parse a configuration file from disk.
 ///
 /// Applies path traversal protection and size limits before parsing.
-/// Uses content-based format detection if not specified in the path.
+/// The format is taken from [`LoaderConfig::format`] when set, otherwise it
+/// is detected from the path extension.
+///
+/// The file is opened once and read through that handle (with the size limit
+/// enforced against the handle's own metadata), so concurrent replacement of
+/// the path cannot swap the content between validation and read.
 ///
 /// # Errors
 ///
@@ -527,7 +559,7 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
 /// - File size exceeds the configured limit
 /// - File cannot be read or parsed
 pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
-    // Path traversal protection: validate the path before loading
+    // Path traversal protection: validate the path before opening it.
     let validated_path =
         validate_path_with_config(path, config).map_err(|e| ConfigError::InvalidValue {
             key: "path".to_string(),
@@ -535,24 +567,37 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
             message: format!("Path validation failed: {}", e),
         })?;
 
-    let metadata = std::fs::metadata(&validated_path).map_err(|e| ConfigError::FileNotFound {
+    // Open the file once, then enforce the size limit against the opened
+    // handle's own metadata and read through the handle. Re-resolving the
+    // path for a second stat/read would race with a concurrent rename or
+    // replace (TOCTOU) and could read content that was never validated.
+    let mut file = std::fs::File::open(&validated_path).map_err(|e| ConfigError::FileNotFound {
         filename: validated_path.clone(),
         source: Some(e),
     })?;
-    if metadata.len() as usize > config.max_size {
+    let metadata = file.metadata().map_err(ConfigError::IoError)?;
+    // Compare as u64: casting `metadata.len()` to usize truncates on 32-bit
+    // targets and would let oversized files slip through.
+    if metadata.len() > config.max_size as u64 {
         return Err(ConfigError::SizeLimitExceeded {
-            actual: metadata.len() as usize,
+            actual: usize::try_from(metadata.len()).unwrap_or(usize::MAX),
             limit: config.max_size,
         });
     }
-    let format =
-        detect_format_from_path(&validated_path).ok_or_else(|| ConfigError::ParseError {
+    // An explicit format override wins over extension-based detection.
+    let format = config
+        .format
+        .or_else(|| detect_format_from_path(&validated_path))
+        .ok_or_else(|| ConfigError::ParseError {
             format: "unknown".into(),
             message: format!("Unknown extension: {:?}", validated_path.extension()),
             location: None,
             source: None,
         })?;
-    let content = std::fs::read_to_string(&validated_path).map_err(ConfigError::IoError)?;
+    let mut content = String::new();
+    use std::io::Read;
+    file.read_to_string(&mut content)
+        .map_err(ConfigError::IoError)?;
     let source = SourceId::new(
         validated_path
             .file_name()
@@ -793,6 +838,12 @@ pub fn parse_ini(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Explicitly imported for tests below: the crate-level import of
+    // `ConfigValue` is gated behind the `ini` feature, but these tests only
+    // need the `toml` feature. An explicit import shadows the (possibly
+    // empty) glob import without conflict.
+    use crate::types::ConfigValue;
+
     #[test]
     fn test_format_display() {
         assert_eq!(Format::Toml.to_string(), "TOML");
@@ -1326,6 +1377,7 @@ mod tests {
         assert!(!config.allow_absolute);
         assert!(config.check_symlinks);
         assert_eq!(config.allowed_base_dirs, vec![PathBuf::from(".")]);
+        assert_eq!(config.format, None);
     }
 
     #[test]
@@ -1406,8 +1458,32 @@ mod tests {
 
     #[test]
     fn test_detect_format_from_content_ini_section() {
+        // `key=value` with an unquoted bare word is NOT valid TOML, so the
+        // INI classification still applies. (Without the `toml` feature the
+        // TOML probe cannot run and the original heuristic applies too.)
         assert_eq!(
             detect_format_from_content("[section]\nkey=value"),
+            Some(Format::Ini)
+        );
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_detect_format_from_content_toml_section_not_ini() {
+        // `[section]` + unspaced `key=value` is valid TOML; the TOML probe
+        // must win so typed values are not silently degraded to strings by
+        // the INI parser.
+        assert_eq!(
+            detect_format_from_content("[section]\nkey=5432"),
+            Some(Format::Toml)
+        );
+        assert_eq!(
+            detect_format_from_content("[db]\nhost=\"localhost\"\n"),
+            Some(Format::Toml)
+        );
+        // Invalid TOML still falls back to INI.
+        assert_eq!(
+            detect_format_from_content("[section]\nkey=value\n=bad\n"),
             Some(Format::Ini)
         );
     }
@@ -1550,6 +1626,80 @@ mod tests {
         let config = LoaderConfig::new().allow_absolute().max_size(1);
         let result = load_file(&test_file, &config);
         assert!(result.is_err());
+
+        let _ = std::fs::remove_file(test_file);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_load_file_size_limit_reports_actual() {
+        // The `actual` field must report the true file size (compared as
+        // u64 so it cannot truncate on 32-bit targets).
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_size_limit_actual.toml");
+        let content = "key = \"value\"\n";
+        std::fs::write(&test_file, content).unwrap();
+
+        let config = LoaderConfig::new().allow_absolute().max_size(4);
+        match load_file(&test_file, &config) {
+            Err(ConfigError::SizeLimitExceeded { actual, limit }) => {
+                assert_eq!(actual, content.len());
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected SizeLimitExceeded, got {:?}", other.err()),
+        }
+
+        let _ = std::fs::remove_file(test_file);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_load_file_reads_via_handle_with_typed_values() {
+        // Regression: content is read from the opened file handle (no second
+        // path resolution between validation and read), and typed values
+        // survive parsing.
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_load_handle.toml");
+        std::fs::write(&test_file, "port = 8080\nname = \"svc\"\n").unwrap();
+
+        let config = LoaderConfig::new().allow_absolute();
+        let result = load_file(&test_file, &config).expect("load should succeed");
+        if let ConfigValue::Map(map) = &result.inner {
+            let port = map.get("port").expect("port key should exist");
+            assert_eq!(port.inner.as_i64(), Some(8080));
+            let name = map.get("name").expect("name key should exist");
+            assert_eq!(name.inner.as_str(), Some("svc"));
+        } else {
+            panic!("expected a map");
+        }
+
+        let _ = std::fs::remove_file(test_file);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_load_file_format_override() {
+        // An explicit LoaderConfig format override wins over extension-based
+        // detection: an extensionless file parses as TOML.
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("confers_test_format_override");
+        std::fs::write(&test_file, "port = 9090\n").unwrap();
+
+        // Without the override, extension detection fails.
+        let plain = LoaderConfig::new().allow_absolute();
+        assert!(load_file(&test_file, &plain).is_err());
+
+        // With the override, the file is parsed as TOML.
+        let config = LoaderConfig::new()
+            .allow_absolute()
+            .with_format(Format::Toml);
+        let result = load_file(&test_file, &config).expect("load should succeed");
+        if let ConfigValue::Map(map) = &result.inner {
+            let port = map.get("port").expect("port key should exist");
+            assert_eq!(port.inner.as_i64(), Some(9090));
+        } else {
+            panic!("expected a map");
+        }
 
         let _ = std::fs::remove_file(test_file);
     }

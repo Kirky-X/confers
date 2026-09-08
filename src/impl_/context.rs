@@ -30,9 +30,22 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Context value types supported in evaluation.
+///
+/// # Number precision
+///
+/// Integers are stored losslessly in [`ContextValue::Integer`]: the
+/// `From<i64>`/`From<i32>` conversions never round-trip through `f64`, so
+/// values beyond 2^53 keep full precision. Use [`ContextValue::Number`]
+/// (or [`From<f64>`]) for fractional values. Note that
+/// `ContextValue::Integer(n)` is a distinct variant from
+/// `ContextValue::Number(n as f64)` for `PartialEq` purposes; convert with
+/// [`ContextValue::as_number`] when comparing against float attributes.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextValue {
     String(Arc<str>),
+    /// Lossless signed integer (produced by the `From<i64>`/`From<i32>`
+    /// conversions).
+    Integer(i64),
     Number(f64),
     Boolean(bool),
 }
@@ -45,9 +58,23 @@ impl ContextValue {
         }
     }
 
+    /// Returns the value as an `f64`.
+    ///
+    /// Converting [`ContextValue::Integer`] to `f64` loses precision for
+    /// |n| > 2^53; use [`ContextValue::as_integer`] for lossless access.
     pub fn as_number(&self) -> Option<f64> {
         match self {
             ContextValue::Number(n) => Some(*n),
+            ContextValue::Integer(n) => Some(*n as f64),
+            _ => None,
+        }
+    }
+
+    /// Returns the value as a lossless `i64`, if this is an
+    /// [`ContextValue::Integer`].
+    pub fn as_integer(&self) -> Option<i64> {
+        match self {
+            ContextValue::Integer(n) => Some(*n),
             _ => None,
         }
     }
@@ -56,6 +83,17 @@ impl ContextValue {
         match self {
             ContextValue::Boolean(b) => Some(*b),
             _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for ContextValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContextValue::String(s) => f.write_str(s),
+            ContextValue::Integer(n) => write!(f, "{n}"),
+            ContextValue::Number(n) => write!(f, "{n}"),
+            ContextValue::Boolean(b) => write!(f, "{b}"),
         }
     }
 }
@@ -80,13 +118,15 @@ impl From<Arc<str>> for ContextValue {
 
 impl From<i64> for ContextValue {
     fn from(n: i64) -> Self {
-        ContextValue::Number(n as f64)
+        // Lossless on purpose: routing through `f64` would silently corrupt
+        // integers beyond 2^53.
+        ContextValue::Integer(n)
     }
 }
 
 impl From<i32> for ContextValue {
     fn from(n: i32) -> Self {
-        ContextValue::Number(n as f64)
+        ContextValue::Integer(i64::from(n))
     }
 }
 
@@ -138,6 +178,12 @@ impl EvaluationContext {
         self.targeting_key.as_deref()
     }
 
+    /// Adds an attribute to the context.
+    ///
+    /// Keys are stored as-is: this is an in-process API whose input is
+    /// trusted, so key content (e.g. empty keys) is neither validated nor
+    /// rejected. Callers building keys from untrusted input should validate
+    /// before calling.
     pub fn attr(mut self, k: impl Into<Arc<str>>, v: impl Into<ContextValue>) -> Self {
         self.attributes.insert(k.into(), v.into());
         self
@@ -253,10 +299,12 @@ impl<T: Clone + Send + Sync + 'static> ContextAwareField<T> {
         }
     }
 
-    /// Construct with a default value. This is a thin wrapper around [`Self::new`].
+    /// Construct with a default value. This is a thin wrapper around
+    /// [`Self::new`]; the builder entry point is
+    /// [`ContextAwareField::builder`].
     #[deprecated(
         since = "0.1.0",
-        note = "Use `ContextAwareFieldBuilder::new(default)` directly instead."
+        note = "Use `ContextAwareField::builder()` or `ContextAwareField::new` instead."
     )]
     pub fn with_default(default: T) -> Self {
         Self::new(default)
@@ -298,7 +346,7 @@ mod tests {
     #[test]
     fn test_context_value_from_i64() {
         let cv: ContextValue = 42i64.into();
-        assert!(matches!(cv, ContextValue::Number(n) if n == 42.0));
+        assert!(matches!(cv, ContextValue::Integer(42)));
     }
 
     #[test]
@@ -481,7 +529,60 @@ mod tests {
     #[test]
     fn test_context_value_from_i32() {
         let cv: ContextValue = 100i32.into();
-        assert!(matches!(cv, ContextValue::Number(n) if n == 100.0));
+        assert!(matches!(cv, ContextValue::Integer(100)));
+    }
+
+    // =============================================================================
+    // ContextValue Integer variant (lossless integers, issue #87)
+    // =============================================================================
+
+    #[test]
+    fn test_context_value_from_i64_beyond_f53_no_precision_loss() {
+        // 2^53 + 1 is the smallest positive integer not representable in
+        // f64; the old `Number(n as f64)` conversion silently corrupted it.
+        let big: i64 = (1i64 << 53) + 1;
+        let cv: ContextValue = big.into();
+        assert!(matches!(cv, ContextValue::Integer(n) if n == big));
+        assert_eq!(cv.as_integer(), Some(big));
+    }
+
+    #[test]
+    fn test_context_value_from_i32_lossless() {
+        let cv: ContextValue = i32::MIN.into();
+        assert_eq!(cv.as_integer(), Some(i32::MIN as i64));
+    }
+
+    #[test]
+    fn test_context_value_as_integer_only_for_integer() {
+        assert_eq!(ContextValue::Integer(-7).as_integer(), Some(-7));
+        assert_eq!(ContextValue::Number(-7.0).as_integer(), None);
+        assert_eq!(ContextValue::String("7".into()).as_integer(), None);
+        assert_eq!(ContextValue::Boolean(true).as_integer(), None);
+    }
+
+    #[test]
+    fn test_context_value_as_number_converts_integer() {
+        // `as_number` widens Integer to f64 (lossy only beyond 2^53).
+        assert_eq!(ContextValue::Integer(42).as_number(), Some(42.0));
+    }
+
+    #[test]
+    fn test_context_value_integer_not_equal_to_number() {
+        // Integer and Number are distinct variants; equality does not
+        // silently round-trip through f64.
+        assert_ne!(ContextValue::Integer(1), ContextValue::Number(1.0));
+        assert_eq!(ContextValue::Integer(1), ContextValue::Integer(1));
+    }
+
+    #[test]
+    fn test_context_value_display() {
+        assert_eq!(
+            ContextValue::Integer(-9_007_199_254_740_993i64).to_string(),
+            "-9007199254740993"
+        );
+        assert_eq!(ContextValue::Number(2.5).to_string(), "2.5");
+        assert_eq!(ContextValue::String("abc".into()).to_string(), "abc");
+        assert_eq!(ContextValue::Boolean(true).to_string(), "true");
     }
 
     // =============================================================================
@@ -765,12 +866,13 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluation_context_attr_with_number_value() {
+    fn test_evaluation_context_attr_with_integer_value() {
+        // `From<i64>` produces the lossless `ContextValue::Integer` variant.
         let ctx = EvaluationContext::new().attr("count", 42i64);
         assert_eq!(ctx.attributes().len(), 1);
         assert!(matches!(
             ctx.attributes().get("count"),
-            Some(ContextValue::Number(n)) if *n == 42.0
+            Some(ContextValue::Integer(42))
         ));
     }
 

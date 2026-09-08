@@ -252,6 +252,17 @@ where
     /// Build the configuration synchronously.
     ///
     /// This method collects all sources and merges them into a final configuration.
+    ///
+    /// # Non-finite floats
+    ///
+    /// `ConfigValue::F64` values that are NaN or infinite cannot be
+    /// represented as JSON numbers; they are serialized as the strings
+    /// `"NaN"`, `"inf"` and `"-inf"` instead of being silently dropped to
+    /// null. Note that deserialization does **not** accept those spellings as
+    /// numbers: a configuration containing a non-finite float cannot be
+    /// deserialized into an `f64` field and fails with an `InvalidValue`
+    /// error (or degrades with a warning in [`Self::build_resilient`]).
+    /// Avoid non-finite floats in configuration data.
     pub fn build(self) -> ConfigResult<T> {
         self.do_build()
     }
@@ -260,6 +271,12 @@ where
     ///
     /// This method returns the raw AnnotatedValue which contains source location
     /// information (line and column numbers) for each value.
+    ///
+    /// # Non-finite floats
+    ///
+    /// Non-finite `f64` values surface unchanged here (no JSON round-trip is
+    /// performed); they are only converted to the strings `"NaN"`, `"inf"`
+    /// and `"-inf"` when routed through JSON deserialization (see [`Self::build`]).
     pub fn build_annotated(self) -> ConfigResult<AnnotatedValue> {
         self.do_build_annotated()
     }
@@ -377,9 +394,25 @@ where
                 .memory_with_priority(self.accumulated_memory, self.memory_priority);
         }
 
+        #[cfg(feature = "snapshot")]
+        let snapshot_config = self.snapshot_config.as_ref();
+        #[cfg(not(feature = "snapshot"))]
+        let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
+
         let chain = self.chain_builder.fail_fast(false).build();
         let mut warnings = Vec::new();
-        let merged = match chain.collect() {
+        let outcome = chain.collect_report();
+        // Skipped sources are no longer fully silent: each one becomes a
+        // SourceError warning so the caller can see *which* source failed
+        // and why, instead of only noticing a degraded result.
+        for (source_name, message) in &outcome.failures {
+            warnings.push(SourceWarning {
+                code: WarningCode::SourceError,
+                message: format!("source '{source_name}' failed and was skipped: {message}"),
+                source: Some(source_name.clone()),
+            });
+        }
+        let merged = match outcome.merged {
             Ok(v) => v,
             Err(e) => {
                 warnings.push(SourceWarning {
@@ -389,9 +422,22 @@ where
                 });
                 let config = T::deserialize(serde_json::Value::Object(Default::default()))
                     .unwrap_or_default();
-                return Ok(BuildResult::degraded(config, e.to_string()));
+                // Keep the collected warnings: they explain why the result is
+                // degraded. (BuildResult::degraded would drop them.)
+                return Ok(BuildResult {
+                    config,
+                    warnings,
+                    degraded: true,
+                    degraded_reason: Some(e.to_string()),
+                });
             }
         };
+
+        // Enforce the configured limits and persist the snapshot exactly like
+        // `build()` does. Resilient mode tolerates *source* errors, not
+        // violated safety limits.
+        self.limits.validate_value(&merged)?;
+        Self::save_snapshot(snapshot_config, &merged)?;
 
         let json = value_to_json(&merged);
         let config: T = match serde_json::from_value(json) {
@@ -404,7 +450,14 @@ where
                 });
                 let config = T::deserialize(serde_json::Value::Object(Default::default()))
                     .unwrap_or_default();
-                return Ok(BuildResult::degraded(config, e.to_string()));
+                // Keep the collected warnings: they explain why the result is
+                // degraded. (BuildResult::degraded would drop them.)
+                return Ok(BuildResult {
+                    config,
+                    warnings,
+                    degraded: true,
+                    degraded_reason: Some(e.to_string()),
+                });
             }
         };
 
@@ -757,6 +810,118 @@ mod tests {
                 // Hard error is also acceptable for type mismatches
             }
         }
+    }
+
+    #[test]
+    fn test_builder_build_resilient_source_error_keeps_warnings() {
+        // A failed source collection must surface the warning together with
+        // the degraded result (previously the collected warnings were
+        // dropped by BuildResult::degraded on the early-return paths).
+        let result = ConfigBuilder::<TestConfig>::new()
+            .file("/nonexistent-required.toml")
+            .build_resilient()
+            .unwrap();
+        assert!(result.degraded);
+        assert!(result.degraded_reason.is_some());
+        assert!(result.has_warnings(), "warnings must survive degradation");
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| matches!(w.code, WarningCode::SourceError))
+        );
+    }
+
+    #[test]
+    fn test_builder_build_resilient_deser_error_keeps_warnings() {
+        // A failed deserialization must surface the warning together with the
+        // degraded result instead of dropping the collected warnings.
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("port", ConfigValue::string("not_a_number"))
+            .build_resilient()
+            .unwrap();
+        assert!(result.degraded);
+        assert!(result.degraded_reason.is_some());
+        assert!(result.has_warnings(), "warnings must survive degradation");
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| matches!(w.code, WarningCode::TypeMismatch))
+        );
+    }
+
+    #[test]
+    fn test_builder_build_resilient_partial_failure_reports_skipped_sources() {
+        // A partially failing chain (one required source missing, memory
+        // values still present) yields a *successful* merged result, and the
+        // skipped source must show up as a named SourceError warning instead
+        // of vanishing silently.
+        let result = ConfigBuilder::<TestConfig>::new()
+            .file("/nonexistent-confers-partial-source.toml")
+            .default("port", ConfigValue::U64(9090))
+            .build_resilient()
+            .unwrap();
+        assert!(!result.degraded, "partial failure still merges: {result:?}");
+        let skipped = result
+            .warnings
+            .iter()
+            .find(|w| matches!(w.code, WarningCode::SourceError))
+            .expect("skipped source must produce a SourceError warning");
+        assert!(
+            skipped
+                .message
+                .contains("/nonexistent-confers-partial-source.toml"),
+            "warning must name the failed source: {}",
+            skipped.message
+        );
+    }
+
+    /// Build an `AnnotatedValue` nested `depth` levels deep.
+    fn deep_annotated(depth: usize) -> AnnotatedValue {
+        let sid = crate::types::SourceId::new("deep");
+        let mut current = AnnotatedValue::new(ConfigValue::string("leaf"), sid.clone(), "leaf");
+        for _ in 0..depth {
+            current = AnnotatedValue::new(ConfigValue::map(vec![("n", current)]), sid.clone(), "n");
+        }
+        current
+    }
+
+    #[test]
+    fn test_builder_build_resilient_enforces_limits() {
+        // build_resilient must enforce configured limits exactly like
+        // build() does; it tolerates source errors, not limit violations.
+        let deep = deep_annotated(6);
+        let result = ConfigBuilder::<TestConfig>::new()
+            .limits(ConfigLimits::default().with_max_nesting_depth(2))
+            .memory(HashMap::from([("deep".to_string(), deep.inner)]))
+            .build_resilient();
+        assert!(
+            result.is_err(),
+            "limit violations must fail resilient builds"
+        );
+    }
+
+    #[cfg(feature = "snapshot")]
+    #[test]
+    fn test_builder_build_resilient_saves_snapshot() {
+        // build_resilient must persist a snapshot when with_snapshot is
+        // configured, mirroring build().
+        let dir = tempfile::tempdir().unwrap();
+        let snap_dir = dir.path().join("snaps");
+        let snapshot = SnapshotConfig::new(snap_dir.clone());
+
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("snap_resilient"))
+            .with_snapshot(snapshot)
+            .build_resilient()
+            .unwrap();
+
+        assert!(!result.degraded);
+        assert!(
+            std::fs::read_dir(&snap_dir).unwrap().next().is_some(),
+            "build_resilient must save a snapshot when configured"
+        );
     }
 
     #[test]

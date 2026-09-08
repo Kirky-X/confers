@@ -264,17 +264,39 @@ where
                 });
             }
 
-            // Resolve the variable
-            let value = if let Some(val) = (*resolver)(var_name) {
-                val
+            // Resolve the variable. Only direct resolution may leave
+            // references in the produced value, so it is the only path that
+            // recursively re-interpolates (with `var_name` recorded in
+            // `visited`).
+            if let Some(val) = (*resolver)(var_name) {
+                // Recursively interpolate the value (it might contain more references)
+                visited.insert(var_name.to_string());
+                let interpolated = interpolate_inner_impl(
+                    &val,
+                    resolver,
+                    visited,
+                    referenced_vars,
+                    sensitive_refs,
+                    is_sensitive,
+                    max_depth,
+                    allow_unresolved,
+                )?;
+                visited.remove(var_name);
+                result.push_str(&interpolated);
             } else if let Some(default) = default_value {
-                // Default might contain interpolations too.
-                // Note: we intentionally do NOT insert var_name into `visited`
-                // here — a self-referential default like `${VAR:${VAR}}` is
-                // not a circular reference, it's just a fallback that itself
-                // references the same (unset) variable. The inner resolution
-                // will produce a clearer "variable not found" error.
-                interpolate_inner_impl(
+                // Default might contain interpolations too. The fully
+                // interpolated default is final and is pushed directly:
+                // interpolating it a second time cannot resolve anything new
+                // (the recursion inside already resolved everything
+                // resolvable), but it would re-scan leftovers — an
+                // `allow_unresolved` literal or a self-referential fallback
+                // like `${VAR:${VAR}}` — and falsely report circular
+                // references.
+                // Note: we intentionally do NOT insert var_name into
+                // `visited` here — a self-referential default like
+                // `${VAR:${VAR}}` is not a circular reference, it's just a
+                // fallback that itself references the same (unset) variable.
+                let expanded = interpolate_inner_impl(
                     default,
                     resolver,
                     visited,
@@ -283,32 +305,22 @@ where
                     is_sensitive,
                     max_depth,
                     allow_unresolved,
-                )?
+                )?;
+                result.push_str(&expanded);
             } else if allow_unresolved {
-                // Leave the original ${VAR} text as-is
-                format!("${{{var_name}}}")
+                // Leave the original ${VAR} text as-is. It is emitted
+                // verbatim and must NOT be recursively re-interpolated: the
+                // recursion would find `var_name` already present in
+                // `visited` and falsely report a circular reference, which
+                // made `allow_unresolved` unusable for any unresolved
+                // variable (issue #126).
+                result.push_str(&format!("${{{var_name}}}"));
             } else {
                 return Err(ConfigError::InterpolationError {
                     variable: var_name.to_string(),
                     message: "variable not found and no default provided".to_string(),
                 });
-            };
-
-            // Recursively interpolate the value (it might contain more references)
-            visited.insert(var_name.to_string());
-            let interpolated = interpolate_inner_impl(
-                &value,
-                resolver,
-                visited,
-                referenced_vars,
-                sensitive_refs,
-                is_sensitive,
-                max_depth,
-                allow_unresolved,
-            )?;
-            visited.remove(var_name);
-
-            result.push_str(&interpolated);
+            }
         } else {
             // Regular character - copy it
             if b < 128 {
@@ -529,8 +541,11 @@ impl InterpolationConfig {
 pub struct InterpolationContext {
     /// All variables referenced across all interpolations
     all_referenced: HashSet<String>,
-    /// Variables referenced from sensitive fields
-    sensitive_references: HashMap<String, String>, // var -> field_name
+    /// Variables referenced from sensitive fields (variable -> every field
+    /// that referenced it). A list is required because the same variable is
+    /// often referenced from several sensitive fields; a single field name
+    /// would silently lose earlier references (last-write-wins).
+    sensitive_references: HashMap<String, Vec<String>>,
     /// Warnings generated during interpolation
     warnings: Vec<InterpolationWarning>,
 }
@@ -542,6 +557,11 @@ impl InterpolationContext {
     }
 
     /// Record an interpolation for a field.
+    ///
+    /// If the field is sensitive, every referenced variable is appended to
+    /// that variable's list of referencing fields (existing entries for
+    /// other fields are preserved, and re-recording the same field does not
+    /// create duplicates).
     pub fn record(&mut self, field_name: &str, result: &InterpolationResult) {
         // Track all referenced variables
         self.all_referenced
@@ -550,8 +570,10 @@ impl InterpolationContext {
         // Track sensitive references
         if result.is_sensitive {
             for var in &result.referenced_vars {
-                self.sensitive_references
-                    .insert(var.clone(), field_name.to_string());
+                let fields = self.sensitive_references.entry(var.clone()).or_default();
+                if !fields.iter().any(|f| f == field_name) {
+                    fields.push(field_name.to_string());
+                }
             }
         }
     }
@@ -571,9 +593,26 @@ impl InterpolationContext {
         self.sensitive_references.contains_key(var)
     }
 
-    /// Get the field name that referenced a sensitive variable.
+    /// Get the first field name that referenced a sensitive variable.
+    ///
+    /// A variable can be referenced from several sensitive fields; use
+    /// [`sensitive_ref_fields`](Self::sensitive_ref_fields) to get them all.
     pub fn sensitive_ref_field(&self, var: &str) -> Option<&str> {
-        self.sensitive_references.get(var).map(|s| s.as_str())
+        self.sensitive_references
+            .get(var)
+            .and_then(|fields| fields.first())
+            .map(|s| s.as_str())
+    }
+
+    /// Get all field names that referenced a sensitive variable.
+    ///
+    /// Returns an empty slice when the variable was never referenced from a
+    /// sensitive field.
+    pub fn sensitive_ref_fields(&self, var: &str) -> &[String] {
+        self.sensitive_references
+            .get(var)
+            .map(|fields| fields.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Check if there are any warnings.
@@ -906,5 +945,106 @@ mod tests {
             }
         });
         assert_eq!(result.unwrap(), "outer_val");
+    }
+
+    // Tests for `allow_unresolved` (issue #126)
+
+    fn allow_unresolved_config() -> InterpolationConfig {
+        InterpolationConfig {
+            allow_unresolved: true,
+            ..InterpolationConfig::default()
+        }
+    }
+
+    #[test]
+    fn test_allow_unresolved_keeps_unresolved_literal() {
+        // Regression (#126): an unresolved variable kept as literal text
+        // must not be re-interpolated and falsely reported as a circular
+        // reference — `allow_unresolved` resolves successfully instead.
+        let r = resolver(&[]);
+        let result = interpolate_with_config("Service: ${MISSING}", &r, &allow_unresolved_config());
+        assert_eq!(result.unwrap(), "Service: ${MISSING}");
+    }
+
+    #[test]
+    fn test_allow_unresolved_rest_of_expression_interpolates() {
+        // The unresolved reference stays literal while the rest of the
+        // expression is interpolated normally.
+        let r = resolver(&[("HOST", "localhost")]);
+        let result =
+            interpolate_with_config("${MISSING}-${HOST}", &r, &allow_unresolved_config()).unwrap();
+        assert_eq!(result, "${MISSING}-localhost");
+    }
+
+    #[test]
+    fn test_allow_unresolved_nested_value_reference() {
+        // A resolved variable whose VALUE references an unresolved variable:
+        // the inner reference stays literal, surrounding text interpolates.
+        let r = resolver(&[("A", "${B}:${HOST}"), ("HOST", "localhost")]);
+        let result = interpolate_with_config("${A}", &r, &allow_unresolved_config()).unwrap();
+        assert_eq!(result, "${B}:localhost");
+    }
+
+    #[test]
+    fn test_allow_unresolved_self_referential_default() {
+        // `${VAR:${VAR}}` is a fallback referencing the same (unset)
+        // variable — documented as NOT a circular reference. With
+        // `allow_unresolved` the leftover literal must survive unchanged.
+        let r = resolver(&[]);
+        let result = interpolate_with_config("${A:${A}}", &r, &allow_unresolved_config()).unwrap();
+        assert_eq!(result, "${A}");
+    }
+
+    #[test]
+    fn test_allow_unresolved_still_detects_real_cycle() {
+        // Genuinely circular values (both resolvable) are still detected.
+        let r = resolver(&[("A", "${B}"), ("B", "${A}")]);
+        let result = interpolate_with_config("${A}", &r, &allow_unresolved_config());
+        assert!(matches!(result, Err(ConfigError::CircularReference { .. })));
+    }
+
+    #[test]
+    fn test_allow_unresolved_nested_name_is_still_invalid() {
+        // Nested `${...}` is only supported in default values, not in
+        // variable NAME positions: `${A_${B}}` captures the name `A_${B}`,
+        // which fails name validation at parse time regardless of
+        // `allow_unresolved` (that option covers unresolvable variables,
+        // not malformed references).
+        let r = resolver(&[("B", "x")]);
+        let result = interpolate_with_config("${A_${B}}", &r, &allow_unresolved_config());
+        assert!(matches!(
+            result,
+            Err(ConfigError::InterpolationError { .. })
+        ));
+    }
+
+    #[test]
+    fn test_interpolation_context_multiple_sensitive_fields_same_var() {
+        // Regression (#128): the same variable referenced from several
+        // sensitive fields must accumulate all field names instead of the
+        // last record overwriting the previous ones.
+        let r = resolver(&[("API_KEY", "secret")]);
+        let result = interpolate_tracked("${API_KEY}", &r, true).unwrap();
+
+        let mut ctx = InterpolationContext::new();
+        ctx.record("db_password", &result);
+        ctx.record("api_token", &result);
+
+        assert!(ctx.is_sensitive_ref("API_KEY"));
+        assert_eq!(
+            ctx.sensitive_ref_fields("API_KEY"),
+            ["db_password".to_string(), "api_token".to_string()]
+        );
+        // First recorded field is preserved for the single-field accessor.
+        assert_eq!(ctx.sensitive_ref_field("API_KEY"), Some("db_password"));
+
+        // Re-recording the same field must not create duplicates.
+        ctx.record("db_password", &result);
+        assert_eq!(ctx.sensitive_ref_fields("API_KEY").len(), 2);
+
+        // Non-sensitive fields never enter the mapping.
+        let plain = interpolate_tracked("${API_KEY}", &r, false).unwrap();
+        ctx.record("public_field", &plain);
+        assert_eq!(ctx.sensitive_ref_fields("API_KEY").len(), 2);
     }
 }

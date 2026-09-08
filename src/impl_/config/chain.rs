@@ -28,6 +28,19 @@ pub struct SourceChain {
     fail_fast: bool,
 }
 
+/// Result of [`SourceChain::collect_report`]: the merged outcome plus the
+/// per-source failures that were skipped instead of aborting the chain.
+///
+/// `failures` carries `(source name, rendered error message)` pairs in
+/// source order; it is empty when every source succeeded or when
+/// `fail_fast` aborted the chain on its first error.
+pub struct ChainOutcome {
+    /// The merged value, or the error that aborted/failed the collection.
+    pub merged: ConfigResult<AnnotatedValue>,
+    /// Skipped sources: `(source name, error message)`.
+    pub failures: Vec<(String, String)>,
+}
+
 impl Default for SourceChain {
     fn default() -> Self {
         Self::new()
@@ -104,30 +117,53 @@ impl SourceChain {
     }
 
     /// Collect and merge all sources.
+    ///
+    /// # Partial failure semantics
+    ///
+    /// When `fail_fast` is disabled (or the failing source is optional),
+    /// sources that fail are **silently skipped**: the merged result combines
+    /// only the successful sources and the collected errors are *not*
+    /// exposed to the caller. A [`ConfigError::MultiSource`] error is
+    /// returned only when *every* source fails. Callers that need per-source
+    /// error visibility must use [`Self::collect_report`] or collect the
+    /// sources individually.
     pub fn collect(self) -> ConfigResult<AnnotatedValue> {
+        self.collect_report().merged
+    }
+
+    /// Like [`Self::collect`], but keeps the per-source failures that were
+    /// skipped in non-fail-fast mode visible so callers can surface them
+    /// (e.g. as build warnings) instead of losing them silently.
+    pub fn collect_report(self) -> ChainOutcome {
         let sources = self.sources;
         let merge_engine = self.merge_engine;
         let fail_fast = self.fail_fast;
 
-        Self::collect_and_merge(sources, merge_engine, fail_fast)
+        Self::collect_and_merge_report(sources, merge_engine, fail_fast)
     }
 
-    fn collect_and_merge(
+    fn collect_and_merge_report(
         sources: Vec<Box<dyn Source>>,
         merge_engine: MergeEngine,
         fail_fast: bool,
-    ) -> ConfigResult<AnnotatedValue> {
+    ) -> ChainOutcome {
         if sources.is_empty() {
-            return Ok(AnnotatedValue::new(
-                ConfigValue::Map(Arc::new(IndexMap::new())),
-                crate::types::SourceId::new("empty"),
-                "",
-            ));
+            return ChainOutcome {
+                merged: Ok(AnnotatedValue::new(
+                    ConfigValue::Map(Arc::new(IndexMap::new())),
+                    crate::types::SourceId::new("empty"),
+                    "",
+                )),
+                failures: Vec::new(),
+            };
         }
 
         // Collect all source values
         let mut values: Vec<(String, ConfigResult<AnnotatedValue>)> = Vec::new();
         let mut errors: Vec<(String, ConfigError)> = Vec::new();
+        // Name + rendered message for every skipped source; ConfigError is
+        // not `Clone`, so the report keeps the flattened form only.
+        let mut failures: Vec<(String, String)> = Vec::new();
 
         for source in &sources {
             let name = source.name().to_string();
@@ -137,8 +173,12 @@ impl SourceChain {
                 Ok(value) => values.push((name, Ok(value))),
                 Err(e) => {
                     if fail_fast && !source.is_optional() {
-                        return Err(e);
+                        return ChainOutcome {
+                            merged: Err(e),
+                            failures: Vec::new(),
+                        };
                     }
+                    failures.push((name.clone(), e.to_string()));
                     errors.push((name, e));
                 }
             }
@@ -147,7 +187,10 @@ impl SourceChain {
         // Handle all errors case
         if values.is_empty() && !errors.is_empty() {
             let multi_err = crate::error::MultiSourceError::new(sources.len(), errors);
-            return Err(ConfigError::MultiSource { source: multi_err });
+            return ChainOutcome {
+                merged: Err(ConfigError::MultiSource { source: multi_err }),
+                failures,
+            };
         }
 
         // Sort by priority (lower priority first), breaking ties by source id
@@ -170,10 +213,21 @@ impl SourceChain {
         );
 
         for value in sorted_values {
-            merged = merge_engine.merge(&merged, &value)?;
+            match merge_engine.merge(&merged, &value) {
+                Ok(m) => merged = m,
+                Err(e) => {
+                    return ChainOutcome {
+                        merged: Err(e),
+                        failures,
+                    };
+                }
+            }
         }
 
-        Ok(merged)
+        ChainOutcome {
+            merged: Ok(merged),
+            failures,
+        }
     }
 
     /// Get a list of source names.
@@ -518,6 +572,37 @@ mod tests {
             result.unwrap_err(),
             ConfigError::MultiSource { .. }
         ));
+    }
+
+    #[test]
+    fn test_chain_partial_failure_merges_successful_sources() {
+        // fail_fast=false + a failing REQUIRED source + a healthy source:
+        // the chain merges the successful sources and silently drops the
+        // error (documented partial-failure semantics). The chain only
+        // errors when every source fails.
+        let chain = SourceChain::new()
+            .fail_fast(false)
+            .push(Box::new(crate::impl_::config::FileSource::new(
+                "/nonexistent-required.toml",
+            )))
+            .push(Box::new(
+                MemorySource::new()
+                    .set("key", ConfigValue::string("from_memory"))
+                    .with_priority(50),
+            ));
+
+        let result = chain.collect().expect("successful sources must merge");
+        assert!(result.is_map());
+        if let ConfigValue::Map(map) = &result.inner {
+            let val = map.get("key").expect("key should exist");
+            if let ConfigValue::String(s) = &val.inner {
+                assert_eq!(s, "from_memory");
+            } else {
+                panic!("expected String value");
+            }
+        } else {
+            panic!("expected map");
+        }
     }
 
     #[test]

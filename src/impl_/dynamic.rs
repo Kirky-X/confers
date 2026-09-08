@@ -247,7 +247,9 @@ mod watcher {
         /// # Arguments
         ///
         /// * `rx` - The watch receiver for configuration changes
-        /// * `fields` - The list of field names to watch (in dot-notation, e.g., "database.host")
+        /// * `fields` - The list of field names to watch (in dot-notation,
+        ///   e.g., "database.host"). An empty list watches no fields;
+        ///   [`changed_for`](Self::changed_for) then returns immediately.
         pub fn new(rx: watch::Receiver<Arc<T>>, fields: Vec<Arc<str>>) -> Self {
             // Seed the baseline from the current configuration so that an
             // initial value (or the first update that equals it) is never
@@ -267,9 +269,37 @@ mod watcher {
         /// Returns a tuple of:
         /// - The updated configuration
         /// - A vector of field names that actually changed
+        ///
+        /// # Empty field list
+        ///
+        /// An empty field list means nothing is watched: the call returns
+        /// immediately with the current configuration and no changes.
+        ///
+        /// # Closed channel
+        ///
+        /// When every sender of the watch channel has been dropped (i.e. the
+        /// configuration source is gone), watching stops gracefully: the
+        /// current configuration is returned with an empty change list
+        /// instead of panicking the awaiting task.
         pub async fn changed_for(&mut self) -> (Arc<T>, Vec<Arc<str>>) {
+            // Nothing to watch: with an empty field list the filter below
+            // would always produce an empty `changed` set and the loop could
+            // never reach its return path. Return the current value instead.
+            if self.fields.is_empty() {
+                let cfg = self.rx.borrow().clone();
+                return (cfg, Vec::new());
+            }
+
             loop {
-                self.rx.changed().await.expect("watch channel closed");
+                // `changed()` only fails once every sender has been dropped.
+                // Treat that as "the source is gone": stop listening and
+                // return the current configuration unchanged (borrowing still
+                // yields the last sent value after closure) instead of
+                // panicking via `expect`.
+                if self.rx.changed().await.is_err() {
+                    let cfg = self.rx.borrow().clone();
+                    return (cfg, Vec::new());
+                }
                 let cfg = self.rx.borrow().clone();
 
                 let changed: Vec<_> = self
@@ -453,5 +483,88 @@ mod tests {
         // The callback should have been called twice: once for update(1)
         // and once for the reentrant update(2).
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
+    }
+}
+
+/// Tests for [`FieldWatcher`] (requires the `watch` feature).
+#[cfg(all(test, feature = "watch"))]
+mod watcher_tests {
+    use super::FieldWatcher;
+    use crate::interface::ConfigProvider;
+    use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::watch;
+
+    /// Minimal in-memory provider for the watcher tests.
+    #[derive(Clone)]
+    struct MapProvider(HashMap<String, AnnotatedValue>);
+
+    impl ConfigProvider for MapProvider {
+        fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+            self.0.get(key)
+        }
+        fn keys(&self) -> Vec<String> {
+            self.0.keys().cloned().collect()
+        }
+    }
+
+    fn provider(pairs: &[(&str, &str)]) -> MapProvider {
+        let mut map = HashMap::new();
+        for (k, v) in pairs {
+            map.insert(
+                (*k).to_string(),
+                AnnotatedValue::new(ConfigValue::string(*v), SourceId::new("test"), *k),
+            );
+        }
+        MapProvider(map)
+    }
+
+    /// Regression (#111): an empty field list watches nothing and must
+    /// return immediately with the current configuration instead of
+    /// waiting forever on the watch channel.
+    #[tokio::test]
+    async fn test_changed_for_empty_fields_returns_immediately() {
+        let (_tx, rx) = watch::channel(Arc::new(provider(&[("a", "1")])));
+        let mut watcher = FieldWatcher::new(rx, Vec::new());
+
+        let (cfg, changed) = tokio::time::timeout(Duration::from_secs(1), watcher.changed_for())
+            .await
+            .expect("empty field list must not block changed_for");
+        assert!(changed.is_empty());
+        assert_eq!(
+            cfg.get_raw("a").map(|v| v.inner.clone()),
+            Some(ConfigValue::string("1"))
+        );
+    }
+
+    /// Regression (#109): a closed watch channel (all senders dropped) must
+    /// end the watch loop gracefully instead of panicking via `expect`.
+    #[tokio::test]
+    async fn test_changed_for_closed_channel_returns_gracefully() {
+        let (tx, rx) = watch::channel(Arc::new(provider(&[("a", "1")])));
+        let mut watcher = FieldWatcher::new(rx, vec![Arc::from("a")]);
+        drop(tx);
+
+        let (_cfg, changed) = tokio::time::timeout(Duration::from_secs(1), watcher.changed_for())
+            .await
+            .expect("closed channel must not panic or hang changed_for");
+        assert!(changed.is_empty());
+    }
+
+    /// Guards the restructured loop: real watched-field changes are still
+    /// reported, and only the fields that actually changed are listed.
+    #[tokio::test]
+    async fn test_changed_for_reports_watched_field_change() {
+        let (tx, rx) = watch::channel(Arc::new(provider(&[("a", "1"), ("b", "2")])));
+        let mut watcher = FieldWatcher::new(rx, vec![Arc::from("a"), Arc::from("b")]);
+
+        // Only "a" changes; "b" keeps its value.
+        let _ = tx.send(Arc::new(provider(&[("a", "9"), ("b", "2")])));
+        let (_cfg, changed) = tokio::time::timeout(Duration::from_secs(1), watcher.changed_for())
+            .await
+            .expect("changed_for must return after a real change");
+        assert_eq!(changed, vec![Arc::from("a")]);
     }
 }

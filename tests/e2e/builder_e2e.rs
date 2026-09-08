@@ -276,7 +276,8 @@ fn bld20_type_mismatch_object_to_primitive_is_rejected() {
     );
 }
 
-/// BLD-21:单源损坏时 build_resilient 不中断构建(其余源照常合并,无降级)。
+/// BLD-21:单源损坏时 build_resilient 不中断构建(其余源照常合并,无降级),
+/// 且被跳过的源必须以 SourceError warning 呈现(不再完全静默)。
 #[test]
 fn bld21_resilient_build_survives_partial_source_failure() {
     let dir = tempfile::tempdir().unwrap();
@@ -291,7 +292,16 @@ fn bld21_resilient_build_survives_partial_source_failure() {
         .expect("resilient build must not fail on a single corrupt source");
 
     assert!(!result.degraded, "partial failure must not degrade");
-    assert!(result.warnings.is_empty());
+    let skipped = result
+        .warnings
+        .iter()
+        .find(|w| matches!(w.code, confers::error::WarningCode::SourceError))
+        .expect("skipped source must surface as a SourceError warning");
+    assert!(
+        skipped.message.contains("corrupt.toml"),
+        "warning must name the failed source: {}",
+        skipped.message
+    );
     assert_eq!(result.config.name, "fallback-name");
     assert_eq!(result.config.port, 8080);
 }
