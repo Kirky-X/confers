@@ -400,9 +400,6 @@ pub struct AppConfig {
 pub struct AppConfig {
     #[config(merge_strategy = "append")]
     pub hosts: Vec<String>,
-
-    #[config(merge_strategy = "deep_merge")]
-    pub settings: HashMap<String, String>,
 }
 ```
 
@@ -411,7 +408,10 @@ pub struct AppConfig {
 - `append`：追加到数组
 - `prepend`：前插到数组
 - `join`：拼接数组值
-- `deep_merge`：深度合并映射
+
+> 说明：Map 之间在引擎层无条件深度合并，因此不需要（也不再接受）`deep_merge`
+> 策略值；`join_append` 亦为可选拼写。原 `deep_merge` 与 `replace` 行为完全
+> 等价，0.6.0 起从合法取值中移除。
 
 ---
 

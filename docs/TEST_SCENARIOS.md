@@ -102,7 +102,7 @@
 | BLD-09 | `.memory(map)` 内存源注入 | 正常 | default | 无 | `tests/core/coverage.rs::test_memory_source_basic/with_initial_values` | tests/e2e/builder_e2e.rs |
 | BLD-10 | `.memory_priority(n)` 调整内存源优先级 | 边界 | default | 无 | `tests/core/coverage.rs::test_memory_source_not_optional` 附近族；专用断言→需新增 | tests/e2e/builder_e2e.rs |
 | BLD-11 | 完整优先级链 default < file < env < memory：同一键四处定义，最终取 memory | 正常 | env | 无 | `tests/core/merge.rs::test_precedence_default_file_env_memory` | tests/e2e/builder_e2e.rs |
-| BLD-12 | 全局 `MergeStrategy` 六种：Replace/Join/Append/Prepend/JoinAppend/DeepMerge 各验证合并结果 | 正常 | default | 无 | `tests/core/merge.rs::test_merge_replace_strategy` 等 6 例 | tests/e2e/builder_e2e.rs |
+| BLD-12 | 全局 `MergeStrategy` 五种：Replace/Join/Append/Prepend/JoinAppend 各验证合并结果（Map 之间无条件深合并，已无 DeepMerge 变体） | 正常 | default | 无 | `tests/core/merge.rs::test_merge_replace_strategy` 等 5 例 | tests/e2e/builder_e2e.rs |
 | BLD-13 | `.field_strategy("tags", Append)` 字段级策略覆盖全局策略 | 边界 | default | 无 | `tests/core/merge.rs::test_field_specific_strategy` | tests/e2e/builder_e2e.rs |
 | BLD-14 | `ConfigLimits::max_file_size_bytes` 超限 → `ConfigSizeLimitExceeded(2400)` | 异常 | default | 本地文件 | `⚠死文件 tests/core/error.rs::test_size_limit_exceeded_error`；集成级→需新增 | tests/e2e/builder_e2e.rs |
 | BLD-15 | 嵌套深度超 `max_nesting_depth` → 明确错误 | 异常 | default | 本地文件 | src 内联 limits tests（`src/impl_/config/limits.rs`）→需集成新增 | tests/e2e/builder_e2e.rs |
@@ -441,10 +441,10 @@
 |----|---------|------|-------------|---------|---------|---------|
 | RDS-01 | `RedisConfigBus::connect("redis://127.0.0.1:16379", channel)` 连接真实 Redis | 正常 | redis-bus | Redis(16379) | `tests/remote/bus.rs::test_redis_bus_connect/test_redis_bus_default`（端口守卫） | tests/e2e/bus_e2e.rs |
 | RDS-02 | 连接不可达 Redis → 连接错误 | 异常 | redis-bus | 无（不可达地址） | `tests/remote/bus.rs::test_redis_bus_connect`（失败分支） | tests/e2e/bus_e2e.rs |
-| RDS-03 | `RedisBusBuilder` url/channel/pool_size/retry_wait_ms/error_retry_wait_secs → build | 正常 | redis-bus | Redis(16379) | `tests/remote/bus.rs::test_redis_bus_url_method/with_pool_size/pool_size_method` | tests/e2e/bus_e2e.rs |
+| RDS-03 | `RedisBusBuilder` url/channel/retry_wait_ms/error_retry_wait_secs → build（pool_size 已于 0.6.0 移除，MultiplexedConnection 单连接多路复用） | 正常 | redis-bus | Redis(16379) | `tests/remote/bus.rs::test_redis_bus_url_method` | tests/e2e/bus_e2e.rs |
 | RDS-04 | start/stop 生命周期 | 正常 | redis-bus | Redis(16379) | `tests/remote/bus.rs::test_redis_bus_start_stop` | tests/e2e/bus_e2e.rs |
 | RDS-05 | 端到端 pub/sub（pub/sub 端到端收发事件） | 正常 | redis-bus | Redis(16379) | `tests/remote/bus.rs::test_redis_bus_publish_subscribe` | tests/e2e/bus_e2e.rs |
-| RDS-06 | 连接池 pool_size>1 并发发布不丢消息 | 边界 | redis-bus | Redis(16379) | 无→需新增 | tests/e2e/bus_e2e.rs |
+| RDS-06 | 多任务并发发布不丢消息（单条多路复用连接） | 边界 | redis-bus | Redis(16379) | `tests/e2e/bus_e2e.rs::rds06_concurrent_publish_delivers_all` | tests/e2e/bus_e2e.rs |
 | RDS-07 | 总线断连恢复：中途 flushall/断连 → 按 error_retry_wait_secs 重试后恢复 | 异常 | redis-bus | Redis(16379) | 无→需新增 | tests/e2e/bus_e2e.rs |
 
 ### 2.23 Schema（SCH，5 条）

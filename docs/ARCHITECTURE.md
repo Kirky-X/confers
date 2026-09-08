@@ -158,7 +158,7 @@ confers/
 
 1. **来源注册**：应用通过 `ConfigBuilder`（或 `SourceChainBuilder`）声明来源，顺序即优先级（后加入者优先）。
 2. **解析**：`loader` 对每个来源做格式探测（按内容或扩展名：TOML/JSON/YAML/INI），解析为 `ConfigValue` 树；解析错误携带 `SourceLocation`（精确到行列）。
-3. **合并**：`MergeEngine` 沿来源链逐键合并，值被包装为 `AnnotatedValue`（保留来源与优先级）；冲突可产生 `ConflictReport` / `SourceWarning`；字段可声明 `merge_strategy`（`replace`/`append`/`prepend`/`join`/`deep_merge`）。
+3. **合并**：`MergeEngine` 沿来源链逐键合并，值被包装为 `AnnotatedValue`（保留来源与优先级）；冲突可产生 `ConflictReport` / `SourceWarning`；字段可声明 `merge_strategy`（`replace`/`append`/`prepend`/`join`；Map 之间无条件深度合并）。
 4. **类型化**：合并结果反序列化为用户结构体 `T`；启用 `validation` 时按 `garde` 规则校验；启用 `encryption` 时以 `enc:` 前缀识别加密值并解密。
 5. **错误出口**：任一环节的初始化期失败以 `ConfigConfigError` 返回；运行期失败以 `ConfersError` 返回。`build_with_fallback` / `build_resilient` 提供降级构建。
 
