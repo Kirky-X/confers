@@ -277,14 +277,7 @@ impl FieldAttrs {
 
         // Validate merge_strategy
         if let Some(ref strategy) = self.merge_strategy {
-            let valid_strategies = [
-                "replace",
-                "join",
-                "append",
-                "prepend",
-                "join_append",
-                "deep_merge",
-            ];
+            let valid_strategies = ["replace", "join", "append", "prepend", "join_append"];
             if !valid_strategies.contains(&strategy.as_str())
                 && let Some(ident) = self.ident.as_ref()
             {
@@ -410,7 +403,6 @@ pub enum MergeStrategyKind {
     Append,
     Prepend,
     JoinAppend,
-    DeepMerge,
 }
 
 impl MergeStrategyKind {
@@ -421,7 +413,6 @@ impl MergeStrategyKind {
             "append" => Self::Append,
             "prepend" => Self::Prepend,
             "join_append" | "joinappend" => Self::JoinAppend,
-            "deep_merge" | "deepmerge" => Self::DeepMerge,
             _ => Self::Replace,
         }
     }
@@ -472,9 +463,11 @@ mod tests {
             MergeStrategyKind::from_str("append"),
             MergeStrategyKind::Append
         );
+        // "deep_merge" was removed alongside the no-op MergeStrategy::DeepMerge
+        // variant: it must now fall back to Replace instead of being accepted.
         assert_eq!(
             MergeStrategyKind::from_str("deep_merge"),
-            MergeStrategyKind::DeepMerge
+            MergeStrategyKind::Replace
         );
     }
 }
