@@ -20,7 +20,13 @@ pub enum PollInterval {
     Normal,
     /// Slow polling (60 seconds) - default for HTTP
     Slow,
-    /// Custom interval
+    /// Custom interval in seconds.
+    ///
+    /// The raw value is stored as given, but every consumer clamps it to the
+    /// valid range `[1, 3600]`: [`PollInterval::as_duration`] and [`std::fmt::Display`]
+    /// both report the clamped, effective value (`Custom(0)` acts as 1s,
+    /// `Custom(5000)` acts as 3600s). Use [`PollInterval::custom`] to reject
+    /// out-of-range values upfront instead of relying on the clamp.
     Custom(u64),
 }
 
@@ -80,7 +86,10 @@ impl std::fmt::Display for PollInterval {
             Self::Fast => write!(f, "10s"),
             Self::Normal => write!(f, "30s"),
             Self::Slow => write!(f, "60s"),
-            Self::Custom(secs) => write!(f, "{}s", secs),
+            // Report the clamped value so Display always matches the
+            // effective interval returned by `as_duration` (single source of
+            // truth for the clamp).
+            Self::Custom(secs) => write!(f, "{}s", (*secs).clamp(1, 3600)),
         }
     }
 }
@@ -125,5 +134,39 @@ mod tests {
         assert_eq!(format!("{}", PollInterval::Normal), "30s");
         assert_eq!(format!("{}", PollInterval::Slow), "60s");
         assert_eq!(format!("{}", PollInterval::Custom(45)), "45s");
+    }
+
+    /// Issue #341/#342: Display must report the effective (clamped) value so
+    /// it stays consistent with `as_duration`.
+    #[test]
+    fn test_poll_interval_display_clamps_custom() {
+        assert_eq!(format!("{}", PollInterval::Custom(0)), "1s");
+        assert_eq!(format!("{}", PollInterval::Custom(1)), "1s");
+        assert_eq!(format!("{}", PollInterval::Custom(3600)), "3600s");
+        assert_eq!(format!("{}", PollInterval::Custom(3601)), "3600s");
+        assert_eq!(format!("{}", PollInterval::Custom(u64::MAX)), "3600s");
+        // Display and as_duration must agree for out-of-range values.
+        assert_eq!(
+            format!("{}", PollInterval::Custom(0)),
+            format!("{}s", PollInterval::Custom(0).as_duration().as_secs())
+        );
+        assert_eq!(
+            format!("{}", PollInterval::Custom(999_999)),
+            format!("{}s", PollInterval::Custom(999_999).as_duration().as_secs())
+        );
+    }
+
+    /// Issue #341/#342: the clamp in `as_duration` is documented behavior for
+    /// the public `Custom(u64)` variant.
+    #[test]
+    fn test_poll_interval_custom_clamped_in_duration() {
+        assert_eq!(
+            PollInterval::Custom(0).as_duration(),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            PollInterval::Custom(3601).as_duration(),
+            Duration::from_secs(3600)
+        );
     }
 }

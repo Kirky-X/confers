@@ -8,7 +8,7 @@
 //! This module provides an etcd-backed implementation of the `PolledSource` trait,
 //! using the etcd-client SDK (gRPC) to interact with etcd's KV store.
 
-use super::common::{merge_into_map, try_parse_value};
+use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
 use crate::types::{AnnotatedValue, SourceId};
@@ -22,6 +22,12 @@ use std::time::Duration;
 /// Default poll interval for etcd (30 seconds).
 pub const DEFAULT_ETCD_POLL_INTERVAL: Duration = Duration::from_secs(30);
 
+/// Default timeout for a single etcd KV operation (30 seconds).
+///
+/// Bounds every KV GET issued by [`EtcdSource`] so a hung connection cannot
+/// stall the poll (and the polling loop) forever.
+pub const DEFAULT_ETCD_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Builder for creating etcd configuration sources.
 pub struct EtcdSourceBuilder {
     endpoints: Vec<String>,
@@ -31,6 +37,7 @@ pub struct EtcdSourceBuilder {
     format: Option<Format>,
     interval: Option<Duration>,
     tls: Option<EtcdTlsConfig>,
+    operation_timeout: Duration,
 }
 
 /// TLS configuration for etcd connection.
@@ -52,6 +59,7 @@ impl EtcdSourceBuilder {
             format: None,
             interval: None,
             tls: None,
+            operation_timeout: DEFAULT_ETCD_OPERATION_TIMEOUT,
         }
     }
 
@@ -100,6 +108,15 @@ impl EtcdSourceBuilder {
     /// Set TLS configuration.
     pub fn tls(mut self, tls: EtcdTlsConfig) -> Self {
         self.tls = Some(tls);
+        self
+    }
+
+    /// Set the timeout for a single etcd KV operation. Default: 30 seconds.
+    ///
+    /// Each KV GET is bounded by this duration; a timed-out operation is
+    /// reported as an error instead of hanging forever.
+    pub fn operation_timeout(mut self, timeout: Duration) -> Self {
+        self.operation_timeout = timeout;
         self
     }
 
@@ -184,6 +201,7 @@ impl EtcdSourceBuilder {
             prefix: Arc::from(self.prefix.clone()),
             format: self.format,
             interval: self.interval.unwrap_or(DEFAULT_ETCD_POLL_INTERVAL),
+            operation_timeout: self.operation_timeout,
             last_revision: AtomicI64::new(0),
             cached_value: ArcSwap::new(Arc::new(None)),
             cached_source_id: SourceId::new(format!("etcd:{}", self.prefix)),
@@ -201,9 +219,11 @@ impl Default for EtcdSourceBuilder {
 pub struct EtcdSource {
     client: Arc<Client>,
     prefix: Arc<str>,
-    #[allow(dead_code)] // reserved for future format-specific polling
+    /// Explicit format for KV values; `None` enables content sniffing.
     format: Option<Format>,
     interval: Duration,
+    /// Timeout applied to each KV GET issued by this source.
+    operation_timeout: Duration,
     last_revision: AtomicI64,
     cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
     cached_source_id: SourceId,
@@ -222,15 +242,23 @@ impl EtcdSource {
         let client = self.client.clone();
         let mut kv_client = client.kv_client();
 
-        // Get all keys with the prefix
-        let get_response = kv_client
-            .get(self.prefix.as_ref(), Some(GetOptions::new().with_prefix()))
-            .await
-            .map_err(|e| ConfigError::InvalidValue {
-                key: "etcd".to_string(),
-                expected_type: "etcd KV response".to_string(),
-                message: format!("Failed to fetch from etcd: {}", e),
-            })?;
+        // Get all keys with the prefix. Issue #335: bound the RPC with a
+        // timeout so a hung connection cannot stall the poll forever.
+        let get_response = tokio::time::timeout(
+            self.operation_timeout,
+            kv_client.get(self.prefix.as_ref(), Some(GetOptions::new().with_prefix())),
+        )
+        .await
+        .map_err(|_| ConfigError::InvalidValue {
+            key: "etcd".to_string(),
+            expected_type: "etcd KV response".to_string(),
+            message: format!("etcd KV get timed out after {:?}", self.operation_timeout),
+        })?
+        .map_err(|e| ConfigError::InvalidValue {
+            key: "etcd".to_string(),
+            expected_type: "etcd KV response".to_string(),
+            message: format!("Failed to fetch from etcd: {}", e),
+        })?;
 
         // Get header with revision
         let header = get_response.header();
@@ -295,8 +323,9 @@ impl EtcdSource {
                 key.clone()
             };
 
-            // Try to parse as config format
-            if let Some(parsed) = try_parse_value(&value, "etcd") {
+            // Try to parse as config format. An explicitly configured format
+            // (issue #334) wins over content sniffing.
+            if let Some(parsed) = try_parse_value_with_format(&value, self.format, "etcd") {
                 merge_into_map(&mut config_map, &relative_key, parsed);
             } else {
                 // Treat as simple string value
@@ -398,6 +427,7 @@ mod tests {
         assert_eq!(builder.format, None);
         assert_eq!(builder.interval, None);
         assert!(builder.tls.is_none());
+        assert_eq!(builder.operation_timeout, DEFAULT_ETCD_OPERATION_TIMEOUT);
     }
 
     #[test]
@@ -463,6 +493,23 @@ mod tests {
         assert!(builder.tls.is_some());
         // Verify the TLS config was actually stored by checking a field.
         assert_eq!(builder.tls.as_ref().unwrap().ca_file, "/path/ca.pem");
+    }
+
+    /// Issue #335: builder exposes the per-operation timeout with a sane
+    /// default.
+    #[test]
+    fn test_builder_operation_timeout() {
+        assert_eq!(
+            EtcdSourceBuilder::new().operation_timeout,
+            DEFAULT_ETCD_OPERATION_TIMEOUT
+        );
+        let builder = EtcdSourceBuilder::new().operation_timeout(Duration::from_secs(5));
+        assert_eq!(builder.operation_timeout, Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_default_etcd_operation_timeout_constant() {
+        assert_eq!(DEFAULT_ETCD_OPERATION_TIMEOUT, Duration::from_secs(30));
     }
 
     #[test]
@@ -716,5 +763,55 @@ mod tests {
             result.unwrap().is_null(),
             "prefix with no keys should yield Null"
         );
+    }
+
+    /// Issue #334: an explicitly configured format is used to parse KV values
+    /// instead of sniffing. A JSON payload pinned as TOML fails to parse and
+    /// is kept as a raw string.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_poll_uses_configured_format_over_sniffing() {
+        if !etcd_ready() {
+            return;
+        }
+        let prefix = unique_prefix();
+        let put_client = Client::connect(&["127.0.0.1:2379"], None)
+            .await
+            .expect("etcd connect for seed");
+        let mut kv = put_client.kv_client();
+        kv.put(format!("{}/key", prefix), r#"{"a":1}"#.to_string(), None)
+            .await
+            .expect("etcd put seed");
+
+        let source = EtcdSourceBuilder::new()
+            .prefix(prefix.clone())
+            .format(Format::Toml)
+            .build()
+            .await
+            .unwrap();
+        let value = source.poll_internal().await.expect("poll should succeed");
+        let map = value.inner.as_map().expect("map");
+        assert_eq!(
+            map.get("key").and_then(|v| v.as_str()),
+            Some(r#"{"a":1}"#),
+            "JSON payload pinned as TOML must stay a raw string"
+        );
+
+        // With the matching format the same payload parses into a map.
+        let source = EtcdSourceBuilder::new()
+            .prefix(prefix.clone())
+            .format(Format::Json)
+            .build()
+            .await
+            .unwrap();
+        let value = source.poll_internal().await.expect("poll should succeed");
+        let parsed = value
+            .inner
+            .as_map()
+            .and_then(|m| m.get("key"))
+            .and_then(|v| v.inner.as_map())
+            .and_then(|m| m.get("a"))
+            .and_then(|v| v.as_i64());
+        assert_eq!(parsed, Some(1), "JSON payload must parse with JSON pinned");
     }
 }

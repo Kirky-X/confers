@@ -16,10 +16,20 @@ use crate::types::SourceId;
 #[cfg(any(feature = "etcd", feature = "consul"))]
 use std::sync::Arc;
 
-/// Try to parse a value as config format.
+/// Try to parse a value with an explicit [`Format`], falling back to content
+/// sniffing when `format` is `None`.
+///
+/// Used by sources that let the user pin a format for KV values (issue #334):
+/// an explicit format always wins over sniffing. Returns `None` when the
+/// content cannot be parsed as the chosen format (callers then treat the
+/// value as a plain string).
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
-pub(crate) fn try_parse_value(content: &str, source_name: &str) -> Option<AnnotatedValue> {
-    let format = detect_format_from_content(content)?;
+pub(crate) fn try_parse_value_with_format(
+    content: &str,
+    format: Option<Format>,
+    source_name: &str,
+) -> Option<AnnotatedValue> {
+    let format = format.or_else(|| detect_format_from_content(content))?;
 
     match format {
         #[cfg(feature = "toml")]
@@ -78,7 +88,7 @@ mod tests {
     #[test]
     fn test_try_parse_value_toml() {
         let content = "key = \"value\"\n";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_some());
         let val = result.unwrap();
         assert!(val.is_map());
@@ -88,7 +98,7 @@ mod tests {
     #[test]
     fn test_try_parse_value_json() {
         let content = "{\"key\": \"value\"}";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_some());
         let val = result.unwrap();
         assert!(val.is_map());
@@ -98,7 +108,7 @@ mod tests {
     #[test]
     fn test_try_parse_value_yaml() {
         let content = "---\nkey: value\n";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_some());
         let val = result.unwrap();
         assert!(val.is_map());
@@ -109,21 +119,21 @@ mod tests {
     fn test_try_parse_value_invalid_content() {
         // Content that does not match any known format pattern
         let content = "totally unrecognizable content @#$%";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_none());
     }
 
     #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_empty_content() {
-        let result = try_parse_value("", "test_source");
+        let result = try_parse_value_with_format("", None, "test_source");
         assert!(result.is_none());
     }
 
     #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_whitespace_only() {
-        let result = try_parse_value("   \n\t  ", "test_source");
+        let result = try_parse_value_with_format("   \n\t  ", None, "test_source");
         assert!(result.is_none());
     }
 
@@ -132,7 +142,7 @@ mod tests {
     fn test_try_parse_value_invalid_toml() {
         // Recognized as TOML (has " = ") but fails to parse
         let content = "key = = invalid";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_none());
     }
 
@@ -141,15 +151,49 @@ mod tests {
     fn test_try_parse_value_invalid_json() {
         // Recognized as JSON (starts with {, has quotes and colon) but fails to parse
         let content = "{\"key\": invalid_value}";
-        let result = try_parse_value(content, "test_source");
+        let result = try_parse_value_with_format(content, None, "test_source");
         assert!(result.is_none());
+    }
+
+    /// Issue #334: an explicit format must be used instead of sniffing.
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_try_parse_value_with_explicit_format_json() {
+        let content = "{\"key\": \"value\"}";
+        let val = try_parse_value_with_format(content, Some(Format::Json), "test_source")
+            .expect("explicit JSON format should parse JSON content");
+        assert!(val.is_map());
+    }
+
+    /// Issue #334: the explicit format wins over content sniffing — content
+    /// that sniffs as JSON is NOT parsed when TOML is pinned (parse failure
+    /// yields None so callers keep the raw string).
+    #[cfg(all(feature = "json", feature = "toml"))]
+    #[test]
+    fn test_try_parse_value_explicit_format_overrides_sniffing() {
+        let content = "{\"key\": \"value\"}";
+        let result = try_parse_value_with_format(content, Some(Format::Toml), "test_source");
+        assert!(
+            result.is_none(),
+            "JSON content must not parse as the pinned TOML format"
+        );
+    }
+
+    /// `None` falls back to content sniffing (the previous default behavior).
+    #[cfg(feature = "json")]
+    #[test]
+    fn test_try_parse_value_with_format_none_sniffs() {
+        let content = "{\"key\": \"value\"}";
+        let val = try_parse_value_with_format(content, None, "test_source")
+            .expect("sniffing should detect JSON");
+        assert!(val.is_map());
     }
 
     #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
     #[test]
     fn test_try_parse_value_source_name_in_result() {
         let content = "key = \"value\"\n";
-        let result = try_parse_value(content, "my_source");
+        let result = try_parse_value_with_format(content, None, "my_source");
         assert!(result.is_some());
         let val = result.unwrap();
         assert_eq!(val.source.as_str(), "my_source");

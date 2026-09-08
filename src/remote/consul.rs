@@ -8,7 +8,7 @@
 //! This module provides a Consul-backed implementation of the `PolledSource` trait,
 //! using the Consul KV REST API via reqwest.
 
-use super::common::{merge_into_map, try_parse_value};
+use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
 use crate::types::{AnnotatedValue, SourceId};
@@ -20,6 +20,15 @@ use std::time::Duration;
 
 /// Default poll interval for Consul (30 seconds).
 pub const DEFAULT_CONSUL_POLL_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Default connect timeout for Consul HTTP requests (10 seconds).
+pub const DEFAULT_CONSUL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Default overall request timeout for Consul HTTP requests (60 seconds).
+///
+/// Must exceed the Consul blocking-query wait used by [`ConsulSource`]
+/// (`wait=30s` long polls); 60s leaves comfortable headroom.
+pub const DEFAULT_CONSUL_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Default maximum Consul HTTP response body size in bytes (16 MB).
 ///
@@ -52,6 +61,9 @@ pub struct ConsulSourceBuilder {
     format: Option<Format>,
     interval: Option<Duration>,
     tls_skip_verify: bool,
+    tls: Option<ConsulTlsConfig>,
+    connect_timeout: Duration,
+    request_timeout: Duration,
     max_response_bytes: usize,
     max_kv_entries: usize,
 }
@@ -74,6 +86,9 @@ impl ConsulSourceBuilder {
             format: None,
             interval: None,
             tls_skip_verify: false,
+            tls: None,
+            connect_timeout: DEFAULT_CONSUL_CONNECT_TIMEOUT,
+            request_timeout: DEFAULT_CONSUL_REQUEST_TIMEOUT,
             max_response_bytes: DEFAULT_MAX_CONSUL_RESPONSE_BYTES,
             max_kv_entries: DEFAULT_MAX_CONSUL_KV_ENTRIES,
         }
@@ -128,6 +143,32 @@ impl ConsulSourceBuilder {
         self
     }
 
+    /// Set the TLS configuration (custom CA and optional client identity).
+    ///
+    /// Applied when the HTTP client is built: the CA is added via
+    /// `add_root_certificate`, and the cert/key pair is used as the client
+    /// identity (mTLS). Files are read at build time and missing/invalid
+    /// files fail loudly (Rule 12).
+    pub fn tls(mut self, tls: ConsulTlsConfig) -> Self {
+        self.tls = Some(tls);
+        self
+    }
+
+    /// Set the connect timeout for Consul HTTP requests. Default: 10 seconds.
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+
+    /// Set the overall request timeout for Consul HTTP requests.
+    ///
+    /// Default: 60 seconds. This must exceed the Consul blocking-query wait
+    /// (`wait=30s` long polls), otherwise every blocking poll would time out.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
+        self
+    }
+
     /// Set the maximum HTTP response body size in bytes.
     ///
     /// Responses larger than this are rejected with `ConfigError::SizeLimitExceeded`
@@ -149,8 +190,74 @@ impl ConsulSourceBuilder {
 
     /// Build the Consul source.
     pub fn build(self) -> ConfigResult<ConsulSource> {
-        let client = Client::builder()
-            .danger_accept_invalid_certs(self.tls_skip_verify)
+        // Issue #326: the client previously had no timeouts at all; bound the
+        // connection and the overall request (including the 30s blocking
+        // long poll).
+        let mut client_builder = Client::builder()
+            .connect_timeout(self.connect_timeout)
+            .timeout(self.request_timeout)
+            .danger_accept_invalid_certs(self.tls_skip_verify);
+
+        // Issue #321: honor the public ConsulTlsConfig by applying it to the
+        // reqwest client — custom CA via add_root_certificate and the
+        // cert/key pair as the client identity (mTLS). Files are read here
+        // (build is synchronous) and failures are loud (Rule 12), mirroring
+        // the etcd builder.
+        if let Some(ref tls_config) = self.tls {
+            let ca_pem =
+                std::fs::read(&tls_config.ca_file).map_err(|e| ConfigError::InvalidValue {
+                    key: "consul.tls.ca_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!("Failed to read TLS CA file '{}': {}", tls_config.ca_file, e),
+                })?;
+            let cert_pem =
+                std::fs::read(&tls_config.cert_file).map_err(|e| ConfigError::InvalidValue {
+                    key: "consul.tls.cert_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!(
+                        "Failed to read TLS cert file '{}': {}",
+                        tls_config.cert_file, e
+                    ),
+                })?;
+            let key_pem =
+                std::fs::read(&tls_config.key_file).map_err(|e| ConfigError::InvalidValue {
+                    key: "consul.tls.key_file".to_string(),
+                    expected_type: "readable PEM file".to_string(),
+                    message: format!(
+                        "Failed to read TLS key file '{}': {}",
+                        tls_config.key_file, e
+                    ),
+                })?;
+
+            let cert =
+                reqwest::Certificate::from_pem(&ca_pem).map_err(|e| ConfigError::InvalidValue {
+                    key: "consul.tls.ca_file".to_string(),
+                    expected_type: "valid PEM certificate".to_string(),
+                    message: format!(
+                        "Invalid TLS CA certificate in '{}': {}",
+                        tls_config.ca_file, e
+                    ),
+                })?;
+            client_builder = client_builder.add_root_certificate(cert);
+
+            // Identity::from_pem expects a single PEM buffer containing the
+            // private key followed by the certificate chain.
+            let mut identity_pem = key_pem;
+            identity_pem.extend_from_slice(&cert_pem);
+            let identity = reqwest::Identity::from_pem(&identity_pem).map_err(|e| {
+                ConfigError::InvalidValue {
+                    key: "consul.tls".to_string(),
+                    expected_type: "valid PEM identity (key + cert)".to_string(),
+                    message: format!(
+                        "Invalid TLS client identity from '{}' / '{}': {}",
+                        tls_config.cert_file, tls_config.key_file, e
+                    ),
+                }
+            })?;
+            client_builder = client_builder.identity(identity);
+        }
+
+        let client = client_builder
             .build()
             .map_err(|e| ConfigError::InvalidValue {
                 key: "consul".to_string(),
@@ -185,7 +292,7 @@ pub struct ConsulSource {
     client: Arc<Client>,
     address: Arc<str>,
     prefix: Arc<str>,
-    #[allow(dead_code)] // reserved for future format-specific polling
+    /// Explicit format for KV values; `None` enables content sniffing.
     format: Option<Format>,
     interval: Duration,
     token: Option<Arc<str>>,
@@ -370,17 +477,24 @@ impl ConsulSource {
                 key_path.trim_start_matches('/').to_string()
             };
 
-            // 解码 value（Consul 将 value 存储为 base64）
+            // Issue #322: a KV entry whose key equals the prefix strips down
+            // to an empty relative key. All such entries would collapse onto
+            // the same "" key and overwrite each other, so skip them.
+            if key.is_empty() {
+                continue;
+            }
+
+            // 解码 value（Consul 将 value 存储为 base64）。
+            // Issue #327: decode failures are propagated (Rule 12: Fail
+            // Loud) instead of silently falling back to the raw string.
             let value_str = match &kv.value {
-                Some(v) => match base64_decode(v) {
-                    Ok(d) => d,
-                    Err(_) => v.clone(),
-                },
+                Some(v) => base64_decode(v)?,
                 None => String::new(),
             };
 
-            // Try to parse as TOML/JSON/YAML
-            if let Some(parsed) = try_parse_value(&value_str, "consul") {
+            // Try to parse as TOML/JSON/YAML. An explicitly configured format
+            // (issue #334) wins over content sniffing.
+            if let Some(parsed) = try_parse_value_with_format(&value_str, self.format, "consul") {
                 // Merge into config map
                 merge_into_map(&mut config_map, &key, parsed);
             } else {
@@ -422,9 +536,10 @@ impl ConsulSource {
 /// Decode base64 string to UTF-8.
 ///
 /// Returns `ConfigError::InvalidValue` if either the base64 decode or the
-/// subsequent UTF-8 conversion fails. Previously, invalid UTF-8 was silently
-/// replaced with an empty string (`unwrap_or_default`), causing data
-/// corruption (M5 — Rule 12: Fail Loud).
+/// subsequent UTF-8 conversion fails — there is deliberately no fallback to
+/// the raw input string (issue #327, Rule 12: Fail Loud). Previously an
+/// undecodable value was silently passed through, corrupting the config map;
+/// earlier still, invalid UTF-8 was silently replaced with an empty string.
 fn base64_decode(input: &str) -> Result<String, ConfigError> {
     use base64::Engine;
     let engine = base64::engine::general_purpose::STANDARD;
@@ -485,6 +600,9 @@ mod tests {
         let builder = ConsulSourceBuilder::new();
         assert_eq!(builder.prefix, "config");
         assert_eq!(builder.interval, None);
+        assert_eq!(builder.connect_timeout, DEFAULT_CONSUL_CONNECT_TIMEOUT);
+        assert_eq!(builder.request_timeout, DEFAULT_CONSUL_REQUEST_TIMEOUT);
+        assert!(builder.tls.is_none());
     }
 
     #[test]
@@ -508,6 +626,9 @@ mod tests {
         assert_eq!(builder.format, None);
         assert_eq!(builder.interval, None);
         assert!(!builder.tls_skip_verify);
+        assert!(builder.tls.is_none());
+        assert_eq!(builder.connect_timeout, DEFAULT_CONSUL_CONNECT_TIMEOUT);
+        assert_eq!(builder.request_timeout, DEFAULT_CONSUL_REQUEST_TIMEOUT);
         assert_eq!(
             builder.max_response_bytes,
             DEFAULT_MAX_CONSUL_RESPONSE_BYTES
@@ -662,6 +783,65 @@ mod tests {
         assert_eq!(tls.key_file, cloned.key_file);
         let debug_str = format!("{:?}", tls);
         assert!(debug_str.contains("ConsulTlsConfig"));
+    }
+
+    /// Issue #321: `ConsulTlsConfig` is accepted by the builder.
+    #[test]
+    fn test_builder_tls() {
+        let tls = ConsulTlsConfig {
+            ca_file: "/path/ca.pem".to_string(),
+            cert_file: "/path/cert.pem".to_string(),
+            key_file: "/path/key.pem".to_string(),
+        };
+        let builder = ConsulSourceBuilder::new().tls(tls.clone());
+        assert!(builder.tls.is_some());
+        assert_eq!(builder.tls.as_ref().unwrap().ca_file, "/path/ca.pem");
+        assert_eq!(builder.tls.as_ref().unwrap().cert_file, "/path/cert.pem");
+        assert_eq!(builder.tls.as_ref().unwrap().key_file, "/path/key.pem");
+    }
+
+    /// Issue #321: the TLS config is applied at build time and missing files
+    /// fail loudly (Rule 12), mirroring the etcd builder.
+    #[test]
+    fn test_build_tls_missing_ca_file_fails_loud() {
+        let result = ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: "/nonexistent/ca.pem".to_string(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build();
+        assert!(
+            result.is_err(),
+            "build() should fail when TLS files do not exist"
+        );
+        let err = match result {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("build() should fail when TLS files do not exist"),
+        };
+        assert!(
+            err.contains("Failed to read TLS CA file"),
+            "error should mention the CA file: {err}"
+        );
+    }
+
+    /// Issue #326: builder exposes connect/request timeouts with sane
+    /// defaults (request timeout must exceed the 30s blocking `wait`).
+    #[test]
+    fn test_builder_timeouts() {
+        let builder = ConsulSourceBuilder::new()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(90));
+        assert_eq!(builder.connect_timeout, Duration::from_secs(5));
+        assert_eq!(builder.request_timeout, Duration::from_secs(90));
+    }
+
+    #[test]
+    fn test_default_consul_timeouts() {
+        assert_eq!(DEFAULT_CONSUL_CONNECT_TIMEOUT, Duration::from_secs(10));
+        assert_eq!(DEFAULT_CONSUL_REQUEST_TIMEOUT, Duration::from_secs(60));
+        // The request timeout must outlast the blocking long poll.
+        assert!(DEFAULT_CONSUL_REQUEST_TIMEOUT > Duration::from_secs(30));
     }
 
     #[test]
@@ -980,9 +1160,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_poll_internal_non_base64_value_fallback() {
-        // Value "!!!notbase64!!!" cannot be decoded as base64 (contains '!'),
-        // so the code falls back to using the raw value string (line 274).
+    async fn test_poll_internal_non_base64_value_fails_loud() {
+        // Issue #327: value "!!!notbase64!!!" cannot be decoded as base64
+        // (contains '!'). Decoding must fail loudly instead of silently
+        // falling back to the raw value string.
         let body = r#"[{"Key":"app/key","Value":"!!!notbase64!!!","ModifyIndex":1}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
@@ -991,16 +1172,112 @@ mod tests {
             .build()
             .unwrap();
         let result = source.poll_internal().await;
+        assert!(result.is_err(), "invalid base64 must fail loudly");
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, ConfigError::InvalidValue { .. }),
+            "expected InvalidValue, got {:?}",
+            err
+        );
+        assert!(
+            err.to_string().contains("base64 decode failed"),
+            "error should mention base64 decode failure: {err}"
+        );
+    }
+
+    /// Issue #322: a KV entry whose key equals the prefix would strip down to
+    /// an empty relative key; such entries must be skipped instead of
+    /// collapsing onto the same "" key and overwriting each other.
+    #[tokio::test]
+    async fn test_poll_internal_key_equal_to_prefix_is_skipped() {
+        // "config" == prefix "config" → empty key → skipped. "config/app"
+        // survives as "app". Without the skip, both entries would map onto
+        // the same key and the last write would win.
+        let body = r#"[
+            {"Key":"config","Value":"aGVsbG8=","ModifyIndex":1},
+            {"Key":"config/app","Value":"aGVsbG8=","ModifyIndex":2}
+        ]"#
+        .to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+        let result = source.poll_internal().await;
         assert!(result.is_ok(), "poll should succeed: {:?}", result.err());
         let value = result.unwrap();
-        assert!(value.is_map(), "non-empty KV response should yield a map");
+        let map = value
+            .inner
+            .as_map()
+            .expect("non-empty KV response should yield a map");
+        assert!(
+            !map.contains_key(""),
+            "empty relative key must be skipped, got keys: {:?}",
+            map.keys().collect::<Vec<_>>()
+        );
+        assert!(map.contains_key("app"), "normal key must survive");
+        assert_eq!(map.len(), 1, "only the non-empty key should be present");
+    }
+
+    /// Issue #334: an explicitly configured format is used to parse KV
+    /// values. `{"a":1}` sniffs as JSON; with JSON pinned it parses into a
+    /// nested map.
+    #[tokio::test]
+    async fn test_poll_internal_uses_configured_format() {
+        // base64("{"a":1}") == eyJhIjoxfQ==
+        let body = r#"[{"Key":"app","Value":"eyJhIjoxfQ==","ModifyIndex":1}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("")
+            .format(Format::Json)
+            .build()
+            .unwrap();
+        let value = source.poll_internal().await.expect("poll should succeed");
+        let map = value
+            .inner
+            .as_map()
+            .expect("JSON payload should parse to a map");
+        let app = map.get("app").expect("entry under key 'app'");
+        let a = app
+            .inner
+            .as_map()
+            .expect("value must be parsed as JSON, not a raw string")
+            .get("a")
+            .expect("field 'a'");
+        assert_eq!(a.as_i64(), Some(1), "JSON payload must decode into a map");
+    }
+
+    /// Issue #334: the pinned format overrides sniffing — the JSON payload
+    /// fails to parse as TOML and is kept as a plain string.
+    #[tokio::test]
+    async fn test_poll_internal_configured_format_overrides_sniffing() {
+        let body = r#"[{"Key":"app","Value":"eyJhIjoxfQ==","ModifyIndex":1}]"#.to_string();
+        let addr = mock_http_server(vec![(200, body)]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("")
+            .format(Format::Toml)
+            .build()
+            .unwrap();
+        let value = source.poll_internal().await.expect("poll should succeed");
+        let map = value.inner.as_map().expect("map");
+        let app = map.get("app").expect("unparsed value kept under its key");
+        assert_eq!(
+            app.as_str(),
+            Some(r#"{"a":1}"#),
+            "value that fails the pinned format must stay a raw string"
+        );
     }
 
     #[tokio::test]
     async fn test_poll_internal_value_starts_with_prefix() {
         // Key "config/app/key" starts with the prefix "config/", exercising
-        // the prefix-stripping branch on the Key field (not Value).
-        let body = r#"[{"Key":"config/app/key","Value":"!data","ModifyIndex":1}]"#.to_string();
+        // the prefix-stripping branch on the Key field (not Value). The Value
+        // is base64("data") since undecodable values now fail loudly
+        // (issue #327).
+        let body = r#"[{"Key":"config/app/key","Value":"ZGF0YQ==","ModifyIndex":1}]"#.to_string();
         let addr = mock_http_server(vec![(200, body)]);
         let source = ConsulSourceBuilder::new()
             .address(addr)

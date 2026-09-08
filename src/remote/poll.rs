@@ -15,7 +15,14 @@
 //! This module implements comprehensive Server-Side Request Forgery protection:
 //! - Blocked IP ranges: private networks, loopback, link-local, documentation ranges
 //! - DNS resolution validation: resolved IPs are checked against blocked ranges
-//! - DNS rebinding protection: domain names are resolved at build time
+//! - DNS rebinding protection: domain names are resolved and validated on the
+//!   async poll path (blocking DNS is offloaded via `spawn_blocking`)
+//! - Pinned DNS resolution: the HTTP client installs a custom resolver that
+//!   re-checks every address reqwest connects to against the same blacklist,
+//!   so the validation lookup and the connection cannot observe different
+//!   DNS answers (the rebinding TOCTOU window is closed)
+//! - Manual redirect following: every redirect hop is re-validated against the
+//!   same SSRF rules before the next request is issued
 //! - Configurable whitelist: specific domains can be allowed via builder
 //! - All blocked attempts return errors with full context
 //! - IPv6 support: handles IPv6 addresses and IPv4-mapped IPv6 addresses
@@ -27,6 +34,7 @@ use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use reqwest::Client;
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -36,6 +44,14 @@ use tokio::sync::RwLock;
 
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Maximum number of HTTP redirects followed per poll.
+///
+/// Mirrors reqwest's default limit (10). The HTTP client does NOT follow
+/// redirects automatically (`redirect::Policy::none`); each hop is resolved
+/// and SSRF-validated manually before the next request is issued, so a
+/// redirect cannot bypass the checks applied to the original URL.
+const MAX_REDIRECTS: u32 = 10;
 
 static BLOCKED_NETWORKS: LazyLock<Vec<ipnet::IpNet>> = LazyLock::new(|| {
     vec![
@@ -73,6 +89,77 @@ pub fn is_ip_blocked(ip: IpAddr) -> bool {
     BLOCKED_NETWORKS.iter().any(|net| net.contains(&ip))
 }
 
+/// Resolve a hostname on tokio's blocking pool, optionally validating every
+/// resolved IP against the SSRF blacklist.
+///
+/// This is the single resolution primitive shared by the poll-path pre-check
+/// ([`resolve_host_with_validation`]) and the pinned reqwest DNS resolver
+/// ([`ValidatingResolver`]): the addresses reqwest connects to come from the
+/// very same resolution that passed the blacklist checks, so a DNS rebinding
+/// attacker cannot show a benign IP to the validation and a private IP to
+/// the connection.
+///
+/// With `enforce_ssrf` set to `false` (direct construction against loopback
+/// mock servers only) the resolution is returned unchecked.
+///
+/// Blocking DNS must never run on the async runtime's worker threads, so the
+/// `getaddrinfo` call is offloaded to tokio's blocking pool.
+async fn resolve_addrs(
+    host: String,
+    port: u16,
+    enforce_ssrf: bool,
+) -> ConfigResult<Vec<SocketAddr>> {
+    let addr_string = if port == 0 {
+        format!("{}:80", host)
+    } else {
+        format!("{}:{}", host, port)
+    };
+
+    let resolved = tokio::task::spawn_blocking(move || {
+        addr_string
+            .to_socket_addrs()
+            .map(|addrs| addrs.collect::<Vec<SocketAddr>>())
+    })
+    .await
+    .map_err(|_| ConfigError::InvalidValue {
+        key: "url".to_string(),
+        expected_type: "resolvable hostname".to_string(),
+        message: format!("DNS resolution task failed for hostname: {}", host),
+    })?
+    .map_err(|_| ConfigError::InvalidValue {
+        key: "url".to_string(),
+        expected_type: "resolvable hostname".to_string(),
+        message: format!("Cannot resolve hostname: {}", host),
+    })?;
+
+    let addrs: Vec<SocketAddr> = resolved;
+
+    if addrs.is_empty() {
+        return Err(ConfigError::InvalidValue {
+            key: "url".to_string(),
+            expected_type: "resolvable hostname".to_string(),
+            message: format!("No addresses resolved for hostname: {}", host),
+        });
+    }
+
+    if enforce_ssrf {
+        for addr in &addrs {
+            if is_ip_blocked(addr.ip()) {
+                // SSRF attempt detected - return error without logging
+                return Err(ConfigError::InvalidValue {
+                    key: "url".to_string(),
+                    expected_type: "public IP".to_string(),
+                    message:
+                        "SSRF attempt detected: resolved IP address is in a blocked private range"
+                            .to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(addrs)
+}
+
 /// Resolve a hostname and check all resolved IPs against blocked ranges.
 ///
 /// This provides DNS rebinding protection by validating that ALL resolved IPs
@@ -87,64 +174,81 @@ pub fn is_ip_blocked(ip: IpAddr) -> bool {
 ///
 /// Returns `Ok(Vec<IpAddr>)` with all resolved IPs if all are safe,
 /// or an error if any IP is blocked.
-fn resolve_host_with_validation(host: &str, port: u16) -> ConfigResult<Vec<IpAddr>> {
-    let addr_string = if port == 0 {
-        format!("{}:80", host)
-    } else {
-        format!("{}:{}", host, port)
-    };
-
-    let addrs: Vec<SocketAddr> = addr_string
-        .to_socket_addrs()
-        .map_err(|_| ConfigError::InvalidValue {
-            key: "url".to_string(),
-            expected_type: "resolvable hostname".to_string(),
-            message: format!("Cannot resolve hostname: {}", host),
-        })?
-        .collect();
-
-    if addrs.is_empty() {
-        return Err(ConfigError::InvalidValue {
-            key: "url".to_string(),
-            expected_type: "resolvable hostname".to_string(),
-            message: format!("No addresses resolved for hostname: {}", host),
-        });
-    }
-
-    let mut resolved_ips = Vec::new();
-    for addr in &addrs {
-        let ip = addr.ip();
-        resolved_ips.push(ip);
-
-        if is_ip_blocked(ip) {
-            // SSRF attempt detected - return error without logging
-            return Err(ConfigError::InvalidValue {
-                key: "url".to_string(),
-                expected_type: "public IP".to_string(),
-                message: "SSRF attempt detected: resolved IP address is in a blocked private range"
-                    .to_string(),
-            });
-        }
-    }
-
-    Ok(resolved_ips)
+async fn resolve_host_with_validation(host: &str, port: u16) -> ConfigResult<Vec<IpAddr>> {
+    Ok(resolve_addrs(host.to_string(), port, true)
+        .await?
+        .into_iter()
+        .map(|addr| addr.ip())
+        .collect())
 }
 
-/// Validate URL for security (SSRF protection).
+/// Custom reqwest DNS resolver that pins SSRF-validated addresses.
 ///
-/// Performs comprehensive SSRF protection checks:
-/// 1. Only HTTPS URLs are allowed (unless HTTPS-only is disabled)
-/// 2. Domain names are resolved and all resolved IPs are validated
-/// 3. Direct IP addresses are validated against blocked ranges
-/// 4. IPv4-mapped IPv6 addresses are blocked
-/// 5. Domains can be whitelisted via the builder
-fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAddr>> {
-    let parsed = url::Url::parse(url).map_err(|_| ConfigError::InvalidValue {
-        key: "url".to_string(),
-        expected_type: "valid URL".to_string(),
-        message: "Invalid URL format".to_string(),
-    })?;
+/// reqwest performs its own DNS lookup when establishing a connection, which
+/// is independent of the pre-connect validation in `do_poll`. Without
+/// pinning, an attacker controlling the DNS answers for a domain could return
+/// a benign IP to the validation lookup and a private IP to reqwest's lookup
+/// — the classic DNS-rebinding TOCTOU window. Installing this resolver on
+/// the client (see [`HttpPolledSourceBuilder::build`]) closes that window:
+/// the addresses reqwest connects to are produced by the same resolution
+/// that was checked against the SSRF blacklist, so the two can no longer
+/// diverge.
+///
+/// The blacklist check runs unconditionally for every resolved address: a
+/// domain whitelist only skips the domain-level DNS pre-check (see
+/// [`is_domain_whitelisted`]), it never exempts private IPs.
+struct ValidatingResolver {
+    /// Whether resolved addresses must pass the SSRF blacklist checks.
+    ///
+    /// `false` only on the direct-construction path used by loopback
+    /// integration tests; addresses are then resolved and returned unchecked.
+    enforce_ssrf: bool,
+}
 
+impl Resolve for ValidatingResolver {
+    fn resolve(&self, name: Name) -> Resolving {
+        let host = name.as_str().to_owned();
+        let enforce_ssrf = self.enforce_ssrf;
+        Box::pin(async move {
+            // The port is irrelevant for name resolution here; hyper's
+            // connector overrides it with the port from the request URL.
+            let addrs = resolve_addrs(host, 0, enforce_ssrf).await?;
+            Ok(Box::new(addrs.into_iter()) as Addrs)
+        })
+    }
+}
+
+/// Check whether a domain matches the SSRF whitelist.
+///
+/// Supports exact entries, subdomain entries (`example.com` matches
+/// `api.example.com`) and explicit wildcards (`*.example.com` matches
+/// `sub.example.com` but not `example.com`).
+fn is_domain_whitelisted(domain: &str, allowed_domains: &[String]) -> bool {
+    allowed_domains.iter().any(|allowed| {
+        // Exact match
+        if allowed == domain {
+            return true;
+        }
+        // Wildcard match: *.example.com matches sub.example.com
+        if let Some(suffix) = allowed.strip_prefix("*.") {
+            // Domain must be a proper subdomain (e.g. sub.example.com, not example.com)
+            return domain.ends_with(&format!(".{suffix}"));
+        }
+        // Subdomain match for non-wildcard entries (e.g. "example.com" matches "sub.example.com")
+        domain.ends_with(&format!(".{allowed}"))
+    })
+}
+
+/// Apply all DNS-free SSRF checks to an already-parsed URL.
+///
+/// 1. Only HTTPS URLs are allowed
+/// 2. The URL must have a host
+/// 3. Direct IP hosts are validated against blocked ranges
+///
+/// Domain hosts only need DNS-based validation (see [`validate_url_full`]);
+/// the whitelist only decides whether that DNS check is performed, so it is
+/// not consulted here.
+fn validate_url_parts(parsed: &url::Url) -> ConfigResult<()> {
     // Only allow HTTPS by default for security
     if parsed.scheme() != "https" {
         // Non-HTTPS URL rejected - return error without logging
@@ -155,47 +259,8 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
         });
     }
 
-    let host = match parsed.host() {
-        Some(h) => h,
-        None => {
-            return Err(ConfigError::InvalidValue {
-                key: "url".to_string(),
-                expected_type: "valid URL with host".to_string(),
-                message: "URL must have a host".to_string(),
-            });
-        }
-    };
-
-    match host {
-        url::Host::Domain(domain) => {
-            // Check whitelist first
-            let domain_str = domain.to_string();
-            let is_whitelisted = allowed_domains.iter().any(|allowed| {
-                // Exact match
-                if allowed == &domain_str {
-                    return true;
-                }
-                // Wildcard match: *.example.com matches sub.example.com
-                if let Some(suffix) = allowed.strip_prefix("*.") {
-                    // Domain must be a proper subdomain (e.g., sub.example.com, not example.com)
-                    return domain_str.ends_with(&format!(".{suffix}"));
-                }
-                // Subdomain match for non-wildcard entries (e.g., "example.com" matches "sub.example.com")
-                domain_str.ends_with(&format!(".{allowed}"))
-            });
-
-            if is_whitelisted {
-                // Whitelisted domains are allowed without IP validation
-                return Ok(Vec::new());
-            }
-
-            // Resolve the domain and validate all IPs (DNS rebinding protection)
-            let port = parsed.port().unwrap_or(443);
-            let resolved = resolve_host_with_validation(&domain_str, port)?;
-
-            Ok(resolved)
-        }
-        url::Host::Ipv4(ip) => {
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
             if is_ip_blocked(IpAddr::V4(ip)) {
                 // Private IPv4 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
@@ -205,9 +270,8 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
                         .to_string(),
                 });
             }
-            Ok(vec![IpAddr::V4(ip)])
         }
-        url::Host::Ipv6(ip) => {
+        Some(url::Host::Ipv6(ip)) => {
             if is_ip_blocked(IpAddr::V6(ip)) {
                 // Private IPv6 rejected - return error without logging
                 return Err(ConfigError::InvalidValue {
@@ -217,9 +281,84 @@ fn validate_url(url: &str, allowed_domains: &[String]) -> ConfigResult<Vec<IpAdd
                         .to_string(),
                 });
             }
-            Ok(vec![IpAddr::V6(ip)])
+        }
+        Some(url::Host::Domain(_)) => {}
+        None => {
+            return Err(ConfigError::InvalidValue {
+                key: "url".to_string(),
+                expected_type: "valid URL with host".to_string(),
+                message: "URL must have a host".to_string(),
+            });
         }
     }
+
+    Ok(())
+}
+
+/// Validate a URL string for security (SSRF protection) — DNS-free checks only.
+///
+/// Parses the URL and applies the static SSRF checks (HTTPS-only scheme, host
+/// presence, blocked-range checks for direct IP hosts). DNS resolution for
+/// domain hosts is NOT performed here; it happens asynchronously on the poll
+/// path via [`validate_url_full`].
+///
+/// Returns the parsed URL on success.
+fn validate_url(url: &str) -> ConfigResult<url::Url> {
+    let parsed = url::Url::parse(url).map_err(|_| ConfigError::InvalidValue {
+        key: "url".to_string(),
+        expected_type: "valid URL".to_string(),
+        message: "Invalid URL format".to_string(),
+    })?;
+
+    validate_url_parts(&parsed)?;
+
+    Ok(parsed)
+}
+
+/// Full SSRF validation of a parsed URL on the async poll path.
+///
+/// Applies the DNS-free static checks plus DNS resolution with blocked-IP
+/// validation for non-whitelisted domain hosts (DNS rebinding protection).
+/// Whitelisted domains skip DNS validation entirely — the whitelist only
+/// bypasses this domain-level pre-check; the client's pinned resolver
+/// ([`ValidatingResolver`]) still validates every address at connection
+/// time, so a whitelisted domain that resolves to a private IP is rejected
+/// when connecting.
+async fn validate_url_full(parsed: &url::Url, allowed_domains: &[String]) -> ConfigResult<()> {
+    validate_url_parts(parsed)?;
+
+    if let Some(url::Host::Domain(domain)) = parsed.host() {
+        let domain = domain.to_string();
+        if !is_domain_whitelisted(&domain, allowed_domains) {
+            let port = parsed.port().unwrap_or(443);
+            resolve_host_with_validation(&domain, port).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Resolve and statically validate one redirect hop.
+///
+/// Pure helper (no DNS, no I/O) so the per-hop redirect rules are unit-testable
+/// in isolation. `location` is resolved against `current` per RFC 3986
+/// (relative references such as `/path` or `../other` are allowed), then the
+/// same DNS-free SSRF checks as for the original URL are applied: HTTPS-only
+/// scheme, host presence and blocked-IP ranges. DNS-based validation for
+/// domain hops is performed separately on the async path (see
+/// [`validate_url_full`]).
+fn validate_redirect_hop(current: &url::Url, location: &str) -> ConfigResult<url::Url> {
+    let next = current
+        .join(location)
+        .map_err(|_| ConfigError::InvalidValue {
+            key: "url".to_string(),
+            expected_type: "valid redirect Location URL".to_string(),
+            message: format!("Invalid redirect Location: {location}"),
+        })?;
+
+    validate_url_parts(&next)?;
+
+    Ok(next)
 }
 
 /// Trait for polled configuration sources.
@@ -256,7 +395,14 @@ pub trait PolledSource: Send + Sync {
 /// - Documentation IP ranges (192.0.2.x/24, etc.)
 /// - IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
 ///
-/// DNS names are resolved at build time and all resolved IPs are validated.
+/// Static checks (scheme, direct-IP hosts) run at build time; DNS names are
+/// resolved and validated on every poll request, and redirects are followed
+/// manually with the same per-hop validation, so a redirect cannot bypass
+/// the SSRF rules. The HTTP client additionally pins DNS resolution
+/// ([`ValidatingResolver`]): addresses reqwest connects to come from the
+/// same resolution that was checked against the blacklist, so a rebinding
+/// attacker cannot show a different IP to the connection than to the
+/// validation.
 ///
 /// # Examples
 ///
@@ -284,6 +430,14 @@ pub struct HttpPolledSource {
     interval: Duration,
     client: Client,
     format: Option<Format>,
+    /// Domains whitelisted for SSRF checks (exact, subdomain or wildcard).
+    allowed_domains: Arc<[String]>,
+    /// Whether per-request SSRF validation is enforced on the poll path.
+    ///
+    /// `true` for sources built via [`HttpPolledSourceBuilder`]. Direct
+    /// construction (tests against local mock servers) may set it to `false`
+    /// because loopback HTTP endpoints are rejected by the SSRF rules.
+    enforce_ssrf: bool,
     cached: RwLock<Option<AnnotatedValue>>,
     last_etag: ArcSwap<Option<String>>,
     last_modified: ArcSwap<Option<String>>,
@@ -320,8 +474,9 @@ impl HttpPolledSourceBuilder {
 
     /// Set the URL of the remote configuration endpoint.
     ///
-    /// The URL must use HTTPS. Domain names will be resolved at build time
-    /// and all resolved IPs will be checked against blocked ranges.
+    /// The URL must use HTTPS. Direct-IP hosts are checked against blocked
+    /// ranges at build time; domain hosts are resolved and validated on the
+    /// async poll path (blocking DNS must not run inside `build()`).
     ///
     /// # SSRF Protection
     ///
@@ -352,8 +507,11 @@ impl HttpPolledSourceBuilder {
 
     /// Add a domain to the allowed whitelist.
     ///
-    /// Whitelisted domains bypass IP-based SSRF checks. This is useful for
-    /// internal services accessed via DNS names that resolve to private IPs.
+    /// Whitelisted domains skip the domain-level DNS pre-check on the poll
+    /// path (see [`validate_url_full`]). The IP blacklist itself is NOT
+    /// relaxed: the client's pinned DNS resolver checks every resolved
+    /// address unconditionally, so a whitelisted domain that resolves to a
+    /// private/loopback IP is still rejected at connection time.
     ///
     /// Supports:
     /// - Exact match: `internal.example.com`
@@ -362,8 +520,9 @@ impl HttpPolledSourceBuilder {
     ///
     /// # Security Note
     ///
-    /// Use whitelisting sparingly. Prefer resolving private IP ranges properly.
-    /// Whitelisting a domain means you trust ALL IPs that domain resolves to.
+    /// Use whitelisting sparingly. The whitelist only suppresses the
+    /// domain-level pre-check; it never allows connections to blocked IP
+    /// ranges.
     pub fn allowed_domain(mut self, domain: impl Into<String>) -> Self {
         self.allowed_domains.push(domain.into());
         self
@@ -408,7 +567,10 @@ impl HttpPolledSourceBuilder {
     /// - URL is missing
     /// - URL uses non-HTTPS scheme
     /// - URL host is a blocked private IP
-    /// - URL host is a domain that resolves to a blocked IP (DNS rebinding protection)
+    ///
+    /// Domain hosts are resolved on the async poll path (see
+    /// [`validate_url_full`]); `build()` deliberately performs no blocking
+    /// DNS resolution.
     pub fn build(self) -> ConfigResult<HttpPolledSource> {
         let url = self.url.ok_or_else(|| ConfigError::InvalidValue {
             key: "url".to_string(),
@@ -416,14 +578,24 @@ impl HttpPolledSourceBuilder {
             message: "URL is required".to_string(),
         })?;
 
-        // Validate URL for security (SSRF protection with DNS resolution)
-        validate_url(&url, &self.allowed_domains)?;
+        // Validate URL for security (DNS-free SSRF checks; DNS resolution
+        // with blocked-IP validation runs asynchronously on every poll, which
+        // also keeps rebinding protection fresh).
+        validate_url(&url)?;
 
         let url_arc: Arc<str> = url.clone().into();
         let source_id = SourceId::new(format!("http:{}", url_arc));
 
-        // Build HTTP client with TLS enabled by default
-        let mut client_builder = Client::builder().use_rustls_tls();
+        // Build HTTP client with TLS enabled by default. Automatic redirect
+        // following is disabled: redirects are followed manually in `do_poll`
+        // so every hop passes the same SSRF validation as the original URL.
+        // The pinned DNS resolver makes reqwest connect to addresses from the
+        // same validated resolution as the poll-path pre-check, eliminating
+        // the DNS-rebinding TOCTOU window between validation and connection.
+        let mut client_builder = Client::builder()
+            .use_rustls_tls()
+            .redirect(reqwest::redirect::Policy::none())
+            .dns_resolver(Arc::new(ValidatingResolver { enforce_ssrf: true }));
 
         if let Some(timeout) = self.timeout {
             client_builder = client_builder.timeout(timeout);
@@ -453,6 +625,8 @@ impl HttpPolledSourceBuilder {
             interval: self.interval.unwrap_or(DEFAULT_POLL_INTERVAL),
             client,
             format: self.format,
+            allowed_domains: self.allowed_domains.into(),
+            enforce_ssrf: true,
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
@@ -515,75 +689,138 @@ impl PolledSource for HttpPolledSource {
 
 impl HttpPolledSource {
     /// Internal poll implementation (without circuit breaker logic).
+    ///
+    /// Redirects are followed manually (up to [`MAX_REDIRECTS`] hops): the
+    /// HTTP client is built with `redirect::Policy::none`, and every hop —
+    /// including the original URL — is SSRF-validated before its request is
+    /// issued, so a redirect cannot bypass the checks applied at build time.
     async fn do_poll(&self) -> ConfigResult<AnnotatedValue> {
-        let mut request = self.client.get(self.url.as_ref());
-
-        if let Some(etag) = self.last_etag.load().as_ref() {
-            request = request.header("If-None-Match", etag.as_str());
-        }
-
-        if let Some(modified) = self.last_modified.load().as_ref() {
-            request = request.header("If-Modified-Since", modified.as_str());
-        }
-
-        let response = request
-            .send()
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: std::any::type_name::<reqwest::Error>().to_string(),
-                retryable: is_retryable_error(&e),
+        let mut current_url: url::Url =
+            self.url.parse().map_err(|_| ConfigError::InvalidValue {
+                key: "url".to_string(),
+                expected_type: "valid URL".to_string(),
+                message: "Invalid URL format".to_string(),
             })?;
 
-        let status = response.status();
+        let mut redirects_followed: u32 = 0;
 
-        if status == reqwest::StatusCode::NOT_MODIFIED {
-            if let Some(cached) = self.cached.read().await.as_ref() {
-                return Ok(cached.clone());
+        loop {
+            if self.enforce_ssrf {
+                // Full per-request validation: static checks plus DNS
+                // resolution with blocked-IP validation for domain hosts.
+                validate_url_full(&current_url, &self.allowed_domains).await?;
             }
-            return Err(ConfigError::RemoteUnavailable {
-                error_type: "NoCachedValue".to_string(),
-                retryable: false,
-            });
+
+            let mut request = self.client.get(current_url.clone());
+
+            if let Some(etag) = self.last_etag.load().as_ref() {
+                request = request.header("If-None-Match", etag.as_str());
+            }
+
+            if let Some(modified) = self.last_modified.load().as_ref() {
+                request = request.header("If-Modified-Since", modified.as_str());
+            }
+
+            let response = request
+                .send()
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: std::any::type_name::<reqwest::Error>().to_string(),
+                    retryable: is_retryable_error(&e),
+                })?;
+
+            let status = response.status();
+
+            if status == reqwest::StatusCode::NOT_MODIFIED {
+                if let Some(cached) = self.cached.read().await.as_ref() {
+                    return Ok(cached.clone());
+                }
+                return Err(ConfigError::RemoteUnavailable {
+                    error_type: "NoCachedValue".to_string(),
+                    retryable: false,
+                });
+            }
+
+            if status.is_redirection() {
+                let location = response
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .ok_or_else(|| ConfigError::RemoteUnavailable {
+                        error_type: "MissingRedirectLocation".to_string(),
+                        retryable: false,
+                    })?
+                    .to_str()
+                    .map_err(|_| ConfigError::RemoteUnavailable {
+                        error_type: "InvalidRedirectLocation".to_string(),
+                        retryable: false,
+                    })?
+                    .to_owned();
+
+                if redirects_followed >= MAX_REDIRECTS {
+                    return Err(ConfigError::RemoteUnavailable {
+                        error_type: "TooManyRedirects".to_string(),
+                        retryable: false,
+                    });
+                }
+                redirects_followed += 1;
+
+                // Resolve the next hop (relative Locations are resolved
+                // against the current URL) and validate it against the SSRF
+                // rules BEFORE issuing the next request. The full DNS-based
+                // validation then runs at the top of the loop, so a hop to a
+                // domain that resolves to a blocked IP is rejected too.
+                current_url = if self.enforce_ssrf {
+                    validate_redirect_hop(&current_url, &location)?
+                } else {
+                    current_url
+                        .join(&location)
+                        .map_err(|_| ConfigError::RemoteUnavailable {
+                            error_type: "InvalidRedirectLocation".to_string(),
+                            retryable: false,
+                        })?
+                };
+                continue;
+            }
+
+            if !status.is_success() {
+                return Err(ConfigError::RemoteUnavailable {
+                    error_type: format!("HTTP_{}", status.as_u16()),
+                    retryable: status.is_server_error() || status.as_u16() == 429,
+                });
+            }
+
+            if let Some(etag) = response.headers().get("etag")
+                && let Ok(etag_str) = etag.to_str()
+            {
+                self.last_etag.store(Arc::new(Some(etag_str.to_string())));
+            }
+
+            if let Some(modified) = response.headers().get("last-modified")
+                && let Ok(modified_str) = modified.to_str()
+            {
+                self.last_modified
+                    .store(Arc::new(Some(modified_str.to_string())));
+            }
+
+            let body = response
+                .text()
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: std::any::type_name::<reqwest::Error>().to_string(),
+                    retryable: is_retryable_error(&e),
+                })?;
+
+            let format = self
+                .format
+                .unwrap_or_else(|| detect_format_from_content(&body).unwrap_or(Format::Json));
+
+            let source = self.source_id.clone();
+            let value = parse_remote_content(&body, format, source)?;
+
+            *self.cached.write().await = Some(value.clone());
+
+            return Ok(value);
         }
-
-        if !status.is_success() {
-            return Err(ConfigError::RemoteUnavailable {
-                error_type: format!("HTTP_{}", status.as_u16()),
-                retryable: status.is_server_error() || status.as_u16() == 429,
-            });
-        }
-
-        if let Some(etag) = response.headers().get("etag")
-            && let Ok(etag_str) = etag.to_str()
-        {
-            self.last_etag.store(Arc::new(Some(etag_str.to_string())));
-        }
-
-        if let Some(modified) = response.headers().get("last-modified")
-            && let Ok(modified_str) = modified.to_str()
-        {
-            self.last_modified
-                .store(Arc::new(Some(modified_str.to_string())));
-        }
-
-        let body = response
-            .text()
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: std::any::type_name::<reqwest::Error>().to_string(),
-                retryable: is_retryable_error(&e),
-            })?;
-
-        let format = self
-            .format
-            .unwrap_or_else(|| detect_format_from_content(&body).unwrap_or(Format::Json));
-
-        let source = self.source_id.clone();
-        let value = parse_remote_content(&body, format, source)?;
-
-        *self.cached.write().await = Some(value.clone());
-
-        Ok(value)
     }
 }
 
@@ -746,7 +983,7 @@ mod tests {
 
     #[test]
     fn test_validate_url_rejects_non_https() {
-        let result = validate_url("http://example.com/config.json", &[]);
+        let result = validate_url("http://example.com/config.json");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, ConfigError::InvalidValue { .. }));
@@ -755,124 +992,301 @@ mod tests {
     #[test]
     fn test_validate_url_rejects_private_ipv4() {
         // 127.0.0.1
-        let result = validate_url("https://127.0.0.1/config.json", &[]);
+        let result = validate_url("https://127.0.0.1/config.json");
         assert!(result.is_err());
         // 10.x.x.x
-        let result = validate_url("https://10.0.0.1/config.json", &[]);
+        let result = validate_url("https://10.0.0.1/config.json");
         assert!(result.is_err());
         // 192.168.x.x
-        let result = validate_url("https://192.168.1.1/config.json", &[]);
+        let result = validate_url("https://192.168.1.1/config.json");
         assert!(err_if_blocked(&result));
         assert!(result.is_err());
         // 172.16.x.x
-        let result = validate_url("https://172.16.0.1/config.json", &[]);
+        let result = validate_url("https://172.16.0.1/config.json");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_url_rejects_private_ipv6() {
         // ::1
-        let result = validate_url("https://[::1]/config.json", &[]);
+        let result = validate_url("https://[::1]/config.json");
         assert!(result.is_err());
         // fe80:: (link-local)
-        let result = validate_url("https://[fe80::1]/config.json", &[]);
+        let result = validate_url("https://[fe80::1]/config.json");
         assert!(result.is_err());
         // fc00:: (unique local)
-        let result = validate_url("https://[fc00::1]/config.json", &[]);
+        let result = validate_url("https://[fc00::1]/config.json");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_url_rejects_ipv4_mapped() {
         // ::ffff:127.0.0.1
-        let result = validate_url("https://[::ffff:127.0.0.1]/config.json", &[]);
+        let result = validate_url("https://[::ffff:127.0.0.1]/config.json");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_url_rejects_documentation_ips() {
-        let result = validate_url("https://192.0.2.1/config.json", &[]);
+        let result = validate_url("https://192.0.2.1/config.json");
         assert!(result.is_err());
-        let result = validate_url("https://198.51.100.1/config.json", &[]);
+        let result = validate_url("https://198.51.100.1/config.json");
         assert!(result.is_err());
-        let result = validate_url("https://203.0.113.1/config.json", &[]);
+        let result = validate_url("https://203.0.113.1/config.json");
         assert!(result.is_err());
-        let result = validate_url("https://192.0.0.1/config.json", &[]);
+        let result = validate_url("https://192.0.0.1/config.json");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_validate_url_accepts_public_ips() {
-        // These should NOT block on IP check alone (though DNS resolution may fail)
-        // We test with an IP that won't resolve
-        let _result = validate_url("https://8.8.8.8/config.json", &[]);
-        // Should not be blocked by SSRF check (8.8.8.8 is public)
-        // The DNS resolution will fail for the IP-as-hostname case
-        // but that's a different error
+        // Public IP hosts pass the static SSRF checks.
+        let result = validate_url("https://8.8.8.8/config.json");
+        assert!(result.is_ok(), "public IP host should pass: {result:?}");
     }
 
+    /// Issue #348: `build()` no longer resolves DNS, so `validate_url` is a
+    /// pure DNS-free check: an unresolvable domain passes the static checks
+    /// and its DNS validation happens asynchronously on the poll path.
     #[test]
-    fn test_validate_url_whitelist_exact_match() {
-        let result = validate_url(
-            "https://internal.example.com/config.json",
-            &["internal.example.com".to_string()],
-        );
-        // T-C-1 B1: the original test had a redundant duplicate
-        // `assert!(result.is_ok())`. A single, well-messaged assertion is
-        // sufficient — the key behavior is that the whitelist accepts the
-        // exact domain. DNS resolution may return an empty IP list for
-        // example domains, so we only assert Ok here.
+    fn test_validate_url_static_accepts_unresolvable_domains() {
+        // ".invalid" is guaranteed not to resolve (RFC 2606).
+        let result = validate_url("https://nonexistent-host-for-tests.invalid/config.json");
         assert!(
             result.is_ok(),
-            "whitelisted domain should be accepted: {:?}",
-            result.err()
+            "static validation must not require DNS: {result:?}"
         );
     }
 
-    #[test]
-    fn test_validate_url_whitelist_subdomain_match() {
-        // "example.com" in whitelist should match "api.example.com"
-        let result = validate_url(
-            "https://api.example.com/config.json",
-            &["example.com".to_string()],
-        );
-        // T-C-1 B2: removed redundant duplicate assertion. The key
-        // behavior is that the whitelist accepts subdomains.
+    /// Issue #348: full poll-path validation rejects domain hosts that
+    /// resolve to blocked IPs (DNS rebinding protection), and whitelisted
+    /// domains skip the DNS check entirely.
+    #[tokio::test]
+    async fn test_validate_url_full_dns_rebinding_protection() {
+        // "localhost" resolves (hosts file) to a loopback IP → blocked.
+        let parsed = url::Url::parse("https://localhost/config.json").unwrap();
+        let result = validate_url_full(&parsed, &[]).await;
+        assert!(result.is_err(), "localhost must be rejected: {result:?}");
+        let err = result.unwrap_err().to_string();
         assert!(
-            result.is_ok(),
-            "subdomain of whitelisted domain should be accepted: {:?}",
-            result.err()
+            err.contains("SSRF") || err.contains("resolve"),
+            "expected SSRF or DNS error, got: {err}"
         );
+
+        // The same domain, whitelisted, skips DNS validation entirely.
+        let result = validate_url_full(&parsed, &["localhost".to_string()]).await;
+        assert!(result.is_ok(), "whitelisted domain must pass: {result:?}");
+
+        // Direct-IP hosts pass full validation without any DNS round trip.
+        let parsed = url::Url::parse("https://8.8.8.8/config.json").unwrap();
+        assert!(validate_url_full(&parsed, &[]).await.is_ok());
     }
 
-    #[test]
-    fn test_validate_url_whitelist_no_match() {
-        // Non-whitelisted domain should be rejected by SSRF check.
-        // T-C-1 D4b: old code discarded the result with `let _result = ...`.
-        let result = validate_url(
-            "https://untrusted.example.com/config.json",
-            &["trusted.example.com".to_string()],
-        );
+    /// Issue #348: DNS resolution is offloaded to the blocking pool but the
+    /// SSRF semantics are unchanged — resolved private IPs are rejected.
+    #[tokio::test]
+    async fn test_resolve_host_with_validation_blocks_loopback() {
+        let result = resolve_host_with_validation("localhost", 443).await;
         assert!(
             result.is_err(),
-            "non-whitelisted domain should be rejected: {result:?}"
+            "a hostname resolving to loopback must be rejected: {result:?}"
         );
     }
 
+    #[tokio::test]
+    async fn test_resolve_host_with_validation_public() {
+        // Test with a well-known public DNS
+        // Note: This test requires network access. If it fails, the host doesn't resolve.
+        let result = resolve_host_with_validation("example.com", 443).await;
+        if let Ok(ips) = result {
+            assert!(!ips.is_empty());
+            for ip in &ips {
+                assert!(
+                    !is_ip_blocked(*ip),
+                    "example.com resolved to a blocked IP: {}",
+                    ip
+                );
+            }
+        }
+        // If network is unavailable, test is skipped
+    }
+
+    // =============================================================================
+    // ValidatingResolver Tests (pinned DNS resolution, rebinding TOCTOU fix)
+    // =============================================================================
+
+    /// The pinned resolver rejects domains whose resolution contains a
+    /// blocked IP. This is the check reqwest runs at connection time on the
+    /// very addresses it will connect to, so the second (unvalidated) DNS
+    /// lookup that enabled the rebinding TOCTOU no longer exists.
+    #[tokio::test]
+    async fn test_validating_resolver_rejects_domain_resolving_to_loopback() {
+        let resolver = ValidatingResolver { enforce_ssrf: true };
+        let name: Name = "localhost".parse().expect("valid DNS name");
+        // Match instead of unwrap_err: the resolved-addr iterator is not Debug.
+        let err = match resolver.resolve(name).await {
+            Ok(_) => panic!("a domain resolving to loopback must be rejected by the resolver"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            err.contains("SSRF") || err.contains("resolve"),
+            "expected SSRF or DNS error from the resolver, got: {err}"
+        );
+    }
+
+    /// With enforcement disabled (direct construction against loopback mock
+    /// servers only) the resolver resolves without any IP validation.
+    #[tokio::test]
+    async fn test_validating_resolver_passthrough_when_not_enforced() {
+        let resolver = ValidatingResolver {
+            enforce_ssrf: false,
+        };
+        let name: Name = "localhost".parse().expect("valid DNS name");
+        let mut addrs = resolver
+            .resolve(name)
+            .await
+            .expect("passthrough resolver must not validate resolved IPs");
+        assert!(
+            addrs.next().is_some(),
+            "passthrough resolution must return addresses"
+        );
+    }
+
+    /// The pinned resolver accepts a public domain and only returns
+    /// validated addresses. Requires network access; skipped when the host
+    /// does not resolve (same convention as
+    /// `test_resolve_host_with_validation_public`).
+    #[tokio::test]
+    async fn test_validating_resolver_accepts_public_domain() {
+        let resolver = ValidatingResolver { enforce_ssrf: true };
+        let name: Name = "example.com".parse().expect("valid DNS name");
+        if let Ok(addrs) = resolver.resolve(name).await {
+            for addr in addrs {
+                assert!(
+                    !is_ip_blocked(addr.ip()),
+                    "example.com resolved to a blocked IP: {}",
+                    addr.ip()
+                );
+            }
+        }
+        // If network is unavailable, test is skipped
+    }
+
+    /// End-to-end wiring proof: a whitelisted domain skips the domain-level
+    /// pre-check in `validate_url_full`, but the builder-built client's
+    /// pinned resolver still blocks the poll because `localhost` resolves to
+    /// loopback. Before the pinned resolver existed this poll would have
+    /// connected straight to the loopback address.
+    #[tokio::test]
+    async fn test_poll_whitelisted_domain_still_blocked_by_resolver() {
+        let source = HttpPolledSourceBuilder::new()
+            .url("https://localhost/config.json")
+            .allowed_domain("localhost")
+            .build()
+            .expect("build passes: domain hosts have no static IP checks to fail");
+
+        let result = source.poll().await;
+        assert!(
+            matches!(result, Err(ConfigError::RemoteUnavailable { .. })),
+            "pinned resolver must block the connection to a loopback-resolving domain"
+        );
+    }
+
+    // =============================================================================
+    // Whitelist Matching Tests (pure helper)
+    // =============================================================================
+
     #[test]
-    fn test_validate_url_whitelist_mixed() {
-        let domains = vec![
-            "internal.corp.com".to_string(),
-            "config-service.prod".to_string(),
-        ];
-        let result = validate_url("https://internal.corp.com/config.json", &domains);
-        assert!(result.is_ok());
-        let result = validate_url("https://config-service.prod/config.json", &domains);
-        assert!(result.is_ok());
+    fn test_is_domain_whitelisted_exact_match() {
+        assert!(is_domain_whitelisted(
+            "internal.example.com",
+            &["internal.example.com".to_string()]
+        ));
+        assert!(!is_domain_whitelisted(
+            "other.example.com",
+            &["internal.example.com".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_is_domain_whitelisted_subdomain_match() {
+        // "example.com" matches "api.example.com" but not "example.com" lookalikes
+        assert!(is_domain_whitelisted(
+            "api.example.com",
+            &["example.com".to_string()]
+        ));
+        assert!(!is_domain_whitelisted(
+            "notexample.com",
+            &["example.com".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_is_domain_whitelisted_wildcard() {
+        let allowed = vec!["*.example.com".to_string()];
+        assert!(is_domain_whitelisted("sub.example.com", &allowed));
+        // A wildcard entry does NOT match the bare domain.
+        assert!(!is_domain_whitelisted("example.com", &allowed));
+    }
+
+    // =============================================================================
+    // Redirect Hop Validation Tests (Issue #347, pure helper)
+    // =============================================================================
+
+    #[test]
+    fn test_validate_redirect_hop_resolves_relative_location() {
+        let current = url::Url::parse("https://config.example.com/a/b.json").unwrap();
+        let next = validate_redirect_hop(&current, "../cfg.json").unwrap();
+        assert_eq!(next.as_str(), "https://config.example.com/cfg.json");
+
+        let next = validate_redirect_hop(&current, "/rooted.json").unwrap();
+        assert_eq!(next.as_str(), "https://config.example.com/rooted.json");
+    }
+
+    #[test]
+    fn test_validate_redirect_hop_accepts_absolute_https() {
+        let current = url::Url::parse("https://config.example.com/a").unwrap();
+        let next = validate_redirect_hop(&current, "https://config.example.com/b").unwrap();
+        assert_eq!(next.as_str(), "https://config.example.com/b");
+    }
+
+    #[test]
+    fn test_validate_redirect_hop_rejects_non_https_target() {
+        let current = url::Url::parse("https://config.example.com/a").unwrap();
+        let result = validate_redirect_hop(&current, "http://config.example.com/b");
+        assert!(result.is_err(), "http redirect target must be rejected");
+    }
+
+    #[test]
+    fn test_validate_redirect_hop_rejects_blocked_ip_targets() {
+        let current = url::Url::parse("https://config.example.com/a").unwrap();
+        // Redirects to private, loopback, link-local (cloud metadata) and
+        // documentation IPs must be rejected.
+        for location in [
+            "https://127.0.0.1/admin",
+            "https://10.0.0.1/internal",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://192.0.2.1/doc",
+            "https://[::1]/admin",
+        ] {
+            let result = validate_redirect_hop(&current, location);
+            assert!(
+                result.is_err(),
+                "redirect to {location} must be rejected by SSRF checks"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_redirect_hop_invalid_location() {
+        let current = url::Url::parse("https://config.example.com/a").unwrap();
+        // "http://" has no host and cannot be resolved against the base URL.
+        let result = validate_redirect_hop(&current, "http://");
+        assert!(result.is_err(), "unparseable Location must be rejected");
     }
 
     // Helper for test assertions
-    fn err_if_blocked(result: &Result<Vec<IpAddr>, ConfigError>) -> bool {
+    fn err_if_blocked(result: &Result<url::Url, ConfigError>) -> bool {
         if let Err(e) = result {
             matches!(e, ConfigError::InvalidValue { .. })
         } else {
@@ -963,47 +1377,31 @@ mod tests {
 
     #[test]
     fn test_builder_accepts_whitelisted_domain() {
-        // Even if the domain resolves to a private IP, whitelisted domains are allowed
-        // Note: In this test, we use a non-resolvable domain. The point is that
-        // if it were resolvable (even to private IPs), the whitelist would bypass the check.
-        // We can't easily test actual DNS resolution in unit tests, but the code path is tested.
-        let result = HttpPolledSourceBuilder::new()
+        // Issue #348: build() no longer resolves DNS, so a whitelisted domain
+        // builds without any network access; the whitelist is consumed on the
+        // async poll path (validate_url_full skips DNS for these domains).
+        let source = HttpPolledSourceBuilder::new()
             .url("https://whitelisted-internal.local/config.json")
             .allowed_domain("whitelisted-internal.local")
-            .build();
-
-        // The build should either succeed (if it resolves to public IPs)
-        // or fail with a DNS error (not an SSRF error)
-        match result {
-            Ok(_) => {}
-            Err(ConfigError::InvalidValue { message, .. }) => {
-                // Should be DNS resolution error, not SSRF error
-                assert!(
-                    message.contains("resolve") || message.contains("Cannot resolve"),
-                    "Expected DNS resolution error, got: {}",
-                    message
-                );
-            }
-            Err(_) => {}
-        }
+            .build()
+            .expect("build() must not perform blocking DNS resolution");
+        assert_eq!(source.allowed_domains.len(), 1);
+        assert_eq!(source.allowed_domains[0], "whitelisted-internal.local");
+        assert!(source.enforce_ssrf, "builder-built sources enforce SSRF");
     }
 
     #[test]
-    fn test_resolve_host_with_validation_public() {
-        // Test with a well-known public DNS
-        // Note: This test requires network access. If it fails, the host doesn't resolve.
-        let result = resolve_host_with_validation("example.com", 443);
-        if let Ok(ips) = result {
-            assert!(!ips.is_empty());
-            for ip in &ips {
-                assert!(
-                    !is_ip_blocked(*ip),
-                    "example.com resolved to a blocked IP: {}",
-                    ip
-                );
-            }
-        }
-        // If network is unavailable, test is skipped
+    fn test_builder_build_does_not_resolve_dns() {
+        // An unresolvable domain builds fine: DNS validation (and its
+        // blocked-IP checks) happens asynchronously on every poll request.
+        let result = HttpPolledSourceBuilder::new()
+            .url("https://nonexistent-host-for-tests.invalid/config.json")
+            .build();
+        assert!(
+            result.is_ok(),
+            "build() must not perform blocking DNS: {:?}",
+            result.err()
+        );
     }
 
     // =============================================================================
@@ -1050,12 +1448,29 @@ mod tests {
         addr: std::net::SocketAddr,
         circuit_breaker: CircuitBreaker,
     ) -> HttpPolledSource {
+        source_against_local_full(
+            addr,
+            Client::builder().build().expect("client build"),
+            circuit_breaker,
+        )
+    }
+
+    /// Like [`source_against_local`] but with caller-supplied client and
+    /// circuit breaker (e.g. a client with `redirect::Policy::none` for
+    /// redirect-following tests).
+    fn source_against_local_full(
+        addr: std::net::SocketAddr,
+        client: Client,
+        circuit_breaker: CircuitBreaker,
+    ) -> HttpPolledSource {
         let url = format!("http://{addr}/config.json");
         HttpPolledSource {
             url: url.clone().into(),
             interval: Duration::from_secs(1),
-            client: Client::builder().build().expect("client build"),
+            client,
             format: None,
+            allowed_domains: Vec::new().into(),
+            enforce_ssrf: false,
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
@@ -1323,6 +1738,150 @@ mod tests {
             6,
             "recovered circuit resumes making real HTTP requests"
         );
+
+        server.await.expect("server task");
+    }
+
+    // =============================================================================
+    // Manual Redirect Following Tests (Issue #347)
+    // =============================================================================
+
+    /// A reqwest client with automatic redirect following disabled, matching
+    /// what `HttpPolledSourceBuilder::build()` configures.
+    fn client_no_redirect() -> Client {
+        Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("client build")
+    }
+
+    /// Issue #347: a 302 with a relative Location is followed manually and
+    /// the final 200 response is parsed — proving the manual loop works where
+    /// the client itself no longer follows redirects.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
+    #[tokio::test]
+    async fn test_poll_follows_redirect_manually() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"app":{"host":"redirected"}}"#;
+
+        let server = tokio::spawn(async move {
+            // Request 1: 302 with a relative Location. Request 2: the real
+            // config at the redirect target.
+            for i in 0..2 {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut buf = [0u8; 4096];
+                let _n = stream.read(&mut buf).await.expect("read");
+                let (status, headers, payload) = if i == 0 {
+                    ("302 Found", "Location: /real/config.json\r\n", "")
+                } else {
+                    ("200 OK", "", body)
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+                    payload.len()
+                );
+                stream.write_all(response.as_bytes()).await.expect("write");
+                stream.flush().await.expect("flush");
+            }
+        });
+
+        let source = source_against_local_full(addr, client_no_redirect(), CircuitBreaker::new());
+
+        let value = source
+            .poll()
+            .await
+            .expect("poll must follow the redirect manually");
+
+        let host = value
+            .inner
+            .as_map()
+            .expect("map")
+            .get("app")
+            .expect("app key")
+            .inner
+            .as_map()
+            .expect("app map")
+            .get("host")
+            .and_then(|v| v.as_str());
+        assert_eq!(host, Some("redirected"), "config fetched after redirect");
+
+        server.await.expect("server task");
+    }
+
+    /// Issue #347: redirect following is bounded — a redirect loop must stop
+    /// after `MAX_REDIRECTS` hops with a non-retryable TooManyRedirects error
+    /// instead of looping forever.
+    #[tokio::test]
+    async fn test_poll_redirect_loop_is_bounded() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+
+        let server = tokio::spawn(async move {
+            // The initial request + MAX_REDIRECTS (10) followed hops.
+            for _ in 0..(MAX_REDIRECTS + 1) {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut buf = [0u8; 4096];
+                let _n = stream.read(&mut buf).await.expect("read");
+                let response = "HTTP/1.1 302 Found\r\nContent-Type: application/json\r\nLocation: /next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    .to_string();
+                stream.write_all(response.as_bytes()).await.expect("write");
+                stream.flush().await.expect("flush");
+            }
+        });
+
+        let source = source_against_local_full(addr, client_no_redirect(), CircuitBreaker::new());
+
+        let result = source.poll().await;
+        match result {
+            Err(ConfigError::RemoteUnavailable {
+                error_type,
+                retryable: false,
+            }) if error_type == "TooManyRedirects" => {}
+            other => panic!("redirect loop must surface TooManyRedirects, got: {other:?}"),
+        }
+
+        server.await.expect("server task");
+    }
+
+    /// Issue #347: a 3xx response without a Location header is an error, not
+    /// a silent stop.
+    #[tokio::test]
+    async fn test_poll_redirect_without_location_errors() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _n = stream.read(&mut buf).await.expect("read");
+            let response = "HTTP/1.1 302 Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+        });
+
+        let source = source_against_local_full(addr, client_no_redirect(), CircuitBreaker::new());
+
+        let result = source.poll().await;
+        match result {
+            Err(ConfigError::RemoteUnavailable { error_type, .. })
+                if error_type == "MissingRedirectLocation" => {}
+            other => panic!("3xx without Location must error, got: {other:?}"),
+        }
 
         server.await.expect("server task");
     }

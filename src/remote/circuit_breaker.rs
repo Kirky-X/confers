@@ -21,6 +21,12 @@
 //!          └──────failure──▶ Open
 //! ```
 //!
+//! HalfOpen admits probes at a bounded rate: the next probe is allowed only
+//! after the current backoff interval has elapsed since the previous probe.
+//! This keeps the circuit protective even when a probe's outcome is never
+//! recorded (e.g. a cancelled future dropped between `can_execute` and
+//! `record_success`/`record_failure`).
+//!
 //! # Exponential Backoff
 //!
 //! The time spent in the `Open` state before transitioning to `HalfOpen`
@@ -67,6 +73,9 @@ pub struct CircuitBreaker {
     max_delay: Duration,
     /// Instant when the circuit last transitioned to Open.
     opened_at: Option<Instant>,
+    /// Instant when the last HalfOpen probe was admitted. Used to bound the
+    /// probe rate so at most one probe is in flight per backoff interval.
+    last_probe_at: Option<Instant>,
 }
 
 impl Default for CircuitBreaker {
@@ -85,12 +94,16 @@ impl CircuitBreaker {
             base_delay: DEFAULT_BASE_DELAY,
             max_delay: DEFAULT_MAX_DELAY,
             opened_at: None,
+            last_probe_at: None,
         }
     }
 
     /// Set the failure threshold (number of consecutive failures to open).
+    ///
+    /// A threshold of `0` would open the circuit on the very first outcome,
+    /// which is never useful; values below `1` are clamped to `1`.
     pub fn with_threshold(mut self, threshold: u32) -> Self {
-        self.threshold = threshold;
+        self.threshold = threshold.max(1);
         self
     }
 
@@ -109,17 +122,33 @@ impl CircuitBreaker {
     /// Returns `true` if a request is allowed in the current state.
     ///
     /// - `Closed`: always allowed.
-    /// - `Open`: allowed only if the backoff timeout has elapsed (transitions to `HalfOpen`).
-    /// - `HalfOpen`: allowed (single probe request).
+    /// - `Open`: allowed only if the backoff timeout has elapsed (transitions
+    ///   to `HalfOpen`).
+    /// - `HalfOpen`: allowed at a bounded rate — the next probe is admitted
+    ///   only after the current backoff interval has elapsed since the last
+    ///   admitted probe. This bounds in-flight probes to one per interval and
+    ///   stays correct even if a probe's outcome is never recorded (e.g. a
+    ///   cancelled future): the interval gates admission, not the recorded
+    ///   outcome.
     pub fn can_execute(&mut self) -> bool {
         match self.state {
             CircuitState::Closed => true,
-            CircuitState::HalfOpen => true,
+            CircuitState::HalfOpen => {
+                let interval = self.backoff_duration();
+                if self.last_probe_at.is_some_and(|at| at.elapsed() < interval) {
+                    return false;
+                }
+                self.last_probe_at = Some(Instant::now());
+                true
+            }
             CircuitState::Open => {
                 if let Some(opened_at) = self.opened_at {
                     let backoff = self.backoff_duration();
                     if opened_at.elapsed() >= backoff {
                         self.state = CircuitState::HalfOpen;
+                        // Admit the first HalfOpen probe and start the probe
+                        // rate window.
+                        self.last_probe_at = Some(Instant::now());
                         true
                     } else {
                         false
@@ -127,6 +156,7 @@ impl CircuitBreaker {
                 } else {
                     // Should not happen, but treat as HalfOpen to recover
                     self.state = CircuitState::HalfOpen;
+                    self.last_probe_at = Some(Instant::now());
                     true
                 }
             }
@@ -139,6 +169,7 @@ impl CircuitBreaker {
         self.failure_count = 0;
         self.state = CircuitState::Closed;
         self.opened_at = None;
+        self.last_probe_at = None;
     }
 
     /// Record a failed operation. Increments the failure counter and
@@ -157,6 +188,7 @@ impl CircuitBreaker {
                 // Any failure in HalfOpen immediately re-opens the circuit
                 self.state = CircuitState::Open;
                 self.opened_at = Some(Instant::now());
+                self.last_probe_at = None;
             }
             CircuitState::Open => {
                 // Already open, just update the failure count
@@ -285,6 +317,81 @@ mod tests {
         assert!(!cb.can_execute());
     }
 
+    /// Issue #311: in HalfOpen the next probe is admitted only after the
+    /// backoff interval has elapsed since the last admitted probe, so at most
+    /// one probe is in flight per interval.
+    #[test]
+    fn test_half_open_probe_rate_is_bounded() {
+        let mut cb = CircuitBreaker::new()
+            .with_threshold(1)
+            .with_base_delay(Duration::from_millis(50))
+            .with_max_delay(Duration::from_millis(50));
+
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+
+        std::thread::sleep(Duration::from_millis(60));
+
+        // Open -> HalfOpen: the first probe is admitted.
+        assert!(cb.can_execute());
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+
+        // A probe whose outcome is never recorded (cancelled future) must not
+        // let further probes through immediately.
+        assert!(!cb.can_execute());
+        assert!(!cb.can_execute());
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+
+        // After the probe interval elapses, exactly one new probe is admitted.
+        std::thread::sleep(Duration::from_millis(60));
+        assert!(cb.can_execute());
+        assert!(!cb.can_execute());
+    }
+
+    /// Issue #311: a recorded HalfOpen probe success closes the circuit and
+    /// lifts the probe rate limit.
+    #[test]
+    fn test_half_open_probe_success_closes_and_unblocks() {
+        let mut cb = CircuitBreaker::new()
+            .with_threshold(1)
+            .with_base_delay(Duration::from_millis(20))
+            .with_max_delay(Duration::from_millis(20));
+
+        cb.record_failure();
+        std::thread::sleep(Duration::from_millis(30));
+
+        assert!(cb.can_execute()); // HalfOpen probe admitted
+        cb.record_success();
+        assert_eq!(cb.state(), CircuitState::Closed);
+
+        // Back in Closed, every request passes without rate limiting.
+        assert!(cb.can_execute());
+        assert!(cb.can_execute());
+    }
+
+    /// Issue #311: a recorded HalfOpen probe failure re-opens the circuit and
+    /// a later probe is admitted once the new backoff elapses.
+    #[test]
+    fn test_half_open_probe_failure_reopens_then_recovers() {
+        let mut cb = CircuitBreaker::new()
+            .with_threshold(1)
+            .with_base_delay(Duration::from_millis(20))
+            .with_max_delay(Duration::from_millis(20));
+
+        cb.record_failure();
+        std::thread::sleep(Duration::from_millis(30));
+
+        assert!(cb.can_execute()); // HalfOpen probe admitted
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+        assert!(!cb.can_execute());
+
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(cb.can_execute()); // new probe admitted
+        cb.record_success();
+        assert_eq!(cb.state(), CircuitState::Closed);
+    }
+
     #[test]
     fn test_backoff_duration_calculation() {
         let base = Duration::from_secs(1);
@@ -356,5 +463,18 @@ mod tests {
         assert_eq!(cb.threshold, 10);
         assert_eq!(cb.base_delay, Duration::from_secs(5));
         assert_eq!(cb.max_delay, Duration::from_secs(120));
+    }
+
+    /// Issue #313: `with_threshold(0)` is clamped to 1 — a zero threshold
+    /// would open the circuit on the first outcome, which is never useful.
+    #[test]
+    fn test_threshold_zero_is_clamped_to_one() {
+        let cb = CircuitBreaker::new().with_threshold(0);
+        assert_eq!(cb.threshold, 1);
+
+        // With threshold 1, a single failure opens the circuit.
+        let mut cb = CircuitBreaker::new().with_threshold(0);
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
     }
 }
