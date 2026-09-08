@@ -14,8 +14,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Rebuild an [`AnnotatedValue`] tree from the plain (non-annotated) JSON a
 /// snapshot file contains. Returns `None` when the value looks like the legacy
-/// AnnotatedValue envelope ({"inner": .., "source": .., ...}) so the caller can
-/// fall back to serde deserialization.
+/// AnnotatedValue envelope ({"inner": .., "source": .., "path": .., ...}) so the
+/// caller can fall back to serde deserialization.
 fn plain_json_to_annotated(
     value: &serde_json::Value,
     source: &crate::types::SourceId,
@@ -43,11 +43,20 @@ fn plain_json_to_annotated(
             ConfigValue::Array(arr.into())
         }
         serde_json::Value::Object(map) => {
-            if map.contains_key("inner")
-                && map.contains_key("source")
-                && map.contains_key("priority")
-                && map.contains_key("version")
-            {
+            // Legacy snapshots written by older versions contain a serialized
+            // `AnnotatedValue`: {"inner": .., "source": .., "path": ..,
+            // "priority": .., "version": ..[, "location": ..]}. `AnnotatedValue`
+            // always serializes all of its fields, so require the full field
+            // set *with matching JSON types* before treating an object as an
+            // envelope. A plain config that merely happens to contain e.g.
+            // `inner`, `source`, `priority` and `version` keys must still be
+            // parsed as an ordinary map, not misclassified as an envelope.
+            let looks_like_envelope = map.contains_key("inner")
+                && map.get("source").is_some_and(serde_json::Value::is_string)
+                && map.get("path").is_some_and(serde_json::Value::is_string)
+                && map.get("priority").is_some_and(serde_json::Value::is_u64)
+                && map.get("version").is_some_and(serde_json::Value::is_u64);
+            if looks_like_envelope {
                 return None; // legacy annotated envelope
             }
             let mut entries = indexmap::IndexMap::new();
@@ -1048,6 +1057,115 @@ version = 0
         });
         let loaded = manager.load_snapshot(&path).await.unwrap();
         assert_eq!(loaded.inner.as_str(), Some("v"));
+    }
+
+    // ---- legacy envelope detection (plain_json_to_annotated) ----
+
+    /// Regression test for #221: a legitimate config whose top-level object
+    /// happens to contain `inner`, `source`, `priority` and `version` keys must
+    /// NOT be misclassified as a legacy AnnotatedValue envelope; it parses as a
+    /// plain map.
+    #[tokio::test]
+    async fn test_load_snapshot_envelope_like_config_parses_as_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("snap.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "inner": {"x": 1},
+                "source": "runtime",
+                "priority": "high",
+                "version": "1.2.3"
+            }"#,
+        )
+        .unwrap();
+        let manager = SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 30,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        });
+        let loaded = manager.load_snapshot(&path).await.unwrap();
+        let map = loaded.inner.as_map().expect("must parse as a plain map");
+        assert!(map.contains_key("inner"));
+        assert!(map.contains_key("source"));
+        assert!(map.contains_key("priority"));
+        assert!(map.contains_key("version"));
+        assert_eq!(
+            map.get("version").unwrap().inner.as_str(),
+            Some("1.2.3"),
+            "values must be preserved verbatim, not unwrapped"
+        );
+    }
+
+    /// A top-level object with envelope-like keys plus a string `path` key is
+    /// still treated as a plain map when the other fields do not match the
+    /// envelope's JSON types (here: `version` is a string, `priority` a string).
+    #[tokio::test]
+    async fn test_load_snapshot_envelope_keys_with_wrong_types_parses_as_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("snap.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "inner": {"x": 1},
+                "source": "runtime",
+                "path": "/etc/app",
+                "priority": "high",
+                "version": "1.2.3"
+            }"#,
+        )
+        .unwrap();
+        let manager = SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 30,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        });
+        let loaded = manager.load_snapshot(&path).await.unwrap();
+        let map = loaded.inner.as_map().expect("must parse as a plain map");
+        assert_eq!(map.len(), 5, "all five keys must be preserved");
+    }
+
+    /// Direct unit test of the heuristic: a fully-typed legacy envelope
+    /// (AnnotatedValue always serializes `inner`, `source`, `path`, `priority`,
+    /// `version`) is still detected.
+    #[test]
+    fn test_plain_json_detects_fully_typed_legacy_envelope() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{
+                "inner": "hello",
+                "source": "test",
+                "path": "",
+                "priority": 0,
+                "version": 0,
+                "location": null
+            }"#,
+        )
+        .unwrap();
+        let result = plain_json_to_annotated(&v, &SourceId::new("snapshot"), "");
+        assert!(
+            result.is_none(),
+            "typed envelope must be detected as legacy"
+        );
+    }
+
+    /// The four envelope-like keys alone (no `path`) are NOT an envelope.
+    #[test]
+    fn test_plain_json_four_envelope_like_keys_is_plain_map() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{
+                "inner": {"x": 1},
+                "source": "runtime",
+                "priority": 3,
+                "version": 7
+            }"#,
+        )
+        .unwrap();
+        let result = plain_json_to_annotated(&v, &SourceId::new("snapshot"), "")
+            .expect("four envelope-like keys must parse as a plain map");
+        let map = result.inner.as_map().expect("map value");
+        assert_eq!(map.len(), 4);
     }
 
     // ---- load_snapshot error paths ----

@@ -80,11 +80,14 @@ impl TypeScriptGenerator {
             for (prop_name, prop_schema) in props {
                 let prop_type = Self::get_typescript_type(prop_schema);
                 let optional = Self::is_optional(prop_name, schema);
+                // Quote keys that are not valid TS identifiers (e.g. "my-key")
+                // so the generated interface is valid TypeScript.
+                let key = Self::ts_property_key(prop_name);
 
                 let property_def = if optional {
-                    format!("  {}?: {};", prop_name, prop_type)
+                    format!("  {}?: {};", key, prop_type)
                 } else {
-                    format!("  {}: {};", prop_name, prop_type)
+                    format!("  {}: {};", key, prop_type)
                 };
 
                 properties.push(property_def);
@@ -125,15 +128,18 @@ impl TypeScriptGenerator {
                 })
                 .collect();
 
-            if types.len() == 2 && types.contains(&"null".to_string()) {
-                let non_null_type = types.iter().find(|&t| t != "null");
-                match non_null_type {
-                    Some(t) => return t.clone(),
-                    None => return "any".to_string(),
-                }
-            } else {
-                return types.join(" | ");
+            // Preserve "null" in the union (Option<T> -> "T | null") so the
+            // generated type keeps the value's nullable runtime semantics.
+            // `null` is normalized to the last union member (TS convention);
+            // optionality (`field?:`) is rendered separately by
+            // `generate_interface` via `is_optional`, so a nullable field
+            // appears as `field?: T | null`.
+            let has_null = types.iter().any(|t| t == "null");
+            let mut ordered: Vec<String> = types.into_iter().filter(|t| t != "null").collect();
+            if has_null {
+                ordered.push("null".to_string());
             }
+            return ordered.join(" | ");
         }
 
         // Handle single type string
@@ -155,7 +161,12 @@ impl TypeScriptGenerator {
                         let mut inner_props = Vec::new();
                         for (p_name, p_schema) in props {
                             let p_type = Self::get_typescript_type(p_schema);
-                            inner_props.push(format!("{}: {}", p_name, p_type));
+                            // Quote keys that are not valid TS identifiers.
+                            inner_props.push(format!(
+                                "{}: {}",
+                                Self::ts_property_key(p_name),
+                                p_type
+                            ));
                         }
                         format!("{{ {} }}", inner_props.join("; "))
                     } else if let Some(additional_props) = schema.get("additionalProperties") {
@@ -231,6 +242,33 @@ impl TypeScriptGenerator {
         }
     }
 
+    /// Check whether a key is a valid TypeScript identifier shape.
+    ///
+    /// Only the lexical shape matters: TypeScript allows reserved words as
+    /// property names (e.g. `interface X { class: string }` is valid), so a key
+    /// is bare-safe when it starts with an ASCII letter, `_` or `$` and
+    /// contains only ASCII identifier characters. Anything else (e.g.
+    /// `my-key`, `2nd`, keys containing spaces) must be quoted.
+    fn is_valid_ts_identifier(key: &str) -> bool {
+        let mut chars = key.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' || c == '$' => {}
+            _ => return false,
+        }
+        chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
+    }
+
+    /// Render an object key as a TypeScript property key: bare when it is a
+    /// valid identifier, quoted (with escapes) otherwise, so keys like
+    /// `my-key`, `2nd` or `with space` produce valid TypeScript.
+    fn ts_property_key(key: &str) -> String {
+        if Self::is_valid_ts_identifier(key) {
+            key.to_string()
+        } else {
+            format!("\"{}\"", key.replace('\\', "\\\\").replace('"', "\\\""))
+        }
+    }
+
     /// Generate TypeScript definitions from a JSON value representing a config structure
     pub fn from_json_value(value: &Value) -> String {
         match value {
@@ -254,7 +292,8 @@ impl TypeScriptGenerator {
 
         for (key, value) in obj {
             let prop_type = Self::from_json_value(value);
-            properties.push(format!("  {}: {};", key, prop_type));
+            // Quote keys that are not valid TS identifiers (e.g. "my-key").
+            properties.push(format!("  {}: {};", Self::ts_property_key(key), prop_type));
         }
 
         if properties.is_empty() {
@@ -428,19 +467,40 @@ mod tests {
     #[test]
     fn test_get_typescript_type_array_option_string() {
         let s = serde_json::json!({ "type": ["string", "null"] });
-        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string");
+        // Option<String> keeps null in the union (see #214): "string | null".
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "string | null"
+        );
     }
 
     #[test]
     fn test_get_typescript_type_array_option_integer() {
         let s = serde_json::json!({ "type": ["integer", "null"] });
-        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "number | null"
+        );
     }
 
     #[test]
     fn test_get_typescript_type_array_option_number() {
         let s = serde_json::json!({ "type": ["null", "number"] });
-        assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "number");
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "number | null"
+        );
+    }
+
+    #[test]
+    fn test_get_typescript_type_array_option_order_preserved() {
+        // Non-null members keep their schema order; `null` is normalized to
+        // the last union position (TS convention).
+        let s = serde_json::json!({ "type": ["null", "boolean"] });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "boolean | null"
+        );
     }
 
     #[test]
@@ -454,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_get_typescript_type_array_only_null() {
-        // types.len() == 1, so the "len == 2 && contains null" branch is false.
+        // A bare ["null"] schema joins to plain "null".
         let s = serde_json::json!({ "type": ["null"] });
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "null");
     }
@@ -758,6 +818,106 @@ mod tests {
         assert!(out.contains("name: string;"));
         assert!(out.contains("age?: number;"));
         assert!(out.starts_with("export interface Person {"));
+    }
+
+    /// Regression test for #215: property keys that are not valid TypeScript
+    /// identifiers (`my-key`, `2nd`, keys with spaces) must be quoted, otherwise
+    /// the generated interface is not valid TypeScript. Valid identifiers stay
+    /// unquoted.
+    #[test]
+    fn test_generate_interface_quotes_non_identifier_keys() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "my-key": { "type": "string" },
+                "2nd": { "type": "integer" },
+                "with space": { "type": "boolean" },
+                "good_name": { "type": "string" }
+            }
+        });
+        let out = TypeScriptGenerator::generate_interface("Weird", &s);
+        // No `required` list → every property renders as optional (`?:`).
+        assert!(out.contains("\"my-key\"?: string;"), "got: {}", out);
+        assert!(out.contains("\"2nd\"?: number;"), "got: {}", out);
+        assert!(out.contains("\"with space\"?: boolean;"), "got: {}", out);
+        assert!(out.contains("good_name?: string;"), "got: {}", out);
+        // Quoting must wrap exactly the key, not the whole definition.
+        assert!(!out.contains("\"good_name\""), "got: {}", out);
+    }
+
+    /// Nullable fields render as `field?: T | null`: optionality comes from
+    /// `is_optional`, while the runtime nullability stays in the union (#214).
+    #[test]
+    fn test_generate_interface_nullable_option_field() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "nickname": { "type": ["string", "null"] }
+            },
+            "required": ["nickname"]
+        });
+        let out = TypeScriptGenerator::generate_interface("Profile", &s);
+        assert!(
+            out.contains("nickname: string | null;"),
+            "required nullable field must keep null in the union, got: {}",
+            out
+        );
+
+        let optional_nullable = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "nickname": { "type": ["string", "null"] }
+            }
+        });
+        let out = TypeScriptGenerator::generate_interface("Profile", &optional_nullable);
+        assert!(
+            out.contains("nickname?: string | null;"),
+            "optional nullable field must render `field?: T | null`, got: {}",
+            out
+        );
+    }
+
+    /// Same quoting rule applies to keys of `from_json_value`-generated
+    /// object types.
+    #[test]
+    fn test_from_json_value_quotes_non_identifier_keys() {
+        let v = serde_json::json!({
+            "my-key": "a",
+            "2nd": 1
+        });
+        let ts = TypeScriptGenerator::from_json_value(&v);
+        assert!(ts.contains("\"my-key\": string;"), "got: {}", ts);
+        assert!(ts.contains("\"2nd\": number;"), "got: {}", ts);
+    }
+
+    /// Same quoting rule applies to inline nested object types.
+    #[test]
+    fn test_get_typescript_type_object_quotes_non_identifier_keys() {
+        let s = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "my-key": { "type": "string" }
+            }
+        });
+        assert_eq!(
+            TypeScriptGenerator::get_typescript_type(&s),
+            "{ \"my-key\": string }"
+        );
+    }
+
+    #[test]
+    fn test_is_valid_ts_identifier() {
+        assert!(TypeScriptGenerator::is_valid_ts_identifier("name"));
+        assert!(TypeScriptGenerator::is_valid_ts_identifier("_private"));
+        assert!(TypeScriptGenerator::is_valid_ts_identifier("$dollar"));
+        assert!(TypeScriptGenerator::is_valid_ts_identifier("n1"));
+        // Reserved words are lexically valid property names in TS.
+        assert!(TypeScriptGenerator::is_valid_ts_identifier("class"));
+        assert!(!TypeScriptGenerator::is_valid_ts_identifier("my-key"));
+        assert!(!TypeScriptGenerator::is_valid_ts_identifier("2nd"));
+        assert!(!TypeScriptGenerator::is_valid_ts_identifier("with space"));
+        assert!(!TypeScriptGenerator::is_valid_ts_identifier(""));
+        assert!(!TypeScriptGenerator::is_valid_ts_identifier("a.b"));
     }
 
     #[test]

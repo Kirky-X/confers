@@ -215,8 +215,10 @@ mod toml_converter {
         }
 
         fn serialize(&self, value: &AnnotatedValue) -> ConfigResult<String> {
-            // Simple serialization - convert to TOML Value and use toml::to_string
-            let toml_val = config_value_to_toml_value(&value.inner);
+            // Simple serialization - convert to TOML Value and use toml::to_string.
+            // TOML has no null representation (see `supports(FormatFeature::Null)`),
+            // so null values fail loudly instead of being silently coerced.
+            let toml_val = config_value_to_toml_value(&value.inner)?;
             toml::to_string_pretty(&toml_val).map_err(|e| ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "TOML".to_string(),
@@ -242,37 +244,47 @@ mod toml_converter {
         }
     }
 
-    fn config_value_to_toml_value(value: &ConfigValue) -> toml::Value {
+    fn config_value_to_toml_value(value: &ConfigValue) -> ConfigResult<toml::Value> {
         use toml::map::Map;
         match value {
-            ConfigValue::Null => toml::Value::String(String::new()),
-            ConfigValue::Bool(b) => toml::Value::Boolean(*b),
-            ConfigValue::I64(i) => toml::Value::Integer(*i),
+            // TOML cannot represent null (`supports(FormatFeature::Null)` is
+            // false). Fail loudly instead of silently flattening null to an
+            // empty string, which loses the null semantics; callers should
+            // strip null entries first or use a null-capable format (JSON/YAML).
+            ConfigValue::Null => Err(ConfigError::InvalidValue {
+                key: "serialization".to_string(),
+                expected_type: "TOML".to_string(),
+                message: "TOML does not support null values; remove null entries before serializing or use a null-capable format such as JSON or YAML".to_string(),
+            }),
+            ConfigValue::Bool(b) => Ok(toml::Value::Boolean(*b)),
+            ConfigValue::I64(i) => Ok(toml::Value::Integer(*i)),
             ConfigValue::U64(u) => {
                 // TOML Integer is i64; values > i64::MAX serialize as string
                 // to avoid silent truncation.
                 if *u <= i64::MAX as u64 {
-                    toml::Value::Integer(*u as i64)
+                    Ok(toml::Value::Integer(*u as i64))
                 } else {
-                    toml::Value::String(u.to_string())
+                    Ok(toml::Value::String(u.to_string()))
                 }
             }
-            ConfigValue::F64(f) => toml::Value::Float(*f),
-            ConfigValue::String(s) => toml::Value::String(s.clone()),
-            ConfigValue::Bytes(b) => {
-                toml::Value::Array(b.iter().map(|&b| toml::Value::Integer(b as i64)).collect())
+            ConfigValue::F64(f) => Ok(toml::Value::Float(*f)),
+            ConfigValue::String(s) => Ok(toml::Value::String(s.clone())),
+            ConfigValue::Bytes(b) => Ok(toml::Value::Array(
+                b.iter().map(|&b| toml::Value::Integer(b as i64)).collect(),
+            )),
+            ConfigValue::Array(arr) => {
+                let mut out = Vec::with_capacity(arr.len());
+                for v in arr.iter() {
+                    out.push(config_value_to_toml_value(&v.inner)?);
+                }
+                Ok(toml::Value::Array(out))
             }
-            ConfigValue::Array(arr) => toml::Value::Array(
-                arr.iter()
-                    .map(|v| config_value_to_toml_value(&v.inner))
-                    .collect(),
-            ),
             ConfigValue::Map(map) => {
                 let mut m = Map::new();
                 for (k, v) in map.iter() {
-                    m.insert(k.to_string(), config_value_to_toml_value(&v.inner));
+                    m.insert(k.to_string(), config_value_to_toml_value(&v.inner)?);
                 }
-                toml::Value::Table(m)
+                Ok(toml::Value::Table(m))
             }
         }
     }
@@ -514,7 +526,14 @@ mod yaml_converter {
             ConfigValue::F64(f) => serde_yaml_ng::Value::String(f.to_string()),
             ConfigValue::String(s) => serde_yaml_ng::Value::String(s.clone()),
             ConfigValue::Bytes(b) => {
-                serde_yaml_ng::Value::String(format!("<binary: {} bytes>", b.len()))
+                // YAML has no dedicated binary type in the representation we
+                // emit, so bytes are encoded as a standard-base64 (RFC 4648)
+                // string. This preserves the data across a serialize -> parse
+                // round trip: decode the resulting string with the standard
+                // base64 alphabet to recover the original bytes (mirrors the
+                // JSON converter's base64 encoding).
+                use base64::Engine as _;
+                serde_yaml_ng::Value::String(base64::engine::general_purpose::STANDARD.encode(b))
             }
             ConfigValue::Array(arr) => serde_yaml_ng::Value::Sequence(
                 arr.iter()
@@ -664,7 +683,7 @@ mod ini_converter {
                 let (section, simple_key) = if let Some(dot) = key.find('.') {
                     (key[..dot].to_string(), key[dot + 1..].to_string())
                 } else {
-                    (String::new(), key)
+                    (String::new(), key.clone())
                 };
 
                 if section != current_section {
@@ -681,11 +700,23 @@ mod ini_converter {
 
                 output.push_str(&simple_key);
                 output.push_str(" = ");
-                if let Some(s) = v.inner.as_str() {
-                    output.push_str(s);
-                } else {
-                    output.push_str(&format!("{:?}", v.inner));
-                }
+                // INI is a flat, typeless format: every entry is `key = value`
+                // text. Scalar values are written as their literal string form
+                // (bool -> "true"/"false", integers/floats -> numeric text) so
+                // the output is valid INI; re-parsing yields strings because INI
+                // carries no type information (inherent limitation).
+                // Values with no INI representation (null, arrays, nested maps)
+                // fail loudly instead of emitting placeholder text.
+                let text = ini_scalar_text(&v.inner).ok_or_else(|| ConfigError::InvalidValue {
+                    key: key.clone(),
+                    expected_type: "INI scalar (string, bool, integer, or float)".to_string(),
+                    message: if matches!(v.inner, ConfigValue::Null) {
+                        "INI does not support null values; remove null entries or use a format that supports null (JSON/YAML)".to_string()
+                    } else {
+                        "INI cannot represent arrays or nested maps; flatten the value or use a format with nesting support (JSON/YAML/TOML)".to_string()
+                    },
+                })?;
+                output.push_str(&text);
                 output.push('\n');
             }
 
@@ -707,6 +738,25 @@ mod ini_converter {
                 FormatFeature::TopLevelArrays => false,
                 FormatFeature::Sections => true,
             }
+        }
+    }
+
+    /// Render a scalar [`ConfigValue`] as its literal INI text form.
+    ///
+    /// INI values are plain text, so non-string scalars are written as their
+    /// canonical string representation (`true`, `8080`, `1.5`). Returns `None`
+    /// for values that have no INI representation (null, arrays, nested maps).
+    fn ini_scalar_text(value: &ConfigValue) -> Option<String> {
+        match value {
+            ConfigValue::String(s) => Some(s.clone()),
+            ConfigValue::Bool(b) => Some(b.to_string()),
+            ConfigValue::I64(i) => Some(i.to_string()),
+            ConfigValue::U64(u) => Some(u.to_string()),
+            ConfigValue::F64(f) => Some(f.to_string()),
+            ConfigValue::Null
+            | ConfigValue::Bytes(_)
+            | ConfigValue::Array(_)
+            | ConfigValue::Map(_) => None,
         }
     }
 }
@@ -1385,10 +1435,15 @@ key = "value""#
             ))
             .is_ok()
         );
-        // Bytes → "<binary: N bytes>"
+        // Bytes -> base64-encoded string (data-preserving)
         let v = AnnotatedValue::new(ConfigValue::Bytes(vec![10, 20]), SourceId::new("t"), "");
         let s = conv.serialize(&v).unwrap();
-        assert!(s.contains("binary"));
+        // base64(0x0A 0x14) == "ChQ="
+        assert!(
+            s.contains("ChQ="),
+            "bytes must be base64-encoded, got: {}",
+            s
+        );
         // Null
         assert!(
             conv.serialize(&AnnotatedValue::new(
@@ -1486,6 +1541,221 @@ key = "value""#
         );
         let result = conv.serialize(&v);
         assert!(result.is_err());
+    }
+
+    /// Regression test for #119: INI serialization previously wrote Rust Debug
+    /// text (`Bool(true)`, `I64(8080)`) for non-string scalars. Non-string
+    /// scalars must now be rendered as their literal string form so the output
+    /// is valid INI (values re-parse as strings; INI is typeless).
+    #[test]
+    fn test_ini_serialize_scalar_literals() {
+        use crate::types::ConfigValue;
+        let conv = ini_converter::IniConverter::new();
+        let v = AnnotatedValue::new(
+            ConfigValue::map(vec![
+                (
+                    "flag",
+                    AnnotatedValue::new(ConfigValue::Bool(true), SourceId::new("t"), "flag"),
+                ),
+                (
+                    "port",
+                    AnnotatedValue::new(ConfigValue::I64(8080), SourceId::new("t"), "port"),
+                ),
+                (
+                    "big",
+                    AnnotatedValue::new(ConfigValue::U64(u64::MAX), SourceId::new("t"), "big"),
+                ),
+                (
+                    "ratio",
+                    AnnotatedValue::new(ConfigValue::F64(1.5), SourceId::new("t"), "ratio"),
+                ),
+                (
+                    "name",
+                    AnnotatedValue::new(
+                        ConfigValue::String("db".into()),
+                        SourceId::new("t"),
+                        "name",
+                    ),
+                ),
+            ]),
+            SourceId::new("t"),
+            "",
+        );
+        let out = conv.serialize(&v).unwrap();
+        assert!(out.contains("flag = true"), "got: {}", out);
+        assert!(out.contains("port = 8080"), "got: {}", out);
+        assert!(out.contains(&format!("big = {}", u64::MAX)), "got: {}", out);
+        assert!(out.contains("ratio = 1.5"), "got: {}", out);
+        assert!(out.contains("name = db"), "got: {}", out);
+        // No Rust Debug artifacts may leak into the output.
+        assert!(!out.contains("Bool("));
+        assert!(!out.contains("I64("));
+        assert!(!out.contains("U64("));
+        assert!(!out.contains("F64("));
+
+        // The serialized document must be legal INI: re-parsing succeeds and
+        // yields the literal string forms (INI carries no type information).
+        let reparsed = conv.parse(&out, SourceId::new("t"), None).unwrap();
+        let map = reparsed.inner.as_map().unwrap();
+        assert_eq!(map.get("flag").unwrap().inner.as_str(), Some("true"));
+        assert_eq!(map.get("port").unwrap().inner.as_str(), Some("8080"));
+        assert_eq!(map.get("ratio").unwrap().inner.as_str(), Some("1.5"));
+    }
+
+    /// INI has no null representation (`supports(FormatFeature::Null)` is
+    /// false): serialization must fail loudly instead of writing placeholder
+    /// text that loses the null semantics.
+    #[test]
+    fn test_ini_serialize_null_errors() {
+        use crate::types::ConfigValue;
+        let conv = ini_converter::IniConverter::new();
+        let v = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "missing",
+                AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "missing"),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        let err = conv.serialize(&v).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("null"),
+            "error must mention null; got: {}",
+            msg
+        );
+    }
+
+    /// Arrays and nested maps have no INI representation and must fail loudly
+    /// instead of being serialized as Rust Debug text.
+    #[test]
+    fn test_ini_serialize_array_and_nested_map_errors() {
+        use crate::types::ConfigValue;
+        let conv = ini_converter::IniConverter::new();
+
+        let array_value = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "items",
+                AnnotatedValue::new(
+                    ConfigValue::array(vec![AnnotatedValue::new(
+                        ConfigValue::I64(1),
+                        SourceId::new("t"),
+                        "items[0]",
+                    )]),
+                    SourceId::new("t"),
+                    "items",
+                ),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        assert!(conv.serialize(&array_value).is_err());
+
+        let nested = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "outer",
+                AnnotatedValue::new(
+                    ConfigValue::map(vec![(
+                        "inner",
+                        AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "outer.inner"),
+                    )]),
+                    SourceId::new("t"),
+                    "outer",
+                ),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        assert!(conv.serialize(&nested).is_err());
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_serialize_null_errors() {
+        use crate::types::ConfigValue;
+        let conv = toml_converter::TomlConverter::new();
+        // Regression test for #122: Null was previously silently coerced to an
+        // empty string. TOML declares no null support, so serialization must
+        // fail loudly, both at the top level and nested inside maps/arrays.
+        let nested = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "missing",
+                AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "missing"),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        let err = conv.serialize(&nested).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("null"),
+            "error must mention null; got: {}",
+            msg
+        );
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_serialize_map_without_null_succeeds() {
+        use crate::types::ConfigValue;
+        let conv = toml_converter::TomlConverter::new();
+        let v = AnnotatedValue::new(
+            ConfigValue::map(vec![
+                (
+                    "name",
+                    AnnotatedValue::new(
+                        ConfigValue::String("db".into()),
+                        SourceId::new("t"),
+                        "name",
+                    ),
+                ),
+                (
+                    "port",
+                    AnnotatedValue::new(ConfigValue::I64(5432), SourceId::new("t"), "port"),
+                ),
+            ]),
+            SourceId::new("t"),
+            "",
+        );
+        let out = conv.serialize(&v).unwrap();
+        assert!(out.contains("name"));
+        assert!(out.contains("5432"));
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn test_yaml_bytes_base64_roundtrip() {
+        use crate::types::ConfigValue;
+        use base64::Engine as _;
+        let conv = yaml_converter::YamlConverter::new();
+        let original: Vec<u8> = vec![0, 1, 2, 10, 20, 200, 255];
+        let v = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "blob",
+                AnnotatedValue::new(
+                    ConfigValue::Bytes(original.clone()),
+                    SourceId::new("t"),
+                    "blob",
+                ),
+            )]),
+            SourceId::new("t"),
+            "",
+        );
+        let serialized = conv.serialize(&v).unwrap();
+        // The emitted value is a plain base64 string; parse it back and decode
+        // to recover the exact original bytes.
+        let reparsed = conv.parse(&serialized, SourceId::new("t"), None).unwrap();
+        let map = reparsed.inner.as_map().unwrap();
+        let stored = map.get("blob").unwrap();
+        match &stored.inner {
+            ConfigValue::String(encoded) => {
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(encoded)
+                    .expect("serialized bytes must be valid standard base64");
+                assert_eq!(decoded, original, "base64 round trip must preserve bytes");
+            }
+            other => panic!("expected base64 string, got {:?}", other),
+        }
     }
 
     #[cfg(feature = "toml")]

@@ -217,7 +217,9 @@ impl ModuleRegistry {
     ///
     /// # Errors
     ///
-    /// Returns [`ConfigError::ModuleNotFound`] if the group or profile doesn't exist.
+    /// Returns [`ConfigError::ModuleNotFound`] if the group or profile doesn't
+    /// exist. The error's `module` field carries the profile name that was
+    /// requested (see `load_active` for the request-name convention).
     ///
     /// # Example
     ///
@@ -275,6 +277,12 @@ impl ModuleRegistry {
     /// Returns [`ConfigError::ModuleNotFound`] if the group doesn't exist
     /// or the active profile's file cannot be loaded.
     pub fn load_active(&self, name: &str, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
+        // Error-field convention: `ConfigError::ModuleNotFound.module` always
+        // carries the profile name that was *requested*. `load_active` requests
+        // the group's active profile without naming it, so a missing group is
+        // reported with the literal request name "active". Once the group is
+        // found, the call is delegated to `load_module` with the concrete
+        // profile, so any profile-level error reports the real profile name.
         let module = self
             .groups
             .get(name)
@@ -842,6 +850,27 @@ mod tests {
         let result = registry.load_active("nonexistent", &LoaderConfig::default());
 
         assert!(result.is_err());
+    }
+
+    /// Convention test (#207): the `module` field of `ModuleNotFound` carries
+    /// the *requested* profile name. `load_active` requests the group's active
+    /// profile without naming it, so a missing group reports the literal
+    /// request name "active"; profile-level errors from `load_active` (via
+    /// `load_module`) report the concrete profile name instead.
+    #[test]
+    fn test_load_active_nonexistent_group_reports_active_request_name() {
+        let registry = ModuleRegistry::default();
+
+        let err = registry
+            .load_active("nonexistent", &LoaderConfig::default())
+            .unwrap_err();
+        match err {
+            ConfigError::ModuleNotFound { group, module } => {
+                assert_eq!(group, "nonexistent");
+                assert_eq!(module, "active");
+            }
+            other => panic!("expected ModuleNotFound, got {:?}", other),
+        }
     }
 
     #[test]

@@ -526,7 +526,7 @@ mod tests {
 
             struct FailingStop {
                 name: &'static str,
-                stopped: std::sync::atomic::AtomicBool,
+                stopped: std::sync::Arc<std::sync::atomic::AtomicBool>,
                 fail: bool,
             }
             impl crate::Lifecycle for FailingStop {
@@ -545,20 +545,26 @@ mod tests {
                 }
             }
 
+            // Shared stopped flags so the test can observe each component after
+            // ownership of the Box<dyn Lifecycle> moves into the registry.
+            let ok_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let fail1_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let fail2_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
             let mut reg = LifecycleRegistry::new();
             let c_ok = Box::new(FailingStop {
                 name: "ok",
-                stopped: std::sync::atomic::AtomicBool::new(false),
+                stopped: ok_stopped.clone(),
                 fail: false,
             });
             let c_fail1 = Box::new(FailingStop {
                 name: "fail1",
-                stopped: std::sync::atomic::AtomicBool::new(false),
+                stopped: fail1_stopped.clone(),
                 fail: true,
             });
             let c_fail2 = Box::new(FailingStop {
                 name: "fail2",
-                stopped: std::sync::atomic::AtomicBool::new(false),
+                stopped: fail2_stopped.clone(),
                 fail: true,
             });
             reg.register("ok", c_ok);
@@ -583,6 +589,20 @@ mod tests {
                 msg.contains("2 component(s)"),
                 "error must report failure count; got: {}",
                 msg
+            );
+
+            // ALL components must have been stopped despite failures (ADR-041)
+            assert!(
+                ok_stopped.load(std::sync::atomic::Ordering::Acquire),
+                "ok component must still be stopped"
+            );
+            assert!(
+                fail1_stopped.load(std::sync::atomic::Ordering::Acquire),
+                "fail1 component must still be stopped"
+            );
+            assert!(
+                fail2_stopped.load(std::sync::atomic::Ordering::Acquire),
+                "fail2 component must still be stopped"
             );
         }
     }
