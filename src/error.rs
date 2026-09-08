@@ -34,7 +34,7 @@
 pub mod config_error;
 
 // Sanitization logic (regex patterns, sanitize_error_message, is_sensitive, etc.)
-mod sanitize;
+pub(crate) mod sanitize;
 
 // Re-export configuration phase error types
 pub use config_error::ConfigConfigError;

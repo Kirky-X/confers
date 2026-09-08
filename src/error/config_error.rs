@@ -120,7 +120,7 @@ pub enum ConfigConfigError {
     },
 
     /// Configuration value is invalid.
-    #[error("Invalid configuration value for '{field}': {message}")]
+    #[error("Invalid configuration value for '{field}' (expected {expected_type}): {message}")]
     InvalidValue {
         /// The configuration field
         field: String,
@@ -208,6 +208,48 @@ pub enum ConfigConfigError {
 }
 
 impl ConfigConfigError {
+    /// Return a display-safe version of `path`.
+    ///
+    /// A path is considered sensitive when any component starts with `.` and
+    /// is not just `.` or `..` (covers `.ssh`, `.aws`, `.gcloud`, `.env`,
+    /// `.kube`, `.config`, and any other hidden directory). For sensitive
+    /// paths only the file name is kept, dropping the entire directory part,
+    /// so no path under a hidden directory is echoed verbatim; normal paths
+    /// are returned unchanged.
+    fn sanitize_sensitive_path(path: &std::path::Path) -> String {
+        let is_sensitive = path.components().any(|c| {
+            let s = c.as_os_str().to_string_lossy();
+            s.starts_with('.') && s != "." && s != ".."
+        });
+        if is_sensitive {
+            path.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "<hidden>".to_string())
+        } else {
+            path.display().to_string()
+        }
+    }
+
+    /// Escape and quote a value for a structured `key="value"` audit field so
+    /// that spaces, quotes, and newlines inside the value cannot break
+    /// `key=value` parsing (log-injection hardening).
+    fn quote_audit_value(value: &str) -> String {
+        let mut out = String::with_capacity(value.len() + 2);
+        out.push('"');
+        for ch in value.chars() {
+            match ch {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                other => out.push(other),
+            }
+        }
+        out.push('"');
+        out
+    }
+
     /// Get the error code for this error.
     pub fn code(&self) -> ConfigErrorCode {
         match self {
@@ -235,25 +277,22 @@ impl ConfigConfigError {
             ConfigConfigError::MissingField { field } => {
                 format!("Missing required configuration field: '{}'", field)
             }
-            ConfigConfigError::InvalidValue { field, message, .. } => {
-                format!("Invalid value for '{}': {}", field, message)
+            ConfigConfigError::InvalidValue {
+                field,
+                expected_type,
+                message,
+            } => {
+                format!(
+                    "Invalid value for '{}' (expected {}): {}",
+                    field, expected_type, message
+                )
             }
             ConfigConfigError::FileNotFound { filename, .. } => {
-                // Sanitize sensitive paths
-                let path_str = filename.display().to_string();
-                let sanitized = if path_str.contains(".ssh")
-                    || path_str.contains(".aws")
-                    || path_str.contains(".gcloud")
-                    || path_str.contains(".env")
-                    || path_str.contains(".kube")
-                {
-                    filename
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "<hidden>".to_string())
-                } else {
-                    path_str
-                };
+                // Sanitize sensitive paths: any dot-prefixed directory
+                // component (".ssh", ".aws", ".config/gcloud", ...) is treated
+                // as sensitive, so no path under a hidden user directory is
+                // ever echoed verbatim. Only the file name is retained.
+                let sanitized = Self::sanitize_sensitive_path(filename);
                 format!("Configuration file '{}' not found", sanitized)
             }
             ConfigConfigError::ParseError {
@@ -294,19 +333,27 @@ impl ConfigConfigError {
     }
 
     /// Get a message suitable for audit logging.
+    ///
+    /// Free-form field values (`message`, `cause`) are quoted and escaped via
+    /// [`Self::quote_audit_value`] so that whitespace, quotes, and newlines
+    /// inside them cannot corrupt the `key=value` structure.
     pub fn audit_message(&self) -> String {
         let base = format!(
             "operation=config_init error_code={} error_type={} message={}",
             self.code() as u16,
             self.code(),
-            self.user_message()
+            Self::quote_audit_value(&self.user_message())
         );
         // Append root-cause source for parse errors so audit trails retain diagnostics.
         if let ConfigConfigError::ParseError {
             source: Some(src), ..
         } = self
         {
-            format!("{} cause={}", base, src)
+            format!(
+                "{} cause={}",
+                base,
+                Self::quote_audit_value(&src.to_string())
+            )
         } else {
             base
         }
@@ -385,6 +432,8 @@ mod tests {
         };
         assert!(err.user_message().contains("port"));
         assert!(err.user_message().contains("out of range"));
+        // #37: the expected type must be visible to users
+        assert!(err.user_message().contains("expected u16"));
     }
 
     #[test]
@@ -763,6 +812,8 @@ mod tests {
         let s = format!("{}", err);
         assert!(s.contains("port"));
         assert!(s.contains("too large"));
+        // #37: the expected type must be part of the Display output
+        assert!(s.contains("expected u16"));
     }
 
     #[test]
@@ -936,5 +987,83 @@ mod tests {
             }
             other => panic!("unexpected variant: {:?}", other),
         }
+    }
+
+    // =============================================================================
+    // #38: any dot-prefixed directory component is sensitive
+    // =============================================================================
+
+    #[test]
+    fn test_user_message_file_not_found_dot_config_path_sanitized() {
+        // ".config/gcloud" does not contain the ".gcloud" substring: the
+        // component-based check must still treat it as sensitive.
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/.config/gcloud/credentials.json"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/home/user/.config"));
+        assert!(!msg.contains("gcloud"));
+        assert!(msg.contains("credentials.json"));
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_nested_dot_dirs_sanitized() {
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("/home/user/.aws/alias/cache"),
+            source: None,
+        };
+        let msg = err.user_message();
+        assert!(!msg.contains("/home/user/.aws/"));
+        assert!(msg.contains("cache"));
+    }
+
+    #[test]
+    fn test_user_message_file_not_found_dot_and_dotdot_not_sensitive() {
+        // "." and ".." components are navigation, not hidden directories
+        let err = ConfigConfigError::FileNotFound {
+            filename: PathBuf::from("./sub/../config.toml"),
+            source: None,
+        };
+        assert_eq!(
+            err.user_message(),
+            "Configuration file './sub/../config.toml' not found"
+        );
+    }
+
+    // =============================================================================
+    // #40: audit_message field values are quoted and escaped
+    // =============================================================================
+
+    #[test]
+    fn test_audit_message_quotes_message_field() {
+        let err = ConfigConfigError::ValidationFailed {
+            field: "email".into(),
+            rule: "format".into(),
+            message: "not \"valid\"\nsecond line\ttabbed".into(),
+        };
+        let audit = err.audit_message();
+        // The message field stays on a single quoted line: embedded quotes,
+        // newlines, and tabs are escaped, so key=value parsing is preserved.
+        assert_eq!(audit.lines().count(), 1);
+        assert!(audit.contains(
+            r#"message="Field 'email' failed validation: not \"valid\"\nsecond line\ttabbed""#
+        ));
+        assert!(audit.contains("error_code=2500"));
+    }
+
+    #[test]
+    fn test_audit_message_quotes_cause_field() {
+        let source: Box<dyn std::error::Error + Send + Sync> =
+            Box::new(std::io::Error::other("disk said \"no space\"\non line 2"));
+        let err = ConfigConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad".into(),
+            location: None,
+            source: Some(source),
+        };
+        let audit = err.audit_message();
+        assert_eq!(audit.lines().count(), 1);
+        assert!(audit.contains(r#"cause="disk said \"no space\"\non line 2""#));
     }
 }

@@ -16,9 +16,11 @@ use super::ConfigError;
 
 // Precompiled regex patterns for sanitization (avoid recompiling on each call)
 
-/// Regex pattern for matching file paths (Unix and Windows style)
+/// Regex pattern for matching file paths (Unix and Windows style), while
+/// keeping whole URLs as one token so their path segments are never rewritten
+/// as local file paths (https://example.com/api/v1/users stays intact)
 static PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"/[a-zA-Z0-9_\-./]+|[a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+")
+    regex::Regex::new(r"(https?://\S+)|(/[a-zA-Z0-9_\-./]+)|([a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+)")
         .expect("PATH_RE regex is valid")
 });
 
@@ -27,13 +29,25 @@ static IP_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").expect("IP_RE regex is valid")
 });
 
-/// Regex pattern for matching potential key material (long hex strings)
+/// Regex pattern for matching long hex strings (>= 32 chars: AES-128 hex
+/// keys, SHA-256 digests, 64-hex-char key material), redacted unconditionally
 static HEX_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{16,}\b").expect("HEX_RE regex is valid"));
+    LazyLock::new(|| regex::Regex::new(r"\b[0-9a-fA-F]{32,}\b").expect("HEX_RE regex is valid"));
 
-/// Regex pattern for matching URLs with embedded credentials
+/// Regex pattern for matching shorter hex runs (16-31 chars), redacted only
+/// when sensitive context keywords appear nearby (git SHAs, device IDs, and
+/// other benign hex runs must not be masked)
+static HEX_SHORT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b[0-9a-fA-F]{16,31}\b").expect("HEX_SHORT_RE regex is valid")
+});
+
+/// Regex pattern for matching URLs with embedded credentials.
+///
+/// Only `http`/`https` schemes are matched. Other schemes that commonly embed
+/// credentials (`ftp://`, `redis://`, `smtp://`, `mongodb://`, ...) are NOT
+/// covered by this pattern and their credentials are not redacted here.
 static URL_WITH_CREDS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"https?://[^/]+:[^@]+@[^/\s]+[/\s]?")
+    regex::Regex::new(r"(?P<scheme>https?)://[^/]+:[^@]+@[^/\s]+[/\s]?")
         .expect("URL_WITH_CREDS_RE regex is valid")
 });
 
@@ -47,24 +61,90 @@ static JWT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 static AWS_AK_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\bAKIA[0-9A-Z]{16}\b").expect("AWS_AK_RE regex is valid"));
 
-/// Regex pattern for matching AWS secret access keys (40-char alphanumeric)
+/// Regex pattern for matching AWS-secret-shaped tokens (40-char alphanumeric)
 static AWS_SAK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b[A-Za-z0-9/+=]{40}\b").expect("AWS_SAK_RE regex is valid")
 });
+
+/// Keywords that, when present near a candidate token, mark it as likely
+/// credential material (AWS secret keys, hex keys, ...)
+static SENSITIVE_CONTEXT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?i)(aws|secret|token|key|credential|password|signature|auth)")
+        .expect("SENSITIVE_CONTEXT_RE regex is valid")
+});
+
+/// Number of characters scanned before/after a candidate token for sensitive
+/// context keywords
+const CONTEXT_WINDOW: usize = 40;
+
+/// Largest index at or below `i` that lies on a UTF-8 char boundary of `s`
+fn floor_char_boundary(s: &str, i: usize) -> usize {
+    let mut i = i.min(s.len());
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+/// Smallest index at or above `i` that lies on a UTF-8 char boundary of `s`
+fn ceil_char_boundary(s: &str, i: usize) -> usize {
+    if i >= s.len() {
+        return s.len();
+    }
+    let mut i = i;
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
+}
+
+/// Replace every match of `re` whose surrounding text (within
+/// [`CONTEXT_WINDOW`] characters on either side) contains a sensitive context
+/// keyword; matches without such context are left untouched.
+///
+/// A bare 40-char base64-shaped token or a 16-31 char hex run is far too
+/// generic to redact blindly (any opaque session id matches), so context is
+/// required before treating them as secrets.
+fn redact_with_context(text: &str, re: &regex::Regex, replacement: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for m in re.find_iter(text) {
+        let before_start = floor_char_boundary(text, m.start().saturating_sub(CONTEXT_WINDOW));
+        let after_end = ceil_char_boundary(text, m.end() + CONTEXT_WINDOW);
+        let has_context = SENSITIVE_CONTEXT_RE.is_match(&text[before_start..m.start()])
+            || SENSITIVE_CONTEXT_RE.is_match(&text[m.end()..after_end]);
+        out.push_str(&text[last..m.start()]);
+        if has_context {
+            out.push_str(replacement);
+        } else {
+            out.push_str(m.as_str());
+        }
+        last = m.end();
+    }
+    out.push_str(&text[last..]);
+    out
+}
 
 /// Sanitize an error message by removing sensitive data.
 ///
 /// This is the central sanitization function used by `user_message()` and
 /// `sanitized_chain()`. It removes:
-/// - File paths (replaced with `<path>/filename`)
+/// - File paths (replaced with `<path>/filename`); URL path segments are
+///   preserved (a URL is not a file path)
 /// - IP addresses (replaced with `<ip>`)
-/// - Long hex strings / key material (replaced with `<redacted>`)
-/// - URLs with embedded credentials
-/// - JWT tokens
-/// - AWS access key IDs
+/// - Long hex strings / key material (>= 32 chars replaced with `<redacted>`;
+///   16-31 char hex runs only when sensitive context keywords appear nearby)
+/// - URLs with embedded credentials (replaced with `<redacted_url>`)
+/// - JWT tokens (replaced with `<jwt_token>`)
+/// - AWS access key IDs (`AKIA...`, replaced with `<aws_access_key>`)
+/// - AWS-secret-shaped 40-char tokens, but only when sensitive context
+///   keywords appear nearby (replaced with `<aws_secret_key>`)
 ///
 /// The user-facing message will not contain any of these sensitive patterns.
-pub(super) fn sanitize_error_message(msg: &str) -> String {
+///
+/// This is also the crate-wide sanitizer for free-form output text (e.g. the
+/// CLI `diff --sanitize` output), so all redaction rules live in one place.
+pub(crate) fn sanitize_error_message(msg: &str) -> String {
     let mut result = msg.to_string();
 
     // Remove URLs with embedded credentials first (before other replacements)
@@ -72,9 +152,15 @@ pub(super) fn sanitize_error_message(msg: &str) -> String {
         .replace_all(&result, "<redacted_url>")
         .to_string();
 
-    // Remove potential file paths (Unix and Windows style) using precompiled regex
+    // Remove potential file paths (Unix and Windows style) using precompiled regex.
+    // Whole URLs are matched as one token and left untouched.
     result = PATH_RE
         .replace_all(&result, |caps: &regex::Captures| {
+            // URL path segments (e.g. https://example.com/api/v1/users) are
+            // not local file paths and must not be rewritten.
+            if caps.get(1).is_some() {
+                return caps[0].to_string();
+            }
             let full_path = &caps[0];
             // Keep only the filename for debugging
             if let Some(filename) = full_path
@@ -100,14 +186,16 @@ pub(super) fn sanitize_error_message(msg: &str) -> String {
         .replace_all(&result, "<aws_access_key>")
         .to_string();
 
-    // Remove AWS secret access keys (40-char strings near AWS context)
-    // Only redact if surrounded by whitespace or common delimiters
-    result = AWS_SAK_RE
-        .replace_all(&result, "<aws_secret_key>")
-        .to_string();
+    // Remove AWS secret access keys (40-char base64-shaped tokens), but only
+    // when sensitive context keywords appear nearby: the bare pattern is far
+    // too generic and would mask any opaque token.
+    result = redact_with_context(&result, &AWS_SAK_RE, "<aws_secret_key>");
 
-    // Remove potential key material (long hex strings) using precompiled regex
+    // Remove potential key material: hex runs >= 32 chars (AES-128 hex keys,
+    // SHA-256 digests, ...) are redacted unconditionally; shorter runs
+    // (16-31 chars, often git SHAs or device IDs) only with sensitive context.
     result = HEX_RE.replace_all(&result, "<redacted>").to_string();
+    result = redact_with_context(&result, &HEX_SHORT_RE, "<redacted>");
 
     result
 }
@@ -127,14 +215,21 @@ impl ConfigError {
         // Apply additional sanitization that still keeps some context
         let mut result = full;
 
-        // Remove credentials from URLs but keep the URL structure
+        // Remove credentials from URLs but keep the URL structure,
+        // preserving the original scheme (http stays http, not https)
         result = URL_WITH_CREDS_RE
-            .replace_all(&result, "https://<creds>@<host>/")
+            .replace_all(&result, |caps: &regex::Captures| {
+                format!("{}://<creds>@<host>/", &caps["scheme"])
+            })
             .to_string();
 
-        // Keep file paths but redact the directory part
+        // Keep file paths but redact the directory part. Whole URLs are
+        // matched as one token and left untouched.
         result = PATH_RE
             .replace_all(&result, |caps: &regex::Captures| {
+                if caps.get(1).is_some() {
+                    return caps[0].to_string();
+                }
                 let full_path = &caps[0];
                 full_path
                     .split('/')
@@ -474,5 +569,151 @@ mod tests {
         };
         let chain = err.sanitized_chain();
         assert_eq!(chain.len(), 1);
+    }
+
+    // =============================================================================
+    // #43: URL path segments must not be rewritten as file paths
+    // =============================================================================
+
+    #[test]
+    fn test_sanitize_error_message_preserves_url_path() {
+        let msg = "API docs at https://example.com/api/v1/users returned 200";
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            sanitized.contains("https://example.com/api/v1/users"),
+            "URL path must not be rewritten, got: {}",
+            sanitized
+        );
+        assert!(!sanitized.contains("<path>"), "got: {}", sanitized);
+    }
+
+    #[test]
+    fn test_sanitize_error_message_still_redacts_local_paths() {
+        let msg = "Failed to load /home/user/project/secrets.txt";
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            sanitized.contains("<path>/secrets.txt"),
+            "got: {}",
+            sanitized
+        );
+        assert!(
+            !sanitized.contains("/home/user/project/"),
+            "got: {}",
+            sanitized
+        );
+    }
+
+    // =============================================================================
+    // #42: AWS-secret-shaped tokens require sensitive context
+    // =============================================================================
+
+    #[test]
+    fn test_sanitize_error_message_aws_secret_key_with_context() {
+        // Real AWS secret access key scenario: credential name next to the
+        // value (40 alphanumeric chars, no '/' so PATH_RE cannot bite first)
+        let msg = "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY12"; // pragma: allowlist secret
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            sanitized.contains("<aws_secret_key>"),
+            "expected AWS secret key to be redacted, got: {}",
+            sanitized
+        );
+        assert!(!sanitized.contains("wJalrXUtnFEMIK7MDENG"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_generic_40char_token_not_redacted() {
+        // 40-char base64-shaped token with no sensitive keywords nearby:
+        // an opaque session/trace id must survive sanitization
+        let msg = "Random opaque string WmbHKbCUrlo8AucIwYzKemDrVNhbergQmBfPsdxZ for tracing";
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            !sanitized.contains("<aws_secret_key>"),
+            "generic token must not be treated as an AWS secret: {}",
+            sanitized
+        );
+        assert!(
+            sanitized.contains("WmbHKbCUrlo8AucIwYzKemDrVNhbergQmBfPsdxZ"),
+            "got: {}",
+            sanitized
+        );
+    }
+
+    // =============================================================================
+    // #47: hex redaction thresholds
+    // =============================================================================
+
+    #[test]
+    fn test_sanitize_error_message_sha256_hex_redacted() {
+        // 64 hex chars (SHA-256-sized key material) is redacted unconditionally
+        let key_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
+        let msg = format!("encryption key digest {}", key_hex);
+        let sanitized = sanitize_error_message(&msg);
+        assert!(sanitized.contains("<redacted>"), "got: {}", sanitized);
+        assert!(!sanitized.contains(key_hex), "got: {}", sanitized);
+    }
+
+    #[test]
+    fn test_sanitize_error_message_short_hex_without_context_kept() {
+        // 16-31 char hex runs without sensitive context (git SHA, device id)
+        // must not be masked
+        let msg = "commit 1234567890abcdef is on device 0123456789abcdef01234567";
+        let sanitized = sanitize_error_message(msg);
+        assert!(
+            !sanitized.contains("<redacted>"),
+            "benign hex must be kept, got: {}",
+            sanitized
+        );
+        assert!(sanitized.contains("1234567890abcdef"), "got: {}", sanitized);
+    }
+
+    #[test]
+    fn test_sanitize_error_message_short_hex_with_context_redacted() {
+        // 16-31 char hex run with a sensitive keyword nearby is a secret
+        let msg = "api_key: 0123456789abcdef01234567 (see logs)"; // pragma: allowlist secret
+        let sanitized = sanitize_error_message(msg);
+        assert!(sanitized.contains("<redacted>"), "got: {}", sanitized);
+        assert!(
+            !sanitized.contains("0123456789abcdef01234567"),
+            "got: {}",
+            sanitized
+        );
+    }
+
+    // =============================================================================
+    // #44: debug_message preserves the original URL scheme
+    // =============================================================================
+
+    #[test]
+    fn test_debug_message_preserves_http_scheme() {
+        let err = ConfigError::InvalidValue {
+            key: "db.url".into(),
+            expected_type: "url".into(),
+            message: "connect failed for http://alice:hunter2@example.com/db".into(), // pragma: allowlist secret
+        };
+        let debug = err.debug_message();
+        assert!(
+            debug.contains("http://<creds>@<host>/"),
+            "original scheme must be preserved, got: {}",
+            debug
+        );
+        assert!(
+            !debug.contains("https://<creds>"),
+            "http must not be relabeled as https, got: {}",
+            debug
+        );
+        assert!(!debug.contains("alice:hunter2"), "got: {}", debug);
+    }
+
+    #[test]
+    fn test_debug_message_preserves_https_scheme() {
+        let err = ConfigError::InvalidValue {
+            key: "db.url".into(),
+            expected_type: "url".into(),
+            message: "connect failed for https://alice:hunter2@example.com/db".into(), // pragma: allowlist secret
+        };
+        let debug = err.debug_message();
+        assert!(debug.contains("https://<creds>@<host>/"), "got: {}", debug);
+        assert!(!debug.contains("alice:hunter2"), "got: {}", debug);
     }
 }

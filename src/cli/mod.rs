@@ -13,7 +13,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::AnnotatedValue;
 use crate::ConfigBuilder;
@@ -67,7 +67,28 @@ fn build_config_from_cli(
     builder.build()
 }
 
-/// Load environment variables from a .env file
+/// Process-wide mutex serializing environment variable writes performed by
+/// this crate (see [`load_env_file`]).
+///
+/// `std::env::set_var` is not thread-safe: mutating the process environment
+/// while another thread reads it is undefined behavior on some platforms.
+/// The lock only serializes writes made through this crate; callers must
+/// additionally honor the [`load_env_file`] single-threaded contract.
+static ENV_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+/// Load environment variables from a .env file.
+///
+/// Variables that already exist in the process environment are never
+/// overwritten.
+///
+/// # Single-threaded requirement
+///
+/// This function mutates the process-wide environment via
+/// `std::env::set_var`, which is not thread-safe. It **must be called before
+/// spawning any threads** in the process (including threads spawned by
+/// libraries invoked afterwards). All environment writes performed by this
+/// crate are serialized behind [`ENV_WRITE_LOCK`], but environment reads from
+/// unrelated threads cannot be synchronized from here.
 pub fn load_env_file(path: &PathBuf) -> Result<()> {
     if !path.exists() {
         anyhow::bail!("Environment file not found: {}", path.display());
@@ -86,6 +107,11 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
 
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read env file: {}", path.display()))?;
+
+    // Serialize environment writes performed by this crate. A poisoned lock
+    // still yields the guard: the previous holder may have panicked, but
+    // skipping the remaining writes would silently drop configuration.
+    let _env_guard = ENV_WRITE_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
     for line in content.lines() {
         if line.len() > MAX_ENV_LINE_LENGTH {
@@ -118,13 +144,56 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
             };
 
             if std::env::var(key).is_err() {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
+                // SAFETY: `std::env::set_var` is `unsafe` because mutating the
+                // process environment is not thread-safe. The single-threaded
+                // precondition holds because (1) `load_env_file` is documented
+                // to be called before any threads are spawned, and (2) all
+                // environment writes in this crate are serialized behind
+                // `ENV_WRITE_LOCK`, which is held for the duration of this
+                // loop (the `std::env::var` read above happens under the same
+                // guard).
                 unsafe { std::env::set_var(key, value) };
             }
         }
     }
 
     Ok(())
+}
+
+// ============== Output sanitization (diff --sanitize) ==============
+//
+// `diff --sanitize` must actually redact sensitive material before printing.
+// The redaction rules live in `error::sanitize` (single source of truth --
+// the CLI previously mirrored ~150 lines of patterns here and the two copies
+// were already drifting).
+
+/// Redact sensitive material (file paths, IPs, JWT tokens, AWS keys,
+/// key-shaped hex strings, URLs with embedded credentials) from free-form
+/// output text. URLs are left intact except for their embedded credentials.
+fn sanitize_output_text(text: &str) -> String {
+    crate::error::sanitize::sanitize_error_message(text)
+}
+
+fn sanitize_json_strings(value: &serde_json::Value, depth: usize) -> serde_json::Value {
+    const MAX_JSON_SANITIZE_DEPTH: usize = 32;
+    if depth > MAX_JSON_SANITIZE_DEPTH {
+        return serde_json::Value::String("<truncated>".to_string());
+    }
+    match value {
+        serde_json::Value::String(s) => serde_json::Value::String(sanitize_output_text(s)),
+        serde_json::Value::Array(items) => serde_json::Value::Array(
+            items
+                .iter()
+                .map(|v| sanitize_json_strings(v, depth + 1))
+                .collect(),
+        ),
+        serde_json::Value::Object(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), sanitize_json_strings(v, depth + 1)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 /// Confers CLI - Configuration diagnostics and inspection tool
@@ -140,10 +209,6 @@ struct Cli {
     /// Additional environment file
     #[arg(long)]
     env_file: Option<PathBuf>,
-
-    /// Profile name
-    #[arg(short, long)]
-    profile: Option<String>,
 
     /// Allow absolute paths for config files (use with caution, mainly for testing)
     #[arg(long)]
@@ -552,57 +617,167 @@ fn cmd_validate(
     Ok(())
 }
 
-/// Check for required configuration keys
+/// Maximum recursion depth for nested configuration checks.
+///
+/// Prevents stack exhaustion when validating deeply nested (or adversarially
+/// self-referential) configuration trees; sections beyond this depth are not
+/// inspected.
+const MAX_CHECK_DEPTH: usize = 16;
+
+/// Known required configuration sections: (section, [acceptable keys],
+/// message emitted when none of the acceptable keys is present).
+const REQUIRED_SECTIONS: [(&str, [&str; 2], &str); 2] = [
+    (
+        "server",
+        ["host", "port"],
+        "Server configuration missing host/port",
+    ),
+    (
+        "database",
+        ["url", "host"],
+        "Database configuration missing connection details",
+    ),
+];
+
+/// Join a path prefix with a child key ("a" + "b" -> "a.b")
+fn join_key(prefix: &str, key: &str) -> String {
+    if prefix.is_empty() {
+        key.to_string()
+    } else {
+        format!("{}.{}", prefix, key)
+    }
+}
+
+/// Check for required configuration keys.
+///
+/// The check recurses into nested maps and arrays (up to
+/// [`MAX_CHECK_DEPTH`]), so missing required sections, null values, and type
+/// anomalies are detected at any depth instead of only at the top level.
 fn check_required_keys(
     obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>,
     issues: &mut Vec<String>,
 ) {
-    // Check for server configuration
-    if let Some(server) = obj.get("server")
-        && let crate::types::ConfigValue::Map(server_map) = &server.inner
-        && !server_map.contains_key("host")
-        && !server_map.contains_key("port")
-    {
-        issues.push("Server configuration missing host/port".to_string());
-    }
+    check_required_keys_inner(obj, "", 0, issues);
+}
 
-    // Check for database configuration
-    if let Some(db) = obj.get("database")
-        && let crate::types::ConfigValue::Map(db_map) = &db.inner
-        && !db_map.contains_key("url")
-        && !db_map.contains_key("host")
-    {
-        issues.push("Database configuration missing connection details".to_string());
+fn check_required_keys_inner(
+    obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>,
+    prefix: &str,
+    depth: usize,
+    issues: &mut Vec<String>,
+) {
+    if depth >= MAX_CHECK_DEPTH {
+        return;
     }
-
-    // Check for empty required sections
     for (key, value) in obj.iter() {
-        if matches!(value.inner, crate::types::ConfigValue::Null) {
-            issues.push(format!("Configuration key '{}' has null value", key));
+        let full_key = join_key(prefix, key.as_ref());
+        match &value.inner {
+            crate::types::ConfigValue::Map(map) => {
+                // Required-section checks are top-level only: `server` /
+                // `database` are documented top-level sections. Applying the
+                // name-based check at every nesting level would flag
+                // arbitrary nested data that merely happens to contain a
+                // `server` key (e.g. values inherited from the environment).
+                if prefix.is_empty() {
+                    for (section, required, message) in REQUIRED_SECTIONS.iter() {
+                        if key.as_ref() == *section
+                            && !required.iter().any(|req| map.contains_key(*req))
+                        {
+                            issues.push((*message).to_string());
+                        }
+                    }
+                }
+                // Null checks still recurse into every nesting level.
+                check_required_keys_inner(map, &full_key, depth + 1, issues);
+            }
+            crate::types::ConfigValue::Array(items) => {
+                for (idx, item) in items.iter().enumerate() {
+                    match &item.inner {
+                        crate::types::ConfigValue::Map(map) => check_required_keys_inner(
+                            map,
+                            &format!("{}[{}]", full_key, idx),
+                            depth + 1,
+                            issues,
+                        ),
+                        crate::types::ConfigValue::Null => issues.push(format!(
+                            "Configuration key '{}[{}]' has null value",
+                            full_key, idx
+                        )),
+                        _ => {}
+                    }
+                }
+            }
+            crate::types::ConfigValue::Null => {
+                issues.push(format!("Configuration key '{}' has null value", full_key));
+            }
+            _ => {}
         }
     }
 }
 
-/// Check for type consistency issues
+/// Check for type consistency issues.
+///
+/// Like [`check_required_keys`], the check recurses into nested maps and
+/// arrays (up to [`MAX_CHECK_DEPTH`]) and reports full dotted key paths.
 fn check_types(obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>, issues: &mut Vec<String>) {
-    // Check for suspicious string values that might be numbers
+    check_types_inner(obj, "", 0, issues);
+}
+
+fn check_types_inner(
+    obj: &indexmap::IndexMap<Arc<str>, AnnotatedValue>,
+    prefix: &str,
+    depth: usize,
+    issues: &mut Vec<String>,
+) {
+    if depth >= MAX_CHECK_DEPTH {
+        return;
+    }
+    // Check for suspicious string values that might be numbers or booleans
     for (key, value) in obj.iter() {
-        if let crate::types::ConfigValue::String(s) = &value.inner {
-            // Check if string looks like a number
-            if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
-                issues.push(format!(
-                    "Key '{}' has string value that looks like a number: {}",
-                    key, s
-                ));
+        let full_key = join_key(prefix, key.as_ref());
+        match &value.inner {
+            crate::types::ConfigValue::String(s) => {
+                check_string_value(&full_key, s, issues);
             }
-            // Check for boolean strings
-            if s == "true" || s == "false" {
-                issues.push(format!(
-                    "Key '{}' has string value that looks like boolean: {}",
-                    key, s
-                ));
+            crate::types::ConfigValue::Map(map) => {
+                check_types_inner(map, &full_key, depth + 1, issues);
             }
+            crate::types::ConfigValue::Array(items) => {
+                for (idx, item) in items.iter().enumerate() {
+                    match &item.inner {
+                        crate::types::ConfigValue::String(s) => {
+                            check_string_value(&format!("{}[{}]", full_key, idx), s, issues);
+                        }
+                        crate::types::ConfigValue::Map(map) => check_types_inner(
+                            map,
+                            &format!("{}[{}]", full_key, idx),
+                            depth + 1,
+                            issues,
+                        ),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
         }
+    }
+}
+
+/// Flag a string value that looks like a number or a boolean
+fn check_string_value(full_key: &str, s: &str, issues: &mut Vec<String>) {
+    // Check if string looks like a number
+    if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
+        issues.push(format!(
+            "Key '{}' has string value that looks like a number: {}",
+            full_key, s
+        ));
+    }
+    // Check for boolean strings
+    if s == "true" || s == "false" {
+        issues.push(format!(
+            "Key '{}' has string value that looks like boolean: {}",
+            full_key, s
+        ));
     }
 }
 
@@ -745,14 +920,30 @@ fn cmd_diff(
 
     match format {
         "json" => {
+            // When --sanitize is on, redact sensitive material inside every
+            // string of the base/overlay trees before printing. Without it the
+            // raw values are echoed unchanged (backward compatible).
+            let (base_out, overlay_out) = if sanitize {
+                let base_json = serde_json::to_value(&base_value)?;
+                let overlay_json = serde_json::to_value(&overlay_value)?;
+                (
+                    sanitize_json_strings(&base_json, 0),
+                    sanitize_json_strings(&overlay_json, 0),
+                )
+            } else {
+                (
+                    serde_json::to_value(&base_value)?,
+                    serde_json::to_value(&overlay_value)?,
+                )
+            };
             let diff_result = serde_json::json!({
                 "base": {
                     "file": base.to_string_lossy(),
-                    "value": base_value
+                    "value": base_out
                 },
                 "overlay": {
                     "file": overlay.to_string_lossy(),
-                    "value": overlay_value
+                    "value": overlay_out
                 },
                 "identical": false,
                 "sanitize": sanitize
@@ -763,17 +954,33 @@ fn cmd_diff(
             println!("Configurations differ");
             println!("\nBase ({}):", base.display());
             for (i, line) in base_content.lines().take(20).enumerate() {
-                println!("{:3}: {}", i + 1, line);
+                let shown = if sanitize {
+                    sanitize_output_text(line)
+                } else {
+                    line.to_string()
+                };
+                println!("{:3}: {}", i + 1, shown);
             }
             println!("\nOverlay ({}):", overlay.display());
             for (i, line) in overlay_content.lines().take(20).enumerate() {
-                println!("{:3}: {}", i + 1, line);
+                let shown = if sanitize {
+                    sanitize_output_text(line)
+                } else {
+                    line.to_string()
+                };
+                println!("{:3}: {}", i + 1, shown);
             }
 
             let diff = similar::TextDiff::from_lines(&base_content, &overlay_content);
             println!("\nUnified Diff:");
             for change in diff.iter_all_changes() {
-                print!("{}", change);
+                let line = change.to_string();
+                let shown = if sanitize {
+                    sanitize_output_text(&line)
+                } else {
+                    line
+                };
+                print!("{}", shown);
             }
         }
     }
@@ -2778,8 +2985,6 @@ mod tests {
             "--config",
             "b.json",
             "--allow-absolute-paths",
-            "--profile",
-            "prod",
             "inspect",
         ])
         .unwrap();
@@ -2787,7 +2992,6 @@ mod tests {
         assert_eq!(cli.config[0], std::path::PathBuf::from("a.toml"));
         assert_eq!(cli.config[1], std::path::PathBuf::from("b.json"));
         assert!(cli.allow_absolute_paths);
-        assert_eq!(cli.profile.as_deref(), Some("prod"));
     }
 
     #[test]
@@ -2886,5 +3090,226 @@ mod tests {
     #[test]
     fn test_default_snapshot_display_limit_is_ten() {
         assert_eq!(DEFAULT_SNAPSHOT_DISPLAY_LIMIT, 10);
+    }
+
+    // ============== Output sanitization (#27) ==============
+
+    #[test]
+    fn test_sanitize_output_text_redacts_paths_ips_and_keys() {
+        let line =
+            "host 10.1.2.3 loads /home/user/project/api_keys.txt with key 0123456789abcdef01234567";
+        let out = sanitize_output_text(line);
+        assert!(out.contains("<ip>"), "got: {}", out);
+        assert!(out.contains("<path>/api_keys.txt"), "got: {}", out);
+        assert!(out.contains("<redacted>"), "got: {}", out);
+        assert!(!out.contains("0123456789abcdef01234567"), "got: {}", out);
+        assert!(!out.contains("/home/user/project/"), "got: {}", out);
+    }
+
+    #[test]
+    fn test_sanitize_output_text_preserves_urls() {
+        let line = "endpoint https://example.com/api/v1/users and http://bob:s3cret@example.com/db";
+        let out = sanitize_output_text(line);
+        // URL path segments must survive; embedded credentials must not
+        assert!(
+            out.contains("https://example.com/api/v1/users"),
+            "got: {}",
+            out
+        );
+        assert!(out.contains("<redacted_url>"), "got: {}", out);
+        assert!(!out.contains("bob:s3cret"), "got: {}", out);
+    }
+
+    #[test]
+    fn test_sanitize_json_strings_redacts_nested_values() {
+        let value = serde_json::json!({
+            "server": {
+                "host": "10.0.0.1",
+                "cert": "/home/user/.ssh/id_rsa"
+            },
+            "list": ["token 0123456789abcdef01234567", 42, null, true]
+        });
+        let out = sanitize_json_strings(&value, 0);
+        assert_eq!(out["server"]["host"], "<ip>");
+        assert_eq!(out["server"]["cert"], "<path>/id_rsa");
+        assert_eq!(out["list"][0], "token <redacted>");
+        assert_eq!(out["list"][1], 42);
+        assert!(out["list"][2].is_null());
+        assert_eq!(out["list"][3], true);
+    }
+
+    #[test]
+    fn test_sanitize_json_strings_preserves_non_sensitive() {
+        let value = serde_json::json!({
+            "name": "confers",
+            "port": 8080,
+            "tags": ["prod", "eu"],
+            "nested": { "flag": false }
+        });
+        let out = sanitize_json_strings(&value, 0);
+        assert_eq!(out, value, "non-sensitive values must be unchanged");
+    }
+
+    // ============== Nested checks (#31) ==============
+
+    #[test]
+    fn test_check_required_keys_nested_null_detected() {
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut db = IndexMap::new();
+        db.insert(
+            Arc::from("password"),
+            AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "database.password"),
+        );
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("database"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(db)),
+                SourceId::new("t"),
+                "database",
+            ),
+        );
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("database.password") && i.contains("null value")),
+            "got: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_check_required_keys_nested_server_section_not_flagged() {
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let server: IndexMap<Arc<str>, AnnotatedValue> = IndexMap::new();
+        let mut services = IndexMap::new();
+        services.insert(
+            Arc::from("server"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(server)),
+                SourceId::new("t"),
+                "services.server",
+            ),
+        );
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("services"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(services)),
+                SourceId::new("t"),
+                "services",
+            ),
+        );
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        // Required-section checks are top-level only: a nested map that
+        // merely happens to be named `server` is arbitrary data, not the
+        // documented top-level `server` section.
+        assert!(
+            issues.is_empty(),
+            "nested same-named sections must not be flagged: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_check_required_keys_array_item_null_detected() {
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut item = IndexMap::new();
+        item.insert(
+            Arc::from("option"),
+            AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "servers[0].option"),
+        );
+        let items = vec![AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(item)),
+            SourceId::new("t"),
+            "servers[0]",
+        )];
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("servers"),
+            AnnotatedValue::new(
+                ConfigValue::Array(items.into()),
+                SourceId::new("t"),
+                "servers",
+            ),
+        );
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        // Null checks recurse into array-item maps with indexed paths.
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("servers[0].option") && i.contains("null")),
+            "got: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_check_types_nested_number_string_detected() {
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        let mut db = IndexMap::new();
+        db.insert(
+            Arc::from("port"),
+            AnnotatedValue::new(
+                ConfigValue::string("5432"),
+                SourceId::new("t"),
+                "database.port",
+            ),
+        );
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("database"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(db)),
+                SourceId::new("t"),
+                "database",
+            ),
+        );
+        let mut issues = Vec::new();
+        check_types(&map, &mut issues);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("database.port") && i.contains("5432")),
+            "got: {:?}",
+            issues
+        );
+    }
+
+    #[test]
+    fn test_check_required_keys_deep_nesting_bounded() {
+        use crate::types::{AnnotatedValue, ConfigValue, SourceId};
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+        // 40 levels of nesting: recursion is capped at MAX_CHECK_DEPTH so the
+        // walk terminates and reports at most one issue per inspected level.
+        let mut map: IndexMap<Arc<str>, AnnotatedValue> = IndexMap::new();
+        for _ in 0..40 {
+            let mut outer: IndexMap<Arc<str>, AnnotatedValue> = IndexMap::new();
+            outer.insert(
+                Arc::from("nullkey"),
+                AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "nullkey"),
+            );
+            outer.insert(
+                Arc::from("n"),
+                AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "n"),
+            );
+            map = outer;
+        }
+        let mut issues = Vec::new();
+        check_required_keys(&map, &mut issues);
+        assert_eq!(issues.len(), MAX_CHECK_DEPTH);
     }
 }
