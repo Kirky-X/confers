@@ -20,7 +20,7 @@
 
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
-    aead::{Aead, KeyInit},
+    aead::{Aead, KeyInit, Payload},
 };
 use getrandom::fill as fill_from_os_rng;
 use hkdf::Hkdf;
@@ -53,7 +53,27 @@ impl XChaCha20Crypto {
         Self
     }
 
+    /// Encrypts `plaintext` under `key` without additional authenticated data.
+    ///
+    /// Equivalent to [`Self::encrypt_with_aad`] with an empty AAD slice.
     pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>), CryptoError> {
+        self.encrypt_with_aad(plaintext, key, &[])
+    }
+
+    /// Encrypts `plaintext` under `key`, authenticating `aad` as additional
+    /// authenticated data.
+    ///
+    /// The AAD is not encrypted and not part of the ciphertext, but it is
+    /// cryptographically bound to it: decryption succeeds only when the exact
+    /// same AAD is supplied. Use it to bind context (for example a field path
+    /// and key version) so a ciphertext cannot be transplanted into another
+    /// context.
+    pub fn encrypt_with_aad(
+        &self,
+        plaintext: &[u8],
+        key: &[u8],
+        aad: &[u8],
+    ) -> Result<(Vec<u8>, Vec<u8>), CryptoError> {
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
         }
@@ -62,24 +82,50 @@ impl XChaCha20Crypto {
             XChaCha20Poly1305::new_from_slice(key).map_err(|_| CryptoError::EncryptionFailed)?;
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
-        // OS 熵源填充（等价旧 OsRng::fill_bytes；getrandom 0.4 显式返回 Result，
-        // 失败时不得降级为静默默认值）
+        // Fill from the OS entropy source (equivalent to the old
+        // OsRng::fill_bytes; getrandom 0.4 explicitly returns a Result, and a
+        // failure must never silently degrade to a default value).
         fill_from_os_rng(&mut nonce_bytes).map_err(|_| CryptoError::EncryptionFailed)?;
         let nonce =
             XNonce::try_from(&nonce_bytes[..]).map_err(|_| CryptoError::EncryptionFailed)?;
 
         let ciphertext = cipher
-            .encrypt(&nonce, plaintext)
+            .encrypt(
+                &nonce,
+                Payload {
+                    msg: plaintext,
+                    aad,
+                },
+            )
             .map_err(|_| CryptoError::EncryptionFailed)?;
 
         Ok((nonce_bytes.to_vec(), ciphertext))
     }
 
+    /// Decrypts `ciphertext` with `key`, assuming no additional authenticated
+    /// data.
+    ///
+    /// Equivalent to [`Self::decrypt_with_aad`] with an empty AAD slice.
     pub fn decrypt(
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
         key: &[u8],
+    ) -> Result<Vec<u8>, CryptoError> {
+        self.decrypt_with_aad(nonce, ciphertext, key, &[])
+    }
+
+    /// Decrypts `ciphertext` with `key`, authenticating `aad` as additional
+    /// authenticated data.
+    ///
+    /// Fails with [`CryptoError::DecryptionFailed`] unless `aad` is
+    /// byte-for-byte identical to the AAD used during encryption.
+    pub fn decrypt_with_aad(
+        &self,
+        nonce: &[u8],
+        ciphertext: &[u8],
+        key: &[u8],
+        aad: &[u8],
     ) -> Result<Vec<u8>, CryptoError> {
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
@@ -95,7 +141,13 @@ impl XChaCha20Crypto {
         let nonce = XNonce::try_from(nonce).map_err(|_| CryptoError::DecryptionFailed)?;
 
         cipher
-            .decrypt(&nonce, ciphertext)
+            .decrypt(
+                &nonce,
+                Payload {
+                    msg: ciphertext,
+                    aad,
+                },
+            )
             .map_err(|_| CryptoError::DecryptionFailed)
     }
 }
@@ -363,5 +415,81 @@ mod tests {
         let (nonce, ciphertext) = cipher.encrypt(plaintext, &TEST_KEY).unwrap();
         let decrypted = cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap();
         assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encrypt_with_aad_round_trip() {
+        let cipher = XChaCha20Crypto::new();
+        let aad = b"db.password:v1".as_slice();
+        let (nonce, ciphertext) = cipher
+            .encrypt_with_aad(b"secret data", &TEST_KEY, aad)
+            .expect("encrypt with aad");
+        let decrypted = cipher
+            .decrypt_with_aad(&nonce, &ciphertext, &TEST_KEY, aad)
+            .expect("decrypt with aad");
+        assert_eq!(decrypted, b"secret data");
+    }
+
+    #[test]
+    fn test_decrypt_with_wrong_aad_fails() {
+        let cipher = XChaCha20Crypto::new();
+        let (nonce, ciphertext) = cipher
+            .encrypt_with_aad(b"secret data", &TEST_KEY, b"expected-context")
+            .unwrap();
+        let err = cipher
+            .decrypt_with_aad(&nonce, &ciphertext, &TEST_KEY, b"attacker-context")
+            .unwrap_err();
+        assert!(matches!(err, CryptoError::DecryptionFailed));
+    }
+
+    #[test]
+    fn test_decrypt_with_missing_aad_fails() {
+        let cipher = XChaCha20Crypto::new();
+        let (nonce, ciphertext) = cipher
+            .encrypt_with_aad(b"secret data", &TEST_KEY, b"context")
+            .unwrap();
+        // Plain decrypt() authenticates against an empty AAD and must reject
+        // ciphertext that was bound to a non-empty AAD.
+        let err = cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap_err();
+        assert!(matches!(err, CryptoError::DecryptionFailed));
+    }
+
+    #[test]
+    fn test_encrypt_and_empty_aad_variants_are_interoperable() {
+        let cipher = XChaCha20Crypto::new();
+        // The legacy encrypt() output decrypts through the explicit AAD path
+        // with an empty AAD...
+        let (nonce, ciphertext) = cipher.encrypt(b"secret data", &TEST_KEY).unwrap();
+        let decrypted = cipher
+            .decrypt_with_aad(&nonce, &ciphertext, &TEST_KEY, &[])
+            .expect("empty AAD must match the legacy path");
+        assert_eq!(decrypted, b"secret data");
+
+        // ...and the empty-AAD encrypt path decrypts through plain decrypt().
+        let (nonce, ciphertext) = cipher
+            .encrypt_with_aad(b"secret data", &TEST_KEY, &[])
+            .unwrap();
+        let decrypted = cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap();
+        assert_eq!(decrypted, b"secret data");
+    }
+
+    #[test]
+    fn test_encrypt_with_aad_rejects_short_key() {
+        let cipher = XChaCha20Crypto::new();
+        let short_key = b"too short"; // pragma: allowlist secret
+        let err = cipher
+            .encrypt_with_aad(b"data", short_key, b"aad")
+            .unwrap_err();
+        assert!(matches!(err, CryptoError::InvalidKeyLength(9)));
+    }
+
+    #[test]
+    fn test_decrypt_with_aad_rejects_invalid_nonce_length() {
+        let cipher = XChaCha20Crypto::new();
+        let bad_nonce = [0u8; NONCE_SIZE - 1];
+        let err = cipher
+            .decrypt_with_aad(&bad_nonce, b"ciphertext", &TEST_KEY, b"aad")
+            .unwrap_err();
+        assert!(matches!(err, CryptoError::DecryptionFailed));
     }
 }

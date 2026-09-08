@@ -14,6 +14,17 @@ use crate::types::{KeyCachePolicy, ZeroizingBytes};
 #[cfg(feature = "remote")]
 use crate::interface::AsyncKeyProvider;
 
+/// Key provider that reads a 32-byte key from a local file.
+///
+/// # Key material semantics
+///
+/// The file content must be valid UTF-8. Leading and trailing whitespace is
+/// trimmed, then the key is taken deterministically as the **first 32 bytes**
+/// of the remaining content; any trailing data is ignored. No base64/hex
+/// decoding is performed: the raw bytes of the text are used directly as key
+/// material. Store the key file as ASCII (for example the base64 or hex
+/// output of `openssl rand -base64 32` / `openssl rand -hex 32`) so the first
+/// 32 bytes are well-defined and stable across editors and platforms.
 pub struct FileKeyProvider {
     path: PathBuf,
     cache_policy: KeyCachePolicy,
@@ -118,6 +129,17 @@ impl Default for FileKeyProviderBuilder {
     }
 }
 
+/// Key provider that fetches a 32-byte key from HashiCorp Vault.
+///
+/// # Token handling
+///
+/// The Vault token is supplied via [`VaultKeyProvider::with_token`] or, by
+/// default, read from the `VAULT_TOKEN` environment variable. Passing the
+/// token through the environment is the industry-standard practice (the
+/// official `vault` CLI uses the same convention) and keeps the token out of
+/// process arguments and config files. This module performs no logging of any
+/// kind: tokens, keys, and request details are never written to logs or to
+/// stdout/stderr by this code.
 #[cfg(feature = "remote")]
 pub struct VaultKeyProvider {
     vault_addr: String,
@@ -175,6 +197,15 @@ impl VaultKeyProvider {
     }
 }
 
+/// Returns `true` for HTTP statuses that are transient and worth retrying:
+/// 429 (rate limiting) and 502/503/504 (gateway/server errors). This mirrors
+/// the remote polling module's retry policy, which also treats 429 as
+/// retryable.
+#[cfg(feature = "remote")]
+fn is_retryable_status(status: u16) -> bool {
+    status == 429 || status == 502 || status == 503 || status == 504
+}
+
 #[cfg(feature = "remote")]
 #[async_trait::async_trait]
 impl AsyncKeyProvider for VaultKeyProvider {
@@ -200,8 +231,9 @@ impl AsyncKeyProvider for VaultKeyProvider {
 
         if !response.status().is_success() {
             let status = response.status();
-            // 502/503/504 are transient server errors that may succeed on retry.
-            let retryable = status == 502 || status == 503 || status == 504;
+            // 429 (rate limit) and 502/503/504 are transient errors that may
+            // succeed on retry.
+            let retryable = is_retryable_status(status.as_u16());
             return Err(ConfigError::RemoteUnavailable {
                 error_type: format!("vault_response: {}", status),
                 retryable,
@@ -624,5 +656,23 @@ mod tests {
             .secret_path("secret/path")
             .build();
         assert!(result.is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_is_retryable_status_includes_429_and_gateway_errors() {
+        // 429 must be treated as retryable, consistent with the remote
+        // polling module's retry policy.
+        assert!(is_retryable_status(429));
+        assert!(is_retryable_status(502));
+        assert!(is_retryable_status(503));
+        assert!(is_retryable_status(504));
+        // Everything else is terminal and must not be retried.
+        assert!(!is_retryable_status(200));
+        assert!(!is_retryable_status(400));
+        assert!(!is_retryable_status(401));
+        assert!(!is_retryable_status(403));
+        assert!(!is_retryable_status(404));
+        assert!(!is_retryable_status(500));
     }
 }

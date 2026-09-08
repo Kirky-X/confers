@@ -31,8 +31,8 @@ mod tests {
         // Test expose method
         assert_eq!(secret.expose(), "my-secret");
 
-        // Test expose_clone method
-        assert_eq!(secret.expose_clone(), "my-secret");
+        // Test expose_clone method (returns a zeroizing managed copy)
+        assert_eq!(secret.expose_clone().as_str(), "my-secret");
     }
 
     #[test]

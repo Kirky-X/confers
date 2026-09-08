@@ -6,6 +6,36 @@
 use std::fmt::Debug;
 use zeroize::{Zeroize, Zeroizing};
 
+/// A heap-allocated string whose contents are zeroized when the value is
+/// dropped (or when [`Zeroize::zeroize`] is called explicitly).
+///
+/// # Security model
+///
+/// The internal buffer is owned and scrubbed on drop, and [`Debug`] and
+/// [`Display`] are intentionally redacted (`[REDACTED]`) so the secret cannot
+/// leak through formatting, logging, or `to_string()`. Unlike
+/// [`SecretBytes`](crate::secret::SecretBytes), this type **does** implement
+/// [`Clone`]: cloning is safe with respect to zeroization (each clone owns
+/// and scrubs its own buffer), but it also means copies of the secret can
+/// easily proliferate.
+///
+/// # WARNING: unmanaged plaintext escape hatches
+///
+/// [`Deref`] (to [`str`]) and [`SecretString::expose`] hand out the plaintext
+/// as ordinary, **unmanaged** Rust data, and [`SecretString::expose_clone`]
+/// duplicates it while both copies are alive. Anything derived from those
+/// values (`&str` copies, slices, substrings, formatted output) is *not*
+/// zeroized and may linger in memory well past the lifetime of this value.
+/// Treat these methods as deliberate, auditable disclosures:
+///
+/// - Prefer [`SecretString::expose`] for the narrowest possible borrow, and
+///   drop the derived data as soon as possible.
+/// - Use [`SecretString::expose_clone`] only when an owned copy is strictly
+///   required (for example to hand the secret to an API that takes `String`
+///   by value). The copy itself is zeroized on drop, but data derived from
+///   it is not.
+/// - Never let formatted output (`format!`, `.to_string()`) or `&str`/`String`
+///   copies outlive the immediate need.
 #[derive(Clone)]
 pub struct SecretString(Zeroizing<String>);
 
@@ -24,8 +54,16 @@ impl SecretString {
         self.0.as_str()
     }
 
-    pub fn expose_clone(&self) -> String {
-        self.0.to_string()
+    /// Returns a managed clone of the secret, zeroized when dropped.
+    ///
+    /// The returned [`Zeroizing<String>`] scrubs its buffer when it goes out
+    /// of scope, so the owned copy does not linger in memory the way a plain
+    /// `String` would. Note that the plaintext is still duplicated while both
+    /// values are alive, and anything derived from the copy (`&str`/`String`
+    /// copies, slices, formatted output) is *not* managed — keep such
+    /// derivatives short-lived.
+    pub fn expose_clone(&self) -> Zeroizing<String> {
+        self.0.clone()
     }
 }
 
@@ -95,10 +133,10 @@ mod tests {
     }
 
     #[test]
-    fn test_expose_clone_returns_owned_string() {
+    fn test_expose_clone_returns_zeroizing_string() {
         let s = SecretString::new("clone-me");
-        let cloned: String = s.expose_clone();
-        assert_eq!(cloned, "clone-me");
+        let cloned = s.expose_clone();
+        assert_eq!(cloned.as_str(), "clone-me");
         // Original is still accessible
         assert_eq!(s.expose(), "clone-me");
     }
@@ -110,7 +148,7 @@ mod tests {
         cloned.push_str("-mutated");
         // Mutating the clone must not affect the original
         assert_eq!(s.expose(), "independent");
-        assert_eq!(cloned, "independent-mutated");
+        assert_eq!(cloned.as_str(), "independent-mutated");
     }
 
     #[test]
@@ -183,7 +221,7 @@ mod tests {
         let long = "x".repeat(10_000);
         let s = SecretString::new(long.clone());
         assert_eq!(s.expose(), long);
-        assert_eq!(s.expose_clone(), long);
+        assert_eq!(s.expose_clone().as_str(), long);
     }
 
     #[test]
@@ -191,7 +229,7 @@ mod tests {
         let unicode = "你好，世界！🌍".to_string();
         let s = SecretString::new(unicode.clone());
         assert_eq!(s.expose(), unicode);
-        assert_eq!(s.expose_clone(), unicode);
+        assert_eq!(s.expose_clone().as_str(), unicode);
     }
 
     #[test]
