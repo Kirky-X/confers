@@ -34,11 +34,72 @@ pub struct KeyInfo {
     pub last_rotated_at: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyManager {
     key_rings: HashMap<String, KeyRing>,
     schedules: HashMap<String, KeyRotationSchedule>,
     default_key_id: String,
+}
+
+impl std::fmt::Debug for KeyManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Redacted Debug: key rings hold key material (albeit encrypted) and
+        // must never leak into logs. Only non-sensitive metadata is emitted.
+        f.debug_struct("KeyManager")
+            .field("default_key_id", &self.default_key_id)
+            .field(
+                "key_rings",
+                &self
+                    .key_rings
+                    .iter()
+                    .map(|(id, ring)| {
+                        format!(
+                            "{} (current v{}, {} secondaries)",
+                            id,
+                            ring.current_version,
+                            ring.secondary_keys.len()
+                        )
+                    })
+                    .collect::<Vec<String>>(),
+            )
+            .field("schedule_ids", &self.schedules.keys().collect::<Vec<_>>())
+            .finish()
+    }
+}
+
+/// Trim `secondary_keys` down to `max_versions` entries.
+///
+/// Pruning prefers the oldest non-Active (retired) versions first; Active
+/// secondaries are only dropped as a last resort when the policy bound would
+/// otherwise be exceeded. This backs `KeyManager::rotate_key`'s enforcement
+/// of the schedule's `max_versions` (unbounded secondary growth otherwise).
+#[cfg(feature = "encryption")]
+fn prune_secondary_keys_to_cap(key_ring: &mut KeyRing, max_versions: usize) {
+    if key_ring.secondary_keys.len() <= max_versions {
+        return;
+    }
+    let excess = key_ring.secondary_keys.len() - max_versions;
+
+    // Order candidates for pruning: non-Active before Active, oldest first
+    // within each group. Sorting indices keeps the ring's storage order
+    // stable for the keys that survive.
+    let mut prune_order: Vec<usize> = (0..key_ring.secondary_keys.len()).collect();
+    prune_order.sort_by_key(|&i| {
+        let key = &key_ring.secondary_keys[i];
+        (
+            key.metadata.status() == KeyStatus::Active,
+            key.metadata.version(),
+        )
+    });
+    let to_remove: Vec<usize> = prune_order.into_iter().take(excess).collect();
+
+    let mut kept = Vec::with_capacity(key_ring.secondary_keys.len() - excess);
+    for (i, key) in key_ring.secondary_keys.drain(..).enumerate() {
+        if !to_remove.contains(&i) {
+            kept.push(key);
+        }
+    }
+    key_ring.secondary_keys = kept;
 }
 
 impl KeyManager {
@@ -181,6 +242,8 @@ impl KeyManager {
     /// - ⚠️ **Key Transition**: Old keys remain available for decryption during transition period
     /// - ⚠️ **Audit Trail**: Include creation information and description for audit purposes
     /// - ⚠️ **Re-encryption**: After rotation, re-encrypt all data that was encrypted with the old key
+    /// - ⚠️ **Retention Cap**: After rotation, secondary keys are trimmed back to the ring
+    ///   schedule's `max_versions` (retired/non-Active versions are pruned first, oldest first)
     ///
     /// # Example
     ///
@@ -212,13 +275,29 @@ impl KeyManager {
             .get_mut(&key_id)
             .ok_or_else(|| ConfigError::ParseError {
                 format: "key".to_string(),
-                message: format!("Key ring '{}' not found", key_id),
+                message: format!(
+                    "Key ring '{}' not found — initialize it with initialize()/create_key_ring() before rotating keys",
+                    key_id
+                ),
                 location: None,
                 source: None,
             })?;
 
         let old_version = key_ring.current_version;
         let new_key = key_ring.rotate(master_key, created_by, description)?;
+
+        // Enforce the rotation policy's retention bound: `KeyRing::rotate`
+        // archives every old primary without a cap, so trim `secondary_keys`
+        // back to the schedule's `max_versions` after each rotation. Retired
+        // (non-Active) versions are pruned first, oldest first; Active
+        // secondaries are only removed as a last resort when the bound cannot
+        // be met otherwise.
+        if let Some(schedule) = self.schedules.get(&key_id) {
+            let max_versions = schedule.max_versions as usize;
+            if key_ring.secondary_keys.len() > max_versions {
+                prune_secondary_keys_to_cap(key_ring, max_versions);
+            }
+        }
 
         if let Some(schedule) = self.schedules.get_mut(&key_id) {
             schedule.update_after_rotation();
@@ -227,7 +306,7 @@ impl KeyManager {
         Ok(RotationResult {
             key_id: key_ring.key_id.clone(),
             previous_version: old_version,
-            new_version: new_key.metadata.version,
+            new_version: new_key.metadata.version(),
             rotated_at: now_timestamp(),
             reencryption_required: true,
         })
@@ -257,7 +336,7 @@ impl KeyManager {
             deprecated_versions: key_ring
                 .secondary_keys
                 .iter()
-                .filter(|k| k.metadata.status == KeyStatus::Deprecated)
+                .filter(|k| k.metadata.status() == KeyStatus::Deprecated)
                 .count(),
             created_at: key_ring.created_at,
             last_rotated_at: key_ring.last_rotated_at,
@@ -280,7 +359,7 @@ impl KeyManager {
                 deprecated_versions: ring
                     .secondary_keys
                     .iter()
-                    .filter(|k| k.metadata.status == KeyStatus::Deprecated)
+                    .filter(|k| k.metadata.status() == KeyStatus::Deprecated)
                     .count(),
                 created_at: ring.created_at,
                 last_rotated_at: ring.last_rotated_at,
@@ -408,6 +487,17 @@ impl KeyManager {
         Ok(())
     }
 
+    /// Prune retired secondary key versions, keeping at most `keep_versions`
+    /// of the newest non-Active secondaries.
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **Active secondary keys are NEVER removed by cleanup**: they may
+    ///   still be required to decrypt data written under them (e.g. the
+    ///   previous primary right after a rotation). Retire a version first
+    ///   via `deprecate_version` to make it eligible for cleanup.
+    ///
+    /// Returns the number of removed key versions.
     pub fn cleanup_old_keys(
         &mut self,
         key_id: &str,
@@ -423,19 +513,23 @@ impl KeyManager {
                 source: None,
             })?;
 
-        if key_ring.secondary_keys.len() <= keep_versions as usize {
-            return Ok(0);
-        }
+        // Split secondaries into Active (always preserved) and retired
+        // (non-Active) versions eligible for pruning.
+        let (active, mut retired): (Vec<KeyBundle>, Vec<KeyBundle>) =
+            std::mem::take(&mut key_ring.secondary_keys)
+                .into_iter()
+                .partition(|k| k.metadata.status() == KeyStatus::Active);
 
-        let initial_count = key_ring.secondary_keys.len();
-        // Sort by version descending so we keep the newest keys
+        // Newest first so the head of `retired` is the set we keep.
+        retired.sort_by_key(|k| std::cmp::Reverse(k.metadata.version()));
+
+        let removed = retired.len().saturating_sub(keep_versions as usize);
+        key_ring.secondary_keys = active;
         key_ring
             .secondary_keys
-            .sort_by_key(|k| std::cmp::Reverse(k.metadata.version));
-        // Keep at most keep_versions secondary keys
-        key_ring.secondary_keys.truncate(keep_versions as usize);
+            .extend(retired.into_iter().take(keep_versions as usize));
 
-        Ok((initial_count - key_ring.secondary_keys.len()) as u32)
+        Ok(removed as u32)
     }
 
     pub fn get_default_key_id(&self) -> &str {
@@ -554,7 +648,7 @@ mod tests {
             .get_key_by_version("k1", 1)
             .expect("get_key_by_version")
             .unwrap();
-        assert_eq!(bundle.metadata.description.as_deref(), Some("primary key"));
+        assert_eq!(bundle.metadata.description(), Some("primary key"));
     }
 
     #[test]
@@ -741,7 +835,7 @@ mod tests {
             .get_key_by_version("prod", CURRENT_KEY_VERSION)
             .expect("get_key_by_version");
         assert!(found.is_some());
-        assert_eq!(found.unwrap().metadata.version, CURRENT_KEY_VERSION);
+        assert_eq!(found.unwrap().metadata.version(), CURRENT_KEY_VERSION);
     }
 
     #[test]
@@ -777,7 +871,7 @@ mod tests {
             .get_key_by_version("k", 1)
             .expect("get_key_by_version")
             .unwrap();
-        assert_eq!(v1.metadata.status, KeyStatus::Deprecated);
+        assert_eq!(v1.metadata.status(), KeyStatus::Deprecated);
     }
 
     #[test]
@@ -815,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn test_key_manager_cleanup_old_keys_removes_inactive_below_threshold() {
+    fn test_key_manager_cleanup_old_keys_removes_retired_keeping_newest() {
         let master_key = [0x12; 32];
         let mut km = make_manager();
         km.create_key_ring(&master_key, "k".to_string(), "u".to_string(), None)
@@ -827,9 +921,55 @@ mod tests {
         }
         assert_eq!(km.get_key_info("k").unwrap().total_versions, 4);
 
-        // keep_versions=2 → keep at most 2 newest secondary keys, remove the rest.
-        let removed = km.cleanup_old_keys("k", 2).expect("cleanup_old_keys");
+        // Retire v1 and v2; v3 stays Active.
+        km.deprecate_version("k", 1).unwrap();
+        km.deprecate_version("k", 2).unwrap();
+
+        // keep_versions=1 → keep the newest retired version (v2), remove v1.
+        // The Active secondary v3 must never be touched.
+        let removed = km.cleanup_old_keys("k", 1).expect("cleanup_old_keys");
         assert_eq!(removed, 1);
+        assert!(
+            km.get_key_by_version("k", 1).expect("get").is_none(),
+            "oldest retired version must be removed"
+        );
+        assert!(
+            km.get_key_by_version("k", 2).expect("get").is_some(),
+            "newest retired version must be kept"
+        );
+        assert!(
+            km.get_key_by_version("k", 3).expect("get").is_some(),
+            "Active secondary must never be removed"
+        );
+        assert!(
+            km.get_key_by_version("k", 4).expect("get").is_some(),
+            "primary must survive cleanup"
+        );
+    }
+
+    #[test]
+    fn test_key_manager_cleanup_old_keys_never_removes_active_secondaries() {
+        let master_key = [0x15; 32];
+        let mut km = make_manager();
+        km.create_key_ring(&master_key, "k".to_string(), "u".to_string(), None)
+            .unwrap();
+        // Rotate 3 times → secondaries = [v1, v2, v3] all Active, primary = v4.
+        for _ in 0..3 {
+            km.rotate_key(&master_key, Some("k".to_string()), "u".to_string(), None)
+                .unwrap();
+        }
+
+        // Even with keep_versions=1, Active secondaries are preserved: they
+        // may still be required to decrypt data written under them.
+        let removed = km.cleanup_old_keys("k", 1).expect("cleanup_old_keys");
+        assert_eq!(removed, 0);
+        for version in 1..=3 {
+            assert!(
+                km.get_key_by_version("k", version).expect("get").is_some(),
+                "Active secondary v{} must survive cleanup",
+                version
+            );
+        }
     }
 
     #[test]
@@ -876,6 +1016,88 @@ mod tests {
         // last_rotation advances after rotate_key (which calls schedule.update_after_rotation)
         assert!(post_status.last_rotation >= pre_status.last_rotation);
         assert!(post_status.next_rotation >= pre_status.next_rotation);
+    }
+
+    #[test]
+    fn test_key_manager_rotate_key_enforces_schedule_max_versions() {
+        let master_key = [0x16; 32];
+        let mut km = make_manager();
+        km.create_key_ring(&master_key, "k".to_string(), "u".to_string(), None)
+            .unwrap();
+        // Default schedule max_versions = 5; rotate 7 times. Without
+        // enforcement `secondary_keys` would grow to 7.
+        for _ in 0..7 {
+            km.rotate_key(&master_key, Some("k".to_string()), "u".to_string(), None)
+                .unwrap();
+        }
+
+        let info = km.get_key_info("k").unwrap();
+        assert_eq!(
+            info.total_versions, 6,
+            "expected primary + 5 capped secondaries"
+        );
+        // With no retired versions available, the oldest Active secondaries
+        // were pruned as a last resort to honor the policy bound.
+        assert!(km.get_key_by_version("k", 1).expect("get").is_none());
+        assert!(km.get_key_by_version("k", 2).expect("get").is_none());
+        assert!(km.get_key_by_version("k", 3).expect("get").is_some());
+        assert!(km.get_key_by_version("k", 7).expect("get").is_some());
+    }
+
+    #[test]
+    fn test_key_manager_rotate_key_prunes_retired_versions_first() {
+        let master_key = [0x17; 32];
+        let mut km = make_manager();
+        km.create_key_ring(&master_key, "k".to_string(), "u".to_string(), None)
+            .unwrap();
+        for _ in 0..5 {
+            km.rotate_key(&master_key, Some("k".to_string()), "u".to_string(), None)
+                .unwrap();
+        }
+        // Retire v1 so the cap has a preferred victim.
+        km.deprecate_version("k", 1).unwrap();
+
+        // This rotation pushes secondaries to 6 (> max_versions 5): the
+        // retired v1 must be pruned instead of any Active version.
+        km.rotate_key(&master_key, Some("k".to_string()), "u".to_string(), None)
+            .unwrap();
+
+        assert!(km.get_key_by_version("k", 1).expect("get").is_none());
+        for version in 2..=6 {
+            assert!(
+                km.get_key_by_version("k", version).expect("get").is_some(),
+                "Active secondary v{} must survive the cap",
+                version
+            );
+        }
+    }
+
+    #[test]
+    fn test_key_manager_debug_redacts_key_material() {
+        let master_key = [0x18; 32];
+        let mut km = make_manager();
+        km.create_key_ring(&master_key, "k".to_string(), "u".to_string(), None)
+            .unwrap();
+        km.rotate_key(&master_key, Some("k".to_string()), "u".to_string(), None)
+            .unwrap();
+
+        let debug = format!("{:?}", km);
+        assert!(debug.contains("KeyManager"), "got: {}", debug);
+        // Encrypted key material of both the primary and secondary versions
+        // must never appear in Debug output.
+        for version in 1..=2 {
+            let encrypted = km
+                .get_key_by_version("k", version)
+                .expect("get")
+                .unwrap()
+                .encrypted_key
+                .clone();
+            assert!(
+                !debug.contains(&encrypted),
+                "Debug leaked key material: {}",
+                debug
+            );
+        }
     }
 
     #[test]

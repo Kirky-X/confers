@@ -10,6 +10,13 @@ use serde::{Deserialize, Serialize};
 const CRITICAL_EXPIRY_DAYS: u64 = 7;
 const WARNING_EXPIRY_DAYS: u64 = 30;
 
+/// Maximum number of rotation history entries retained in memory by
+/// [`KeyRotationService`]. When the cap is exceeded, the oldest entries are
+/// dropped first so long-lived services cannot grow the history without
+/// bound.
+#[cfg(feature = "encryption")]
+const MAX_ROTATION_HISTORY: usize = 100;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyRotationPolicy {
     pub max_versions: u32,
@@ -186,8 +193,21 @@ impl RotationTask {
 #[allow(dead_code)] // used via KeyRotationPolicy in integrated scenarios
 pub struct KeyRotationService {
     policy: KeyRotationPolicy,
+    /// In-memory audit trail of executed rotations. Capped at
+    /// `MAX_ROTATION_HISTORY` entries; the oldest entries are dropped first.
     history: Vec<RotationHistory>,
-    active_tasks: Vec<RotationTask>,
+}
+
+/// Number of secondary key versions that are no longer Active.
+///
+/// Shared by `execute_rotation` and `can_rotate` so both use identical
+/// accounting for how many retired versions a key ring retains.
+fn inactive_secondary_count(key_ring: &KeyRing) -> u32 {
+    key_ring
+        .secondary_keys
+        .iter()
+        .filter(|k| k.metadata.status() != KeyStatus::Active)
+        .count() as u32
 }
 
 impl KeyRotationService {
@@ -195,7 +215,6 @@ impl KeyRotationService {
         Self {
             policy,
             history: Vec::new(),
-            active_tasks: Vec::new(),
         }
     }
 
@@ -221,6 +240,25 @@ impl KeyRotationService {
         Ok(plan)
     }
 
+    /// Validate a rotation plan against a key ring and policy.
+    ///
+    /// # Semantics
+    ///
+    /// A [`RotationPlan`] (see [`RotationPlan::new`] and
+    /// [`KeyRotationService::create_rotation_plan`]) lists the *future*
+    /// versions `current_version + 1 ..= target_version` that the rotation
+    /// will create. Validation therefore checks that:
+    ///
+    /// - `plan.current_version` exists in the key ring;
+    /// - every version in `plan.keys_to_rotate` does **not** exist yet (it
+    ///   will be created by the rotation);
+    /// - `plan.keys_to_rotate` is contiguous and strictly ascending, starting
+    ///   at `plan.current_version + 1`;
+    /// - the target stays within `policy.max_versions` of the ring's current
+    ///   version.
+    ///
+    /// Note: this function currently has no production callers; it is part of
+    /// the rotation-planning API.
     pub fn validate_rotation(
         key_ring: &KeyRing,
         plan: &RotationPlan,
@@ -238,11 +276,40 @@ impl KeyRotationService {
             });
         }
 
+        if key_ring.get_key_by_version(plan.current_version).is_none() {
+            return Err(ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!(
+                    "Plan current version {} not found in key ring '{}'",
+                    plan.current_version, key_ring.key_id
+                ),
+                location: None,
+                source: None,
+            });
+        }
+
+        let mut expected = plan.current_version;
         for version in &plan.keys_to_rotate {
-            if key_ring.get_key_by_version(*version).is_none() {
+            if *version != expected + 1 {
                 return Err(ConfigError::ParseError {
                     format: "key".to_string(),
-                    message: format!("Key version {} not found", version),
+                    message: format!(
+                        "Plan versions must be contiguous and ascending from current_version + 1 ({}), got {}",
+                        plan.current_version + 1,
+                        version
+                    ),
+                    location: None,
+                    source: None,
+                });
+            }
+            expected = *version;
+            if key_ring.get_key_by_version(*version).is_some() {
+                return Err(ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!(
+                        "Key version {} already exists in key ring '{}'; keys_to_rotate must list future versions that the rotation will create",
+                        version, key_ring.key_id
+                    ),
                     location: None,
                     source: None,
                 });
@@ -260,8 +327,11 @@ impl KeyRotationService {
         rotated_by: String,
         reason: Option<String>,
     ) -> Result<RotationResult, ConfigError> {
-        // Enforce max_versions bound before rotating to prevent unbounded version growth
-        let inactive_count = key_ring.secondary_keys.len() as u32;
+        // Enforce max_versions bound before rotating to prevent unbounded
+        // version growth. The accounting matches `can_rotate` exactly: only
+        // non-Active secondary versions count (Active secondaries may still
+        // be needed to decrypt data written under them).
+        let inactive_count = inactive_secondary_count(key_ring);
         if inactive_count >= self.policy.max_versions {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
@@ -281,7 +351,7 @@ impl KeyRotationService {
             rotation_id: format!("rot_{}_{}", key_ring.key_id, now_timestamp()),
             key_id: key_ring.key_id.clone(),
             from_version: old_version,
-            to_version: new_key.metadata.version,
+            to_version: new_key.metadata.version(),
             rotated_at: now_timestamp(),
             rotated_by,
             reason,
@@ -290,10 +360,17 @@ impl KeyRotationService {
         };
         self.history.push(history);
 
+        // Cap the in-memory history so long-lived services don't grow it
+        // without bound; the oldest entries are dropped first.
+        if self.history.len() > MAX_ROTATION_HISTORY {
+            self.history
+                .drain(..self.history.len() - MAX_ROTATION_HISTORY);
+        }
+
         Ok(RotationResult {
             key_id: key_ring.key_id.clone(),
             previous_version: old_version,
-            new_version: new_key.metadata.version,
+            new_version: new_key.metadata.version(),
             rotated_at: now_timestamp(),
             reencryption_required: true,
         })
@@ -302,7 +379,7 @@ impl KeyRotationService {
     pub fn check_key_expiration(metadata: &KeyMetadata) -> KeyExpirationStatus {
         if metadata.is_expired() {
             KeyExpirationStatus::Expired
-        } else if let Some(expires_at) = metadata.expires_at {
+        } else if let Some(expires_at) = metadata.expires_at() {
             let now = now_timestamp();
             let days_until_expiry = (expires_at.saturating_sub(now)) / SECONDS_PER_DAY;
 
@@ -318,15 +395,18 @@ impl KeyRotationService {
         }
     }
 
+    /// Check whether a rotation is allowed under the policy.
+    ///
+    /// The accounting and threshold are identical to `execute_rotation`: only
+    /// non-Active secondary versions count, and rotation is rejected once
+    /// `max_versions` (or more) retired versions already exist. In other
+    /// words, `max_versions` bounds the number of retired secondary versions
+    /// retained alongside the single Active primary — a ring holding
+    /// `max_versions` non-Active secondaries must clean up before rotating.
     pub fn can_rotate(key_ring: &KeyRing, policy: &KeyRotationPolicy) -> Result<(), ConfigError> {
-        let inactive_versions: Vec<u32> = key_ring
-            .secondary_keys
-            .iter()
-            .filter(|k| k.metadata.status != KeyStatus::Active)
-            .map(|k| k.metadata.version)
-            .collect();
+        let inactive_count = inactive_secondary_count(key_ring);
 
-        if inactive_versions.len() as u32 >= policy.max_versions.saturating_sub(1) {
+        if inactive_count >= policy.max_versions {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
                 message: "Too many inactive key versions. Consider cleaning up old keys."
@@ -349,7 +429,7 @@ impl KeyRotationService {
             .unwrap_or(0);
 
         let version_age_days = (now_timestamp()
-            .saturating_sub(key_ring.primary_key.metadata.created_at))
+            .saturating_sub(key_ring.primary_key.metadata.created_at()))
             / SECONDS_PER_DAY;
 
         let should_rotate = days_since_rotation >= policy.rotation_interval_days as u64
@@ -654,7 +734,7 @@ mod tests {
     fn test_key_rotation_service_new_initializes_empty() {
         let policy = KeyRotationPolicy::default();
         let _service = KeyRotationService::new(policy);
-        // No public accessors for history/active_tasks; just ensure construction works.
+        // No public accessors for history; just ensure construction works.
     }
 
     #[test]
@@ -700,32 +780,58 @@ mod tests {
     }
 
     #[test]
-    fn test_key_rotation_service_validate_rotation_missing_version_errors() {
-        // plan.keys_to_rotate = [4, 5], but ring only has version 3 (primary).
+    fn test_key_rotation_service_validate_rotation_current_version_missing_errors() {
+        // plan claims the ring is at version 1, but the ring is at version 3:
+        // the plan's current version must exist in the key ring.
         let ring = make_key_ring(3, vec![], None, None);
-        let plan = RotationPlan::new("k".to_string(), 3, 5);
+        let plan = RotationPlan::new("k".to_string(), 1, 3);
         let policy = KeyRotationPolicy::new(10, 90, 14, false);
 
         let err = KeyRotationService::validate_rotation(&ring, &plan, &policy).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("Key version 4 not found"), "got: {}", msg);
+        assert!(
+            msg.contains("Plan current version 1 not found"),
+            "got: {}",
+            msg
+        );
     }
 
     #[test]
-    fn test_key_rotation_service_validate_rotation_passes_when_all_versions_exist() {
-        // validate_rotation requires that every version in plan.keys_to_rotate
-        // already exists in the key_ring (i.e., pre-staged as secondaries).
-        let ring = make_key_ring(
-            3,
-            vec![(4, KeyStatus::Active), (5, KeyStatus::Active)],
-            None,
-            None,
-        );
+    fn test_key_rotation_service_validate_rotation_existing_version_errors() {
+        // keys_to_rotate lists FUTURE versions that the rotation will create;
+        // a version that already exists in the ring must be rejected.
+        let ring = make_key_ring(3, vec![(4, KeyStatus::Active)], None, None);
+        let plan = RotationPlan::new("k".to_string(), 3, 5); // keys_to_rotate = [4, 5]
+        let policy = KeyRotationPolicy::new(10, 90, 14, false);
+
+        let err = KeyRotationService::validate_rotation(&ring, &plan, &policy).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("already exists"), "got: {}", msg);
+        assert!(msg.contains("4"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_rotation_service_validate_rotation_non_contiguous_errors() {
+        let ring = make_key_ring(3, vec![], None, None);
+        let mut plan = RotationPlan::new("k".to_string(), 3, 6);
+        plan.keys_to_rotate = vec![4, 6]; // gap at 5
+        let policy = KeyRotationPolicy::new(10, 90, 14, false);
+
+        let err = KeyRotationService::validate_rotation(&ring, &plan, &policy).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("contiguous"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_rotation_service_validate_rotation_passes_for_future_versions() {
+        // keys_to_rotate lists the versions the rotation WILL create; a fresh
+        // ring whose future versions do not exist yet must validate cleanly.
+        let ring = make_key_ring(3, vec![], None, None);
         let plan = RotationPlan::new("k".to_string(), 3, 5); // keys_to_rotate = [4, 5]
         let policy = KeyRotationPolicy::new(10, 90, 14, false); // max_versions = 10
 
         KeyRotationService::validate_rotation(&ring, &plan, &policy)
-            .expect("validate_rotation should pass when all target versions exist");
+            .expect("validate_rotation should accept a plan that creates future versions");
     }
 
     #[test]
@@ -738,7 +844,7 @@ mod tests {
     #[test]
     fn test_key_rotation_service_check_key_expiration_expired_returns_expired() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
-        meta.expires_at = Some(now_timestamp().saturating_sub(1));
+        meta.set_expires_at(Some(now_timestamp().saturating_sub(1)));
         let status = KeyRotationService::check_key_expiration(&meta);
         assert_eq!(status, KeyExpirationStatus::Expired);
     }
@@ -747,7 +853,7 @@ mod tests {
     fn test_key_rotation_service_check_key_expiration_critical_threshold() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
         // 5 days until expiry → Critical (≤ 7 days)
-        meta.expires_at = Some(now_timestamp() + 5 * SECONDS_PER_DAY);
+        meta.set_expires_at(Some(now_timestamp() + 5 * SECONDS_PER_DAY));
         let status = KeyRotationService::check_key_expiration(&meta);
         match status {
             KeyExpirationStatus::Critical(days) => {
@@ -761,7 +867,7 @@ mod tests {
     fn test_key_rotation_service_check_key_expiration_warning_threshold() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
         // 20 days until expiry → Warning (≤ 30 but > 7)
-        meta.expires_at = Some(now_timestamp() + 20 * SECONDS_PER_DAY);
+        meta.set_expires_at(Some(now_timestamp() + 20 * SECONDS_PER_DAY));
         let status = KeyRotationService::check_key_expiration(&meta);
         match status {
             KeyExpirationStatus::Warning(days) => {
@@ -775,7 +881,7 @@ mod tests {
     fn test_key_rotation_service_check_key_expiration_far_future_returns_valid() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
         // 100 days until expiry → Valid (> 30)
-        meta.expires_at = Some(now_timestamp() + 100 * SECONDS_PER_DAY);
+        meta.set_expires_at(Some(now_timestamp() + 100 * SECONDS_PER_DAY));
         let status = KeyRotationService::check_key_expiration(&meta);
         assert_eq!(status, KeyExpirationStatus::Valid);
     }
@@ -789,12 +895,15 @@ mod tests {
             None,
         );
         let policy = KeyRotationPolicy::default(); // max_versions = 5
-        // inactive_versions = [v1] (len 1) < 5-1=4 → Ok
+        // inactive_versions = [v1] (count 1) < 5 → Ok
         KeyRotationService::can_rotate(&ring, &policy).expect("can_rotate should pass");
     }
 
     #[test]
-    fn test_key_rotation_service_can_rotate_fails_with_too_many_inactive() {
+    fn test_key_rotation_service_can_rotate_passes_at_threshold_minus_one() {
+        // Threshold is unified with execute_rotation: 4 inactive < max_versions
+        // of 5 → rotation stays allowed (the old `max_versions - 1` threshold
+        // incorrectly rejected this state).
         let ring = make_key_ring(
             5,
             vec![
@@ -806,11 +915,74 @@ mod tests {
             None,
             None,
         );
-        let policy = KeyRotationPolicy::new(5, 90, 14, false); // max_versions = 5
-        // inactive = 4, threshold = max_versions - 1 = 4 → 4 >= 4 → error
+        let policy = KeyRotationPolicy::new(5, 90, 14, false);
+        KeyRotationService::can_rotate(&ring, &policy)
+            .expect("4 inactive versions < max_versions 5 must be allowed");
+    }
+
+    #[test]
+    fn test_key_rotation_service_can_rotate_fails_with_too_many_inactive() {
+        let ring = make_key_ring(
+            6,
+            vec![
+                (1, KeyStatus::Deprecated),
+                (2, KeyStatus::Deprecated),
+                (3, KeyStatus::Expired),
+                (4, KeyStatus::Compromised),
+                (5, KeyStatus::Deprecated),
+            ],
+            None,
+            None,
+        );
+        let policy = KeyRotationPolicy::new(5, 90, 14, false);
+        // inactive = 5 >= max_versions = 5 → error (same accounting as
+        // execute_rotation; Active secondaries are not counted).
         let err = KeyRotationService::can_rotate(&ring, &policy).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("inactive key versions"), "got: {}", msg);
+    }
+
+    #[test]
+    fn test_key_rotation_service_can_rotate_ignores_active_secondaries() {
+        // Unified accounting: Active secondary versions are never counted.
+        let ring = make_key_ring(
+            6,
+            vec![
+                (1, KeyStatus::Deprecated),
+                (2, KeyStatus::Active),
+                (3, KeyStatus::Active),
+                (4, KeyStatus::Active),
+                (5, KeyStatus::Active),
+            ],
+            None,
+            None,
+        );
+        let policy = KeyRotationPolicy::new(5, 90, 14, false);
+        // Only v1 is inactive (1 < 5) despite 5 total secondaries.
+        KeyRotationService::can_rotate(&ring, &policy).expect("Active secondaries must not count");
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_rotation_service_history_is_bounded() {
+        let master_key = [0xcd; 32];
+        let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
+        let mut service = KeyRotationService::new(KeyRotationPolicy::default());
+
+        for _ in 0..MAX_ROTATION_HISTORY + 10 {
+            service
+                .execute_rotation(&mut ring, &master_key, "u".to_string(), None)
+                .expect("rotate");
+        }
+
+        assert_eq!(
+            service.history.len(),
+            MAX_ROTATION_HISTORY,
+            "history must be capped at MAX_ROTATION_HISTORY"
+        );
+        // Oldest entries are dropped first: rotations 1..10 were evicted, so
+        // the first retained entry is rotation #11 (from version 11).
+        assert_eq!(service.history[0].from_version, 11);
     }
 
     #[test]

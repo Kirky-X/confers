@@ -31,7 +31,7 @@ fn key0102_generate_roundtrip_and_wrong_master_rejected() {
 
     let bundle = KeyBundle::generate(&mk, 1, "e2e".to_string(), Some("E2E 密钥".to_string()))
         .expect("generate must succeed");
-    assert_eq!(bundle.metadata.version, 1);
+    assert_eq!(bundle.metadata.version(), 1);
     assert_eq!(bundle.key_id, "v_1");
     assert!(bundle.metadata.is_active(), "fresh key must be active");
 
@@ -73,7 +73,7 @@ fn key030405_ring_rotation_multiversion_and_deactivation() {
     let rotated = ring
         .rotate(&mk, "e2e".to_string(), Some("轮换".to_string()))
         .expect("rotate must succeed");
-    assert_eq!(rotated.metadata.version, 2);
+    assert_eq!(rotated.metadata.version(), 2);
     assert_eq!(ring.current_version, 2);
     assert!(ring.last_rotated_at.is_some());
 
@@ -97,7 +97,7 @@ fn key030405_ring_rotation_multiversion_and_deactivation() {
     // deactivate 后查得到但状态为 Deprecated(KEY-04 后半)。
     ring.deactivate_version(1);
     let deactivated = ring.get_key_by_version(1).expect("still present");
-    assert_eq!(deactivated.metadata.status, KeyStatus::Deprecated);
+    assert_eq!(deactivated.metadata.status(), KeyStatus::Deprecated);
     assert!(
         !deactivated.metadata.is_active(),
         "deactivated key must not be active"
@@ -192,17 +192,23 @@ fn key10111213_manager_error_paths_cleanup_and_expiry() {
 
     // cleanup_old_keys:保留 keep_n 个最新旧版本(KEY-10):v1 被清,v2 保留,
     // 当前默认版本 v3 不受影响。
+    // cleanup_old_keys(KEY-10 新语义):Active 的 secondary 不再被静默删除。
+    // v1/v2 此时均为 Active → 清理返回 0;deprecate v1 后以 keep=0 清理仅移除非 Active 版本。
     let removed = km.cleanup_old_keys("app", 1).expect("cleanup");
-    assert_eq!(removed, 1, "2 secondary keys → keep newest 1 → remove 1");
+    assert_eq!(removed, 0, "Active secondaries are never pruned by cleanup");
+    km.deprecate_version("app", 1)
+        .expect("old version deprecates");
+    let removed = km.cleanup_old_keys("app", 0).expect("cleanup");
+    assert_eq!(removed, 1, "retired (inactive) v1 pruned when keep=0");
     let ring = km.get_key_by_version("app", 3).expect("ring");
     assert!(ring.is_some(), "current version must survive cleanup");
     assert!(
-        ring.is_some() && km.get_key_by_version("app", 1).expect("ring").is_none(),
-        "oldest v1 pruned"
+        km.get_key_by_version("app", 1).expect("ring").is_none(),
+        "inactive v1 pruned"
     );
     assert!(
         km.get_key_by_version("app", 2).expect("ring").is_some(),
-        "newest secondary kept"
+        "active secondary kept"
     );
 
     // deprecate_version:当前版本拒绝(KEY-12 同族),存留旧版本允许(KEY-11)。
@@ -214,7 +220,7 @@ fn key10111213_manager_error_paths_cleanup_and_expiry() {
         .expect("ring")
         .expect("v2 still resolvable")
         .clone();
-    assert_eq!(deprecated.metadata.status, KeyStatus::Deprecated);
+    assert_eq!(deprecated.metadata.status(), KeyStatus::Deprecated);
 
     // set_default_key_id(非法 id) → 错误(KEY-12)。
     assert!(km.set_default_key_id("ghost").is_err());
@@ -229,7 +235,7 @@ fn key10111213_manager_error_paths_cleanup_and_expiry() {
     assert!(live.is_active() && !live.is_expired(), "no expiry → active");
 
     let mut expired = KeyMetadata::new(2, "e2e".to_string(), None);
-    expired.expires_at = Some(now.saturating_sub(1));
+    expired.set_expires_at(Some(now.saturating_sub(1)));
     assert!(expired.is_expired(), "past expires_at → expired");
     assert!(!expired.is_active());
 }

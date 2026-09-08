@@ -25,6 +25,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "encryption")]
 use rand::Rng;
+#[cfg(feature = "encryption")]
+use zeroize::Zeroizing;
 
 pub const CONFERS_KEY_VERSION: &str = "v1";
 pub const KEY_VERSION_PREFIX: &str = "v";
@@ -39,14 +41,29 @@ pub enum KeyStatus {
     Expired,
 }
 
+/// Descriptive metadata attached to a key version.
+///
+/// # Serialization Compatibility
+///
+/// The serde field names are unchanged and part of the on-disk format:
+/// `KeyRing` payloads persisted by earlier versions deserialize as-is.
+///
+/// # Security Note
+///
+/// Fields are read-only outside the `key` module. Status changes go through
+/// the controlled mutator [`KeyMetadata::deprecate`] (or the audited helpers
+/// `KeyRing::deactivate_version` / `KeyManager::deprecate_version`), and
+/// expiry changes through [`KeyMetadata::set_expires_at`]. The library
+/// intentionally does not enforce a full status state machine — treat status
+/// changes as privileged operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyMetadata {
-    pub version: u32,
-    pub created_at: u64,
-    pub created_by: String,
-    pub status: KeyStatus,
-    pub expires_at: Option<u64>,
-    pub description: Option<String>,
+    version: u32,
+    created_at: u64,
+    created_by: String,
+    status: KeyStatus,
+    expires_at: Option<u64>,
+    description: Option<String>,
 }
 
 impl KeyMetadata {
@@ -59,6 +76,50 @@ impl KeyMetadata {
             expires_at: None,
             description,
         }
+    }
+
+    /// Key version this metadata describes.
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// Creation timestamp (seconds since the UNIX epoch).
+    pub fn created_at(&self) -> u64 {
+        self.created_at
+    }
+
+    /// Identity of the principal that created this key version.
+    pub fn created_by(&self) -> &str {
+        &self.created_by
+    }
+
+    /// Current lifecycle status of the key version.
+    pub fn status(&self) -> KeyStatus {
+        self.status
+    }
+
+    /// Expiry timestamp (seconds since the UNIX epoch), if one is set.
+    pub fn expires_at(&self) -> Option<u64> {
+        self.expires_at
+    }
+
+    /// Free-form description, if one was provided at creation.
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    /// Mark this key version as [`KeyStatus::Deprecated`] (retired).
+    ///
+    /// This is the controlled replacement for direct `status` assignment.
+    pub fn deprecate(&mut self) {
+        self.status = KeyStatus::Deprecated;
+    }
+
+    /// Set or clear the expiry timestamp (seconds since the UNIX epoch).
+    ///
+    /// Intended for policy code and tests that construct expiry scenarios.
+    pub fn set_expires_at(&mut self, expires_at: Option<u64>) {
+        self.expires_at = expires_at;
     }
 
     pub fn is_expired(&self) -> bool {
@@ -74,11 +135,24 @@ impl KeyMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyBundle {
     pub metadata: KeyMetadata,
     pub key_id: String,
     pub encrypted_key: String,
+}
+
+impl std::fmt::Debug for KeyBundle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Redacted Debug: `encrypted_key` is key material (albeit encrypted)
+        // and must never leak into logs or panic messages. Only non-sensitive
+        // metadata is emitted.
+        f.debug_struct("KeyBundle")
+            .field("key_id", &self.key_id)
+            .field("version", &self.metadata.version())
+            .field("status", &self.metadata.status())
+            .finish_non_exhaustive()
+    }
 }
 
 impl KeyBundle {
@@ -96,6 +170,16 @@ impl KeyBundle {
         }
     }
 
+    /// Generate a new key bundle by encrypting fresh random key material with
+    /// the given master key.
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ The `master_key` buffer is borrowed; the caller remains responsible
+    ///   for zeroizing it when no longer needed.
+    /// - The local random key material is wrapped in [`zeroize::Zeroizing`]
+    ///   and wiped from memory when this function returns. (The value handed
+    ///   to `encrypt` is only the base64 ASCII encoding of the key.)
     #[cfg(feature = "encryption")]
     pub fn generate(
         master_key: &[u8; 32],
@@ -103,12 +187,14 @@ impl KeyBundle {
         created_by: String,
         description: Option<String>,
     ) -> Result<Self, ConfigError> {
-        let mut key_bytes = [0u8; 32];
-        rand::rng().fill_bytes(&mut key_bytes);
+        // Zeroizing wipes the raw key material from memory when this scope
+        // ends.
+        let mut key_bytes = Zeroizing::new([0u8; 32]);
+        rand::rng().fill_bytes(&mut key_bytes[..]);
 
         let encryptor = XChaCha20Crypto::new();
         let (nonce, ciphertext) = encryptor
-            .encrypt(BASE64.encode(key_bytes).as_bytes(), master_key)
+            .encrypt(BASE64.encode(&key_bytes[..]).as_bytes(), master_key)
             .map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
                 message: format!("Encryption failed: {}", e),
@@ -130,6 +216,17 @@ impl KeyBundle {
         ))
     }
 
+    /// Decrypt and return the plaintext 32-byte key material.
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ The returned `[u8; 32]` buffer is owned by the caller, who is
+    ///   responsible for zeroizing it when no longer needed (e.g. via
+    ///   `zeroize::Zeroizing`).
+    /// - Internal copies of the raw key material are wrapped in
+    ///   [`zeroize::Zeroizing`] and wiped when this function returns. (The
+    ///   decrypted `plaintext` only ever holds the base64 ASCII encoding of
+    ///   the key.)
     #[cfg(feature = "encryption")]
     pub fn get_plaintext_key(&self, master_key: &[u8; 32]) -> Result<[u8; 32], ConfigError> {
         let parts: Vec<&str> = self.encrypted_key.split(':').collect();
@@ -169,21 +266,25 @@ impl KeyBundle {
                 source: None,
             })?;
 
-        let key_bytes = BASE64
-            .decode(
-                String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
-                    format: "key".to_string(),
-                    message: format!("Invalid plaintext UTF-8: {}", e),
-                    location: None,
-                    source: None,
-                })?,
-            )
-            .map_err(|e| ConfigError::ParseError {
-                format: "key".to_string(),
-                message: format!("Invalid base64 in plaintext: {}", e),
-                location: None,
-                source: None,
-            })?;
+        // `plaintext` only ever holds the base64 ASCII encoding of the key;
+        // `key_bytes` holds the raw key material and is zeroized on drop.
+        let plaintext = String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
+            format: "key".to_string(),
+            message: format!("Invalid plaintext UTF-8: {}", e),
+            location: None,
+            source: None,
+        })?;
+        let key_bytes =
+            Zeroizing::new(
+                BASE64
+                    .decode(plaintext)
+                    .map_err(|e| ConfigError::ParseError {
+                        format: "key".to_string(),
+                        message: format!("Invalid base64 in plaintext: {}", e),
+                        location: None,
+                        source: None,
+                    })?,
+            );
 
         if key_bytes.len() != 32 {
             return Err(ConfigError::ParseError {
@@ -200,7 +301,7 @@ impl KeyBundle {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyRing {
     pub key_id: String,
     pub current_version: u32,
@@ -208,6 +309,22 @@ pub struct KeyRing {
     pub secondary_keys: Vec<KeyBundle>,
     pub created_at: u64,
     pub last_rotated_at: Option<u64>,
+}
+
+impl std::fmt::Debug for KeyRing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Redacted Debug: primary/secondary keys hold key material (albeit
+        // encrypted) and must never leak into logs. Only non-sensitive
+        // metadata is emitted.
+        f.debug_struct("KeyRing")
+            .field("key_id", &self.key_id)
+            .field("current_version", &self.current_version)
+            .field("primary_version", &self.primary_key.metadata.version())
+            .field("secondary_count", &self.secondary_keys.len())
+            .field("created_at", &self.created_at)
+            .field("last_rotated_at", &self.last_rotated_at)
+            .finish()
+    }
 }
 
 impl KeyRing {
@@ -229,6 +346,18 @@ impl KeyRing {
         })
     }
 
+    /// Rotate to a new key version, archiving the current primary as a
+    /// secondary.
+    ///
+    /// # Security Notes
+    ///
+    /// - ⚠️ **No retention limit**: this method intentionally enforces no
+    ///   retention policy of its own — every old primary is archived
+    ///   unconditionally, so `secondary_keys` grows by one per rotation.
+    ///   Enforcing a `max_versions` bound is the caller's responsibility;
+    ///   `KeyManager::rotate_key` does this automatically using the ring's
+    ///   `KeyRotationSchedule` (single-responsibility: `KeyRing` only rotates,
+    ///   `KeyManager` applies policy).
     #[cfg(feature = "encryption")]
     pub fn rotate(
         &mut self,
@@ -249,12 +378,12 @@ impl KeyRing {
     }
 
     pub fn get_key_by_version(&self, version: u32) -> Option<&KeyBundle> {
-        if self.primary_key.metadata.version == version {
+        if self.primary_key.metadata.version() == version {
             Some(&self.primary_key)
         } else {
             self.secondary_keys
                 .iter()
-                .find(|k| k.metadata.version == version)
+                .find(|k| k.metadata.version() == version)
         }
     }
 
@@ -264,17 +393,17 @@ impl KeyRing {
 
     pub fn deactivate_version(&mut self, version: u32) {
         if let Some(key) = self.get_key_by_version_mut(version) {
-            key.metadata.status = KeyStatus::Deprecated;
+            key.metadata.deprecate();
         }
     }
 
     fn get_key_by_version_mut(&mut self, version: u32) -> Option<&mut KeyBundle> {
-        if self.primary_key.metadata.version == version {
+        if self.primary_key.metadata.version() == version {
             Some(&mut self.primary_key)
         } else {
             self.secondary_keys
                 .iter_mut()
-                .find(|k| k.metadata.version == version)
+                .find(|k| k.metadata.version() == version)
         }
     }
 }
@@ -382,18 +511,18 @@ mod tests {
     #[test]
     fn test_key_metadata_new_defaults() {
         let meta = KeyMetadata::new(3, "alice".to_string(), Some("desc".to_string()));
-        assert_eq!(meta.version, 3);
-        assert_eq!(meta.created_by, "alice");
-        assert_eq!(meta.status, KeyStatus::Active);
-        assert_eq!(meta.expires_at, None);
-        assert_eq!(meta.description.as_deref(), Some("desc"));
-        assert!(meta.created_at > 0);
+        assert_eq!(meta.version(), 3);
+        assert_eq!(meta.created_by(), "alice");
+        assert_eq!(meta.status(), KeyStatus::Active);
+        assert_eq!(meta.expires_at(), None);
+        assert_eq!(meta.description(), Some("desc"));
+        assert!(meta.created_at() > 0);
     }
 
     #[test]
     fn test_key_metadata_new_without_description() {
         let meta = KeyMetadata::new(1, "bob".to_string(), None);
-        assert_eq!(meta.description, None);
+        assert_eq!(meta.description(), None);
     }
 
     #[test]
@@ -405,14 +534,15 @@ mod tests {
     #[test]
     fn test_key_metadata_is_expired_past() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
-        meta.expires_at = Some(now_timestamp().saturating_sub(1));
+        meta.set_expires_at(Some(now_timestamp().saturating_sub(1)));
+        assert_eq!(meta.status(), KeyStatus::Active);
         assert!(meta.is_expired());
     }
 
     #[test]
     fn test_key_metadata_is_expired_future() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
-        meta.expires_at = Some(now_timestamp().saturating_add(86_400));
+        meta.set_expires_at(Some(now_timestamp().saturating_add(86_400)));
         assert!(!meta.is_expired());
     }
 
@@ -425,14 +555,15 @@ mod tests {
     #[test]
     fn test_key_metadata_is_active_when_deprecated() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
-        meta.status = KeyStatus::Deprecated;
+        meta.deprecate();
+        assert_eq!(meta.status(), KeyStatus::Deprecated);
         assert!(!meta.is_active());
     }
 
     #[test]
     fn test_key_metadata_is_active_when_expired() {
         let mut meta = KeyMetadata::new(1, "u".to_string(), None);
-        meta.expires_at = Some(now_timestamp().saturating_sub(1));
+        meta.set_expires_at(Some(now_timestamp().saturating_sub(1)));
         assert!(!meta.is_active());
     }
 
@@ -445,11 +576,11 @@ mod tests {
             "creator".to_string(),
             Some("desc".to_string()),
         );
-        assert_eq!(bundle.metadata.version, 2);
+        assert_eq!(bundle.metadata.version(), 2);
         assert_eq!(bundle.key_id, "k_2");
         assert_eq!(bundle.encrypted_key, "encrypted");
-        assert_eq!(bundle.metadata.created_by, "creator");
-        assert_eq!(bundle.metadata.status, KeyStatus::Active);
+        assert_eq!(bundle.metadata.created_by(), "creator");
+        assert_eq!(bundle.metadata.status(), KeyStatus::Active);
     }
 
     #[test]
@@ -579,8 +710,8 @@ mod tests {
         let meta = KeyMetadata::new(2, "alice".to_string(), Some("d".to_string()));
         let json = serde_json::to_string(&meta).expect("serialize");
         let de: KeyMetadata = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(de.version, meta.version);
-        assert_eq!(de.created_by, meta.created_by);
+        assert_eq!(de.version(), meta.version());
+        assert_eq!(de.created_by(), meta.created_by());
     }
 
     #[test]
@@ -610,9 +741,9 @@ mod tests {
         )
         .expect("generate");
 
-        assert_eq!(bundle.metadata.version, 1);
-        assert_eq!(bundle.metadata.created_by, "creator");
-        assert_eq!(bundle.metadata.status, KeyStatus::Active);
+        assert_eq!(bundle.metadata.version(), 1);
+        assert_eq!(bundle.metadata.created_by(), "creator");
+        assert_eq!(bundle.metadata.status(), KeyStatus::Active);
         assert!(bundle.encrypted_key.contains(':'));
         assert_eq!(bundle.key_id, format!("{}_1", KEY_VERSION_PREFIX));
 
@@ -620,6 +751,54 @@ mod tests {
             .get_plaintext_key(&master_key)
             .expect("decrypt round-trip");
         assert_eq!(plaintext.len(), 32);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn test_key_bundle_debug_redacts_encrypted_key() {
+        let master_key = [0x03; 32];
+        let bundle = KeyBundle::generate(&master_key, 1, "u".to_string(), None).expect("generate");
+        let debug = format!("{:?}", bundle);
+        assert!(debug.contains("KeyBundle"), "got: {}", debug);
+        assert!(
+            !debug.contains(&bundle.encrypted_key),
+            "Debug leaked encrypted key material: {}",
+            debug
+        );
+        // Non-sensitive metadata stays visible for debugging.
+        assert!(debug.contains("version"), "got: {}", debug);
+    }
+
+    #[test]
+    fn test_key_ring_debug_redacts_key_material() {
+        let primary = KeyBundle::new(
+            2,
+            "k_2".to_string(),
+            "primary-secret-material".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let secondary = KeyBundle::new(
+            1,
+            "k_1".to_string(),
+            "secondary-secret-material".to_string(),
+            "u".to_string(),
+            None,
+        );
+        let ring = KeyRing {
+            key_id: "k".to_string(),
+            current_version: 2,
+            primary_key: primary,
+            secondary_keys: vec![secondary],
+            created_at: 0,
+            last_rotated_at: None,
+        };
+        let debug = format!("{:?}", ring);
+        assert!(debug.contains("KeyRing"), "got: {}", debug);
+        assert!(!debug.contains("primary-secret-material"));
+        assert!(!debug.contains("secondary-secret-material"));
+        // Non-sensitive metadata stays visible for debugging.
+        assert!(debug.contains("current_version"), "got: {}", debug);
     }
 
     #[cfg(feature = "encryption")]
@@ -656,8 +835,8 @@ mod tests {
         assert!(ring.secondary_keys.is_empty());
         assert!(ring.created_at > 0);
         assert_eq!(ring.last_rotated_at, None);
-        assert_eq!(ring.primary_key.metadata.version, CURRENT_KEY_VERSION);
-        assert_eq!(ring.primary_key.metadata.status, KeyStatus::Active);
+        assert_eq!(ring.primary_key.metadata.version(), CURRENT_KEY_VERSION);
+        assert_eq!(ring.primary_key.metadata.status(), KeyStatus::Active);
     }
 
     #[cfg(feature = "encryption")]
@@ -665,7 +844,7 @@ mod tests {
     fn test_key_ring_rotate_increments_version_and_archives_old_primary() {
         let master_key = [0x02; 32];
         let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
-        let old_primary_version = ring.primary_key.metadata.version;
+        let old_primary_version = ring.primary_key.metadata.version();
         let old_primary = ring.primary_key.clone();
 
         let new_key = ring
@@ -676,12 +855,18 @@ mod tests {
             )
             .expect("rotate");
 
-        assert_eq!(new_key.metadata.version, old_primary_version + 1);
+        assert_eq!(new_key.metadata.version(), old_primary_version + 1);
         assert_eq!(ring.current_version, old_primary_version + 1);
-        assert_eq!(ring.primary_key.metadata.version, new_key.metadata.version);
+        assert_eq!(
+            ring.primary_key.metadata.version(),
+            new_key.metadata.version()
+        );
         // Old primary moved to secondaries
         assert_eq!(ring.secondary_keys.len(), 1);
-        assert_eq!(ring.secondary_keys[0].metadata.version, old_primary_version);
+        assert_eq!(
+            ring.secondary_keys[0].metadata.version(),
+            old_primary_version
+        );
         assert_eq!(
             ring.secondary_keys[0].encrypted_key,
             old_primary.encrypted_key
@@ -797,7 +982,7 @@ mod tests {
         };
         ring.deactivate_version(1);
         let v1 = ring.get_key_by_version(1).unwrap();
-        assert_eq!(v1.metadata.status, KeyStatus::Deprecated);
+        assert_eq!(v1.metadata.status(), KeyStatus::Deprecated);
     }
 
     #[test]
@@ -819,6 +1004,6 @@ mod tests {
         };
         // Missing version: deactivate is a no-op (no panic, no change)
         ring.deactivate_version(99);
-        assert_eq!(ring.primary_key.metadata.status, KeyStatus::Active);
+        assert_eq!(ring.primary_key.metadata.status(), KeyStatus::Active);
     }
 }

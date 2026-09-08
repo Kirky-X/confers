@@ -13,9 +13,14 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use zeroize::Zeroizing;
 
-/// 十六进制模式 - 全局缓存
-static HEX_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-fA-F]{8,64}").unwrap());
+/// Hex pattern - global cache. The minimum length of 32 is deliberate: real
+/// key material is 32+ hex chars (64-hex master keys, 32-hex 128-bit keys,
+/// 64-hex SHA-256 digests), while shorter hex runs — version hashes,
+/// hyphen-less UUIDs, small ids — are common in non-secret payloads and must
+/// stay readable for debugging.
+static HEX_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-fA-F]{32,}").unwrap());
 
 /// 密钥模式 - 全局缓存
 static KEY_PATTERN: LazyLock<Regex> =
@@ -33,7 +38,10 @@ static SECRET_PATTERN: LazyLock<Regex> =
 static LONG_HEX_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[0-9a-fA-F]{64}").unwrap());
 
-/// Base64模式 - 全局缓存
+/// Base64 pattern - global cache. Only applied at the Aggressive level:
+/// base64 is ubiquitous in non-secret payloads, so broad redaction at lower
+/// levels would badly hurt debuggability. The tradeoff (base64-encoded
+/// secrets may be missed at Minimal/Standard level) is accepted deliberately.
 static BASE64_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[A-Za-z0-9+/]{32,}={0,2}").unwrap());
 
@@ -49,8 +57,12 @@ pub enum SanitizationLevel {
 }
 
 /// 错误消息脱敏器
+///
+/// The hex-encoded master key is held in a [`Zeroizing`] buffer, so it is
+/// wiped from memory when the sanitizer is dropped (no explicit `Drop` impl
+/// is needed — the type-level guarantee covers it).
 pub struct ErrorSanitizer {
-    master_key_hex: String,
+    master_key_hex: Zeroizing<String>,
     level: SanitizationLevel,
     replacement: String,
 }
@@ -59,7 +71,7 @@ impl ErrorSanitizer {
     /// 创建新的错误脱敏器
     pub fn new(master_key: &[u8; 32], level: SanitizationLevel) -> Self {
         Self {
-            master_key_hex: hex::encode(master_key),
+            master_key_hex: Zeroizing::new(hex::encode(master_key)),
             level,
             replacement: "***".to_string(),
         }
@@ -98,11 +110,12 @@ impl ErrorSanitizer {
 
     /// 脱敏完整的密钥十六进制编码
     fn sanitize_full_key(&self, message: &str) -> String {
-        message.replace(&self.master_key_hex, &self.replacement)
+        message.replace(self.master_key_hex.as_str(), &self.replacement)
     }
 
-    /// 脱敏密钥片段（8字符以上的十六进制字符串）
-    /// 脱敏十六进制片段
+    /// Redact hex fragments of 32+ characters (candidate key/hash material).
+    /// Shorter hex runs (version hashes, UUIDs) are deliberately left intact
+    /// to keep error messages debuggable; see `HEX_PATTERN`.
     fn sanitize_key_fragments(&self, message: &str) -> String {
         HEX_PATTERN
             .replace_all(message, &self.replacement)
@@ -221,6 +234,10 @@ impl KeyStorage {
         created_by: String,
     ) -> Result<(), ConfigError> {
         self.master_key = Some(SecretBytes::new(master_key.to_vec()));
+        // Configure the error sanitizer for this master key too, so this path
+        // gets the same redaction guarantees as set_master_key() instead of a
+        // pass-through sanitizer.
+        self.error_sanitizer = Some(ErrorSanitizer::new(master_key, SanitizationLevel::Standard));
         let key_id_for_error = key_id.clone();
         self.key_manager
             .initialize(master_key, key_id, created_by)
@@ -505,6 +522,9 @@ impl KeyStorage {
         master_key: &[u8; 32],
     ) -> Result<(), ConfigError> {
         self.master_key = Some(SecretBytes::new(master_key.to_vec()));
+        // Keep the error sanitizer in sync with the new master key (same as
+        // set_master_key), so errors cover the imported key material.
+        self.error_sanitizer = Some(ErrorSanitizer::new(master_key, SanitizationLevel::Standard));
 
         let mut file = File::open(input_path)
             .map_err(|e| std::io::Error::other(format!("Failed to open import file: {}", e)))?;
@@ -521,7 +541,7 @@ impl KeyStorage {
                 source: None,
             })?;
 
-        self.validate_checksum_by_data(&export.encrypted_data)?;
+        self.validate_import_not_empty(&export.encrypted_data)?;
         let key_data = self.decrypt_data(&export.encrypted_data, master_key)?;
         self.deserialize_key_manager(&key_data)?;
 
@@ -529,10 +549,13 @@ impl KeyStorage {
         Ok(())
     }
 
-    fn validate_checksum_by_data(&self, encrypted_data: &str) -> Result<(), ConfigError> {
-        // Verify the internal consistency of the import data by ensuring it is
-        // non-empty.  The actual integrity check (decryption with the correct
-        // master key) happens in the next step.
+    /// Early sanity check that the import payload is non-empty.
+    ///
+    /// Despite the historical name this is NOT an integrity check: real
+    /// integrity/authenticity is enforced by AEAD-authenticated decryption
+    /// with the master key (any tampered payload fails `decrypt_data`). This
+    /// check only produces a clearer error for empty payloads.
+    fn validate_import_not_empty(&self, encrypted_data: &str) -> Result<(), ConfigError> {
         if encrypted_data.is_empty() {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
@@ -663,6 +686,13 @@ impl KeyStorage {
                 })?;
 
         self.master_key = Some(SecretBytes::new(new_master_key.to_vec()));
+        // Rebuild the error sanitizer so it redacts the NEW master key hex;
+        // the previous sanitizer still holds the old key's hex and would stop
+        // matching after rotation.
+        self.error_sanitizer = Some(ErrorSanitizer::new(
+            new_master_key,
+            SanitizationLevel::Standard,
+        ));
 
         let checksum = Self::calculate_checksum(&reencrypted_data);
         let store = EncryptedKeyStore {
@@ -736,11 +766,20 @@ mod tests {
         assert!(sanitized.contains("***"));
         assert!(!sanitized.contains(&test_key_hex));
 
-        // 测试密钥片段脱敏
-        let fragment_msg = "Error with key fragment: deadbeefcafebabe";
+        // 测试密钥片段脱敏：32+ 位十六进制片段（候选密钥材料）被替换
+        let fragment_msg = "Error with key fragment: 0123456789abcdef0123456789abcdef";
         let sanitized = sanitizer.sanitize(fragment_msg);
         assert!(sanitized.contains("***"));
-        assert!(!sanitized.contains("deadbeefcafebabe"));
+        assert!(!sanitized.contains("0123456789abcdef0123456789abcdef"));
+
+        // 短十六进制串（版本哈希等）刻意保留，保证错误消息可调试
+        let short_hex_msg = "Error with short hash: deadbeefcafebabe";
+        let sanitized_short = sanitizer.sanitize(short_hex_msg);
+        assert!(
+            sanitized_short.contains("deadbeefcafebabe"),
+            "short hashes must stay readable, got: {}",
+            sanitized_short
+        );
 
         // 测试模式匹配脱敏
         let pattern_msg = "key: 12345678, master: abcdefgh, secret: 87654321";
@@ -748,6 +787,36 @@ mod tests {
         assert!(sanitized.contains("key: ***"));
         assert!(sanitized.contains("master: ***"));
         assert!(sanitized.contains("secret: ***"));
+    }
+
+    #[test]
+    fn test_error_sanitizer_preserves_short_hex_uuid_and_versions() {
+        // Over-redaction regression test: short hex runs, UUIDs and small
+        // numeric ids must survive Standard sanitization untouched.
+        let master_key = [0x42; 32];
+        let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Standard);
+
+        let msg =
+            "uuid 123e4567-e89b-12d3-a456-426614174000, hash deadbeefcafebabe, version 12345678";
+        let sanitized = sanitizer.sanitize(msg);
+        assert_eq!(sanitized, msg, "short hashes/UUIDs must not be redacted");
+    }
+
+    #[test]
+    fn test_error_sanitizer_redacts_32_and_64_char_hex() {
+        // Real key material (32-hex 128-bit keys, 64-hex 256-bit keys and
+        // SHA-256 digests) must still be redacted after raising the minimum
+        // hex fragment length to 32.
+        let master_key = [0x99; 32];
+        let sanitizer = ErrorSanitizer::new(&master_key, SanitizationLevel::Standard);
+
+        let key_hex = hex::encode(master_key); // 64 hex chars
+        let hex_32 = "0123456789abcdef0123456789abcdef"; // 32 hex chars
+        let msg = format!("blob {} digest {}", key_hex, hex_32);
+        let sanitized = sanitizer.sanitize(&msg);
+        assert!(!sanitized.contains(&key_hex), "got: {}", sanitized);
+        assert!(!sanitized.contains(hex_32), "got: {}", sanitized);
+        assert!(sanitized.contains("***"));
     }
 
     #[test]
@@ -1435,10 +1504,10 @@ mod tests {
             .unwrap();
 
         // export_keys re-encrypts with a random nonce, so the export's encrypted_data
-        // differs from the store's. validate_checksum_by_data compares the import's
-        // encrypted_data checksum against the EXISTING store's checksum. To make the
-        // import succeed, we build an export file containing the store's exact
-        // encrypted_data (matching checksum) — exercising the happy path of import.
+        // differs from the store's. import_keys decrypts the export payload
+        // directly with the provided master key (AEAD authentication provides
+        // integrity; validate_import_not_empty only rejects empty payloads),
+        // so a genuine export file imports cleanly.
         let store = storage_a.read_store().expect("read_store");
         let export = KeyExport {
             version: 1,
@@ -1473,9 +1542,9 @@ mod tests {
 
     #[test]
     fn test_import_keys_cross_storage_succeeds() {
-        // Cross-storage import with the same master key should succeed because
-        // validate_checksum_by_data checks internal consistency of the import
-        // data, not cross-storage checksum comparison (which was a bug).
+        // Cross-storage import with the same master key should succeed: the
+        // import payload is authenticated by AEAD decryption, and
+        // validate_import_not_empty only rejects empty payloads.
         let temp_dir = tempfile::tempdir().unwrap();
         let master_key = [0xB2; 32];
 
@@ -1502,7 +1571,7 @@ mod tests {
 
     #[test]
     fn test_import_keys_empty_data_errors() {
-        // Empty import data must be rejected by validate_checksum_by_data.
+        // Empty import data must be rejected by validate_import_not_empty.
         let temp_dir = tempfile::tempdir().unwrap();
         let master_key = [0xB2; 32];
 
@@ -1645,13 +1714,13 @@ mod tests {
     }
 
     #[test]
-    fn test_initialize_with_master_key_sets_master_key_for_encryption() {
+    fn test_initialize_with_master_key_enables_sanitizer() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
         let master_key = [0xB8; 32];
 
-        // initialize_with_master_key sets the internal master_key (so save() works)
-        // but does NOT set up the error sanitizer (only set_master_key does that).
+        // initialize_with_master_key sets the internal master_key (so save()
+        // works) AND configures the error sanitizer, just like set_master_key.
         storage
             .initialize_with_master_key(&master_key, "k".to_string(), "u".to_string())
             .unwrap();
@@ -1662,15 +1731,73 @@ mod tests {
             .expect("save must succeed after initialize_with_master_key");
         assert!(temp_dir.path().join("keys.json").exists());
 
-        // The sanitizer is NOT configured by initialize_with_master_key, so
-        // sanitize_error must be a pass-through (no replacement).
+        // The sanitizer IS configured by initialize_with_master_key, so
+        // sanitize_error must redact the master key hex.
         let key_hex = hex::encode(master_key);
         let msg = format!("error with key: {}", key_hex);
         let sanitized = storage.sanitize_error(&msg);
-        assert_eq!(
-            sanitized, msg,
-            "initialize_with_master_key must NOT enable the sanitizer"
+        assert!(
+            sanitized.contains("***") && !sanitized.contains(&key_hex),
+            "sanitizer must redact master key hex, got: {}",
+            sanitized
         );
+    }
+
+    #[test]
+    fn test_rotate_master_key_rebuilds_error_sanitizer() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let old_key = [0xCA; 32];
+        let new_key = [0xCB; 32];
+
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage.set_master_key(&old_key);
+        storage
+            .initialize_with_master_key(&old_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        storage
+            .rotate_master_key(&old_key, &new_key)
+            .expect("rotate_master_key");
+
+        // After rotation the sanitizer must cover the NEW master key hex.
+        let new_hex = hex::encode(new_key);
+        let msg = format!("error with {}", new_hex);
+        let sanitized = storage.sanitize_error(&msg);
+        assert!(
+            !sanitized.contains(&new_hex),
+            "new key hex leaked after rotation: {}",
+            sanitized
+        );
+        assert!(sanitized.contains("***"));
+    }
+
+    #[test]
+    fn test_import_keys_configures_error_sanitizer() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let master_key = [0xB9; 32];
+
+        let src_dir = temp_dir.path().join("src");
+        let mut storage_a = KeyStorage::new(src_dir.clone()).unwrap();
+        storage_a.set_master_key(&master_key);
+        storage_a
+            .initialize_with_master_key(&master_key, "src".to_string(), "u".to_string())
+            .unwrap();
+        let export_path = src_dir.join("export.json");
+        storage_a.export_keys(&export_path).expect("export_keys");
+
+        let dst_dir = temp_dir.path().join("dst");
+        let mut storage_b = KeyStorage::new(dst_dir).unwrap();
+        storage_b
+            .import_keys(&export_path, &master_key)
+            .expect("import_keys");
+
+        // import_keys must keep the error sanitizer in sync with the
+        // imported master key.
+        let key_hex = hex::encode(master_key);
+        let msg = format!("error with {}", key_hex);
+        let sanitized = storage_b.sanitize_error(&msg);
+        assert!(sanitized.contains("***"));
+        assert!(!sanitized.contains(&key_hex));
     }
 
     #[test]
