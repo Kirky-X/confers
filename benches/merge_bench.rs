@@ -10,6 +10,12 @@
 //! Consolidates the former merge_bench, cow_efficiency_bench, and
 //! incremental_merge_bench into a single file.
 
+// The benches below named "deep_merge"/"deep" now build their engines with
+// `MergeStrategy::Replace`: maps deep-merge recursively regardless of strategy,
+// so the measured code path is unchanged (the removed DeepMerge variant was
+// behaviorally identical to Replace). The benchmark names are kept for
+// continuity of the historical baseline.
+
 use confers::merger::{MergeEngine, MergeStrategy};
 use confers::types::{AnnotatedValue, ConfigValue};
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -204,7 +210,7 @@ fn bench_cow_identity_check(c: &mut Criterion) {
 
 /// Deep merge with nested structures (depth 3, 10 children per level).
 fn bench_cow_deep_merge(c: &mut Criterion) {
-    let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+    let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
 
     fn make_nested(depth: usize, prefix: &str) -> ConfigValue {
         if depth == 0 {
@@ -247,7 +253,7 @@ fn bench_merge_strategies(c: &mut Criterion) {
     });
 
     group.bench_function("deep_merge", |b| {
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
 
@@ -282,7 +288,7 @@ fn bench_merge_shallow(c: &mut Criterion) {
         group.bench_with_input(format!("size_{}", size), &size, |b, &size| {
             let base = create_nested_config(1, size, "base");
             let override_val = create_nested_config(1, size, "override");
-            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
 
             b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
         });
@@ -298,7 +304,7 @@ fn bench_merge_deep(c: &mut Criterion) {
         group.bench_with_input(format!("depth_{}", depth), &depth, |b, &depth| {
             let base = create_nested_config(depth, 10, "base");
             let override_val = create_nested_config(depth, 10, "override");
-            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+            let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
 
             b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
         });
@@ -330,7 +336,7 @@ fn bench_incremental_merge(c: &mut Criterion) {
             confers::SourceId::new("bench"),
             "override",
         );
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
 
         b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });
@@ -353,7 +359,7 @@ fn bench_incremental_merge(c: &mut Criterion) {
             confers::SourceId::new("bench"),
             "override",
         );
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
 
         b.iter(|| engine.merge(black_box(&base), black_box(&override_val)));
     });

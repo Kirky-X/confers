@@ -95,13 +95,13 @@ impl MergeEngine {
             (low_inner, high_inner, MergeStrategy::Custom { func, .. }) => {
                 func(&low_inner, &high_inner)
             }
-            (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
-                ConfigValue::String(format!("{}{}{}", l, separator, r))
-            }
+            // Join and JoinAppend behave identically for String+String;
+            // JoinAppend only differs for Array+Array (chained with Append
+            // in the arm below).
             (
                 ConfigValue::String(l),
                 ConfigValue::String(r),
-                MergeStrategy::JoinAppend { separator },
+                MergeStrategy::Join { separator } | MergeStrategy::JoinAppend { separator },
             ) => ConfigValue::String(format!("{}{}{}", l, separator, r)),
             (
                 ConfigValue::Array(l),
@@ -151,7 +151,10 @@ impl MergeEngine {
 
 #[inline]
 fn check_merge_depth(depth: usize, path: &Arc<str>) -> ConfigResult<()> {
-    if depth > MAX_MERGE_DEPTH {
+    // `depth` counts recursion levels starting from 0 at the root merge, so
+    // the deepest allowed level is `MAX_MERGE_DEPTH - 1` and a call at
+    // `MAX_MERGE_DEPTH` exceeds the cap.
+    if depth >= MAX_MERGE_DEPTH {
         return Err(ConfigError::ParseError {
             format: "merge".to_string(),
             message: format!(
@@ -292,8 +295,11 @@ fn values_equal(low: &ConfigValue, high: &ConfigValue, strategy: &MergeStrategy)
         // If they don't, conservatively report "may differ" to avoid O(n) comparison.
         (ConfigValue::Map(l), ConfigValue::Map(r), _) => Arc::ptr_eq(l, r),
         // String join: result differs from low
-        (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::Join { .. }) => false,
-        (ConfigValue::String(_), ConfigValue::String(_), MergeStrategy::JoinAppend { .. }) => false,
+        (
+            ConfigValue::String(_),
+            ConfigValue::String(_),
+            MergeStrategy::Join { .. } | MergeStrategy::JoinAppend { .. },
+        ) => false,
         // Array strategies: result differs from low
         (
             ConfigValue::Array(_),
@@ -314,13 +320,12 @@ fn apply_leaf_strategy(
 ) -> ConfigValue {
     match (low, high, strategy) {
         (_, _, MergeStrategy::Replace) => high.clone(),
-        (ConfigValue::String(l), ConfigValue::String(r), MergeStrategy::Join { separator }) => {
-            ConfigValue::String(format!("{}{}{}", l, separator, r))
-        }
+        // Join and JoinAppend behave identically for String+String; JoinAppend
+        // only differs for Array+Array (chained with Append in the arm below).
         (
             ConfigValue::String(l),
             ConfigValue::String(r),
-            MergeStrategy::JoinAppend { separator },
+            MergeStrategy::Join { separator } | MergeStrategy::JoinAppend { separator },
         ) => ConfigValue::String(format!("{}{}{}", l, separator, r)),
         (
             ConfigValue::Array(l),
@@ -633,7 +638,9 @@ mod tests {
     #[test]
     fn test_check_merge_depth_exceeded() {
         let path: Arc<str> = Arc::from("deep.path");
-        let result = check_merge_depth(MAX_MERGE_DEPTH + 1, &path);
+        // Depth counts from 0, so MAX_MERGE_DEPTH itself is already over the
+        // limit (at most MAX_MERGE_DEPTH levels, depths 0..MAX-1, are allowed).
+        let result = check_merge_depth(MAX_MERGE_DEPTH, &path);
         assert!(result.is_err());
         match result.unwrap_err() {
             ConfigError::ParseError {
@@ -651,12 +658,14 @@ mod tests {
     fn test_check_merge_depth_ok() {
         let path: Arc<str> = Arc::from("ok.path");
         assert!(check_merge_depth(0, &path).is_ok());
-        assert!(check_merge_depth(MAX_MERGE_DEPTH, &path).is_ok());
+        assert!(check_merge_depth(MAX_MERGE_DEPTH - 1, &path).is_ok());
     }
 
     #[test]
-    fn test_merge_deep_merge_strategy_on_maps() {
-        let e = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+    fn test_merge_replace_strategy_still_deep_merges_maps() {
+        // Map + Map deep-merges recursively unconditionally: the strategy name
+        // (Replace vs the removed DeepMerge variant) does not change this.
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         let low_inner = IndexMap::from_iter(vec![(
             Arc::from("a"),
             AnnotatedValue::new(ConfigValue::string("low_a"), SourceId::new("l"), "t.a"),
@@ -677,16 +686,16 @@ mod tests {
         );
         let result = e.merge(&l, &h).unwrap();
         let map = result.inner.as_map().unwrap();
-        // DeepMerge on leaf strings falls to _ => high.clone()
+        // Leaf strings inside merged maps fall to _ => high.clone()
         assert_eq!(map.get("a").unwrap().as_str(), Some("high_a"));
     }
 
     #[test]
-    fn test_merge_deep_merge_strategy_on_non_maps() {
-        let e = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+    fn test_merge_replace_strategy_on_non_maps() {
+        let e = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         let l = AnnotatedValue::new(ConfigValue::string("low"), SourceId::new("l"), "t");
         let h = AnnotatedValue::new(ConfigValue::string("high"), SourceId::new("h"), "t");
-        // DeepMerge on non-map falls to _ => high.inner.clone()
+        // Replace on non-map falls to _ => high.inner.clone()
         assert_eq!(e.merge(&l, &h).unwrap().as_str(), Some("high"));
     }
 
@@ -793,7 +802,9 @@ mod tests {
         let m1 = ConfigValue::Map(Arc::new(IndexMap::new()));
         let m2 = ConfigValue::Map(Arc::new(IndexMap::new()));
         assert!(!values_equal(&m1, &m2, &MergeStrategy::Append));
-        assert!(!values_equal(&m1, &m2, &MergeStrategy::DeepMerge));
+        // Replace compares by deep equality: two empty maps are equal
+        // regardless of Arc identity, so the merge is a no-op.
+        assert!(values_equal(&m1, &m2, &MergeStrategy::Replace));
     }
 
     #[test]
@@ -806,7 +817,7 @@ mod tests {
         let m1 = ConfigValue::Map(Arc::clone(&shared));
         let m2 = ConfigValue::Map(Arc::clone(&shared));
         assert!(values_equal(&m1, &m2, &MergeStrategy::Append));
-        assert!(values_equal(&m1, &m2, &MergeStrategy::DeepMerge));
+        assert!(values_equal(&m1, &m2, &MergeStrategy::Replace));
     }
 
     #[test]
@@ -857,17 +868,17 @@ mod tests {
     }
 
     #[test]
-    fn test_values_equal_deep_merge_non_map() {
-        // DeepMerge on non-map types falls to _ => low == high
+    fn test_values_equal_replace_non_map() {
+        // Replace on non-map types falls to _ => low == high
         assert!(values_equal(
             &ConfigValue::I64(1),
             &ConfigValue::I64(1),
-            &MergeStrategy::DeepMerge
+            &MergeStrategy::Replace
         ));
         assert!(!values_equal(
             &ConfigValue::I64(1),
             &ConfigValue::I64(2),
-            &MergeStrategy::DeepMerge
+            &MergeStrategy::Replace
         ));
     }
 

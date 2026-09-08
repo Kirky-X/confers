@@ -42,10 +42,10 @@ fuzz_target!(|data: &[u8]| {
         create_annotated(data),
         create_annotated(&data[data.len() / 2..]),
     ) {
-        let engine_replace = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
-        let _ = engine_replace.merge(&low, &high);
-
-        let engine_deep = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
-        let _ = engine_deep.merge(&low, &high);
+        // Maps deep-merge recursively regardless of strategy, so a single
+        // Replace-engine run covers the path the former DeepMerge engine
+        // (its behaviorally identical twin) also exercised.
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
+        let _ = engine.merge(&low, &high);
     }
 });

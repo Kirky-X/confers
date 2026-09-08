@@ -65,8 +65,10 @@ mod async_traits_impl {
             Ok(self.get_raw(key).await?.is_some())
         }
         async fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
-            #[allow(deprecated)]
-            Ok(self.get_raw(key).await?.and_then(|v| v.as_string()))
+            Ok(self
+                .get_raw(key)
+                .await?
+                .and_then(|v| v.as_str().map(str::to_owned)))
         }
         async fn get_i64(&self, key: &str) -> ConfersResult<Option<i64>> {
             Ok(self.get_raw(key).await?.and_then(|v| v.as_i64()))
@@ -155,8 +157,9 @@ mod sync_traits {
 
         /// Get string value.
         fn get_string(&self, key: &str) -> ConfersResult<Option<String>> {
-            #[allow(deprecated)]
-            Ok(self.get_raw(key)?.and_then(|v| v.as_string()))
+            Ok(self
+                .get_raw(key)?
+                .and_then(|v| v.as_str().map(str::to_owned)))
         }
 
         /// Get i64 value.
@@ -225,8 +228,15 @@ pub trait ConfigProvider: Send + Sync {
     /// Get all non-sensitive configuration keys.
     ///
     /// Returns keys in dot-notation format (e.g., "database.host").
-    /// Sensitive fields marked `#[config(sensitive = true)]` or `#[config(encrypt = "...")]`
-    /// SHALL NOT appear in the returned list.
+    ///
+    /// # Implementor contract
+    ///
+    /// Sensitive fields marked `#[config(sensitive = true)]` or
+    /// `#[config(encrypt = "...")]` SHALL NOT appear in the returned list.
+    /// This contract is the implementor's responsibility — the library does
+    /// not enforce it. Implementors can use the provided
+    /// [`filter_sensitive_keys`] helper to strip sensitive paths from their
+    /// key list.
     fn keys(&self) -> Vec<String>;
 
     /// Check if a key exists.
@@ -234,7 +244,12 @@ pub trait ConfigProvider: Send + Sync {
         self.get_raw(key).is_some()
     }
 
-    /// Get all configuration keys including sensitive fields.
+    /// Get all configuration keys, optionally including sensitive fields.
+    ///
+    /// The default implementation delegates to [`ConfigProvider::keys`] and
+    /// therefore does NOT include sensitive keys. Implementors may override
+    /// this method to additionally disclose sensitive keys (e.g. for
+    /// diagnostics); the library itself never does.
     ///
     /// Only available in debug builds. In release builds, use `keys()` instead.
     #[cfg(debug_assertions)]
@@ -249,8 +264,8 @@ pub trait ConfigProvider: Send + Sync {
 pub trait ConfigProviderExt: ConfigProvider {
     /// Get a string value by key.
     fn get_string(&self, key: &str) -> Option<String> {
-        #[allow(deprecated)]
-        self.get_raw(key).and_then(|v| v.as_string())
+        self.get_raw(key)
+            .and_then(|v| v.as_str().map(str::to_owned))
     }
 
     /// Get an integer value by key.
@@ -289,15 +304,12 @@ pub trait ConfigProviderExt: ConfigProvider {
                 message: "key not found".to_string(),
             })?;
 
-        let s = {
-            #[allow(deprecated)]
-            let s = value.as_string();
-            s
-        }
-        .ok_or_else(|| crate::error::ConfigError::InvalidValue {
-            key: key.to_string(),
-            expected_type: std::any::type_name::<T>().to_string(),
-            message: "value is not a string".to_string(),
+        let s = value.as_str().map(str::to_owned).ok_or_else(|| {
+            crate::error::ConfigError::InvalidValue {
+                key: key.to_string(),
+                expected_type: std::any::type_name::<T>().to_string(),
+                message: "value is not a string".to_string(),
+            }
         })?;
 
         s.parse::<T>()

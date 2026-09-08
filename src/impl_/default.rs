@@ -984,9 +984,11 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_builder_merge_strategy_deep_merge() {
+        async fn test_builder_merge_strategy_replace_uint_value() {
+            // Formerly used the removed `DeepMerge` variant; `Replace` is
+            // behaviorally equivalent (maps deep-merge unconditionally).
             let config = ConfigImpl::builder()
-                .merge_strategy(MergeStrategy::DeepMerge)
+                .merge_strategy(MergeStrategy::Replace)
                 .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
                 .build()
                 .unwrap();
@@ -1482,9 +1484,11 @@ mod tests {
         }
 
         #[test]
-        fn test_builder_merge_strategy_deep_merge() {
+        fn test_builder_merge_strategy_replace_uint_value() {
+            // Formerly used the removed `DeepMerge` variant; `Replace` is
+            // behaviorally equivalent (maps deep-merge unconditionally).
             let config = ConfigImpl::builder()
-                .merge_strategy(MergeStrategy::DeepMerge)
+                .merge_strategy(MergeStrategy::Replace)
                 .defaults(HashMap::from([("k".to_string(), ConfigValue::uint(1))]))
                 .build()
                 .unwrap();

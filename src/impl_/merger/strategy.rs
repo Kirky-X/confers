@@ -11,6 +11,10 @@ use crate::types::ConfigValue;
 pub type CustomMergeFn = fn(&ConfigValue, &ConfigValue) -> ConfigValue;
 
 /// Merge strategy for combining configuration values.
+///
+/// Note: `Map` + `Map` values always deep-merge recursively regardless of the
+/// configured strategy (see `MergeEngine`), so no dedicated deep-merge
+/// variant exists.
 #[derive(Clone, Copy, Default)]
 pub enum MergeStrategy {
     /// Replace the lower priority value entirely (default)
@@ -24,8 +28,6 @@ pub enum MergeStrategy {
     Prepend,
     /// Join and append: join strings, append arrays
     JoinAppend { separator: &'static str },
-    /// Deep merge maps recursively
-    DeepMerge,
     /// Custom merge function
     Custom {
         /// Custom merge function
@@ -43,7 +45,6 @@ impl std::fmt::Debug for MergeStrategy {
             MergeStrategy::Append => write!(f, "Append"),
             MergeStrategy::Prepend => write!(f, "Prepend"),
             MergeStrategy::JoinAppend { separator } => write!(f, "JoinAppend({:?})", separator),
-            MergeStrategy::DeepMerge => write!(f, "DeepMerge"),
             MergeStrategy::Custom { name, .. } => write!(f, "Custom({:?})", name),
         }
     }
@@ -60,7 +61,6 @@ impl PartialEq for MergeStrategy {
                 MergeStrategy::JoinAppend { separator: a },
                 MergeStrategy::JoinAppend { separator: b },
             ) => a == b,
-            (MergeStrategy::DeepMerge, MergeStrategy::DeepMerge) => true,
             (MergeStrategy::Custom { name: a, .. }, MergeStrategy::Custom { name: b, .. }) => {
                 a == b
             }
@@ -143,12 +143,6 @@ mod tests {
     }
 
     #[test]
-    fn test_deep_merge_strategy() {
-        let s = MergeStrategy::DeepMerge;
-        assert_eq!(s, MergeStrategy::DeepMerge);
-    }
-
-    #[test]
     fn test_join_append_constructor() {
         let s = MergeStrategy::join_append(",");
         assert_eq!(s, MergeStrategy::JoinAppend { separator: "," });
@@ -159,7 +153,6 @@ mod tests {
         assert!(!MergeStrategy::Replace.is_custom());
         assert!(!MergeStrategy::Append.is_custom());
         assert!(!MergeStrategy::Prepend.is_custom());
-        assert!(!MergeStrategy::DeepMerge.is_custom());
         assert!(!MergeStrategy::join(":").is_custom());
         assert!(!MergeStrategy::join_append(":").is_custom());
     }
@@ -193,11 +186,6 @@ mod tests {
     }
 
     #[test]
-    fn test_debug_format_deep_merge() {
-        assert_eq!(format!("{:?}", MergeStrategy::DeepMerge), "DeepMerge");
-    }
-
-    #[test]
     fn test_debug_format_custom() {
         fn noop(_: &ConfigValue, high: &ConfigValue) -> ConfigValue {
             high.clone()
@@ -216,7 +204,6 @@ mod tests {
             MergeStrategy::join_append(","),
             MergeStrategy::join_append(",")
         );
-        assert_eq!(MergeStrategy::DeepMerge, MergeStrategy::DeepMerge);
     }
 
     #[test]
@@ -233,7 +220,6 @@ mod tests {
         assert_ne!(MergeStrategy::Replace, MergeStrategy::Append);
         assert_ne!(MergeStrategy::Append, MergeStrategy::Prepend);
         assert_ne!(MergeStrategy::join(":"), MergeStrategy::join_append(":"));
-        assert_ne!(MergeStrategy::DeepMerge, MergeStrategy::Replace);
         assert_ne!(
             MergeStrategy::join(":"),
             MergeStrategy::Custom {

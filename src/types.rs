@@ -88,7 +88,8 @@ pub struct SourceLocation {
     pub line: usize,
     /// Column number (1-based)
     pub column: usize,
-    /// Full file path for internal diagnostics (not exposed to end users)
+    /// Full file path for internal diagnostics only (never serialized or
+    /// exposed to end users)
     pub(crate) file_path: Option<Box<std::path::PathBuf>>,
 }
 
@@ -98,11 +99,12 @@ impl Serialize for SourceLocation {
         S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("SourceLocation", 4)?;
+        // `file_path` is intentionally omitted: it is internal diagnostic data
+        // and must not be exposed to end users through serialization.
+        let mut s = serializer.serialize_struct("SourceLocation", 3)?;
         s.serialize_field("source_name", &*self.source_name)?;
         s.serialize_field("line", &self.line)?;
         s.serialize_field("column", &self.column)?;
-        s.serialize_field("file_path", &self.file_path)?;
         s.end()
     }
 }
@@ -200,6 +202,10 @@ impl Serialize for ConfigValue {
             ConfigValue::Bytes(b) => {
                 // Serialize as a tagged map `{"$bytes": [u8...]}` so that
                 // deserialization can distinguish Bytes from Array.
+                //
+                // NOTE: this tag is heuristic — a literal map entry
+                // `"$bytes": [1, 2, 3]` is indistinguishable from this
+                // encoding and is always decoded back as `Bytes`.
                 use serde::ser::SerializeMap;
                 let mut map = serializer.serialize_map(Some(1))?;
                 map.serialize_entry("$bytes", b)?;
@@ -305,14 +311,44 @@ impl<'de> Deserialize<'de> for ConfigValue {
             where
                 A: de::MapAccess<'de>,
             {
+                // Buffered first value so the `$bytes` tag can be inspected
+                // without committing to a single interpretation: an untagged
+                // enum accepts both a plain integer array and a regular
+                // annotated value.
+                #[derive(Deserialize)]
+                #[serde(untagged)]
+                enum BytesOrValue {
+                    /// Canonical `ConfigValue::Bytes` payload: a byte array.
+                    Bytes(Vec<u8>),
+                    /// Any regular map value (an `AnnotatedValue`).
+                    Value(AnnotatedValue),
+                }
+
                 // Peek at the first key to detect the `$bytes` tag used by
                 // `ConfigValue::Bytes` serialization.
                 let first_key: Option<String> = map.next_key()?;
 
                 if first_key.as_deref() == Some("$bytes") {
-                    // Tagged bytes payload — reconstruct Bytes variant.
-                    let bytes: Vec<u8> = map.next_value()?;
-                    return Ok(ConfigValue::Bytes(bytes));
+                    // Only treat the entry as the tagged `Bytes` encoding when
+                    // the value is actually a byte array; otherwise this is a
+                    // legitimate map whose first key happens to be "$bytes" —
+                    // consume it (and the rest of the map) as regular entries.
+                    //
+                    // NOTE: this ambiguity is a constraint of the format: a
+                    // literal `"$bytes": [1, 2, 3]` entry cannot be
+                    // distinguished from the tagged encoding and is decoded
+                    // as `Bytes`.
+                    match map.next_value::<BytesOrValue>()? {
+                        BytesOrValue::Bytes(bytes) => return Ok(ConfigValue::Bytes(bytes)),
+                        BytesOrValue::Value(v) => {
+                            let mut m = IndexMap::new();
+                            m.insert(Arc::from("$bytes"), v);
+                            while let Some((k, v)) = map.next_entry::<String, AnnotatedValue>()? {
+                                m.insert(Arc::from(k), v);
+                            }
+                            return Ok(ConfigValue::Map(Arc::new(m)));
+                        }
+                    }
                 }
 
                 // Regular map — collect remaining entries.
@@ -403,15 +439,6 @@ impl ConfigValue {
             ConfigValue::F64(f) => Some(*f),
             ConfigValue::I64(i) => Some(*i as f64),
             ConfigValue::U64(u) => Some(*u as f64),
-            _ => None,
-        }
-    }
-
-    /// Get as string.
-    #[deprecated(since = "0.3.0", note = "Prefer as_str() to avoid allocation")]
-    pub fn as_string(&self) -> Option<String> {
-        match self {
-            ConfigValue::String(s) => Some(s.clone()),
             _ => None,
         }
     }
@@ -699,13 +726,6 @@ impl AnnotatedValue {
         self.inner.as_f64()
     }
 
-    /// Get as string.
-    #[deprecated(since = "0.3.0", note = "Prefer as_str() to avoid allocation")]
-    pub fn as_string(&self) -> Option<String> {
-        #[allow(deprecated)]
-        self.inner.as_string()
-    }
-
     /// Get as string reference.
     pub fn as_str(&self) -> Option<&str> {
         self.inner.as_str()
@@ -815,9 +835,13 @@ impl AnnotatedValue {
         mode: SerializeMode,
         sensitive_paths: &[&str],
     ) -> serde_json::Value {
-        let is_sensitive = sensitive_paths
-            .iter()
-            .any(|p| self.path.as_ref().starts_with(p));
+        let is_sensitive = sensitive_paths.iter().any(|p| {
+            // Segment-aware match (same semantics as
+            // `interface::filter_sensitive_keys`): `db.password` must not
+            // match `db.password_hash`, and `db` must not match `dbx.*`.
+            let path = self.path.as_ref();
+            path == *p || path.starts_with(&format!("{p}."))
+        });
 
         if is_sensitive && mode == SerializeMode::Redacted {
             return serde_json::Value::String("[REDACTED]".to_string());
@@ -1664,6 +1688,55 @@ mod tests {
     }
 
     #[test]
+    fn test_config_value_map_with_literal_bytes_key_roundtrip() {
+        // A legitimate map containing a literal "$bytes" key whose value is
+        // not a plain byte array must deserialize as a Map (not Bytes), keep
+        // the "$bytes" key itself, and preserve all remaining entries.
+        let cv = ConfigValue::map(vec![
+            (
+                "$bytes",
+                AnnotatedValue::new(
+                    ConfigValue::Bytes(vec![1u8, 2, 3]),
+                    SourceId::new("t"),
+                    "$bytes",
+                ),
+            ),
+            (
+                "other",
+                AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("t"), "other"),
+            ),
+        ]);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        let map = deser
+            .as_map()
+            .expect("literal $bytes key with map value must stay a Map");
+        assert_eq!(map.len(), 2);
+        let nested = map.get("$bytes").unwrap();
+        assert!(matches!(&nested.inner, ConfigValue::Bytes(b) if b.as_slice() == [1u8, 2, 3]));
+        assert_eq!(map.get("other").unwrap().as_str(), Some("v"));
+    }
+
+    #[test]
+    fn test_config_value_map_bytes_key_non_array_value() {
+        // "$bytes" with a non-array value must not error (previously the
+        // unguarded Vec<u8> decode failed); it stays a regular map entry.
+        let cv = ConfigValue::map(vec![(
+            "$bytes",
+            AnnotatedValue::new(
+                ConfigValue::string("not-bytes"),
+                SourceId::new("t"),
+                "$bytes",
+            ),
+        )]);
+        let json = serde_json::to_string(&cv).unwrap();
+        let deser: ConfigValue = serde_json::from_str(&json).unwrap();
+        let map = deser.as_map().unwrap();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get("$bytes").unwrap().as_str(), Some("not-bytes"));
+    }
+
+    #[test]
     fn test_config_value_array_serde_roundtrip() {
         let items = vec![
             AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "arr.0"),
@@ -1719,6 +1792,19 @@ mod tests {
         assert_eq!(deser.source_name.as_ref(), "config.toml");
         assert_eq!(deser.line, 42);
         assert_eq!(deser.column, 7);
+        assert_eq!(deser.file_path, None);
+    }
+
+    #[test]
+    fn test_source_location_serialize_omits_file_path() {
+        // The internal file_path must not leak into serialized output.
+        let loc = SourceLocation::from_path(std::path::Path::new("/etc/confers/app.toml"), 1, 2);
+        assert!(loc.file_path.is_some());
+        let json = serde_json::to_string(&loc).unwrap();
+        assert!(!json.contains("file_path"));
+        assert!(json.contains("app.toml"));
+        // Round-trip keeps working and file_path stays internal (None).
+        let deser: SourceLocation = serde_json::from_str(&json).unwrap();
         assert_eq!(deser.file_path, None);
     }
 
@@ -1867,18 +1953,6 @@ mod tests {
     }
 
     #[test]
-    fn test_annotated_value_as_string_deprecated() {
-        #[allow(deprecated)]
-        {
-            let av = AnnotatedValue::new(ConfigValue::string("val"), SourceId::new("t"), "k");
-            assert_eq!(av.as_string(), Some("val".to_string()));
-
-            let non_str = AnnotatedValue::new(ConfigValue::I64(1), SourceId::new("t"), "k");
-            assert_eq!(non_str.as_string(), None);
-        }
-    }
-
-    #[test]
     #[cfg(feature = "json")]
     fn test_to_json_null_bool_int() {
         let null_av = AnnotatedValue::new(ConfigValue::Null, SourceId::new("t"), "k");
@@ -1951,6 +2025,51 @@ mod tests {
         );
         let full = arr_av.to_json_with_mode(SerializeMode::Full, &[]);
         assert!(full.is_array());
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_redacted_segment_matching() {
+        // Sensitive path matching is segment-aware: "db.password" must not
+        // redact "db.password_hash" ...
+        let password_hash = AnnotatedValue::new(
+            ConfigValue::string("salt"),
+            SourceId::new("t"),
+            "db.password_hash",
+        );
+        let redacted = password_hash.to_json_with_mode(SerializeMode::Redacted, &["db.password"]);
+        assert_eq!(redacted, serde_json::Value::String("salt".to_string()));
+
+        // ... and "db" must not redact "dbx.secret".
+        let dbx = AnnotatedValue::new(
+            ConfigValue::string("hidden"),
+            SourceId::new("t"),
+            "dbx.secret",
+        );
+        let redacted = dbx.to_json_with_mode(SerializeMode::Redacted, &["db"]);
+        assert_eq!(redacted, serde_json::Value::String("hidden".to_string()));
+
+        // Exact matches and true sub-paths are still redacted.
+        let secret = AnnotatedValue::new(
+            ConfigValue::string("hush"),
+            SourceId::new("t"),
+            "db.password",
+        );
+        let redacted = secret.to_json_with_mode(SerializeMode::Redacted, &["db.password"]);
+        assert_eq!(
+            redacted,
+            serde_json::Value::String("[REDACTED]".to_string())
+        );
+        let sub = AnnotatedValue::new(
+            ConfigValue::string("hush"),
+            SourceId::new("t"),
+            "db.password.primary",
+        );
+        let redacted = sub.to_json_with_mode(SerializeMode::Redacted, &["db.password"]);
+        assert_eq!(
+            redacted,
+            serde_json::Value::String("[REDACTED]".to_string())
+        );
     }
 
     #[test]

@@ -246,6 +246,9 @@ mod tests {
 
     #[test]
     fn test_merge_deep_strategy() {
+        // Maps deep-merge recursively unconditionally: the strategy name does
+        // not affect this behavior (the removed DeepMerge variant was a no-op
+        // distinct from Replace, so Replace is used here).
         let low_inner = make_map(vec![
             ("a", make_value(ConfigValue::I64(1), 10)),
             ("b", make_value(ConfigValue::I64(2), 10)),
@@ -258,7 +261,7 @@ mod tests {
         ]);
         let high = make_value(high_inner, 20);
 
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         let result = engine.merge(&low, &high).unwrap();
 
         match result.inner {
@@ -326,6 +329,8 @@ mod tests {
 
     #[test]
     fn test_nested_deep_merge() {
+        // Map + Map deep-merges recursively unconditionally, regardless of the
+        // strategy name (Replace is equivalent to the removed DeepMerge).
         let nested_low = make_map(vec![("inner", make_value(ConfigValue::I64(1), 10))]);
         let low_inner = make_map(vec![("outer", make_value(nested_low, 10))]);
         let low = make_value(low_inner, 10);
@@ -340,7 +345,7 @@ mod tests {
         let high_inner = make_map(vec![("outer", make_value(nested_high, 20))]);
         let high = make_value(high_inner, 20);
 
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         let result = engine.merge(&low, &high).unwrap();
 
         match result.inner {
@@ -388,7 +393,9 @@ mod tests {
 
     #[test]
     fn test_merge_deeply_nested() {
-        // Test 5 levels of nesting
+        // Test 5 levels of nesting. Map + Map deep-merges recursively
+        // unconditionally, so Replace covers the same path as the removed
+        // DeepMerge variant.
         let deep = make_value(
             ConfigValue::Map(Arc::new(indexmap::IndexMap::from([(
                 Arc::from("level1"),
@@ -403,7 +410,7 @@ mod tests {
             10,
         );
 
-        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::DeepMerge);
+        let engine = MergeEngine::new().with_default_strategy(MergeStrategy::Replace);
         let result = engine.merge(&deep, &deep).unwrap();
 
         // Should not panic with deep nesting
