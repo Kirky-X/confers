@@ -1,0 +1,43 @@
+# Gitleaks configuration for confers.
+#
+# This repository contains sanitization *self-tests* whose fixtures are
+# deliberately secret-shaped public example values (the jwt.io sample token,
+# the AWS documentation example keys, sequential fake keys). Those fixtures
+# are allowlisted below so scans stay focused on real leaks; the
+# `// pragma: allowlist secret` comments in source mark the same spots for
+# human reviewers.
+#
+# Git history also contains test fixtures that lived in files removed by
+# earlier refactors; those historical paths are allowlisted explicitly.
+#
+# Everything else keeps gitleaks defaults — this file extends, not replaces.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Sanitizer self-test fixtures (public example values), local tooling artifacts, and removed test files (history only)"
+paths = [
+  # Sanitizer self-test modules: secret-shaped strings here are fixtures
+  # under test, not credentials.
+  '''(^|/)src/error/sanitize\.rs$''',
+  '''(^|/)src/security/error_sanitization\.rs$''',
+  # Local tooling cache (never committed).
+  '''(^|/)\.mimosa/''',
+  # Removed by earlier refactors; gitleaks only sees these in git history.
+  '''(^|/)src/security/security_tests\.rs$''',
+  '''(^|/)tests/integration_etcd\.rs$''',
+  '''(^|/)tests/integration_remote\.rs$''',
+  '''(^|/)examples/src/08-audit/08-audit-sensitive_fields\.rs$''',
+  '''(^|/)examples/src/examples/remote_etcd\.rs$''',
+]
+regexes = [
+  # AWS documentation example keys.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+  # jwt.io documentation sample token (and the truncated form used in tests).
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]*''',
+  '''eyJhbGciOiJIUzI1NiJ9\.signature''',
+  # Sequential fake keys used in sanitizer/error tests (incl. git history).
+  '''abcdefghijklmnopqrstuvwxyz0123456789ABCD''',
+  '''abcdef0123456789abcdef0123456789''',
+]
