@@ -687,6 +687,7 @@ dependencies = [
  "indexmap",
  "ipnet",
  "itoa",
+ "log",
  "moka",
  "notify-debouncer-full",
  "proptest",

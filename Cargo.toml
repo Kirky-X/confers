@@ -62,6 +62,7 @@ similar = { version = "3.1", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
 getset = "0.1"
 itoa = "1.0"
+log = { workspace = true, optional = true }
 
 [workspace]
 members = ["macros", "examples"]
@@ -91,6 +92,7 @@ darling = "0.24"
 futures = "0.3"
 
 indexmap = { version = "2.13", features = ["serde"] }
+log = "0.4"
 proc-macro2 = "1.0"
 proptest = "1.11"
 quote = "1.0"
@@ -133,7 +135,7 @@ typescript-schema = ["schema"]
 security = ["encryption", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
-watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait"]
+watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm", "dep:getrandom"]
 cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono"]
 schema = ["dep:schemars"]
@@ -153,7 +155,7 @@ etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwes
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
 # Message bus
-config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream"]
+config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream", "dep:log"]
 nats-bus = ["config-bus", "dep:async-nats"]
 redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 
