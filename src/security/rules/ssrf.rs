@@ -75,6 +75,15 @@ impl SsrfValidator {
     }
 
     /// Add URLs/patterns to the whitelist (these bypass SSRF checks).
+    ///
+    /// # Blocked-IP exceptions are never whitelisted
+    ///
+    /// The whitelist only exempts non-blocked-IP violations (the HTTPS-scheme
+    /// check and malformed-host warnings). Hosts that are literal private or
+    /// reserved IP addresses are **always** reported as a `Critical` violation,
+    /// even when listed here — so an internal address such as
+    /// `https://127.0.0.1` in the whitelist cannot be used to bypass the SSRF
+    /// blocked-IP protection. Prefer whitelisting public hosts only.
     pub fn with_whitelist(mut self, urls: Vec<String>) -> Self {
         self.whitelist = urls;
         self
@@ -153,12 +162,8 @@ impl SecurityValidator for SsrfValidator {
                 continue;
             }
 
-            // Check whitelist first
-            if self.is_whitelisted(url_str) {
-                continue;
-            }
-
-            // Parse URL
+            // Parse URL first: an unparseable URL can never be whitelisted
+            // and is always reported.
             let parsed = match url::Url::parse(url_str) {
                 Ok(u) => u,
                 Err(_) => {
@@ -172,8 +177,13 @@ impl SecurityValidator for SsrfValidator {
                 }
             };
 
+            // The whitelist only exempts non-blocked-IP violations; the
+            // private/reserved IP check below runs unconditionally so a
+            // whitelisted internal address cannot bypass SSRF protection.
+            let whitelisted = self.is_whitelisted(url_str);
+
             // Check scheme
-            if self.enforce_https && parsed.scheme() != "https" {
+            if !whitelisted && self.enforce_https && parsed.scheme() != "https" {
                 violations.push(SecurityViolation {
                     validator: self.name().to_string(),
                     field: Some(self.config_key.clone()),
@@ -182,7 +192,8 @@ impl SecurityValidator for SsrfValidator {
                 });
             }
 
-            // Check host against blocked IP ranges
+            // Check host against blocked IP ranges (unconditional: the
+            // whitelist does not exempt blocked-IP violations)
             if let Some(host) = parsed.host_str() {
                 // Strip brackets from IPv6 addresses (e.g. "[::1]" -> "::1")
                 // Malformed brackets (e.g. "[::1") → report as violation, don't silently skip
@@ -204,8 +215,9 @@ impl SecurityValidator for SsrfValidator {
                             severity: ViolationSeverity::Critical,
                         });
                     }
-                } else if malformed_ipv6 {
+                } else if malformed_ipv6 && !whitelisted {
                     // Malformed IPv6 address that can't be parsed — flag as warning
+                    // (exempted for whitelisted URLs: not a blocked-IP violation)
                     violations.push(SecurityViolation {
                         validator: self.name().to_string(),
                         field: Some(self.config_key.clone()),
@@ -362,10 +374,50 @@ mod tests {
     #[test]
     fn test_whitelist_exact_host_match() {
         let validator = SsrfValidator::new().with_whitelist(vec!["https://127.0.0.1".to_string()]);
-        // Exact host match with subpath — should be whitelisted
+        // Whitelist matching itself still works for exact hosts...
         assert!(validator.is_whitelisted("https://127.0.0.1/admin"));
         // Exact host, no subpath
         assert!(validator.is_whitelisted("https://127.0.0.1"));
+    }
+
+    #[test]
+    fn test_whitelist_does_not_bypass_blocked_ip() {
+        // A whitelist entry containing an internal address must NOT bypass the
+        // blocked-IP check: a Critical violation is still produced.
+        let validator = SsrfValidator::new().with_whitelist(vec!["https://127.0.0.1".to_string()]);
+        let config = TestProvider::new().with_value("ssrf.allowed_urls", "https://127.0.0.1/admin");
+        let result = validator.validate(&config);
+        assert!(
+            result.is_err(),
+            "whitelist must not bypass blocked-IP check"
+        );
+        let violations = result.unwrap_err();
+        assert!(violations.iter().any(
+            |v| v.severity == ViolationSeverity::Critical && v.message.contains("private")
+        ));
+
+        // Same for other private ranges in the whitelist.
+        let validator = SsrfValidator::new().with_whitelist(vec!["https://10.0.0.1".to_string()]);
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "https://10.0.0.1/internal");
+        assert!(validator.validate(&config).is_err());
+    }
+
+    #[test]
+    fn test_whitelist_exempts_non_blocked_violations_only() {
+        // Whitelisted public URL over HTTP: the non-HTTPS warning is exempted
+        // (it is not a blocked-IP violation) and the URL passes.
+        let validator =
+            SsrfValidator::new().with_whitelist(vec!["http://api.example.com".to_string()]);
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "http://api.example.com/webhook");
+        assert!(validator.validate(&config).is_ok());
+
+        // A non-whitelisted public URL over HTTP still yields the warning.
+        let validator = SsrfValidator::new();
+        let config =
+            TestProvider::new().with_value("ssrf.allowed_urls", "http://other.example.com/webhook");
+        assert!(validator.validate(&config).is_err());
     }
 
     #[test]

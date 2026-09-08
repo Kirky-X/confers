@@ -49,6 +49,11 @@ pub trait SensitiveData {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum SensitivityLevel {
     /// 低敏感度 - 内部数据
+    ///
+    /// By design, `Low` sensitivity is treated as non-secret: for this level
+    /// [`SecureString::new`] keeps the **original text** as its display name
+    /// (no masking), and `is_highly_sensitive` returns `false`. Do not use
+    /// `Low` for credentials or secrets.
     #[default]
     Low,
     /// 中敏感度 - 用户数据
@@ -137,6 +142,8 @@ impl SecureString {
             SensitivityLevel::Critical => "[SENSITIVE]".to_string(),
             SensitivityLevel::High => format!("[{} chars]", string.len()),
             SensitivityLevel::Medium => format!("[{} chars]", string.len()),
+            // Design choice: Low sensitivity is non-secret by definition, so
+            // the original text is intentionally kept as the display name.
             SensitivityLevel::Low => string.clone(),
         };
         let data = string.into_bytes();
@@ -165,6 +172,11 @@ impl SecureString {
     }
 
     /// 获取字符串引用
+    ///
+    /// If the internal bytes are not valid UTF-8, the literal placeholder
+    /// `"[invalid utf-8]"` is returned instead: invalid bytes are never
+    /// partially replaced and this never panics. The raw bytes remain
+    /// accessible via [`Self::as_bytes`].
     pub fn as_str(&self) -> &str {
         // 安全: 转换为字符串切片
         std::str::from_utf8(&self.data).unwrap_or("[invalid utf-8]")
@@ -179,8 +191,16 @@ impl SecureString {
     ///
     /// # 警告
     ///
-    /// 返回的 `String` 不会自动清零，请确保妥善处理。调用后原始 SecureString
-    /// 被移动并 drop，内部缓冲区会被安全清零。
+    /// By design this **always produces a plaintext copy** of the secret: the
+    /// returned `String` is a fresh heap allocation that is NOT zeroized when
+    /// dropped, and that copy cannot be avoided when handing the value to APIs
+    /// requiring `String`. Ensure the result is handled securely (e.g.
+    /// overwritten after use) and never logged or serialized. After this call
+    /// the original `SecureString` is moved and dropped, and its internal
+    /// buffer is zeroed.
+    ///
+    /// Non-UTF-8 content yields an empty `String` (see [`Self::as_str`] for
+    /// the borrowed variant's placeholder behavior).
     #[allow(clippy::wrong_self_convention)] // Consumes self intentionally for conversion
     pub fn to_plain_string(self) -> String {
         // Convert to String; self is dropped (and zeroed) at end of this function.

@@ -14,10 +14,19 @@
 //! - **错误消息过滤**: 过滤包含敏感信息的错误消息
 //! - **自定义脱敏规则**: 支持自定义脱敏模式和规则
 
-use crate::security::patterns::SENSITIVE_KEYWORDS;
+use crate::security::patterns::{SENSITIVE_KEYWORDS, contains_as_token};
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock, RwLock};
+
+/// Maximum number of characters [`ErrorSanitizer::sanitize`] processes.
+///
+/// Input longer than this is truncated (on a char boundary) before pattern
+/// matching. The built-in regexes are linear-time (the `regex` crate
+/// guarantees no catastrophic backtracking); the cap is defense-in-depth
+/// against unbounded input sizes, and content beyond the cap is dropped
+/// rather than leaked.
+const MAX_SANITIZE_INPUT_CHARS: usize = 10_000;
 
 /// 敏感信息模式
 static SENSITIVE_PATTERNS: OnceLock<Vec<(Regex, Replacement)>> = OnceLock::new();
@@ -158,8 +167,17 @@ impl ErrorSanitizer {
     }
 
     /// 脱敏错误消息
+    ///
+    /// Input longer than [`MAX_SANITIZE_INPUT_CHARS`] characters is truncated
+    /// before matching (see the constant's documentation).
     pub fn sanitize(&self, message: &str) -> String {
-        let mut result = message.to_string();
+        // Truncate oversized input before matching, counting characters so the
+        // cut always lands on a UTF-8 boundary.
+        let mut result = if message.chars().count() > MAX_SANITIZE_INPUT_CHARS {
+            message.chars().take(MAX_SANITIZE_INPUT_CHARS).collect()
+        } else {
+            message.to_string()
+        };
 
         // 应用内置规则
         for (pattern, replacement) in get_sensitive_patterns().iter() {
@@ -197,6 +215,11 @@ impl ErrorSanitizer {
     }
 
     /// 检查消息是否包含敏感信息
+    ///
+    /// Keywords are matched with token boundaries (see
+    /// `patterns::contains_as_token`), consistent with the word-boundary
+    /// behavior of strict-mode sanitization: `my_key` matches the keyword
+    /// `key`, while `monkey`, `whiskey`, or `secretary` do not.
     pub fn contains_sensitive(&self, message: &str) -> bool {
         // 检查是否匹配任何敏感模式
         for (pattern, _) in get_sensitive_patterns().iter() {
@@ -205,7 +228,7 @@ impl ErrorSanitizer {
             }
         }
 
-        // 检查敏感关键词
+        // 检查敏感关键词（token 边界匹配，避免子串误报）
         let keywords = self
             .sensitive_keywords
             .read()
@@ -213,7 +236,7 @@ impl ErrorSanitizer {
         let message_lower = message.to_lowercase();
         keywords
             .iter()
-            .any(|keyword| message_lower.contains(keyword))
+            .any(|keyword| contains_as_token(&message_lower, keyword))
     }
 
     /// 批量脱敏
@@ -504,26 +527,33 @@ impl SensitiveDataFilter {
     }
 
     /// 过滤消息
+    ///
+    /// Evaluation order: explicit allowed patterns short-circuit first, then
+    /// blocked patterns are checked unconditionally, and only then is the
+    /// message sanitized if it contains sensitive data.
     pub fn filter(&self, message: &str) -> FilterResult {
-        // Check allowed patterns first — if any match, skip sanitization entirely
+        // Allowed patterns short-circuit: explicitly allowed messages skip
+        // every other check.
         for pattern in &self.allowed_patterns {
             if pattern.is_match(message) {
                 return FilterResult::Allowed(message.to_string());
             }
         }
 
-        // 先检查是否包含敏感数据
-        if !self.sanitizer.contains_sensitive(message) {
-            return FilterResult::Allowed(message.to_string());
-        }
-
-        // 检查是否被阻止
+        // Blocked patterns are checked unconditionally — including for
+        // messages that contain no sensitive keyword — so blocking rules can
+        // never be bypassed by keyword-free wording.
         for pattern in &self.blocked_patterns {
             if pattern.is_match(message) {
                 return FilterResult::Blocked {
                     reason: "message matches blocked pattern".to_string(),
                 };
             }
+        }
+
+        // 无敏感数据的消息原样放行
+        if !self.sanitizer.contains_sensitive(message) {
+            return FilterResult::Allowed(message.to_string());
         }
 
         // 脱敏并允许
@@ -639,6 +669,28 @@ mod tests {
             }
             _ => unreachable!("Expected sanitized result"),
         }
+    }
+
+    #[test]
+    fn test_sanitize_input_length_cap() {
+        let sanitizer = ErrorSanitizer::new();
+
+        // Input beyond the cap is truncated before matching: sensitive data
+        // past the cap is dropped entirely and never appears in the output.
+        let mut oversized = "a".repeat(MAX_SANITIZE_INPUT_CHARS + 5_000);
+        oversized.push_str(" password: supersecret123"); // pragma: allowlist secret
+        let result = sanitizer.sanitize(&oversized);
+        assert!(!result.contains("supersecret123"));
+        assert!(result.chars().count() <= MAX_SANITIZE_INPUT_CHARS);
+
+        // Sensitive data within the cap is still masked as usual.
+        let within = format!(
+            "{} password: abc",
+            "x".repeat(MAX_SANITIZE_INPUT_CHARS - 20)
+        ); // pragma: allowlist secret
+        let result = sanitizer.sanitize(&within);
+        assert!(!result.contains("password: abc"));
+        assert!(result.contains("***"));
     }
 
     #[test]
@@ -817,6 +869,20 @@ mod tests {
     }
 
     #[test]
+    fn test_contains_sensitive_token_boundaries() {
+        // Token-bounded keywords match.
+        let sanitizer = ErrorSanitizer::new();
+        assert!(sanitizer.contains_sensitive("my_key is configured"));
+        assert!(sanitizer.contains_sensitive("client_secret: xxx")); // pragma: allowlist secret
+        // Substrings inside larger words no longer match (no false positives).
+        assert!(!sanitizer.contains_sensitive("the monkey escaped"));
+        assert!(!sanitizer.contains_sensitive("a whiskey bar"));
+        assert!(!sanitizer.contains_sensitive("the secretary will call"));
+        assert!(!sanitizer.contains_sensitive("the author wrote a book"));
+        assert!(!sanitizer.contains_sensitive("keyboard layout"));
+    }
+
+    #[test]
     fn test_sanitize_with_indicator() {
         let sanitizer = ErrorSanitizer::new();
         let (sanitized, flagged) = sanitizer.sanitize_with_indicator("API Key: sk-abcdef");
@@ -964,6 +1030,27 @@ mod tests {
         assert_eq!(
             filter.add_blocked_pattern(r"[").unwrap_err(),
             Error::InvalidPattern
+        );
+    }
+
+    #[test]
+    fn test_filter_blocks_message_without_sensitive_keyword() {
+        // Regression: blocked patterns were previously skipped for messages
+        // that contained no sensitive keyword. A message matching a blocked
+        // rule must be blocked even when keyword-free.
+        let mut filter = SensitiveDataFilter::new();
+        filter.add_blocked_pattern(r"INTERNAL_ERROR_\d+").unwrap();
+        let result = filter.filter("INTERNAL_ERROR_42 occurred");
+        assert!(result.is_blocked());
+        assert!(!result.is_allowed());
+
+        // A blocked-pattern hit takes precedence over sanitization.
+        let mut filter = SensitiveDataFilter::new();
+        filter.add_blocked_pattern(r"session_\d+").unwrap();
+        assert!(
+            filter
+                .filter("session_99 with API Key: sk-abcdef")
+                .is_blocked()
         );
     }
 

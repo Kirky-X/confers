@@ -14,7 +14,9 @@
 //! - **输入清理**: 提供输入清理和验证功能
 //! - **白名单验证**: 支持白名单格式验证
 
-use crate::security::patterns::{SENSITIVE_DETECTION_PATTERNS, SENSITIVE_KEYWORDS};
+use crate::security::patterns::{
+    SENSITIVE_DETECTION_PATTERNS, SENSITIVE_KEYWORDS, is_match_with_token_boundary,
+};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
@@ -35,7 +37,17 @@ static DEFAULT_DANGEROUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         Regex::new(r"2>").unwrap(),
         Regex::new(r"\.\.[/\\]").unwrap(),
         Regex::new(r"[/\\]\.\.[/\\]").unwrap(),
-        Regex::new(r"(?i)(;?\s*(drop|delete|update|insert|alter|create)\b)").unwrap(),
+        // SQL injection patterns require SQL syntax context: a statement
+        // separator, a classic keyword pair, or a trailing comment. Bare SQL
+        // keywords (e.g. "Please delete this item") are ordinary English and
+        // must NOT be rejected.
+        Regex::new(r"(?i);\s*(drop|delete|update|insert|alter|create|truncate|exec|merge)\b")
+            .unwrap(),
+        Regex::new(
+            r"(?i)\b(drop\s+table|drop\s+database|drop\s+index|delete\s+from|insert\s+into|alter\s+table|create\s+table|truncate\s+table)\b",
+        )
+        .unwrap(),
+        Regex::new(r"(?i)\bupdate\s+\w+\s+set\b").unwrap(),
         Regex::new(r"(?i)(union\s+select\b)").unwrap(),
         Regex::new(r"(?i)'+\s*(or|and)\b").unwrap(),
         Regex::new(r"(?i)--\s*$").unwrap(),
@@ -110,8 +122,13 @@ impl SensitiveDataDetector {
         }
 
         // 检查字段值是否匹配敏感模式
+        // Patterns are matched with token boundaries (see
+        // `patterns::is_match_with_token_boundary`): `my_secret` and
+        // `api_key` match, while `secretary`, `author`, or `monkey` do not.
         for pattern in &self.sensitive_patterns {
-            if pattern.is_match(&field_lower) || pattern.is_match(&value_lower) {
+            if is_match_with_token_boundary(pattern, &field_lower)
+                || is_match_with_token_boundary(pattern, &value_lower)
+            {
                 return SensitivityResult::Medium {
                     field: field_name.to_string(),
                     reason: format!("sensitive pattern detected: {}", pattern.as_str()),
@@ -850,6 +867,79 @@ mod tests {
         assert!(validator.validate_string("admin'--").is_err());
         // DELETE
         assert!(validator.validate_string("; DELETE FROM accounts").is_err());
+    }
+
+    #[test]
+    fn test_sql_patterns_require_sql_context() {
+        let validator = InputValidator::new();
+
+        // Ordinary English containing bare SQL keywords must NOT be rejected
+        // (regression: the old keyword regex flagged any text containing
+        // delete/update/create/insert/alter).
+        for normal in [
+            "Please delete this item",
+            "Please update your settings",
+            "We create amazing products",
+            "Insert coin to continue",
+            "The hero has an alter ego",
+            "updated documentation",
+        ] {
+            assert!(
+                validator.validate_string(normal).is_ok(),
+                "normal text '{normal}' must not be flagged as SQL injection"
+            );
+        }
+
+        // Real SQL injection (with SQL syntax context) is still rejected.
+        for malicious in [
+            "'; DROP TABLE users--",
+            "1 UNION SELECT * FROM users",
+            "; DELETE FROM accounts",
+            "x'; INSERT INTO users VALUES('a')",
+            "update users set name='pwned'",
+            "drop table users",
+            "drop database prod",
+            "admin'--",
+        ] {
+            assert!(
+                validator.validate_string(malicious).is_err(),
+                "SQL injection '{malicious}' must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sensitive_detection_token_boundaries() {
+        let detector = SensitiveDataDetector::new();
+        // Token-bounded keywords/patterns are still detected.
+        assert!(
+            detector
+                .is_sensitive("my_secret", "value")
+                .needs_protection()
+        );
+        assert!(detector.is_sensitive("api_key", "value").needs_protection());
+        assert!(
+            detector
+                .is_sensitive("login", "my_password value")
+                .needs_protection()
+        );
+        // Words merely containing a keyword as a substring are not flagged.
+        assert!(
+            !detector
+                .is_sensitive("secretary", "value")
+                .needs_protection()
+        );
+        assert!(!detector.is_sensitive("monkey", "value").needs_protection());
+        assert!(
+            !detector
+                .is_sensitive("author_name", "bob")
+                .needs_protection()
+        );
+        assert!(
+            !detector
+                .is_sensitive("turkey_count", "12")
+                .needs_protection()
+        );
     }
 
     #[test]

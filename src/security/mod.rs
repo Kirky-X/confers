@@ -379,11 +379,19 @@ impl EnvSecurityValidator {
 
     /// Validate an environment variable value.
     ///
+    /// Checks control characters, null bytes, shell expansion (`${...}`),
+    /// dangerous shell metacharacters, and the configured value-length limit.
+    ///
+    /// # Scope of validation for `enc:` values
+    ///
     /// When `allow_encrypted_values` is enabled and the value starts with
-    /// `"enc:"`, only the base64 format is checked — control-character,
-    /// null-byte, and dangerous-pattern checks are intentionally skipped
-    /// because encrypted content is trusted to be safe. This is a deliberate
-    /// design decision: callers opt in via `EnvironmentValidationConfig`.
+    /// `"enc:"`, **only the base64 character set of the payload is verified**
+    /// (see [`validate_encrypted_format`]). Control-character, null-byte,
+    /// shell-expansion, dangerous-pattern, and length checks are all skipped,
+    /// and the payload is never decrypted or otherwise inspected here — the
+    /// scope of validation for `enc:` values is exactly this format check.
+    /// This is a deliberate design decision: callers opt in via
+    /// `EnvironmentValidationConfig`.
     pub fn validate_env_value(&self, value: &str) -> Result<(), EnvSecurityError> {
         if self.config.allow_encrypted_values && is_encrypted_value(value) {
             validate_encrypted_format(value)?;
@@ -430,19 +438,25 @@ impl EnvSecurityValidator {
 
     /// Validate a complete environment variable mapping.
     ///
-    /// Validates both names and values: each env name is checked via
-    /// [`Self::validate_env_name`] (with the corresponding value for encrypted-value
-    /// bypass), and each value is checked via [`Self::validate_env_value`].
+    /// The mapping maps configuration field names to environment variable
+    /// *names*, and only names are validated here: each env name must match
+    /// the allowed naming format and not hit a blocked pattern (see
+    /// [`Self::validate_env_name`]), and each field name must be non-empty and
+    /// free of spaces.
+    ///
+    /// Environment variable **values** are intentionally not validated by
+    /// this method — a name-only mapping carries no values. Actual values are
+    /// validated via [`Self::validate_env_value`] at the point where they are
+    /// read and injected (see [`ConfigInjector::inject`] and the
+    /// `inject_from_env!` macro, which both validate the real value).
     pub fn validate_env_mapping(
         &self,
         mapping: &HashMap<String, String>,
     ) -> Result<(), EnvSecurityError> {
         for (field_name, env_name) in mapping {
-            // Validate name with value context (enables enc: bypass for blocked names)
-            self.validate_env_name(env_name, Some(env_name.as_str()))?;
-
-            // Validate the value itself
-            self.validate_env_value(env_name)?;
+            // Only the naming format of the env var is checked here; a
+            // name-only mapping carries no value to validate.
+            self.validate_env_name(env_name, None)?;
 
             // Also validate that the field name is reasonable
             if field_name.is_empty() || field_name.contains(' ') {
@@ -462,15 +476,23 @@ impl EnvSecurityValidator {
         patterns.iter().map(|p| compile_pattern(p)).collect()
     }
 
-    /// Sanitize an environment variable value for logging
+    /// Sanitize an environment variable value for logging.
+    ///
+    /// Values are genuinely **masked**, not merely truncated: values longer
+    /// than 4 characters keep only their first and last character with the
+    /// middle replaced by `***` (e.g. `"abcdef"` → `"a***f"`), and values of
+    /// up to 4 characters are masked entirely so no character leaks. The
+    /// output is therefore always at most 5 characters, and the full value
+    /// never survives sanitization.
     pub fn sanitize_for_logging(&self, value: &str) -> String {
-        // 按字符计数避免多字节 UTF-8 切片 panic
+        // Count by chars to avoid slicing into multi-byte UTF-8 characters.
         let char_count = value.chars().count();
-        if char_count > 100 {
-            let prefix: String = value.chars().take(97).collect();
-            format!("{}...", prefix)
+        if char_count <= 4 {
+            "*".repeat(char_count)
         } else {
-            value.to_string()
+            let first = value.chars().next().unwrap_or('*');
+            let last = value.chars().next_back().unwrap_or('*');
+            format!("{first}***{last}")
         }
     }
 
@@ -710,6 +732,48 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_env_mapping_only_validates_names() {
+        // Regression: validate_env_mapping must not treat the env var *name*
+        // as a value. With a custom allowed pattern admitting names that would
+        // fail VALUE validation (parentheses), only the name format matters.
+        let config = EnvironmentValidationConfig::new()
+            .with_custom_allowed_patterns(vec![r"^[A-Z][A-Z0-9_()]*$".to_string()]);
+        let validator = EnvSecurityValidator::with_config(config);
+
+        let mut mapping = HashMap::new();
+        mapping.insert("field".to_string(), "MY(VAR)".to_string());
+        assert!(
+            validator.validate_env_mapping(&mapping).is_ok(),
+            "name must not be validated as a value"
+        );
+
+        // Name-format violations are still rejected.
+        let mut bad = HashMap::new();
+        bad.insert("field".to_string(), "lower_case_name".to_string());
+        assert!(validator.validate_env_mapping(&bad).is_err());
+    }
+
+    #[test]
+    fn test_sanitize_for_logging_masks_values() {
+        let validator = EnvSecurityValidator::default();
+
+        // Short values (<= 4 chars) are masked entirely.
+        assert_eq!(validator.sanitize_for_logging(""), "");
+        assert_eq!(validator.sanitize_for_logging("a"), "*");
+        assert_eq!(validator.sanitize_for_logging("abcd"), "****");
+        // Longer values keep only the first and last character.
+        assert_eq!(validator.sanitize_for_logging("abcdef"), "a***f");
+        assert_eq!(validator.sanitize_for_logging(&"s".repeat(150)), "s***s");
+        // Multi-byte characters are masked without panicking.
+        assert_eq!(validator.sanitize_for_logging("密码测试值"), "密***值");
+        // The full value never survives sanitization.
+        let secret = "super-secret-password-do-not-leak";
+        let sanitized = validator.sanitize_for_logging(secret);
+        assert_eq!(sanitized, "s***k");
+        assert!(!sanitized.contains(secret));
+    }
+
+    #[test]
     fn test_custom_length_limits() {
         let config = EnvironmentValidationConfig::new()
             .with_max_name_length(100)
@@ -847,14 +911,14 @@ pub use error_sanitization::{
 
 // ── Public API re-exports ──────────────────────────────────────────────
 #[cfg(feature = "security-rules")]
-pub use config_injector::{ConfigInjector, ConfigInjectionError, EnvironmentConfig};
+pub use config_injector::{ConfigInjectionError, ConfigInjector, EnvironmentConfig};
 #[cfg(feature = "security-rules")]
 pub use input_validation::{
-    ConfigValidator, ConfigValidatorBuilder, ConfigValidationError, ConfigValidationResult,
-    InputValidator, InputValidationError, SensitiveDataDetector, SensitivityResult,
+    ConfigValidationError, ConfigValidationResult, ConfigValidator, ConfigValidatorBuilder,
+    InputValidationError, InputValidator, SensitiveDataDetector, SensitivityResult,
 };
 #[cfg(feature = "encryption")]
 pub use secure_string::{
-    SensitiveData, SensitivityLevel, SecureString, SecureStringBuilder,
-    allocated_secure_strings, deallocated_secure_strings,
+    SecureString, SecureStringBuilder, SensitiveData, SensitivityLevel, allocated_secure_strings,
+    deallocated_secure_strings,
 };

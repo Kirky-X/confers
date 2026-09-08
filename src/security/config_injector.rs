@@ -33,7 +33,7 @@
 //! }
 //! ```
 
-use crate::security::patterns::SENSITIVE_DETECTION_PATTERNS;
+use crate::security::patterns::{SENSITIVE_DETECTION_PATTERNS, is_match_with_token_boundary};
 use crate::security::{EnvSecurityError, EnvSecurityValidator};
 use regex::Regex;
 use std::collections::HashMap;
@@ -127,6 +127,11 @@ impl InjectionRateLimiter {
             return Ok(());
         }
 
+        // A zero quota rejects every request outright.
+        if self.max_requests == 0 {
+            return Err(self.window_seconds);
+        }
+
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -140,16 +145,23 @@ impl InjectionRateLimiter {
                     .compare_exchange(0, now_secs, Ordering::SeqCst, Ordering::SeqCst)
                     .is_ok()
                 {
+                    // The first request starts the window AND consumes one
+                    // slot from the quota (no free request).
+                    self.window_counter.store(1, Ordering::SeqCst);
                     return Ok(());
                 }
                 continue;
             }
 
-            if now_secs - window_start < self.window_seconds {
+            // saturating_sub defends against clock roll-back: if the wall
+            // clock moved behind window_start, elapsed saturates to 0 instead
+            // of panicking on unsigned underflow.
+            let elapsed = now_secs.saturating_sub(window_start);
+            if elapsed < self.window_seconds {
                 let current = self.window_counter.fetch_add(1, Ordering::SeqCst);
                 if current as usize >= self.max_requests {
                     self.window_counter.fetch_sub(1, Ordering::SeqCst);
-                    let retry_after = self.window_seconds - (now_secs - window_start);
+                    let retry_after = self.window_seconds.saturating_sub(elapsed);
                     return Err(retry_after);
                 }
                 return Ok(());
@@ -242,6 +254,10 @@ pub struct ConfigInjector {
     injection_history: Arc<RwLock<Vec<InjectionRecord>>>,
     /// 最大存储条目数
     max_entries: usize,
+    /// Per-instance rate limiter. When `Some`, `inject` uses this limiter
+    /// instead of the process-global one (see `with_dedicated_rate_limiter`).
+    /// Clones of the instance share the same limiter through the `Arc`.
+    rate_limiter: Option<Arc<InjectionRateLimiter>>,
 }
 
 impl Default for ConfigInjector {
@@ -264,12 +280,37 @@ impl ConfigInjector {
             sensitive_patterns: Self::default_sensitive_patterns(),
             injection_history: Arc::new(RwLock::new(Vec::new())),
             max_entries: DEFAULT_MAX_ENTRIES,
+            rate_limiter: None,
         }
     }
 
     /// Set the maximum number of entries the injector can hold.
     pub fn max_entries(mut self, max: usize) -> Self {
         self.max_entries = max;
+        self
+    }
+
+    /// Use a dedicated rate limiter for this injector instead of the shared
+    /// process-global one.
+    ///
+    /// By default every [`ConfigInjector`] shares a single process-wide rate
+    /// limiter, so `inject` calls on *any* instance count against the same
+    /// quota. With this option the instance owns an independent limiter
+    /// (default limits, configurable via the `CONFERS_RATE_LIMIT_*`
+    /// environment variables); clones of the instance share it via `Arc`.
+    pub fn with_dedicated_rate_limiter(mut self) -> Self {
+        self.rate_limiter = Some(Arc::new(InjectionRateLimiter::new()));
+        self
+    }
+
+    /// Use the provided rate limiter for this injector (non-global).
+    ///
+    /// This is the explicit-limiter variant of
+    /// [`Self::with_dedicated_rate_limiter`], useful for custom limit tuning
+    /// and deterministic tests.
+    #[allow(dead_code)] // test-only helper (deterministic limit control)
+    pub(crate) fn with_rate_limiter(mut self, limiter: InjectionRateLimiter) -> Self {
+        self.rate_limiter = Some(Arc::new(limiter));
         self
     }
 
@@ -296,18 +337,16 @@ impl ConfigInjector {
     ///
     /// 成功返回 Ok(())，失败返回错误信息
     pub fn inject(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {
+        // Rate limiting: use the instance's dedicated limiter when configured;
+        // otherwise share the process-global limiter (disabled in tests).
         #[cfg(test)]
-        if let Err(retry_after) = TEST_RATE_LIMITER
-            .get_or_init(InjectionRateLimiter::disabled)
-            .check_rate_limit()
-        {
-            return Err(ConfigInjectionError::RateLimited {
-                retry_after_seconds: retry_after,
-            });
-        }
+        let shared_limiter = TEST_RATE_LIMITER.get_or_init(InjectionRateLimiter::disabled);
         #[cfg(not(test))]
-        if let Err(retry_after) = GLOBAL_RATE_LIMITER
-            .get_or_init(InjectionRateLimiter::new)
+        let shared_limiter = GLOBAL_RATE_LIMITER.get_or_init(InjectionRateLimiter::new);
+        if let Err(retry_after) = self
+            .rate_limiter
+            .as_deref()
+            .unwrap_or(shared_limiter)
             .check_rate_limit()
         {
             return Err(ConfigInjectionError::RateLimited {
@@ -364,6 +403,14 @@ impl ConfigInjector {
     /// # 返回
     ///
     /// 返回成功和失败的注入记录
+    ///
+    /// # 容量限制
+    ///
+    /// Like [`Self::inject`], adding a *new* key beyond `max_entries` is
+    /// rejected with a capacity error; updating an existing key is always
+    /// allowed. inject_all is not atomic: entries are injected up to the
+    /// remaining capacity and each overflowing entry is reported individually
+    /// in `failures` with the same `CapacityExceeded` error text.
     #[allow(clippy::type_complexity)]
     pub fn inject_all(
         &self,
@@ -398,7 +445,25 @@ impl ConfigInjector {
                 .write()
                 .map_err(|_| ConfigInjectionError::PoisonedLock)?;
 
+            // Capacity accounting: new keys beyond `max_entries` overflow into
+            // `failures` (with the same error as `inject`), while updates of
+            // existing keys are always allowed.
+            let mut current_len = values.len();
             for (name, value, is_sensitive) in valid_injections {
+                let is_new = !values.contains_key(&name);
+                if is_new && current_len >= self.max_entries {
+                    failures.push((
+                        name,
+                        ConfigInjectionError::CapacityExceeded {
+                            max: self.max_entries,
+                        }
+                        .to_string(),
+                    ));
+                    continue;
+                }
+                if is_new {
+                    current_len += 1;
+                }
                 values.insert(name.clone(), value);
                 history.push(InjectionRecord {
                     name: name.clone(),
@@ -518,11 +583,16 @@ impl ConfigInjector {
     }
 
     /// 检查是否为敏感字段
+    ///
+    /// Patterns are matched with token boundaries (see
+    /// `patterns::is_match_with_token_boundary`): `APP_SECRET` and
+    /// `MY_API_KEY` are sensitive, while `APP_SECRETARY`, `APP_MONKEY`, or
+    /// `AUTHOR_NAME` are not.
     fn is_sensitive_field(&self, name: &str) -> bool {
         let name_lower = name.to_lowercase();
         self.sensitive_patterns
             .iter()
-            .any(|pattern| pattern.is_match(&name_lower))
+            .any(|pattern| is_match_with_token_boundary(pattern, &name_lower))
     }
 
     /// 掩码敏感值
@@ -1204,10 +1274,18 @@ mod tests {
 
     #[test]
     fn test_rate_limiter_enforces_limit() {
-        // max_requests=1：Call1 初始化窗口，Call2 计入 1 次请求（放行），Call3 超限被拒
+        // Exact quota semantics: the first request starts the window AND
+        // consumes one slot, so max_requests=1 allows exactly one call.
         let limiter = InjectionRateLimiter::with_limits(1, 3600);
         assert!(limiter.check_rate_limit().is_ok());
-        assert!(limiter.check_rate_limit().is_ok());
+        assert!(limiter.check_rate_limit().is_err());
+    }
+
+    #[test]
+    fn test_rate_limiter_zero_limit_rejects_everything() {
+        // A zero quota rejects the very first request (no free request).
+        let limiter = InjectionRateLimiter::with_limits(0, 3600);
+        assert!(limiter.check_rate_limit().is_err());
         assert!(limiter.check_rate_limit().is_err());
     }
 
@@ -1220,11 +1298,83 @@ mod tests {
         assert_eq!(remaining, 0);
         assert_eq!(usage, 0.0);
 
-        // 初始化窗口后：remaining 接近窗口长度，计数仍为 0（首调用不计数）
+        // 初始化窗口后：remaining 接近窗口长度；首个请求即计数为 1
         assert!(limiter.check_rate_limit().is_ok());
         let (counter, remaining, usage) = limiter.usage_stats();
-        assert_eq!(counter, 0);
-        assert_eq!(usage, 0.0);
+        assert_eq!(counter, 1);
+        assert_eq!(usage, 1.0);
         assert!(remaining > 0 && remaining <= 60);
+    }
+
+    #[test]
+    fn test_dedicated_rate_limiter_isolation() {
+        // Regression: the process-global rate limiter was shared by every
+        // ConfigInjector instance. Dedicated limiters are independent: quota
+        // exhausted on one instance does not affect another.
+        let injector_a = ConfigInjector::with_validator(EnvSecurityValidator::lenient())
+            .with_rate_limiter(InjectionRateLimiter::with_limits(2, 3600));
+        let injector_b = ConfigInjector::with_validator(EnvSecurityValidator::lenient())
+            .with_rate_limiter(InjectionRateLimiter::with_limits(2, 3600));
+
+        assert!(injector_a.inject("APP_A1", "1").is_ok());
+        assert!(injector_a.inject("APP_A2", "2").is_ok());
+        // A 的配额已耗尽
+        let err = injector_a.inject("APP_A3", "3").unwrap_err();
+        assert!(matches!(err, ConfigInjectionError::RateLimited { .. }));
+        // B 不受影响（实例级限流器相互隔离）
+        assert!(injector_b.inject("APP_B1", "1").is_ok());
+
+        // with_dedicated_rate_limiter：实例拥有独立限流器（默认限额），可正常注入
+        let injector_c = ConfigInjector::new().with_dedicated_rate_limiter();
+        assert!(injector_c.inject("APP_C1", "1").is_ok());
+
+        // 克隆共享同一个实例级限流器：C 的配额由克隆体共同消耗
+        let injector_c2 = injector_c.clone();
+        assert!(injector_c2.inject("APP_C2", "2").is_ok());
+    }
+
+    #[test]
+    fn test_inject_all_respects_capacity() {
+        // Regression: inject_all previously ignored max_entries and could
+        // silently exceed the capacity that `inject` enforces.
+        let injector =
+            ConfigInjector::with_validator(EnvSecurityValidator::lenient()).max_entries(2);
+
+        let mut config = HashMap::new();
+        config.insert("APP_A".to_string(), "1".to_string());
+        config.insert("APP_B".to_string(), "2".to_string());
+        config.insert("APP_C".to_string(), "3".to_string());
+
+        let (success, failures) = injector.inject_all(&config).unwrap();
+        // 最多注入到容量上限；溢出条目按 inject 的 CapacityExceeded 错误上报
+        assert_eq!(success.len(), 2);
+        assert_eq!(injector.len().unwrap(), 2);
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].1.contains("capacity"), "got: {}", failures[0].1);
+
+        // 容量已满时更新既有 key 仍被允许（与 inject 语义一致）
+        let mut update = HashMap::new();
+        for name in &success {
+            update.insert(name.clone(), "updated".to_string());
+        }
+        let (success2, failures2) = injector.inject_all(&update).unwrap();
+        assert_eq!(success2.len(), 2);
+        assert!(failures2.is_empty());
+        assert_eq!(injector.len().unwrap(), 2);
+        assert_eq!(injector.get(&success2[0]), Some("updated".to_string()));
+    }
+
+    #[test]
+    fn test_sensitive_field_token_boundaries() {
+        let injector = ConfigInjector::new();
+        // Token-bounded keywords are still detected.
+        assert!(injector.is_sensitive_field("APP_SECRET"));
+        assert!(injector.is_sensitive_field("MY_API_KEY"));
+        assert!(injector.is_sensitive_field("DATABASE_PASSWORD"));
+        // Substring-only matches are no longer flagged (no false positives).
+        assert!(!injector.is_sensitive_field("APP_SECRETARY"));
+        assert!(!injector.is_sensitive_field("APP_MONKEY"));
+        assert!(!injector.is_sensitive_field("TURKEY_MODE"));
+        assert!(!injector.is_sensitive_field("AUTHOR_NAME"));
     }
 }

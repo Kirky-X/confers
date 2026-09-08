@@ -109,24 +109,31 @@ fn sec0304_length_limits_and_strict_lenient_divergence() {
 }
 
 #[test]
-fn sec05_sanitize_for_logging_truncates_long_values() {
+fn sec05_sanitize_for_logging_masks_values() {
     let validator = EnvSecurityValidator::new();
 
     let secret = "super-secret-password-do-not-leak".to_string();
+    let sanitized = validator.sanitize_for_logging(&secret);
     assert_eq!(
-        validator.sanitize_for_logging(&secret),
-        secret,
-        "values within 100 chars are logged as-is"
+        sanitized, "s***k",
+        "values are genuinely masked (first+last only), not echoed"
+    );
+    assert!(
+        !sanitized.contains(&secret),
+        "full value must never leak through sanitize_for_logging"
+    );
+
+    let short = "abc".to_string();
+    assert_eq!(
+        validator.sanitize_for_logging(&short),
+        "***",
+        "values of up to 4 chars are masked entirely"
     );
 
     let long_secret = "s".repeat(150);
-    let sanitized = validator.sanitize_for_logging(&long_secret);
-    assert_eq!(sanitized.chars().count(), 100, "97 chars + '...'");
-    assert!(sanitized.ends_with("..."), "truncation marker appended");
-    assert!(
-        !sanitized.contains(&long_secret),
-        "full value must not leak"
-    );
+    let masked = validator.sanitize_for_logging(&long_secret);
+    assert_eq!(masked, "s***s", "long values keep only first/last char");
+    assert!(!masked.contains(&long_secret), "full value must not leak");
 }
 
 #[test]

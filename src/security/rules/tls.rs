@@ -73,35 +73,53 @@ impl SecurityValidator for TlsConfigValidator {
             // Accept "1.2", "1.3", "TLSv1.2", "TLSv1.3", etc.
             let version_num = normalized.strip_prefix("tlsv").unwrap_or(&normalized);
 
+            let min_parts: Vec<u32> = MIN_TLS_VERSION
+                .split('.')
+                .filter_map(|p| p.parse().ok())
+                .collect();
+
             // Parse version components as integers for correct numeric comparison
             // (avoids both lexicographic bugs like "1.12" < "1.2" and f64 bugs like 1.12 < 1.2)
-            let is_below = version_num
+            let parsed_version: Option<(u32, u32)> = version_num
                 .split('.')
                 .map(|p| p.parse::<u32>().ok())
                 .collect::<Option<Vec<_>>>()
                 .and_then(|parts| {
-                    let min_parts: Vec<u32> = MIN_TLS_VERSION
-                        .split('.')
-                        .filter_map(|p| p.parse().ok())
-                        .collect();
-                    if parts.len() >= 2 && min_parts.len() >= 2 {
-                        Some((parts[0], parts[1]) < (min_parts[0], min_parts[1]))
+                    if parts.len() >= 2 {
+                        Some((parts[0], parts[1]))
                     } else {
                         None
                     }
-                })
-                .unwrap_or(false);
-
-            if is_below {
-                violations.push(SecurityViolation {
-                    validator: self.name().to_string(),
-                    field: Some("tls.min_version".to_string()),
-                    message: format!(
-                        "TLS minimum version '{}' is below recommended minimum of '{}'",
-                        version_str, MIN_TLS_VERSION
-                    ),
-                    severity: ViolationSeverity::Critical,
                 });
+
+            match parsed_version {
+                Some((major, minor)) => {
+                    if min_parts.len() >= 2 && (major, minor) < (min_parts[0], min_parts[1]) {
+                        violations.push(SecurityViolation {
+                            validator: self.name().to_string(),
+                            field: Some("tls.min_version".to_string()),
+                            message: format!(
+                                "TLS minimum version '{}' is below recommended minimum of '{}'",
+                                version_str, MIN_TLS_VERSION
+                            ),
+                            severity: ViolationSeverity::Critical,
+                        });
+                    }
+                }
+                None => {
+                    // Fail-closed: an unparseable version string cannot be
+                    // verified to meet the minimum, so it is reported instead
+                    // of silently accepted.
+                    violations.push(SecurityViolation {
+                        validator: self.name().to_string(),
+                        field: Some("tls.min_version".to_string()),
+                        message: format!(
+                            "TLS minimum version '{}' is not a recognizable version number (expected e.g. '1.2' or 'TLSv1.2'); cannot verify the minimum of '{}'",
+                            version_str, MIN_TLS_VERSION
+                        ),
+                        severity: ViolationSeverity::Critical,
+                    });
+                }
             }
         }
 
@@ -274,6 +292,25 @@ mod tests {
         let validator = TlsConfigValidator::new();
         let config = TestProvider::new().with_value("tls.min_version", "1.12");
         assert!(validator.validate(&config).is_ok());
+    }
+
+    #[test]
+    fn test_malformed_tls_version_fails_closed() {
+        // Regression: unparseable version strings were silently accepted via
+        // `.unwrap_or(false)` (fail-open). They must now be reported.
+        let validator = TlsConfigValidator::new();
+        for bad in ["abc", "1", "v1.2", "1.", "TLS", ""] {
+            let config = TestProvider::new().with_value("tls.min_version", bad);
+            let result = validator.validate(&config);
+            assert!(result.is_err(), "malformed version '{bad}' must be flagged");
+            let violations = result.unwrap_err();
+            assert!(
+                violations
+                    .iter()
+                    .any(|v| v.severity == ViolationSeverity::Critical),
+                "malformed version '{bad}' must be critical (fail-closed)"
+            );
+        }
     }
 
     #[test]
