@@ -17,6 +17,34 @@ pub(crate) mod poll;
 
 pub use interval::PollInterval;
 
+/// Record remote-fetch critical-path metrics around a poll future: the fetch
+/// latency as a histogram (always) and a fetch-error counter (on failure).
+///
+/// Emissions are no-ops unless a [`MetricsBackend`] was installed via
+/// [`crate::metrics::set_metrics_backend`].
+pub(crate) async fn record_fetch_metrics<F>(
+    source: &crate::types::SourceId,
+    fetch: F,
+) -> crate::error::ConfigResult<crate::types::AnnotatedValue>
+where
+    F: std::future::Future<Output = crate::error::ConfigResult<crate::types::AnnotatedValue>>,
+{
+    use crate::metrics::names;
+
+    let started = std::time::Instant::now();
+    let result = fetch.await;
+    let labels = [("source", source.as_str())];
+    crate::metrics::record_histogram(
+        names::REMOTE_FETCH_DURATION_SECONDS,
+        started.elapsed().as_secs_f64(),
+        &labels,
+    );
+    if result.is_err() {
+        crate::metrics::record_counter(names::REMOTE_FETCH_ERRORS_TOTAL, &labels);
+    }
+    result
+}
+
 #[cfg(all(test, feature = "remote"))]
 pub(crate) mod test_support {
     /// 检测本机是否存在拦截 127.0.0.1 流量的代理（Windows 系统代理等）。

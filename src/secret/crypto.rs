@@ -120,7 +120,29 @@ impl XChaCha20Crypto {
     ///
     /// Fails with [`CryptoError::DecryptionFailed`] unless `aad` is
     /// byte-for-byte identical to the AAD used during encryption.
+    ///
+    /// Every decryption failure is emitted as a
+    /// `confers_secret_decrypt_errors_total` counter through the (optional,
+    /// NoOp-by-default) [`MetricsBackend`](crate::interface::MetricsBackend).
     pub fn decrypt_with_aad(
+        &self,
+        nonce: &[u8],
+        ciphertext: &[u8],
+        key: &[u8],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, CryptoError> {
+        let result = self.decrypt_with_aad_inner(nonce, ciphertext, key, aad);
+        if result.is_err() {
+            // Critical-path metric: secret decryption failure.
+            crate::metrics::record_counter(
+                crate::metrics::names::SECRET_DECRYPT_ERRORS_TOTAL,
+                &[],
+            );
+        }
+        result
+    }
+
+    fn decrypt_with_aad_inner(
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
@@ -179,6 +201,31 @@ mod tests {
 
     /// A fixed 32-byte key used by tests that need a deterministic master key.
     const TEST_KEY: [u8; 32] = *b"0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
+
+    #[test]
+    #[serial_test::serial]
+    fn test_decrypt_error_metric_recorded() {
+        // Critical-path metric: a failing decryption must increment the
+        // confers_secret_decrypt_errors_total counter on the installed
+        // backend (and remain a silent no-op without one).
+        crate::metrics::clear_metrics_backend();
+        let recorder = crate::metrics::test_support::RecordingBackend::installed();
+
+        let cipher = XChaCha20Crypto::new();
+        // Wrong nonce length → DecryptionFailed.
+        let result = cipher.decrypt(&[0u8; 5], b"data", &TEST_KEY);
+        assert!(result.is_err());
+        assert!(
+            recorder.counter_count(crate::metrics::names::SECRET_DECRYPT_ERRORS_TOTAL) >= 1,
+            "decryption failure must be counted"
+        );
+
+        // Successful decryption must NOT count as an error.
+        let (nonce, ciphertext) = cipher.encrypt(b"ok", &TEST_KEY).unwrap();
+        cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap();
+
+        crate::metrics::clear_metrics_backend();
+    }
 
     #[test]
     fn test_new_returns_instance() {

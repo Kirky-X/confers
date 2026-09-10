@@ -8,5 +8,6 @@
 //! Implementation lives in `crate::impl_::audit`.
 
 pub use crate::impl_::audit::{
-    AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditWriter, AuditWriterBuilder,
+    verify_audit_chain, AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditWriter,
+    AuditWriterBuilder,
 };

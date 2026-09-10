@@ -54,38 +54,75 @@ pub fn generate_load_impl(
     }
 }
 
-/// Generate the async load() method
-fn generate_load_method(
-    struct_ident: &Ident,
-    attrs: &StructAttrs,
-    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
-) -> TokenStream {
-    let env_prefix = attrs.effective_env_prefix();
-
-    // Generate default source setup
-    let default_calls: Vec<TokenStream> = fields
+/// Generate the default source registration statements.
+///
+/// Defaults are registered under the **serde field name** — the merged value
+/// tree (file keys included) is keyed by serde field names, so a default
+/// parked under a renamed config key would never reach deserialization.
+/// `skip` fields with a `default` attribute are registered too: the value is
+/// needed for deserialization itself, and the post-build materialization then
+/// makes it immune to any source override.
+fn generate_default_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> Vec<TokenStream> {
+    fields
         .iter()
-        .filter(|(_, _, f)| !f.skip && f.default.is_some())
-        .map(|(_, _, f)| {
-            let config_key = f.effective_name();
+        .filter(|(_, _, f)| f.default.is_some())
+        .map(|(ident, _, f)| {
+            let field_key = ident.to_string();
             let default_expr = f.default.as_ref().unwrap();
 
             quote! {
-                builder = builder.default(#config_key.to_string(), {
+                builder = builder.default(#field_key.to_string(), {
                     let val: confers::ConfigValue = (#default_expr).into();
                     val
                 });
             }
         })
-        .collect();
+        .collect()
+}
 
-    // Generate env source setup
-    let env_calls: Vec<TokenStream> = fields
+/// Generate default registration statements for `skip` fields only.
+///
+/// The generated `load_file`/`load_file_with_env` loaders never registered
+/// struct defaults (pre-existing semantics, kept untouched); a skipped field
+/// carrying a `default` attribute is the one exception — without it the value
+/// cannot deserialize when no source provides the key.
+fn generate_skip_default_calls(
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+) -> Vec<TokenStream> {
+    fields
+        .iter()
+        .filter(|(_, _, f)| f.skip && f.default.is_some())
+        .map(|(ident, _, f)| {
+            let field_key = ident.to_string();
+            let default_expr = f.default.as_ref().unwrap();
+
+            quote! {
+                builder = builder.default(#field_key.to_string(), {
+                    let val: confers::ConfigValue = (#default_expr).into();
+                    val
+                });
+            }
+        })
+        .collect()
+}
+
+/// Generate the env extraction statements filling `env_map`.
+///
+/// Each entry is keyed by the **serde field name** (the merge space used by
+/// the file source and deserialization) while the env var name follows
+/// `name_env` when declared (verbatim, no default-naming fallback) or the
+/// default `PREFIX+KEY` upper-case rule otherwise. `skip` fields are excluded:
+/// they never participate in loading.
+fn generate_env_calls(
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+    env_prefix: &str,
+) -> Vec<TokenStream> {
+    fields
         .iter()
         .filter(|(_, _, f)| !f.skip)
-        .map(|(_, _, f)| {
+        .map(|(ident, _, f)| {
             let env_name = f.effective_env_name(env_prefix);
-            let config_key = f.effective_name();
+            let field_key = ident.to_string();
 
             // Handle _FILE suffix for secrets with secure path validation
             if f.is_sensitive_effective() {
@@ -99,7 +136,7 @@ fn generate_load_method(
                             Ok(validated_path) => {
                                 if let Ok(content) = std::fs::read_to_string(&validated_path) {
                                     let val = content.trim().to_string();
-                                    env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
+                                    env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                                 }
                             }
                             Err(_) => {
@@ -107,18 +144,88 @@ fn generate_load_method(
                             }
                         }
                     } else if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
+                        env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             } else {
                 quote! {
                     if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
+                        env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
                 }
             }
         })
-        .collect();
+        .collect()
+}
+
+/// Generate the statements that force-materialize `skip` fields after a
+/// successful build.
+///
+/// `skip` fields never participate in loading (no env entry, no file key may
+/// reach them), so their value is assigned last — from the `default` attribute
+/// when present, otherwise the field type's `Default::default()`. This runs
+/// after deserialization, making the skip default the final word over every
+/// source.
+fn generate_skip_materialization(
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+) -> Vec<TokenStream> {
+    fields
+        .iter()
+        .filter(|(_, _, f)| f.skip)
+        .map(|(ident, _, f)| {
+            let init = match f.default.as_ref() {
+                Some(expr) => quote! { #expr },
+                None => quote! { ::std::default::Default::default() },
+            };
+            quote! { config.#ident = #init; }
+        })
+        .collect()
+}
+
+/// Shared body of every generated loader: defaults first (lowest priority),
+/// then the declared env overrides as a memory source, then `finish` runs the
+/// builder to a result and skip fields are materialized last.
+fn loader_body(
+    attrs: &StructAttrs,
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+    finish: TokenStream,
+) -> TokenStream {
+    let default_calls = generate_default_calls(fields);
+    let env_calls = generate_env_calls(fields, attrs.effective_env_prefix());
+    let skip_assigns = generate_skip_materialization(fields);
+    let mut_kw = if skip_assigns.is_empty() {
+        quote! {}
+    } else {
+        quote! { mut }
+    };
+
+    quote! {
+        let mut builder = confers::ConfigBuilder::<Self>::new();
+
+        // Add defaults first (lowest priority)
+        #(#default_calls)*
+
+        // Add environment variables (higher priority)
+        let mut env_map = std::collections::HashMap::new();
+        #(#env_calls)*
+        if !env_map.is_empty() {
+            builder = builder.memory(env_map);
+        }
+
+        let #mut_kw config: Self = #finish?;
+        // `skip` fields are the final word: no source may have set them.
+        #(#skip_assigns)*
+        Ok(config)
+    }
+}
+
+/// Generate the async load() method
+fn generate_load_method(
+    struct_ident: &Ident,
+    attrs: &StructAttrs,
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+) -> TokenStream {
+    let body = loader_body(attrs, fields, quote! { builder.build() });
 
     quote! {
         impl #struct_ident {
@@ -136,19 +243,7 @@ fn generate_load_method(
 
             /// Load configuration synchronously.
             pub fn load_sync() -> confers::ConfigResult<Self> {
-                let mut builder = confers::ConfigBuilder::<Self>::new();
-
-                // Add defaults first (lowest priority)
-                #(#default_calls)*
-
-                // Add environment variables (higher priority)
-                let mut env_map = std::collections::HashMap::new();
-                #(#env_calls)*
-                if !env_map.is_empty() {
-                    builder = builder.memory(env_map);
-                }
-
-                builder.build()
+                #body
             }
         }
     }
@@ -160,83 +255,13 @@ fn generate_load_sync_method(
     attrs: &StructAttrs,
     fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
 ) -> TokenStream {
-    let env_prefix = attrs.effective_env_prefix();
-
-    // Generate default source setup
-    let default_calls: Vec<TokenStream> = fields
-        .iter()
-        .filter(|(_, _, f)| !f.skip && f.default.is_some())
-        .map(|(_ident, _, f)| {
-            let config_key = f.effective_name();
-            let default_expr = f.default.as_ref().unwrap();
-
-            quote! {
-                builder = builder.default(#config_key.to_string(), {
-                    let val: confers::ConfigValue = (#default_expr).into();
-                    val
-                });
-            }
-        })
-        .collect();
-
-    // Generate env source setup
-    let env_calls: Vec<TokenStream> = fields
-        .iter()
-        .filter(|(_, _, f)| !f.skip)
-        .map(|(_ident, _ty, f)| {
-            let env_name = f.effective_env_name(env_prefix);
-            let config_key = f.effective_name();
-
-            // Handle _FILE suffix for secrets with secure path validation
-            if f.is_sensitive_effective() {
-                let file_env_name = format!("{}_FILE", env_name);
-                quote! {
-                    // Check for _FILE suffix first (Docker/K8s secrets pattern)
-                    // Security: Use PathValidator to prevent directory traversal attacks
-                    if let Ok(file_path) = std::env::var(#file_env_name) {
-                        let validator = confers::security::PathValidator::new();
-                        match validator.validate_and_resolve(&file_path) {
-                            Ok(validated_path) => {
-                                if let Ok(content) = std::fs::read_to_string(&validated_path) {
-                                    let val = content.trim().to_string();
-                                    env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
-                                }
-                            }
-                            Err(_) => {
-                                // Silently skip invalid secret file paths
-                            }
-                        }
-                    } else if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
-                    }
-                }
-            } else {
-                quote! {
-                    if let Ok(val) = std::env::var(#env_name) {
-                        env_map.insert(#config_key.to_string(), confers::EnvSource::infer_config_value(&val));
-                    }
-                }
-            }
-        })
-        .collect();
+    let body = loader_body(attrs, fields, quote! { builder.build() });
 
     quote! {
         impl #struct_ident {
             /// Build configuration with environment variables and defaults.
             pub fn build_config() -> confers::ConfigResult<Self> {
-                let mut builder = confers::ConfigBuilder::<Self>::new();
-
-                // Add defaults first (lowest priority)
-                #(#default_calls)*
-
-                // Add environment variables (higher priority)
-                let mut env_map = std::collections::HashMap::new();
-                #(#env_calls)*
-                if !env_map.is_empty() {
-                    builder = builder.memory(env_map);
-                }
-
-                builder.build()
+                #body
             }
         }
     }
@@ -245,24 +270,63 @@ fn generate_load_sync_method(
 /// Generate the load_file() method
 fn generate_load_file_method(
     struct_ident: &Ident,
-    _attrs: &StructAttrs,
-    _fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+    attrs: &StructAttrs,
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
 ) -> TokenStream {
+    // load_file_with_env must carry the same declared-env overrides as
+    // load_sync: the generic env source alone cannot honor `name_env`
+    // declarations (it only maps UPPER_SNAKE → lower.dot paths).
+    let env_calls = generate_env_calls(fields, attrs.effective_env_prefix());
+    let skip_assigns = generate_skip_materialization(fields);
+    let skip_assigns_in_env_loader = skip_assigns.clone();
+    let skip_defaults = generate_skip_default_calls(fields);
+    let skip_defaults_in_env_loader = skip_defaults.clone();
+    let mut_kw = if skip_assigns.is_empty() {
+        quote! {}
+    } else {
+        quote! { mut }
+    };
+    let file_builder_mut = if skip_defaults.is_empty() {
+        quote! {}
+    } else {
+        quote! { mut }
+    };
+    let env_builder_mut = if skip_defaults_in_env_loader.is_empty() && env_calls.is_empty() {
+        quote! {}
+    } else {
+        quote! { mut }
+    };
+
     quote! {
         impl #struct_ident {
             /// Load configuration from a specific file.
             pub fn load_file(path: impl AsRef<std::path::Path>) -> confers::ConfigResult<Self> {
-                let builder = confers::ConfigBuilder::<Self>::new()
+                let #file_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref());
-                builder.build()
+                #(#skip_defaults)*
+                let #mut_kw config: Self = builder.build()?;
+                // `skip` fields are the final word: no source may have set them.
+                #(#skip_assigns)*
+                Ok(config)
             }
 
             /// Load configuration from a specific file with environment overrides.
             pub fn load_file_with_env(path: impl AsRef<std::path::Path>) -> confers::ConfigResult<Self> {
-                let builder = confers::ConfigBuilder::<Self>::new()
+                let #env_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref())
                     .env();
-                builder.build()
+                #(#skip_defaults_in_env_loader)*
+
+                let mut env_map = std::collections::HashMap::new();
+                #(#env_calls)*
+                if !env_map.is_empty() {
+                    builder = builder.memory(env_map);
+                }
+
+                let #mut_kw config: Self = builder.build()?;
+                // `skip` fields are the final word: no source may have set them.
+                #(#skip_assigns_in_env_loader)*
+                Ok(config)
             }
         }
     }

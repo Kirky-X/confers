@@ -560,7 +560,7 @@ fn base64_decode(input: &str) -> Result<String, ConfigError> {
 #[async_trait]
 impl crate::remote::PolledSource for ConsulSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        self.poll_internal().await
+        crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await
     }
 
     fn poll_interval(&self) -> Option<Duration> {

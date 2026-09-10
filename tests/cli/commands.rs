@@ -546,6 +546,8 @@ fn test_help_flag() {
     assert!(stdout.contains("export"), "Output: {}", stdout);
     assert!(stdout.contains("diff"), "Output: {}", stdout);
     assert!(stdout.contains("snapshot"), "Output: {}", stdout);
+    assert!(stdout.contains("schema"), "Output: {}", stdout);
+    assert!(stdout.contains("get"), "Output: {}", stdout);
 }
 
 #[test]

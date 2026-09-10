@@ -303,7 +303,15 @@ impl FsWatcher {
                                     // race with creation events on some platforms.
                                     for event_path in &event.paths {
                                         match tx.try_send(event_path.clone()) {
-                                            Ok(_) => {}
+                                            Ok(_) => {
+                                                // Critical-path metric: watcher
+                                                // trigger forwarded to reload
+                                                // consumers.
+                                                crate::metrics::record_counter(
+                                                    crate::metrics::names::WATCHER_EVENTS_TOTAL,
+                                                    &[],
+                                                );
+                                            }
                                             Err(mpsc::error::TrySendError::Full(_)) => {
                                                 // Channel full — event silently dropped.
                                             }
@@ -639,7 +647,15 @@ impl MultiFsWatcher {
                                     for event_path in &event.paths {
                                         if paths.contains(event_path) {
                                             match tx.try_send(event_path.clone()) {
-                                                Ok(_) => {}
+                                                Ok(_) => {
+                                                    // Critical-path metric: watcher
+                                                    // trigger forwarded to reload
+                                                    // consumers.
+                                                    crate::metrics::record_counter(
+                                                        crate::metrics::names::WATCHER_EVENTS_TOTAL,
+                                                        &[],
+                                                    );
+                                                }
                                                 Err(mpsc::error::TrySendError::Full(_)) => {
                                                     // Channel full — event silently dropped.
                                                 }
@@ -677,6 +693,55 @@ impl MultiFsWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Critical-path metric: every watcher event forwarded to consumers must
+    /// increment confers_watcher_events_total on the installed backend.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn watcher_metrics_count_forwarded_events() {
+        crate::metrics::clear_metrics_backend();
+        let recorder = crate::metrics::test_support::RecordingBackend::installed();
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut watcher = FsWatcher::with_recv_timeout(dir.path(), 30, 50)
+            .await
+            .expect("watchable temp dir");
+
+        // Give the debouncer thread a beat to establish the inotify watch
+        // before writing (same pattern as tests/e2e/watch_e2e.rs).
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+
+        let file = dir.path().join("metrics-trigger.toml");
+        std::fs::write(&file, b"tick").expect("write triggers an event");
+
+        // Every recv is bounded: a missing event fails the test instead of
+        // hanging the suite (recv blocks indefinitely while running).
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut received = false;
+        while std::time::Instant::now() < deadline {
+            match tokio::time::timeout(std::time::Duration::from_millis(500), watcher.recv()).await
+            {
+                Ok(Some(_)) => {
+                    received = true;
+                    break;
+                }
+                Ok(None) => break, // watcher stopped/failed
+                Err(_elapsed) => continue,
+            }
+        }
+        assert!(received, "watcher must deliver the change event");
+
+        // The forwarding thread emits the metric right after try_send
+        // succeeds; give it a beat to be observed.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(
+            recorder.counter_count(crate::metrics::names::WATCHER_EVENTS_TOTAL) >= 1,
+            "forwarded watcher events must be counted"
+        );
+
+        watcher.stop();
+        crate::metrics::clear_metrics_backend();
+    }
 
     fn assert_thread_reported_failure(
         running: &std::sync::atomic::AtomicBool,

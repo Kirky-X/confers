@@ -6,12 +6,13 @@
 //! E2E: 审计(tests/e2e/audit_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.8):
-//! - AUD-11 多线程并发 write 同一日志文件:行数 = 写入数,每行均为合法 JSON(无交错损坏)
+//! - AUD-11 多线程并发 write 同一日志文件:事件行数 = 写入数,每行均为合法 JSON(无交错损坏)
+//! - AUD-12 rc.3 HMAC 链:并发写入后整条链可被 verify_audit_chain 校验通过
 //!
 //! AUD-01…10 已有覆盖(tests/security/audit.rs);
 //! CCY-06(8 线程压力档)固化于 concurrency_e2e.rs。
 
-use confers::audit::AuditWriter;
+use confers::audit::{verify_audit_chain, AuditWriter};
 use std::collections::HashSet;
 
 #[test]
@@ -52,35 +53,48 @@ fn aud11_concurrent_writes_produce_one_intact_line_each() {
         .map(|e| e.path())
         .collect();
     assert!(!files.is_empty(), "audit log file must exist");
-
-    let mut total_lines = 0usize;
-    let mut seen_sources = HashSet::new();
     files.sort();
+
+    let mut total_events = 0usize;
+    let mut seen_sources = HashSet::new();
     for file in &files {
         let content = std::fs::read_to_string(file).expect("log file readable");
         for line in content.lines().filter(|l| !l.trim().is_empty()) {
             let json: serde_json::Value = serde_json::from_str(line)
                 .unwrap_or_else(|e| panic!("every line must be valid JSON, got {e}: {line}"));
+            // 链头/链尾元数据行(record 字段)不是事件行。
+            if json.get("record").is_some() {
+                continue;
+            }
             assert!(
                 json.get("LoadSuccess").is_some(),
-                "line must be a LoadSuccess event: {line}"
+                "event line must be a LoadSuccess event: {line}"
             );
             assert!(
-                line.contains("LoadSuccess"),
-                "expected load events, got: {line}"
+                json.get("hmac").is_some() && json.get("prev_hash").is_some(),
+                "event line must carry HMAC chain metadata: {line}"
             );
-            total_lines += 1;
+            total_events += 1;
             seen_sources.insert(line.to_string());
         }
     }
 
     assert_eq!(
-        total_lines, TOTAL,
-        "each of {TOTAL} concurrent writes must land as its own intact line"
+        total_events, TOTAL,
+        "each of {TOTAL} concurrent writes must land as its own intact event line"
     );
     assert_eq!(
         seen_sources.len(),
         TOTAL,
         "no interleaving may corrupt or duplicate records"
     );
+
+    // AUD-12:并发写入后整条 HMAC 链必须可校验。
+    for file in &files {
+        assert!(
+            verify_audit_chain(file).expect("chain verification must not IO-error"),
+            "chain in {} must verify after concurrent writes",
+            file.display()
+        );
+    }
 }
