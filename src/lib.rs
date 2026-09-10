@@ -62,6 +62,10 @@ pub mod metrics;
 // OpenFeature-style flag evaluation (openfeature feature).
 #[cfg(feature = "openfeature")]
 pub mod openfeature;
+
+// Lazy segmented parsing for oversized documents (lazy feature).
+#[cfg(feature = "lazy")]
+pub mod lazy;
 pub mod tree_transform;
 
 // Internal tracing facade (no-op without the `tracing` feature).

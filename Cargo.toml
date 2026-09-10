@@ -160,6 +160,7 @@ k8s = ["remote", "toml", "json", "yaml"]
 cloud-kms = ["remote"]
 keyring = ["dep:log"]
 openfeature = ["feature-toggle", "context-aware"]
+lazy = ["toml"]
 nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
