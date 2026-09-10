@@ -58,6 +58,10 @@ pub mod interface;
 pub mod loader;
 pub mod merger;
 pub mod metrics;
+
+// OpenFeature-style flag evaluation (openfeature feature).
+#[cfg(feature = "openfeature")]
+pub mod openfeature;
 pub mod tree_transform;
 
 // Internal tracing facade (no-op without the `tracing` feature).
