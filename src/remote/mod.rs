@@ -13,6 +13,8 @@ mod interval;
 pub(crate) mod consul;
 #[cfg(feature = "etcd")]
 pub(crate) mod etcd;
+#[cfg(feature = "etcd-watch")]
+pub mod etcd_watch;
 pub(crate) mod poll;
 
 pub use interval::PollInterval;
@@ -72,4 +74,9 @@ pub(crate) mod test_support {
 pub use consul::{ConsulSource, ConsulSourceBuilder, ConsulTlsConfig};
 #[cfg(feature = "etcd")]
 pub use etcd::{EtcdSource, EtcdSourceBuilder, EtcdTlsConfig};
+#[cfg(feature = "etcd-watch")]
+pub use etcd_watch::{
+    EtcdGrpcWatchSource, EtcdWatchCallback, EtcdWatchEvent, EtcdWatchRetry, EtcdWatcher,
+    WatchEventSource, WatchItem,
+};
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
