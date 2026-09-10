@@ -309,6 +309,18 @@ enum Commands {
         key: String,
     },
 
+    /// Documentation output. `--agent` emits the machine-readable knowledge
+    /// pack (subcommands, arguments, exit-code contract, task recipes).
+    Docs {
+        /// Emit the agent knowledge pack.
+        #[arg(long)]
+        agent: bool,
+
+        /// Knowledge format (json, markdown)
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
     /// Diagnose configuration health (schema, source chain, encryption,
     /// env overrides) and print a single-line JSON report.
     Doctor {
@@ -425,6 +437,13 @@ where
         }
         Commands::Doctor { format } => {
             cmd_doctor(&config_paths, &format, allow_absolute_paths)?;
+        }
+        Commands::Docs { agent, format } => {
+            if agent {
+                cmd_docs(&format)?;
+            } else {
+                anyhow::bail!("nothing to show: use `confers docs --agent` for the knowledge pack");
+            }
         }
     }
 
@@ -1969,6 +1988,89 @@ fn collect_paths(value: &AnnotatedValue, prefix: &str, out: &mut std::collection
             out.insert(prefix.to_string());
         }
     }
+}
+
+/// Stable knowledge-pack schema marker (bump on contract changes).
+const AGENT_KNOWLEDGE_VERSION: u32 = 1;
+
+/// Build the agent knowledge pack as a JSON value.
+///
+/// Machine-readable summary of the CLI surface: every subcommand, the exit
+/// code contract and copy-paste task recipes — everything an agent needs to
+/// operate this tool without crawling the full documentation.
+pub fn agent_knowledge_json() -> serde_json::Value {
+    serde_json::json!({
+        "knowledge_version": AGENT_KNOWLEDGE_VERSION,
+        "tool": "confers",
+        "subcommands": [
+            {"name": "inspect", "purpose": "list keys with source+location provenance", "key_args": ["--key <k>...", "--show-conflicts", "--format text|json"]},
+            {"name": "validate", "purpose": "structural sanity checks (nulls, number-shaped strings)", "key_args": ["--strict", "--format text|json"]},
+            {"name": "export", "purpose": "print merged config (sanitized by default)", "key_args": ["--format json|toml|yaml", "--output <file>", "--with-provenance", "--raw"]},
+            {"name": "diff", "purpose": "diff two config files", "key_args": ["--base <file>", "--overlay <file>", "--format text|json", "--sanitize=true|false"]},
+            {"name": "snapshot", "purpose": "manage snapshots", "key_args": ["list|diff|prune"]},
+            {"name": "schema", "purpose": "JSON Schema for the config type", "key_args": ["--from-instance (reverse-engineer a draft from the loaded instance)"]},
+            {"name": "get", "purpose": "single key lookup, single-line JSON", "key_args": ["<dot.path>", "--fields a.b,c"]},
+            {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
+            {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
+        ],
+        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>"],
+        "exit_codes": {
+            "0": "success (or doctor: healthy)",
+            "1": "configuration error / doctor has warnings",
+            "2": "I/O error / doctor has errors",
+        },
+        "machine_readable_contract": {
+            "doctor": "single-line JSON: {status, exit_code, checks:[{name, severity, message}]}; severity ok|warning|error",
+            "get": "single-line JSON",
+            "schema": "pretty-printed JSON Schema (draft 2020-12 flavor for --from-instance)",
+        },
+        "recipes": [
+            {"task": "load config with env overlay", "command": "confers --config app.toml --env-file .env inspect --format json"},
+            {"task": "quality gate a config in CI", "command": "confers --config app.toml doctor; echo exit=$?"},
+            {"task": "find where a value comes from", "command": "confers --config app.toml inspect --key database.host"},
+            {"task": "get one value", "command": "confers --config app.toml get database.pool.size"},
+            {"task": "schema-first reverse engineering", "command": "confers --config app.toml schema --from-instance > schema.draft.json"},
+            {"task": "export sanitized config", "command": "confers --config app.toml export --format json"},
+        ],
+    })
+}
+
+/// Render the knowledge pack as Markdown.
+pub fn agent_knowledge_markdown() -> String {
+    let knowledge = agent_knowledge_json();
+    let mut out = String::from("# confers agent knowledge pack\n\n");
+    out.push_str(&format!(
+        "knowledge_version: {}\n\n## Subcommands\n\n",
+        knowledge["knowledge_version"]
+    ));
+    for sub in knowledge["subcommands"].as_array().expect("subcommands") {
+        out.push_str(&format!(
+            "- **{}** — {} (args: {})\n",
+            sub["name"].as_str().unwrap_or("?"),
+            sub["purpose"].as_str().unwrap_or(""),
+            sub["key_args"].as_array().map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default(),
+        ));
+    }
+    out.push_str("\n## Exit codes\n\n- `0` success (doctor: healthy)\n- `1` config error / doctor warnings\n- `2` I/O error / doctor errors\n");
+    out.push_str("\n## Recipes\n\n```sh\n");
+    for recipe in knowledge["recipes"].as_array().expect("recipes") {
+        out.push_str(&format!(
+            "# {}\n{}\n",
+            recipe["task"].as_str().unwrap_or(""),
+            recipe["command"].as_str().unwrap_or(""),
+        ));
+    }
+    out.push_str("```\n");
+    out
+}
+
+/// Run the `docs` subcommand.
+fn cmd_docs(format: &str) -> anyhow::Result<()> {
+    match format {
+        "markdown" => println!("{}", agent_knowledge_markdown()),
+        _ => println!("{}", serde_json::to_string_pretty(&agent_knowledge_json())?),
+    }
+    Ok(())
 }
 
 /// Run the `doctor` subcommand: build the chain, emit the single-line JSON
@@ -4377,5 +4479,40 @@ mod tests {
         let mut bad = instance.clone();
         bad["a"] = serde_json::json!("now-a-string");
         assert!(!validate(&bad, &schema));
+    }
+}
+
+#[cfg(test)]
+mod docs_agent_tests {
+    use super::*;
+
+    #[test]
+    fn knowledge_pack_json_contains_contract_and_recipes() {
+        let pack = agent_knowledge_json();
+        assert_eq!(pack["knowledge_version"], 1);
+        let subs = pack["subcommands"].as_array().expect("subcommands");
+        let names: Vec<&str> = subs.iter().filter_map(|s| s["name"].as_str()).collect();
+        for expected in ["inspect", "validate", "export", "doctor", "get", "schema", "docs"] {
+            assert!(names.contains(&expected), "missing subcommand {expected}");
+        }
+        // Exit-code contract documented.
+        assert_eq!(pack["exit_codes"]["0"], "success (or doctor: healthy)");
+        assert!(pack["exit_codes"]["2"].as_str().unwrap().contains("I/O error"));
+        // Recipes are copy-pasteable (non-empty commands).
+        for recipe in pack["recipes"].as_array().expect("recipes") {
+            assert!(!recipe["command"].as_str().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn knowledge_pack_markdown_contains_recipes() {
+        let md = agent_knowledge_markdown();
+        assert!(md.contains("# confers agent knowledge pack"));
+        assert!(md.contains("## Subcommands"));
+        assert!(md.contains("## Exit codes"));
+        assert!(md.contains("## Recipes"));
+        assert!(md.contains("doctor"), "doctor recipe documented");
+        // Knowledge pack stays compact (<= 200 lines, per spec).
+        assert!(md.lines().count() <= 200, "pack too long: {}", md.lines().count());
     }
 }
