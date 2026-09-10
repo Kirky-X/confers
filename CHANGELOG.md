@@ -2,11 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.0-rc.4] — 2026-09-10
+## [0.6.0-rc.3] — 2026-09-10
 
-> workspace-rc4-completion（Phase 1 confers）：统一变更流、宏属性语义补全、新配置源、doctor 自检、观测与安全增强。
+> 本节包含 `workspace-rc3-hardening` 与 `workspace-rc4-completion` 两批内容（rc.3 发布前累计；版本规则：目标 = crates.io 已发布 rc.2 + 1）。
 
-### 新增
+### 新增（workspace-rc4-completion）
 
 - **统一变更流端口**（`change-stream` feature，T101）：`ChangeStream` trait（publish/subscribe/ack），`InMemoryChangeStream` 复用 `ConfigBus`；watch 与 remote 变更统一发布 `ChangeEvent` 信封（key/旧值/新值/来源 + 单调版本）。
 - **宏四属性 codegen 真实消费**（T102）：`flatten`（顶层键提升进嵌套结构，`ConfigFieldKeys` 钩子）、`dynamic`（`<field>_handle()` DynamicField 运行时句柄）、`interpolate`（字段值 `${key}`/`${key:default}` 按合并树解析）、`watch`（字段级热重载订阅器 `field_watcher`）；四属性组合不冲突，macro_e2e 语义断言。
@@ -29,19 +29,16 @@ All notable changes to this project will be documented in this file.
 - **金丝雀联动**（T119，`change-stream` feature）：ProgressiveReloader 阶段迁移（trial_started/committed/rolled_back）发布 `ChangeSource::Canary` 事件到 ChangeStream，供上层编排。
 - **惰性分段解析**（`lazy` feature，T120）：`LazySegmentedConfig` 按顶层 TOML 表头切分（纯行扫描），段首次访问才解析并缓存；单测断言未访问段零解析。
 
-### 变更
+### 变更（workspace-rc4-completion）
 
 - `InMemoryConfig` 值存储改为 `Arc<AnnotatedValue>`（公共 API 兼容；`get_raw`/`get_string` 语义不变）。
 
-
-## [0.6.0-rc.3] — 2026-09-10
-
-### 修复
+### 修复（workspace-rc3-hardening）
 
 - **宏 env 键名覆盖**：修复 `#[confers(name_env = "X")]` 生成的 env 键与声明不一致的缺陷，确保自定义 env 键名与默认命名规则互不污染。
 - **skip+default 组合**：修复 `skip` 字段参与加载且 `default` 被 env/文件覆盖的缺陷，修正字段过滤顺序。
 
-### 新增
+### 新增（workspace-rc3-hardening）
 
 - **审计 HMAC 链式签名**（`audit` feature）：`AuditEvent` 落盘前计算 `HMAC-SHA256(prev_hash || canonical_event_bytes)`，链首用随机 salt；审计文件写入链头/链尾元数据；提供 `verify_audit_chain(path)` 校验函数。
 - **MetricsBackend 关键路径埋点**：loader 加载完成/失败、watcher 触发次数、remote 源拉取延迟与错误、secret 解密错误四类路径接入 `MetricsBackend`，指标名前缀 `confers_`。
