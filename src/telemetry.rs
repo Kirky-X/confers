@@ -24,6 +24,10 @@
 
 /// Emit a structured event with `key=value` fields (no-op without the
 /// `tracing` feature).
+// Feature-combination-dependent usage: every current call site sits behind
+// another feature (e.g. `watch`), so some feature sets leave this helper
+// unused. It is part of the facade contract either way.
+#[allow(dead_code)]
 #[allow(unused_variables)]
 pub(crate) fn event(name: &'static str, fields: &[(&'static str, &str)]) {
     #[cfg(feature = "tracing")]
