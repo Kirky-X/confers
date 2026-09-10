@@ -234,6 +234,11 @@ harness = false
 required-features = ["interpolation"]
 
 [[bench]]
+name = "watch_callback_bench"
+harness = false
+required-features = ["change-stream"]
+
+[[bench]]
 name = "value_path_bench"
 harness = false
 required-features = ["interpolation"]
