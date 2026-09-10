@@ -302,7 +302,7 @@ required-features = ["dynamic", "watch", "toml"]
 [[test]]
 name = "macro_e2e"
 path = "tests/e2e/macro_e2e.rs"
-required-features = ["watch"]
+required-features = ["watch", "dynamic"]
 
 [[test]]
 name = "encryption_e2e"

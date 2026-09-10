@@ -217,6 +217,11 @@ pub struct FieldAttrs {
     #[darling(default)]
     pub dynamic: bool,
 
+    /// Whether to subscribe this field in the generated field-level
+    /// hot-reload watcher (`field_watcher`)
+    #[darling(default)]
+    pub watch: bool,
+
     /// Module group for this field (config groups)
     pub module_group: Option<String>,
 }

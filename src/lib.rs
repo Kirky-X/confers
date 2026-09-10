@@ -52,12 +52,19 @@
 
 pub mod config;
 pub mod error;
+pub mod flatten;
 pub mod format;
 pub mod interface;
 pub mod loader;
 pub mod merger;
 pub mod metrics;
+pub mod tree_transform;
 pub mod types;
+
+// JSON value re-export: generated code (and users writing `map_json`
+// transformations) reference value types without needing their own
+// serde_json dependency.
+pub use serde_json as json;
 
 // Internal implementation (not exposed)
 mod impl_;
@@ -153,6 +160,9 @@ pub use loader::{
     Format, LoaderConfig, detect_format_from_content, detect_format_from_path, load_file,
     parse_content,
 };
+
+pub use flatten::{ConfigFieldKeys, FlattenSpec, hoist_flattened};
+pub use tree_transform::interpolate_keys;
 
 // Re-export derive macros (feature-gated to match their generated code dependencies)
 pub use confers_macros::Config;

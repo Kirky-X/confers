@@ -11,9 +11,9 @@
 //! - MAC-09/MAC-17/ENC-23 的宏展开期错误(非法 merge_strategy / env_prefix /
 //!   encrypt 算法)固化于 macros crate 的 trybuild 用例(macros/tests/compile_fail.rs)
 //!
-//! 行为固化说明(见报告):`flatten` / `interpolate` / `dynamic`(结构体与字段级)/
-//! `watch` 属性由宏解析但 codegen 未消费 —— MAC-06/08/11/12/18 的"集成级"预期
-//! 无法成立,本文件以 flatten+dynamic 组合加载用例固化该真实边界。
+//! 行为固化说明(见报告):`flatten` / `interpolate` / `dynamic` /
+//! `watch` 属性曾在 rc.3 前由宏解析但 codegen 未消费 —— rc.4 起四属性
+//! codegen 真实生效,MAC-06/08/11/12/18 以集成级语义断言固化于本文件。
 //!
 //! MAC-01/02/04/05/10/13…16 已有覆盖(tests/core/derive.rs、tests/core/env_types.rs、src 内联)。
 
@@ -214,19 +214,166 @@ fn mac07_skip_materializes_value_instead_of_failing() {
     assert_eq!(cfg.hidden, "default-value");
 }
 
-/// 行为固化:flatten / dynamic / interpolate / watch 属性被解析接受,
-/// 配置照常加载(无额外语义 —— 见报告)。
+/// MAC-06:`flatten` 字段并入父命名空间 —— 顶层键提升进嵌套结构。
 #[derive(Debug, confers::Config, serde::Deserialize)]
-#[config(watch = true)]
-struct ParsedOnlyAttrs {
-    #[config(flatten = true, dynamic = true, interpolate = true, name = "plain_key")]
-    pub value: String,
+struct FlattenDatabase {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct FlattenParent {
+    pub app_name: String,
+
+    #[config(flatten)]
+    pub database: FlattenDatabase,
 }
 
 #[test]
-fn mac06_macro08_macro12_macro18_parsed_only_attrs_do_not_break_loading() {
-    let (_file, path) = write_cwd_toml("value = \"loaded\"\n");
-    let cfg = ParsedOnlyAttrs::load_file_with_env(&path)
-        .expect("parse-only attrs must not affect loading");
-    assert_eq!(cfg.value, "loaded");
+#[serial]
+fn mac06_flatten_hoists_top_level_keys_into_nested_struct() {
+    // 顶层直接写 database 的字段(flat 风格),flatten codegen 负责归位。
+    let (_file, path) = write_cwd_toml(
+        "app_name = \"orders\"\nhost = \"flat-db\"\nport = 6543\n",
+    );
+    let cfg = FlattenParent::load_file_with_env(&path).expect("flatten load");
+    assert_eq!(cfg.app_name, "orders");
+    assert_eq!(cfg.database.host, "flat-db", "top-level key hoisted into flatten field");
+    assert_eq!(cfg.database.port, 6543);
+
+    // 嵌套写法(database.host)依旧原生支持,且显式嵌套值优先于顶层同名键。
+    let (_file, path) = write_cwd_toml(
+        "app_name = \"orders\"\nhost = \"ignored\"\ndatabase = { host = \"nested-db\", port = 1 }\n",
+    );
+    let cfg = FlattenParent::load_file_with_env(&path).expect("nested-form flatten load");
+    assert_eq!(cfg.database.host, "nested-db", "explicit nested value wins");
+}
+
+/// MAC-08:`dynamic` 字段生成 DynamicField 句柄(加载值作为初值)。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct DynamicFieldStruct {
+    #[config(dynamic)]
+    pub replicas: u32,
+}
+
+#[test]
+fn mac08_dynamic_field_generates_runtime_handle() {
+    let (_file, path) = write_cwd_toml("replicas = 3\n");
+    let cfg = DynamicFieldStruct::load_file_with_env(&path).expect("dynamic load");
+    let handle = cfg.replicas_handle();
+    assert_eq!(handle.get(), 3, "handle seeded with the loaded value");
+
+    // 运行时推送新值,读取侧立即可见(无需重载整个结构体)。
+    handle.update(5);
+    assert_eq!(handle.get(), 5);
+}
+
+/// MAC-18:`interpolate` 字段值模板 ${key} 在加载后按合并树解析。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct InterpolatedStruct {
+    #[allow(dead_code)]
+    pub host: String,
+
+    #[config(interpolate)]
+    pub url: String,
+}
+
+#[test]
+#[serial]
+fn mac18_interpolate_resolves_field_template_against_merged_tree() {
+    let (_file, path) = write_cwd_toml("host = \"db.internal\"\nurl = \"http://${host}:8080\"\n");
+    let cfg = InterpolatedStruct::load_file_with_env(&path).expect("interpolate load");
+    assert_eq!(cfg.url, "http://db.internal:8080", "${{host}} resolved from merged tree");
+
+    // 不可解析引用 + 默认值回退。
+    let (_file, path) = write_cwd_toml("host = \"db.internal\"\nurl = \"${missing:fallback}\"\n");
+    let cfg = InterpolatedStruct::load_file_with_env(&path).expect("interpolate default load");
+    assert_eq!(cfg.url, "fallback", ":default applies when key missing");
+}
+
+/// MAC-12:`watch` 字段生成字段级热重载订阅器(与 watch feature 联动)。
+#[derive(Debug, Clone, confers::Config, serde::Deserialize)]
+struct WatchedStruct {
+    #[config(watch)]
+    pub host: String,
+
+    pub port: u16,
+}
+
+#[tokio::test]
+async fn mac12_watch_generates_field_level_hot_reload_subscription() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let (tx, rx) = tokio::sync::watch::channel(Arc::new(WatchedStruct {
+        host: "a".to_string(),
+        port: 1,
+    }));
+    let mut watcher = WatchedStruct {
+        host: "a".to_string(),
+        port: 1,
+    }
+    .field_watcher(rx);
+
+    // port 未被订阅:只推 port 变化不触发。
+    tx.send(Arc::new(WatchedStruct {
+        host: "a".to_string(),
+        port: 2,
+    }))
+    .unwrap();
+    // host 被订阅:host 变化后 changed() 返回且只报告 host。
+    tx.send(Arc::new(WatchedStruct {
+        host: "b".to_string(),
+        port: 2,
+    }))
+    .unwrap();
+    let (snapshot, changed) = tokio::time::timeout(Duration::from_millis(500), watcher.changed())
+        .await
+        .expect("watcher must wake on watched-field change")
+        .expect("channel open");
+    assert_eq!(changed, vec!["host".to_string().into()], "only the watched field is reported");
+    assert_eq!(snapshot.host, "b");
+    assert_eq!(snapshot.port, 2);
+}
+
+/// 四属性组合使用不冲突(MAC-06/08/12/18 交叠)。
+#[derive(Debug, Clone, confers::Config, serde::Deserialize)]
+struct ComboNested {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, confers::Config, serde::Deserialize)]
+struct ComboAttrs {
+    #[config(flatten)]
+    pub database: ComboNested,
+
+    #[config(dynamic)]
+    pub replicas: u32,
+
+    #[config(interpolate)]
+    pub url: String,
+
+    #[config(watch)]
+    pub banner: String,
+}
+
+#[test]
+#[serial]
+fn combined_flatten_dynamic_interpolate_watch_attrs_compose() {
+    let (_file, path) = write_cwd_toml(
+        "host = \"combo-db\"\nport = 7\nreplicas = 2\nurl = \"pg://${database.host}:${database.port}\"\nbanner = \"v1\"\n",
+    );
+    let cfg = ComboAttrs::load_file_with_env(&path).expect("combined attrs load");
+    // flatten:顶层键归位进嵌套结构。
+    assert_eq!(cfg.database.host, "combo-db");
+    assert_eq!(cfg.database.port, 7);
+    // dynamic:句柄以加载值为初值。
+    assert_eq!(cfg.replicas_handle().get(), 2);
+    // interpolate:引用解析自 flatten 归位后的树(host/port 已在 database 下)。
+    assert_eq!(cfg.url, "pg://combo-db:7");
+    // watch:订阅器可从加载后的快照构建。
+    let (_tx, rx) = tokio::sync::watch::channel(std::sync::Arc::new(cfg.clone()));
+    let watcher = cfg.field_watcher(rx);
+    assert_eq!(watcher.watched_fields(), vec!["banner".to_string().into()]);
 }

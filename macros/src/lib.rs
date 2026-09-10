@@ -114,7 +114,8 @@ mod codegen;
 mod parse;
 
 use codegen::{
-    generate_clap_impl, generate_defaults_impl, generate_load_impl, generate_migration_impl,
+    generate_clap_impl, generate_defaults_impl, generate_field_attr_impls,
+    generate_field_keys_impl, generate_load_impl, generate_migration_impl,
     generate_modules_impl, generate_schema_impl, generate_validate_impl,
 };
 use darling::FromField;
@@ -273,11 +274,16 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let validate_impl = generate_validate_impl(&struct_attrs, &field_info);
     // Generate sensitive_paths() for ConfigProvider::keys() filtering
     let sensitive_paths = generate_sensitive_paths(struct_ident, &field_info);
+    // Field capabilities: ConfigFieldKeys (flatten hook) + dynamic/watch methods
+    let field_keys_impl = generate_field_keys_impl(struct_ident, &field_info);
+    let field_attr_impls = generate_field_attr_impls(struct_ident, &field_info);
     Ok(quote! {
         #defaults_impl
         #load_impl
         #validate_impl
         #sensitive_paths
+        #field_keys_impl
+        #field_attr_impls
     })
 }
 

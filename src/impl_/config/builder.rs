@@ -62,6 +62,9 @@ pub struct ConfigBuilder<T> {
     /// Health check for reload operations.
     #[cfg(feature = "progressive-reload")]
     reload_health_check: Option<Arc<dyn ReloadHealthCheck>>,
+    /// JSON-tree transformations applied to the merged value right before
+    /// deserialization (e.g. `#[config(flatten)]` hoisting).
+    json_maps: Vec<Box<dyn Fn(&mut serde_json::Value) + Send + Sync>>,
     /// Type marker.
     _marker: PhantomData<T>,
     /// Lifecycle registry for managing component startup/shutdown.
@@ -97,6 +100,7 @@ impl<T> ConfigBuilder<T> {
             preload_validators: Vec::new(),
             #[cfg(feature = "progressive-reload")]
             reload_health_check: None,
+            json_maps: Vec::new(),
             #[cfg(any(
                 feature = "remote",
                 feature = "config-bus",
@@ -192,6 +196,18 @@ impl<T> ConfigBuilder<T> {
     /// Enable fail-fast mode (stop on first error).
     pub fn fail_fast(mut self, fail_fast: bool) -> Self {
         self.chain_builder = self.chain_builder.fail_fast(fail_fast);
+        self
+    }
+
+    /// Register a transformation applied to the merged JSON tree right
+    /// before deserialization.
+    ///
+    /// Multiple transformations compose in registration order. The merged
+    /// [`AnnotatedValue`] (snapshots, provenance) is unaffected; only the
+    /// deserialization key-space changes. Used by the derive macro to
+    /// implement `#[config(flatten)]`.
+    pub fn map_json(mut self, f: impl Fn(&mut serde_json::Value) + Send + Sync + 'static) -> Self {
+        self.json_maps.push(Box::new(f));
         self
     }
 
@@ -326,7 +342,10 @@ where
         self.limits.validate_value(&merged)?;
         Self::save_snapshot(snapshot_config, &merged)?;
 
-        let json = value_to_json(&merged);
+        let mut json = value_to_json(&merged);
+        for map in &self.json_maps {
+            map(&mut json);
+        }
         let config: T = serde_json::from_value(json).map_err(|e| ConfigError::InvalidValue {
             key: String::new(),
             expected_type: std::any::type_name::<T>().to_string(),
@@ -463,7 +482,10 @@ where
         self.limits.validate_value(&merged)?;
         Self::save_snapshot(snapshot_config, &merged)?;
 
-        let json = value_to_json(&merged);
+        let mut json = value_to_json(&merged);
+        for map in &self.json_maps {
+            map(&mut json);
+        }
         let config: T = match serde_json::from_value(json) {
             Ok(c) => c,
             Err(e) => {

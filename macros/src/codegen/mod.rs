@@ -7,6 +7,7 @@
 
 mod clap;
 mod defaults;
+mod field_attrs;
 mod load;
 mod migration;
 mod modules;
@@ -16,6 +17,7 @@ mod validate;
 
 pub use clap::*;
 pub use defaults::*;
+pub use field_attrs::*;
 pub use load::*;
 pub use migration::*;
 pub use modules::*;
