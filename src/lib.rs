@@ -99,6 +99,9 @@ pub mod context;
 #[cfg(feature = "config-bus")]
 pub mod bus;
 
+#[cfg(feature = "change-stream")]
+pub mod stream;
+
 #[cfg(feature = "cli")]
 pub mod cli;
 
@@ -213,6 +216,9 @@ pub use context::{
 
 #[cfg(feature = "config-bus")]
 pub use bus::{BusBuilder, BusEventLimiter, ConfigBus, ConfigChangeEvent, InMemoryBus};
+
+#[cfg(feature = "change-stream")]
+pub use stream::{ChangeEvent, ChangeSource, ChangeStream, InMemoryChangeStream};
 
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};

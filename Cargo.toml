@@ -160,6 +160,9 @@ config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", 
 nats-bus = ["config-bus", "dep:async-nats"]
 redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 
+# Unified change stream port (reuses the config-bus transport)
+change-stream = ["config-bus", "watch"]
+
 # Context-aware
 context-aware = []
 
@@ -170,7 +173,7 @@ modules = ["toml"]
 recommended = ["toml", "env", "validation", "json", "security-rules"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "context-aware", "modules", "etcd", "consul", "feature-toggle"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle"]
 minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
