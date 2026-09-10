@@ -165,7 +165,7 @@ pub use loader::{
 };
 
 pub use flatten::{ConfigFieldKeys, FlattenSpec, hoist_flattened};
-pub use tree_transform::interpolate_keys;
+pub use tree_transform::{interpolate_keys, rename_tree_keys};
 
 // Re-export derive macros (feature-gated to match their generated code dependencies)
 pub use confers_macros::Config;

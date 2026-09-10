@@ -45,6 +45,13 @@ pub struct StructAttrs {
     /// Configuration version for migrations
     pub version: Option<u32>,
 
+    /// Batch naming strategy for the struct's configuration keys
+    /// (`camelCase`, `snake_case`, `kebab-case`). Configuration files are
+    /// then addressed with the renamed keys; the derive codegen maps them
+    /// back to the serde field names before deserialization.
+    #[darling(default)]
+    pub rename_all: Option<String>,
+
     /// Whether to enable profile overlay
     #[darling(default)]
     pub profile: bool,
@@ -82,6 +89,22 @@ impl StructAttrs {
     /// Returns `Ok(())` if all validations pass, or accumulates errors.
     pub fn validate(&self, input: &syn::DeriveInput) -> darling::Result<()> {
         let mut errors = darling::Error::accumulator();
+
+        // Validate rename_all style
+        if let Some(ref style) = self.rename_all {
+            match style.as_str() {
+                "camelCase" | "snake_case" | "kebab-case" => {}
+                other => {
+                    errors.push(
+                        darling::Error::custom(format!(
+                            "unsupported rename_all style '{other}'\n\
+                             supported styles: \"camelCase\", \"snake_case\", \"kebab-case\""
+                        ))
+                        .with_span(&input.ident),
+                    );
+                }
+            }
+        }
 
         // Validate version
         if let Some(version) = self.version

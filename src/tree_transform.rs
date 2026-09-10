@@ -114,6 +114,29 @@ fn scalar_to_string(value: &serde_json::Value) -> String {
     }
 }
 
+
+/// Rename top-level object keys from their external (file) form to the serde
+/// field names, as configured by `#[config(rename_all = "...")]`.
+///
+/// Generated code supplies `(external_key, serde_name)` pairs. A key is
+/// moved only when the serde-named key is absent, so an explicitly written
+/// serde-named key always wins. Unknown keys pass through untouched.
+pub fn rename_tree_keys(json: &mut serde_json::Value, mappings: &[(&str, &str)]) {
+    let Some(obj) = json.as_object_mut() else {
+        return;
+    };
+    for (external, serde_name) in mappings {
+        if external == serde_name {
+            continue;
+        }
+        if let Some(external_value) = obj.remove(*external) {
+            obj.entry(serde_name.to_string())
+                .or_insert(external_value);
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +191,37 @@ mod tests {
         let mut json = json!("scalar");
         interpolate_keys(&mut json, &["template"]);
         assert_eq!(json, json!("scalar"));
+    }
+
+    #[test]
+    fn renames_external_keys_to_serde_names() {
+        let mut json = json!({"userName": "amy", "isActive": true, "host": "db"});
+        rename_tree_keys(&mut json, &[("userName", "user_name"), ("isActive", "is_active")]);
+        assert_eq!(json["user_name"], json!("amy"));
+        assert_eq!(json["is_active"], json!(true));
+        assert!(json.get("userName").is_none(), "external key is consumed");
+        assert_eq!(json["host"], json!("db"), "unmapped keys pass through");
+    }
+
+    #[test]
+    fn explicit_serde_named_key_wins_over_external() {
+        let mut json = json!({"userName": "external", "user_name": "explicit"});
+        rename_tree_keys(&mut json, &[("userName", "user_name")]);
+        assert_eq!(json["user_name"], json!("explicit"));
+        assert!(json.get("userName").is_none());
+    }
+
+    #[test]
+    fn rename_is_noop_for_identical_mapping() {
+        let mut json = json!({"host": "db"});
+        rename_tree_keys(&mut json, &[("host", "host")]);
+        assert_eq!(json["host"], json!("db"));
+    }
+
+    #[test]
+    fn rename_non_object_root_is_a_noop() {
+        let mut json = json!([1, 2]);
+        rename_tree_keys(&mut json, &[("a", "b")]);
+        assert_eq!(json, json!([1, 2]));
     }
 }

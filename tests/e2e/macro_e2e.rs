@@ -377,3 +377,52 @@ fn combined_flatten_dynamic_interpolate_watch_attrs_compose() {
     let watcher = cfg.field_watcher(rx);
     assert_eq!(watcher.watched_fields(), vec!["banner".to_string().into()]);
 }
+/// rename_all 批量命名:文件键使用外部命名,codegen 在反序列化前映射回 serde 名。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[config(rename_all = "camelCase")]
+struct CamelCaseNaming {
+    user_name: String,
+    max_retries: u32,
+}
+
+#[test]
+#[serial]
+fn rename_all_camel_case_maps_file_keys_to_serde_names() {
+    let (_file, path) = write_cwd_toml("userName = \"amy\"\nmaxRetries = 5\n");
+    let cfg = CamelCaseNaming::load_file_with_env(&path).expect("camelCase load");
+    assert_eq!(cfg.user_name, "amy");
+    assert_eq!(cfg.max_retries, 5);
+}
+
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[config(rename_all = "kebab-case")]
+struct KebabCaseNaming {
+    log_level: String,
+}
+
+#[test]
+#[serial]
+fn rename_all_kebab_case_maps_file_keys_to_serde_names() {
+    let (_file, path) = write_cwd_toml("log-level = \"debug\"\n");
+    let cfg = KebabCaseNaming::load_file_with_env(&path).expect("kebab-case load");
+    assert_eq!(cfg.log_level, "debug");
+
+    // serde 名显式出现时优先于外部命名(不被外部键覆盖)。
+    let (_file, path) = write_cwd_toml("log-level = \"kebab\"\nlog_level = \"explicit\"\n");
+    let cfg = KebabCaseNaming::load_file_with_env(&path).expect("explicit serde key load");
+    assert_eq!(cfg.log_level, "explicit", "explicit serde-named key wins");
+}
+
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[config(rename_all = "snake_case")]
+struct SnakeCaseNaming {
+    pub host: String,
+}
+
+#[test]
+#[serial]
+fn rename_all_snake_case_is_identity_for_snake_fields() {
+    let (_file, path) = write_cwd_toml("host = \"db\"\n");
+    let cfg = SnakeCaseNaming::load_file_with_env(&path).expect("snake_case load");
+    assert_eq!(cfg.host, "db");
+}
