@@ -155,6 +155,7 @@ remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-s
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 etcd-watch = ["etcd", "dep:futures-util"]
 k8s = ["remote", "toml", "json", "yaml"]
+nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
 # Message bus

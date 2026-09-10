@@ -17,6 +17,8 @@ pub(crate) mod etcd;
 pub mod etcd_watch;
 #[cfg(feature = "k8s")]
 pub mod k8s;
+#[cfg(feature = "nacos")]
+pub mod nacos;
 pub(crate) mod poll;
 
 pub use interval::PollInterval;
@@ -85,4 +87,6 @@ pub use etcd_watch::{
 pub use k8s::{
     in_cluster_api_host, K8sApiSource, K8sApiSourceBuilder, K8sMountedSource, K8sObjectKind,
 };
+#[cfg(feature = "nacos")]
+pub use nacos::{NacosSource, NacosSourceBuilder, DEFAULT_NACOS_GROUP};
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
