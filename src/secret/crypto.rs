@@ -149,6 +149,12 @@ impl XChaCha20Crypto {
         key: &[u8],
         aad: &[u8],
     ) -> Result<Vec<u8>, CryptoError> {
+
+        // Critical-path span: field decryption.
+        #[cfg(feature = "tracing")]
+        let decrypt_span = tracing::info_span!("confers.decrypt");
+        #[cfg(feature = "tracing")]
+        let _decrypt_guard = decrypt_span.enter();
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
         }

@@ -47,6 +47,7 @@ thiserror = "2.0"
 dotenvy = { version = "0.15", optional = true }
 aes-gcm = { version = "0.11", optional = true }
 serde_ini = { version = "0.2", optional = true }
+tracing = { version = "0.1", optional = true }
 regex = "1.11"
 anyhow = "1.0"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
@@ -147,6 +148,7 @@ audit = ["dep:chrono", "dep:sha2", "dep:hmac", "dep:hex", "dep:getrandom"]
 migration = ["dep:chrono"]
 snapshot = ["dep:chrono", "dep:tokio", "json", "toml", "yaml", "dynamic"]
 interpolation = []
+tracing = ["dep:tracing"]
 
 # Remote sources
 remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap"]

@@ -59,6 +59,9 @@ pub mod loader;
 pub mod merger;
 pub mod metrics;
 pub mod tree_transform;
+
+// Internal tracing facade (no-op without the `tracing` feature).
+mod telemetry;
 pub mod types;
 
 // JSON value re-export: generated code (and users writing `map_json`

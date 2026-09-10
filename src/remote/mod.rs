@@ -37,6 +37,12 @@ where
 {
     use crate::metrics::names;
 
+    // Critical-path span: one remote fetch (etcd/Consul/HTTP/Nacos/K8s).
+    #[cfg(feature = "tracing")]
+    let fetch_span = tracing::info_span!("confers.remote_fetch", source = %source.as_str());
+    #[cfg(feature = "tracing")]
+    let _fetch_guard = fetch_span.enter();
+
     let started = std::time::Instant::now();
     let result = fetch.await;
     let labels = [("source", source.as_str())];

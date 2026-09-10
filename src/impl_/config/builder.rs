@@ -322,6 +322,12 @@ where
     }
 
     fn do_build_inner(mut self) -> ConfigResult<T> {
+        // Critical-path span: the whole chain build (load).
+        #[cfg(feature = "tracing")]
+        let load_span = tracing::info_span!("confers.load");
+        #[cfg(feature = "tracing")]
+        let _load_guard = load_span.enter();
+
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
