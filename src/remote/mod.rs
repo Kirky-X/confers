@@ -15,6 +15,8 @@ pub(crate) mod consul;
 pub(crate) mod etcd;
 #[cfg(feature = "etcd-watch")]
 pub mod etcd_watch;
+#[cfg(feature = "k8s")]
+pub mod k8s;
 pub(crate) mod poll;
 
 pub use interval::PollInterval;
@@ -78,5 +80,9 @@ pub use etcd::{EtcdSource, EtcdSourceBuilder, EtcdTlsConfig};
 pub use etcd_watch::{
     EtcdGrpcWatchSource, EtcdWatchCallback, EtcdWatchEvent, EtcdWatchRetry, EtcdWatcher,
     WatchEventSource, WatchItem,
+};
+#[cfg(feature = "k8s")]
+pub use k8s::{
+    in_cluster_api_host, K8sApiSource, K8sApiSourceBuilder, K8sMountedSource, K8sObjectKind,
 };
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
