@@ -897,6 +897,7 @@ mod tests {
         addr
     }
 
+    #[cfg(feature = "remote")]
     #[tokio::test]
     async fn approle_login_exchanges_credentials_for_token() {
         let addr = spawn_mock_vault(vec![
@@ -929,6 +930,7 @@ mod tests {
         assert!(!key.as_slice().is_empty());
     }
 
+    #[cfg(feature = "remote")]
     #[tokio::test]
     async fn kubernetes_login_exchanges_jwt_for_token() {
         let addr = spawn_mock_vault(vec![
@@ -961,6 +963,7 @@ mod tests {
         assert!(!key.as_slice().is_empty());
     }
 
+    #[cfg(feature = "remote")]
     #[tokio::test]
     async fn failed_login_maps_to_retryable_unavailable() {
         let addr = spawn_mock_vault(vec![(403, "{\"errors\":[\"bad creds\"]}".to_string())]).await;
@@ -984,6 +987,7 @@ mod tests {
         ), "403 is permanent, not retryable");
     }
 
+    #[cfg(feature = "remote")]
     #[test]
     fn kubernetes_auth_can_be_built_from_inline_jwt() {
         let auth = VaultAuth::Kubernetes {

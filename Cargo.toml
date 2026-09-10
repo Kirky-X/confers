@@ -158,6 +158,7 @@ etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwes
 etcd-watch = ["etcd", "dep:futures-util"]
 k8s = ["remote", "toml", "json", "yaml"]
 cloud-kms = ["remote"]
+keyring = ["dep:log"]
 nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
