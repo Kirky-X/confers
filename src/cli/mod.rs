@@ -296,7 +296,12 @@ enum Commands {
     },
 
     /// Output JSON Schema for the configuration type
-    Schema,
+    Schema {
+        /// Infer a schema draft from the loaded configuration instance
+        /// instead of the derived type (schema-first reverse engineering).
+        #[arg(long)]
+        from_instance: bool,
+    },
 
     /// Get a specific configuration value by key path (dot-separated)
     Get {
@@ -408,8 +413,12 @@ where
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
         }
-        Commands::Schema => {
-            cmd_schema::<T>()?;
+        Commands::Schema { from_instance } => {
+            if from_instance {
+                cmd_schema_from_instance(&config_paths, allow_absolute_paths)?;
+            } else {
+                cmd_schema::<T>()?;
+            }
         }
         Commands::Get { key } => {
             cmd_get(&config_paths, &key, allow_absolute_paths, fields_filter.as_deref())?;
@@ -1254,6 +1263,90 @@ fn cmd_schema<T: JsonSchema>() -> Result<()> {
     println!("{json}");
     Ok(())
 }
+
+/// `schema --from-instance`: reverse-engineer a JSON Schema draft from the
+/// loaded configuration instance.
+///
+/// The draft captures the observed shape (types, required keys, array item
+/// types); it is a starting point for schema-first workflows, not a strict
+/// guarantee that future instances of the same service match it.
+fn cmd_schema_from_instance(config_paths: &[PathBuf], allow_absolute_paths: bool) -> Result<()> {
+    let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
+    let schema = infer_schema_from_instance(&config);
+    println!("{}", serde_json::to_string_pretty(&schema)?);
+    Ok(())
+}
+
+/// Maximum recursion depth for instance schema inference (DoS guard).
+const MAX_INFER_DEPTH: usize = 32;
+
+/// Infer a JSON Schema draft (2020-12 flavored) from a JSON instance.
+///
+/// - objects: `type: object` + `properties` (recursive) + `required` (all
+///   observed keys) + `additionalProperties: false`
+/// - arrays: `type: array` + `items` merged from the observed elements
+/// - integers stay `integer`, floats become `number`, `null` becomes `{}` and
+///   mixed-type arrays widen `items` to `{}`
+pub fn infer_schema_from_instance(value: &serde_json::Value) -> serde_json::Value {
+    infer_schema_inner(value, 0)
+}
+
+fn infer_schema_inner(value: &serde_json::Value, depth: usize) -> serde_json::Value {
+    if depth > MAX_INFER_DEPTH {
+        // Deeper structure than we are willing to walk: accept anything.
+        return serde_json::json!({});
+    }
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut properties = serde_json::Map::new();
+            let mut required = Vec::new();
+            for (key, child) in map {
+                properties.insert(
+                    key.clone(),
+                    infer_schema_inner(child, depth + 1),
+                );
+                required.push(serde_json::Value::String(key.clone()));
+            }
+            serde_json::json!({
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": false,
+            })
+        }
+        serde_json::Value::Array(items) => {
+            let item_schemas: Vec<serde_json::Value> = items
+                .iter()
+                .map(|item| infer_schema_inner(item, depth + 1))
+                .collect();
+            let items_schema = match item_schemas.as_slice() {
+                [] => serde_json::json!({}),
+                [first] => first.clone(),
+                many => {
+                    // Homogeneous arrays keep the element schema; mixed
+                    // arrays widen to "any" instead of guessing a union.
+                    if many.iter().all(|s| s == &many[0]) {
+                        many[0].clone()
+                    } else {
+                        serde_json::json!({})
+                    }
+                }
+            };
+            serde_json::json!({ "type": "array", "items": items_schema })
+        }
+        serde_json::Value::String(_) => serde_json::json!({ "type": "string" }),
+        serde_json::Value::Number(n) => {
+            if n.is_i64() || n.is_u64() {
+                serde_json::json!({ "type": "integer" })
+            } else {
+                serde_json::json!({ "type": "number" })
+            }
+        }
+        serde_json::Value::Bool(_) => serde_json::json!({ "type": "boolean" }),
+        serde_json::Value::Null => serde_json::json!({}),
+    }
+}
+
 
 /// Get a specific configuration value by dot-separated key path.
 ///
@@ -4187,5 +4280,102 @@ mod tests {
         let line = serde_json::to_string(&report.to_json_line()).expect("json");
         assert!(!line.contains('\n'), "single line: {line}");
         assert!(line.contains("\"status\":\"healthy\""), "{line}");
+    }
+
+    // ============== schema --from-instance ==============
+
+    #[test]
+    fn infer_schema_object_with_required_and_nested() {
+        let instance = serde_json::json!({
+            "host": "localhost",
+            "port": 8080,
+            "database": {"url": "postgres://x", "pool": {"size": 10}},
+        });
+        let schema = super::infer_schema_from_instance(&instance);
+
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["host"]["type"], "string");
+        assert_eq!(schema["properties"]["port"]["type"], "integer");
+        assert_eq!(schema["properties"]["database"]["type"], "object");
+        assert_eq!(
+            schema["properties"]["database"]["properties"]["pool"]["properties"]["size"]["type"],
+            "integer"
+        );
+
+        // Every observed key is required.
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(required, vec!["database", "host", "port"]);
+        assert_eq!(schema["additionalProperties"], false);
+    }
+
+    #[test]
+    fn infer_schema_arrays_and_scalars() {
+        let instance = serde_json::json!({
+            "tags": ["a", "b"],
+            "mixed": [1, "x"],
+            "empty": [],
+            "ratio": 0.5,
+            "enabled": true,
+            "nothing": null,
+        });
+        let schema = super::infer_schema_from_instance(&instance);
+
+        assert_eq!(schema["properties"]["tags"]["type"], "array");
+        assert_eq!(schema["properties"]["tags"]["items"]["type"], "string");
+        // Mixed array widens items to "any".
+        assert_eq!(schema["properties"]["mixed"]["items"], serde_json::json!({}));
+        assert_eq!(schema["properties"]["empty"]["items"], serde_json::json!({}));
+        assert_eq!(schema["properties"]["ratio"]["type"], "number");
+        assert_eq!(schema["properties"]["enabled"]["type"], "boolean");
+        // null infers to the permissive schema.
+        assert_eq!(schema["properties"]["nothing"], serde_json::json!({}));
+    }
+
+    #[test]
+    fn inferred_schema_validates_the_original_instance() {
+        // Round-trip guarantee: the draft accepts the instance it was
+        // inferred from (required keys + types are exactly the observed ones).
+        let instance = serde_json::json!({"a": 1, "b": {"c": [true]}});
+        let schema = super::infer_schema_from_instance(&instance);
+
+        fn validate(v: &serde_json::Value, s: &serde_json::Value) -> bool {
+            match (v, s) {
+                (serde_json::Value::Object(obj), s) => {
+                    if s["type"] != "object" {
+                        return false;
+                    }
+                    let props = s["properties"].as_object().unwrap();
+                    let required = s["required"].as_array().unwrap();
+                    obj.iter().all(|(k, val)| {
+                        props.contains_key(k) && validate(val, &props[k])
+                    }) && required.iter().all(|r| obj.contains_key(r.as_str().unwrap()))
+                }
+                (serde_json::Value::Array(items), s) => {
+                    s["type"] == "array"
+                        && items.iter().all(|i| validate(i, &s["items"]))
+                }
+                (serde_json::Value::String(_), s) => s["type"] == "string",
+                (serde_json::Value::Number(n), s) => {
+                    if n.is_f64() {
+                        s["type"] == "number"
+                    } else {
+                        s["type"] == "integer" || s["type"] == "number"
+                    }
+                }
+                (serde_json::Value::Bool(_), s) => s["type"] == "boolean",
+                (serde_json::Value::Null, _) => true,
+                _ => false,
+            }
+        }
+        assert!(validate(&instance, &schema));
+        // A mutated instance violates the draft.
+        let mut bad = instance.clone();
+        bad["a"] = serde_json::json!("now-a-string");
+        assert!(!validate(&bad, &schema));
     }
 }
