@@ -326,3 +326,18 @@ println!("CPU time: {:?}", monitor.elapsed());
 
 结论：单订阅者一次变更通告约 2 µs，8 订阅者扇出 < 4 µs，通知路径不构成
 热重载瓶颈（对比一次典型 load 的 ~0.7 µs 量级一致）。
+
+### 零拷贝热路径（hot_path_bench，T118）
+
+`InMemoryConfig` 内部存储改为 `Cache<String, Arc<AnnotatedValue>>`，并新增
+`SharedValueReader::get_shared()`（返回 `Arc` 句柄，避免深拷贝大 value）。
+10 KiB 字符串 value 的读取对比（同一运行内）：
+
+| 读取路径 | 耗时（median） |
+| --- | --- |
+| `get_raw`（深拷贝，变更前路径） | ~337 ns |
+| `get_shared`（Arc 共享句柄，变更后路径） | ~161 ns |
+
+大 value 读取零拷贝路径约 **2.1x** 提升，且不随 value 体积增长。
+附带记录：`hot_path_get_100_keys`（100 键 get_string 扫描）≈ 24.9 µs。
+公共 API 零破坏：`get_raw`/`get_string` 语义不变，`get_shared` 为纯新增。

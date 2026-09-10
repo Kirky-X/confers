@@ -29,8 +29,27 @@ use crate::interface::sealed::Sealed;
 use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::types::{AnnotatedValue, SourceId};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 // ============== Async Implementation (feature-gated) ==============
+
+/// Zero-copy read port: fetch the shared handle (`Arc`) to a stored value
+/// instead of a deep clone.
+///
+/// Implemented by [`InMemoryConfig`]; pair it with [`crate::new_in_memory`]
+/// for allocation-free hot-path reads of large values. Only available in
+/// async builds (one of `remote`/`config-bus`/`encryption`/`watch`); the
+/// minimal sync build keeps zero dependencies.
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+#[async_trait::async_trait]
+pub trait SharedValueReader: Send + Sync {
+    async fn get_shared(&self, key: &str) -> ConfersResult<Option<Arc<AnnotatedValue>>>;
+}
 
 #[cfg(any(
     feature = "remote",
@@ -50,7 +69,7 @@ mod async_impl {
     #[derive(Debug)]
     pub struct InMemoryConfig {
         /// The underlying moka cache
-        cache: Cache<String, AnnotatedValue>,
+        cache: Cache<String, Arc<AnnotatedValue>>,
         /// Source ID for values created by this config
         source_id: SourceId,
         /// Default priority for new values
@@ -91,6 +110,12 @@ mod async_impl {
         /// # Ok::<(), confers::ConfigConfigError>(())
         /// ```
         pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
+            Self::validate_capacity(max_capacity)?;
+            Ok(Self::builder().max_capacity(max_capacity).build())
+        }
+
+        /// Shared validation used by the sync/async variants.
+        fn validate_capacity(max_capacity: u64) -> Result<(), ConfigConfigError> {
             if max_capacity == 0 {
                 return Err(ConfigConfigError::InvalidValue {
                     field: "max_capacity".into(),
@@ -98,7 +123,7 @@ mod async_impl {
                     message: "must be greater than 0".into(),
                 });
             }
-            Ok(Self::builder().max_capacity(max_capacity).build())
+            Ok(())
         }
 
         /// Create a builder for custom configuration.
@@ -143,7 +168,7 @@ mod async_impl {
     #[async_trait]
     impl ConfigReader for InMemoryConfig {
         async fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>> {
-            Ok(self.cache.get(&key.to_string()).await)
+            Ok(self.cache.get(&key.to_string()).await.map(|v| (*v).clone()))
         }
 
         async fn keys(&self) -> ConfersResult<Vec<String>> {
@@ -152,9 +177,20 @@ mod async_impl {
     }
 
     #[async_trait]
+    impl super::SharedValueReader for InMemoryConfig {
+        /// Zero-copy read: returns the shared handle to the stored value
+        /// (an `Arc` clone) instead of deep-cloning the value tree.
+        async fn get_shared(&self, key: &str) -> ConfersResult<Option<Arc<AnnotatedValue>>> {
+            Ok(self.cache.get(&key.to_string()).await)
+        }
+    }
+
+    #[async_trait]
     impl ConfigWriter for InMemoryConfig {
         async fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()> {
-            self.cache.insert(key.to_string(), value).await;
+            self.cache
+                .insert(key.to_string(), Arc::new(value))
+                .await;
             self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -311,7 +347,7 @@ mod sync_impl {
     #[derive(Debug)]
     pub struct InMemoryConfig {
         /// The underlying moka cache
-        cache: Cache<String, AnnotatedValue>,
+        cache: Cache<String, Arc<AnnotatedValue>>,
         /// Source ID for values created by this config
         source_id: SourceId,
         /// Default priority for new values
@@ -394,7 +430,7 @@ mod sync_impl {
 
     impl ConfigReader for InMemoryConfig {
         fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>> {
-            Ok(self.cache.get(&key.to_string()))
+            Ok(self.cache.get(&key.to_string()).map(|v| (*v).clone()))
         }
 
         fn keys(&self) -> ConfersResult<Vec<String>> {
@@ -402,9 +438,17 @@ mod sync_impl {
         }
     }
 
+    impl InMemoryConfig {
+        /// Zero-copy read: returns the shared handle to the stored value
+        /// (an `Arc` clone) instead of deep-cloning the value tree.
+        pub fn get_shared(&self, key: &str) -> Option<Arc<AnnotatedValue>> {
+            self.cache.get(&key.to_string())
+        }
+    }
+
     impl ConfigWriter for InMemoryConfig {
         fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()> {
-            self.cache.insert(key.to_string(), value);
+            self.cache.insert(key.to_string(), Arc::new(value));
             self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -853,5 +897,59 @@ mod tests {
             config.delete("key").unwrap();
             assert_eq!(config.version(), 2);
         }
+    }
+}
+
+#[cfg(all(test, any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+)))]
+mod zero_copy_tests {
+    use super::*;
+    use crate::types::{ConfigValue, SourceId};
+
+    #[tokio::test]
+    async fn get_shared_returns_same_underlying_value() {
+        let config = InMemoryConfig::new();
+        config
+            .set(
+                "large.value",
+                AnnotatedValue::new(
+                    ConfigValue::string("x".repeat(10_000)),
+                    SourceId::default(),
+                    "large.value",
+                ),
+            )
+            .await
+            .unwrap();
+
+        let shared1 = SharedValueReader::get_shared(&config, "large.value")
+            .await
+            .unwrap()
+            .unwrap();
+        let shared2 = SharedValueReader::get_shared(&config, "large.value")
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Zero-copy: both handles wrap the same allocation.
+        assert!(
+            Arc::ptr_eq(&shared1, &shared2),
+            "get_shared must return the shared handle, not a clone"
+        );
+        assert_eq!(shared1.as_str(), shared2.as_str());
+    }
+
+    #[tokio::test]
+    async fn get_shared_absent_key_is_none() {
+        let config = InMemoryConfig::new();
+        assert!(
+            SharedValueReader::get_shared(&config, "missing")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }
