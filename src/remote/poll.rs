@@ -653,6 +653,22 @@ impl PolledSource for HttpPolledSource {
     /// consecutive failures have occurred, returning an error immediately
     /// without making an HTTP request.
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+        super::record_fetch_metrics(&self.source_id.clone(), self.poll_with_circuit_breaker())
+            .await
+    }
+
+    fn poll_interval(&self) -> Option<Duration> {
+        Some(self.interval)
+    }
+
+    fn source_id(&self) -> SourceId {
+        self.source_id.clone()
+    }
+}
+
+impl HttpPolledSource {
+    /// Poll with circuit-breaker accounting (the original `poll` body).
+    async fn poll_with_circuit_breaker(&self) -> ConfigResult<AnnotatedValue> {
         // Check circuit breaker before making any HTTP request
         {
             let mut cb = self.circuit_breaker.lock().unwrap();
@@ -678,16 +694,6 @@ impl PolledSource for HttpPolledSource {
         result
     }
 
-    fn poll_interval(&self) -> Option<Duration> {
-        Some(self.interval)
-    }
-
-    fn source_id(&self) -> SourceId {
-        self.source_id.clone()
-    }
-}
-
-impl HttpPolledSource {
     /// Internal poll implementation (without circuit breaker logic).
     ///
     /// Redirects are followed manually (up to [`MAX_REDIRECTS`] hops): the
@@ -1477,6 +1483,66 @@ mod tests {
             source_id: SourceId::new(format!("http:{url}")),
             circuit_breaker: std::sync::Mutex::new(circuit_breaker),
         }
+    }
+
+    /// Remote-fetch critical-path metrics: latency histogram on every fetch
+    /// and an error counter on failures, through the optional backend.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_remote_fetch_metrics_recorded_on_error_and_success() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        crate::metrics::clear_metrics_backend();
+        let recorder = crate::metrics::test_support::RecordingBackend::installed();
+
+        // Error path: a closed local port fails fast and must record both the
+        // latency histogram and the error counter.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let closed_addr = listener.local_addr().expect("local addr");
+        drop(listener); // close the port so the connection is refused
+
+        let source = source_against_local(closed_addr);
+        assert!(source.poll().await.is_err(), "closed port must fail");
+        assert!(
+            recorder
+                .counter_count(crate::metrics::names::REMOTE_FETCH_ERRORS_TOTAL)
+                >= 1,
+            "fetch errors must be counted"
+        );
+        assert!(
+            recorder
+                .histogram_count(crate::metrics::names::REMOTE_FETCH_DURATION_SECONDS)
+                >= 1,
+            "fetch latency must be recorded"
+        );
+
+        // Success path: a live local HTTP server records latency without
+        // counting an error.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"ok":true}"#;
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _n = stream.read(&mut buf).await.expect("read");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+        });
+
+        let source = source_against_local(addr);
+        assert!(source.poll().await.is_ok(), "live server must answer");
+        server.await.expect("server task");
+
+        crate::metrics::clear_metrics_backend();
     }
 
     /// Real local HTTP interaction with explicit value assertions.

@@ -275,13 +275,37 @@ where
     /// # Non-finite floats
     ///
     /// Non-finite `f64` values surface unchanged here (no JSON round-trip is
-    /// performed); they are only converted to the strings `"NaN"`, `"inf"`
-    /// and `"-inf"` when routed through JSON deserialization (see [`Self::build`]).
+    /// performed); they are only converted to the strings `"NaN"`, `"inf"` and
+    /// `"-inf"` when routed through JSON deserialization (see [`Self::build`]).
     pub fn build_annotated(self) -> ConfigResult<AnnotatedValue> {
         self.do_build_annotated()
     }
 
-    fn do_build(mut self) -> ConfigResult<T> {
+    fn do_build(self) -> ConfigResult<T> {
+        // Critical-path metric: loader completion/failure and duration are
+        // emitted through the (optional, NoOp-by-default) MetricsBackend.
+        let started = std::time::Instant::now();
+        let result = self.do_build_inner();
+        match &result {
+            Ok(_) => {
+                crate::metrics::record_counter(crate::metrics::names::LOADER_LOADS_TOTAL, &[]);
+                crate::metrics::record_histogram(
+                    crate::metrics::names::LOADER_DURATION_SECONDS,
+                    started.elapsed().as_secs_f64(),
+                    &[],
+                );
+            }
+            Err(_) => {
+                crate::metrics::record_counter(
+                    crate::metrics::names::LOADER_FAILURES_TOTAL,
+                    &[],
+                );
+            }
+        }
+        result
+    }
+
+    fn do_build_inner(mut self) -> ConfigResult<T> {
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
@@ -554,6 +578,40 @@ mod tests {
         name: String,
         #[serde(default)]
         port: u16,
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_loader_metrics_record_success_and_failure() {
+        // Critical-path metrics: loader completion (counter + duration
+        // histogram) and failure (counter) through the optional backend.
+        crate::metrics::clear_metrics_backend();
+        let recorder = crate::metrics::test_support::RecordingBackend::installed();
+
+        let config = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("metrics"))
+            .build()
+            .unwrap();
+        assert_eq!(config.name, "metrics");
+        assert!(
+            recorder.counter_count(crate::metrics::names::LOADER_LOADS_TOTAL) >= 1,
+            "successful build must count a load"
+        );
+        assert!(
+            recorder.histogram_count(crate::metrics::names::LOADER_DURATION_SECONDS) >= 1,
+            "successful build must record a duration"
+        );
+
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("port", ConfigValue::string("not_a_number"))
+            .build();
+        assert!(result.is_err());
+        assert!(
+            recorder.counter_count(crate::metrics::names::LOADER_FAILURES_TOTAL) >= 1,
+            "failed build must count a loader failure"
+        );
+
+        crate::metrics::clear_metrics_backend();
     }
 
     #[test]

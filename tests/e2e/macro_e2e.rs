@@ -17,6 +17,7 @@
 //!
 //! MAC-01/02/04/05/10/13…16 已有覆盖(tests/core/derive.rs、tests/core/env_types.rs、src 内联)。
 
+use serial_test::serial;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -44,38 +45,103 @@ struct NamedFields {
 }
 
 #[test]
+#[serial]
 fn mac03_name_and_name_env_override_key_mapping() {
-    // 行为固化:name 属性映射 env 名与默认键,文件键仍是 serde 字段名。
+    // 基线:文件键仍是 serde 字段名,name 属性不改变文件键。
     let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 8080\n");
     let cfg = NamedFields::load_file_with_env(&path).expect("load via field-name keys");
     assert_eq!(cfg.host, "file-host");
     assert_eq!(cfg.port, 8080);
 
-    // 行为固化(已知缺陷,见报告):name 派生的 env 名写入重命名后的键
-    // ("bind_host"),serde 仍按字段名 "host" 反序列化 → env 覆盖不生效。
-    let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 8080\n");
-    unsafe { std::env::set_var("BIND_HOST", "env-host") };
-    let cfg = NamedFields::load_file_with_env(&path).expect("load with default name env");
-    unsafe { std::env::remove_var("BIND_HOST") };
-    assert_eq!(
-        cfg.host, "file-host",
-        "name-derived env override lands under a key serde ignores (fixated defect)"
-    );
-
-    // name_env 同理:自定义 env 名的覆盖同样不生效。
+    // name_env 声明的 env 名必须与声明一致并真实覆盖 host 字段。
     let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 8080\n");
     unsafe { std::env::set_var("NAMED_FIELDS_CUSTOM_HOST", "custom-env-host") };
     let cfg = NamedFields::load_file_with_env(&path).expect("load with custom name_env");
     unsafe { std::env::remove_var("NAMED_FIELDS_CUSTOM_HOST") };
     assert_eq!(
+        cfg.host, "custom-env-host",
+        "name_env override must reach the field"
+    );
+
+    // 互不污染:host 声明了 name_env 后,name 派生命名(BIND_HOST)不再生效。
+    let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 8080\n");
+    unsafe { std::env::set_var("BIND_HOST", "leaked-host") };
+    let cfg = NamedFields::load_file_with_env(&path).expect("load with derived name env");
+    unsafe { std::env::remove_var("BIND_HOST") };
+    assert_eq!(
         cfg.host, "file-host",
-        "name_env override ineffective for the same reason (fixated defect)"
+        "fields declaring name_env must not read the name-derived env key"
     );
 }
 
-/// MAC-07:skip 字段行为固化。
+/// MAC-03:仅声明 `name`(无 name_env)时,name 派生的 env 名必须真实覆盖字段。
 #[derive(Debug, confers::Config, serde::Deserialize)]
-#[allow(dead_code)] // 仅断言加载失败路径,字段值本身不被读取。
+struct NameOnlyFields {
+    #[config(name = "bind_host")]
+    pub host: String,
+
+    #[config(name = "bind_port")]
+    pub port: u16,
+}
+
+#[test]
+#[serial]
+fn mac03_name_derived_env_override_reaches_field() {
+    let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 8080\n");
+    unsafe { std::env::set_var("BIND_HOST", "env-host") };
+    unsafe { std::env::set_var("BIND_PORT", "9090") };
+    let cfg = NameOnlyFields::load_file_with_env(&path).expect("load with derived name envs");
+    unsafe { std::env::remove_var("BIND_HOST") };
+    unsafe { std::env::remove_var("BIND_PORT") };
+    assert_eq!(
+        cfg.host, "env-host",
+        "name-derived env override must reach the field"
+    );
+    assert_eq!(cfg.port, 9090, "name-derived env override applies to all fields");
+}
+
+/// MAC-03(互不污染):声明 name_env 后,env 键与默认命名规则互不串扰。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct EnvNameIsolation {
+    #[config(name_env = "ISOLATION_CUSTOM")]
+    pub custom: String,
+
+    pub plain: String,
+}
+
+#[test]
+#[serial]
+fn mac03_name_env_does_not_pollute_default_naming() {
+    // 声明了 name_env 的字段只读取声明键:默认派生命名(CUSTOM)不再生效。
+    let (_file, path) = write_cwd_toml("custom = \"file-custom\"\nplain = \"file-plain\"\n");
+    unsafe { std::env::set_var("CUSTOM", "leaked") };
+    unsafe { std::env::set_var("ISOLATION_CUSTOM", "declared-env") };
+    let cfg = EnvNameIsolation::load_file_with_env(&path).expect("load isolation struct");
+    unsafe { std::env::remove_var("CUSTOM") };
+    unsafe { std::env::remove_var("ISOLATION_CUSTOM") };
+    assert_eq!(
+        cfg.custom, "declared-env",
+        "name_env-declared key must drive the override"
+    );
+    assert_eq!(
+        cfg.plain, "file-plain",
+        "custom env key must not leak into the plain field"
+    );
+
+    // 反向:默认命名规则字段只读取自身派生键,不读取他人声明的 name_env。
+    let (_file, path) = write_cwd_toml("custom = \"file-custom\"\nplain = \"file-plain\"\n");
+    unsafe { std::env::set_var("PLAIN", "plain-env") };
+    let cfg = EnvNameIsolation::load_file_with_env(&path).expect("load isolation struct 2");
+    unsafe { std::env::remove_var("PLAIN") };
+    assert_eq!(
+        cfg.custom, "file-custom",
+        "plain field's derived env must not touch the name_env field"
+    );
+    assert_eq!(cfg.plain, "plain-env");
+}
+
+/// MAC-07:skip 字段行为。
+#[derive(Debug, confers::Config, serde::Deserialize)]
 struct SkippedField {
     pub visible: String,
 
@@ -84,6 +150,7 @@ struct SkippedField {
 }
 
 #[test]
+#[serial]
 fn mac07_skipped_field_behavior() {
     // skip + Option 字段:源未提供键 → None(serde 可选语义)。
     #[derive(Debug, confers::Config, serde::Deserialize)]
@@ -98,29 +165,53 @@ fn mac07_skipped_field_behavior() {
     assert_eq!(cfg.visible, "from-file");
     assert!(cfg.hidden.is_none(), "skipped field stays unset");
 
-    // 行为固化(已知缺陷,见报告):通用 env 源仍会按 HIDDEN → hidden 注入,
-    // skip 无法把字段挡在加载管线之外。
+    // skip 字段不参与加载:通用 env 源不得把 HIDDEN 注入 skipped 字段。
     unsafe { std::env::set_var("HIDDEN", "from-env") };
     let cfg = SkippedOptional::load_file_with_env(&path).expect("load with env var present");
     unsafe { std::env::remove_var("HIDDEN") };
     assert_eq!(
-        cfg.hidden.as_deref(),
-        Some("from-env"),
-        "generic env source bypasses skip (fixated defect)"
+        cfg.hidden, None,
+        "skip must keep the field out of the load pipeline (env bypass fixed)"
     );
 }
 
-/// 行为固化(已知缺陷):`skip` + `default` 组合 —— default 属性对 skip 字段
-/// 不生效(默认值生成同样过滤了 skip 字段)→ 缺键时加载直接失败。
+/// MAC-07:skip 字段从任何来源(env/文件)取得的值都不得覆盖其 default。
 #[test]
-fn mac07_skip_with_default_attr_still_fails_when_key_missing() {
+#[serial]
+fn mac07_skip_default_not_overridden_by_env_or_file() {
+    // env 同名值不得覆盖 skip 字段 default。
     let (_file, path) = write_cwd_toml("visible = \"from-file\"\n");
-    let err = SkippedField::load_file_with_env(&path)
-        .expect_err("skip + default does not materialize the default");
-    assert!(
-        err.to_string().contains("missing field `hidden`"),
-        "unexpected error: {err}"
+    unsafe { std::env::set_var("HIDDEN", "from-env") };
+    let cfg = SkippedField::load_file_with_env(&path).expect("load with skipped + default");
+    unsafe { std::env::remove_var("HIDDEN") };
+    assert_eq!(cfg.visible, "from-file");
+    assert_eq!(
+        cfg.hidden, "default-value",
+        "skip field must materialize its default, not the env value"
     );
+
+    // 文件同名值同样不得覆盖 skip 字段 default。
+    let (_file, path) = write_cwd_toml("visible = \"from-file\"\nhidden = \"from-file\"\n");
+    let cfg = SkippedField::load_file_with_env(&path).expect("load with file key for skip field");
+    assert_eq!(
+        cfg.hidden, "default-value",
+        "skip field default must not be overridden by the file source"
+    );
+}
+
+/// MAC-07:skip + default 组合在键缺失时加载成功(default 物化)。
+#[test]
+#[serial]
+fn mac07_skip_materializes_value_instead_of_failing() {
+    let (_file, path) = write_cwd_toml("visible = \"from-file\"\n");
+    let cfg = SkippedField::load_file_with_env(&path)
+        .expect("skip + default must materialize the default instead of failing");
+    assert_eq!(cfg.hidden, "default-value");
+
+    // load_file(无 env)同样物化 skip default。
+    let (_file, path) = write_cwd_toml("visible = \"from-file\"\n");
+    let cfg = SkippedField::load_file(&path).expect("load_file also materializes skip default");
+    assert_eq!(cfg.hidden, "default-value");
 }
 
 /// 行为固化:flatten / dynamic / interpolate / watch 属性被解析接受,

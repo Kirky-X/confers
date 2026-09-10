@@ -12,6 +12,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use schemars::JsonSchema;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -214,6 +215,10 @@ struct Cli {
     #[arg(long)]
     allow_absolute_paths: bool,
 
+    /// Filter output to only include specified fields (comma-separated dot-paths, e.g. "a.b,c.d")
+    #[arg(long, global = true)]
+    fields: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -289,6 +294,15 @@ enum Commands {
         #[command(subcommand)]
         action: SnapshotCommands,
     },
+
+    /// Output JSON Schema for the configuration type
+    Schema,
+
+    /// Get a specific configuration value by key path (dot-separated)
+    Get {
+        /// Configuration key path (e.g., "server.host" or "database.pool.size")
+        key: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -323,9 +337,15 @@ enum SnapshotCommands {
 ///
 /// Generic over the config type `T` for type-safe validation and schema
 /// generation. Use with `confers::cli::run::<AppConfig>()`.
+///
+/// # Exit codes
+///
+/// - `0` — success
+/// - `1` — configuration error (parse, validation, missing field, …)
+/// - `2` — I/O error (file not found on disk level, permission denied, …)
 pub fn run<T>() -> Result<()>
 where
-    T: serde::de::DeserializeOwned + Send + Sync + 'static,
+    T: serde::de::DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
     let cli = Cli::parse();
 
@@ -335,6 +355,7 @@ where
 
     let config_paths = cli.config.clone();
     let allow_absolute_paths = cli.allow_absolute_paths;
+    let fields_filter = cli.fields.clone();
 
     match cli.command {
         Commands::Inspect {
@@ -378,6 +399,12 @@ where
         }
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
+        }
+        Commands::Schema => {
+            cmd_schema::<T>()?;
+        }
+        Commands::Get { key } => {
+            cmd_get(&config_paths, &key, allow_absolute_paths, fields_filter.as_deref())?;
         }
     }
 
@@ -1205,6 +1232,78 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         removed_count, days, failed_count, skipped_count
     );
     Ok(())
+}
+
+// ── T005: schema / get / --fields ──
+
+/// Output JSON Schema for configuration type `T`.
+fn cmd_schema<T: JsonSchema>() -> Result<()> {
+    let schema = schemars::schema_for!(T);
+    let json = serde_json::to_string_pretty(&schema)?;
+    println!("{json}");
+    Ok(())
+}
+
+/// Get a specific configuration value by dot-separated key path.
+///
+/// Output is single-line stable JSON. Missing keys emit `null` (exit 0).
+fn cmd_get(
+    config_paths: &[PathBuf],
+    key: &str,
+    allow_absolute_paths: bool,
+    fields: Option<&str>,
+) -> Result<()> {
+    let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
+
+    // "." means the root config object
+    let value = if key == "." {
+        Some(&config)
+    } else {
+        navigate_json(&config, key)
+    };
+
+    // Apply --fields filtering if provided
+    let output = match (value, fields) {
+        (Some(v), Some(f)) => filter_json_by_fields(v, f),
+        (Some(v), None) => v.clone(),
+        (None, _) => serde_json::Value::Null,
+    };
+
+    let json_str = serde_json::to_string(&output)?;
+    println!("{json_str}");
+    Ok(())
+}
+
+/// Navigate a `serde_json::Value` by dot-separated key path.
+fn navigate_json<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
+    let mut current = value;
+    for key in path.split('.') {
+        match current.get(key) {
+            Some(v) => current = v,
+            None => return None,
+        }
+    }
+    Some(current)
+}
+
+/// Filter a JSON value to only include the specified fields (comma-separated dot-paths).
+///
+/// For example, `filter_json_by_fields(value, "a.b,c")` on
+/// `{"a":{"b":1,"d":2},"c":3,"e":4}` produces `{"b":1,"c":3}`.
+fn filter_json_by_fields(value: &serde_json::Value, fields: &str) -> serde_json::Value {
+    let mut result = serde_json::Map::new();
+    for field_path in fields.split(',') {
+        let field_path = field_path.trim();
+        if field_path.is_empty() {
+            continue;
+        }
+        if let Some(v) = navigate_json(value, field_path) {
+            // Use the last segment of the path as the key
+            let key = field_path.rsplit('.').next().unwrap_or(field_path);
+            result.insert(key.to_string(), v.clone());
+        }
+    }
+    serde_json::Value::Object(result)
 }
 
 #[cfg(test)]

@@ -56,6 +56,7 @@ pub mod format;
 pub mod interface;
 pub mod loader;
 pub mod merger;
+pub mod metrics;
 pub mod types;
 
 // Internal implementation (not exposed)
@@ -189,7 +190,8 @@ pub use secret::{
 
 #[cfg(feature = "audit")]
 pub use audit::{
-    AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditWriter, AuditWriterBuilder,
+    verify_audit_chain, AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditWriter,
+    AuditWriterBuilder,
 };
 
 #[cfg(feature = "dynamic")]
