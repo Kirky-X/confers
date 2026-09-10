@@ -27,7 +27,7 @@ chacha20poly1305 = { version = "0.11", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 compact_str = { version = "0.10", features = ["serde"] }
-confers-macros = { version = "0.6.0-rc.3", path = "macros" }
+confers-macros = { version = "0.6.0-rc.4", path = "macros" }
 dashmap = { version = "6.1", optional = true }
 garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
@@ -72,7 +72,7 @@ exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0-rc.3"
+version = "0.6.0-rc.4"
 edition = "2024"
 rust-version = "1.97.1"
 description = "Production-ready Rust configuration library with zero boilerplate"
@@ -182,7 +182,7 @@ modules = ["toml"]
 recommended = ["toml", "env", "validation", "json", "security-rules"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy", "tracing"]
 minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 

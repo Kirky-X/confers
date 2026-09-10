@@ -331,7 +331,11 @@ async fn mac12_watch_generates_field_level_hot_reload_subscription() {
         .await
         .expect("watcher must wake on watched-field change")
         .expect("channel open");
-    assert_eq!(changed, vec!["host".to_string().into()], "only the watched field is reported");
+    assert_eq!(
+        changed,
+        vec![std::sync::Arc::<str>::from("host")],
+        "only the watched field is reported"
+    );
     assert_eq!(snapshot.host, "b");
     assert_eq!(snapshot.port, 2);
 }
@@ -375,7 +379,10 @@ fn combined_flatten_dynamic_interpolate_watch_attrs_compose() {
     // watch:订阅器可从加载后的快照构建。
     let (_tx, rx) = tokio::sync::watch::channel(std::sync::Arc::new(cfg.clone()));
     let watcher = cfg.field_watcher(rx);
-    assert_eq!(watcher.watched_fields(), vec!["banner".to_string().into()]);
+    assert_eq!(
+        watcher.watched_fields(),
+        vec![std::sync::Arc::<str>::from("banner")]
+    );
 }
 /// rename_all 批量命名:文件键使用外部命名,codegen 在反序列化前映射回 serde 名。
 #[derive(Debug, confers::Config, serde::Deserialize)]

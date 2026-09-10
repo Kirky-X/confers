@@ -134,7 +134,7 @@ mod tests {
             .await
             .expect("timeout")
             .expect("channel open");
-        assert_eq!(changed, vec!["port".to_string().into()]);
+        assert_eq!(changed, vec![Arc::<str>::from("port")]);
         assert_eq!(cfg.port, 2);
 
         // Unchanged snapshot -> loop continues, not reported.
@@ -152,7 +152,7 @@ mod tests {
             .await
             .expect("timeout")
             .expect("channel open");
-        assert_eq!(changed, vec!["host".to_string().into()]);
+        assert_eq!(changed, vec![Arc::<str>::from("host")]);
     }
 
     #[tokio::test]
@@ -189,7 +189,10 @@ mod tests {
             .await
             .expect("timeout")
             .expect("channel open");
-        assert_eq!(changed, vec!["host".to_string().into()]);
-        assert_eq!(w.watched_fields(), vec!["host".to_string().into(), "port".to_string().into()]);
+        assert_eq!(changed, vec![Arc::<str>::from("host")]);
+        assert_eq!(
+            w.watched_fields(),
+            vec![Arc::<str>::from("host"), Arc::<str>::from("port")]
+        );
     }
 }
