@@ -174,7 +174,15 @@ impl FsWatcher {
             return None;
         }
         if let Some(ref mut rx) = self.rx {
-            rx.recv().await
+            let path = rx.recv().await;
+            if path.is_some() {
+                // Critical-path span: a debounced file event is handed to the
+                // reload pipeline.
+                #[cfg(feature = "tracing")]
+                let _reload = tracing::info_span!("confers.reload").entered();
+                crate::telemetry::event("confers.reload.triggered", &[("file", "changed")]);
+            }
+            path
         } else {
             None
         }

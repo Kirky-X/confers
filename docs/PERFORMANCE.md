@@ -281,3 +281,63 @@ println!("CPU time: {:?}", monitor.elapsed());
 - [ ] 配置合理的缓存大小
 - [ ] 为不可信配置设置内存上限
 - [ ] 用真实负载做性能剖析
+
+---
+
+## 性能基线（rc.4 基线门禁）
+
+> 来源：`workspace-rc4-completion` T110。基线在开发机（WSL2, linux 6.6, 16 线程）本地采集，
+> criterion 默认参数之外的运行使用 `--warm-up-time 1 --measurement-time 2 --sample-size 20`。
+> 数值为 `[lower bound, estimate, upper bound]` 区间的 estimate（中位数口径）。
+>
+> **CI 门禁说明**：阈值（如 P99 +15% 阻断）待基线在 CI 环境稳定后启用；当前以
+> `cargo bench --save-baseline rc.4` 归档，供后续版本对比。
+
+### 加载路径（load_bench，default features）
+
+| 用例 | 耗时（estimate） |
+| --- | --- |
+| load/50_fields | ~691 ns |
+| load/100_fields | ~692 ns |
+| load/200_fields | ~713 ns |
+
+### 合并路径（merge_bench，interpolation feature）
+
+| 用例 | 耗时（estimate） |
+| --- | --- |
+| merge_shallow/size_10 | ~263 ns |
+| merge_shallow/size_100 | ~1.91 µs |
+| merge_shallow/size_1000 | ~20.9 µs |
+| merge_deep/depth_2 | ~3.93 µs |
+| merge_deep/depth_4 | ~830 µs |
+| merge_deep/depth_6 | ~244 ms（指数级用例，仅作上限参考） |
+| merge_strategies/join | ~46.7 ms |
+| replace_strategy_1000 | ~66.3 µs |
+
+### watch 回调路径（watch_callback_bench，change-stream feature，T110 新增）
+
+统一变更流（`ChangeStream`）publish → 订阅端送达的端到端成本：
+
+| 用例 | 耗时（estimate） |
+| --- | --- |
+| change_stream_roundtrip_1_sub | ~1.98 µs |
+| change_stream_roundtrip_8_sub | ~3.72 µs |
+| change_stream_publish_ack（16 连发 + pending 记账） | ~5.89 µs |
+
+结论：单订阅者一次变更通告约 2 µs，8 订阅者扇出 < 4 µs，通知路径不构成
+热重载瓶颈（对比一次典型 load 的 ~0.7 µs 量级一致）。
+
+### 零拷贝热路径（hot_path_bench，T118）
+
+`InMemoryConfig` 内部存储改为 `Cache<String, Arc<AnnotatedValue>>`，并新增
+`SharedValueReader::get_shared()`（返回 `Arc` 句柄，避免深拷贝大 value）。
+10 KiB 字符串 value 的读取对比（同一运行内）：
+
+| 读取路径 | 耗时（median） |
+| --- | --- |
+| `get_raw`（深拷贝，变更前路径） | ~337 ns |
+| `get_shared`（Arc 共享句柄，变更后路径） | ~161 ns |
+
+大 value 读取零拷贝路径约 **2.1x** 提升，且不随 value 体积增长。
+附带记录：`hot_path_get_100_keys`（100 键 get_string 扫描）≈ 24.9 µs。
+公共 API 零破坏：`get_raw`/`get_string` 语义不变，`get_shared` 为纯新增。

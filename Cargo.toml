@@ -47,6 +47,7 @@ thiserror = "2.0"
 dotenvy = { version = "0.15", optional = true }
 aes-gcm = { version = "0.11", optional = true }
 serde_ini = { version = "0.2", optional = true }
+tracing = { version = "0.1", optional = true }
 regex = "1.11"
 anyhow = "1.0"
 tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
@@ -147,18 +148,29 @@ audit = ["dep:chrono", "dep:sha2", "dep:hmac", "dep:hex", "dep:getrandom"]
 migration = ["dep:chrono"]
 snapshot = ["dep:chrono", "dep:tokio", "json", "toml", "yaml", "dynamic"]
 interpolation = []
+tracing = ["dep:tracing"]
 
 # Remote sources
 remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
+etcd-watch = ["etcd", "dep:futures-util"]
+k8s = ["remote", "toml", "json", "yaml"]
+cloud-kms = ["remote"]
+keyring = ["dep:log"]
+openfeature = ["feature-toggle", "context-aware"]
+lazy = ["toml"]
+nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
 # Message bus
 config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream", "dep:log"]
 nats-bus = ["config-bus", "dep:async-nats"]
 redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
+
+# Unified change stream port (reuses the config-bus transport)
+change-stream = ["config-bus", "watch"]
 
 # Context-aware
 context-aware = []
@@ -170,7 +182,7 @@ modules = ["toml"]
 recommended = ["toml", "env", "validation", "json", "security-rules"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "context-aware", "modules", "etcd", "consul", "feature-toggle"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy", "tracing"]
 minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
@@ -224,6 +236,11 @@ required-features = ["dynamic"]
 name = "interpolation_bench"
 harness = false
 required-features = ["interpolation"]
+
+[[bench]]
+name = "watch_callback_bench"
+harness = false
+required-features = ["change-stream"]
 
 [[bench]]
 name = "value_path_bench"
@@ -299,7 +316,7 @@ required-features = ["dynamic", "watch", "toml"]
 [[test]]
 name = "macro_e2e"
 path = "tests/e2e/macro_e2e.rs"
-required-features = ["watch"]
+required-features = ["watch", "dynamic"]
 
 [[test]]
 name = "encryption_e2e"

@@ -13,6 +13,12 @@ mod interval;
 pub(crate) mod consul;
 #[cfg(feature = "etcd")]
 pub(crate) mod etcd;
+#[cfg(feature = "etcd-watch")]
+pub mod etcd_watch;
+#[cfg(feature = "k8s")]
+pub mod k8s;
+#[cfg(feature = "nacos")]
+pub mod nacos;
 pub(crate) mod poll;
 
 pub use interval::PollInterval;
@@ -30,6 +36,12 @@ where
     F: std::future::Future<Output = crate::error::ConfigResult<crate::types::AnnotatedValue>>,
 {
     use crate::metrics::names;
+
+    // Critical-path span: one remote fetch (etcd/Consul/HTTP/Nacos/K8s).
+    #[cfg(feature = "tracing")]
+    let fetch_span = tracing::info_span!("confers.remote_fetch", source = %source.as_str());
+    #[cfg(feature = "tracing")]
+    let _fetch_guard = fetch_span.enter();
 
     let started = std::time::Instant::now();
     let result = fetch.await;
@@ -72,4 +84,15 @@ pub(crate) mod test_support {
 pub use consul::{ConsulSource, ConsulSourceBuilder, ConsulTlsConfig};
 #[cfg(feature = "etcd")]
 pub use etcd::{EtcdSource, EtcdSourceBuilder, EtcdTlsConfig};
+#[cfg(feature = "etcd-watch")]
+pub use etcd_watch::{
+    EtcdGrpcWatchSource, EtcdWatchCallback, EtcdWatchEvent, EtcdWatchRetry, EtcdWatcher,
+    WatchEventSource, WatchItem,
+};
+#[cfg(feature = "k8s")]
+pub use k8s::{
+    in_cluster_api_host, K8sApiSource, K8sApiSourceBuilder, K8sMountedSource, K8sObjectKind,
+};
+#[cfg(feature = "nacos")]
+pub use nacos::{NacosSource, NacosSourceBuilder, DEFAULT_NACOS_GROUP};
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};

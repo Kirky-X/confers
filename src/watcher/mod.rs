@@ -13,6 +13,9 @@ pub(crate) mod progressive;
 #[cfg(feature = "watch")]
 pub(crate) mod fs_watcher;
 
+#[cfg(feature = "watch")]
+pub(crate) mod field_watch;
+
 pub use debounce::AdaptiveDebouncer;
 
 #[cfg(feature = "progressive-reload")]
@@ -23,6 +26,9 @@ pub use progressive::{
 
 #[cfg(feature = "watch")]
 pub use fs_watcher::{FsWatcher, MultiFsWatcher};
+
+#[cfg(feature = "watch")]
+pub use field_watch::{FieldExtractor, StructFieldWatcher, WatchReceiver};
 
 use std::sync::Arc;
 use std::sync::Mutex;

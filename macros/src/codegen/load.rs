@@ -182,6 +182,131 @@ fn generate_skip_materialization(
         .collect()
 }
 
+/// Naming styles accepted by `#[config(rename_all = "...")]`.
+///
+/// Convert a serde field name into the external (file) key form. The derive
+/// then generates a `rename_tree_keys` pass that maps the external form back
+/// to the serde name right before deserialization.
+fn to_camel_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut uppercase_next = false;
+    for ch in name.chars() {
+        if ch == '_' {
+            uppercase_next = true;
+        } else if uppercase_next {
+            out.extend(ch.to_uppercase());
+            uppercase_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn to_kebab_case(name: &str) -> String {
+    name.replace('_', "-")
+}
+
+/// External (file) key for `name` under `rename_all`; `None` keeps the serde
+/// field name (identity mapping is skipped by the runtime pass).
+fn external_key(rename_all: &str, name: &str) -> String {
+    match rename_all {
+        "camelCase" => to_camel_case(name),
+        "kebab-case" => to_kebab_case(name),
+        _ => name.to_string(),
+    }
+}
+
+/// Generate a `builder.map_json(...)` pass renaming the struct's own keys
+/// from the configured batch style back to serde field names. Returns an
+/// empty stream when `rename_all` is not configured.
+fn generate_rename_all_call(
+    rename_all: Option<&String>,
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+) -> Option<TokenStream> {
+    let style = rename_all?;
+    let mappings: Vec<TokenStream> = fields
+        .iter()
+        .filter(|(_, _, f)| !f.skip)
+        .map(|(ident, _, _)| {
+            let external = external_key(style, &ident.to_string());
+            let serde_name = ident.to_string();
+            quote! { (#external, #serde_name) }
+        })
+        .collect();
+    Some(quote! {
+        builder = builder.map_json(|json: &mut confers::json::Value| {
+            confers::rename_tree_keys(json, &[#(#mappings),*]);
+        });
+    })
+}
+
+/// Generate `builder.map_json(...)` registrations for the `flatten` and
+/// `interpolate` field attributes.
+///
+/// Both transforms run on the merged JSON tree right before deserialization:
+/// - `flatten` hoists top-level keys addressed to flattened nested structs
+///   into `field_key.nested_key` form (explicit parent/nested values win).
+/// - `interpolate` resolves `${key}` / `${key:default}` references inside the
+///   marked fields against the merged tree.
+///
+/// Transforms compose in registration order (flatten before interpolate).
+/// The returned statements assume a `builder` variable in scope.
+fn generate_map_json_calls(
+    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
+) -> Vec<TokenStream> {
+    let mut calls = Vec::new();
+
+    // `flatten`: one combined pass with every flattened field's spec.
+    let own_keys: Vec<TokenStream> = fields
+        .iter()
+        .filter(|(_, _, f)| !f.skip)
+        .map(|(ident, _, _)| {
+            let key = ident.to_string();
+            quote! { #key }
+        })
+        .collect();
+    let flatten_specs: Vec<TokenStream> = fields
+        .iter()
+        .filter(|(_, _, f)| f.flatten)
+        .map(|(ident, ty, _)| {
+            let field_key = ident.to_string();
+            quote! {
+                confers::FlattenSpec {
+                    field_key: #field_key,
+                    nested_keys: <#ty as confers::ConfigFieldKeys>::FIELD_KEYS,
+                }
+            }
+        })
+        .collect();
+    if !flatten_specs.is_empty() {
+        calls.push(quote! {
+            builder = builder.map_json(|json: &mut confers::json::Value| {
+                confers::hoist_flattened(json, &[#(#own_keys),*], &[#(#flatten_specs),*]);
+            });
+        });
+    }
+
+    // `interpolate`: one combined pass over every interpolated field.
+    let interpolate_keys: Vec<TokenStream> = fields
+        .iter()
+        .filter(|(_, _, f)| f.interpolate)
+        .map(|(ident, _, _)| {
+            let key = ident.to_string();
+            quote! { #key }
+        })
+        .collect();
+    if !interpolate_keys.is_empty() {
+        calls.push(quote! {
+            builder = builder.map_json(|json: &mut confers::json::Value| {
+                confers::interpolate_keys(json, &[#(#interpolate_keys),*]);
+            });
+        });
+    }
+
+    calls
+}
+
 /// Shared body of every generated loader: defaults first (lowest priority),
 /// then the declared env overrides as a memory source, then `finish` runs the
 /// builder to a result and skip fields are materialized last.
@@ -193,6 +318,10 @@ fn loader_body(
     let default_calls = generate_default_calls(fields);
     let env_calls = generate_env_calls(fields, attrs.effective_env_prefix());
     let skip_assigns = generate_skip_materialization(fields);
+    // rename_all runs before the other tree transforms so flatten/interpolate
+    // observe serde-normalized keys.
+    let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
+    let map_json_calls = generate_map_json_calls(fields);
     let mut_kw = if skip_assigns.is_empty() {
         quote! {}
     } else {
@@ -211,6 +340,11 @@ fn loader_body(
         if !env_map.is_empty() {
             builder = builder.memory(env_map);
         }
+
+        // Field-attribute transforms (rename_all first, then
+        // flatten/interpolate) on the merged tree
+        #rename_call
+        #(#map_json_calls)*
 
         let #mut_kw config: Self = #finish?;
         // `skip` fields are the final word: no source may have set them.
@@ -281,17 +415,28 @@ fn generate_load_file_method(
     let skip_assigns_in_env_loader = skip_assigns.clone();
     let skip_defaults = generate_skip_default_calls(fields);
     let skip_defaults_in_env_loader = skip_defaults.clone();
+    let map_json_calls = generate_map_json_calls(fields);
+    let map_json_calls_in_env_loader = map_json_calls.clone();
+    let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
+    let rename_call_in_env_loader = rename_call.clone();
     let mut_kw = if skip_assigns.is_empty() {
         quote! {}
     } else {
         quote! { mut }
     };
-    let file_builder_mut = if skip_defaults.is_empty() {
+    let file_builder_mut = if skip_defaults.is_empty()
+        && map_json_calls.is_empty()
+        && rename_call.is_none()
+    {
         quote! {}
     } else {
         quote! { mut }
     };
-    let env_builder_mut = if skip_defaults_in_env_loader.is_empty() && env_calls.is_empty() {
+    let env_builder_mut = if skip_defaults_in_env_loader.is_empty()
+        && env_calls.is_empty()
+        && map_json_calls_in_env_loader.is_empty()
+        && rename_call_in_env_loader.is_none()
+    {
         quote! {}
     } else {
         quote! { mut }
@@ -304,6 +449,9 @@ fn generate_load_file_method(
                 let #file_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref());
                 #(#skip_defaults)*
+                // Field-attribute transforms (rename_all first, then flatten/interpolate)
+                #rename_call
+                #(#map_json_calls)*
                 let #mut_kw config: Self = builder.build()?;
                 // `skip` fields are the final word: no source may have set them.
                 #(#skip_assigns)*
@@ -322,6 +470,10 @@ fn generate_load_file_method(
                 if !env_map.is_empty() {
                     builder = builder.memory(env_map);
                 }
+
+                // Field-attribute transforms (rename_all first, then flatten/interpolate)
+                #rename_call_in_env_loader
+                #(#map_json_calls_in_env_loader)*
 
                 let #mut_kw config: Self = builder.build()?;
                 // `skip` fields are the final word: no source may have set them.

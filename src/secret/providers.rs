@@ -140,12 +140,141 @@ impl Default for FileKeyProviderBuilder {
 /// process arguments and config files. This module performs no logging of any
 /// kind: tokens, keys, and request details are never written to logs or to
 /// stdout/stderr by this code.
+/// Vault authentication method.
+///
+/// `Token` is the static-token flow (unchanged from rc.3). `AppRole` and
+/// `Kubernetes` log in against their auth mounts and exchange credentials
+/// for a short-lived client token; the resolved token is cached per provider
+/// so a fetch does not re-login on every call.
+#[cfg(feature = "remote")]
+#[derive(Clone)]
+pub enum VaultAuth {
+    /// Static token (or `VAULT_TOKEN` when empty).
+    Token {
+        token: String,
+    },
+    /// AppRole login: `role_id` + `secret_id` exchanged at
+    /// `POST /v1/auth/approle/login`.
+    AppRole {
+        role_id: String,
+        secret_id: String,
+    },
+    /// Kubernetes service-account login: pod JWT + auth role exchanged at
+    /// `POST /v1/auth/kubernetes/login`.
+    Kubernetes {
+        jwt: String,
+        role: String,
+    },
+}
+
+#[cfg(feature = "remote")]
+impl VaultAuth {
+    /// Kubernetes auth from the in-pod service-account token file.
+    pub fn kubernetes_from_service_account(role: impl Into<String>) -> ConfigResult<Self> {
+        const SA_TOKEN: &str = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+        let jwt = std::fs::read_to_string(SA_TOKEN).map_err(|e| ConfigError::KeyError {
+            message: format!(
+                "cannot read Kubernetes service-account token at {SA_TOKEN}: {e}"
+            ),
+        })?;
+        Ok(Self::Kubernetes {
+            jwt: jwt.trim().to_string(),
+            role: role.into(),
+        })
+    }
+
+    fn login_path(&self) -> Option<&'static str> {
+        match self {
+            Self::Token { .. } => None,
+            Self::AppRole { .. } => Some("/v1/auth/approle/login"),
+            Self::Kubernetes { .. } => Some("/v1/auth/kubernetes/login"),
+        }
+    }
+
+    fn login_body(&self) -> serde_json::Value {
+        match self {
+            Self::Token { .. } => serde_json::json!({}),
+            Self::AppRole { role_id, secret_id } => {
+                serde_json::json!({ "role_id": role_id, "secret_id": secret_id })
+            }
+            Self::Kubernetes { jwt, role } => {
+                serde_json::json!({ "jwt": jwt, "role": role })
+            }
+        }
+    }
+
+    fn describe(&self) -> &'static str {
+        match self {
+            Self::Token { .. } => "token",
+            Self::AppRole { .. } => "approle",
+            Self::Kubernetes { .. } => "kubernetes",
+        }
+    }
+
+    /// Exchange credentials for a client token (no-op for `Token`).
+    async fn resolve(&self, client: &reqwest::Client, vault_addr: &str) -> ConfigResult<String> {
+        match self {
+            Self::Token { token } => {
+                if token.is_empty() {
+                    std::env::var("VAULT_TOKEN").map_err(|_| ConfigError::KeyError {
+                        message: "Vault token not provided".to_string(),
+                    })
+                } else {
+                    Ok(token.clone())
+                }
+            }
+            _ => {
+                let url = format!(
+                    "{}{}",
+                    vault_addr.trim_end_matches('/'),
+                    self.login_path().expect("login path for login method")
+                );
+                let response = client
+                    .post(&url)
+                    .json(&self.login_body())
+                    .send()
+                    .await
+                    .map_err(|e| ConfigError::RemoteUnavailable {
+                        error_type: format!("vault_login_request: {e}"),
+                        retryable: true,
+                    })?;
+                let status = response.status();
+                if !status.is_success() {
+                    return Err(ConfigError::RemoteUnavailable {
+                        error_type: format!("vault_login_response: {status}"),
+                        retryable: is_retryable_status(status.as_u16()),
+                    });
+                }
+                let json: serde_json::Value = response.json().await.map_err(|e| {
+                    ConfigError::ParseError {
+                        format: "json".to_string(),
+                        message: format!("Failed to parse Vault login response: {e}"),
+                        location: None,
+                        source: None,
+                    }
+                })?;
+                json.get("auth")
+                    .and_then(|a| a.get("client_token"))
+                    .and_then(|t| t.as_str())
+                    .map(|t| t.to_string())
+                    .ok_or(ConfigError::KeyError {
+                        message: "Vault login response missing auth.client_token".to_string(),
+                    })
+            }
+        }
+    }
+}
+
 #[cfg(feature = "remote")]
 pub struct VaultKeyProvider {
     vault_addr: String,
     secret_path: String,
     secret_key: String,
-    token: Option<String>,
+    auth: VaultAuth,
+    /// Resolved client token after the first successful login.
+    token_cache: std::sync::Mutex<Option<String>>,
+    /// Allow plain HTTP (loopback mock tests only).
+    allow_http: bool,
     cache_policy: KeyCachePolicy,
 }
 
@@ -168,7 +297,9 @@ impl VaultKeyProvider {
             vault_addr: addr,
             secret_path: secret_path.into(),
             secret_key: secret_key.into(),
-            token: None,
+            auth: VaultAuth::Token { token: String::new() },
+            token_cache: std::sync::Mutex::new(None),
+            allow_http: false,
             cache_policy: KeyCachePolicy::default(),
         })
     }
@@ -178,7 +309,20 @@ impl VaultKeyProvider {
     }
 
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
-        self.token = Some(token.into());
+        self.auth = VaultAuth::Token { token: token.into() };
+        self
+    }
+
+    /// Authenticate with AppRole / Kubernetes service-account instead of a
+    /// static token (see [`VaultAuth`]).
+    pub fn with_auth(mut self, auth: VaultAuth) -> Self {
+        self.auth = auth;
+        self
+    }
+
+    /// Allow plain HTTP (loopback mock tests only).
+    pub fn allow_http(mut self, allow: bool) -> Self {
+        self.allow_http = allow;
         self
     }
 
@@ -187,13 +331,24 @@ impl VaultKeyProvider {
         self
     }
 
-    fn get_token(&self) -> ConfigResult<String> {
-        if let Some(ref token) = self.token {
-            return Ok(token.clone());
+    /// The active authentication method descriptor.
+    pub fn auth_method(&self) -> &'static str {
+        self.auth.describe()
+    }
+
+    async fn get_token(&self) -> ConfigResult<String> {
+        // Fast path: token already resolved (and cached) by a previous fetch.
+        if let Ok(cache) = self.token_cache.lock() {
+            if let Some(ref token) = *cache {
+                return Ok(token.clone());
+            }
         }
-        std::env::var("VAULT_TOKEN").map_err(|_| ConfigError::KeyError {
-            message: "Vault token not provided".to_string(),
-        })
+        let client = reqwest::Client::new();
+        let token = self.auth.resolve(&client, &self.vault_addr).await?;
+        if let Ok(mut cache) = self.token_cache.lock() {
+            *cache = Some(token.clone());
+        }
+        Ok(token)
     }
 }
 
@@ -210,7 +365,12 @@ fn is_retryable_status(status: u16) -> bool {
 #[async_trait::async_trait]
 impl AsyncKeyProvider for VaultKeyProvider {
     async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
-        let token = self.get_token()?;
+        if !self.allow_http && !self.vault_addr.starts_with("https://") {
+            return Err(ConfigError::KeyError {
+                message: "Vault address must use HTTPS for security (allow_http overrides this for loopback tests)".to_string(),
+            });
+        }
+        let token = self.get_token().await?;
 
         let client = reqwest::Client::new();
         let url = format!(
@@ -279,7 +439,8 @@ pub struct VaultKeyProviderBuilder {
     vault_addr: Option<String>,
     secret_path: Option<String>,
     secret_key: Option<String>,
-    token: Option<String>,
+    auth: Option<VaultAuth>,
+    allow_http: bool,
     cache_policy: KeyCachePolicy,
 }
 
@@ -290,7 +451,8 @@ impl VaultKeyProviderBuilder {
             vault_addr: None,
             secret_path: None,
             secret_key: None,
-            token: None,
+            auth: None,
+            allow_http: false,
             cache_policy: KeyCachePolicy::default(),
         }
     }
@@ -311,7 +473,19 @@ impl VaultKeyProviderBuilder {
     }
 
     pub fn token(mut self, token: impl Into<String>) -> Self {
-        self.token = Some(token.into());
+        self.auth = Some(VaultAuth::Token { token: token.into() });
+        self
+    }
+
+    /// Authenticate with AppRole / Kubernetes service-account (see [`VaultAuth`]).
+    pub fn auth(mut self, auth: VaultAuth) -> Self {
+        self.auth = Some(auth);
+        self
+    }
+
+    /// Allow plain HTTP (loopback mock tests only).
+    pub fn allow_http(mut self, allow: bool) -> Self {
+        self.allow_http = allow;
         self
     }
 
@@ -327,11 +501,6 @@ impl VaultKeyProviderBuilder {
             message: "Vault address is required".to_string(),
         })?;
 
-        if !vault_addr.starts_with("https://") {
-            return Err(ConfigError::KeyError {
-                message: "Vault address must use HTTPS for security".to_string(),
-            });
-        }
 
         let secret_path = self.secret_path.ok_or(ConfigError::InvalidValue {
             key: "secret_path".to_string(),
@@ -349,7 +518,11 @@ impl VaultKeyProviderBuilder {
             vault_addr,
             secret_path,
             secret_key,
-            token: self.token,
+            auth: self
+                .auth
+                .unwrap_or(VaultAuth::Token { token: String::new() }),
+            token_cache: std::sync::Mutex::new(None),
+            allow_http: self.allow_http,
             cache_policy: self.cache_policy,
         })
     }
@@ -366,6 +539,7 @@ impl Default for VaultKeyProviderBuilder {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::Arc;
     use tempfile::NamedTempFile;
 
     #[test]
@@ -628,14 +802,18 @@ mod tests {
     }
 
     #[cfg(feature = "remote")]
-    #[test]
-    fn test_vault_key_provider_builder_non_https() {
-        let result = VaultKeyProvider::builder()
+    #[tokio::test]
+    async fn test_vault_key_provider_builder_non_https() {
+        // Plain HTTP builds (mock-test support) but fails closed on fetch
+        // unless allow_http is explicitly enabled.
+        let provider = VaultKeyProvider::builder()
             .vault_addr("http://vault.example.com")
             .secret_path("secret/path")
             .secret_key("key")
-            .build();
-        assert!(result.is_err());
+            .build()
+            .expect("http builds with runtime enforcement");
+        let err = provider.get_key().await.expect_err("http must be rejected");
+        assert!(matches!(err, ConfigError::KeyError { .. }));
     }
 
     #[cfg(feature = "remote")]
@@ -674,5 +852,154 @@ mod tests {
         assert!(!is_retryable_status(403));
         assert!(!is_retryable_status(404));
         assert!(!is_retryable_status(500));
+    }
+
+    // ============== VaultAuth: AppRole / Kubernetes (T114) ==============
+
+    /// Mock Vault: serves queued (status, body) responses in order, records
+    /// the requests it received.
+    async fn spawn_mock_vault(
+        responses: Vec<(u16, String)>,
+    ) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().unwrap();
+        let queue = Arc::new(std::sync::Mutex::new(responses));
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let queue = Arc::clone(&queue);
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 8192];
+                    let _ = stream.read(&mut buf).await;
+                    let (status, body) = {
+                        let mut q = queue.lock().unwrap();
+                        if q.len() > 1 {
+                            q.remove(0)
+                        } else {
+                            q.first().cloned().unwrap_or((404, "{}".to_string()))
+                        }
+                    };
+                    let status_line = if status == 200 { "200 OK" } else { "403 Forbidden" };
+                    let response = format!(
+                        "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes()).await;
+                });
+            }
+        });
+        addr
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn approle_login_exchanges_credentials_for_token() {
+        let addr = spawn_mock_vault(vec![
+            (
+                200,
+                serde_json::json!({"auth": {"client_token": "approle-token"}}).to_string(),
+            ),
+            (
+                200,
+                serde_json::json!({"data": {"key": "0123456789012345678901234567890123456789"}})
+                    .to_string(),
+            ),
+        ])
+        .await;
+
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::AppRole {
+                role_id: "role-1".to_string(),
+                secret_id: "secret-1".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+
+        assert_eq!(provider.auth_method(), "approle");
+        let key = provider.get_key().await.expect("key via approle");
+        assert!(!key.as_slice().is_empty());
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn kubernetes_login_exchanges_jwt_for_token() {
+        let addr = spawn_mock_vault(vec![
+            (
+                200,
+                serde_json::json!({"auth": {"client_token": "k8s-token"}}).to_string(),
+            ),
+            (
+                200,
+                serde_json::json!({"data": {"key": "0123456789012345678901234567890123456789"}})
+                    .to_string(),
+            ),
+        ])
+        .await;
+
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Kubernetes {
+                jwt: "fake-pod-jwt".to_string(),
+                role: "confers-role".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+
+        assert_eq!(provider.auth_method(), "kubernetes");
+        let key = provider.get_key().await.expect("key via kubernetes auth");
+        assert!(!key.as_slice().is_empty());
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn failed_login_maps_to_retryable_unavailable() {
+        let addr = spawn_mock_vault(vec![(403, "{\"errors\":[\"bad creds\"]}".to_string())]).await;
+
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::AppRole {
+                role_id: "bad".to_string(),
+                secret_id: "worse".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+
+        let err = provider.get_key().await.expect_err("login must fail");
+        assert!(matches!(
+            err,
+            ConfigError::RemoteUnavailable { retryable: false, .. }
+        ), "403 is permanent, not retryable");
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn kubernetes_auth_can_be_built_from_inline_jwt() {
+        let auth = VaultAuth::Kubernetes {
+            jwt: "jwt".to_string(),
+            role: "role".to_string(),
+        };
+        assert_eq!(auth.describe(), "kubernetes");
+        assert_eq!(auth.login_path(), Some("/v1/auth/kubernetes/login"));
+        let approle = VaultAuth::AppRole {
+            role_id: "r".to_string(),
+            secret_id: "s".to_string(),
+        };
+        assert_eq!(approle.login_path(), Some("/v1/auth/approle/login"));
     }
 }

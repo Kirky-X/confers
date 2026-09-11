@@ -34,3 +34,18 @@ pub use providers::{VaultKeyProvider, VaultKeyProviderBuilder};
 pub use string::SecretString;
 #[cfg(feature = "encryption")]
 pub use zeroizing::{ZeroizingBytes, zeroizing_bytes};
+
+#[cfg(feature = "keyring")]
+pub mod keyring;
+
+#[cfg(feature = "cloud-kms")]
+pub mod providers_cloud;
+
+#[cfg(feature = "cloud-kms")]
+pub use providers_cloud::{CloudKmsBackend, CloudKmsVendor, VaultTransitKeyProvider, VaultTransitKeyProviderBuilder};
+
+#[cfg(feature = "keyring")]
+pub use keyring::{
+    FileKeyringStore, KeyringStore, MasterKeyStore, SecretToolKeyringStore,
+    MASTER_KEY_ACCOUNT, MASTER_KEY_SERVICE,
+};

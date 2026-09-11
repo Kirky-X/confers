@@ -510,6 +510,57 @@ impl ConfigValue {
         }
         ConfigValue::Map(Arc::new(map))
     }
+
+    /// Convert a JSON value into a [`ConfigValue`].
+    ///
+    /// Inverse of the loader's JSON projection: numbers keep their
+    /// integer/float distinction, objects become maps and arrays become
+    /// annotated (source-less) values.
+    pub fn from_json_value(json: serde_json::Value) -> Self {
+        use serde_json::Value;
+        match json {
+            Value::Null => Self::Null,
+            Value::Bool(b) => Self::Bool(b),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Self::I64(i)
+                } else if let Some(u) = n.as_u64() {
+                    Self::U64(u)
+                } else {
+                    Self::F64(n.as_f64().unwrap_or_default())
+                }
+            }
+            Value::String(s) => Self::String(s),
+            Value::Array(items) => Self::Array(
+                items
+                    .into_iter()
+                    .map(|v| AnnotatedValue::new(Self::from_json_value(v), SourceId::default(), ""))
+                    .collect(),
+            ),
+            Value::Object(entries) => {
+                let mut map = IndexMap::new();
+                for (k, v) in entries {
+                    map.insert(
+                        Arc::<str>::from(k.as_str()),
+                        AnnotatedValue::new(Self::from_json_value(v), SourceId::default(), ""),
+                    );
+                }
+                Self::Map(Arc::new(map))
+            }
+        }
+    }
+
+    /// Project any serializable value into a [`ConfigValue`].
+    ///
+    /// Used by generated code (e.g. `#[config(dynamic)]` handles) to bridge
+    /// typed fields into the dynamic value space. Values that fail to
+    /// serialize (cannot happen for plain configuration data) become `Null`.
+    pub fn from_serializable<T: serde::Serialize + ?Sized>(value: &T) -> Self {
+        match serde_json::to_value(value) {
+            Ok(json) => Self::from_json_value(json),
+            Err(_) => Self::Null,
+        }
+    }
 }
 
 impl From<bool> for ConfigValue {

@@ -1,0 +1,9 @@
+error: unsupported rename_all style 'PascalCase'
+       supported styles: "camelCase", "snake_case", "kebab-case"
+ --> tests/compile_fail/rename_all_bad_style.rs:5:1
+  |
+5 | / #[config(rename_all = "PascalCase")]
+6 | | struct Doc {
+7 | |     host: String,
+8 | | }
+  | |_^

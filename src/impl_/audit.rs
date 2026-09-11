@@ -4,6 +4,7 @@
 // See LICENSE file in the project root for full license information.
 
 use chrono::{DateTime, Utc};
+use std::sync::Arc;
 
 use crate::error::{ConfigError, ConfigResult};
 
@@ -249,8 +250,25 @@ impl Default for AuditConfigBuilder {
     }
 }
 
+/// Multi-sink audit port.
+///
+/// The [`AuditWriter`] persists events to its local (date-rotated, HMAC
+/// chained) file as before; every injected [`AuditSink`] additionally
+/// receives the same events verbatim. Upper layers (e.g. an external logging
+/// stack) implement this trait to bridge audit events into their own
+/// storage. The trait is object-safe so sinks compose behind `Arc<dyn
+/// AuditSink>`.
+pub trait AuditSink: Send + Sync {
+    /// Deliver a batch of audit events. Implementors must not block
+    /// indefinitely and must treat failures as their own concern: the
+    /// writer's local persistence is unaffected by sink outcomes.
+    fn write(&self, events: &[AuditEvent]);
+}
+
 pub struct AuditWriter {
     config: AuditConfig,
+    /// Extra audit sinks fanned out on every written event (best effort).
+    sinks: Vec<Arc<dyn AuditSink>>,
     /// Serializes writes so concurrent events never interleave in the log file.
     write_lock: std::sync::Mutex<()>,
     /// HMAC chain state per audit file this writer has extended. Restored from
@@ -270,9 +288,25 @@ impl AuditWriter {
     pub fn with_config(config: AuditConfig) -> Self {
         Self {
             config,
+            sinks: Vec::new(),
             write_lock: std::sync::Mutex::new(()),
             chain_states: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
+    }
+
+    /// Inject an additional audit sink.
+    ///
+    /// Injected sinks receive every event the writer accepts (after the
+    /// enabled check), alongside the default local-file persistence which
+    /// stays exactly as it was.
+    pub fn add_sink(&mut self, sink: Arc<dyn AuditSink>) {
+        self.sinks.push(sink);
+    }
+
+    /// Builder-style sink injection (see [`AuditWriter::add_sink`]).
+    pub fn with_sink(mut self, sink: Arc<dyn AuditSink>) -> Self {
+        self.sinks.push(sink);
+        self
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -286,10 +320,20 @@ impl AuditWriter {
 
         let level = AuditLevel::for_event(&event);
 
-        match level {
+        let result = match level {
             AuditLevel::Durable => self.write_durable(&event),
             AuditLevel::BestEffort => self.write_best_effort(&event),
+        };
+
+        // Fan the accepted event out to every injected sink (best effort:
+        // sink outcomes never affect the local persistence result).
+        if !self.sinks.is_empty() {
+            for sink in &self.sinks {
+                sink.write(std::slice::from_ref(&event));
+            }
         }
+
+        result
     }
 
     fn write_durable(&self, event: &AuditEvent) -> ConfigResult<()> {
@@ -661,12 +705,14 @@ pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
 
 pub struct AuditWriterBuilder {
     config: AuditConfig,
+    sinks: Vec<Arc<dyn AuditSink>>,
 }
 
 impl AuditWriterBuilder {
     pub fn new() -> Self {
         Self {
             config: AuditConfig::default(),
+            sinks: Vec::new(),
         }
     }
 
@@ -680,8 +726,16 @@ impl AuditWriterBuilder {
         self
     }
 
+    /// Inject an audit sink (see [`AuditWriter::add_sink`]).
+    pub fn sink(mut self, sink: Arc<dyn AuditSink>) -> Self {
+        self.sinks.push(sink);
+        self
+    }
+
     pub fn build(self) -> AuditWriter {
-        AuditWriter::with_config(self.config)
+        let mut writer = AuditWriter::with_config(self.config);
+        writer.sinks = self.sinks;
+        writer
     }
 }
 
@@ -987,5 +1041,131 @@ mod tests {
             verify_audit_chain(&path).unwrap(),
             "a reopened file must continue the same chain and verify"
         );
+    }
+
+    // ============== AuditSink multi-sink port ==============
+
+    use std::sync::{Arc, Mutex};
+
+    /// In-memory sink capturing every delivered event (upper-layer bridge).
+    struct MemorySink {
+        events: Mutex<Vec<AuditEvent>>,
+    }
+
+    impl MemorySink {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                events: Mutex::new(Vec::new()),
+            })
+        }
+
+        fn captured(&self) -> Vec<AuditEvent> {
+            self.events.lock().unwrap().clone()
+        }
+    }
+
+    impl AuditSink for MemorySink {
+        fn write(&self, events: &[AuditEvent]) {
+            self.events.lock().unwrap().extend_from_slice(events);
+        }
+    }
+
+    fn key_access(key: &str) -> AuditEvent {
+        AuditEvent::KeyAccess {
+            key: key.to_string(),
+            timestamp: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn injected_sink_receives_every_event() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let sink = MemorySink::new();
+        let mut writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build();
+        writer.add_sink(Arc::clone(&sink) as Arc<dyn AuditSink>);
+
+        writer.write(key_access("alpha")).expect("write 1");
+        writer.write(key_access("beta")).expect("write 2");
+        writer
+            .write(AuditEvent::Decrypt {
+                field: "db.password".to_string(),
+                success: true,
+                timestamp: chrono::Utc::now(),
+            })
+            .expect("write 3");
+
+        let captured = sink.captured();
+        assert_eq!(captured.len(), 3, "sink sees every accepted event");
+        assert!(matches!(&captured[0], AuditEvent::KeyAccess { key, .. } if key == "alpha"));
+        assert!(matches!(&captured[2], AuditEvent::Decrypt { success: true, .. }));
+    }
+
+    #[test]
+    fn builder_injected_sink_receives_events() {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let sink = MemorySink::new();
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .sink(Arc::clone(&sink) as Arc<dyn AuditSink>)
+            .build();
+
+        writer.write(key_access("builder-sink")).expect("write");
+        assert_eq!(sink.captured().len(), 1);
+    }
+
+    #[test]
+    fn sink_failure_does_not_affect_local_persistence() {
+        /// Fails exactly once (graceful failure: returns silently after).
+        struct FlakySink {
+            failed: std::sync::atomic::AtomicBool,
+        }
+
+        impl AuditSink for FlakySink {
+            fn write(&self, _: &[AuditEvent]) {
+                if !self.failed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    // Sink-side failure (e.g. downstream unavailable).
+                    return;
+                }
+            }
+        }
+
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let mut writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build();
+        writer.add_sink(Arc::new(FlakySink {
+            failed: std::sync::atomic::AtomicBool::new(false),
+        }));
+
+        // Sink-side failures never surface as writer errors and never skip
+        // the local (HMAC-chained) persistence.
+        writer.write(key_access("survivor")).expect("local write ok");
+        writer.write(key_access("after")).expect("writer reusable");
+
+        let lines = audit_lines(dir.path());
+        let keys: Vec<String> = lines
+            .iter()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter_map(|v| {
+                v["KeyAccess"]["key"].as_str().map(|s| s.to_string())
+            })
+            .collect();
+        assert!(keys.contains(&"survivor".to_string()), "local file keeps the event: {lines:?}");
+        assert!(keys.contains(&"after".to_string()));
+    }
+
+    #[test]
+    fn disabled_writer_does_not_fan_out_to_sinks() {
+        let sink = MemorySink::new();
+        let mut writer = AuditWriter::builder().enabled(false).build();
+        writer.add_sink(Arc::clone(&sink) as Arc<dyn AuditSink>);
+
+        writer.write(key_access("dropped")).expect("disabled write is Ok");
+        assert!(sink.captured().is_empty(), "sinks only see accepted events");
     }
 }

@@ -296,12 +296,37 @@ enum Commands {
     },
 
     /// Output JSON Schema for the configuration type
-    Schema,
+    Schema {
+        /// Infer a schema draft from the loaded configuration instance
+        /// instead of the derived type (schema-first reverse engineering).
+        #[arg(long)]
+        from_instance: bool,
+    },
 
     /// Get a specific configuration value by key path (dot-separated)
     Get {
         /// Configuration key path (e.g., "server.host" or "database.pool.size")
         key: String,
+    },
+
+    /// Documentation output. `--agent` emits the machine-readable knowledge
+    /// pack (subcommands, arguments, exit-code contract, task recipes).
+    Docs {
+        /// Emit the agent knowledge pack.
+        #[arg(long)]
+        agent: bool,
+
+        /// Knowledge format (json, markdown)
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
+    /// Diagnose configuration health (schema, source chain, encryption,
+    /// env overrides) and print a single-line JSON report.
+    Doctor {
+        /// Output format (json = single line, text)
+        #[arg(long, default_value = "json")]
+        format: String,
     },
 }
 
@@ -400,11 +425,25 @@ where
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
         }
-        Commands::Schema => {
-            cmd_schema::<T>()?;
+        Commands::Schema { from_instance } => {
+            if from_instance {
+                cmd_schema_from_instance(&config_paths, allow_absolute_paths)?;
+            } else {
+                cmd_schema::<T>()?;
+            }
         }
         Commands::Get { key } => {
             cmd_get(&config_paths, &key, allow_absolute_paths, fields_filter.as_deref())?;
+        }
+        Commands::Doctor { format } => {
+            cmd_doctor(&config_paths, &format, allow_absolute_paths)?;
+        }
+        Commands::Docs { agent, format } => {
+            if agent {
+                cmd_docs(&format)?;
+            } else {
+                anyhow::bail!("nothing to show: use `confers docs --agent` for the knowledge pack");
+            }
         }
     }
 
@@ -1244,6 +1283,90 @@ fn cmd_schema<T: JsonSchema>() -> Result<()> {
     Ok(())
 }
 
+/// `schema --from-instance`: reverse-engineer a JSON Schema draft from the
+/// loaded configuration instance.
+///
+/// The draft captures the observed shape (types, required keys, array item
+/// types); it is a starting point for schema-first workflows, not a strict
+/// guarantee that future instances of the same service match it.
+fn cmd_schema_from_instance(config_paths: &[PathBuf], allow_absolute_paths: bool) -> Result<()> {
+    let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
+    let schema = infer_schema_from_instance(&config);
+    println!("{}", serde_json::to_string_pretty(&schema)?);
+    Ok(())
+}
+
+/// Maximum recursion depth for instance schema inference (DoS guard).
+const MAX_INFER_DEPTH: usize = 32;
+
+/// Infer a JSON Schema draft (2020-12 flavored) from a JSON instance.
+///
+/// - objects: `type: object` + `properties` (recursive) + `required` (all
+///   observed keys) + `additionalProperties: false`
+/// - arrays: `type: array` + `items` merged from the observed elements
+/// - integers stay `integer`, floats become `number`, `null` becomes `{}` and
+///   mixed-type arrays widen `items` to `{}`
+pub fn infer_schema_from_instance(value: &serde_json::Value) -> serde_json::Value {
+    infer_schema_inner(value, 0)
+}
+
+fn infer_schema_inner(value: &serde_json::Value, depth: usize) -> serde_json::Value {
+    if depth > MAX_INFER_DEPTH {
+        // Deeper structure than we are willing to walk: accept anything.
+        return serde_json::json!({});
+    }
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut properties = serde_json::Map::new();
+            let mut required = Vec::new();
+            for (key, child) in map {
+                properties.insert(
+                    key.clone(),
+                    infer_schema_inner(child, depth + 1),
+                );
+                required.push(serde_json::Value::String(key.clone()));
+            }
+            serde_json::json!({
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": false,
+            })
+        }
+        serde_json::Value::Array(items) => {
+            let item_schemas: Vec<serde_json::Value> = items
+                .iter()
+                .map(|item| infer_schema_inner(item, depth + 1))
+                .collect();
+            let items_schema = match item_schemas.as_slice() {
+                [] => serde_json::json!({}),
+                [first] => first.clone(),
+                many => {
+                    // Homogeneous arrays keep the element schema; mixed
+                    // arrays widen to "any" instead of guessing a union.
+                    if many.iter().all(|s| s == &many[0]) {
+                        many[0].clone()
+                    } else {
+                        serde_json::json!({})
+                    }
+                }
+            };
+            serde_json::json!({ "type": "array", "items": items_schema })
+        }
+        serde_json::Value::String(_) => serde_json::json!({ "type": "string" }),
+        serde_json::Value::Number(n) => {
+            if n.is_i64() || n.is_u64() {
+                serde_json::json!({ "type": "integer" })
+            } else {
+                serde_json::json!({ "type": "number" })
+            }
+        }
+        serde_json::Value::Bool(_) => serde_json::json!({ "type": "boolean" }),
+        serde_json::Value::Null => serde_json::json!({}),
+    }
+}
+
+
 /// Get a specific configuration value by dot-separated key path.
 ///
 /// Output is single-line stable JSON. Missing keys emit `null` (exit 0).
@@ -1304,6 +1427,679 @@ fn filter_json_by_fields(value: &serde_json::Value, fields: &str) -> serde_json:
         }
     }
     serde_json::Value::Object(result)
+}
+
+// ============== doctor: configuration self-diagnostics ==============
+//
+// `doctor` aggregates health checks over the loaded configuration and emits a
+// machine-readable report:
+//
+// - `load`      — the configuration chain loads at all
+// - `schema`    — structural issues (null values, number-typed strings, …)
+// - `sources`   — the source priority chain is coherent (env outranks files)
+// - `encryption`— `enc:v1:<base64(nonce||ct)>` fields decrypt with
+//                 `CONFERS_MASTER_KEY` (hex, 32 bytes)
+// - `env_overrides` — no config key is overridden by conflicting env spellings
+//
+// Exit code contract: `0` healthy, `1` warnings only, `2` any error.
+
+/// Severity of a single doctor check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorSeverity {
+    /// Check passed.
+    Ok,
+    /// Suspicious but usable configuration.
+    Warning,
+    /// Broken configuration.
+    Error,
+}
+
+impl DoctorSeverity {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        }
+    }
+}
+
+/// One doctor check result.
+#[derive(Debug, Clone)]
+pub struct DoctorCheck {
+    /// Stable check identifier (`load`, `schema`, `sources`, `encryption`,
+    /// `env_overrides`).
+    pub name: &'static str,
+    /// Severity (drives the aggregate status).
+    pub severity: DoctorSeverity,
+    /// Human-readable summary.
+    pub message: String,
+}
+
+/// Aggregate doctor report.
+#[derive(Debug, Clone)]
+pub struct DoctorReport {
+    /// `healthy` (no issues), `warning` or `error`.
+    pub status: &'static str,
+    /// 0 / 1 / 2 exit code derived from the severities.
+    pub exit_code: u8,
+    /// Individual check outcomes.
+    pub checks: Vec<DoctorCheck>,
+}
+
+impl DoctorReport {
+    /// Single-line JSON representation (the doctor stdout contract).
+    pub fn to_json_line(&self) -> serde_json::Value {
+        serde_json::json!({
+            "status": self.status,
+            "exit_code": self.exit_code,
+            "checks": self.checks.iter().map(|c| serde_json::json!({
+                "name": c.name,
+                "severity": c.severity.as_str(),
+                "message": c.message,
+            })).collect::<Vec<_>>(),
+        })
+    }
+
+    fn from_checks(checks: Vec<DoctorCheck>) -> Self {
+        let has_error = checks
+            .iter()
+            .any(|c| c.severity == DoctorSeverity::Error);
+        let has_warning = checks
+            .iter()
+            .any(|c| c.severity == DoctorSeverity::Warning);
+        let (status, exit_code) = if has_error {
+            ("error", 2)
+        } else if has_warning {
+            ("warning", 1)
+        } else {
+            ("healthy", 0)
+        };
+        Self {
+            status,
+            exit_code,
+            checks,
+        }
+    }
+}
+
+/// Prefix marking encrypted values recognized by the `encryption` check.
+pub const DOCTOR_ENVELOPE_PREFIX: &str = "enc:v1:";
+/// Environment variable carrying the hex-encoded 32-byte master key.
+pub const DOCTOR_MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
+
+/// Run every doctor check against an already-loaded annotated configuration.
+///
+/// `load_result` is the outcome of the chain build: `None` signals a load
+/// failure (the remaining checks then report as skipped-but-error).
+pub fn run_doctor_checks(
+    load_result: &ConfigResult<AnnotatedValue>,
+    config_paths: &[PathBuf],
+) -> DoctorReport {
+    let mut checks = Vec::new();
+
+    let annotated: &AnnotatedValue = match load_result {
+        Ok(value) => {
+            checks.push(DoctorCheck {
+                name: "load",
+                severity: DoctorSeverity::Ok,
+                message: format!(
+                    "configuration loaded from {} file(s)",
+                    config_paths.len()
+                ),
+            });
+            value
+        }
+        Err(e) => {
+            checks.push(DoctorCheck {
+                name: "load",
+                severity: DoctorSeverity::Error,
+                message: format!("configuration failed to load: {e}"),
+            });
+            // Downstream checks cannot run without data; report them so the
+            // report shape stays stable for consumers.
+            for name in ["schema", "sources", "encryption", "env_overrides"] {
+                checks.push(DoctorCheck {
+                    name,
+                    severity: DoctorSeverity::Error,
+                    message: "skipped: configuration did not load".to_string(),
+                });
+            }
+            return DoctorReport::from_checks(checks);
+        }
+    };
+
+    // --- schema: structural sanity (same heuristics as `validate`) ---
+    let mut schema_issues = Vec::new();
+    if let crate::types::ConfigValue::Map(map) = &annotated.inner {
+        check_required_keys(map, &mut schema_issues);
+        check_types(map, &mut schema_issues);
+    }
+    checks.push(DoctorCheck {
+        name: "schema",
+        severity: if schema_issues.is_empty() {
+            DoctorSeverity::Ok
+        } else {
+            DoctorSeverity::Error
+        },
+        message: if schema_issues.is_empty() {
+            "no schema issues detected".to_string()
+        } else {
+            format!("{} schema issue(s): {}", schema_issues.len(), schema_issues.join("; "))
+        },
+    });
+
+    // --- sources: priority chain coherence ---
+    checks.push(check_source_chain(annotated));
+
+    // --- encryption: encrypted fields decrypt with the master key ---
+    checks.push(check_encryption(annotated));
+
+    // --- env_overrides: conflicting env spellings for the same key ---
+    checks.push(check_env_override_conflicts(annotated));
+
+    DoctorReport::from_checks(checks)
+}
+
+/// A leaf value with its dot-path, source and priority.
+struct DoctorLeaf<'a> {
+    path: String,
+    source: &'a str,
+    priority: u8,
+}
+
+/// Collect scalar leaves with their provenance.
+fn collect_leaves<'a>(
+    value: &'a AnnotatedValue,
+    prefix: &str,
+    out: &mut Vec<DoctorLeaf<'a>>,
+) {
+    const MAX_DOCTOR_DEPTH: usize = 32;
+    match &value.inner {
+        crate::types::ConfigValue::Map(map) => {
+            if prefix.split('.').count() > MAX_DOCTOR_DEPTH {
+                return;
+            }
+            for (key, child) in map.iter() {
+                let path = if prefix.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                collect_leaves(child, &path, out);
+            }
+        }
+        _ => out.push(DoctorLeaf {
+            path: prefix.to_string(),
+            source: value.source.as_str(),
+            priority: value.priority,
+        }),
+    }
+}
+
+/// Source-priority-chain coherence: the `env` source must strictly outrank
+/// every file source, and each source must present a single priority.
+fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
+    let mut leaves = Vec::new();
+    collect_leaves(annotated, "", &mut leaves);
+
+    if leaves.is_empty() {
+        return DoctorCheck {
+            name: "sources",
+            severity: DoctorSeverity::Error,
+            message: "no configuration values were contributed by any source".to_string(),
+        };
+    }
+
+    let mut priority_by_source: std::collections::HashMap<&str, std::collections::BTreeSet<u8>> =
+        std::collections::HashMap::new();
+    for leaf in &leaves {
+        priority_by_source
+            .entry(leaf.source)
+            .or_default()
+            .insert(leaf.priority);
+    }
+
+    // A source advertising several priorities is chain drift (two files with
+    // colliding ids, or a corrupted provenance chain).
+    let drifted: Vec<String> = priority_by_source
+        .iter()
+        .filter(|(_, priorities)| priorities.len() > 1)
+        .map(|(source, _)| (*source).to_string())
+        .collect();
+    if !drifted.is_empty() {
+        let example = leaves
+            .iter()
+            .find(|leaf| drifted.iter().any(|d| leaf.source == d))
+            .map(|leaf| format!("(e.g. key '{}')", leaf.path))
+            .unwrap_or_default();
+        return DoctorCheck {
+            name: "sources",
+            severity: DoctorSeverity::Warning,
+            message: format!(
+                "source(s) with inconsistent priorities across keys: {} {example}",
+                drifted.join(", ")
+            ),
+        };
+    }
+
+    // env must strictly outrank file sources, otherwise configured overrides
+    // silently lose to file values.
+    let is_env = |source: &str| source.contains("env");
+    let is_file = |source: &str| {
+        source.contains("file")
+            || source.ends_with(".toml")
+            || source.ends_with(".json")
+            || source.ends_with(".yaml")
+            || source.ends_with(".yml")
+    };
+    let env_priority = priority_by_source
+        .iter()
+        .filter(|(source, _)| is_env(source))
+        .flat_map(|(_, priorities)| priorities.iter().max().copied())
+        .max();
+    let max_file_priority = priority_by_source
+        .iter()
+        .filter(|(source, _)| is_file(source))
+        .flat_map(|(_, priorities)| priorities.iter().max().copied())
+        .max();
+
+    if let (Some(env_p), Some(file_p)) = (env_priority, max_file_priority) {
+        if env_p <= file_p {
+            return DoctorCheck {
+                name: "sources",
+                severity: DoctorSeverity::Warning,
+                message: format!(
+                    "env priority ({env_p}) is not above the file priority ({file_p}); \
+                     env overrides would lose"
+                ),
+            };
+        }
+    }
+
+    let sources: Vec<String> = priority_by_source
+        .keys()
+        .map(|s| (*s).to_string())
+        .collect();
+    DoctorCheck {
+        name: "sources",
+        severity: DoctorSeverity::Ok,
+        message: format!("priority chain coherent across source(s): {}", sources.join(", ")),
+    }
+}
+
+/// Encrypted-field check: every `enc:v1:` value must decrypt with the
+/// configured master key.
+fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
+    #[cfg(feature = "encryption")]
+    {
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        collect_encrypted_values(annotated, "", &mut candidates);
+
+        if candidates.is_empty() {
+            return DoctorCheck {
+                name: "encryption",
+                severity: DoctorSeverity::Ok,
+                message: "no encrypted fields detected".to_string(),
+            };
+        }
+
+        let Some(key_hex) = std::env::var(DOCTOR_MASTER_KEY_ENV).ok() else {
+            return DoctorCheck {
+                name: "encryption",
+                severity: DoctorSeverity::Warning,
+                message: format!(
+                    "{} encrypted field(s) found but {DOCTOR_MASTER_KEY_ENV} is not set",
+                    candidates.len()
+                ),
+            };
+        };
+
+        let Some(key) = decode_master_key(&key_hex) else {
+            return DoctorCheck {
+                name: "encryption",
+                severity: DoctorSeverity::Error,
+                message: format!(
+                    "{DOCTOR_MASTER_KEY_ENV} is not a valid 32-byte hex key; \
+                     encrypted field(s) cannot be decrypted"
+                ),
+            };
+        };
+
+        let crypto = crate::secret::XChaCha20Crypto::new();
+        let failures: Vec<String> = candidates
+            .iter()
+            .filter(|(_, envelope)| {
+                !verify_envelope(&crypto, envelope, &key)
+            })
+            .map(|(path, _)| path.clone())
+            .collect();
+
+        if failures.is_empty() {
+            DoctorCheck {
+                name: "encryption",
+                severity: DoctorSeverity::Ok,
+                message: format!(
+                    "{} encrypted field(s) decrypt successfully",
+                    candidates.len()
+                ),
+            }
+        } else {
+            DoctorCheck {
+                name: "encryption",
+                severity: DoctorSeverity::Error,
+                message: format!(
+                    "decryption failed for {} encrypted field(s): {}",
+                    failures.len(),
+                    failures.join(", ")
+                ),
+            }
+        }
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    {
+        let _ = annotated;
+        DoctorCheck {
+            name: "encryption",
+            severity: DoctorSeverity::Ok,
+            message: "encryption feature not compiled in; skipped".to_string(),
+        }
+    }
+}
+
+/// Depth-bounded walk collecting `enc:v1:` string values.
+#[cfg(feature = "encryption")]
+fn collect_encrypted_values(
+    value: &AnnotatedValue,
+    prefix: &str,
+    out: &mut Vec<(String, String)>,
+) {
+    const MAX_DOCTOR_DEPTH: usize = 32;
+    match &value.inner {
+        crate::types::ConfigValue::Map(map) => {
+            if prefix.split('.').count() > MAX_DOCTOR_DEPTH {
+                return;
+            }
+            for (key, child) in map.iter() {
+                let path = if prefix.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                collect_encrypted_values(child, &path, out);
+            }
+        }
+        crate::types::ConfigValue::String(s) => {
+            if s.starts_with(DOCTOR_ENVELOPE_PREFIX) {
+                out.push((prefix.to_string(), s.clone()));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Decrypt `enc:v1:<base64(nonce||ciphertext)>` with `key`.
+#[cfg(feature = "encryption")]
+fn verify_envelope(
+    crypto: &crate::secret::XChaCha20Crypto,
+    envelope: &str,
+    key: &[u8],
+) -> bool {
+    use base64::Engine;
+
+    let Some(encoded) = envelope.strip_prefix(DOCTOR_ENVELOPE_PREFIX) else {
+        return false;
+    };
+    let Ok(blob) = base64::engine::general_purpose::STANDARD.decode(encoded) else {
+        return false;
+    };
+    const NONCE_SIZE: usize = 24;
+    if blob.len() <= NONCE_SIZE {
+        return false;
+    }
+    crypto.decrypt(&blob[..NONCE_SIZE], &blob[NONCE_SIZE..], key).is_ok()
+}
+
+/// Decode the doctor master key: hex (64 chars) or raw 32-byte ASCII.
+#[cfg(feature = "encryption")]
+fn decode_master_key(key_str: &str) -> Option<Vec<u8>> {
+    let trimmed = key_str.trim();
+    if let Ok(bytes) = hex_decode(trimmed) {
+        if bytes.len() == 32 {
+            return Some(bytes);
+        }
+    }
+    if trimmed.len() == 32 {
+        return Some(trimmed.as_bytes().to_vec());
+    }
+    None
+}
+
+/// Minimal hex decoder (avoids a hard hex-crate dependency in the CLI).
+#[cfg(feature = "encryption")]
+fn hex_decode(input: &str) -> Result<Vec<u8>, ()> {
+    if input.len() % 2 != 0 {
+        return Err(());
+    }
+    let mut out = Vec::with_capacity(input.len() / 2);
+    let bytes = input.as_bytes();
+    for pair in bytes.chunks(2) {
+        let hi = (pair[0] as char).to_digit(16).ok_or(())?;
+        let lo = (pair[1] as char).to_digit(16).ok_or(())?;
+        out.push(((hi << 4) | lo) as u8);
+    }
+    Ok(out)
+}
+
+/// Env-override conflict check: two different env spellings resolve to the
+/// same configuration key (e.g. `DATABASE_HOST` and `DATABASE__HOST`), which
+/// makes the effective value depend on env-var iteration order.
+fn check_env_override_conflicts(annotated: &AnnotatedValue) -> DoctorCheck {
+    // All dot-paths present in the merged configuration.
+    let mut paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    collect_paths(annotated, "", &mut paths);
+
+    // Map every process env var onto the config paths it could address.
+    let mut mappings: std::collections::HashMap<String, std::collections::BTreeSet<String>> =
+        std::collections::HashMap::new();
+    for (name, _value) in std::env::vars() {
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            continue;
+        }
+        let lower = name.to_ascii_lowercase();
+        // Direct key (`HOST` → `host`).
+        if paths.contains(&lower) {
+            mappings.entry(lower.clone()).or_default().insert(name.clone());
+        }
+        // Underscore-split dot path (`DATABASE_HOST` → `database.host`).
+        let dotted = lower.replace('_', ".");
+        if paths.contains(&dotted) {
+            mappings.entry(dotted).or_default().insert(name.clone());
+        }
+        // Double-underscore nested form (`DATABASE__HOST` → `database.host`).
+        let double = lower.replace("__", ".");
+        if paths.contains(&double) {
+            mappings.entry(double).or_default().insert(name.clone());
+        }
+    }
+
+    // A path addressed by more than one env var with differing values is a
+    // conflict (order-dependent effective value).
+    let mut conflicts: Vec<String> = Vec::new();
+    for (path, vars) in &mappings {
+        if vars.len() > 1 {
+            let values: std::collections::BTreeSet<String> = vars
+                .iter()
+                .filter_map(|v| std::env::var(v).ok())
+                .collect();
+            if values.len() > 1 {
+                conflicts.push(format!("{} <- {}", path, {
+                    let mut sorted: Vec<&String> = vars.iter().collect();
+                    sorted.sort();
+                    sorted
+                        .iter()
+                        .map(|v| v.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }));
+            }
+        }
+    }
+
+    if conflicts.is_empty() {
+        DoctorCheck {
+            name: "env_overrides",
+            severity: DoctorSeverity::Ok,
+            message: "no conflicting env overrides".to_string(),
+        }
+    } else {
+        DoctorCheck {
+            name: "env_overrides",
+            severity: DoctorSeverity::Warning,
+            message: format!(
+                "{} env override conflict(s): {}",
+                conflicts.len(),
+                conflicts.join("; ")
+            ),
+        }
+    }
+}
+
+/// Depth-bounded dot-path collection.
+fn collect_paths(value: &AnnotatedValue, prefix: &str, out: &mut std::collections::HashSet<String>) {
+    const MAX_DOCTOR_DEPTH: usize = 16;
+    match &value.inner {
+        crate::types::ConfigValue::Map(map) => {
+            if prefix.split('.').count() > MAX_DOCTOR_DEPTH {
+                out.insert(prefix.to_string());
+                return;
+            }
+            for (key, child) in map.iter() {
+                let path = if prefix.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                collect_paths(child, &path, out);
+            }
+        }
+        _ => {
+            out.insert(prefix.to_string());
+        }
+    }
+}
+
+/// Stable knowledge-pack schema marker (bump on contract changes).
+const AGENT_KNOWLEDGE_VERSION: u32 = 1;
+
+/// Build the agent knowledge pack as a JSON value.
+///
+/// Machine-readable summary of the CLI surface: every subcommand, the exit
+/// code contract and copy-paste task recipes — everything an agent needs to
+/// operate this tool without crawling the full documentation.
+pub fn agent_knowledge_json() -> serde_json::Value {
+    serde_json::json!({
+        "knowledge_version": AGENT_KNOWLEDGE_VERSION,
+        "tool": "confers",
+        "subcommands": [
+            {"name": "inspect", "purpose": "list keys with source+location provenance", "key_args": ["--key <k>...", "--show-conflicts", "--format text|json"]},
+            {"name": "validate", "purpose": "structural sanity checks (nulls, number-shaped strings)", "key_args": ["--strict", "--format text|json"]},
+            {"name": "export", "purpose": "print merged config (sanitized by default)", "key_args": ["--format json|toml|yaml", "--output <file>", "--with-provenance", "--raw"]},
+            {"name": "diff", "purpose": "diff two config files", "key_args": ["--base <file>", "--overlay <file>", "--format text|json", "--sanitize=true|false"]},
+            {"name": "snapshot", "purpose": "manage snapshots", "key_args": ["list|diff|prune"]},
+            {"name": "schema", "purpose": "JSON Schema for the config type", "key_args": ["--from-instance (reverse-engineer a draft from the loaded instance)"]},
+            {"name": "get", "purpose": "single key lookup, single-line JSON", "key_args": ["<dot.path>", "--fields a.b,c"]},
+            {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
+            {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
+        ],
+        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>"],
+        "exit_codes": {
+            "0": "success (or doctor: healthy)",
+            "1": "configuration error / doctor has warnings",
+            "2": "I/O error / doctor has errors",
+        },
+        "machine_readable_contract": {
+            "doctor": "single-line JSON: {status, exit_code, checks:[{name, severity, message}]}; severity ok|warning|error",
+            "get": "single-line JSON",
+            "schema": "pretty-printed JSON Schema (draft 2020-12 flavor for --from-instance)",
+        },
+        "recipes": [
+            {"task": "load config with env overlay", "command": "confers --config app.toml --env-file .env inspect --format json"},
+            {"task": "quality gate a config in CI", "command": "confers --config app.toml doctor; echo exit=$?"},
+            {"task": "find where a value comes from", "command": "confers --config app.toml inspect --key database.host"},
+            {"task": "get one value", "command": "confers --config app.toml get database.pool.size"},
+            {"task": "schema-first reverse engineering", "command": "confers --config app.toml schema --from-instance > schema.draft.json"},
+            {"task": "export sanitized config", "command": "confers --config app.toml export --format json"},
+        ],
+    })
+}
+
+/// Render the knowledge pack as Markdown.
+pub fn agent_knowledge_markdown() -> String {
+    let knowledge = agent_knowledge_json();
+    let mut out = String::from("# confers agent knowledge pack\n\n");
+    out.push_str(&format!(
+        "knowledge_version: {}\n\n## Subcommands\n\n",
+        knowledge["knowledge_version"]
+    ));
+    for sub in knowledge["subcommands"].as_array().expect("subcommands") {
+        out.push_str(&format!(
+            "- **{}** — {} (args: {})\n",
+            sub["name"].as_str().unwrap_or("?"),
+            sub["purpose"].as_str().unwrap_or(""),
+            sub["key_args"].as_array().map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default(),
+        ));
+    }
+    out.push_str("\n## Exit codes\n\n- `0` success (doctor: healthy)\n- `1` config error / doctor warnings\n- `2` I/O error / doctor errors\n");
+    out.push_str("\n## Recipes\n\n```sh\n");
+    for recipe in knowledge["recipes"].as_array().expect("recipes") {
+        out.push_str(&format!(
+            "# {}\n{}\n",
+            recipe["task"].as_str().unwrap_or(""),
+            recipe["command"].as_str().unwrap_or(""),
+        ));
+    }
+    out.push_str("```\n");
+    out
+}
+
+/// Run the `docs` subcommand.
+fn cmd_docs(format: &str) -> anyhow::Result<()> {
+    match format {
+        "markdown" => println!("{}", agent_knowledge_markdown()),
+        _ => println!("{}", serde_json::to_string_pretty(&agent_knowledge_json())?),
+    }
+    Ok(())
+}
+
+/// Run the `doctor` subcommand: build the chain, emit the single-line JSON
+/// report (or text) and exit with 0/1/2 by aggregate health.
+fn cmd_doctor(
+    config_paths: &[PathBuf],
+    format: &str,
+    allow_absolute_paths: bool,
+) -> anyhow::Result<()> {
+    let load_result = build_annotated_from_cli(config_paths, allow_absolute_paths);
+    let report = run_doctor_checks(&load_result, config_paths);
+
+    match format {
+        "text" => {
+            println!("Doctor (status: {}, exit: {})", report.status, report.exit_code);
+            for check in &report.checks {
+                println!("  [{:>7}] {:>14}: {}", check.severity.as_str(), check.name, check.message);
+            }
+        }
+        _ => {
+            // Default: single-line JSON (machine-readable contract).
+            println!("{}", serde_json::to_string(&report.to_json_line())?);
+        }
+    }
+
+    if report.exit_code != 0 {
+        std::process::exit(i32::from(report.exit_code));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -3410,5 +4206,313 @@ mod tests {
         let mut issues = Vec::new();
         check_required_keys(&map, &mut issues);
         assert_eq!(issues.len(), MAX_CHECK_DEPTH);
+    }
+
+    // ============== doctor ==============
+
+    use super::{DoctorSeverity, DOCTOR_ENVELOPE_PREFIX, DOCTOR_MASTER_KEY_ENV};
+
+    fn annotated_from_value(value: crate::types::ConfigValue) -> AnnotatedValue {
+        AnnotatedValue::new(value, crate::types::SourceId::new("doctor-test"), "")
+    }
+
+    /// Map node with AnnotatedValue leaves (doctor test scaffolding).
+    fn doctor_map(entries: Vec<(&str, crate::types::ConfigValue)>) -> AnnotatedValue {
+        let map: indexmap::IndexMap<Arc<str>, AnnotatedValue> = entries
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    Arc::from(k),
+                    AnnotatedValue::new(
+                        v,
+                        crate::types::SourceId::new("doctor-test"),
+                        k,
+                    ),
+                )
+            })
+            .collect();
+        annotated_from_value(crate::types::ConfigValue::Map(Arc::new(map)))
+    }
+
+    fn severity_of<'a>(report: &'a super::DoctorReport, name: &str) -> DoctorSeverity {
+        report
+            .checks
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| c.severity)
+            .unwrap_or_else(|| panic!("check {name} missing"))
+    }
+
+    #[test]
+    fn doctor_healthy_config_exits_zero() {
+        let config = doctor_map(vec![
+            ("host", crate::types::ConfigValue::string("localhost")),
+            ("port", crate::types::ConfigValue::uint(8080)),
+        ]);
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        assert_eq!(report.exit_code, 0, "healthy: {:?}", report.checks);
+        assert_eq!(report.status, "healthy");
+        assert!(severity_of(&report, "sources") == DoctorSeverity::Ok);
+    }
+
+    #[test]
+    fn doctor_schema_fault_is_reported_as_error() {
+        // Injected fault: a null value (structural issue).
+        let config = doctor_map(vec![
+            ("host", crate::types::ConfigValue::string("localhost")),
+            ("broken", crate::types::ConfigValue::Null),
+        ]);
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        assert!(severity_of(&report, "schema") == DoctorSeverity::Error);
+        assert_eq!(report.exit_code, 2);
+    }
+
+    #[test]
+    fn doctor_load_failure_marks_all_checks_errored() {
+        let err: ConfigResult<AnnotatedValue> = Err(crate::error::ConfigError::InvalidValue {
+            key: "x".to_string(),
+            expected_type: "y".to_string(),
+            message: "boom".to_string(),
+        });
+        let report = super::run_doctor_checks(&err, &[]);
+        assert_eq!(report.exit_code, 2);
+        assert!(severity_of(&report, "load") == DoctorSeverity::Error);
+        assert!(severity_of(&report, "schema") == DoctorSeverity::Error);
+        assert!(report.to_json_line()["status"] == "error");
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    #[serial_test::serial]
+    fn doctor_encrypted_field_without_key_warns() {
+        let config = doctor_map(vec![(
+            "api_key",
+            crate::types::ConfigValue::string(format!("{DOCTOR_ENVELOPE_PREFIX}AAAA")),
+        )]);
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        assert!(severity_of(&report, "encryption") == DoctorSeverity::Warning);
+        assert_eq!(report.exit_code, 1);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    #[serial_test::serial]
+    fn doctor_encrypted_field_decrypts_with_valid_key() {
+        let key = [7u8; 32];
+        let crypto = crate::secret::XChaCha20Crypto::new();
+        let (nonce, ciphertext) = crypto
+            .encrypt(b"secret-value", &key)
+            .expect("encrypt");
+        let mut blob = nonce;
+        blob.extend_from_slice(&ciphertext);
+        use base64::Engine;
+        let envelope = format!(
+            "{DOCTOR_ENVELOPE_PREFIX}{}",
+            base64::engine::general_purpose::STANDARD.encode(&blob)
+        );
+
+        let config = doctor_map(vec![(
+            "api_key",
+            crate::types::ConfigValue::string(envelope),
+        )]);
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+
+        // Valid hex master key → decryption succeeds.
+        let hex_key: String = key.iter().map(|b| format!("{b:02x}")).collect();
+        unsafe { std::env::set_var(DOCTOR_MASTER_KEY_ENV, &hex_key) };
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        unsafe { std::env::remove_var(DOCTOR_MASTER_KEY_ENV) };
+        assert!(severity_of(&report, "encryption") == DoctorSeverity::Ok, "{report:?}");
+
+        // Wrong key → decryption fails with an error.
+        let wrong: String = [9u8; 32].iter().map(|b| format!("{b:02x}")).collect();
+        unsafe { std::env::set_var(DOCTOR_MASTER_KEY_ENV, &wrong) };
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        unsafe { std::env::remove_var(DOCTOR_MASTER_KEY_ENV) };
+        assert!(severity_of(&report, "encryption") == DoctorSeverity::Error);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn doctor_env_override_conflict_is_reported() {
+        let host = AnnotatedValue::new(
+            crate::types::ConfigValue::string("from-file"),
+            crate::types::SourceId::new("doctor-test"),
+            "host",
+        );
+        let db_map: indexmap::IndexMap<Arc<str>, AnnotatedValue> =
+            [(Arc::from("host"), host)].into_iter().collect();
+        let database = AnnotatedValue::new(
+            crate::types::ConfigValue::Map(Arc::new(db_map)),
+            crate::types::SourceId::new("doctor-test"),
+            "database",
+        );
+        let root: indexmap::IndexMap<Arc<str>, AnnotatedValue> =
+            [(Arc::from("database"), database)].into_iter().collect();
+        let config = annotated_from_value(crate::types::ConfigValue::Map(Arc::new(root)));
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+
+        // Two env spellings mapping to database.host with different values.
+        unsafe { std::env::set_var("DATABASE_HOST", "a") };
+        unsafe { std::env::set_var("DATABASE__HOST", "b") };
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        unsafe { std::env::remove_var("DATABASE_HOST") };
+        unsafe { std::env::remove_var("DATABASE__HOST") };
+
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "env_overrides")
+            .expect("env_overrides check present");
+        assert!(check.severity == DoctorSeverity::Warning, "{:?}", check.message);
+        assert_eq!(report.exit_code, 1);
+    }
+
+    #[test]
+    fn doctor_report_json_is_single_line_serializable() {
+        let config = doctor_map(vec![(
+            "k",
+            crate::types::ConfigValue::string("v"),
+        )]);
+        let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
+        let report = super::run_doctor_checks(&ok_result, &[]);
+        let line = serde_json::to_string(&report.to_json_line()).expect("json");
+        assert!(!line.contains('\n'), "single line: {line}");
+        assert!(line.contains("\"status\":\"healthy\""), "{line}");
+    }
+
+    // ============== schema --from-instance ==============
+
+    #[test]
+    fn infer_schema_object_with_required_and_nested() {
+        let instance = serde_json::json!({
+            "host": "localhost",
+            "port": 8080,
+            "database": {"url": "postgres://x", "pool": {"size": 10}},
+        });
+        let schema = super::infer_schema_from_instance(&instance);
+
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["host"]["type"], "string");
+        assert_eq!(schema["properties"]["port"]["type"], "integer");
+        assert_eq!(schema["properties"]["database"]["type"], "object");
+        assert_eq!(
+            schema["properties"]["database"]["properties"]["pool"]["properties"]["size"]["type"],
+            "integer"
+        );
+
+        // Every observed key is required.
+        let required: Vec<&str> = schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(required, vec!["database", "host", "port"]);
+        assert_eq!(schema["additionalProperties"], false);
+    }
+
+    #[test]
+    fn infer_schema_arrays_and_scalars() {
+        let instance = serde_json::json!({
+            "tags": ["a", "b"],
+            "mixed": [1, "x"],
+            "empty": [],
+            "ratio": 0.5,
+            "enabled": true,
+            "nothing": null,
+        });
+        let schema = super::infer_schema_from_instance(&instance);
+
+        assert_eq!(schema["properties"]["tags"]["type"], "array");
+        assert_eq!(schema["properties"]["tags"]["items"]["type"], "string");
+        // Mixed array widens items to "any".
+        assert_eq!(schema["properties"]["mixed"]["items"], serde_json::json!({}));
+        assert_eq!(schema["properties"]["empty"]["items"], serde_json::json!({}));
+        assert_eq!(schema["properties"]["ratio"]["type"], "number");
+        assert_eq!(schema["properties"]["enabled"]["type"], "boolean");
+        // null infers to the permissive schema.
+        assert_eq!(schema["properties"]["nothing"], serde_json::json!({}));
+    }
+
+    #[test]
+    fn inferred_schema_validates_the_original_instance() {
+        // Round-trip guarantee: the draft accepts the instance it was
+        // inferred from (required keys + types are exactly the observed ones).
+        let instance = serde_json::json!({"a": 1, "b": {"c": [true]}});
+        let schema = super::infer_schema_from_instance(&instance);
+
+        fn validate(v: &serde_json::Value, s: &serde_json::Value) -> bool {
+            match (v, s) {
+                (serde_json::Value::Object(obj), s) => {
+                    if s["type"] != "object" {
+                        return false;
+                    }
+                    let props = s["properties"].as_object().unwrap();
+                    let required = s["required"].as_array().unwrap();
+                    obj.iter().all(|(k, val)| {
+                        props.contains_key(k) && validate(val, &props[k])
+                    }) && required.iter().all(|r| obj.contains_key(r.as_str().unwrap()))
+                }
+                (serde_json::Value::Array(items), s) => {
+                    s["type"] == "array"
+                        && items.iter().all(|i| validate(i, &s["items"]))
+                }
+                (serde_json::Value::String(_), s) => s["type"] == "string",
+                (serde_json::Value::Number(n), s) => {
+                    if n.is_f64() {
+                        s["type"] == "number"
+                    } else {
+                        s["type"] == "integer" || s["type"] == "number"
+                    }
+                }
+                (serde_json::Value::Bool(_), s) => s["type"] == "boolean",
+                (serde_json::Value::Null, _) => true,
+                _ => false,
+            }
+        }
+        assert!(validate(&instance, &schema));
+        // A mutated instance violates the draft.
+        let mut bad = instance.clone();
+        bad["a"] = serde_json::json!("now-a-string");
+        assert!(!validate(&bad, &schema));
+    }
+}
+
+#[cfg(test)]
+mod docs_agent_tests {
+    use super::*;
+
+    #[test]
+    fn knowledge_pack_json_contains_contract_and_recipes() {
+        let pack = agent_knowledge_json();
+        assert_eq!(pack["knowledge_version"], 1);
+        let subs = pack["subcommands"].as_array().expect("subcommands");
+        let names: Vec<&str> = subs.iter().filter_map(|s| s["name"].as_str()).collect();
+        for expected in ["inspect", "validate", "export", "doctor", "get", "schema", "docs"] {
+            assert!(names.contains(&expected), "missing subcommand {expected}");
+        }
+        // Exit-code contract documented.
+        assert_eq!(pack["exit_codes"]["0"], "success (or doctor: healthy)");
+        assert!(pack["exit_codes"]["2"].as_str().unwrap().contains("I/O error"));
+        // Recipes are copy-pasteable (non-empty commands).
+        for recipe in pack["recipes"].as_array().expect("recipes") {
+            assert!(!recipe["command"].as_str().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn knowledge_pack_markdown_contains_recipes() {
+        let md = agent_knowledge_markdown();
+        assert!(md.contains("# confers agent knowledge pack"));
+        assert!(md.contains("## Subcommands"));
+        assert!(md.contains("## Exit codes"));
+        assert!(md.contains("## Recipes"));
+        assert!(md.contains("doctor"), "doctor recipe documented");
+        // Knowledge pack stays compact (<= 200 lines, per spec).
+        assert!(md.lines().count() <= 200, "pack too long: {}", md.lines().count());
     }
 }

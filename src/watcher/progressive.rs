@@ -83,6 +83,10 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     /// rollout, including its sleeps and health-check polling: a staged
     /// deployment must never interleave with another reload.
     reload_lock: tokio::sync::Mutex<()>,
+    /// Unified change stream the canary stage transitions are published to
+    /// (upstream orchestration), when attached.
+    #[cfg(feature = "change-stream")]
+    change_stream: ArcSwap<Option<Arc<dyn crate::stream::ChangeStream>>>,
 }
 
 pub struct ProgressiveReloader<T: Clone + Send + Sync + 'static> {
@@ -106,6 +110,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 strategy,
                 health_check: ArcSwap::new(Arc::new(None)),
                 reload_lock: tokio::sync::Mutex::new(()),
+                #[cfg(feature = "change-stream")]
+                change_stream: ArcSwap::new(Arc::new(None)),
             }),
         }
     }
@@ -122,6 +128,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 strategy,
                 health_check: ArcSwap::new(Arc::new(health_check)),
                 reload_lock: tokio::sync::Mutex::new(()),
+                #[cfg(feature = "change-stream")]
+                change_stream: ArcSwap::new(Arc::new(None)),
             }),
         }
     }
@@ -150,6 +158,45 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self
     }
 
+    /// Attach the unified change stream (T101) as the canary event sink.
+    ///
+    /// Stage transitions (`trial_started` / `committed` / `rolled_back`) are
+    /// published as `ChangeSource::Canary` events so an orchestrator can
+    /// observe (and react to) a staged rollout across instances. Like
+    /// [`Self::with_health_check`], the slot is shared by every clone of the
+    /// reloader. Only available with the `change-stream` feature.
+    #[cfg(feature = "change-stream")]
+    pub fn with_change_stream(self, stream: Arc<dyn crate::stream::ChangeStream>) -> Self {
+        self.inner.change_stream.store(Arc::new(Some(stream)));
+        self
+    }
+
+    /// Publish a canary stage transition to the attached change stream
+    /// (no-op without one). Publish failures never affect the reload.
+    #[cfg(feature = "change-stream")]
+    async fn publish_canary_stage(&self, stage: &'static str, detail: &str) {
+        use crate::stream::{ChangeEvent, ChangeSource};
+        let loaded = self.inner.change_stream.load_full();
+        if let Some(stream) = loaded.as_ref() {
+            let _ = stream
+                .publish(ChangeEvent::new(
+                    "canary",
+                    Some(crate::types::ConfigValue::string(stage)),
+                    Some(crate::types::ConfigValue::string(detail)),
+                    ChangeSource::Canary,
+                ))
+                .await;
+        }
+    }
+
+    /// No-op twin of the change-stream publisher for builds without the
+    /// `change-stream` feature (reload paths call it unconditionally).
+    #[cfg(not(feature = "change-stream"))]
+    #[inline]
+    async fn publish_canary_stage(&self, _stage: &'static str, _detail: &str) {}
+
+
+
     /// Begin a staged reload of the configuration.
     ///
     /// The reload lock is held for the entire duration of the call: for
@@ -174,6 +221,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         match &self.inner.strategy {
             ReloadStrategy::Immediate => {
                 self.inner.current.store(new_config);
+                self.publish_canary_stage("committed", "immediate").await;
                 Ok(ReloadOutcome::Committed)
             }
             ReloadStrategy::Canary {
@@ -200,6 +248,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner
             .candidate
             .store(Arc::new(Some(new_config.clone())));
+        self.publish_canary_stage("trial_started", "canary").await;
         let deadline = Instant::now() + trial_duration;
 
         while Instant::now() < deadline {
@@ -209,6 +258,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
+                        self.publish_canary_stage("rolled_back", &reason).await;
                         return Err(ConfigError::ReloadRolledBack { reason });
                     }
                     HealthStatus::Degraded { reason } => {
@@ -222,6 +272,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
 
         self.inner.current.store(new_config);
         self.inner.candidate.store(Arc::new(None));
+        self.publish_canary_stage("committed", "canary").await;
         Ok(ReloadOutcome::Committed)
     }
 
@@ -243,6 +294,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
+                        let detail = format!("linear step {}: {}", step + 1, reason);
+                        self.publish_canary_stage("rolled_back", &detail).await;
                         return Err(ConfigError::ReloadRolledBack {
                             reason: format!("Linear step {} failed: {}", step + 1, reason),
                         });
@@ -258,6 +311,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
 
         self.inner.current.store(new_config);
         self.inner.candidate.store(Arc::new(None));
+        self.publish_canary_stage("committed", "linear").await;
         Ok(ReloadOutcome::Committed)
     }
 }
@@ -531,5 +585,176 @@ mod tests {
             1,
             "the shared reload lock must serialize reloads across clones"
         );
+    }
+
+    // ============== Canary events -> ChangeStream (T119) ==============
+
+    #[cfg(all(feature = "change-stream", feature = "progressive-reload"))]
+    mod canary_events {
+        use super::*;
+        use crate::stream::{ChangeEvent, ChangeSource, InMemoryChangeStream};
+        use std::pin::Pin;
+        use std::sync::Mutex;
+        use std::time::Duration;
+
+        /// Capturing subscriber: records published events via the port.
+        struct CollectingStream {
+            inner: InMemoryChangeStream,
+            events: Mutex<Vec<ChangeEvent>>,
+        }
+
+        #[async_trait]
+        impl crate::stream::ChangeStream for CollectingStream {
+            async fn publish(&self, event: ChangeEvent) -> ConfigResult<()> {
+                self.events.lock().unwrap().push(event.clone());
+                self.inner.publish(event).await
+            }
+
+            async fn subscribe(
+                &self,
+            ) -> ConfigResult<
+                Pin<Box<dyn futures_util::Stream<Item = ChangeEvent> + Send>>,
+            > {
+                self.inner.subscribe().await
+            }
+
+            async fn ack(&self, version: u64) -> ConfigResult<()> {
+                self.inner.ack(version).await
+            }
+        }
+
+        struct HealthyCheck;
+
+        #[async_trait]
+        impl ReloadHealthCheck for HealthyCheck {
+            async fn check(&self, _: Arc<dyn ConfigProvider>) -> HealthStatus {
+                HealthStatus::Healthy
+            }
+        }
+
+        struct CriticalCheck;
+
+        #[async_trait]
+        impl ReloadHealthCheck for CriticalCheck {
+            async fn check(&self, _: Arc<dyn ConfigProvider>) -> HealthStatus {
+                HealthStatus::Critical {
+                    reason: "probe failed".to_string(),
+                }
+            }
+        }
+
+        fn provider() -> Arc<dyn ConfigProvider> {
+            Arc::new(MockProvider)
+        }
+
+        #[tokio::test]
+        async fn canary_stages_are_published_to_the_change_stream() {
+            let sink = Arc::new(CollectingStream {
+                inner: InMemoryChangeStream::new(),
+                events: Mutex::new(Vec::new()),
+            });
+            let reloader = ProgressiveReloader::new(
+                Arc::new(1u32),
+                ReloadStrategy::Canary {
+                    trial_duration: Duration::from_millis(20),
+                    poll_interval: Duration::from_millis(5),
+                },
+            )
+            .with_health_check(Arc::new(HealthyCheck))
+            .with_change_stream(sink.clone());
+
+            let outcome = reloader
+                .begin_reload(Arc::new(2u32), provider())
+                .await
+                .expect("reload");
+            assert!(matches!(outcome, ReloadOutcome::Committed));
+
+            let stages: Vec<(String, String)> = sink
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|e| {
+                    (
+                        e.old_value.as_ref().and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        e.new_value.as_ref().and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    )
+                })
+                .collect();
+
+            assert_eq!(
+                stages,
+                vec![
+                    ("trial_started".to_string(), "canary".to_string()),
+                    ("committed".to_string(), "canary".to_string()),
+                ],
+                "canary stage transitions reach the change stream"
+            );
+            // All events carry the canary source marker.
+            assert!(
+                sink.events
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|e| e.source == ChangeSource::Canary)
+            );
+        }
+
+        #[tokio::test]
+        async fn rollback_is_published_to_the_change_stream() {
+            let sink = Arc::new(CollectingStream {
+                inner: InMemoryChangeStream::new(),
+                events: Mutex::new(Vec::new()),
+            });
+            let reloader = ProgressiveReloader::new(
+                Arc::new(1u32),
+                ReloadStrategy::Canary {
+                    trial_duration: Duration::from_millis(50),
+                    poll_interval: Duration::from_millis(5),
+                },
+            )
+            .with_health_check(Arc::new(CriticalCheck))
+            .with_change_stream(sink.clone());
+
+            let outcome = reloader
+                .begin_reload(Arc::new(2u32), provider())
+                .await
+                .expect_err("critical health must roll back");
+
+            assert!(matches!(outcome, ConfigError::ReloadRolledBack { .. }));
+            let stages: Vec<String> = sink
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|e| e.old_value.as_ref().and_then(|v| v.as_str()))
+                .map(|s| s.to_string())
+                .collect();
+            assert_eq!(
+                stages.last().map(String::as_str),
+                Some("rolled_back"),
+                "rollback transition is published"
+            );
+            // The current config is untouched after the rollback.
+            assert_eq!(*reloader.current(), 1);
+        }
+
+        #[tokio::test]
+        async fn no_stream_attached_is_a_noop() {
+            let reloader = ProgressiveReloader::new(
+                Arc::new(1u32),
+                ReloadStrategy::Canary {
+                    trial_duration: Duration::from_millis(10),
+                    poll_interval: Duration::from_millis(5),
+                },
+            )
+            .with_health_check(Arc::new(HealthyCheck));
+
+            let outcome = reloader
+                .begin_reload(Arc::new(2u32), provider())
+                .await
+                .expect("reload without stream still works");
+            assert!(matches!(outcome, ReloadOutcome::Committed));
+        }
     }
 }

@@ -5,8 +5,10 @@
 
 //! ConfigBus - Multi-instance configuration change broadcast.
 
+pub mod arbiter;
 pub mod limiter;
 
+pub use arbiter::{MonotonicSequencer, OrderedEventFilter, VersionArbitratedBus};
 pub use limiter::BusEventLimiter;
 
 use std::pin::Pin;

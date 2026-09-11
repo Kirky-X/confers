@@ -208,12 +208,21 @@ fn prs07_full_preset_covers_all_domain_features() {
         "etcd",
         "consul",
         "feature-toggle",
+        // rc.4 新增能力域（workspace-rc4-completion）。
+        "etcd-watch",
+        "k8s",
+        "nacos",
+        "cloud-kms",
+        "keyring",
+        "openfeature",
+        "lazy",
+        "tracing",
     ];
     assert_contains(&features, "full", &domains);
     assert_eq!(
         features["full"].len(),
-        30,
-        "full preset must stay the 30-item surface"
+        39,
+        "full preset must stay the full capability surface"
     );
 
     // full 构建态正向断言(PRS-07:full 编译 + 测试可通过)。

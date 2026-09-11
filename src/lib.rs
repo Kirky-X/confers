@@ -52,12 +52,30 @@
 
 pub mod config;
 pub mod error;
+pub mod flatten;
 pub mod format;
 pub mod interface;
 pub mod loader;
 pub mod merger;
 pub mod metrics;
+
+// OpenFeature-style flag evaluation (openfeature feature).
+#[cfg(feature = "openfeature")]
+pub mod openfeature;
+
+// Lazy segmented parsing for oversized documents (lazy feature).
+#[cfg(feature = "lazy")]
+pub mod lazy;
+pub mod tree_transform;
+
+// Internal tracing facade (no-op without the `tracing` feature).
+mod telemetry;
 pub mod types;
+
+// JSON value re-export: generated code (and users writing `map_json`
+// transformations) reference value types without needing their own
+// serde_json dependency.
+pub use serde_json as json;
 
 // Internal implementation (not exposed)
 mod impl_;
@@ -98,6 +116,9 @@ pub mod context;
 
 #[cfg(feature = "config-bus")]
 pub mod bus;
+
+#[cfg(feature = "change-stream")]
+pub mod stream;
 
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -151,6 +172,9 @@ pub use loader::{
     parse_content,
 };
 
+pub use flatten::{ConfigFieldKeys, FlattenSpec, hoist_flattened};
+pub use tree_transform::{interpolate_keys, rename_tree_keys};
+
 // Re-export derive macros (feature-gated to match their generated code dependencies)
 pub use confers_macros::Config;
 #[cfg(feature = "cli")]
@@ -190,8 +214,8 @@ pub use secret::{
 
 #[cfg(feature = "audit")]
 pub use audit::{
-    verify_audit_chain, AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditWriter,
-    AuditWriterBuilder,
+    verify_audit_chain, AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditSink,
+    AuditWriter, AuditWriterBuilder,
 };
 
 #[cfg(feature = "dynamic")]
@@ -213,6 +237,9 @@ pub use context::{
 
 #[cfg(feature = "config-bus")]
 pub use bus::{BusBuilder, BusEventLimiter, ConfigBus, ConfigChangeEvent, InMemoryBus};
+
+#[cfg(feature = "change-stream")]
+pub use stream::{ChangeEvent, ChangeSource, ChangeStream, InMemoryChangeStream};
 
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
@@ -249,9 +276,33 @@ pub use toggle::{FeatureInfo, FeatureToggle, FeatureToggleRegistry};
 /// # Ok(())
 /// # }
 /// ```
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+pub fn new_in_memory() -> impl ConfigConnector + impl_::memory::SharedValueReader {
+    impl_::memory::InMemoryConfig::new()
+}
+
+#[cfg(not(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+)))]
 pub fn new_in_memory() -> impl ConfigConnector {
     impl_::memory::InMemoryConfig::new()
 }
+
+#[cfg(any(
+    feature = "remote",
+    feature = "config-bus",
+    feature = "encryption",
+    feature = "watch"
+))]
+pub use impl_::memory::SharedValueReader;
 
 // ============== Prelude ==============
 

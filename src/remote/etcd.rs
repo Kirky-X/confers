@@ -390,6 +390,29 @@ impl crate::interface::AsyncSource for EtcdSource {
     }
 }
 
+#[cfg(feature = "etcd-watch")]
+impl EtcdSource {
+    /// Build the native watch transport for this source's prefix.
+    ///
+    /// Pair it with [`crate::remote::EtcdWatcher`] to stream changes the
+    /// moment they are committed (instead of waiting for the poll interval),
+    /// with automatic reconnect:
+    ///
+    /// ```ignore
+    /// let transport = source.watch_transport();
+    /// let watcher = confers::remote::EtcdWatcher::new(std::sync::Arc::new(transport));
+    /// tokio::spawn(watcher.run(std::sync::Arc::new(|event| {
+    ///     println!("{} -> {:?}", event.key, event.value);
+    /// })));
+    /// ```
+    pub fn watch_transport(&self) -> crate::remote::EtcdGrpcWatchSource {
+        crate::remote::EtcdGrpcWatchSource::new(
+            (*self.client).clone(),
+            self.prefix.to_string(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
