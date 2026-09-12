@@ -1084,8 +1084,16 @@ impl ZeroizingBytes {
 
 impl Drop for ZeroizingBytes {
     fn drop(&mut self) {
-        // Zeroize the bytes on drop
-        self.0.fill(0);
+        // Volatile stores so the zeroization survives optimization: a plain
+        // `fill(0)` may be elided entirely when the buffer is deallocated
+        // right after and never read again. This mirrors what the `zeroize`
+        // crate does without forcing the dependency into the core types.
+        for slot in self.0.iter_mut() {
+            // SAFETY: `slot` is a valid, exclusively borrowed `u8`; the
+            // volatile write neither allocates nor unwinds.
+            unsafe { std::ptr::write_volatile(slot, 0) };
+        }
+        std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
     }
 }
 

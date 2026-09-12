@@ -433,3 +433,32 @@ fn rename_all_snake_case_is_identity_for_snake_fields() {
     let cfg = SnakeCaseNaming::load_file_with_env(&path).expect("snake_case load");
     assert_eq!(cfg.host, "db");
 }
+
+/// serde(rename) 字段:merge 空间(defaults/env 覆盖/文件键)必须跟随 serde
+/// 字段名,而非 Rust 标识符 —— 否则重命名后的字段永远拿不到源值。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct RenamedBind {
+    #[serde(rename = "bind_addr")]
+    #[config(default = "fallback".to_string(), name_env = "RENAMED_BIND_CUSTOM")]
+    pub bind: String,
+}
+
+#[test]
+#[serial]
+fn serde_rename_field_addresses_serde_name_everywhere() {
+    // 文件键使用 serde 名(bind_addr)。
+    let (_file, path) = write_cwd_toml("bind_addr = \"from-file\"\n");
+    let cfg = RenamedBind::load_file_with_env(&path).expect("file key under serde name");
+    assert_eq!(cfg.bind, "from-file");
+
+    // env 覆盖同样落在 serde 名空间。
+    let (_file, path) = write_cwd_toml("bind_addr = \"from-file\"\n");
+    unsafe { std::env::set_var("RENAMED_BIND_CUSTOM", "from-env") };
+    let cfg = RenamedBind::load_file_with_env(&path).expect("env override load");
+    unsafe { std::env::remove_var("RENAMED_BIND_CUSTOM") };
+    assert_eq!(cfg.bind, "from-env");
+
+    // 无任何来源时 default 生效(default 也注册在 serde 名下)。
+    let cfg = RenamedBind::load_sync().expect("default load");
+    assert_eq!(cfg.bind, "fallback");
+}

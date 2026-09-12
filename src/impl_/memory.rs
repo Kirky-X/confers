@@ -138,7 +138,7 @@ mod async_impl {
 
         /// Check if the config is healthy.
         pub fn is_healthy(&self) -> bool {
-            self.healthy.load(Ordering::Relaxed)
+            self.healthy.load(Ordering::Acquire)
         }
 
         /// Get max capacity.
@@ -224,7 +224,7 @@ mod async_impl {
     #[async_trait]
     impl ConfigConnector for InMemoryConfig {
         async fn health_check(&self) -> crate::error::ConfersResult<()> {
-            if self.healthy.load(Ordering::Relaxed) {
+            if self.healthy.load(Ordering::Acquire) {
                 Ok(())
             } else {
                 Err(crate::error::ConfigError::HealthCheckFailed {
@@ -235,7 +235,7 @@ mod async_impl {
 
         async fn shutdown(&self) {
             self.cache.invalidate_all();
-            self.healthy.store(false, Ordering::Relaxed);
+            self.healthy.store(false, Ordering::Release);
         }
     }
 
@@ -401,7 +401,7 @@ mod sync_impl {
 
         /// Check if the config is healthy.
         pub fn is_healthy(&self) -> bool {
-            self.healthy.load(Ordering::Relaxed)
+            self.healthy.load(Ordering::Acquire)
         }
 
         /// Get max capacity.
@@ -470,7 +470,7 @@ mod sync_impl {
 
     impl ConfigConnector for InMemoryConfig {
         fn health_check(&self) -> crate::error::ConfersResult<()> {
-            if self.healthy.load(Ordering::Relaxed) {
+            if self.healthy.load(Ordering::Acquire) {
                 Ok(())
             } else {
                 Err(crate::error::ConfigError::HealthCheckFailed {
@@ -481,7 +481,7 @@ mod sync_impl {
 
         fn shutdown(&self) {
             self.cache.invalidate_all();
-            self.healthy.store(false, Ordering::Relaxed);
+            self.healthy.store(false, Ordering::Release);
         }
     }
 
@@ -490,7 +490,7 @@ mod sync_impl {
             Ok(())
         }
         fn stop(&self) -> ConfersResult<()> {
-            self.healthy.store(false, Ordering::Relaxed);
+            self.healthy.store(false, Ordering::Release);
             Ok(())
         }
     }

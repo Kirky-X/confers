@@ -14,6 +14,25 @@ use crate::types::{KeyCachePolicy, ZeroizingBytes};
 #[cfg(feature = "remote")]
 use crate::interface::AsyncKeyProvider;
 
+/// Shared HTTP client for the Vault-backed key providers.
+///
+/// Building a fresh `reqwest::Client` per request defeats connection pooling
+/// and inherits reqwest's "no timeout" default, so an unreachable endpoint
+/// would hang the calling task forever. One process-wide client with a
+/// bounded request timeout is shared instead (`Client` clones are cheap).
+#[cfg(feature = "remote")]
+pub(crate) fn shared_http_client() -> reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default()
+        })
+        .clone()
+}
+
 /// Key provider that reads a 32-byte key from a local file.
 ///
 /// # Key material semantics
@@ -343,7 +362,7 @@ impl VaultKeyProvider {
                 return Ok(token.clone());
             }
         }
-        let client = reqwest::Client::new();
+        let client = shared_http_client();
         let token = self.auth.resolve(&client, &self.vault_addr).await?;
         if let Ok(mut cache) = self.token_cache.lock() {
             *cache = Some(token.clone());
@@ -372,7 +391,7 @@ impl AsyncKeyProvider for VaultKeyProvider {
         }
         let token = self.get_token().await?;
 
-        let client = reqwest::Client::new();
+        let client = shared_http_client();
         let url = format!(
             "{}/v1/{}",
             self.vault_addr.trim_end_matches('/'),

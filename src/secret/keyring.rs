@@ -43,6 +43,35 @@ pub trait KeyringStore: Send + Sync {
 pub const MASTER_KEY_SERVICE: &str = "confers";
 pub const MASTER_KEY_ACCOUNT: &str = "master-key";
 
+/// Validate a keyring attribute (service or account name).
+///
+/// The values address the backing store — they become `secret-tool` argv
+/// elements and fallback-store file names — so anything that could change
+/// how they are interpreted is rejected outright: a leading `-` would be
+/// parsed as an option by secret-tool, path separators / `..` would escape
+/// the fallback directory, control characters (including NUL) could alter
+/// argv or file-name semantics.
+fn validated_attribute(value: &str, what: &str) -> ConfigResult<()> {
+    let reject = |reason: &str| {
+        Err(ConfigError::KeyError {
+            message: format!("keyring {what} {reason}"),
+        })
+    };
+    if value.is_empty() {
+        return reject("must not be empty");
+    }
+    if value.starts_with('-') {
+        return reject("must not start with '-'");
+    }
+    if value.contains(['/', '\\', '\0']) || value.contains("..") {
+        return reject("must not contain path separators or '..'");
+    }
+    if value.chars().any(char::is_control) {
+        return reject("must not contain control characters");
+    }
+    Ok(())
+}
+
 /// Secret Service access through the `secret-tool` CLI.
 pub struct SecretToolKeyringStore;
 
@@ -102,6 +131,8 @@ impl Default for SecretToolKeyringStore {
 
 impl KeyringStore for SecretToolKeyringStore {
     fn set_secret(&self, service: &str, account: &str, secret: &[u8]) -> ConfigResult<()> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         self.run(
             &["store", "--label=confers master key", service, account],
             Some(secret),
@@ -110,6 +141,8 @@ impl KeyringStore for SecretToolKeyringStore {
     }
 
     fn get_secret(&self, service: &str, account: &str) -> ConfigResult<Option<Vec<u8>>> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         match self.run(&["lookup", service, account], None) {
             Ok(bytes) if bytes.is_empty() => Ok(None),
             Ok(bytes) => Ok(Some(bytes)),
@@ -120,6 +153,8 @@ impl KeyringStore for SecretToolKeyringStore {
     }
 
     fn delete_secret(&self, service: &str, account: &str) -> ConfigResult<()> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         self.run(&["clear", service, account], None)?;
         Ok(())
     }
@@ -148,6 +183,8 @@ impl FileKeyringStore {
 
 impl KeyringStore for FileKeyringStore {
     fn set_secret(&self, service: &str, account: &str, secret: &[u8]) -> ConfigResult<()> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| ConfigError::KeyError {
                 message: format!("cannot create keyring fallback dir: {e}"),
@@ -182,6 +219,8 @@ impl KeyringStore for FileKeyringStore {
     }
 
     fn get_secret(&self, service: &str, account: &str) -> ConfigResult<Option<Vec<u8>>> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         let file_name = format!("{service}-{account}.key");
         match std::fs::read(self.path.join(file_name)) {
             Ok(bytes) => Ok(Some(bytes)),
@@ -193,6 +232,8 @@ impl KeyringStore for FileKeyringStore {
     }
 
     fn delete_secret(&self, service: &str, account: &str) -> ConfigResult<()> {
+        validated_attribute(service, "service")?;
+        validated_attribute(account, "account")?;
         let file_name = format!("{service}-{account}.key");
         match std::fs::remove_file(self.path.join(file_name)) {
             Ok(()) => Ok(()),

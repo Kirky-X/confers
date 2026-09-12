@@ -421,7 +421,13 @@ impl OpenFeatureClient {
 
     /// Swap the provider (OpenFeature `set_provider`).
     pub fn set_provider(&self, provider: Arc<dyn FeatureProvider>) {
-        *self.provider.write().expect("provider lock") = provider;
+                // A provider that panicked while evaluated must not wedge the client
+        // for good: recover the (possibly inconsistent) lock like the other
+        // poisoned-lock call sites in this crate.
+        *self
+            .provider
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = provider;
     }
 
     /// The active provider's name.
@@ -433,7 +439,7 @@ impl OpenFeatureClient {
     pub fn bool_value(&self, flag_key: &str, default: bool, ctx: &EvaluationContext) -> bool {
         self.provider
             .read()
-            .expect("provider lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .resolve_bool(flag_key, default, ctx)
             .value
     }
@@ -447,7 +453,7 @@ impl OpenFeatureClient {
     ) -> EvaluationDetail<bool> {
         self.provider
             .read()
-            .expect("provider lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .resolve_bool(flag_key, default, ctx)
     }
 
@@ -460,7 +466,7 @@ impl OpenFeatureClient {
     ) -> String {
         self.provider
             .read()
-            .expect("provider lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .resolve_string(flag_key, default, ctx)
             .value
     }
@@ -474,7 +480,7 @@ impl OpenFeatureClient {
     ) -> EvaluationDetail<String> {
         self.provider
             .read()
-            .expect("provider lock")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .resolve_string(flag_key, default, ctx)
     }
 }

@@ -254,8 +254,15 @@ impl ChangeStream for InMemoryChangeStream {
         stored.version = version;
 
         // Retain the full envelope, then broadcast a summary over the
-        // reused ConfigBus transport.
-        if let Ok(mut store) = self.payloads.try_lock() {
+        // reused ConfigBus transport. The store must keep up with the
+        // broadcast: a poisoned lock is recovered (matching this crate's
+        // other lock call sites) so subscribers can still resolve the
+        // version they are about to be notified of.
+        //
+        // Scoped block, not `drop()`: the guard must not be considered live
+        // across the await below when the future's Send-ness is computed.
+        {
+            let mut store = self.payloads.lock().unwrap_or_else(|p| p.into_inner());
             store.insert(version, stored.clone());
         }
         let summary = ConfigChangeEvent::new(
@@ -277,25 +284,27 @@ impl ChangeStream for InMemoryChangeStream {
             async move {
                 let version: u64 = summary.checksum.parse().unwrap_or(0);
                 // Payloads stay retained until acked (see `ack`), so a clone
-                // is delivered here rather than a destructive remove.
-                payloads
-                    .try_lock()
-                    .ok()
-                    .and_then(|store| store.get(version).cloned())
+                // is delivered here rather than a destructive remove. The
+                // lock is recovered if poisoned: a skipped lookup here would
+                // silently drop the event for this subscriber.
+                let store = payloads.lock().unwrap_or_else(|p| p.into_inner());
+                store.get(version).cloned()
             }
         });
         Ok(Box::pin(mapped))
     }
 
     async fn ack(&self, version: u64) -> ConfigResult<()> {
-        if let Ok(mut store) = self.payloads.try_lock() {
-            store.remove(version);
-        }
+        let mut store = self.payloads.lock().unwrap_or_else(|p| p.into_inner());
+        store.remove(version);
         Ok(())
     }
 
     fn pending_count(&self) -> usize {
-        self.payloads.try_lock().map(|store| store.len()).unwrap_or(0)
+        self.payloads
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .len()
     }
 }
 

@@ -67,6 +67,29 @@ pub struct VaultTransitKeyProvider {
     cache_policy: crate::types::KeyCachePolicy,
 }
 
+/// Validate a Vault transit key name before it is interpolated into the
+/// request URL path (`/v1/transit/decrypt/{key}`).
+///
+/// The key name must not be able to change which engine path the request
+/// hits: path separators, `..` segments, percent escapes and whitespace are
+/// rejected; plain key names (letters, digits, `.`, `_`, `-`) pass.
+fn validate_transit_key(key: &str) -> ConfigResult<()> {
+    let ok = !key.is_empty()
+        && !key.contains("..")
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    if ok {
+        Ok(())
+    } else {
+        Err(ConfigError::KeyError {
+            message: format!(
+                "transit key '{key}' contains characters outside [A-Za-z0-9._-] or a '..' segment"
+            ),
+        })
+    }
+}
+
 impl VaultTransitKeyProvider {
     /// Create a provider for the transit key `transit_key` unwrapping
     /// `ciphertext`.
@@ -81,9 +104,11 @@ impl VaultTransitKeyProvider {
                 message: "Vault address must be an http(s) URL".to_string(),
             });
         }
+        let key = transit_key.into();
+        validate_transit_key(&key)?;
         Ok(Self {
             vault_addr: addr,
-            transit_key: transit_key.into(),
+            transit_key: key,
             ciphertext: ciphertext.into(),
             namespace: None,
             token: None,
@@ -150,7 +175,7 @@ impl CloudKmsBackend for VaultTransitKeyProvider {
         self.validate_addr()?;
         let token = self.get_token()?;
 
-        let client = reqwest::Client::new();
+        let client = crate::secret::providers::shared_http_client();
         let url = format!(
             "{}/v1/transit/decrypt/{}",
             self.vault_addr.trim_end_matches('/'),
@@ -330,6 +355,23 @@ mod tests {
         )
     }
 
+    #[test]
+    fn transit_key_path_injection_is_rejected() {
+        // The key name lands in the URL path: traversal and escape payloads
+        // must fail at construction, not reach the server.
+        for bad in ["../admin/key", "a/b", "key%2e%2e", "", "k y", "k..y/x"] {
+            assert!(
+                VaultTransitKeyProvider::new("https://vault:8200", bad, wrapped_key()).is_err(),
+                "transit key {bad:?} must be rejected"
+            );
+        }
+        assert!(
+            VaultTransitKeyProvider::new("https://vault:8200", "payments.v1_key-2", wrapped_key())
+                .is_ok(),
+            "plain key names remain accepted"
+        );
+    }
+
     #[tokio::test]
     async fn transit_decrypt_unwraps_key_against_mock_server() {
         use base64::Engine;
@@ -423,8 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_requires_all_fields() {
-        assert!(VaultTransitKeyProviderBuilder::new().build().is_err());
+    fn builder_requires_all_fields() {        assert!(VaultTransitKeyProviderBuilder::new().build().is_err());
         assert!(
             VaultTransitKeyProviderBuilder::new()
                 .vault_addr("https://vault:8200")

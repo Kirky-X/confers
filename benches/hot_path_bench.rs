@@ -22,10 +22,14 @@ fn bench_hot_path_get(c: &mut Criterion) {
         }
     });
 
+    // Keys are built outside the measured loop: the benchmark targets the
+    // lookup cost, not per-iteration string formatting.
+    let keys: Vec<String> = (0..100).map(|i| format!("key_{i}")).collect();
+
     c.bench_function("hot_path_get_100_keys", |b| {
         b.to_async(&rt).iter(|| async {
-            for i in 0..100 {
-                let _ = config.get_string(&format!("key_{i}")).await;
+            for key in &keys {
+                let _ = config.get_string(key).await;
             }
         })
     });

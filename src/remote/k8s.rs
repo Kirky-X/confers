@@ -164,7 +164,14 @@ impl K8sMountedSource {
                 // Atomic-writer internals (`..data`, `..2024_01_01_...`).
                 continue;
             }
-            let content = std::fs::read_to_string(entry.path()).map_err(|e| {
+            // Volume entries are symlinks (each key points into the `..data`
+            // timestamped directory), so links must be followed — but only
+            // within the mount: a symlink escaping `mount_path` is not a
+            // config key and is skipped.
+            let Some(resolved) = self.entry_path_within_mount(entry.path()) else {
+                continue;
+            };
+            let content = std::fs::read_to_string(&resolved).map_err(|e| {
                 io_err(
                     entry.path().display().to_string(),
                     format!("cannot read mounted key '{name}'"),
@@ -189,6 +196,23 @@ impl K8sMountedSource {
         Ok(AnnotatedValue::new(value, SourceId::new(SOURCE_NAME), ""))
     }
 
+    /// Resolve `path` (following symlinks) and require it to stay inside the
+    /// mount directory; `None` when it escapes or cannot be resolved.
+    ///
+    /// Mounted ConfigMap/Secret volumes are symlink farms managed by the
+    /// kubelet (`key -> ..data/key`), so links must be followed — canonical
+    /// paths of legitimate entries still live under the mount's canonical
+    /// path. A link pointing elsewhere (e.g. `/etc/shadow`) is refused.
+    fn entry_path_within_mount(&self, path: std::path::PathBuf) -> Option<std::path::PathBuf> {
+        let mount = self.mount_path.canonicalize().ok()?;
+        let resolved = path.canonicalize().ok()?;
+        if resolved.starts_with(&mount) {
+            Some(resolved)
+        } else {
+            None
+        }
+    }
+
     /// FNV-1a stamp over file names + contents for symlink-less directories.
     ///
     /// Mounted ConfigMaps/Secrets are size-bounded by kubelet (1 MiB), so
@@ -205,7 +229,12 @@ impl K8sMountedSource {
             if name.starts_with("..") {
                 continue;
             }
-            let content = std::fs::read(entry.path()).unwrap_or_default();
+            // Same containment rule as `read_volume`: entries resolving
+            // outside the mount are not part of the volume.
+            let Some(resolved) = self.entry_path_within_mount(entry.path()) else {
+                continue;
+            };
+            let content = std::fs::read(&resolved).unwrap_or_default();
             collected.push((name, content));
         }
         collected.sort();

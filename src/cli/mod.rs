@@ -847,7 +847,7 @@ fn check_string_value(full_key: &str, s: &str, issues: &mut Vec<String>) {
     }
 }
 
-/// Export merged configuration (sanitized)
+/// Export merged configuration (sanitized unless `--raw`)
 fn cmd_export(
     config_paths: &[PathBuf],
     format: &str,
@@ -867,6 +867,11 @@ fn cmd_export(
     if with_provenance {
         let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
 
+        // Sanitized by default; `--raw` opts out (see the warning above).
+        let annotated_json = serde_json::to_value(&annotated_config)?;
+        let annotated_json =
+            if raw { annotated_json } else { sanitize_json_strings(&annotated_json, 0) };
+
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
                 let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
@@ -880,9 +885,9 @@ fn cmd_export(
         };
 
         let formatted = match format {
-            "json" => serde_json::to_string_pretty(&annotated_config)?,
-            "toml" => toml::to_string_pretty(&annotated_config)?,
-            "yaml" => serde_yaml_ng::to_string(&annotated_config)?,
+            "json" => serde_json::to_string_pretty(&annotated_json)?,
+            "toml" => toml::to_string_pretty(&annotated_json)?,
+            "yaml" => serde_yaml_ng::to_string(&annotated_json)?,
             _ => anyhow::bail!("Unsupported format: {}", format),
         };
 
@@ -894,6 +899,9 @@ fn cmd_export(
         }
     } else {
         let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
+
+        // Sanitized by default; `--raw` opts out (see the warning above).
+        let config = if raw { config } else { sanitize_json_strings(&config, 0) };
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
@@ -1153,6 +1161,8 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     let mut snapshots: Vec<_> = entries.into_iter().collect();
     snapshots.sort_by_key(|e| std::cmp::Reverse(e.metadata().ok().and_then(|m| m.modified().ok())));
 
+    // `--latest 0` would underflow the index below; clamp to the newest pair.
+    let count = count.max(1);
     let first = snapshots
         .first()
         .ok_or_else(|| anyhow::anyhow!("No snapshots found after sorting"))?;

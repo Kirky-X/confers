@@ -19,6 +19,13 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Upper bound for establishing one watch stream (lock + gRPC creation).
+///
+/// Matches the KV-operation timeout default in the polling etcd source:
+/// transport-level hangs must degrade into the reconnect loop, not wedge
+/// the watch future.
+const WATCH_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// One normalized etcd watch event.
 ///
 /// `value` is `None` for deletions; `mod_revision` is the etcd revision at
@@ -209,17 +216,33 @@ impl WatchEventSource for EtcdGrpcWatchSource {
             options = options.with_start_revision(start + 1);
         }
 
-        let watch_stream = self
-            .client
-            .lock()
-            .await
-            .watch(self.prefix.as_str(), Some(options))
-            .await
-            .map_err(|e| crate::error::ConfigError::InvalidValue {
-                key: "etcd".to_string(),
-                expected_type: "etcd watch stream".to_string(),
-                message: format!("failed to establish etcd watch: {e}"),
-            })?;
+        // Bound the establishment (lock acquisition + watch creation): a
+        // slow or unresponsive cluster must surface as a transient error so
+        // the reconnect backoff engages instead of hanging this future
+        // forever. The returned stream itself is long-lived and unaffected.
+        let watch_stream = tokio::time::timeout(
+            WATCH_ESTABLISH_TIMEOUT,
+            async {
+                self.client
+                    .lock()
+                    .await
+                    .watch(self.prefix.as_str(), Some(options))
+                    .await
+            },
+        )
+        .await
+        .map_err(|_| crate::error::ConfigError::InvalidValue {
+            key: "etcd".to_string(),
+            expected_type: "etcd watch stream".to_string(),
+            message: format!(
+                "etcd watch establishment timed out after {WATCH_ESTABLISH_TIMEOUT:?}"
+            ),
+        })?
+        .map_err(|e| crate::error::ConfigError::InvalidValue {
+            key: "etcd".to_string(),
+            expected_type: "etcd watch stream".to_string(),
+            message: format!("failed to establish etcd watch: {e}"),
+        })?;
 
         let last_revision = Arc::clone(&self.last_revision);
         // Each gRPC response becomes a burst of normalized items; a

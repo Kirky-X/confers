@@ -42,7 +42,11 @@ pub trait ConfigFieldKeys {
 ///   wins over the hoisted top-level one).
 ///
 /// When the nested object does not exist yet but any hoistable key is
-/// present, it is created.
+/// present, it is created. A pre-existing **non-object** value at
+/// `field_key` (e.g. `"database": null`) is replaced by the hoisted object
+/// when hoistable keys exist: the top-level keys are the configuration the
+/// user actually wrote, and the displaced scalar could not deserialize into
+/// the nested struct anyway.
 pub fn hoist_flattened(
     json: &mut serde_json::Value,
     own_keys: &[&str],

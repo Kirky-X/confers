@@ -192,7 +192,10 @@ pub fn derive_field_key(
     key_version: &str,
 ) -> Result<[u8; 32], CryptoError> {
     let hk = Hkdf::<Sha256>::new(None, master_key);
-    let info = format!("{}:{}", key_version, field_path);
+    // NUL cannot appear in key versions or field paths: a `:`-style separator
+    // would let ("v1", "a:b") and ("v1:a", "b") collide into the same info
+    // string, deriving identical keys for distinct contexts.
+    let info = format!("{key_version}\x00{field_path}");
     let mut field_key = [0u8; 32];
 
     hk.expand(info.as_bytes(), &mut field_key)
@@ -236,6 +239,15 @@ mod tests {
     #[test]
     fn test_new_returns_instance() {
         let _ = XChaCha20Crypto::new();
+    }
+
+    #[test]
+    fn test_derive_field_key_separates_contexts() {
+        // The NUL info separator must keep ("v1", "a:b") and ("v1:a", "b")
+        // distinct: a shared info string would derive the same field key.
+        let a = derive_field_key(&TEST_KEY, "a:b", "v1").unwrap();
+        let b = derive_field_key(&TEST_KEY, "b", "v1:a").unwrap();
+        assert_ne!(a, b, "distinct (version, path) contexts must not collide");
     }
 
     #[test]

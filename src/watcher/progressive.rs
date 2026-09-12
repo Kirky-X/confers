@@ -15,6 +15,12 @@ use crate::error::{ConfigError, ConfigResult};
 use crate::interface::ConfigProvider;
 
 /// Reload strategy for hot reload.
+///
+/// Degenerate parameters commit immediately by construction: a `Canary`
+/// with `trial_duration == Duration::ZERO` skips the trial loop and a
+/// `Linear` with `steps == 0` skips the ramp — both behave like
+/// [`ReloadStrategy::Immediate`]. Constructing them that way is not an
+/// error; pass a positive trial/steps when health-checked staging matters.
 #[derive(Debug, Clone, Default)]
 pub enum ReloadStrategy {
     #[default]
