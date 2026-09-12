@@ -116,7 +116,6 @@ pub fn generate_field_attr_impls(
     }
 
     quote! {
-        #[allow(dead_code)]
         impl #struct_ident {
             #(#dynamic_methods)*
             #watcher_method

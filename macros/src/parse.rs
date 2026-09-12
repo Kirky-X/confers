@@ -8,7 +8,7 @@
 //! Uses darling for derive-aware attribute parsing with precise error spans.
 
 use darling::{FromDeriveInput, FromField};
-use syn::{GenericArgument, Ident, PathArguments, Type};
+use syn::{Ident, Type};
 
 /// Maximum allowed length for environment variable prefix.
 const MAX_PREFIX_LENGTH: usize = 64;
@@ -64,12 +64,6 @@ impl StructAttrs {
     /// Get the effective environment prefix.
     pub fn effective_env_prefix(&self) -> &str {
         self.env_prefix.as_deref().unwrap_or("")
-    }
-
-    /// Get the effective profile environment variable name.
-    #[allow(dead_code)]
-    pub fn effective_profile_env(&self) -> &str {
-        self.profile_env.as_deref().unwrap_or("APP_ENV")
     }
 
     /// Validate struct attributes.
@@ -188,7 +182,6 @@ impl StructAttrs {
 /// Parsed attributes from a field.
 #[derive(Debug, FromField)]
 #[darling(attributes(config))]
-#[allow(dead_code)]
 pub struct FieldAttrs {
     /// Field identifier
     pub ident: Option<Ident>,
@@ -382,45 +375,6 @@ pub fn is_secret_type(ty: &Type) -> bool {
     false
 }
 
-/// Type category for optimized type handling
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TypeCategory {
-    String,
-    Integer,
-    Float,
-    Boolean,
-    Option,
-    Vec,
-    Map,
-    Secret,
-    Custom,
-}
-
-impl TypeCategory {
-    /// Determine the category of a type (optimized version)
-    #[allow(dead_code)]
-    pub fn from_type(ty: &Type) -> Self {
-        if let Type::Path(type_path) = ty
-            && let Some(segment) = type_path.path.segments.last()
-        {
-            match segment.ident.to_string().as_str() {
-                "String" | "str" => return Self::String,
-                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" => return Self::Integer,
-                "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => return Self::Integer,
-                "f32" | "f64" => return Self::Float,
-                "bool" => return Self::Boolean,
-                "Option" => return Self::Option,
-                "Vec" => return Self::Vec,
-                "HashMap" | "BTreeMap" | "Map" => return Self::Map,
-                "SecretString" | "SecretBytes" => return Self::Secret,
-                _ => {}
-            }
-        }
-        Self::Custom
-    }
-}
-
 /// Check if a type is Option<T>
 pub fn is_option_type(ty: &Type) -> bool {
     if let syn::Type::Path(type_path) = ty
@@ -439,44 +393,6 @@ pub fn is_vec_type(ty: &Type) -> bool {
         return segment.ident == "Vec";
     }
     false
-}
-
-/// Extract the inner type from Option<T> or Vec<T>
-#[allow(dead_code)]
-pub fn extract_inner_type(ty: &Type) -> Option<&Type> {
-    if let syn::Type::Path(type_path) = ty
-        && let Some(segment) = type_path.path.segments.last()
-        && let PathArguments::AngleBracketed(args) = &segment.arguments
-        && let Some(GenericArgument::Type(inner)) = args.args.first()
-    {
-        return Some(inner);
-    }
-    None
-}
-
-/// Merge strategy enum for code generation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[allow(dead_code)]
-pub enum MergeStrategyKind {
-    #[default]
-    Replace,
-    Join,
-    Append,
-    Prepend,
-    JoinAppend,
-}
-
-impl MergeStrategyKind {
-    #[allow(dead_code)]
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "join" => Self::Join,
-            "append" => Self::Append,
-            "prepend" => Self::Prepend,
-            "join_append" | "joinappend" => Self::JoinAppend,
-            _ => Self::Replace,
-        }
-    }
 }
 
 /// Extract the serde field rename from a field's attributes.
@@ -594,36 +510,6 @@ mod tests {
 
         let ty: Type = parse_quote!(String);
         assert!(!is_vec_type(&ty));
-    }
-
-    #[test]
-    fn test_extract_inner_type() {
-        let ty: Type = parse_quote!(Option<String>);
-        let inner = extract_inner_type(&ty);
-        assert!(inner.is_some());
-
-        let ty: Type = parse_quote!(Vec<i32>);
-        let inner = extract_inner_type(&ty);
-        assert!(inner.is_some());
-    }
-
-    #[test]
-    fn test_merge_strategy_from_str() {
-        assert_eq!(
-            MergeStrategyKind::from_str("replace"),
-            MergeStrategyKind::Replace
-        );
-        assert_eq!(MergeStrategyKind::from_str("join"), MergeStrategyKind::Join);
-        assert_eq!(
-            MergeStrategyKind::from_str("append"),
-            MergeStrategyKind::Append
-        );
-        // "deep_merge" was removed alongside the no-op MergeStrategy::DeepMerge
-        // variant: it must now fall back to Replace instead of being accepted.
-        assert_eq!(
-            MergeStrategyKind::from_str("deep_merge"),
-            MergeStrategyKind::Replace
-        );
     }
 
     #[test]

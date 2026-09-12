@@ -23,7 +23,6 @@ use std::time::Duration;
 /// This struct implements `ConfigProvider` and can be used in tests that need
 /// a realistic configuration object with proper trait implementations.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct TestConfig {
     pub timeout_ms: u32,
     pub max_connections: usize,
@@ -45,19 +44,16 @@ impl TestConfig {
     }
 
     /// Creates a TestConfig with only timeout specified.
-    #[allow(dead_code)]
     pub fn with_timeout(timeout_ms: u32) -> Self {
         Self::new(timeout_ms, 0)
     }
 
     /// Creates a TestConfig with only max_connections specified.
-    #[allow(dead_code)]
     pub fn with_connections(max_connections: usize) -> Self {
         Self::new(0, max_connections)
     }
 
     /// Creates a TestConfig with random values for fuzzing tests.
-    #[allow(dead_code)]
     pub fn random() -> Self {
         use std::collections::hash_map::RandomState;
         use std::hash::{BuildHasher, Hasher};
@@ -137,7 +133,6 @@ impl ConfigProvider for TestConfig {
 /// This is used by integration tests that require external services like
 /// Etcd or Consul to be running.
 #[cfg(feature = "remote")]
-#[allow(dead_code)]
 pub async fn is_service_available(url: &str, timeout: Duration) -> bool {
     let client = reqwest::Client::builder().timeout(timeout).build().unwrap();
 

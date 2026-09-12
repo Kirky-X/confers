@@ -162,7 +162,6 @@ impl ValidationReport {
     /// 注意：garde::Report 的迭代器返回 &(Path, Error) 元组。
     /// Path 只包含结构化路径信息（字段名、索引），不包含规则名。
     /// 这里使用路径中的字段名作为 error_type。
-    #[allow(dead_code)]
     pub fn from_garde_report(report: garde::Report) -> Self {
         let errors = report
             .iter()

@@ -18,11 +18,8 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 // These structs are used as type markers for migration examples
-#[allow(dead_code)]
 struct ConfigV1;
-#[allow(dead_code)]
 struct ConfigV2;
-#[allow(dead_code)]
 struct ConfigV3;
 
 impl Versioned for ConfigV1 {

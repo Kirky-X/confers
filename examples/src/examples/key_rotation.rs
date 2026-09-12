@@ -24,7 +24,6 @@ struct EncryptedData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 struct KeyVersion {
     status: String,
     created_at: String,
@@ -33,7 +32,6 @@ struct KeyVersion {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 struct KeyManagement {
     current_version: String,
     master_key_id: String,

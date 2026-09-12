@@ -102,19 +102,16 @@ pub fn generate_clap_impl(
         /// ```
         impl #struct_ident {
             /// Generate clap Args struct by parsing command line arguments.
-            #[allow(dead_code)]
             pub fn clap_args() -> #cli_args_ident {
                 <#cli_args_ident as clap::Parser>::parse()
             }
 
             /// Get clap app for custom configuration.
-            #[allow(dead_code)]
             pub fn clap_app() -> clap::Command {
                 <#cli_args_ident as clap::CommandFactory>::command()
             }
 
             /// Create clap args from iterator of strings (for testing).
-            #[allow(dead_code)]
             pub fn clap_args_from<I>(iter: I) -> #cli_args_ident
             where
                 I: Iterator<Item = std::ffi::OsString>,
@@ -131,14 +128,12 @@ pub fn generate_clap_impl(
         /// CLI arguments struct (use via ConfigClap trait).
         #[derive(clap::Parser, Debug)]
         #[command(name = #app_name)]
-        #[allow(dead_code)]
         pub struct #cli_args_ident {
             #(#clap_field_defs),*
         }
 
         impl #cli_args_ident {
             /// Convert CLI arguments to a configuration map.
-            #[allow(dead_code)]
             pub fn to_config_map(&self) -> std::collections::HashMap<String, confers::ConfigValue> {
                 let mut map = std::collections::HashMap::new();
                 #(

@@ -6,7 +6,7 @@
 //! Load method generation for Config derive macro.
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::Ident;
 
 use crate::parse::{FieldAttrs, StructAttrs, parse_field_attrs};
@@ -505,31 +505,3 @@ fn generate_env_mapping(
     }
 }
 
-/// Generate a helper method for getting typed config keys
-#[allow(dead_code)]
-pub fn generate_typed_keys(
-    struct_ident: &Ident,
-    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
-) -> TokenStream {
-    let key_defs: Vec<TokenStream> = fields
-        .iter()
-        .filter(|(_, _, f)| !f.skip)
-        .map(|(ident, ty, f)| {
-            let config_key = f.effective_name();
-            let fn_name = format_ident!("key_{}", ident);
-
-            quote! {
-                /// Get a typed configuration key for this field.
-                pub fn #fn_name() -> confers::TypedConfigKey<#ty> {
-                    confers::TypedConfigKey::new(#config_key)
-                }
-            }
-        })
-        .collect();
-
-    quote! {
-        impl #struct_ident {
-            #(#key_defs)*
-        }
-    }
-}

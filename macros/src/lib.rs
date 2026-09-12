@@ -74,7 +74,6 @@
 //!
 //! - `parse`: Attribute parsing and validation
 //! - `codegen`: Code generation for different features
-//!   - `security`: Security utilities (path validation, encryption)
 //!   - `defaults`: Default value generation
 //!   - `load`: Configuration loading methods
 //!   - `schema`: JSON Schema generation

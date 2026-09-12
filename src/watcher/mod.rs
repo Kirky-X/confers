@@ -35,7 +35,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::error::{ConfersResult, ConfigConfigError};
 
 /// Guard for managing watcher lifecycle.
 ///
@@ -161,23 +160,6 @@ impl WatcherGuard {
     #[allow(dead_code)]
     pub(crate) fn set_task_handle(&self, handle: tokio::task::JoinHandle<()>) {
         *self.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
-    }
-}
-
-#[cfg(feature = "watch")]
-impl WatcherGuard {
-    /// Start the watcher task (delegates to existing start method).
-    #[allow(dead_code)]
-    pub(crate) async fn lifecycle_start(&self) -> Result<(), ConfigConfigError> {
-        self.start();
-        Ok(())
-    }
-
-    /// Stop the watcher gracefully (delegates to shutdown).
-    #[allow(dead_code)]
-    pub(crate) async fn lifecycle_stop(&self) -> ConfersResult<()> {
-        self.shutdown(Duration::from_secs(5)).await?;
-        Ok(())
     }
 }
 

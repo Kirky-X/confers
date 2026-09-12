@@ -53,15 +53,3 @@ pub fn generate_defaults_impl(
         }
     }
 }
-
-/// Generate a function to check if a field has an explicit default
-#[allow(dead_code)]
-pub fn has_explicit_default(attrs: &FieldAttrs) -> bool {
-    attrs.default.is_some()
-}
-
-/// Generate the default value expression for a field
-#[allow(dead_code)]
-pub fn default_value_expr(attrs: &FieldAttrs) -> Option<TokenStream> {
-    attrs.default.as_ref().map(|expr| quote!(#expr))
-}

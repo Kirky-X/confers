@@ -199,19 +199,16 @@ impl InjectionRateLimiter {
     }
 }
 
-// `GLOBAL_RATE_LIMITER` is used by `inject()` under `#[cfg(not(test))]`;
-// test builds use `TEST_RATE_LIMITER` instead, so allow dead_code for test cfg.
-#[allow(dead_code)]
-/// Global rate limiter instance (enabled by default)
+/// Global rate limiter instance (enabled by default).
+///
+/// Test builds use [`TEST_RATE_LIMITER`] instead (see `inject()`), so this
+/// static only exists — and is only consumed — in non-test builds.
+#[cfg(not(test))]
 pub(crate) static GLOBAL_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
 
 /// Global rate limiter for testing (disabled)
 #[cfg(test)]
 pub(crate) static TEST_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
-
-#[allow(dead_code)]
-/// 全局默认配置注入器
-pub(crate) static GLOBAL_INJECTOR: OnceLock<Arc<RwLock<ConfigInjector>>> = OnceLock::new();
 
 /// Maximum number of entries the injector can hold (default: 10_000).
 const DEFAULT_MAX_ENTRIES: usize = 10_000;
