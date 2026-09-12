@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/confers.png" alt="Confers Logo" width="200">
+<img src="docs/assets/confers.png" alt="Confers Logo" width="180">
 
 [![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
 
@@ -14,17 +14,20 @@
 
 ---
 
-<!-- Hero Section -->
-
 <div align="center" style="padding: 32px; margin: 24px 0">
 
-### 🎯 零样板配置管理
+### 🎯 声明式配置管理
 
-Confers 提供**声明式方法**进行配置管理：
+通过 `#[derive(Config)]` 派生宏声明配置结构，库负责剩下的工作：
 
-| ✨ 类型安全 | 🔄 自动重载 | 🔐 XChaCha20-Poly1305 加密 | 🌐 远程配置源 |
-|:-------------:|:--------------:|:---------------------:|:-----------------:|
-| 编译时检查 | 热重载支持 | 敏感数据保护 | etcd、Consul、HTTP |
+<table style="width:100%; border-collapse: collapse">
+<tr>
+<td align="center" width="25%" style="padding: 12px">🧩<br><b>派生宏驱动</b><br><span style="color:#64748B">编译期生成加载代码</span></td>
+<td align="center" width="25%" style="padding: 12px">🛡️<br><b>类型安全</b><br><span style="color:#64748B">多来源合并 强类型输出</span></td>
+<td align="center" width="25%" style="padding: 12px">🔄<br><b>热重载</b><br><span style="color:#64748B">渐进发布 健康检查回滚</span></td>
+<td align="center" width="25%" style="padding: 12px">🔐<br><b>端到端加密</b><br><span style="color:#64748B">XChaCha20-Poly1305</span></td>
+</tr>
+</table>
 
 </div>
 
@@ -38,13 +41,12 @@ Confers 提供**声明式方法**进行配置管理：
 - [📋 目录](#-目录)
 - [✨ 功能特性](#-功能特性)
 - [🚀 快速开始](#-快速开始)
-  - [📦 安装](#-安装)
-  - [💡 基本用法](#-基本用法)
 - [🎨 特性标志](#-特性标志)
 - [📚 文档](#-文档)
 - [💻 示例](#-示例)
 - [🏗️ 架构](#️-架构)
 - [🤖 CLI 工具](#-cli-工具)
+- [🔄 核心流程](#-核心流程)
 - [🧪 测试](#-测试)
 - [📊 性能](#-性能)
 - [🔒 安全](#-安全)
@@ -62,43 +64,53 @@ Confers 提供**声明式方法**进行配置管理：
 
 ## ✨ 功能特性
 
-| 🎯 核心功能 | ⚡ 可选功能 |
-|:-----------------|:--------------------|
-| 始终可用 | 按需启用 |
-
 <table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="vertical-align:top; padding: 16px">
-
-### 🎯 核心功能（始终可用）
-
-| 状态 | 功能 | 描述 |
-|:------:|---------|-------------|
-| ✅ | **类型安全配置** | 通过派生宏自动生成配置结构体（`derive` 功能） |
-| ✅ | **多格式支持** | 支持 TOML、YAML、JSON、INI 配置文件 |
-| ✅ | **环境变量覆盖** | 支持环境变量覆盖配置 |
-| ✅ | **命令行参数覆盖** | 支持命令行参数覆盖（`cli` 功能） |
-
-</td>
-<td width="50%" style="vertical-align:top; padding: 16px">
-
-### ⚡ 可选功能
-
-| 状态 | 功能 | 描述 |
-|:------:|---------|-------------|
-| 🔍 | **配置验证** | 内置验证器集成（`validation` 功能） |
-| 📊 | **Schema 生成** | 自动生成 JSON Schema（`schema` 功能） |
-| 🚀 | **文件监控与热重载** | 实时文件监控（`watch` 功能） |
-| 🔐 | **配置加密** | XChaCha20-Poly1305 加密存储（`encryption` 功能） |
-| 🌐 | **远程配置** | 支持 etcd、Consul、HTTP（`remote` 功能） |
-| 📦 | **审计日志** | 记录访问和变更历史（`audit` 功能） |
-| 🔧 | **配置对比** | 多种输出格式的配置比较 |
-| 🛡️ | **安全增强** | Nonce 重用检测、SSRF 防护 |
-| 🔑 | **密钥管理** | 内置密钥生成和轮换 |
-
-</td>
+<td width="50%" style="vertical-align:top; padding: 12px">🧩 <b>派生宏驱动</b><br><span style="color:#64748B"><code>#[derive(Config)]</code> 与 <code>#[config(...)]</code> 属性在编译期生成加载、默认值与环境变量覆盖代码</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🗂️ <b>多格式支持</b><br><span style="color:#64748B">TOML、JSON、YAML、INI 与 <code>.env</code>，支持按内容自动探测格式</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔗 <b>多来源优先级链</b><br><span style="color:#64748B">文件、环境变量、内存与远程来源按声明顺序合并，每个值携带来源与位置元数据</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🛡️ <b>类型安全与校验</b><br><span style="color:#64748B">合并结果反序列化为强类型结构体，可选 garde 规则校验</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔄 <b>热重载</b><br><span style="color:#64748B">文件监听与自适应去抖，支持渐进发布与健康检查自动回滚</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">⚡ <b>动态字段</b><br><span style="color:#64748B">基于 arc-swap 的无锁运行时更新，支持回调与字段监听</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔐 <b>配置加密</b><br><span style="color:#64748B">XChaCha20-Poly1305 认证加密，HKDF-SHA256 按字段派生子密钥</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🌐 <b>远程配置</b><br><span style="color:#64748B">HTTP 轮询、etcd v3、Consul、Nacos、Kubernetes，内置熔断器与 SSRF 防护</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">📢 <b>变更广播</b><br><span style="color:#64748B">NATS / Redis Pub-Sub 消息总线，多实例配置同步</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">📊 <b>Schema 生成</b><br><span style="color:#64748B">自动生成 JSON Schema 与 TypeScript 类型定义</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🧾 <b>审计日志</b><br><span style="color:#64748B">HMAC 签名保护完整性，敏感字段自动脱敏</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🧰 <b>CLI 诊断工具</b><br><span style="color:#64748B">inspect、validate、diff、export、snapshot、schema、doctor 等子命令</span></td>
 </tr>
 </table>
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🧩 更多能力</summary>
+
+| 能力 | 特性标志 | 说明 |
+|---------|---------|------|
+| 配置版本迁移 | `migration` | 结构升级时的数据迁移 |
+| 快照与回滚 | `snapshot` | 配置快照持久化、diff 与回滚 |
+| 变量插值 | `interpolation` | `${VAR}` 与 `${VAR:-default}` 引用 |
+| 模块化配置 | `modules` | 按特性注册配置分组 |
+| 上下文感知 | `context-aware` | 租户等上下文维度的取值规则 |
+| 运行时特性开关 | `feature-toggle` | 线程安全的开关注册表 |
+| OpenFeature 风格评估 | `openfeature` | 特性评估 API |
+| 安全规则校验器 | `security-rules` | JWT、CORS、SSRF、TLS 内置校验器与注册表 |
+| 密钥管理与轮换 | `key` | 密钥版本、状态与定时轮换 |
+| 密钥存储后端 | `keyring` | 文件、MasterKey、secret-tool 等存储 |
+| 云 KMS 密钥提供方 | `cloud-kms` | Vault Transit 等后端 |
+| 惰性分段解析 | `lazy` | 超大文档按需解析 |
+| 统一变更流 | `change-stream` | 跨传输的变更事件端口 |
+
+</details>
 
 ---
 
@@ -106,188 +118,63 @@ Confers 提供**声明式方法**进行配置管理：
 
 ### 📦 安装
 
-#### 🦀 Rust 安装
+```bash
+cargo add confers
+```
 
-| 安装方式 | 配置方式 | 使用场景 |
-|-------------------|---------------|----------|
-| **默认** | `confers = "0.6.0-rc.2"` | 包含 `toml`、`json`、`env`（默认特性） |
-| **最小化** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }` | 环境变量 + JSON |
-| **推荐** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 验证 |
-| **CLI 工具** | `confers = { version = "0.6.0-rc.2", features = ["cli"] }` | CLI 工具（不含验证/加密） |
-| **完整** | `confers = { version = "0.6.0-rc.2", features = ["full"] }` | 所有功能 |
+要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`env`。
 
-### 💡 基本用法
+| 预设 | 安装方式 | 适用场景 |
+|------|----------|----------|
+| 默认 | `cargo add confers` | TOML、JSON、环境变量 |
+| 最小化 | `cargo add confers --no-default-features --features minimal` | 仅环境变量与 JSON |
+| 推荐 | `cargo add confers --no-default-features --features recommended` | 默认格式加校验与安全规则 |
+| 完整 | `cargo add confers --features full` | 全部能力 |
 
-#### 🎬 5 分钟快速入门
+### 💡 最小示例
 
-**必需功能**：`toml`、`env`、`validation`（使用：`features = ["recommended"]`）
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**第一步：定义配置结构体**
+以下示例改编自 [`examples/src/examples/basic_usage.rs`](examples/src/examples/basic_usage.rs)：
 
 ```rust
 use confers::Config;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
+#[derive(Config, Deserialize, Debug, Clone)]
 pub struct AppConfig {
-    pub name: String,
+    /// 服务器监听地址
+    #[config(default = "127.0.0.1".to_string())]
+    pub host: String,
+
+    /// 服务器监听端口
+    #[config(default = 8080u16)]
     pub port: u16,
-    pub debug: bool,
+
+    /// 日志级别
+    #[config(default = "info".to_string())]
+    pub log_level: String,
 }
-```
 
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**第二步：创建配置文件**
-
-```toml
-# config.toml
-name = "my-app"
-port = 8080
-debug = true
-```
-
-</td>
-</tr>
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**第三步：加载配置**
-
-```rust
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 读取字段默认值，环境变量 HOST、PORT、LOG_LEVEL 可覆盖
     let config = AppConfig::load_sync()?;
-    println!("✅ 已加载: {:?}", config);
+
+    println!("监听地址: {}:{}", config.host, config.port);
     Ok(())
 }
 ```
-
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**第四步：环境变量覆盖**
 
 ```bash
-# 环境变量自动覆盖配置
-export APP_PORT=9090
-export APP_DEBUG=true
+# 环境变量覆盖默认值
+export PORT=9000
+cargo run    # 输出: 监听地址: 127.0.0.1:9000
 ```
 
-</td>
-</tr>
-</table>
+### 🧭 核心概念
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 完整工作示例</summary>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-fn main() -> anyhow::Result<()> {
-    // 创建配置文件
-    let config_content = r#"
-name = "my-app"
-port = 8080
-debug = true
-"#;
-    std::fs::write("config.toml", config_content)?;
-
-    // 加载配置
-    let config = AppConfig::load_sync()?;
-
-    // 打印配置
-    println!("🎉 配置加载成功！");
-    println!("📋 名称: {}", config.name);
-    println!("🔌 端口: {}", config.port);
-    println!("🐛 调试模式: {}", config.debug);
-
-    Ok(())
-}
-```
-
-</details>
-
-#### 🎨 三种使用模式
-
-Confers 提供三种灵活的使用模式以满足不同需求：
-
-**1️⃣ 简单模式（推荐）**
-
-适用于大多数应用程序，代码简洁：
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-// 一行代码加载配置
-let config = AppConfig::load_sync()?;
-```
-
-**2️⃣ 构建器模式**
-
-更好地控制配置来源：
-
-```rust
-use confers::{ConfigBuilder, ConfigProviderExt};
-
-let config = ConfigBuilder::<serde_json::Value>::new()
-    .file("config.toml")
-    .file("local.toml")  // 更高优先级
-    .env()
-    .build()?;
-
-let name = config.get_string("app.name");
-let port = config.get_int("app.port");
-```
-
-**3️⃣ 依赖注入模式**
-
-便于集成到框架中，支持运行时灵活性：
-
-```rust
-use std::sync::Arc;
-use confers::{ConfigBuilder, ConfigProviderExt};
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct MyConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-let config = ConfigBuilder::<MyConfig>::new()
-    .file("config.toml")
-    .env()
-    .build()?;
-
-let shared_config = Arc::new(config);
-
-let service = MyService::new(shared_config);
-```
+- **来源链**：通过 `ConfigBuilder` / `SourceChainBuilder` 声明 `FileSource`、`EnvSource`、`MemorySource` 与远程来源，声明顺序即优先级，后加入者覆盖先加入者。
+- **注解值**：每个配置值包装为 `AnnotatedValue`，携带 `SourceId` 与 `SourceLocation`（精确到行列），冲突可溯源。
+- **双阶段错误**：初始化期失败返回 `ConfigConfigError`，运行期失败返回 `ConfersError`，两类问题分开处理。
+- **特性门控**：全部可选能力均为独立 feature，编译产物只包含启用的部分，最小可只用 `env` + `json`。
 
 ---
 
@@ -295,190 +182,67 @@ let service = MyService::new(shared_config);
 
 ### 📦 功能预设
 
-| 预设 | 包含功能 | 使用场景 |
-|--------|----------|----------|
-| <span style="color:#166534; padding:4px 8px">minimal</span> | `env`, `json` | 最小化配置加载（无验证、无 CLI） |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation` | **推荐大多数应用程序使用** |
-| <span style="color:#92400E; padding:4px 8px">dev</span> | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | 开发环境，包含所有工具 |
-| <span style="color:#991B1B; padding:4px 8px">production</span> | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | 生产环境配置 |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | 分布式系统 |
-| <span style="color:#5B21B6; padding:4px 8px">full</span>        | 所有功能 | 完整功能集 |
-
-**说明**：默认特性包含 `toml`、`json`、`env`。
-
-### 🎨 功能架构
-
-```mermaid
-graph LR
-    A["<b>配置源</b><br/>文件 • 环境变量 • CLI"] --> B["<b>ConfigLoader</b><br/>核心引擎"]
-    B --> C["<b>验证</b><br/>类型和业务规则"]
-    B --> D["<b>Schema</b><br/>JSON Schema 生成"]
-    B --> E["<b>加密</b><br/>XChaCha20-Poly1305"]
-    B --> F["<b>审计</b><br/>访问日志"]
-    C --> H["<b>应用配置</b><br/>可直接使用"]
-    D --> H
-    E --> H
-    F --> H
-
-    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
-    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
-    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
-```
+| 预设 | 包含特性 | 适用场景 |
+|------|----------|----------|
+| `minimal` | `env`、`json` | 最小化加载 |
+| `recommended` | `toml`、`env`、`validation`、`json`、`security-rules` | 大多数应用 |
+| `dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
+| `production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
+| `distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
+| `full` | 全部特性 | 完整能力集 |
 
 ### 📋 功能矩阵
 
-| 功能 | 默认 | 说明 | 稳定性 |
-| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
-| **格式支持** |         |                                                      |           |
-| `toml`                |   ✅    | TOML 配置文件                             | 稳定    |
-| `json`                |   ✅    | JSON 配置文件                             | 稳定    |
-| `yaml`                |   ❌    | YAML 配置文件                             | 稳定    |
-| `ini`                 |   ❌    | INI 配置文件                              | 稳定    |
-| `env`                 |   ✅    | 环境变量支持                         | 稳定    |
-| `dotenv`              |   ❌    | `.env` 文件支持（`env` 的别名）                 | 稳定    |
-| **核心功能**     |         |                                                      |           |
-| `validation`          |   ❌    | 配置验证（garde）                     | 稳定    |
-| `watch`               |   ❌    | 文件监控和热重载                         | 稳定    |
-| `encryption`          |   ❌    | XChaCha20-Poly1305 加密                        | 稳定    |
-| `cli`                 |   ❌    | 命令行工具（含子命令）                              | 稳定    |
-| `schema`              |   ❌    | JSON Schema 生成                               | 稳定    |
-| `typescript-schema`   |   ❌    | TypeScript 类型生成（`schema` 的别名）       | 稳定    |
-| **高级功能** |         |                                                      |           |
-| `audit`               |   ❌    | 审计日志                                        | 稳定    |
-| `dynamic`             |   ❌    | 动态字段                                       | 稳定    |
-| `progressive-reload`  |   ❌    | 金丝雀/线性渐进发布                                | 稳定    |
-| `migration`           |   ❌    | 配置迁移                              | 稳定    |
-| `snapshot`            |   ❌    | 快照回滚                                    | 稳定    |
-| `interpolation`       |   ❌    | 变量插值                               | 稳定    |
-| **远程源**    |         |                                                      |           |
-| `remote`              |   ❌    | HTTP 轮询                                         | 测试版      |
-| `etcd`                |   ❌    | Etcd v3 集成                             | 测试版      |
-| `consul`              |   ❌    | Consul 集成                             | 测试版      |
-| **消息总线**    |         |                                                      |           |
-| `config-bus`          |   ❌    | 配置事件总线                                     | 稳定    |
-| `nats-bus`            |   ❌    | NATS 集成                                     | 稳定    |
-| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | 稳定    |
-| **安全**    |         |                                                      |           |
-| `security`            |   ❌    | 安全模块（环境变量验证、错误信息清理） | 稳定    |
-| `key`                 |   ❌    | 密钥管理与轮换                          | 稳定    |
-| **上下文与模块** |         |                                                      |           |
-| `context-aware`       |   ❌    | 租户感知配置                           | 稳定    |
-| `modules`             |   ❌    | 模块化配置                                | 稳定    |
-
-### 🧩 单独功能说明
-
-| 功能 | 描述 | 默认启用 |
-|---------|-------------|---------|
-| **格式支持** |||
-| `toml` | TOML 格式支持 | ✅ |
-| `json` | JSON 格式支持 | ✅ |
-| `yaml` | YAML 格式支持 | ❌ |
-| `ini` | INI 格式支持 | ❌ |
-| `env` | 环境变量支持 | ✅ |
-| `dotenv` | `.env` 文件支持（`env` 的别名） | ❌ |
-| **核心功能** |||
-| `validation` | 配置验证（garde） | ❌ |
-| `watch` | 文件监控和热重载 | ❌ |
-| `encryption` | XChaCha20-Poly1305 加密 | ❌ |
-| `cli` | 命令行工具 | ❌ |
-| `schema` | JSON Schema 生成 | ❌ |
-| `typescript-schema` | TypeScript 类型生成（`schema` 的别名） | ❌ |
-| **高级功能** |||
-| `audit` | 审计日志 | ❌ |
-| `dynamic` | 动态字段 | ❌ |
-| `progressive-reload` | 渐进式重载 | ❌ |
-| `migration` | 配置迁移 | ❌ |
-| `snapshot` | 快照回滚 | ❌ |
-| `interpolation` | 变量插值 | ❌ |
-| **远程源** |||
-| `remote` | HTTP 轮询 | ❌ |
-| `etcd` | Etcd 集成 | ❌ |
-| `consul` | Consul 集成 | ❌ |
-| **消息总线** |||
-| `config-bus` | 配置事件总线 | ❌ |
-| `nats-bus` | NATS 消息总线 | ❌ |
-| `redis-bus` | Redis 消息总线 | ❌ |
-| **其他** |||
-| `security` | 安全模块 | ❌ |
-| `key` | 密钥管理系统 | ❌ |
-| `modules` | 模块化配置 | ❌ |
-| `context-aware` | 上下文感知配置 | ❌ |
-
-### 🔧 CLI 命令功能依赖
-
-| 命令 | 必需功能 | 可选功能 | 描述 |
-|---------|------------------|------------------|-------------|
-| `inspect` | `cli` | - | 查看配置键及来源 |
-| `validate` | `cli` | - | 验证配置文件 |
-| `diff` | `cli` | - | 比较配置文件 |
-| `export` | `cli` | - | 导出合并后的配置 |
-| `snapshot` | `cli` | `snapshot` | 管理配置快照 |
-
-**注意**：`cli` 功能提供用于配置管理的命令行工具。
-
-### 🎛️ 配置选项
+下表逐项对应 `Cargo.toml` 的 `[features]` 定义，`default = ["toml", "json", "env"]`。
 
 <table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-**基本配置**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "localhost"
-port = 8080
-
-[features]
-debug = true
-logging = true
-```
-
-</td>
-<td width="50%" style="padding: 16px">
-
-**高级配置**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "0.0.0.0"
-port = 8080
-workers = 4
-
-[database]
-url = "postgres://localhost/db"
-pool_size = 10
-
-[performance]
-cache_size = 1000
-```
-
-</td>
-</tr>
+<tr><th style="text-align:left">特性</th><th style="text-align:center">默认</th><th style="text-align:left">说明</th></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>格式支持</b></td></tr>
+<tr><td><code>toml</code></td><td align="center">✅</td><td>TOML 配置文件</td></tr>
+<tr><td><code>json</code></td><td align="center">✅</td><td>JSON 配置文件</td></tr>
+<tr><td><code>yaml</code></td><td align="center">❌</td><td>YAML 配置文件</td></tr>
+<tr><td><code>ini</code></td><td align="center">❌</td><td>INI 配置文件</td></tr>
+<tr><td><code>env</code></td><td align="center">✅</td><td>环境变量加载与 <code>.env</code> 文件</td></tr>
+<tr><td><code>dotenv</code></td><td align="center">❌</td><td><code>env</code> 的别名</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>核心能力</b></td></tr>
+<tr><td><code>validation</code></td><td align="center">❌</td><td>基于 garde 的配置校验</td></tr>
+<tr><td><code>watch</code></td><td align="center">❌</td><td>文件监听与热重载，自适应去抖</td></tr>
+<tr><td><code>encryption</code></td><td align="center">❌</td><td>XChaCha20-Poly1305 加密与 HKDF 字段密钥派生</td></tr>
+<tr><td><code>cli</code></td><td align="center">❌</td><td>confers 命令行诊断工具</td></tr>
+<tr><td><code>schema</code></td><td align="center">❌</td><td>JSON Schema 生成</td></tr>
+<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript 类型生成（<code>schema</code> 的别名）</td></tr>
+<tr><td><code>dynamic</code></td><td align="center">❌</td><td>动态字段，arc-swap 无锁读取</td></tr>
+<tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>渐进式重载，金丝雀发布与健康检查回滚（含 <code>watch</code>）</td></tr>
+<tr><td><code>audit</code></td><td align="center">❌</td><td>审计日志，HMAC 完整性与敏感字段脱敏</td></tr>
+<tr><td><code>migration</code></td><td align="center">❌</td><td>配置版本迁移</td></tr>
+<tr><td><code>snapshot</code></td><td align="center">❌</td><td>快照与回滚</td></tr>
+<tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> 变量插值，支持嵌套默认值</td></tr>
+<tr><td><code>tracing</code></td><td align="center">❌</td><td>启用内部 tracing 门面（未启用时为 no-op）</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>安全</b></td></tr>
+<tr><td><code>security</code></td><td align="center">❌</td><td>安全模块：加密集成、错误脱敏、环境变量校验（含 <code>encryption</code>）</td></tr>
+<tr><td><code>security-rules</code></td><td align="center">❌</td><td>内置 JWT、CORS、SSRF、TLS 校验器与注册表</td></tr>
+<tr><td><code>key</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
+<tr><td><code>keyring</code></td><td align="center">❌</td><td>密钥存储后端（文件、MasterKey、secret-tool）</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方，含 Vault Transit（依赖 <code>remote</code>）</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>远程来源</b></td></tr>
+<tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP 轮询来源，含 SSRF 防护与熔断器</td></tr>
+<tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 集成（含 <code>remote</code>）</td></tr>
+<tr><td><code>etcd-watch</code></td><td align="center">❌</td><td>etcd watch 监听（含 <code>etcd</code>）</td></tr>
+<tr><td><code>consul</code></td><td align="center">❌</td><td>HashiCorp Consul 集成（含 <code>remote</code>）</td></tr>
+<tr><td><code>nacos</code></td><td align="center">❌</td><td>Nacos 配置中心集成（含 <code>remote</code>）</td></tr>
+<tr><td><code>k8s</code></td><td align="center">❌</td><td>Kubernetes ConfigMap / Secret 来源，挂载卷与 API 两种方式（含 <code>remote</code>）</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>消息总线与变更流</b></td></tr>
+<tr><td><code>config-bus</code></td><td align="center">❌</td><td>配置变更事件总线，基于 tokio broadcast</td></tr>
+<tr><td><code>nats-bus</code></td><td align="center">❌</td><td>NATS 总线后端（含 <code>config-bus</code>）</td></tr>
+<tr><td><code>redis-bus</code></td><td align="center">❌</td><td>Redis Pub/Sub 总线后端（含 <code>config-bus</code>）</td></tr>
+<tr><td><code>change-stream</code></td><td align="center">❌</td><td>统一变更流端口，复用 config-bus 传输（含 <code>watch</code>）</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>组织与扩展</b></td></tr>
+<tr><td><code>modules</code></td><td align="center">❌</td><td>模块化配置分组与注册表</td></tr>
+<tr><td><code>context-aware</code></td><td align="center">❌</td><td>上下文感知（租户维度）配置</td></tr>
+<tr><td><code>feature-toggle</code></td><td align="center">❌</td><td>运行时特性开关注册表</td></tr>
+<tr><td><code>openfeature</code></td><td align="center">❌</td><td>OpenFeature 风格特性评估（含 <code>feature-toggle</code>、<code>context-aware</code>）</td></tr>
+<tr><td><code>lazy</code></td><td align="center">❌</td><td>超大文档惰性分段解析</td></tr>
 </table>
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 所有配置选项</summary>
-
-| 选项 | 类型 | 默认值 | 描述 |
-|--------|------|---------|-------------|
-| `name` | String | - | 项目名称 |
-| `version` | String | "1.0.0" | 版本号 |
-| `host` | String | "localhost" | 服务器主机 |
-| `port` | u16 | 8080 | 服务器端口 |
-| `debug` | Boolean | false | 启用调试模式 |
-| `workers` | usize | 4 | 工作线程数 |
-| `cache_size` | usize | 1000 | 缓存大小（MB） |
-
-</details>
 
 ---
 
@@ -488,518 +252,296 @@ cache_size = 1000
 |------|------|
 | [📖 用户指南](docs/USER_GUIDE.md) | 从安装到进阶的完整使用教程 |
 | [📘 API 参考](docs/API_REFERENCE.md) | 全部公开 API 的详细说明 |
-| [🏗️ 架构文档](docs/ARCHITECTURE.md) | 设计理念与内部实现 |
-| [🔒 安全文档](docs/SECURITY.md) | 安全设计与最佳实践 |
+| [🏗️ 架构文档](docs/ARCHITECTURE.md) | 设计原则、模块划分与数据流 |
+| [🧭 宏配置指南](docs/CONFIG_MACRO_GUIDE.md) | `Config` 派生宏与 `#[config(...)]` 属性的完整用法 |
+| [📈 性能优化指南](docs/PERFORMANCE.md) | 基准数据、性能口径与优化建议 |
+| [🔒 安全文档](docs/SECURITY.md) | 安全设计、最佳实践与漏洞处理记录 |
 | [❓ FAQ](docs/FAQ.md) | 常见问题解答 |
-| [📈 性能优化指南](docs/PERFORMANCE.md) | 基准测试说明与性能优化建议 |
-| [🧭 宏配置指南](docs/CONFIG_MACRO_GUIDE.md) | `Config` 派生宏与属性的完整用法 |
-| [📚 库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目中 |
+| [📚 库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目 |
+| [🧪 测试场景矩阵](docs/TEST_SCENARIOS.md) | E2E 验收场景穷举矩阵 |
 | [📋 更新日志](docs/CHANGELOG.md) | 每个版本的变更记录 |
 | [🤝 贡献指南](docs/CONTRIBUTING.md) | 如何参与项目开发 |
 | [📦 在线 API 文档](https://docs.rs/confers) | docs.rs 自动生成的最新文档 |
+| [📦 crates.io](https://crates.io/crates/confers) | 发布页面 |
 
 ---
 
 ## 💻 示例
 
-### 🗂️ 示例目录
+全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标。
 
-完整可运行的示例展示所有主要功能。所有示例可在 [`examples/`](examples/) 目录中找到。
-
-| 示例                | 文件                                           | 所需功能            | 描述                                       |
-| :------------------- | :--------------------------------------------- | :------------------- | :----------------------------------------- |
-| **basic_usage**      | `examples/src/examples/basic_usage.rs`         | `toml`, `env`        | 从 TOML 和环境变量加载基本配置             |
-| **hot_reload**       | `examples/src/examples/hot_reload.rs`          | `watch`              | 实时文件监控与自动重载                     |
-| **encryption**       | `examples/src/examples/encryption.rs`          | `encryption`         | 使用 XChaCha20-Poly1305 加密敏感字段       |
-| **key_rotation**     | `examples/src/examples/key_rotation.rs`        | `key`                | 密钥生命周期管理与轮换                     |
-| **migration**        | `examples/src/examples/migration.rs`           | `migration`          | 配置版本迁移                               |
-| **dynamic_fields**   | `examples/src/examples/dynamic_fields.rs`      | `dynamic`            | 无锁动态字段更新与回调                     |
-| **config_groups**    | `examples/src/examples/config_groups.rs`       | `modules`            | 模块化配置分组                             |
-| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | 金丝雀部署与基于健康检查的滚动发布         |
-| **config_bus**       | `examples/src/examples/config_bus.rs`          | `config-bus`         | 通过 NATS/Redis 多实例配置广播             |
-| **snapshot**         | `examples/src/examples/snapshot.rs`            | `snapshot`           | 配置快照与 diff、回滚                      |
-| **remote_consul**    | `examples/src/examples/remote_consul.rs`       | `consul`             | 从 HashiCorp Consul 获取远程配置           |
-| **remote_etcd**      | `examples/src/examples/remote_etcd.rs`         | `etcd`               | 从 etcd v3 获取远程配置                    |
-| **validation**       | `examples/src/examples/validation.rs`          | `validation`         | 使用 garde 进行配置验证                    |
-| **json_schema**      | `examples/src/examples/json_schema.rs`         | `schema`             | JSON Schema 和 TypeScript 类型生成         |
-| **interpolation**    | `examples/src/examples/interpolation.rs`      | `interpolation`      | 配置字符串插值，支持 ${VAR} 语法          |
-| **audit**            | `examples/src/examples/audit.rs`              | `audit`              | 审计日志，AuditWriter 和 AuditEvent       |
-| **context_aware**    | `examples/src/examples/context_aware.rs`      | `context-aware`      | 上下文感知配置，ContextAwareField         |
-| **security**         | `examples/src/examples/security.rs`           | `security`           | 安全功能：加密前缀检测、环境变量验证      |
-| **modules_demo**     | `examples/src/examples/modules_demo.rs`       | `modules`            | 模块注册表，按特性加载配置                |
-| **cli_integration**  | `examples/src/examples/cli_integration.rs`     | `cli`                | CLI 工具集成与使用                         |
-| **full_stack**       | `examples/src/examples/full_stack.rs`          | `full`               | 完整功能展示                               |
+| 示例 | 文件 | 所需特性 | 描述 |
+|------|------|----------|------|
+| basic_usage | `examples/src/examples/basic_usage.rs` | `toml`、`env` | 从默认值与环境变量加载基础配置 |
+| hot_reload | `examples/src/examples/hot_reload.rs` | `watch` | 配置文件变更监听与自动重载 |
+| encryption | `examples/src/examples/encryption.rs` | `encryption` | XChaCha20-Poly1305 加密保护敏感字段 |
+| key_rotation | `examples/src/examples/key_rotation.rs` | `key` | 加密密钥的安全轮转 |
+| migration | `examples/src/examples/migration.rs` | `migration` | 配置版本迁移 |
+| dynamic_fields | `examples/src/examples/dynamic_fields.rs` | `dynamic` | DynamicField 运行时配置更新与回调 |
+| config_groups | `examples/src/examples/config_groups.rs` | `modules` | 配置分组管理 |
+| progressive_reload | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | ProgressiveReloader 渐进式热更新 |
+| config_bus | `examples/src/examples/config_bus.rs` | `config-bus` | ConfigBus 配置变更事件广播 |
+| snapshot | `examples/src/examples/snapshot.rs` | `snapshot` | SnapshotManager 配置快照持久化 |
+| remote_consul | `examples/src/examples/remote_consul.rs` | `consul` | 从 Consul KV Store 加载配置 |
+| remote_etcd | `examples/src/examples/remote_etcd.rs` | `etcd` | 从 etcd KV Store 加载配置 |
+| validation | `examples/src/examples/validation.rs` | `validation` | 使用 garde 进行配置校验 |
+| json_schema | `examples/src/examples/json_schema.rs` | `schema` | ConfigSchema 派生宏生成 JSON Schema |
+| interpolation | `examples/src/examples/interpolation.rs` | `interpolation` | `${VAR}` 变量插值与默认值 |
+| audit | `examples/src/examples/audit.rs` | `audit` | AuditConfig 与 AuditWriter 审计日志 |
+| context_aware | `examples/src/examples/context_aware.rs` | `context-aware` | ContextAwareField 上下文取值规则 |
+| security | `examples/src/examples/security.rs` | `security` | EncryptionPrefix 加密值识别与处理 |
+| modules_demo | `examples/src/examples/modules_demo.rs` | `modules` | ModuleRegistry 模块系统 |
+| cli_integration | `examples/src/examples/cli_integration.rs` | `cli` | ConfigClap 派生宏与 CLI 集成 |
+| full_stack | `examples/src/examples/full_stack.rs` | `full` | 完整功能集展示 |
 
 ```bash
-# 从 examples 目录运行任意示例
+# 运行单个示例（在 examples/ 目录下）
 cd examples && cargo run --bin basic_usage
 cd examples && cargo run --bin encryption
-cd examples && cargo run --bin full_stack
 
-# 验证所有示例可编译
+# 验证全部示例可编译
 cd examples && ./verify_examples.sh
 ```
-
-### 💡 实际示例
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-#### 📝 示例 1：基本配置
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct BasicConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-fn basic_example() -> anyhow::Result<()> {
-    let config = BasicConfig::load_sync()?;
-    println!("✅ 名称: {}, 端口: {}", config.name, config.port);
-    Ok(())
-}
-```
-
-<details style="margin-top:8px">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6">查看输出</summary>
-
-```
-✅ 名称: my-app, 端口: 8080
-```
-
-</details>
-
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-#### 🔥 示例 2：高级配置
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "MYAPP_")]
-pub struct AdvancedConfig {
-    #[config(description = "服务器端口号")]
-    pub port: u16,
-    #[config(default = "localhost")]
-    pub host: String,
-    #[config(sensitive = true)]
-    pub api_key: String,
-}
-
-fn advanced_example() -> anyhow::Result<()> {
-    let config = AdvancedConfig::load_sync()?;
-    println!("🚀 服务器: {}:{}", config.host, config.port);
-    Ok(())
-}
-```
-
-<details style="margin-top:8px">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6">查看输出</summary>
-
-```
-🚀 服务器: localhost:8080
-```
-
-</details>
-
-</td>
-</tr>
-</table>
-
-**[📂 查看所有示例 →](examples/)**
 
 ---
 
 ## 🏗️ 架构
 
-> 完整的架构设计说明见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
-
-### 🏗️ 系统架构
+Confers 采用门面与内部实现分离的分层设计：`src/` 下的公开模块（`config`、`loader`、`merger`、`format`、`types`、`interface`、`error`、`lifecycle`）只做转发动机，真正实现位于 `src/impl_/` 内部模块；可选能力（`validator`、`watcher`、`secret`、`remote`、`bus`、`cli` 等）按 feature 独立门控。派生宏由 workspace 内的 `confers-macros` 过程宏 crate 提供，`macros/src/parse.rs` 解析 `#[config(...)]` 属性，codegen 生成加载与校验代码。核心数据通路为：来源链注册、loader 格式探测与解析（错误精确到行列）、`MergeEngine` 沿来源链深度合并、serde 反序列化为用户类型并可选执行 garde 校验与敏感字段解密。接口层遵循接口隔离原则，拆分为 `ConfigReader`、`ConfigWriter`、`ConfigConnector`、`ConfigProvider` 等独立 trait。
 
 ```mermaid
-graph TB
-    subgraph Sources ["配置源"]
-        A["本地文件<br/>TOML, JSON, YAML, INI"]
-        B["环境变量"]
-        C["命令行参数"]
-        D["远程配置源<br/>etcd, Consul, HTTP"]
+flowchart LR
+    subgraph MACROS["confers-macros 编译期"]
+        DM["derive 宏<br/>解析 config 属性并生成加载代码"]
     end
 
-    subgraph Core ["核心引擎"]
-        E["ConfigLoader<br/>多源合并"]
+    subgraph SOURCES["来源层"]
+        FS["FileSource<br/>TOML JSON YAML INI"]
+        ES["EnvSource<br/>环境变量与 .env"]
+        MS["MemorySource"]
+        RS["remote<br/>HTTP 轮询 etcd Consul"]
     end
 
-    subgraph Processing ["处理层"]
-        F["验证<br/>类型和业务规则"]
-        G["Schema 生成"]
-        H["加密<br/>XChaCha20-Poly1305"]
-        I["审计日志"]
-        J["文件监控"]
+    subgraph CORE["核心引擎"]
+        LD["loader<br/>格式探测与解析"]
+        SC["SourceChain 优先级链"]
+        MG["merger<br/>MergeEngine 深度合并"]
     end
 
-    subgraph Output ["应用"]
-        L["应用配置<br/>类型安全且已验证"]
+    subgraph OPS["运维与安全"]
+        WT["watcher 热重载"]
+        BUS["bus 变更广播"]
+        AU["audit 审计日志"]
+        SE["secret 加密"]
     end
 
-    Sources --> Core
-    Core --> Processing
-    Processing --> Output
+    APP["类型化配置结构体 T"]
 
-    style Sources fill:#DBEAFE,stroke:#1E40AF
-    style Core fill:#FEF3C7,stroke:#92400E
-    style Processing fill:#EDE9FE,stroke:#5B21B6
-    style Output fill:#DCFCE7,stroke:#166534
+    SOURCES --> LD
+    LD --> SC
+    SC --> MG
+    MG --> APP
+    DM -.为 T 生成加载代码.-> APP
+    WT -.重载触发.-> LD
+    BUS -.变更通知.-> APP
+    SE -.解密敏感字段.-> MG
+    AU -.记录访问.-> MG
 ```
 
-### 📐 组件状态
-
-| 组件 | 描述 | 状态 |
-|-----------|-------------|--------|
-| **ConfigLoader** | 支持多源的核心加载器 | ✅ 稳定 |
-| **配置验证** | 内置验证器集成 | ✅ 稳定 |
-| **Schema 生成** | 自动生成 JSON Schema | ✅ 稳定 |
-| **文件监控** | 实时监控并热重载 | ✅ 稳定 |
-| **远程配置** | etcd、Consul、HTTP 支持 | 🚧 测试版 |
-| **审计日志** | 记录访问和变更历史 | ✅ 稳定 |
-| **加密存储** | XChaCha20-Poly1305 加密存储 | ✅ 稳定 |
-| **配置对比** | 多种输出格式 | ✅ 稳定 |
-
-### 🔄 BrickArchitecture 迁移指南
-
-Confers 遵循 **BrickArchitecture** 错误分离模式：
-
-| 错误类型           | 阶段     | 出现时机     | 示例                                        |
-| ------------------ | -------- | ------------ | ------------------------------------------- |
-| `ConfigConfigError` | 配置阶段 | 初始化时     | 缺失字段、解析错误、验证失败                |
-| `ConfersError`     | 运行时   | 使用时       | 超时、远程不可用、解密失败                  |
-
-**向后兼容：** 现有的 `ConfigError` 和 `ConfigResult<T>` 别名仍然可用。
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 迁移示例</summary>
-
-```rust
-// 旧：所有错误都用 ConfigError
-use confers::ConfigError;
-
-// 新：使用 BrickArchitecture 错误分离
-use confers::{ConfigConfigError, ConfersError};
-
-// 配置阶段 - 使用 ConfigConfigError
-fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
-    use confers::impl_::memory::InMemoryConfig;
-    let config = InMemoryConfig::new_validated(1000)?; // 返回 ConfigConfigError
-    Ok(config)
-}
-
-// 运行时阶段 - 使用 ConfersError
-async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
-    let value = config.get_string("key").await?;  // 返回 ConfersError
-    Ok(())
-}
-```
-
-</details>
+> 完整的模块划分与数据流说明见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
 
 ---
 
 ## 🤖 CLI 工具
 
-Confers 提供独立的命令行工具 `confers` 用于配置管理：
-
-### 安装 CLI 工具
+`confers` 二进制（`src/cli/main.rs`，需启用 `cli` 特性）提供配置诊断能力：
 
 ```bash
-cargo install confers
+cargo install confers --features cli
 ```
 
-### 基本命令
+| 命令 | 描述 |
+|------|------|
+| `inspect` | 列出全部配置键及其来源，支持冲突展示与 JSON 输出 |
+| `validate` | 校验配置，`--strict` 模式将警告视为错误 |
+| `export` | 导出合并后配置（json、toml、yaml），默认脱敏敏感值 |
+| `diff` | 对比 base 与 overlay 两份配置 |
+| `snapshot` | 快照管理：`list`、`diff`、`prune` |
+| `schema` | 输出配置类型的 JSON Schema，支持从实例反推 |
+| `get` | 按键路径读取单个配置值 |
+| `doctor` | 配置健康诊断，输出单行 JSON 报告 |
+| `docs --agent` | 输出面向代理的机器可读知识包 |
 
 ```bash
-# 查看帮助
-confers --help
-
-# 查看配置 - 列出所有配置键及其来源
+# 常用命令
 confers --config config.toml inspect
-
-# 验证配置文件
-confers --config config.toml validate
-
-# 比较配置文件
-confers diff --base config1.toml --overlay config2.toml
-
-# 导出合并后的配置
+confers --config config.toml validate --strict
 confers --config config.toml export --format json
-
-# 管理配置快照
-confers --config config.toml snapshot list
-confers --config config.toml snapshot diff --latest 2
+confers diff --base config1.toml --overlay config2.toml
 ```
 
-**注意**：CLI 工具需要启用 `cli` 特性。
+全局选项：`--config <文件>`（可多次）、`--env-file <文件>`、`--fields <点路径列表>`。退出码约定：0 成功、1 配置错误、2 I/O 错误。
+
+---
+
+## 🔄 核心流程
+
+以下时序图展示配置加载与热重载的真实执行路径（对照 `docs/ARCHITECTURE.md` 数据流一节与 `src/watcher` 实现）：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as 应用
+    participant Bld as ConfigBuilder
+    participant Ldr as loader
+    participant Mrg as merger
+    participant Wtr as watcher
+
+    App->>Bld: 声明来源链 文件与环境变量
+    App->>Bld: build 触发加载
+    Bld->>Ldr: 逐来源探测格式并解析
+    Ldr->>Mrg: ConfigValue 树 携带来源与位置
+    Mrg->>Mrg: 沿 SourceChain 深度合并
+    Mrg-->>App: 反序列化为 T 可选校验与解密
+
+    Note over Wtr: 文件变更事件
+    Wtr->>Ldr: 自适应去抖后触发重载
+    Ldr->>Mrg: 重新加载与合并
+    Mrg-->>Wtr: 生成新配置
+    Wtr-->>App: 渐进发布 健康检查失败自动回滚
+```
+
+启用 `progressive-reload` 后，新配置按批次切换实例；健康检查失败时自动回滚（`ReloadRolledBack`）。启用 `dynamic` 时，字段级更新经 `arc-swap` 快照原子换入，读者无锁。
 
 ---
 
 ## 🧪 测试
 
-### 🎯 测试覆盖率
+### 🎯 测试策略
+
+| 层级 | 位置 | 说明 |
+|------|------|------|
+| 单元测试 | `src/` 内联 `#[cfg(test)]` 模块 | 覆盖各特性门控下的核心逻辑 |
+| 集成测试 | `tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli` | 按功能域组织的门控套件 |
+| 端到端测试 | `tests/e2e`（24 个套件，经 `[[test]]` 显式注册） | 覆盖格式、构建器、加密、总线、渐进发布等场景，场景矩阵见 [测试场景文档](docs/TEST_SCENARIOS.md) |
+| 宏测试 | `macros/tests` | trybuild 编译失败用例与属性校验 |
+| 模糊测试 | `fuzz/` | cargo-fuzz 目标：`parser`、`merger`、`interpolation` |
+| 基准测试 | `benches/` | 9 组 Criterion 基准 |
+| 文档测试 | 公开 API rustdoc 示例 | 随 `cargo test` 执行 |
+
+### ▶️ 运行命令（与 CI 一致）
 
 ```bash
-# 🧪 运行所有测试
-cargo test --features full
+# 全量测试（CI 矩阵按 default / recommended / full 三档运行）
+cargo test --workspace --features full
 
-# 📊 生成覆盖率报告
-cargo llvm-cov --features full
+# Lint 与格式门禁
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
 
-# ⚡ 运行基准测试
-cargo bench
+# 覆盖率门禁：行覆盖率不低于 80%
+cargo llvm-cov --workspace --all-features --fail-under-lines 80
 
-# 🎯 运行特定测试
-cargo test test_name
+# 基准测试
+cargo bench --features dev --benches
+
+# 模糊测试（在 fuzz/ 目录下）
+cargo fuzz run parser
 ```
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📊 测试统计</summary>
+总线相关的集成测试需要本地 NATS 服务，CI 使用 `nats:2.10 -js` 容器（见 `docker-compose.test.yml`）。
 
-> 数据来源：`cargo test --features full`（截至 2026-07）。数字随代码演进增长，可重新运行命令验证。
+### 📊 测试规模
 
-| 类别 | 测试数量 | 说明 |
-|----------|------------|----------|
-| 🧪 单元测试 | 1700+ | 跨所有 feature gate 的 lib 测试 |
-| 🔗 集成测试 | 多套件 | `tests/integration_*.rs` 按 feature 组织 |
-| 📚 文档测试 | 32 | rustdoc 示例 |
-| ⚡ 性能测试 | 10 个 bench 文件 | `benches/*.rs`（criterion） |
-| **📈 总计** | **1700+** | 运行 `cargo test --features full` |
+> 规模为 `#[test]` / `#[tokio::test]` 函数的 grep 统计，截至 v0.6.0-rc.3。
 
-**覆盖率目标**：≥ 80%（CI 通过 `cargo llvm-cov` 强制执行）。
+| 类别 | 数量 |
+|------|------|
+| 单元测试（`src/` 内联） | 约 2100+ |
+| 集成与 E2E（`tests/`） | 600（53 个文件） |
+| 模糊测试目标 | 3 |
+| Criterion 基准 | 9 组 |
 
-</details>
+覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。
 
 ---
 
 ## 📊 性能
 
-### ⚡ 基准测试结果
+> 口径沿用 [📈 性能优化指南](docs/PERFORMANCE.md)：基线在开发机（WSL2、linux 6.6、16 线程）本地采集，数值为 criterion 区间估计的 estimate（中位数口径），非默认参数运行使用 `--warm-up-time 1 --measurement-time 2 --sample-size 20`。实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。
 
-> 实际性能取决于配置复杂度和硬件环境。请运行 `cargo bench` 获取针对您硬件的实测数据。
+<table style="width:100%; border-collapse: collapse">
+<tr><th style="text-align:left">路径</th><th style="text-align:left">用例</th><th style="text-align:left">耗时</th></tr>
+<tr><td>加载</td><td><code>load / 50 fields</code></td><td>约 691 ns</td></tr>
+<tr><td>加载</td><td><code>load / 200 fields</code></td><td>约 713 ns</td></tr>
+<tr><td>合并</td><td><code>merge_shallow / size 10</code></td><td>约 263 ns</td></tr>
+<tr><td>合并</td><td><code>merge_shallow / size 1000</code></td><td>约 20.9 µs</td></tr>
+<tr><td>变更流</td><td><code>change_stream_roundtrip / 1 订阅者</code></td><td>约 1.98 µs</td></tr>
+<tr><td>变更流</td><td><code>change_stream_roundtrip / 8 订阅者</code></td><td>约 3.72 µs</td></tr>
+<tr><td>大值读取</td><td><code>get_shared</code>（Arc 句柄）对比 <code>get_raw</code>（深拷贝）</td><td>约 161 ns 对比约 337 ns，约 2.1 倍提升</td></tr>
+</table>
 
-```bash
-# 运行全部基准测试
-cargo bench
-
-# 运行特定基准测试
-cargo bench --bench merge_bench --features interpolation
-cargo bench --bench load_bench
-cargo bench --bench concurrent_access_bench
-```
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 可用基准测试列表</summary>
-
-| 基准测试 | 描述 |
-|-----------|------|
-| `merge_bench` | 配置合并性能（含 COW 优化、深层嵌套、大规模 Map） |
-| `load_bench` | 配置加载性能 |
-| `concurrent_access_bench` | 并发访问性能 |
-| `concurrent_rw_bench` | 并发读写性能 |
-| `dynamic_field_bench` | 动态字段性能 |
-| `hot_path_bench` | 热路径性能 |
-| `interpolation_bench` | 插值计算性能 |
-| `value_path_bench` | 值路径访问性能 |
-
-</details>
-
-更详细的基准测试说明与性能优化建议，请参阅 [📈 性能优化指南](docs/PERFORMANCE.md)。
+性能设计要点：动态字段基于 `arc-swap` 无锁读取；`ConfigValue` 树使用 `IndexMap` 保持键序、短字符串经 `compact_str` 驻留；watcher 自适应去抖抑制重载风暴；全部可选能力特性门控以控制编译时间与二进制体积。更多优化建议见 [📈 性能优化指南](docs/PERFORMANCE.md)。
 
 ---
 
 ## 🔒 安全
 
-### 🛡️ 安全特性
+### 🛡️ 安全设计
 
-完整的安全政策、漏洞报告流程与安全最佳实践，请参阅 [🔒 安全文档](docs/SECURITY.md)。
+| 要点 | 说明 |
+|------|------|
+| 认证加密 | XChaCha20-Poly1305 AEAD，每次加密生成随机 nonce，密文附带 Poly1305 认证标签 |
+| 字段级密钥派生 | HKDF-SHA256 从主密钥按字段路径与密钥版本派生子密钥（`derive_field_key`） |
+| 内存安全 | `SecretBytes` / `ZeroizingBytes` 丢弃即清零，`secrecy` 防止敏感值进入日志，`SecureString` 禁止 `Clone` |
+| 密钥治理 | `KeyManager` 与 `KeyRegistry` 管理密钥版本、状态与轮换，含熵值校验 |
+| 输入防护 | `EnvSecurityValidator` 环境变量注入防护；内置 JWT、CORS、SSRF、TLS 校验器，SSRF 覆盖 18 个封锁网段并做 URL 边界匹配 |
+| 输出脱敏 | `ErrorSanitizer` 错误信息脱敏，`#[config(sensitive = true)]` 字段在日志与 debug 输出中自动遮蔽 |
+| 审计追踪 | 审计日志带 HMAC 签名保护完整性，支持敏感字段追踪 |
+| 远程来源防护 | SSRF 校验与熔断器，避免内网地址探测与故障扩散 |
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/lock.png" width="48" height="48"><br>
-<b>内存安全</b><br>
-<span style="color:#166534">零拷贝和安全清理</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
-<b>已审计</b><br>
-<span style="color:#1E40AF">定期安全审计</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="48" height="48"><br>
-<b>隐私</b><br>
-<span style="color:#92400E">无数据收集</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/shield.png" width="48" height="48"><br>
-<b>合规</b><br>
-<span style="color:#5B21B6">符合行业标准</span>
-</td>
-</tr>
-</table>
+### ⛓️ 供应链与门禁
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#991B1B">🔐 安全详情</summary>
+- `cargo deny check`：漏洞、许可证、禁用依赖与来源校验（`deny.toml`）。
+- `cargo audit`：RustSec 安全公告扫描，CI 与 pre-push 钩子执行。
+- pre-commit 私钥扫描（lefthook `no-private-key`）。
 
-### 🛡️ 安全措施
+### 🚨 报告安全漏洞
 
-| 措施 | 描述 | API 参考 |
-|---------|-------------|---------------|
-| ✅ **内存保护** | 使用 zeroization 自动安全清理 | `SecretString`、`zeroize` crate |
-| ✅ **侧信道保护** | 常量时间加密操作 | XChaCha20-Poly1305 加密 |
-| ✅ **输入验证** | 全面的输入清理 | `Validate` trait、`garde` crate |
-| ✅ **审计日志** | 完整的操作追踪 | `AuditConfig`、审计追踪 |
-| ✅ **SSRF 防护** | 内置的服务端请求伪造防护 | `HttpPolledSource`、`is_ip_blocked()` |
-| ✅ **敏感数据检测** | 自动检测敏感字段 | `#[config(sensitive = true)]` 派生宏 |
-| ✅ **错误信息清理** | 从错误消息中移除敏感信息 | `ErrorSanitizer`、`SecureLogger` |
-| ✅ **Nonce 重用检测** | 防止加密 nonce 重用 | 内置于加密模块 |
-
-### 🔐 安全 API
-
-```rust,ignore
-// 安全字符串处理
-use confers::security::{SecureString, SensitivityLevel};
-let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
-
-// 输入验证
-use confers::security::ConfigValidator;
-let validator = ConfigValidator::builder()
-    .max_string_length(1024)
-    .strict_mode()
-    .build();
-let data: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-let result = validator.validate(&data);
-
-// 错误信息清理
-use confers::security::ErrorSanitizer;
-let sanitizer = ErrorSanitizer::default();
-let safe_error = sanitizer.sanitize(&error_message);
-
-// 审计日志
-#[cfg(feature = "audit")]
-use confers::audit::AuditConfig;
-let audit = AuditConfig::new().enable_sensitive_field_tracking();
-```
-
-### 🚨 安全最佳实践
-
-1. **敏感数据使用 SecureString**：自动清理内存
-2. **启用审计日志**：追踪所有配置访问和变更
-3. **验证所有输入**：使用内置验证器验证用户输入
-4. **使用加密**：为敏感配置启用 `encryption` 功能
-5. **遵循最小权限原则**：最小化敏感数据暴露
-
-### 📧 报告安全问题
-
-请将安全漏洞报告至：**Kirky-X@outlook.com**
-
-</details>
+请勿通过公开 issue 报告安全漏洞。请使用 GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/advisories/new) 私密披露通道提交报告。项目承诺 48 小时内确认、7 天内给出初步评估。完整政策见 [SECURITY.md](SECURITY.md) 与 [安全文档](docs/SECURITY.md)。
 
 ---
 
 ## 🗺️ 开发路线图
 
-### 🎯 开发路线图
-
-```mermaid
-gantt
-    title Confers 开发路线图
-    dateFormat  YYYY-MM
-    section 核心功能
-    类型安全配置     :done, 2024-01, 2024-06
-    多格式支持       :done, 2024-02, 2024-06
-    环境变量覆盖     :done, 2024-03, 2024-06
-    section 验证系统
-    基础验证集成     :done, 2024-04, 2024-07
-    section 高级功能
-    Schema 生成      :active, 2024-06, 2024-09
-    文件监控热重载   :done, 2024-07, 2024-09
-    远程配置支持     :active, 2024-08, 2024-12
-    审计日志         :done, 2024-08, 2024-10
-```
-
 <table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-### ✅ 已完成
-
-**核心功能**
-- [x] 类型安全配置
-- [x] 多格式支持（TOML、YAML、JSON、INI）
-- [x] 环境变量覆盖
-- [x] 命令行参数覆盖
-
-**验证系统**
-- [x] 配置验证系统（garde）
-
-**高级特性**
-- [x] Schema 生成（JSON Schema + TypeScript 类型）
-- [x] 文件监控与热重载
-- [x] 审计日志
-- [x] 加密存储支持（XChaCha20-Poly1305）
-- [x] 动态字段（无锁）
-- [x] 模块化配置（modules）
-- [x] 上下文感知配置（租户感知）
-- [x] 配置迁移
-- [x] 快照与回滚
-- [x] 变量插值
-- [x] 渐进式重载（金丝雀发布）
-
-**远程与总线**
-- [x] 远程配置支持（etcd、Consul、HTTP）
-- [x] HTTP 轮询
-- [x] 配置事件总线（NATS / Redis Pub-Sub）
-
-**安全**
-- [x] 安全模块（环境变量验证、错误信息清理、SSRF 防护）
-- [x] 密钥管理与轮换
-- [x] Nonce 重用检测
-
-</td>
-<td width="50%" style="padding: 16px">
-
-### 📋 计划中
-
-**性能优化**
-- [ ] 基准测试套件完善（criterion 基线）
-- [ ] 大型配置的内存占用优化
-- [ ] 高频读取的零拷贝热路径
-
-**云原生集成增强**
-- [ ] Kubernetes ConfigMap 集成
-- [ ] 服务网格支持（Istio/Linkerd）
-- [ ] 分布式追踪集成
-
-</td>
-</tr>
+<tr><th style="text-align:center">状态</th><th style="text-align:left">方向</th><th style="text-align:left">条目</th></tr>
+<tr><td align="center">✅</td><td>核心引擎</td><td>派生宏、多格式支持、来源链合并、环境变量与 CLI 覆盖</td></tr>
+<tr><td align="center">✅</td><td>校验与 Schema</td><td>garde 校验、JSON Schema 生成、TypeScript 类型生成</td></tr>
+<tr><td align="center">✅</td><td>热更新</td><td>文件监听热重载、渐进式发布、动态字段、快照回滚、配置迁移、变量插值</td></tr>
+<tr><td align="center">✅</td><td>安全与审计</td><td>XChaCha20-Poly1305 加密、密钥管理与轮换、审计日志、安全规则校验器</td></tr>
+<tr><td align="center">✅</td><td>远程与总线</td><td>HTTP 轮询、etcd、Consul、Nacos、Kubernetes ConfigMap / Secret、NATS 与 Redis 总线</td></tr>
+<tr><td align="center">🚧</td><td>远程来源成熟度</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code> 处于测试期（Beta），接口可能调整</td></tr>
+<tr><td align="center">📋</td><td>性能优化</td><td>基准套件完善（criterion 基线）、大型配置内存占用优化、高频读取零拷贝热路径</td></tr>
+<tr><td align="center">📋</td><td>云原生集成</td><td>服务网格支持、分布式追踪集成</td></tr>
 </table>
 
 ---
 
 ## 🤝 参与贡献
 
-详细的贡献流程、开发环境准备与代码规范，请参阅 [🤝 贡献指南](docs/CONTRIBUTING.md)。
+详细的贡献流程与代码规范请参阅 [🤝 贡献指南](docs/CONTRIBUTING.md)。
 
-### 💖 感谢所有贡献者！
+### 🛠️ 开发环境
 
-<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
+| 项 | 要求 |
+|----|------|
+| 工具链 | Rust 1.97.1（`rust-toolchain.toml` 锁定） |
+| 格式与 Lint | `cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings` |
+| Git 钩子 | [lefthook](https://github.com/evilmartians/lefthook)：pre-commit 运行 rustfmt、clippy、`cargo deny check` 与私钥扫描；pre-push 运行 `cargo audit` 与覆盖率门禁 |
+| 提交信息 | Conventional Commits（`feat`、`fix`、`docs` 等，由 commit-msg 钩子校验） |
+
+### 💖 贡献方式
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1030,98 +572,49 @@ gantt
 </tr>
 </table>
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📝 贡献指南</summary>
-
-### 🚀 如何贡献
-
-1. **Fork** 本仓库
-2. **Clone** 你的 fork：`git clone https://github.com/yourusername/confers.git`
-3. **创建** 分支：`git checkout -b feature/amazing-feature`
-4. **进行** 修改
-5. **测试** 修改：`cargo test --all-features`
-6. **提交** 修改：`git commit -m 'feat: 添加某功能'`
-7. **推送** 到分支：`git push origin feature/amazing-feature`
-8. **创建** Pull Request
-
-### 📋 代码规范
-
-- ✅ 遵循 Rust 标准编码规范
-- ✅ 编写全面的测试
-- ✅ 更新文档
-- ✅ 为新功能添加示例
-- ✅ 通过 `cargo clippy -- -D warnings`
-
-</details>
+<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
 
 ---
 
 ## 📋 更新日志
 
-完整版本历史请参阅 [📋 更新日志](docs/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式）。
+完整版本历史见 [📋 更新日志](docs/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式，语义化版本）。
 
-### 🕘 最近版本
-
-| 版本 | 发布日期 | 主要变更 |
-|------|----------|----------|
-| v0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时特性开关；修复 SSRF 白名单绕过、TLS 版本比较等多项问题 |
-| v0.5.0 | 2026-08-04 | 精简 `ConfigBuilder`（移除 6 个无效方法）；新增熔断器（Circuit Breaker）；增强密钥熵值校验与错误信息清理 |
-| v0.4.0 | 2026-07-03 | 错误类型分离（`ConfigConfigError` / `ConfersError`）；`SecureString` 不再实现 `Clone`；修复插值嵌套默认值解析等问题 |
+| 版本 | 日期 | 要点 |
+|------|------|------|
+| 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |
+| 0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时开关；修复 SSRF 白名单绕过与 TLS 版本比较等问题 |
+| 0.5.0 | 2026-08-04 | 精简 `ConfigBuilder`（移除 6 个无效方法）；新增熔断器；增强密钥熵值校验与错误信息脱敏 |
 
 ---
 
 ## 📄 许可证
 
-本项目基于 MIT + Commons Clause 许可证发布，商业使用需单独授权。详见 [LICENSE](LICENSE)。
+本项目采用 MIT 许可证，附加 [Commons Clause](LICENSE) v1.0 条件：未经单独授权不得销售本软件。详见 [LICENSE](LICENSE)。
 
 ---
 
 ## 🙏 致谢
 
-### 🌟 基于优秀工具构建
+### 🌟 核心依赖
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td align="center" width="25%" style="padding: 16px">
-<a href="https://www.rust-lang.org/" style="text-decoration:none">
-<div style="padding: 16px">
-<img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" width="48" height="48"><br>
-<b>Rust</b>
-</div>
-</a>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<a href="https://github.com/" style="text-decoration:none">
-<div style="padding: 16px">
-<img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="48" height="48"><br>
-<b>GitHub</b>
-</div>
-</a>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b>开源</b>
-</div>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/community.png" width="48" height="48"><br>
-<b>社区</b>
-</div>
-</td>
-</tr>
-</table>
+Confers 站在以下优秀开源项目的肩膀上：
+
+| 依赖 | 用途 |
+|------|------|
+| [serde](https://github.com/serde-rs/serde) | 序列化与反序列化框架 |
+| [tokio](https://github.com/tokio-rs/tokio) | 异步运行时 |
+| [garde](https://github.com/jprochazk/garde) | 配置校验 |
+| [arc-swap](https://github.com/vorner/arc-swap) | 无锁并发快照 |
+| [chacha20poly1305](https://github.com/RustCrypto/AEADs) | 认证加密 |
+| [notify-debouncer-full](https://github.com/notify-rs/notify) | 文件监听与去抖 |
+| [clap](https://github.com/clap-rs/clap) | CLI 框架 |
+| [schemars](https://github.com/GREsau/schemars) | JSON Schema 生成 |
+| [criterion](https://github.com/bheisler/criterion.rs) | 基准测试 |
 
 ### 💝 特别感谢
 
-| 类别 | 描述 |
-|----------|-------------|
-| 🌟 **依赖项目** | [serde](https://github.com/serde-rs/serde) - 序列化框架 |
-| | [figment](https://github.com/SergioBenitez/figment) - 配置管理 |
-| | [validator](https://github.com/Keats/validator) - 验证库 |
-| 👥 **贡献者** | 感谢所有贡献者！ |
-| 💬 **社区** | 特别感谢社区成员 |
+感谢 Rust 社区与所有 [贡献者](https://github.com/Kirky-X/confers/graphs/contributors)。
 
 ---
 
@@ -1130,31 +623,16 @@ gantt
 <table style="width:100%; max-width: 600px">
 <tr>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers/issues">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/bug.png" width="32" height="32"><br>
-<b style="color:#991B1B">Issues</b>
-</div>
-</a>
-<br><span style="color:#64748B">报告问题和 Bug</span>
+<a href="https://github.com/Kirky-X/confers/issues"><b style="color:#991B1B">Issues</b></a><br>
+<span style="color:#64748B">报告问题和 Bug</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers/discussions">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="32" height="32"><br>
-<b style="color:#1E40AF">讨论区</b>
-</div>
-</a>
-<br><span style="color:#64748B">提问和分享想法</span>
+<a href="https://github.com/Kirky-X/confers/discussions"><b style="color:#1E40AF">讨论区</b></a><br>
+<span style="color:#64748B">提问和分享想法</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/github.png" width="32" height="32"><br>
-<b style="color:#1E293B">GitHub</b>
-</div>
-</a>
-<br><span style="color:#64748B">查看源代码</span>
+<a href="https://github.com/Kirky-X/confers"><b style="color:#1E293B">GitHub</b></a><br>
+<span style="color:#64748B">查看源代码</span>
 </td>
 </tr>
 </table>
@@ -1165,11 +643,9 @@ gantt
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
-### 💝 支持本项目
+如果这个项目对您有帮助，请考虑给它一个 ⭐️！
 
-如果您觉得这个项目有用，请考虑给它一个 ⭐️！
-
-**由 Kirky.X 用 ❤️ 构建**
+**由 Kirky.X 构建**
 
 ---
 

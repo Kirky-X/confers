@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/confers.png" alt="Confers Logo" width="200">
+<img src="docs/assets/confers.png" alt="Confers Logo" width="180">
 
 [![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
 
@@ -14,17 +14,20 @@
 
 ---
 
-<!-- Hero Section -->
-
 <div align="center" style="padding: 32px; margin: 24px 0">
 
-### 🎯 Zero-Boilerplate Configuration Management
+### 🎯 Declarative Configuration
 
-Confers provides a **declarative approach** to configuration management with:
+Declare your config structs with `#[derive(Config)]` and let the library do the rest:
 
-|   ✨ Type Safety    |   🔄 Auto Reload   | 🔐 XChaCha20-Poly1305 Encryption | 🌐 Remote Sources  |
-| :-----------------: | :----------------: | :------------------------------: | :----------------: |
-| Compile-time checks | Hot reload support |    Sensitive data protection     | etcd, Consul, HTTP |
+<table style="width:100%; border-collapse: collapse">
+<tr>
+<td align="center" width="25%" style="padding: 12px">🧩<br><b>Derive-Macro Driven</b><br><span style="color:#64748B">Loading code generated at compile time</span></td>
+<td align="center" width="25%" style="padding: 12px">🛡️<br><b>Type-Safe</b><br><span style="color:#64748B">Multi-source merge, typed output</span></td>
+<td align="center" width="25%" style="padding: 12px">🔄<br><b>Hot Reload</b><br><span style="color:#64748B">Progressive rollout, health-check rollback</span></td>
+<td align="center" width="25%" style="padding: 12px">🔐<br><b>End-to-End Encryption</b><br><span style="color:#64748B">XChaCha20-Poly1305</span></td>
+</tr>
+</table>
 
 </div>
 
@@ -38,13 +41,12 @@ Confers provides a **declarative approach** to configuration management with:
 - [📋 Table of Contents](#-table-of-contents)
 - [✨ Features](#-features)
 - [🚀 Quick Start](#-quick-start)
-  - [📦 Installation](#-installation)
-  - [💡 Basic Usage](#-basic-usage)
 - [🎨 Feature Flags](#-feature-flags)
 - [📚 Documentation](#-documentation)
 - [💻 Examples](#-examples)
 - [🏗️ Architecture](#️-architecture)
 - [🔧 CLI Tool](#-cli-tool)
+- [🔄 Core Workflows](#-core-workflows)
 - [🧪 Testing](#-testing)
 - [📊 Performance](#-performance)
 - [🔒 Security](#-security)
@@ -62,43 +64,53 @@ Confers provides a **declarative approach** to configuration management with:
 
 ## ✨ Features
 
-| 🎯 Core Features | ⚡ Optional Features |
-| :--------------- | :------------------- |
-| Always available | Enable as needed     |
-
 <table style="width:100%; border-collapse: collapse">
 <tr>
-<td width="50%" style="vertical-align:top; padding: 16px">
-
-### 🎯 Core Features (Always Available)
-
-| Status | Feature                           | Description                                                       |
-| :----: | --------------------------------- | ----------------------------------------------------------------- |
-|   ✅   | **Type-safe Configuration**       | Auto-generate config structs via derive macros (`derive` feature) |
-|   ✅   | **Multi-format Support**          | TOML, YAML, JSON, INI configuration files                         |
-|   ✅   | **Environment Variable Override** | Support environment variable overrides                            |
-|   ✅   | **CLI Argument Override**         | Support command-line argument overrides (`cli` feature)           |
-
-</td>
-<td width="50%" style="vertical-align:top; padding: 16px">
-
-### ⚡ Optional Features
-
-| Status | Feature                        | Description                                                 |
-| :----: | ------------------------------ | ----------------------------------------------------------- |
-|   🔍   | **Configuration Validation**   | Built-in validator integration (`validation` feature)       |
-|   📊   | **Schema Generation**          | Auto-generate JSON Schema (`schema` feature)                |
-|   🚀   | **File Watching & Hot Reload** | Real-time file monitoring (`watch` feature)                 |
-|   🔐   | **Configuration Encryption**   | XChaCha20-Poly1305 encrypted storage (`encryption` feature) |
-|   🌐   | **Remote Configuration**       | etcd, Consul, HTTP support (`remote` feature)               |
-|   📦   | **Audit Logging**              | Record access & change history (`audit` feature)            |
-|   🔧   | **Configuration Diff**         | Compare configs with multiple output formats                |
-|   🛡️   | **Security Enhancements**      | Nonce reuse detection, SSRF protection                      |
-|   🔑   | **Key Management**             | Built-in key generation and rotation                        |
-
-</td>
+<td width="50%" style="vertical-align:top; padding: 12px">🧩 <b>Derive-Macro Driven</b><br><span style="color:#64748B"><code>#[derive(Config)]</code> and <code>#[config(...)]</code> attributes generate loading, defaults, and env overrides at compile time</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🗂️ <b>Multi-Format Support</b><br><span style="color:#64748B">TOML, JSON, YAML, INI, and <code>.env</code> with content-based format detection</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔗 <b>Multi-Source Priority Chain</b><br><span style="color:#64748B">Files, environment variables, memory, and remote sources merged in declaration order; every value carries source and location metadata</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🛡️ <b>Type Safety & Validation</b><br><span style="color:#64748B">Merged results deserialize into strongly typed structs with optional garde rules</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔄 <b>Hot Reload</b><br><span style="color:#64748B">File watching with adaptive debouncing, progressive rollout, and health-check rollback</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">⚡ <b>Dynamic Fields</b><br><span style="color:#64748B">Lock-free runtime updates built on arc-swap, with callbacks and field watchers</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🔐 <b>Config Encryption</b><br><span style="color:#64748B">XChaCha20-Poly1305 authenticated encryption with HKDF-SHA256 per-field key derivation</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🌐 <b>Remote Configuration</b><br><span style="color:#64748B">HTTP polling, etcd v3, Consul, Nacos, Kubernetes, with circuit breaker and SSRF protection</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">📢 <b>Change Broadcast</b><br><span style="color:#64748B">NATS / Redis Pub-Sub message bus for multi-instance config sync</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">📊 <b>Schema Generation</b><br><span style="color:#64748B">Automatic JSON Schema and TypeScript type definitions</span></td>
+</tr>
+<tr>
+<td width="50%" style="vertical-align:top; padding: 12px">🧾 <b>Audit Logging</b><br><span style="color:#64748B">HMAC-signed integrity with automatic sensitive-field masking</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🧰 <b>CLI Diagnostics</b><br><span style="color:#64748B">inspect, validate, diff, export, snapshot, schema, doctor subcommands</span></td>
 </tr>
 </table>
+
+<details style="padding:16px; margin: 16px 0">
+<summary style="cursor:pointer; font-weight:600; color:#1E293B">🧩 More Capabilities</summary>
+
+| Capability | Feature | Description |
+|---------|---------|------|
+| Config migration | `migration` | Data migration across structure upgrades |
+| Snapshot & rollback | `snapshot` | Persistent config snapshots with diff and rollback |
+| Variable interpolation | `interpolation` | `${VAR}` and `${VAR:-default}` references |
+| Modular configuration | `modules` | Register config groups by capability |
+| Context-aware config | `context-aware` | Value rules per tenant or context |
+| Runtime feature toggles | `feature-toggle` | Thread-safe toggle registry |
+| OpenFeature-style evaluation | `openfeature` | Feature evaluation API |
+| Security rule validators | `security-rules` | Built-in JWT, CORS, SSRF, TLS validators with a registry |
+| Key management & rotation | `key` | Key versions, states, and scheduled rotation |
+| Key storage backends | `keyring` | File, MasterKey, secret-tool stores |
+| Cloud KMS providers | `cloud-kms` | Vault Transit and other backends |
+| Lazy segmented parsing | `lazy` | On-demand parsing of oversized documents |
+| Unified change stream | `change-stream` | Change-event port across transports |
+
+</details>
 
 ---
 
@@ -106,188 +118,63 @@ Confers provides a **declarative approach** to configuration management with:
 
 ### 📦 Installation
 
-#### 🦀 Rust Installation
+```bash
+cargo add confers
+```
 
-| Installation Type  | Configuration                                                                           | Use Case                                          |
-| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| **Default**        | `confers = "0.6.0-rc.2"`                                                                     | Includes `toml`, `json`, `env` (default features) |
-| **Minimal**        | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }`     | Environment variables + JSON only                 |
-| **Recommended**    | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + validation                    |
-| **CLI with Tools** | `confers = { version = "0.6.0-rc.2", features = ["cli"] }`                                   | CLI tool (no validation/encryption)                |
-| **Full**           | `confers = { version = "0.6.0-rc.2", features = ["full"] }`                                  | All features                                      |
+Requires Rust 1.97.1 or later (MSRV, matching the repository `rust-toolchain.toml`). Default features include `toml`, `json`, and `env`.
 
-### 💡 Basic Usage
+| Preset | Installation | Use Case |
+|------|----------|----------|
+| Default | `cargo add confers` | TOML, JSON, environment variables |
+| Minimal | `cargo add confers --no-default-features --features minimal` | Env vars and JSON only |
+| Recommended | `cargo add confers --no-default-features --features recommended` | Default formats plus validation and security rules |
+| Full | `cargo add confers --features full` | All capabilities |
 
-#### 🎬 5-Minute Quick Start
+### 💡 Minimal Example
 
-**Required Features**: `toml`, `env`, `validation` (use: `features = ["recommended"]`)
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**Step 1: Define Config Structure**
+The following example is adapted from [`examples/src/examples/basic_usage.rs`](examples/src/examples/basic_usage.rs):
 
 ```rust
 use confers::Config;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
+#[derive(Config, Deserialize, Debug, Clone)]
 pub struct AppConfig {
-    pub name: String,
+    /// Server bind address
+    #[config(default = "127.0.0.1".to_string())]
+    pub host: String,
+
+    /// Server bind port
+    #[config(default = 8080u16)]
     pub port: u16,
-    pub debug: bool,
+
+    /// Log level
+    #[config(default = "info".to_string())]
+    pub log_level: String,
 }
-```
 
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**Step 2: Create Config File**
-
-```toml
-# config.toml
-name = "my-app"
-port = 8080
-debug = true
-```
-
-</td>
-</tr>
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**Step 3: Load Config**
-
-```rust
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load field defaults; the HOST, PORT, and LOG_LEVEL env vars override them
     let config = AppConfig::load_sync()?;
-    println!("✅ Loaded: {:?}", config);
+
+    println!("Listening on {}:{}", config.host, config.port);
     Ok(())
 }
 ```
-
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-**Step 4: Environment Override**
 
 ```bash
-# Environment variables automatically override
-export APP_PORT=9090
-export APP_DEBUG=true
+# Environment variables override defaults
+export PORT=9000
+cargo run    # Output: Listening on 127.0.0.1:9000
 ```
 
-</td>
-</tr>
-</table>
+### 🧭 Core Concepts
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Complete Working Example</summary>
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "APP_")]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-fn main() -> anyhow::Result<()> {
-    // Create config file
-    let config_content = r#"
-name = "my-app"
-port = 8080
-debug = true
-"#;
-    std::fs::write("config.toml", config_content)?;
-
-    // Load configuration
-    let config = AppConfig::load_sync()?;
-
-    // Print configuration
-    println!("🎉 Configuration loaded successfully!");
-    println!("📋 Name: {}", config.name);
-    println!("🔌 Port: {}", config.port);
-    println!("🐛 Debug: {}", config.debug);
-
-    Ok(())
-}
-```
-
-</details>
-
-#### 🎨 Three Usage Patterns
-
-Confers provides three flexible usage patterns to suit different needs:
-
-**1️⃣ Simple Mode (Recommended)**
-
-Perfect for most applications with minimal boilerplate:
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct AppConfig {
-    pub name: String,
-    pub port: u16,
-    pub debug: bool,
-}
-
-// One-line configuration loading
-let config = AppConfig::load_sync()?;
-```
-
-**2️⃣ Builder Mode**
-
-For more control over configuration sources:
-
-```rust
-use confers::{ConfigBuilder, ConfigProviderExt};
-
-let config = ConfigBuilder::<serde_json::Value>::new()
-    .file("config.toml")
-    .file("local.toml")  // Higher priority
-    .env()
-    .build()?;
-
-let name = config.get_string("app.name");
-let port = config.get_int("app.port");
-```
-
-**3️⃣ DI Mode (Dependency Injection)**
-
-For integration into frameworks and runtime flexibility:
-
-```rust
-use std::sync::Arc;
-use confers::{ConfigBuilder, ConfigProviderExt};
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct MyConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-let config = ConfigBuilder::<MyConfig>::new()
-    .file("config.toml")
-    .env()
-    .build()?;
-
-let shared_config = Arc::new(config);
-
-let service = MyService::new(shared_config);
-```
+- **Source chain**: declare `FileSource`, `EnvSource`, `MemorySource`, and remote sources via `ConfigBuilder` / `SourceChainBuilder`; declaration order is priority, later sources override earlier ones.
+- **Annotated values**: every config value is wrapped in an `AnnotatedValue` carrying `SourceId` and `SourceLocation` (down to row and column), so conflicts are traceable.
+- **Two-phase errors**: initialization failures return `ConfigConfigError`; runtime failures return `ConfersError`, keeping the two classes of problems separate.
+- **Feature gating**: every optional capability is an independent feature; compiled artifacts only include what you enable, down to a minimal `env` + `json`.
 
 ---
 
@@ -295,190 +182,67 @@ let service = MyService::new(shared_config);
 
 ### 📦 Feature Presets
 
-| Preset                                                          | Features                                                                                                                                                     | Use Case                              |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| <span style="color:#166534; padding:4px 8px">minimal</span>     | `env`, `json`                                                                                                                                                | Environment variables + JSON          |
-| <span style="color:#1E40AF; padding:4px 8px">recommended</span> | `toml`, `json`, `env`, `validation`                                                                                                                          | **Recommended for most applications** |
-| <span style="color:#92400E; padding:4px 8px">dev</span>         | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic`                                | Development with all tools            |
-| <span style="color:#991B1B; padding:4px 8px">production</span>  | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot` | Production-ready configuration        |
-| <span style="color:#7C3AED; padding:4px 8px">distributed</span> | `toml`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit`                                                                 | Distributed systems                   |
-| <span style="color:#5B21B6; padding:4px 8px">full</span>        | All features                                                                                                                                                 | Complete feature set                  |
-
-**Note:** Default features include `toml`, `json`, `env`.
-
-### 🎨 Feature Architecture
-
-```mermaid
-graph LR
-    A["<b>Configuration Sources</b><br/>Files • Env • CLI"] --> B["<b>ConfigLoader</b><br/>Core Engine"]
-    B --> C["<b>Validation</b><br/>Type & Business Rules"]
-    B --> D["<b>Schema</b><br/>JSON Schema Gen"]
-    B --> E["<b>Encryption</b><br/>XChaCha20-Poly1305"]
-    B --> F["<b>Audit</b><br/>Access Logs"]
-    C --> H["<b>Application Config</b><br/>Ready to Use"]
-    D --> H
-    E --> H
-    F --> H
-
-    style A fill:#DBEAFE,stroke:#1E40AF,stroke-width:2px
-    style B fill:#FEF3C7,stroke:#92400E,stroke-width:2px
-    style H fill:#DCFCE7,stroke:#166534,stroke-width:2px
-```
+| Preset | Features | Use Case |
+|------|----------|----------|
+| `minimal` | `env`, `json` | Minimal loading |
+| `recommended` | `toml`, `env`, `validation`, `json`, `security-rules` | Most applications |
+| `dev` | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Full development toolset |
+| `production` | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`, `security-rules`, `feature-toggle` | Production environments |
+| `distributed` | `toml`, `json`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
+| `full` | All features | Complete capability set |
 
 ### 📋 Feature Matrix
 
-| Feature               | Default | Description                                          | Stability |
-| :-------------------- | :-----: | :--------------------------------------------------- | :-------- |
-| **Format Support**    |         |                                                      |           |
-| `toml`                |   ✅    | TOML configuration files                             | Stable    |
-| `json`                |   ✅    | JSON configuration files                             | Stable    |
-| `yaml`                |   ❌    | YAML configuration files                             | Stable    |
-| `ini`                 |   ❌    | INI configuration files                              | Stable    |
-| `env`                 |   ✅    | Environment variable support                         | Stable    |
-| `dotenv`              |   ❌    | `.env` file support (alias of `env`)                 | Stable    |
-| **Core Features**     |         |                                                      |           |
-| `validation`          |   ❌    | Configuration validation (garde)                     | Stable    |
-| `watch`               |   ❌    | File watching and hot reload                         | Stable    |
-| `encryption`          |   ❌    | XChaCha20-Poly1305 encryption                        | Stable    |
-| `cli`                 |   ❌    | CLI tool with commands                               | Stable    |
-| `schema`              |   ❌    | JSON Schema generation                               | Stable    |
-| `typescript-schema`   |   ❌    | TypeScript type generation (alias of `schema`)       | Stable    |
-| **Advanced Features** |         |                                                      |           |
-| `audit`               |   ❌    | Audit logging                                        | Stable    |
-| `dynamic`             |   ❌    | Dynamic fields                                       | Stable    |
-| `progressive-reload`  |   ❌    | Canary/linear rollout                                | Stable    |
-| `migration`           |   ❌    | Configuration migration                              | Stable    |
-| `snapshot`            |   ❌    | Snapshot rollback                                    | Stable    |
-| `interpolation`       |   ❌    | Variable interpolation                               | Stable    |
-| **Remote Sources**    |         |                                                      |           |
-| `remote`              |   ❌    | HTTP polling                                         | Beta      |
-| `etcd`                |   ❌    | Etcd v3 integration                                  | Beta      |
-| `consul`              |   ❌    | Consul integration                                   | Beta      |
-| **Message Bus**       |         |                                                      |           |
-| `config-bus`          |   ❌    | Config event bus                                     | Stable    |
-| `nats-bus`            |   ❌    | NATS integration                                     | Stable    |
-| `redis-bus`           |   ❌    | Redis Pub/Sub                                        | Stable    |
-| **Security**          |         |                                                      |           |
-| `security`            |   ❌    | Security module (env validation, error sanitization) | Stable    |
-| `key`                 |   ❌    | Key management and rotation                          | Stable    |
-| **Context & Modules** |         |                                                      |           |
-| `context-aware`       |   ❌    | Tenant-aware configuration                           | Stable    |
-| `modules`             |   ❌    | Modular configuration                                | Stable    |
-
-### 🧩 Individual Features
-
-| Feature               | Description                      | Default |
-| --------------------- | -------------------------------- | ------- |
-| **Format Support**    |                                  |         |
-| `toml`                | TOML format support              | ✅      |
-| `json`                | JSON format support              | ✅      |
-| `yaml`                | YAML format support              | ❌      |
-| `ini`                 | INI format support               | ❌      |
-| `env`                 | Environment variable support     | ✅      |
-| `dotenv`              | `.env` file support (alias of `env`) | ❌      |
-| **Core Features**     |                                  |         |
-| `validation`          | Configuration validation (garde) | ❌      |
-| `watch`               | File watching and hot reload     | ❌      |
-| `encryption`          | XChaCha20-Poly1305 encryption    | ❌      |
-| `cli`                 | Command-line tool                | ❌      |
-| `schema`              | JSON Schema generation           | ❌      |
-| `typescript-schema`   | TypeScript type generation (alias of `schema`) | ❌      |
-| **Advanced Features** |                                  |         |
-| `audit`               | Audit logging                    | ❌      |
-| `dynamic`             | Dynamic fields                   | ❌      |
-| `progressive-reload`  | Progressive reload               | ❌      |
-| `migration`           | Configuration migration          | ❌      |
-| `snapshot`            | Snapshot rollback                | ❌      |
-| `interpolation`       | Variable interpolation           | ❌      |
-| **Remote Sources**    |                                  |         |
-| `remote`              | HTTP polling                     | ❌      |
-| `etcd`                | Etcd integration                 | ❌      |
-| `consul`              | Consul integration               | ❌      |
-| **Message Bus**       |                                  |         |
-| `config-bus`          | Configuration event bus          | ❌      |
-| `nats-bus`            | NATS message bus                 | ❌      |
-| `redis-bus`           | Redis message bus                | ❌      |
-| **Others**            |                                  |         |
-| `security`            | Security module                  | ❌      |
-| `key`                 | Key management system            | ❌      |
-| `modules`             | Modular configuration            | ❌      |
-| `context-aware`       | Context-aware configuration      | ❌      |
-
-### 🔧 CLI Command Feature Dependencies
-
-| Command    | Required Features | Optional Features | Description                  |
-| ---------- | ----------------- | ----------------- | ---------------------------- |
-| `inspect`    | `cli`             | -                 | List all configuration keys with sources            |
-| `export`     | `cli`             | -                 | Export resolved configuration                       |
-| `validate`   | `cli`             | -                 | Validate configuration files                        |
-| `diff`       | `cli`             | -                 | Compare configuration files                         |
-| `snapshot`   | `cli`             | -                 | Snapshot rollback (list/diff/prune)                 |
-
-**Note**: The `cli` feature provides command-line tools for configuration management.
-
-### 🎛️ Configuration Options
+The table below mirrors the `[features]` section of `Cargo.toml`, where `default = ["toml", "json", "env"]`.
 
 <table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-**Basic Configuration**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "localhost"
-port = 8080
-
-[features]
-debug = true
-logging = true
-```
-
-</td>
-<td width="50%" style="padding: 16px">
-
-**Advanced Configuration**
-
-```toml
-[project]
-name = "my-app"
-version = "1.0.0"
-
-[server]
-host = "0.0.0.0"
-port = 8080
-workers = 4
-
-[database]
-url = "postgres://localhost/db"
-pool_size = 10
-
-[performance]
-cache_size = 1000
-```
-
-</td>
-</tr>
+<tr><th style="text-align:left">Feature</th><th style="text-align:center">Default</th><th style="text-align:left">Description</th></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Format Support</b></td></tr>
+<tr><td><code>toml</code></td><td align="center">✅</td><td>TOML configuration files</td></tr>
+<tr><td><code>json</code></td><td align="center">✅</td><td>JSON configuration files</td></tr>
+<tr><td><code>yaml</code></td><td align="center">❌</td><td>YAML configuration files</td></tr>
+<tr><td><code>ini</code></td><td align="center">❌</td><td>INI configuration files</td></tr>
+<tr><td><code>env</code></td><td align="center">✅</td><td>Environment variable loading and <code>.env</code> files</td></tr>
+<tr><td><code>dotenv</code></td><td align="center">❌</td><td>Alias of <code>env</code></td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Core Capabilities</b></td></tr>
+<tr><td><code>validation</code></td><td align="center">❌</td><td>Configuration validation built on garde</td></tr>
+<tr><td><code>watch</code></td><td align="center">❌</td><td>File watching and hot reload with adaptive debouncing</td></tr>
+<tr><td><code>encryption</code></td><td align="center">❌</td><td>XChaCha20-Poly1305 encryption with HKDF per-field key derivation</td></tr>
+<tr><td><code>cli</code></td><td align="center">❌</td><td>The confers command-line diagnostics tool</td></tr>
+<tr><td><code>schema</code></td><td align="center">❌</td><td>JSON Schema generation</td></tr>
+<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript type generation (alias of <code>schema</code>)</td></tr>
+<tr><td><code>dynamic</code></td><td align="center">❌</td><td>Dynamic fields with lock-free arc-swap reads</td></tr>
+<tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>Progressive reload with canary rollout and health-check rollback (includes <code>watch</code>)</td></tr>
+<tr><td><code>audit</code></td><td align="center">❌</td><td>Audit logging with HMAC integrity and sensitive-field masking</td></tr>
+<tr><td><code>migration</code></td><td align="center">❌</td><td>Configuration version migration</td></tr>
+<tr><td><code>snapshot</code></td><td align="center">❌</td><td>Snapshots and rollback</td></tr>
+<tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> interpolation with nested defaults</td></tr>
+<tr><td><code>tracing</code></td><td align="center">❌</td><td>Enable the internal tracing facade (no-op when disabled)</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Security</b></td></tr>
+<tr><td><code>security</code></td><td align="center">❌</td><td>Security module: encryption integration, error sanitization, env validation (includes <code>encryption</code>)</td></tr>
+<tr><td><code>security-rules</code></td><td align="center">❌</td><td>Built-in JWT, CORS, SSRF, TLS validators with a registry</td></tr>
+<tr><td><code>key</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
+<tr><td><code>keyring</code></td><td align="center">❌</td><td>Key storage backends (file, MasterKey, secret-tool)</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers including Vault Transit (requires <code>remote</code>)</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Remote Sources</b></td></tr>
+<tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP polling source with SSRF protection and circuit breaker</td></tr>
+<tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 integration (includes <code>remote</code>)</td></tr>
+<tr><td><code>etcd-watch</code></td><td align="center">❌</td><td>etcd watch subscription (includes <code>etcd</code>)</td></tr>
+<tr><td><code>consul</code></td><td align="center">❌</td><td>HashiCorp Consul integration (includes <code>remote</code>)</td></tr>
+<tr><td><code>nacos</code></td><td align="center">❌</td><td>Nacos configuration center integration (includes <code>remote</code>)</td></tr>
+<tr><td><code>k8s</code></td><td align="center">❌</td><td>Kubernetes ConfigMap / Secret sources, both mounted volumes and API (includes <code>remote</code>)</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Message Bus & Change Stream</b></td></tr>
+<tr><td><code>config-bus</code></td><td align="center">❌</td><td>Config change event bus built on tokio broadcast</td></tr>
+<tr><td><code>nats-bus</code></td><td align="center">❌</td><td>NATS bus backend (includes <code>config-bus</code>)</td></tr>
+<tr><td><code>redis-bus</code></td><td align="center">❌</td><td>Redis Pub/Sub bus backend (includes <code>config-bus</code>)</td></tr>
+<tr><td><code>change-stream</code></td><td align="center">❌</td><td>Unified change stream port reusing the config-bus transport (includes <code>watch</code>)</td></tr>
+<tr><td colspan="3" style="background:#F8FAFC"><b>Organization & Extensions</b></td></tr>
+<tr><td><code>modules</code></td><td align="center">❌</td><td>Modular config groups with a registry</td></tr>
+<tr><td><code>context-aware</code></td><td align="center">❌</td><td>Context-aware (tenant-dimension) configuration</td></tr>
+<tr><td><code>feature-toggle</code></td><td align="center">❌</td><td>Runtime feature toggle registry</td></tr>
+<tr><td><code>openfeature</code></td><td align="center">❌</td><td>OpenFeature-style flag evaluation (includes <code>feature-toggle</code> and <code>context-aware</code>)</td></tr>
+<tr><td><code>lazy</code></td><td align="center">❌</td><td>Lazy segmented parsing of oversized documents</td></tr>
 </table>
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🔧 All Configuration Options</summary>
-
-| Option       | Type    | Default     | Description              |
-| ------------ | ------- | ----------- | ------------------------ |
-| `name`       | String  | -           | Project name             |
-| `version`    | String  | "1.0.0"     | Version number           |
-| `host`       | String  | "localhost" | Server host              |
-| `port`       | u16     | 8080        | Server port              |
-| `debug`      | Boolean | false       | Enable debug mode        |
-| `workers`    | usize   | 4           | Number of worker threads |
-| `cache_size` | usize   | 1000        | Cache size in MB         |
-
-</details>
 
 ---
 
@@ -488,516 +252,296 @@ cache_size = 1000
 |------|------|
 | [📖 User Guide](docs/USER_GUIDE.md) | Complete tutorial from installation to advanced usage |
 | [📘 API Reference](docs/API_REFERENCE.md) | Detailed description of all public APIs |
-| [🏗️ Architecture](docs/ARCHITECTURE.md) | Design philosophy and internal implementation |
-| [🔒 Security](docs/SECURITY.md) | Security design and best practices |
+| [🏗️ Architecture](docs/ARCHITECTURE.md) | Design principles, module layout, and data flow |
+| [🧭 Config Macro Guide](docs/CONFIG_MACRO_GUIDE.md) | Complete usage of the `Config` derive macro and `#[config(...)]` attributes |
+| [📈 Performance Guide](docs/PERFORMANCE.md) | Benchmark data, measurement methodology, and optimization tips |
+| [🔒 Security](docs/SECURITY.md) | Security design, best practices, and vulnerability handling records |
 | [❓ FAQ](docs/FAQ.md) | Frequently asked questions |
-| [📈 Performance Guide](docs/PERFORMANCE.md) | Benchmark notes and performance optimization tips |
-| [🧭 Config Macro Guide](docs/CONFIG_MACRO_GUIDE.md) | Complete usage of the `Config` derive macro and its attributes |
-| [📚 Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate confers CLI into your projects |
+| [📚 Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate the confers CLI into your projects |
+| [🧪 Test Scenario Matrix](docs/TEST_SCENARIOS.md) | Exhaustive E2E acceptance scenario matrix |
 | [📋 Changelog](docs/CHANGELOG.md) | Change records for every release |
 | [🤝 Contributing Guide](docs/CONTRIBUTING.md) | How to participate in project development |
 | [📦 Online API Docs](https://docs.rs/confers) | Latest documentation auto-generated on docs.rs |
+| [📦 crates.io](https://crates.io/crates/confers) | Release page |
 
 ---
 
 ## 💻 Examples
 
-### 🗂️ Examples Directory
+All 21 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target.
 
-Complete, runnable examples demonstrating all major features. All examples can be found in the [`examples/`](examples/) directory.
-
-| Example                | File                                          | Features             | Description                                                     |
-| :--------------------- | :-------------------------------------------- | :------------------- | :-------------------------------------------------------------- |
-| **basic_usage**        | `examples/src/examples/basic_usage.rs`        | `toml`, `env`        | Basic configuration loading from TOML and environment variables |
-| **hot_reload**         | `examples/src/examples/hot_reload.rs`         | `watch`              | Real-time file monitoring with automatic reload                 |
-| **encryption**         | `examples/src/examples/encryption.rs`         | `encryption`         | Sensitive field encryption with XChaCha20-Poly1305              |
-| **key_rotation**       | `examples/src/examples/key_rotation.rs`       | `key`                | Key lifecycle management and rotation                           |
-| **migration**          | `examples/src/examples/migration.rs`          | `migration`          | Configuration version migration                                 |
-| **dynamic_fields**     | `examples/src/examples/dynamic_fields.rs`     | `dynamic`            | Lock-free dynamic field updates with callbacks                  |
-| **config_groups**      | `examples/src/examples/config_groups.rs`      | `modules`            | Modular configuration groups                                    |
-| **progressive_reload** | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Canary deployment and health-check-based rollout                |
-| **config_bus**         | `examples/src/examples/config_bus.rs`         | `config-bus`         | Multi-instance config broadcast via NATS/Redis                  |
-| **snapshot**           | `examples/src/examples/snapshot.rs`           | `snapshot`           | Configuration snapshots with diff and rollback                  |
-| **remote_consul**      | `examples/src/examples/remote_consul.rs`      | `consul`             | Remote config from HashiCorp Consul                             |
-| **remote_etcd**        | `examples/src/examples/remote_etcd.rs`        | `etcd`               | Remote config from etcd v3                                      |
-| **validation**         | `examples/src/examples/validation.rs`         | `validation`         | Configuration validation with garde                             |
-| **json_schema**        | `examples/src/examples/json_schema.rs`        | `schema`             | JSON Schema and TypeScript type generation                      |
-| **interpolation**      | `examples/src/examples/interpolation.rs`      | `interpolation`      | Configuration string interpolation with ${VAR} syntax           |
-| **audit**              | `examples/src/examples/audit.rs`              | `audit`              | Audit logging with AuditWriter and AuditEvent                   |
-| **context_aware**      | `examples/src/examples/context_aware.rs`      | `context-aware`      | Context-aware configuration with ContextAwareField              |
-| **security**           | `examples/src/examples/security.rs`           | `security`           | Security features: encryption prefix detection, env validation  |
-| **modules_demo**       | `examples/src/examples/modules_demo.rs`       | `modules`            | Module registry for feature-based configuration loading         |
-| **cli_integration**    | `examples/src/examples/cli_integration.rs`    | `cli`                | CLI tool integration and usage                                  |
-| **full_stack**         | `examples/src/examples/full_stack.rs`         | `full`               | Complete feature showcase                                       |
+| Example | File | Features | Description |
+|------|------|----------|------|
+| basic_usage | `examples/src/examples/basic_usage.rs` | `toml`, `env` | Basic config loading from defaults and environment variables |
+| hot_reload | `examples/src/examples/hot_reload.rs` | `watch` | Config file watching with automatic reload |
+| encryption | `examples/src/examples/encryption.rs` | `encryption` | XChaCha20-Poly1305 protection for sensitive fields |
+| key_rotation | `examples/src/examples/key_rotation.rs` | `key` | Safe rotation of encryption keys |
+| migration | `examples/src/examples/migration.rs` | `migration` | Configuration version migration |
+| dynamic_fields | `examples/src/examples/dynamic_fields.rs` | `dynamic` | DynamicField runtime updates with callbacks |
+| config_groups | `examples/src/examples/config_groups.rs` | `modules` | Config group management |
+| progressive_reload | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | Progressive hot reload with ProgressiveReloader |
+| config_bus | `examples/src/examples/config_bus.rs` | `config-bus` | ConfigBus change event broadcasting |
+| snapshot | `examples/src/examples/snapshot.rs` | `snapshot` | Persistent config snapshots with SnapshotManager |
+| remote_consul | `examples/src/examples/remote_consul.rs` | `consul` | Loading config from a Consul KV store |
+| remote_etcd | `examples/src/examples/remote_etcd.rs` | `etcd` | Loading config from an etcd KV store |
+| validation | `examples/src/examples/validation.rs` | `validation` | Configuration validation with garde |
+| json_schema | `examples/src/examples/json_schema.rs` | `schema` | JSON Schema generation via the ConfigSchema derive macro |
+| interpolation | `examples/src/examples/interpolation.rs` | `interpolation` | `${VAR}` interpolation with defaults |
+| audit | `examples/src/examples/audit.rs` | `audit` | Audit logging with AuditConfig and AuditWriter |
+| context_aware | `examples/src/examples/context_aware.rs` | `context-aware` | ContextAwareField value rules |
+| security | `examples/src/examples/security.rs` | `security` | Identifying encrypted values with EncryptionPrefix |
+| modules_demo | `examples/src/examples/modules_demo.rs` | `modules` | The ModuleRegistry module system |
+| cli_integration | `examples/src/examples/cli_integration.rs` | `cli` | ConfigClap derive macro and CLI integration |
+| full_stack | `examples/src/examples/full_stack.rs` | `full` | Complete feature showcase |
 
 ```bash
-# Run any example from the examples directory
+# Run a single example (from the examples/ directory)
 cd examples && cargo run --bin basic_usage
 cd examples && cargo run --bin encryption
-cd examples && cargo run --bin full_stack
 
 # Verify all examples compile
 cd examples && ./verify_examples.sh
 ```
 
-### 💡 Real-World Examples
-
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-#### 📝 Example 1: Basic Configuration
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-pub struct BasicConfig {
-    pub name: String,
-    pub port: u16,
-}
-
-fn basic_example() -> anyhow::Result<()> {
-    let config = BasicConfig::load_sync()?;
-    println!("✅ Name: {}, Port: {}", config.name, config.port);
-    Ok(())
-}
-```
-
-<details style="margin-top:8px">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6">View Output</summary>
-
-```
-✅ Name: my-app, Port: 8080
-```
-
-</details>
-
-</td>
-<td width="50%" style="padding: 16px; vertical-align:top">
-
-#### 🔥 Example 2: Advanced Configuration
-
-```rust
-use confers::Config;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
-#[config(env_prefix = "MYAPP_")]
-pub struct AdvancedConfig {
-    #[config(description = "Server port number")]
-    pub port: u16,
-    #[config(default = "localhost")]
-    pub host: String,
-    #[config(sensitive = true)]
-    pub api_key: String,
-}
-
-fn advanced_example() -> anyhow::Result<()> {
-    let config = AdvancedConfig::load_sync()?;
-    println!("🚀 Server: {}:{}", config.host, config.port);
-    Ok(())
-}
-```
-
-<details style="margin-top:8px">
-<summary style="cursor:pointer; font-weight:600; color:#3B82F6">View Output</summary>
-
-```
-🚀 Server: localhost:8080
-```
-
-</details>
-
-</td>
-</tr>
-</table>
-
-**[📂 Explore All Examples →](examples/)**
-
 ---
 
 ## 🏗️ Architecture
 
-> See the [🏗️ Architecture doc](docs/ARCHITECTURE.md) for the full design document.
-
-### 🏗️ System Architecture
+Confers follows a facade-plus-implementation layered design: the public modules under `src/` (`config`, `loader`, `merger`, `format`, `types`, `interface`, `error`, `lifecycle`) only re-export, while the real implementation lives in the internal `src/impl_/` modules; optional capabilities (`validator`, `watcher`, `secret`, `remote`, `bus`, `cli`, and more) are gated behind independent features. The derive macros are provided by the `confers-macros` proc-macro crate in the workspace: `macros/src/parse.rs` parses `#[config(...)]` attributes and the codegen module generates loading and validation code. The core data path runs from source chain registration, through loader format detection and parsing (errors pinned to row and column), `MergeEngine` deep merging along the source chain, and finally serde deserialization into user types with optional garde validation and sensitive-field decryption. The interface layer follows the interface segregation principle with independent traits such as `ConfigReader`, `ConfigWriter`, `ConfigConnector`, and `ConfigProvider`.
 
 ```mermaid
-graph TB
-    subgraph Sources ["Configuration Sources"]
-        A["Local Files<br/>TOML, JSON, YAML, INI"]
-        B["Environment Variables"]
-        C["CLI Arguments"]
-        D["Remote Sources<br/>etcd, Consul, HTTP"]
+flowchart LR
+    subgraph MACROS["confers-macros compile time"]
+        DM["derive macro<br/>parses config attributes and generates loading code"]
     end
 
-    subgraph Core ["Core Engine"]
-        E["ConfigLoader<br/>Multi-source Merge"]
+    subgraph SOURCES["Source layer"]
+        FS["FileSource<br/>TOML JSON YAML INI"]
+        ES["EnvSource<br/>env vars and .env"]
+        MS["MemorySource"]
+        RS["remote<br/>HTTP polling etcd Consul"]
     end
 
-    subgraph Processing ["Processing Layer"]
-        F["Validation<br/>Type & Business Rules"]
-        G["Schema Generation"]
-        H["Encryption<br/>XChaCha20-Poly1305"]
-        I["Audit Logging"]
-        J["File Watching"]
+    subgraph CORE["Core engine"]
+        LD["loader<br/>format detection and parsing"]
+        SC["SourceChain priority chain"]
+        MG["merger<br/>MergeEngine deep merge"]
     end
 
-    subgraph Output ["Application"]
-        L["Application Configuration<br/>Type-Safe & Validated"]
+    subgraph OPS["Operations and security"]
+        WT["watcher hot reload"]
+        BUS["bus change broadcast"]
+        AU["audit logging"]
+        SE["secret encryption"]
     end
 
-    Sources --> Core
-    Core --> Processing
-    Processing --> Output
+    APP["Typed config struct T"]
 
-    style Sources fill:#DBEAFE,stroke:#1E40AF
-    style Core fill:#FEF3C7,stroke:#92400E
-    style Processing fill:#EDE9FE,stroke:#5B21B6
-    style Output fill:#DCFCE7,stroke:#166534
+    SOURCES --> LD
+    LD --> SC
+    SC --> MG
+    MG --> APP
+    DM -.generates loading code for T.-> APP
+    WT -.triggers reload.-> LD
+    BUS -.change notification.-> APP
+    SE -.decrypts sensitive fields.-> MG
+    AU -.records access.-> MG
 ```
 
-### 📐 Component Status
-
-| Component                    | Description                           | Status    |
-| ---------------------------- | ------------------------------------- | --------- |
-| **ConfigLoader**             | Core loader with multi-source support | ✅ Stable |
-| **Configuration Validation** | Built-in validator integration        | ✅ Stable |
-| **Schema Generation**        | Auto-generate JSON Schema             | ✅ Stable |
-| **File Watching**            | Real-time monitoring with hot reload  | ✅ Stable |
-| **Remote Configuration**     | etcd, Consul, HTTP support            | 🚧 Beta   |
-| **Audit Logging**            | Record access and change history      | ✅ Stable |
-| **Encrypted Storage**        | XChaCha20-Poly1305 encrypted storage  | ✅ Stable |
-| **Configuration Diff**       | Multiple output formats               | ✅ Stable |
-
-### 🔄 BrickArchitecture Migration Guide
-
-Confers now follows **BrickArchitecture** error separation patterns:
-
-| Error Type           | Phase         | When It Occurs      | Example                                        |
-| -------------------- | ------------- | ------------------- | ---------------------------------------------- |
-| `ConfigConfigError` | Configuration | Initialization time | Missing field, parse error, validation failure |
-| `ConfersError`       | Runtime       | Use time            | Timeout, remote unavailable, decryption failed |
-
-**Backward Compatibility:** Existing `ConfigError` and `ConfigResult<T>` aliases remain available.
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📖 Migration Example</summary>
-
-```rust
-// OLD: ConfigError for all errors
-use confers::ConfigError;
-
-// NEW: Use BrickArchitecture error separation
-use confers::{ConfigConfigError, ConfersError};
-
-// Configuration phase - use ConfigConfigError
-fn init_config() -> Result<impl confers::interface::ConfigConnector, ConfigConfigError> {
-    use confers::impl_::memory::InMemoryConfig;
-    let config = InMemoryConfig::new_validated(1000)?; // Returns ConfigConfigError
-    Ok(config)
-}
-
-// Runtime phase - use ConfersError
-async fn use_config(config: &impl ConfigReader) -> Result<(), ConfersError> {
-    let value = config.get_string("key").await?;  // Returns ConfersError
-    Ok(())
-}
-```
-
-</details>
+> For the full module breakdown and data flow, see the [🏗️ Architecture doc](docs/ARCHITECTURE.md).
 
 ---
 
 ## 🔧 CLI Tool
 
-Confers provides a standalone command-line tool `confers` for configuration management:
-
-### Install CLI Tool
+The `confers` binary (`src/cli/main.rs`, requires the `cli` feature) provides configuration diagnostics:
 
 ```bash
-cargo install confers
+cargo install confers --features cli
 ```
 
-### Basic Commands
+| Command | Description |
+|------|------|
+| `inspect` | List all config keys with their sources; supports conflict display and JSON output |
+| `validate` | Validate configuration; `--strict` treats warnings as errors |
+| `export` | Export the merged config (json, toml, yaml); sensitive values masked by default |
+| `diff` | Compare a base and an overlay config |
+| `snapshot` | Snapshot management: `list`, `diff`, `prune` |
+| `schema` | Emit the JSON Schema for the config type, optionally inferred from an instance |
+| `get` | Read a single config value by key path |
+| `doctor` | Config health diagnostics, printed as a single-line JSON report |
+| `docs --agent` | Emit the machine-readable knowledge pack for agents |
 
 ```bash
-# View help
-confers --help
-
-# Inspect configuration - list all keys with their sources
+# Common commands
 confers --config config.toml inspect
-
-# Validate configuration file
-confers --config config.toml validate
-
-# Compare configuration files
-confers diff --base config1.toml --overlay config2.toml
-
-# Export merged configuration
+confers --config config.toml validate --strict
 confers --config config.toml export --format json
-
-# Manage configuration snapshots
-confers --config config.toml snapshot list
-confers --config config.toml snapshot diff --latest 2
+confers diff --base config1.toml --overlay config2.toml
 ```
 
-**Note**: The CLI tool requires the `cli` feature to be enabled.
+Global options: `--config <file>` (repeatable), `--env-file <file>`, and `--fields <dot-path list>`. Exit code contract: 0 success, 1 configuration error, 2 I/O error.
+
+---
+
+## 🔄 Core Workflows
+
+The sequence diagram below shows the real config loading and hot reload path (mirroring the data flow section of `docs/ARCHITECTURE.md` and the `src/watcher` implementation):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Application
+    participant Bld as ConfigBuilder
+    participant Ldr as loader
+    participant Mrg as merger
+    participant Wtr as watcher
+
+    App->>Bld: Declare source chain with files and env vars
+    App->>Bld: build triggers loading
+    Bld->>Ldr: Detect format and parse each source
+    Ldr->>Mrg: ConfigValue tree with source and location
+    Mrg->>Mrg: Deep merge along the SourceChain
+    Mrg-->>App: Deserialize into T with optional validation and decryption
+
+    Note over Wtr: File change event
+    Wtr->>Ldr: Trigger reload after adaptive debounce
+    Ldr->>Mrg: Reload and merge again
+    Mrg-->>Wtr: Produce the new config
+    Wtr-->>App: Progressive rollout with health-check rollback
+```
+
+With `progressive-reload` enabled, the new config switches instances in batches; failed health checks trigger an automatic rollback (`ReloadRolledBack`). With `dynamic` enabled, field-level updates swap in new snapshots atomically via `arc-swap` while readers stay lock-free.
 
 ---
 
 ## 🧪 Testing
 
-### 🎯 Test Coverage
+### 🎯 Test Strategy
+
+| Layer | Location | Description |
+|------|------|------|
+| Unit tests | Inline `#[cfg(test)]` modules in `src/` | Cover core logic under each feature gate |
+| Integration tests | `tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli` | Feature-gated suites organized by domain |
+| End-to-end tests | `tests/e2e` (24 suites, explicitly registered via `[[test]]`) | Cover formats, builders, encryption, bus, progressive reload, and more; see the [test scenario doc](docs/TEST_SCENARIOS.md) |
+| Macro tests | `macros/tests` | trybuild compile-fail cases and attribute validation |
+| Fuzz testing | `fuzz/` | cargo-fuzz targets: `parser`, `merger`, `interpolation` |
+| Benchmarks | `benches/` | 9 Criterion benchmark groups |
+| Doc tests | rustdoc examples on public APIs | Run with `cargo test` |
+
+### ▶️ Commands (matching CI)
 
 ```bash
-# 🧪 Run all tests
-cargo test --features full
+# Full test run (CI matrix runs default / recommended / full)
+cargo test --workspace --features full
 
-# 📊 Generate coverage report
-cargo llvm-cov --features full
+# Lint and format gates
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
 
-# ⚡ Run benchmarks
-cargo bench
+# Coverage gate: at least 80% line coverage
+cargo llvm-cov --workspace --all-features --fail-under-lines 80
 
-# 🎯 Run specific test
-cargo test test_name
+# Benchmarks
+cargo bench --features dev --benches
+
+# Fuzz testing (from the fuzz/ directory)
+cargo fuzz run parser
 ```
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#166534">📊 Test Statistics</summary>
+Bus-related integration tests require a local NATS service; CI uses a `nats:2.10 -js` container (see `docker-compose.test.yml`).
 
-> Data source: `cargo test --features full` (as of 2026-07). Numbers grow with code evolution; re-run the command to verify.
+### 📊 Test Scale
 
-| Category             | Test Count        | Notes                                  |
-| -------------------- | ----------------- | -------------------------------------- |
-| 🧪 Unit Tests        | 1700+             | lib tests across all feature gates     |
-| 🔗 Integration Tests | multiple suites   | `tests/integration_*.rs` per feature   |
-| 📚 Doc Tests         | 32                | rustdoc examples                       |
-| ⚡ Performance Tests | 10 bench files    | `benches/*.rs` (criterion)             |
-| **📈 Total**         | **1700+**         | Run `cargo test --features full`       |
+> Counts come from grepping `#[test]` / `#[tokio::test]` functions, as of v0.6.0-rc.3.
 
-**Coverage target:** ≥ 80% (enforced in CI via `cargo llvm-cov`).
+| Category | Count |
+|------|------|
+| Unit tests (inline in `src/`) | ~2100+ |
+| Integration and E2E (`tests/`) | 600 (53 files) |
+| Fuzz targets | 3 |
+| Criterion benchmark groups | 9 |
 
-</details>
+The coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook.
 
 ---
 
 ## 📊 Performance
 
-### ⚡ Benchmark Results
+> Methodology follows the [📈 Performance Guide](docs/PERFORMANCE.md): baselines were collected locally on a development machine (WSL2, linux 6.6, 16 threads); values are the criterion estimate (median) of the confidence interval, and non-default runs use `--warm-up-time 1 --measurement-time 2 --sample-size 20`. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce.
 
-> Actual performance depends on configuration complexity and hardware. Run `cargo bench` to obtain measurements for your specific setup.
+<table style="width:100%; border-collapse: collapse">
+<tr><th style="text-align:left">Path</th><th style="text-align:left">Case</th><th style="text-align:left">Time</th></tr>
+<tr><td>Loading</td><td><code>load / 50 fields</code></td><td>~691 ns</td></tr>
+<tr><td>Loading</td><td><code>load / 200 fields</code></td><td>~713 ns</td></tr>
+<tr><td>Merging</td><td><code>merge_shallow / size 10</code></td><td>~263 ns</td></tr>
+<tr><td>Merging</td><td><code>merge_shallow / size 1000</code></td><td>~20.9 µs</td></tr>
+<tr><td>Change stream</td><td><code>change_stream_roundtrip / 1 subscriber</code></td><td>~1.98 µs</td></tr>
+<tr><td>Change stream</td><td><code>change_stream_roundtrip / 8 subscribers</code></td><td>~3.72 µs</td></tr>
+<tr><td>Large-value reads</td><td><code>get_shared</code> (Arc handle) vs <code>get_raw</code> (deep copy)</td><td>~161 ns vs ~337 ns, about 2.1x faster</td></tr>
+</table>
 
-```bash
-# Run all benchmarks
-cargo bench
-
-# Run specific benchmarks
-cargo bench --bench merge_bench --features interpolation
-cargo bench --bench load_bench
-cargo bench --bench concurrent_access_bench
-```
-
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#92400E">📈 Available Benchmarks</summary>
-
-| Benchmark | Description |
-|-----------|-------------|
-| `merge_bench` | Config merge performance (COW optimization, deep nesting, large maps) |
-| `load_bench` | Config loading performance |
-| `concurrent_access_bench` | Concurrent access performance |
-| `concurrent_rw_bench` | Concurrent read/write performance |
-| `dynamic_field_bench` | Dynamic field performance |
-| `hot_path_bench` | Hot path performance |
-| `interpolation_bench` | Interpolation computation performance |
-| `value_path_bench` | Value path access performance |
-
-</details>
-
-For detailed benchmark notes and performance optimization tips, see the [📈 Performance Guide](docs/PERFORMANCE.md).
+Performance design highlights: dynamic fields read lock-free via `arc-swap`; the `ConfigValue` tree keeps key order with `IndexMap` and interns short strings with `compact_str`; the watcher's adaptive debouncer suppresses reload storms; all optional capabilities are feature-gated to control compile time and binary size. See the [📈 Performance Guide](docs/PERFORMANCE.md) for more optimization tips.
 
 ---
 
 ## 🔒 Security
 
-### 🛡️ Security Features
+### 🛡️ Security Design
 
-For the full security policy, vulnerability reporting process, and security best practices, see the [🔒 Security document](docs/SECURITY.md).
+| Aspect | Description |
+|------|------|
+| Authenticated encryption | XChaCha20-Poly1305 AEAD with a fresh random nonce per encryption and a Poly1305 authentication tag |
+| Per-field key derivation | HKDF-SHA256 derives a subkey per field path and key version from the master key (`derive_field_key`) |
+| Memory safety | `SecretBytes` / `ZeroizingBytes` zeroize on drop, `secrecy` keeps sensitive values out of logs, `SecureString` forbids `Clone` |
+| Key governance | `KeyManager` and `KeyRegistry` manage key versions, states, and rotation with entropy checks |
+| Input protection | `EnvSecurityValidator` guards against env injection; built-in JWT, CORS, SSRF, and TLS validators, with SSRF covering 18 blocked CIDR ranges and URL boundary matching |
+| Output sanitization | `ErrorSanitizer` sanitizes error messages; `#[config(sensitive = true)]` fields are masked automatically in logs and debug output |
+| Audit trail | Audit logs are HMAC-signed for integrity and support sensitive-field tracking |
+| Remote source protection | SSRF validation and a circuit breaker prevent internal network probing and failure propagation |
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/lock.png" width="48" height="48"><br>
-<b>Memory Safety</b><br>
-<span style="color:#166534">Zero-copy & secure cleanup</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/security-checked.png" width="48" height="48"><br>
-<b>Audited</b><br>
-<span style="color:#1E40AF">Regular security audits</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/privacy.png" width="48" height="48"><br>
-<b>Privacy</b><br>
-<span style="color:#92400E">No data collection</span>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/shield.png" width="48" height="48"><br>
-<b>Compliance</b><br>
-<span style="color:#5B21B6">Industry standards</span>
-</td>
-</tr>
-</table>
+### ⛓️ Supply Chain and Gates
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#991B1B">🔐 Security Details</summary>
+- `cargo deny check`: vulnerability, license, banned dependency, and source checks (`deny.toml`).
+- `cargo audit`: RustSec advisory scanning, enforced in CI and the pre-push hook.
+- Pre-commit private key scanning (lefthook `no-private-key`).
 
-### 🛡️ Security Measures
+### 🚨 Reporting Security Issues
 
-| Measure                         | Description                                     | API Reference                         |
-| ------------------------------- | ----------------------------------------------- | ------------------------------------- |
-| ✅ **Memory Protection**        | Automatic secure cleanup with zeroization       | `SecretString`, `zeroize` crate       |
-| ✅ **Side-channel Protection**  | Constant-time cryptographic operations          | XChaCha20-Poly1305 encryption         |
-| ✅ **Input Validation**         | Comprehensive input sanitization                | `Validate` trait, `garde` crate       |
-| ✅ **Audit Logging**            | Full operation tracking                         | `AuditConfig`, audit trails           |
-| ✅ **SSRF Protection**          | Built-in Server-Side Request Forgery prevention | `HttpPolledSource`, `is_ip_blocked()` |
-| ✅ **Sensitive Data Detection** | Automatic detection of sensitive fields         | `#[config(sensitive = true)]` proc-macro |
-| ✅ **Error Sanitization**       | Remove sensitive info from error messages       | `ErrorSanitizer`, `SecureLogger`      |
-| ✅ **Nonce Reuse Detection**    | Prevent cryptographic nonce reuse               | Built into encryption module          |
-
-### 🔐 Security APIs
-
-```rust,ignore
-// Secure string handling
-use confers::security::{SecureString, SensitivityLevel};
-let secure_str = SecureString::new("sensitive_data", SensitivityLevel::High);
-
-// Input validation
-use confers::security::ConfigValidator;
-let validator = ConfigValidator::builder()
-    .max_string_length(1024)
-    .strict_mode()
-    .build();
-let data: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-let result = validator.validate(&data);
-
-// Error sanitization
-use confers::security::ErrorSanitizer;
-let sanitizer = ErrorSanitizer::default();
-let safe_error = sanitizer.sanitize(&error_message);
-
-// Audit logging
-#[cfg(feature = "audit")]
-use confers::audit::AuditConfig;
-let audit = AuditConfig::new().enable_sensitive_field_tracking();
-```
-
-### 🚨 Security Best Practices
-
-1. **Use SecureString for sensitive data**: Automatically zeroizes memory
-2. **Enable audit logging**: Track all configuration access and changes
-3. **Validate all inputs**: Use built-in validators for user inputs
-4. **Use encryption**: Enable `encryption` feature for sensitive configs
-5. **Follow principle of least privilege**: Minimize sensitive data exposure
-
-### 📧 Reporting Security Issues
-
-Please report security vulnerabilities to: **Kirky-X@outlook.com**
-
-</details>
+Please do not report security vulnerabilities through public issues. Use the private GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/advisories/new) disclosure channel instead. The project commits to acknowledging reports within 48 hours and providing an initial assessment within 7 days. See the full policy in [SECURITY.md](SECURITY.md) and the [security doc](docs/SECURITY.md).
 
 ---
 
 ## 🗺️ Roadmap
 
-### 🎯 Development Roadmap
-
-```mermaid
-gantt
-    title Confers Development Roadmap
-    dateFormat  YYYY-MM
-    section Core Features
-    Type-safe Configuration     :done, 2024-01, 2024-06
-    Multi-format Support       :done, 2024-02, 2024-06
-    Environment Variable Override     :done, 2024-03, 2024-06
-    section Validation System
-    Basic Validation Integration     :done, 2024-04, 2024-07
-    section Advanced Features
-    Schema Generation      :active, 2024-06, 2024-09
-    File Watching Hot Reload   :done, 2024-07, 2024-09
-    Remote Configuration Support     :active, 2024-08, 2024-12
-    Audit Logging         :done, 2024-08, 2024-10
-```
-
 <table style="width:100%; border-collapse: collapse">
-<tr>
-<td width="50%" style="padding: 16px">
-
-### ✅ Completed
-
-**Core Features**
-- [x] Type-safe Configuration
-- [x] Multi-format Support (TOML, YAML, JSON, INI)
-- [x] Environment Variable Override
-- [x] CLI Argument Override
-
-**Validation System**
-- [x] Configuration Validation System (garde)
-
-**Advanced Features**
-- [x] Schema Generation (JSON Schema + TypeScript types)
-- [x] File Watching & Hot Reload
-- [x] Audit Logging
-- [x] Encrypted Storage Support (XChaCha20-Poly1305)
-- [x] Dynamic Fields (lock-free)
-- [x] Modular Configuration (modules)
-- [x] Context-aware Configuration (tenant-aware)
-- [x] Configuration Migration
-- [x] Snapshot & Rollback
-- [x] Variable Interpolation
-- [x] Progressive Reload (canary rollout)
-
-**Remote & Bus**
-- [x] Remote Configuration Support (etcd, Consul, HTTP)
-- [x] HTTP Polling
-- [x] Configuration Event Bus (NATS / Redis Pub-Sub)
-
-**Security**
-- [x] Security Module (env validation, error sanitization, SSRF protection)
-- [x] Key Management & Rotation
-- [x] Nonce Reuse Detection
-
-</td>
-<td width="50%" style="padding: 16px">
-
-### 📋 Planned
-
-**Performance Optimization**
-- [ ] Benchmark suite refinement (criterion baselines)
-- [ ] Memory footprint optimization for large configs
-- [ ] Zero-copy hot path for high-frequency reads
-
-**Cloud-native Integration Enhancements**
-- [ ] Kubernetes ConfigMap integration
-- [ ] Service mesh support (Istio/Linkerd)
-- [ ] Distributed tracing integration
-
-</td>
-</tr>
+<tr><th style="text-align:center">Status</th><th style="text-align:left">Area</th><th style="text-align:left">Items</th></tr>
+<tr><td align="center">✅</td><td>Core engine</td><td>Derive macros, multi-format support, source chain merging, env and CLI overrides</td></tr>
+<tr><td align="center">✅</td><td>Validation and schema</td><td>garde validation, JSON Schema generation, TypeScript type generation</td></tr>
+<tr><td align="center">✅</td><td>Hot updates</td><td>File watching hot reload, progressive rollout, dynamic fields, snapshot rollback, config migration, variable interpolation</td></tr>
+<tr><td align="center">✅</td><td>Security and audit</td><td>XChaCha20-Poly1305 encryption, key management and rotation, audit logging, security rule validators</td></tr>
+<tr><td align="center">✅</td><td>Remote and bus</td><td>HTTP polling, etcd, Consul, Nacos, Kubernetes ConfigMap / Secret, NATS and Redis buses</td></tr>
+<tr><td align="center">🚧</td><td>Remote source maturity</td><td><code>remote</code>, <code>etcd</code>, and <code>consul</code> are in beta; interfaces may change</td></tr>
+<tr><td align="center">📋</td><td>Performance</td><td>Benchmark suite refinement (criterion baselines), memory footprint optimization for large configs, zero-copy hot path for high-frequency reads</td></tr>
+<tr><td align="center">📋</td><td>Cloud-native integration</td><td>Service mesh support, distributed tracing integration</td></tr>
 </table>
 
 ---
 
 ## 🤝 Contributing
 
-For the detailed contribution workflow, development environment setup, and code standards, see the [🤝 Contributing Guide](docs/CONTRIBUTING.md).
+For the detailed contribution workflow and code standards, see the [🤝 Contributing Guide](docs/CONTRIBUTING.md).
 
-### 💖 Thank You to All Contributors!
+### 🛠️ Development Environment
+
+| Item | Requirement |
+|----|------|
+| Toolchain | Rust 1.97.1 (pinned in `rust-toolchain.toml`) |
+| Format and lint | `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings` |
+| Git hooks | [lefthook](https://github.com/evilmartians/lefthook): pre-commit runs rustfmt, clippy, `cargo deny check`, and private key scanning; pre-push runs `cargo audit` and the coverage gate |
+| Commit messages | Conventional Commits (`feat`, `fix`, `docs`, etc., enforced by the commit-msg hook) |
+
+### 💖 Ways to Contribute
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -1028,98 +572,49 @@ Want to contribute code?<br>
 </tr>
 </table>
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📝 Contribution Guidelines</summary>
-
-### 🚀 How to Contribute
-
-1. **Fork** this repository
-2. **Clone** your fork: `git clone https://github.com/yourusername/confers.git`
-3. **Create** a branch: `git checkout -b feature/amazing-feature`
-4. **Make** your changes
-5. **Test** your changes: `cargo test --all-features`
-6. **Commit** your changes: `git commit -m 'feat: Add amazing feature'`
-7. **Push** to the branch: `git push origin feature/amazing-feature`
-8. **Create** a Pull Request
-
-### 📋 Code Standards
-
-- ✅ Follow Rust standard coding conventions
-- ✅ Write comprehensive tests
-- ✅ Update documentation
-- ✅ Add examples for new features
-- ✅ Pass `cargo clippy -- -D warnings`
-
-</details>
+<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
 
 ---
 
 ## 📋 Changelog
 
-For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format).
+For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and semantic versioning).
 
-### 🕘 Recent Releases
-
-| Version | Date       | Highlights |
-| ------- | ---------- | ---------- |
-| v0.5.1  | 2026-08-06 | New `SecurityValidator` security rules and `FeatureToggleRegistry` runtime feature toggles; fixed SSRF whitelist bypass, TLS version comparison, and more |
-| v0.5.0  | 2026-08-04 | Slimmed `ConfigBuilder` (6 dead methods removed); new Circuit Breaker; enhanced key entropy validation and error message sanitization |
-| v0.4.0  | 2026-07-03 | Error type separation (`ConfigConfigError` / `ConfersError`); `SecureString` no longer implements `Clone`; fixed interpolation nested default-value parsing and more |
+| Version | Date | Highlights |
+|------|------|------|
+| 0.6.0-rc.2 | 2026-09-07 | Refreshed 12+ 0.x dependencies (async-nats 0.50, chacha20poly1305 0.11, garde 0.23, and more); solidified the test pyramid by adding and registering 7 E2E suites |
+| 0.5.1 | 2026-08-06 | New `SecurityValidator` security rules and `FeatureToggleRegistry` runtime toggles; fixed SSRF whitelist bypass, TLS version comparison, and more |
+| 0.5.0 | 2026-08-04 | Slimmed `ConfigBuilder` (6 dead methods removed); new circuit breaker; enhanced key entropy validation and error message sanitization |
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT + Commons Clause License. Commercial use requires separate authorization. See [LICENSE](LICENSE).
+This project is licensed under the MIT License with the [Commons Clause](LICENSE) v1.0 condition: the right to sell the software is excluded unless separately authorized. See [LICENSE](LICENSE).
 
 ---
 
 ## 🙏 Acknowledgments
 
-### 🌟 Built With Amazing Tools
+### 🌟 Core Dependencies
 
-<table style="width:100%; border-collapse: collapse">
-<tr>
-<td align="center" width="25%" style="padding: 16px">
-<a href="https://www.rust-lang.org/" style="text-decoration:none">
-<div style="padding: 16px">
-<img src="https://www.rust-lang.org/static/images/rust-logo-blk.svg" width="48" height="48"><br>
-<b>Rust</b>
-</div>
-</a>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<a href="https://github.com/" style="text-decoration:none">
-<div style="padding: 16px">
-<img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" width="48" height="48"><br>
-<b>GitHub</b>
-</div>
-</a>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/code.png" width="48" height="48"><br>
-<b>Open Source</b>
-</div>
-</td>
-<td align="center" width="25%" style="padding: 16px">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/community.png" width="48" height="48"><br>
-<b>Community</b>
-</div>
-</td>
-</tr>
-</table>
+Confers stands on the shoulders of these excellent open source projects:
+
+| Dependency | Purpose |
+|------|------|
+| [serde](https://github.com/serde-rs/serde) | Serialization and deserialization framework |
+| [tokio](https://github.com/tokio-rs/tokio) | Async runtime |
+| [garde](https://github.com/jprochazk/garde) | Configuration validation |
+| [arc-swap](https://github.com/vorner/arc-swap) | Lock-free concurrent snapshots |
+| [chacha20poly1305](https://github.com/RustCrypto/AEADs) | Authenticated encryption |
+| [notify-debouncer-full](https://github.com/notify-rs/notify) | File watching with debouncing |
+| [clap](https://github.com/clap-rs/clap) | CLI framework |
+| [schemars](https://github.com/GREsau/schemars) | JSON Schema generation |
+| [criterion](https://github.com/bheisler/criterion.rs) | Benchmarking |
 
 ### 💝 Special Thanks
 
-| Category                   | Description                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| 🌟 **Dependency Projects** | [serde](https://github.com/serde-rs/serde) - Serialization framework           |
-|                            | [figment](https://github.com/SergioBenitez/figment) - Configuration management |
-|                            | [validator](https://github.com/Keats/validator) - Validation library           |
-| 👥 **Contributors**        | Thanks to all contributors!                                                    |
-| 💬 **Community**           | Special thanks to community members                                            |
+Thanks to the Rust community and all [contributors](https://github.com/Kirky-X/confers/graphs/contributors).
 
 ---
 
@@ -1128,31 +623,16 @@ This project is licensed under the MIT + Commons Clause License. Commercial use 
 <table style="width:100%; max-width: 600px">
 <tr>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers/issues">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/bug.png" width="32" height="32"><br>
-<b style="color:#991B1B">Issues</b>
-</div>
-</a>
-<br><span style="color:#64748B">Report bugs & issues</span>
+<a href="https://github.com/Kirky-X/confers/issues"><b style="color:#991B1B">Issues</b></a><br>
+<span style="color:#64748B">Report bugs & issues</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers/discussions">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/chat.png" width="32" height="32"><br>
-<b style="color:#1E40AF">Discussions</b>
-</div>
-</a>
-<br><span style="color:#64748B">Ask questions & share ideas</span>
+<a href="https://github.com/Kirky-X/confers/discussions"><b style="color:#1E40AF">Discussions</b></a><br>
+<span style="color:#64748B">Ask questions & share ideas</span>
 </td>
 <td align="center" width="33%">
-<a href="https://github.com/Kirky-X/confers">
-<div style="padding: 16px">
-<img src="https://img.icons8.com/fluency/96/000000/github.png" width="32" height="32"><br>
-<b style="color:#1E293B">GitHub</b>
-</div>
-</a>
-<br><span style="color:#64748B">View source code</span>
+<a href="https://github.com/Kirky-X/confers"><b style="color:#1E293B">GitHub</b></a><br>
+<span style="color:#64748B">View source code</span>
 </td>
 </tr>
 </table>
@@ -1163,11 +643,9 @@ This project is licensed under the MIT + Commons Clause License. Commercial use 
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Kirky-X/confers&type=Date)](https://star-history.com/#Kirky-X/confers&Date)
 
-### 💝 Support This Project
-
 If you find this project useful, please consider giving it a ⭐️!
 
-**Built with ❤️ by Kirky.X**
+**Built by Kirky.X**
 
 ---
 
