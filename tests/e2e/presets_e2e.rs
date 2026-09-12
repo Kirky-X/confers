@@ -208,7 +208,7 @@ fn prs07_full_preset_covers_all_domain_features() {
         "etcd",
         "consul",
         "feature-toggle",
-        // rc.4 新增能力域（workspace-rc4-completion）。
+        // rc.4 新增能力域。
         "etcd-watch",
         "k8s",
         "nacos",

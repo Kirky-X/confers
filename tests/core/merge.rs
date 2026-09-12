@@ -51,7 +51,7 @@ mod tests {
     /// Each source defines the SAME key with a distinct value; the final
     /// merged value must come from the highest-priority source. This asserts
     /// real precedence across the full ConfigBuilder pipeline, not just the
-    /// merge engine in isolation (T060 scenario 1).
+    /// merge engine in isolation (scenario 1).
     #[derive(Debug, Default, PartialEq, Deserialize)]
     struct PrecedenceConfig {
         #[serde(default)]

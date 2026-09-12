@@ -9,7 +9,7 @@
 //! upper layers subscribe to: `ChangeStream::publish` (file / remote /
 //! canary producers) through the `ConfigBus` transport to a delivered event
 //! on the subscriber side. Baseline numbers live in
-//! `docs/PERFORMANCE.md` (baseline gate, workspace-rc4-completion T110).
+//! `docs/PERFORMANCE.md` (baseline gate).
 
 use confers::ChangeStream;
 use confers::stream::{ChangeEvent, ChangeSource, InMemoryChangeStream};

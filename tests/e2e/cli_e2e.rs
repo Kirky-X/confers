@@ -339,7 +339,6 @@ fn cli24_inspect_truncates_long_strings_char_safely() {
     assert!(!body.contains('\u{fffd}'), "no replacement chars allowed");
 }
 
-// ── T005: CLI agent 化 — schema / get / --fields / 退出码契约 ──
 
 #[test]
 fn t005_schema_outputs_valid_json() {

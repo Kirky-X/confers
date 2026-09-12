@@ -1273,7 +1273,6 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-// ── T005: schema / get / --fields ──
 
 /// Output JSON Schema for configuration type `T`.
 fn cmd_schema<T: JsonSchema>() -> Result<()> {

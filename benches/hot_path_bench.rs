@@ -31,7 +31,7 @@ fn bench_hot_path_get(c: &mut Criterion) {
     });
 }
 
-/// Zero-copy comparison (T118): deep-clone `get_raw` vs the shared `Arc`
+/// Zero-copy comparison: deep-clone `get_raw` vs the shared `Arc`
 /// handle on a large (10 KiB) string value.
 fn bench_zero_copy_large_value(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();

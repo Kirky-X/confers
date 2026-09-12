@@ -158,7 +158,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self
     }
 
-    /// Attach the unified change stream (T101) as the canary event sink.
+    /// Attach the unified change stream as the canary event sink.
     ///
     /// Stage transitions (`trial_started` / `committed` / `rolled_back`) are
     /// published as `ChangeSource::Canary` events so an orchestrator can
@@ -587,7 +587,6 @@ mod tests {
         );
     }
 
-    // ============== Canary events -> ChangeStream (T119) ==============
 
     #[cfg(all(feature = "change-stream", feature = "progressive-reload"))]
     mod canary_events {

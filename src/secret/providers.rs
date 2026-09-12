@@ -854,7 +854,6 @@ mod tests {
         assert!(!is_retryable_status(500));
     }
 
-    // ============== VaultAuth: AppRole / Kubernetes (T114) ==============
 
     /// Mock Vault: serves queued (status, body) responses in order, records
     /// the requests it received.
