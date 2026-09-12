@@ -578,13 +578,17 @@ impl Drop for AuditWriter {
         // mask the original outcome, so append errors are swallowed here by
         // design. The footer is pure metadata (it is not part of the hash
         // chain) and is skipped by `verify_audit_chain`.
+        //
+        // Lock order must match `append_event` (write_lock → chain_states):
+        // taking them reversed here would allow an ABBA deadlock against an
+        // in-flight append on another thread.
+        let _guard = self.write_lock.lock();
         let Ok(states) = self.chain_states.lock() else {
             return;
         };
         if states.is_empty() {
             return;
         }
-        let _guard = self.write_lock.lock();
         for (path, state) in states.iter() {
             let footer = serde_json::json!({
                 "record": CHAIN_FOOTER_RECORD,

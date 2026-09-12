@@ -288,9 +288,9 @@ impl FsWatcher {
             drop(debouncer);
             return;
         };
-        // Drop this extra handle: the store and the closure above hold the
-        // channel open; `close_sender` on failure only needs the store.
-        drop(tx_store);
+        // The thread keeps its `tx_store` reference for the whole run: a
+        // mid-run bridge failure must still be able to close the outgoing
+        // channel (same as `MultiFsWatcher::run_watcher`).
 
         let recv_timeout = Duration::from_millis(recv_timeout_ms);
 
@@ -339,7 +339,13 @@ impl FsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    // Bridge channel disconnected - exit gracefully
+                    // Bridge died mid-run (debouncer gone): no further events
+                    // can arrive. Mirror the establishment-failure protocol —
+                    // leaving `running`/`failed` untouched here would keep
+                    // `is_running()` true and block a pending `recv()` forever.
+                    running.store(false, std::sync::atomic::Ordering::SeqCst);
+                    failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                    close_sender(&tx_store);
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -684,7 +690,13 @@ impl MultiFsWatcher {
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    // Bridge channel disconnected - exit gracefully
+                    // Bridge died mid-run (debouncer gone): no further events
+                    // can arrive. Mirror the establishment-failure protocol —
+                    // leaving `running`/`failed` untouched here would keep
+                    // `is_running()` true and block a pending `recv()` forever.
+                    running.store(false, std::sync::atomic::Ordering::SeqCst);
+                    failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                    close_sender(&tx_store);
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
