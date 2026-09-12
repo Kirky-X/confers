@@ -5,6 +5,15 @@
 
 //! Shared utilities for remote configuration sources.
 
+// AnnotatedValue 仅被下方 toml/json/yaml 门控的解析函数与 etcd/consul 门控的
+// 合并函数使用；confers/remote 被单独启用时（如 trait-kit presets-remote）两者皆关。
+#[cfg(any(
+    feature = "toml",
+    feature = "json",
+    feature = "yaml",
+    feature = "etcd",
+    feature = "consul"
+))]
 use crate::types::AnnotatedValue;
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]

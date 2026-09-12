@@ -39,17 +39,6 @@ pub enum ResolutionReason {
     Error,
 }
 
-impl ResolutionReason {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Static => "STATIC",
-            Self::TargetingMatch => "TARGETING_MATCH",
-            Self::Default => "DEFAULT",
-            Self::Error => "ERROR",
-        }
-    }
-}
-
 /// OpenFeature `EvaluationDetail`: resolved value plus evaluation metadata.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluationDetail<T> {

@@ -4480,7 +4480,6 @@ mod tests {
                 }
                 (serde_json::Value::Bool(_), s) => s["type"] == "boolean",
                 (serde_json::Value::Null, _) => true,
-                _ => false,
             }
         }
         assert!(validate(&instance, &schema));
