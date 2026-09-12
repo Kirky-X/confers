@@ -118,8 +118,7 @@ use codegen::{
     generate_field_keys_impl, generate_load_impl, generate_migration_impl,
     generate_modules_impl, generate_schema_impl, generate_validate_impl,
 };
-use darling::FromField;
-use parse::{FieldAttrs, StructAttrs};
+use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 
 /// Derive macro for configuration loading.
 ///
@@ -224,13 +223,11 @@ pub fn config_clap_derive(input: TokenStream) -> TokenStream {
 
 fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     // Parse struct-level attributes
-    let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+    let struct_attrs =
+        StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     // Validate struct attributes
-    struct_attrs
-        .validate(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+    struct_attrs.validate(input).map_err(syn::Error::from)?;
 
     // Get the struct identifier
     let struct_ident = &input.ident;
@@ -246,15 +243,9 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
         }
     };
 
-    // Parse field attributes
-    let field_info: Vec<(&syn::Ident, &syn::Type, FieldAttrs)> = fields
-        .iter()
-        .filter_map(|field| {
-            let ident = field.ident.as_ref()?;
-            let attrs = FieldAttrs::from_field(field).ok()?;
-            Some((ident, &field.ty, attrs))
-        })
-        .collect();
+    // Parse field attributes; malformed ones surface as spanned compile
+    // errors appended to the output instead of silently dropping the field.
+    let (field_info, attr_errors) = parse_field_attrs(fields);
 
     // Validate field attributes
     for (ident, _ty, attrs) in &field_info {
@@ -265,7 +256,7 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
                     .find(|f| f.ident.as_ref() == Some(ident))
                     .expect("field must exist in parsed fields"),
             )
-            .map_err(|e| syn::Error::new_spanned(ident, e.to_string()))?;
+            .map_err(syn::Error::from)?;
     }
 
     // Generate code
@@ -278,6 +269,7 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     let field_keys_impl = generate_field_keys_impl(struct_ident, &field_info);
     let field_attr_impls = generate_field_attr_impls(struct_ident, &field_info);
     Ok(quote! {
+        #attr_errors
         #defaults_impl
         #load_impl
         #validate_impl
@@ -320,7 +312,7 @@ fn generate_sensitive_paths(
 
 fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+        .map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -343,7 +335,7 @@ fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::To
 
 fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+        .map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -366,7 +358,7 @@ fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2:
 
 fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+        .map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -389,7 +381,7 @@ fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::T
 
 fn impl_config_clap_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(|e| syn::Error::new_spanned(input, e.to_string()))?;
+        .map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 

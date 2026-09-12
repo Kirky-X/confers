@@ -51,6 +51,7 @@ mod tests {
             strict: false,
             watch: false,
             version: None,
+            rename_all: None,
             profile: false,
             profile_env: None,
         };

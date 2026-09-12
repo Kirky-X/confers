@@ -7,12 +7,11 @@
 //!
 //! Generates module_registry function for composable config groups.
 
-use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Fields, Ident};
 
-use crate::parse::{FieldAttrs, StructAttrs};
+use crate::parse::{StructAttrs, parse_field_attrs};
 
 /// Generate module registry for config groups.
 pub fn generate_modules_impl(
@@ -20,19 +19,13 @@ pub fn generate_modules_impl(
     _attrs: &StructAttrs,
     fields: &Fields,
 ) -> TokenStream {
-    // Collect unique module group names
+    // Collect unique module group names. Malformed `#[config(...)]`
+    // attributes surface as compile errors appended to the output.
+    let (field_info, attr_errors) = parse_field_attrs(fields);
     let mut group_names: Vec<TokenStream> = Vec::new();
     let mut seen_groups: Vec<String> = Vec::new();
 
-    for field in fields.iter() {
-        let _ident = match &field.ident {
-            Some(i) => i,
-            None => continue,
-        };
-        let attrs = match FieldAttrs::from_field(field).ok() {
-            Some(a) => a,
-            None => continue,
-        };
+    for (_, _, attrs) in &field_info {
         if let Some(group) = &attrs.module_group {
             // Avoid duplicates
             if !seen_groups.contains(group) {
@@ -53,6 +46,7 @@ pub fn generate_modules_impl(
         .collect();
 
     quote! {
+        #attr_errors
         impl #struct_ident {
             /// Generate a module registry for this configuration type.
             ///

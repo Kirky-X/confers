@@ -1,8 +1,5 @@
 error: env_prefix must only contain alphanumeric characters and underscores
- --> tests/compile_fail/env_prefix_illegal_chars.rs:5:1
+ --> tests/compile_fail/env_prefix_illegal_chars.rs:6:8
   |
-5 | / #[config(env_prefix = "bad-prefix")]
-6 | | struct Doc {
-7 | |     host: String,
-8 | | }
-  | |_^
+6 | struct Doc {
+  |        ^^^

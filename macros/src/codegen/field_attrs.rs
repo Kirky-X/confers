@@ -37,8 +37,8 @@ use crate::parse::FieldAttrs;
 pub fn generate_field_keys_impl(struct_ident: &Ident, fields: &[(&Ident, &syn::Type, FieldAttrs)]) -> TokenStream {
     let keys: Vec<TokenStream> = fields
         .iter()
-        .map(|(ident, _, _)| {
-            let key = ident.to_string();
+        .map(|(_, _, f)| {
+            let key = f.serde_name();
             quote! { #key }
         })
         .collect();
@@ -82,8 +82,8 @@ pub fn generate_field_attr_impls(
     let watcher_method = if watch_fields.is_empty() {
         quote! {}
     } else {
-        let extractors = watch_fields.iter().map(|(ident, _, _)| {
-            let name = ident.to_string();
+        let extractors = watch_fields.iter().map(|(ident, _, f)| {
+            let name = f.serde_name();
             quote! {
                 (
                     ::std::convert::From::from(#name),

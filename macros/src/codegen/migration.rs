@@ -7,12 +7,11 @@
 //!
 //! Generates Versioned trait implementation and migration_registry function.
 
-use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Fields, Ident};
 
-use crate::parse::{FieldAttrs, StructAttrs};
+use crate::parse::{StructAttrs, parse_field_attrs};
 
 /// Generate Versioned implementation and migration registry for a config struct.
 pub fn generate_migration_impl(
@@ -22,22 +21,23 @@ pub fn generate_migration_impl(
 ) -> TokenStream {
     let version = attrs.version.unwrap_or(1);
 
+    // Malformed `#[config(...)]` attributes surface as compile errors
+    // appended to the output instead of dropping the field.
+    let (field_info, attr_errors) = parse_field_attrs(fields);
+
     // Collect fields with their migration info
-    let _field_migrations: Vec<TokenStream> = fields
+    let _field_migrations: Vec<TokenStream> = field_info
         .iter()
-        .filter_map(|field| {
-            let ident = field.ident.as_ref()?;
-            let field_attrs = FieldAttrs::from_field(field).ok()?;
-            if field_attrs.skip {
-                return None;
-            }
-            Some(quote! {
+        .filter(|(_, _, field_attrs)| !field_attrs.skip)
+        .map(|(ident, _, _)| {
+            quote! {
                 field: #ident
-            })
+            }
         })
         .collect();
 
     quote! {
+        #attr_errors
         impl confers::migration::Versioned for #struct_ident {
             const VERSION: u32 = #version;
         }

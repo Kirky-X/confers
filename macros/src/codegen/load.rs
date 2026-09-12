@@ -5,12 +5,11 @@
 
 //! Load method generation for Config derive macro.
 
-use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Fields, Ident};
+use syn::Ident;
 
-use crate::parse::{FieldAttrs, StructAttrs};
+use crate::parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 
 /// Generate the load methods for a struct.
 pub fn generate_load_impl(
@@ -19,20 +18,10 @@ pub fn generate_load_impl(
     fields: &syn::Fields,
 ) -> TokenStream {
     let env_prefix = attrs.effective_env_prefix();
-    let named_fields = match fields {
-        Fields::Named(named) => &named.named,
-        _ => return quote! {},
-    };
 
-    // Collect field information
-    let field_info: Vec<(&syn::Ident, &syn::Type, FieldAttrs)> = named_fields
-        .iter()
-        .filter_map(|field| {
-            let ident = field.ident.as_ref()?;
-            let attrs = FieldAttrs::from_field(field).ok()?;
-            Some((ident, &field.ty, attrs))
-        })
-        .collect();
+    // Field information; malformed `#[config(...)]` attributes surface as
+    // compile errors appended to the output instead of dropping the field.
+    let (field_info, attr_errors) = parse_field_attrs(fields);
 
     // Generate load() method
     let load_impl = generate_load_method(struct_ident, attrs, &field_info);
@@ -47,6 +36,7 @@ pub fn generate_load_impl(
     let env_mapping_impl = generate_env_mapping(struct_ident, env_prefix, &field_info);
 
     quote! {
+        #attr_errors
         #load_impl
         #load_sync_impl
         #load_file_impl
@@ -66,8 +56,8 @@ fn generate_default_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> V
     fields
         .iter()
         .filter(|(_, _, f)| f.default.is_some())
-        .map(|(ident, _, f)| {
-            let field_key = ident.to_string();
+        .map(|(_, _, f)| {
+            let field_key = f.serde_name();
             let default_expr = f.default.as_ref().unwrap();
 
             quote! {
@@ -92,8 +82,8 @@ fn generate_skip_default_calls(
     fields
         .iter()
         .filter(|(_, _, f)| f.skip && f.default.is_some())
-        .map(|(ident, _, f)| {
-            let field_key = ident.to_string();
+        .map(|(_, _, f)| {
+            let field_key = f.serde_name();
             let default_expr = f.default.as_ref().unwrap();
 
             quote! {
@@ -120,9 +110,9 @@ fn generate_env_calls(
     fields
         .iter()
         .filter(|(_, _, f)| !f.skip)
-        .map(|(ident, _, f)| {
+        .map(|(_, _, f)| {
             let env_name = f.effective_env_name(env_prefix);
-            let field_key = ident.to_string();
+            let field_key = f.serde_name();
 
             // Handle _FILE suffix for secrets with secure path validation
             if f.is_sensitive_effective() {
@@ -228,9 +218,9 @@ fn generate_rename_all_call(
     let mappings: Vec<TokenStream> = fields
         .iter()
         .filter(|(_, _, f)| !f.skip)
-        .map(|(ident, _, _)| {
-            let external = external_key(style, &ident.to_string());
-            let serde_name = ident.to_string();
+        .map(|(_, _, f)| {
+            let serde_name = f.serde_name();
+            let external = external_key(style, &serde_name);
             quote! { (#external, #serde_name) }
         })
         .collect();
@@ -261,16 +251,16 @@ fn generate_map_json_calls(
     let own_keys: Vec<TokenStream> = fields
         .iter()
         .filter(|(_, _, f)| !f.skip)
-        .map(|(ident, _, _)| {
-            let key = ident.to_string();
+        .map(|(_, _, f)| {
+            let key = f.serde_name();
             quote! { #key }
         })
         .collect();
     let flatten_specs: Vec<TokenStream> = fields
         .iter()
         .filter(|(_, _, f)| f.flatten)
-        .map(|(ident, ty, _)| {
-            let field_key = ident.to_string();
+        .map(|(_, ty, f)| {
+            let field_key = f.serde_name();
             quote! {
                 confers::FlattenSpec {
                     field_key: #field_key,
@@ -363,12 +353,11 @@ fn generate_load_method(
 
     quote! {
         impl #struct_ident {
-            /// Load configuration from all sources.
+            /// Load configuration from environment variables and defaults.
             ///
-            /// This method loads configuration in priority order:
-            /// 1. Environment variables (highest priority)
-            /// 2. Configuration files
-            /// 3. Default values (lowest priority)
+            /// Priority order: declared defaults first (lowest), then the
+            /// struct's environment variables (highest). Configuration files
+            /// are not consulted — use [`Self::load_file`] for that.
             pub fn load() -> impl std::future::Future<Output = confers::ConfigResult<Self>> {
                 async {
                     Self::load_sync()

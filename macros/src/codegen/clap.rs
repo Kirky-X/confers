@@ -7,12 +7,11 @@
 //!
 //! Generates ClapArgs struct and CLI argument support.
 
-use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Fields, Ident};
 
-use crate::parse::{FieldAttrs, StructAttrs};
+use crate::parse::{StructAttrs, parse_field_attrs};
 
 /// Generate ClapArgs struct for CLI argument parsing.
 pub fn generate_clap_impl(
@@ -23,16 +22,15 @@ pub fn generate_clap_impl(
     let _env_prefix = attrs.effective_env_prefix();
     let app_name = attrs.app_name.as_deref().unwrap_or("app");
 
-    // Generate field definitions for ClapArgs
-    let clap_field_defs: Vec<TokenStream> = fields
-        .iter()
-        .filter_map(|field| {
-            let ident = field.ident.as_ref()?;
-            let field_attrs = FieldAttrs::from_field(field).ok()?;
-            if field_attrs.skip {
-                return None;
-            }
+    // Malformed `#[config(...)]` attributes surface as compile errors
+    // appended to the output instead of dropping the field.
+    let (field_info, attr_errors) = parse_field_attrs(fields);
 
+    // Generate field definitions for ClapArgs
+    let clap_field_defs: Vec<TokenStream> = field_info
+        .iter()
+        .filter(|(_, _, field_attrs)| !field_attrs.skip)
+        .map(|(ident, ty, field_attrs)| {
             let field_name = field_attrs.effective_name();
             let cli_name = field_attrs
                 .name_clap_long
@@ -53,7 +51,6 @@ pub fn generate_clap_impl(
             // Check if field has a default
             let has_default = field_attrs.default.is_some();
 
-            let ty = &field.ty;
             let type_str = quote!(#ty).to_string();
 
             // Handle optional types - make them optional in CLI
@@ -66,30 +63,25 @@ pub fn generate_clap_impl(
 
             let arg_attr = quote! { #[arg(#(#arg_parts),*)] };
 
-            Some(quote! {
+            quote! {
                 #arg_attr
                 pub #ident: #ty
-            })
+            }
         })
         .collect();
 
     // Generate field names for to_config_map
-    let field_idents: Vec<TokenStream> = fields
+    let field_idents: Vec<TokenStream> = field_info
         .iter()
-        .filter_map(|field| {
-            let ident = field.ident.as_ref()?;
-            let attrs = FieldAttrs::from_field(field).ok()?;
-            if attrs.skip {
-                return None;
-            }
-            Some(quote! { #ident })
-        })
+        .filter(|(_, _, attrs)| !attrs.skip)
+        .map(|(ident, _, _)| quote! { #ident })
         .collect();
 
     // Create a unique type name based on struct name
     let cli_args_ident = quote::format_ident!("{}CliArgs", struct_ident);
 
     quote! {
+        #attr_errors
         /// CLI arguments generated from configuration struct.
         ///
         /// # Example

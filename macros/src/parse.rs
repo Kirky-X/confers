@@ -215,6 +215,10 @@ pub struct FieldAttrs {
     pub name_clap_short: Option<char>,
 
     /// Whether this field is sensitive (hidden in logs)
+    ///
+    /// Requires the `security` feature on the confers dependency: the
+    /// generated `_FILE` env handling references
+    /// `confers::security::PathValidator`.
     #[darling(default)]
     pub sensitive: bool,
 
@@ -247,12 +251,41 @@ pub struct FieldAttrs {
 
     /// Module group for this field (config groups)
     pub module_group: Option<String>,
+
+    /// `#[serde(rename = "...")]` / `#[serde(rename(deserialize = "..."))]`
+    /// value captured from the field's serde attributes (`darling(skip)`:
+    /// not part of `#[config]`, filled by [`FieldAttrs::from_field_with_serde`]).
+    #[darling(skip)]
+    pub serde_rename: Option<String>,
 }
 
 impl FieldAttrs {
+    /// Parse the `#[config(...)]` attributes plus the serde rename attribute.
+    ///
+    /// Prefer this over [`FromField::from_field`]: generated keys must follow
+    /// the serde field name (the merge-space key), which differs from the
+    /// Rust identifier whenever `#[serde(rename)]` is present.
+    pub fn from_field_with_serde(field: &syn::Field) -> darling::Result<Self> {
+        let mut attrs = Self::from_field(field)?;
+        attrs.serde_rename = serde_rename_attr(field);
+        Ok(attrs)
+    }
+
     /// Get the effective configuration key name
     pub fn effective_name(&self) -> String {
         self.name.clone().unwrap_or_else(|| {
+            self.ident
+                .as_ref()
+                .map(|i| i.to_string())
+                .unwrap_or_default()
+        })
+    }
+
+    /// The serde field name: `#[serde(rename)]` wins over the Rust
+    /// identifier. This is the merge-space key used for defaults, env
+    /// overrides, flatten hoisting, and the field-watcher extractors.
+    pub fn serde_name(&self) -> String {
+        self.serde_rename.clone().unwrap_or_else(|| {
             self.ident
                 .as_ref()
                 .map(|i| i.to_string())
@@ -446,6 +479,100 @@ impl MergeStrategyKind {
     }
 }
 
+/// Extract the serde field rename from a field's attributes.
+///
+/// Handles both `#[serde(rename = "x")]` and
+/// `#[serde(rename(serialize = "a", deserialize = "b"))]` — for the merge
+/// space only the deserialization name matters.
+fn serde_rename_attr(field: &syn::Field) -> Option<String> {
+    for attr in &field.attrs {
+        if !attr.path().is_ident("serde") {
+            continue;
+        }
+        let Ok(nested) = attr.parse_args_with(
+            syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+        ) else {
+            continue;
+        };
+        for meta in nested {
+            if !meta.path().is_ident("rename") {
+                continue;
+            }
+            match meta {
+                syn::Meta::NameValue(nv) => {
+                    if let Some(v) = expr_as_string_lit(&nv.value) {
+                        return Some(v);
+                    }
+                }
+                syn::Meta::List(list) => {
+                    let Ok(inner) = list.parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                    ) else {
+                        continue;
+                    };
+                    for m in inner {
+                        if m.path().is_ident("deserialize")
+                            && let syn::Meta::NameValue(nv) = m
+                            && let Some(v) = expr_as_string_lit(&nv.value)
+                        {
+                            return Some(v);
+                        }
+                    }
+                }
+                syn::Meta::Path(_) => {}
+            }
+        }
+    }
+    None
+}
+
+fn expr_as_string_lit(expr: &syn::Expr) -> Option<String> {
+    if let syn::Expr::Lit(lit) = expr
+        && let syn::Lit::Str(s) = &lit.lit
+    {
+        return Some(s.value());
+    }
+    None
+}
+
+/// Parse the `#[config(...)]` attributes of every field of a named struct.
+///
+/// Malformed attributes are never silently dropped: the collected `darling`
+/// errors come back as a token stream of spanned `compile_error!` diagnostics
+/// that the caller must append to its generated output. Returns an empty vec
+/// when `fields` is not a named-field struct (the callers then emit nothing).
+pub fn parse_field_attrs(
+    fields: &syn::Fields,
+) -> (
+    Vec<(&syn::Ident, &syn::Type, FieldAttrs)>,
+    proc_macro2::TokenStream,
+) {
+    let syn::Fields::Named(named) = fields else {
+        return (Vec::new(), proc_macro2::TokenStream::new());
+    };
+    let mut errors = darling::Error::accumulator();
+    let info: Vec<(&syn::Ident, &syn::Type, FieldAttrs)> = named
+        .named
+        .iter()
+        .filter_map(|field| {
+            let ident = field.ident.as_ref()?;
+            match FieldAttrs::from_field_with_serde(field) {
+                Ok(attrs) => Some((ident, &field.ty, attrs)),
+                Err(e) => {
+                    errors.push(e);
+                    None
+                }
+            }
+        })
+        .collect();
+    let error_tokens = errors
+        .finish()
+        .err()
+        .map(|e| e.write_errors())
+        .unwrap_or_default();
+    (info, error_tokens)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,6 +623,57 @@ mod tests {
         assert_eq!(
             MergeStrategyKind::from_str("deep_merge"),
             MergeStrategyKind::Replace
+        );
+    }
+
+    #[test]
+    fn test_serde_rename_capture() {
+        let field: syn::Field = parse_quote! {
+            #[serde(rename = "hostName")]
+            #[config(default = "h")]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "hostName");
+
+        let field: syn::Field = parse_quote! {
+            #[serde(rename(serialize = "a", deserialize = "b"))]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "b", "deserialize name wins");
+
+        let field: syn::Field = parse_quote! {
+            #[serde(rename_all = "camelCase")]
+            pub host_name: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(
+            attrs.serde_name(),
+            "host_name",
+            "field-level rename_all is not the merge key form"
+        );
+    }
+
+    #[test]
+    fn test_parse_field_attrs_collects_errors() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Sample {
+                #[config(default = "ok")]
+                pub fine: String,
+                #[config(encrypt = 42)]
+                pub broken: String
+            }
+        };
+        let fields = match &input.data {
+            syn::Data::Struct(data) => &data.fields,
+            _ => unreachable!("parsed a struct"),
+        };
+        let (info, errors) = parse_field_attrs(fields);
+        assert_eq!(info.len(), 1, "the well-formed field still parses");
+        assert!(
+            !errors.is_empty(),
+            "the malformed attribute must surface as compile-error tokens"
         );
     }
 }

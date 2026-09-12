@@ -7,12 +7,11 @@
 //!
 //! Generates JSON Schema and TypeScript type definitions from configuration structs.
 
-use darling::FromField;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Fields, Ident, Type};
 
-use crate::parse::{FieldAttrs, StructAttrs};
+use crate::parse::{StructAttrs, parse_field_attrs};
 
 /// Generate JSON Schema for a configuration struct.
 pub fn generate_schema_impl(
@@ -20,9 +19,11 @@ pub fn generate_schema_impl(
     _attrs: &StructAttrs,
     fields: &Fields,
 ) -> TokenStream {
-    let field_schemas = generate_field_schemas(fields);
+    let (field_info, attr_errors) = parse_field_attrs(fields);
+    let field_schemas = generate_field_schemas(&field_info);
 
     quote! {
+        #attr_errors
         impl #struct_ident {
             /// Generate JSON Schema for this configuration struct.
             pub fn json_schema() -> serde_json::Value {
@@ -45,23 +46,19 @@ pub fn generate_schema_impl(
 }
 
 /// Generate schema for each field.
-fn generate_field_schemas(fields: &Fields) -> TokenStream {
-    let field_defs: Vec<TokenStream> = fields
+fn generate_field_schemas(
+    field_info: &[(&syn::Ident, &syn::Type, crate::parse::FieldAttrs)],
+) -> TokenStream {
+    let field_defs: Vec<TokenStream> = field_info
         .iter()
-        .filter_map(|field| {
-            let _ident = field.ident.as_ref()?;
-            let attrs = FieldAttrs::from_field(field).ok()?;
-            if attrs.skip {
-                return None;
-            }
-
+        .filter(|(_, _, attrs)| !attrs.skip)
+        .map(|(_, field_type, attrs)| {
             let field_name = attrs.effective_name();
-            let field_type = &field.ty;
             let schema = generate_type_schema(field_type);
 
-            Some(quote! {
+            quote! {
                 #field_name: #schema
-            })
+            }
         })
         .collect();
 
