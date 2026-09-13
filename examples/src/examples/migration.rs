@@ -11,28 +11,11 @@
 //! - 版本升级策略
 //! - 热重载时的自动迁移
 
-use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};
+use confers::migration::{MigrationOnReload, MigrationRegistry};
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use indexmap::IndexMap;
 use std::sync::Arc;
 use tracing::{info, warn};
-
-// These structs are used as type markers for migration examples
-struct ConfigV1;
-struct ConfigV2;
-struct ConfigV3;
-
-impl Versioned for ConfigV1 {
-    const VERSION: u32 = 1;
-}
-
-impl Versioned for ConfigV2 {
-    const VERSION: u32 = 2;
-}
-
-impl Versioned for ConfigV3 {
-    const VERSION: u32 = 3;
-}
 
 fn main() {
     tracing_subscriber::fmt::init();

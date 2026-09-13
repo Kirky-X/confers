@@ -23,21 +23,6 @@ struct EncryptedData {
     previous_version: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct KeyVersion {
-    status: String,
-    created_at: String,
-    deprecated_at: Option<String>,
-    expires_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct KeyManagement {
-    current_version: String,
-    master_key_id: String,
-    versions: std::collections::HashMap<String, KeyVersion>,
-}
-
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
