@@ -44,8 +44,6 @@
 - [📚 文档](#-文档)
 - [💻 示例](#-示例)
 - [🏗️ 架构](#️-架构)
-- [🤖 CLI 工具](#-cli-工具)
-- [🔄 核心流程](#-核心流程)
 - [🧪 测试](#-测试)
 - [📊 性能](#-性能)
 - [🔒 安全](#-安全)
@@ -283,6 +281,38 @@ cd examples && cargo run --bin encryption
 cd examples && ./verify_examples.sh
 ```
 
+### 🤖 CLI 工具
+
+除运行示例外，也可以使用随库附带的 CLI 诊断工具排查真实项目中的配置。
+
+`confers` 二进制（`src/cli/main.rs`，需启用 `cli` 特性）提供配置诊断能力：
+
+```bash
+cargo install confers --features cli
+```
+
+| 命令 | 描述 |
+|------|------|
+| `inspect` | 列出全部配置键及其来源，支持冲突展示与 JSON 输出 |
+| `validate` | 校验配置，`--strict` 模式将警告视为错误 |
+| `export` | 导出合并后配置（json、toml、yaml），默认脱敏敏感值 |
+| `diff` | 对比 base 与 overlay 两份配置 |
+| `snapshot` | 快照管理：`list`、`diff`、`prune` |
+| `schema` | 输出配置类型的 JSON Schema，支持从实例反推 |
+| `get` | 按键路径读取单个配置值 |
+| `doctor` | 配置健康诊断，输出单行 JSON 报告 |
+| `docs --agent` | 输出面向代理的机器可读知识包 |
+
+```bash
+# 常用命令
+confers --config config.toml inspect
+confers --config config.toml validate --strict
+confers --config config.toml export --format json
+confers diff --base config1.toml --overlay config2.toml
+```
+
+全局选项：`--config <文件>`（可多次）、`--env-file <文件>`、`--fields <点路径列表>`。退出码约定：0 成功、1 配置错误、2 I/O 错误。
+
 ---
 
 ## 🏗️ 架构
@@ -330,41 +360,7 @@ flowchart LR
 
 > 完整的模块划分与数据流说明见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
 
----
-
-## 🤖 CLI 工具
-
-`confers` 二进制（`src/cli/main.rs`，需启用 `cli` 特性）提供配置诊断能力：
-
-```bash
-cargo install confers --features cli
-```
-
-| 命令 | 描述 |
-|------|------|
-| `inspect` | 列出全部配置键及其来源，支持冲突展示与 JSON 输出 |
-| `validate` | 校验配置，`--strict` 模式将警告视为错误 |
-| `export` | 导出合并后配置（json、toml、yaml），默认脱敏敏感值 |
-| `diff` | 对比 base 与 overlay 两份配置 |
-| `snapshot` | 快照管理：`list`、`diff`、`prune` |
-| `schema` | 输出配置类型的 JSON Schema，支持从实例反推 |
-| `get` | 按键路径读取单个配置值 |
-| `doctor` | 配置健康诊断，输出单行 JSON 报告 |
-| `docs --agent` | 输出面向代理的机器可读知识包 |
-
-```bash
-# 常用命令
-confers --config config.toml inspect
-confers --config config.toml validate --strict
-confers --config config.toml export --format json
-confers diff --base config1.toml --overlay config2.toml
-```
-
-全局选项：`--config <文件>`（可多次）、`--env-file <文件>`、`--fields <点路径列表>`。退出码约定：0 成功、1 配置错误、2 I/O 错误。
-
----
-
-## 🔄 核心流程
+### 🔄 核心流程
 
 以下时序图展示配置加载与热重载的真实执行路径（对照 `docs/ARCHITECTURE.md` 数据流一节与 `src/watcher` 实现）：
 

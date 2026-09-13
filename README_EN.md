@@ -44,8 +44,6 @@ Declare your config structs with `#[derive(Config)]` and let the library do the 
 - [📚 Documentation](#-documentation)
 - [💻 Examples](#-examples)
 - [🏗️ Architecture](#️-architecture)
-- [🔧 CLI Tool](#-cli-tool)
-- [🔄 Core Workflows](#-core-workflows)
 - [🧪 Testing](#-testing)
 - [📊 Performance](#-performance)
 - [🔒 Security](#-security)
@@ -283,6 +281,38 @@ cd examples && cargo run --bin encryption
 cd examples && ./verify_examples.sh
 ```
 
+### 🔧 CLI Tool
+
+Beyond the runnable examples, the bundled CLI diagnostics tool can also be used to troubleshoot configuration in real projects.
+
+The `confers` binary (`src/cli/main.rs`, requires the `cli` feature) provides configuration diagnostics:
+
+```bash
+cargo install confers --features cli
+```
+
+| Command | Description |
+|------|------|
+| `inspect` | List all config keys with their sources; supports conflict display and JSON output |
+| `validate` | Validate configuration; `--strict` treats warnings as errors |
+| `export` | Export the merged config (json, toml, yaml); sensitive values masked by default |
+| `diff` | Compare a base and an overlay config |
+| `snapshot` | Snapshot management: `list`, `diff`, `prune` |
+| `schema` | Emit the JSON Schema for the config type, optionally inferred from an instance |
+| `get` | Read a single config value by key path |
+| `doctor` | Config health diagnostics, printed as a single-line JSON report |
+| `docs --agent` | Emit the machine-readable knowledge pack for agents |
+
+```bash
+# Common commands
+confers --config config.toml inspect
+confers --config config.toml validate --strict
+confers --config config.toml export --format json
+confers diff --base config1.toml --overlay config2.toml
+```
+
+Global options: `--config <file>` (repeatable), `--env-file <file>`, and `--fields <dot-path list>`. Exit code contract: 0 success, 1 configuration error, 2 I/O error.
+
 ---
 
 ## 🏗️ Architecture
@@ -330,41 +360,7 @@ flowchart LR
 
 > For the full module breakdown and data flow, see the [🏗️ Architecture doc](docs/ARCHITECTURE.md).
 
----
-
-## 🔧 CLI Tool
-
-The `confers` binary (`src/cli/main.rs`, requires the `cli` feature) provides configuration diagnostics:
-
-```bash
-cargo install confers --features cli
-```
-
-| Command | Description |
-|------|------|
-| `inspect` | List all config keys with their sources; supports conflict display and JSON output |
-| `validate` | Validate configuration; `--strict` treats warnings as errors |
-| `export` | Export the merged config (json, toml, yaml); sensitive values masked by default |
-| `diff` | Compare a base and an overlay config |
-| `snapshot` | Snapshot management: `list`, `diff`, `prune` |
-| `schema` | Emit the JSON Schema for the config type, optionally inferred from an instance |
-| `get` | Read a single config value by key path |
-| `doctor` | Config health diagnostics, printed as a single-line JSON report |
-| `docs --agent` | Emit the machine-readable knowledge pack for agents |
-
-```bash
-# Common commands
-confers --config config.toml inspect
-confers --config config.toml validate --strict
-confers --config config.toml export --format json
-confers diff --base config1.toml --overlay config2.toml
-```
-
-Global options: `--config <file>` (repeatable), `--env-file <file>`, and `--fields <dot-path list>`. Exit code contract: 0 success, 1 configuration error, 2 I/O error.
-
----
-
-## 🔄 Core Workflows
+### 🔄 Core Workflows
 
 The sequence diagram below shows the real config loading and hot reload path (mirroring the data flow section of `docs/ARCHITECTURE.md` and the `src/watcher` implementation):
 

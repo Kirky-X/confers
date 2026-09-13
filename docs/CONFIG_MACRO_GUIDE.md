@@ -1,6 +1,6 @@
 # 🧩 Confers 宏指南
 
-本文档完整介绍 `#[derive(Config)]` 宏的用法。该宏是 Confers 库的核心，能为 Rust 结构体自动生成完整的配置管理功能。宏实现位于 `macros/src/lib.rs`，通过 `codegen.rs` 与 `parse.rs` 完成代码生成。
+本文档完整介绍 `#[derive(Config)]` 宏的用法，包括结构体级与字段级属性、自动生成的方法与校验集成。
 
 ## 📋 目录
 
