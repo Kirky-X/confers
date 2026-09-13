@@ -1,4 +1,4 @@
-# 📊 Confers 性能指南
+# ⚡ Confers 性能指南
 
 Confers 为高性能配置管理而生。本指南介绍针对生产负载优化性能的各项技术。
 
@@ -14,6 +14,8 @@ Confers 为高性能配置管理而生。本指南介绍针对生产负载优化
 - [并发](#-并发)
 - [缓存](#-缓存)
 - [基准测试](#-基准测试)
+- [性能基线](#-性能基线)
+- [相关文档](#-相关文档)
 
 </details>
 
@@ -57,19 +59,20 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-### 惰性加载模式
+### 惰性分段解析
 
-只加载需要的内容：
+对超大 TOML 文档（`lazy` 特性），`LazySegmentedConfig` 按顶层表头把文档切分为段：切分是一次廉价的行扫描，段在首次访问时才真正解析并缓存，从未被访问的段永远不会被解析。
 
 ```rust
-// 与其一次性加载全部
-let config = ConfigBuilder::<serde_json::Value>::new()
-    .file("config.toml")
-    .build()?;
+use confers::lazy::LazySegmentedConfig;
 
-// 按需加载特定分区
-let server_config = config.get_section("server")?;
-let db_config = config.get_section("database")?;
+let config = LazySegmentedConfig::from_toml_document(&huge_toml_text);
+
+// 只解析被访问的段
+let server = config.get_segment("server")?;
+
+// 观察解析进度
+println!("已解析 {}/{} 段", config.parsed_count(), config.segment_keys().len());
 ```
 
 ### 文件格式与性能
@@ -92,19 +95,26 @@ let db_config = config.get_section("database")?;
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { features = ["validation"] }
+confers = { version = "0.6.0-rc.3", features = ["validation"] }
 ```
 
 ### 校验缓存
 
 校验缓存目前没有作为公开 API 暴露。如果对相同配置的重复校验成为瓶颈，可以自行用缓存（例如 `moka::Cache`）包裹 `Validate`。
 
-### 尽量跳过开销大的规则
+### 减少参与加载的字段
+
+无需从配置加载的重计算字段使用 `#[config(skip)]` 标记，加载器会完全跳过它们：
 
 ```rust
+use confers::Config;
+
 #[derive(Config)]
 pub struct Config {
-    #[config(skip_in_test)]
+    pub port: u16,
+
+    /// 不参与配置加载，使用结构体默认值
+    #[config(skip)]
     pub expensive_rule: ExpensiveValidator,
 }
 ```
@@ -115,37 +125,36 @@ pub struct Config {
 
 ### 降低内存占用
 
+Confers 内部已对短字符串做驻留优化（`compact_str`），并使用 `IndexMap` 保持键序，通常无需额外处理。对不可信来源的配置，建议显式设置资源上限：
+
 ```rust
-use confers::Config;
+use confers::{ConfigBuilder, ConfigLimits};
 
-// 使用紧凑字符串类型
-#[derive(Config)]
-pub struct Config {
-    #[config(compact_string)]
-    pub short_string: String,  // 内部驻留，内存占用低
-
-    pub normal_string: String,
-}
-
-// 为大型配置启用内存上限
-let loader = ConfigLoader::builder()
-    .max_memory_mb(256)  // 限制为 256MB
+let config = ConfigBuilder::<AppConfig>::new()
+    .file("config.toml")
+    .limits(ConfigLimits {
+        max_file_size_bytes: 64 * 1024 * 1024, // 单文件上限 64 MB
+        max_nesting_depth: 32,
+        ..Default::default()
+    })
     .build()?;
 ```
 
 ### 零拷贝读取
 
-```rust
-use confers::types::ConfigValue;
+内置内存配置（`new_in_memory()`，需 `remote`/`config-bus`/`encryption`/`watch` 任一特性）实现了 `SharedValueReader`，`get_shared()` 返回 `Arc` 句柄，读取大 value 时避免深拷贝：
 
-let value: &ConfigValue = config.get("key")?;
-// 对配置值的零拷贝访问
-println!("{:?}", value.as_str());
+```rust
+use confers::{new_in_memory, SharedValueReader};
+
+let config = new_in_memory();
+let shared = config.get_shared("large_key").await?;
+// shared: Arc<AnnotatedValue>，克隆只增加引用计数
 ```
 
 ### 大文件的处理
 
-`confers` 目前没有内置流式加载 API。对于超过 10 MB 的文件，建议先将文件一次性读入 `String`，再传给 `confers::parse_content`，让解析器直接在内存缓冲区上工作，避免反复读盘。
+`confers` 目前没有内置流式加载 API。对于超过 10 MB 的文件，建议先将文件一次性读入 `String`，再传给 `confers::parse_content`，让解析器直接在内存缓冲区上工作，避免反复读盘；TOML 超大文档可进一步考虑 `lazy` 特性的惰性分段解析（见上文）。
 
 ---
 
@@ -201,7 +210,9 @@ use confers::loader::LoaderConfig;
 let loader_config = LoaderConfig::default();
 ```
 
-### ETag 与远程配置
+### 远程轮询间隔
+
+远程配置（`remote` 特性）按固定间隔轮询，合理放大间隔可显著降低网络与解析开销：
 
 ```rust
 use confers::remote::HttpPolledSourceBuilder;
@@ -212,12 +223,16 @@ let source = HttpPolledSourceBuilder::new()
     .build()?;
 ```
 
-### 快照缓存
+### 快照与恢复
+
+`snapshot` 特性提供配置快照落盘与恢复（`SnapshotManager`），恢复走已解析文件的加载路径，可用于快速回滚：
 
 ```rust
-// 缓存开销大的校验结果
-let snapshot = config.snapshot()?;
-let cached = snapshot.restore()?;  // 命中缓存时几乎瞬时完成
+use confers::snapshot::{SnapshotManager, SnapshotConfig};
+
+let manager = SnapshotManager::new(SnapshotConfig::default());
+let path = manager.save(&annotated_value, &["database.password"]).await?;
+let restored = manager.load_snapshot(&path).await?;
 ```
 
 ---
@@ -233,11 +248,11 @@ cargo bench
 # 运行指定基准测试
 cargo bench --bench load_bench
 
-# 基准测试输出示例
-test bench_config_load  ... bench: 1,000 ns/iter (+/- 50)
-test bench_merge       ... bench: 2,500 ns/iter (+/- 100)
-test bench_validate    ... bench:   500 ns/iter (+/- 25)
+# 保存基线，供后续版本对比
+cargo bench --save-baseline <name>
 ```
+
+Criterion 会在 `target/criterion/` 下生成含分布图与回归检测的 HTML 报告，用浏览器打开即可查看各用例的中位数与置信区间。
 
 ### 基准测试套件
 
@@ -250,44 +265,31 @@ test bench_validate    ... bench:   500 ns/iter (+/- 25)
 | `interpolation_bench` | `benches/interpolation_bench.rs` | 变量插值性能 |
 | `value_path_bench` | `benches/value_path_bench.rs` | 值路径访问性能 |
 | `dynamic_field_bench` | `benches/dynamic_field_bench.rs` | 动态字段读写 |
-| `hot_path_bench` | `benches/hot_path_bench.rs` | 热路径（动态 + watch） |
+| `hot_path_bench` | `benches/hot_path_bench.rs` | 热路径（零拷贝读取） |
+| `watch_callback_bench` | `benches/watch_callback_bench.rs` | 变更流（ChangeStream）往返与扇出 |
 | `concurrent_rw_bench` | `benches/concurrent_rw_bench.rs` | 并发读写模式 |
 | `concurrent_access_bench` | `benches/concurrent_access_bench.rs` | 并发访问模式 |
 
 ### 对应用进行性能剖析
 
+基准测试覆盖库内热路径；应用级剖析建议使用标准工具链：
+
 ```bash
-# 在 Cargo.toml 中添加剖析依赖
-[dependencies]
-perf-monitor = "0.2"
+# 火焰图（cargo-flamegraph，Linux 下基于 perf）
+cargo install flamegraph
+cargo flamegraph --bench load_bench
 
-# 在代码中使用
-use perf_monitor::cpu_monitor::CpuMonitor;
-
-let mut monitor = CpuMonitor::start();
-let config = AppConfig::load()?;
-println!("CPU time: {:?}", monitor.elapsed());
+# 或直接对运行中的示例采样
+perf record -g cargo run --example basic_usage -p confers-examples
+perf report
 ```
 
 ---
 
-## 性能检查清单
+## 📊 性能基线
 
-上线生产环境之前：
-
-- [ ] 运行 `cargo bench` 验证性能是否达标
-- [ ] 使用 `json` 格式获得最佳加载性能
-- [ ] 启用 `dynamic` 特性获得无锁读取
-- [ ] 配置合理的缓存大小
-- [ ] 为不可信配置设置内存上限
-- [ ] 用真实负载做性能剖析
-
----
-
-## 性能基线（rc.4 基线门禁）
-
-> 来源：`workspace-rc4-completion` T110。基线在开发机（WSL2, linux 6.6, 16 线程）本地采集，
-> criterion 默认参数之外的运行使用 `--warm-up-time 1 --measurement-time 2 --sample-size 20`。
+> 基线在开发机（WSL2, linux 6.6, 16 线程）本地采集，criterion 默认参数之外的运行使用
+> `--warm-up-time 1 --measurement-time 2 --sample-size 20`。
 > 数值为 `[lower bound, estimate, upper bound]` 区间的 estimate（中位数口径）。
 >
 > **CI 门禁说明**：阈值（如 P99 +15% 阻断）待基线在 CI 环境稳定后启用；当前以
@@ -314,7 +316,7 @@ println!("CPU time: {:?}", monitor.elapsed());
 | merge_strategies/join | ~46.7 ms |
 | replace_strategy_1000 | ~66.3 µs |
 
-### watch 回调路径（watch_callback_bench，change-stream feature，T110 新增）
+### watch 回调路径（watch_callback_bench，change-stream feature）
 
 统一变更流（`ChangeStream`）publish → 订阅端送达的端到端成本：
 
@@ -327,7 +329,7 @@ println!("CPU time: {:?}", monitor.elapsed());
 结论：单订阅者一次变更通告约 2 µs，8 订阅者扇出 < 4 µs，通知路径不构成
 热重载瓶颈（对比一次典型 load 的 ~0.7 µs 量级一致）。
 
-### 零拷贝热路径（hot_path_bench，T118）
+### 零拷贝热路径（hot_path_bench）
 
 `InMemoryConfig` 内部存储改为 `Cache<String, Arc<AnnotatedValue>>`，并新增
 `SharedValueReader::get_shared()`（返回 `Arc` 句柄，避免深拷贝大 value）。
@@ -341,3 +343,27 @@ println!("CPU time: {:?}", monitor.elapsed());
 大 value 读取零拷贝路径约 **2.1x** 提升，且不随 value 体积增长。
 附带记录：`hot_path_get_100_keys`（100 键 get_string 扫描）≈ 24.9 µs。
 公共 API 零破坏：`get_raw`/`get_string` 语义不变，`get_shared` 为纯新增。
+
+---
+
+## 🔧 性能检查清单
+
+上线生产环境之前：
+
+- [ ] 运行 `cargo bench` 验证性能是否达标
+- [ ] 使用 `json` 格式获得最佳加载性能
+- [ ] 启用 `dynamic` 特性获得无锁读取
+- [ ] 配置合理的缓存大小
+- [ ] 为不可信配置设置内存上限
+- [ ] 用真实负载做性能剖析
+
+---
+
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [🏗️ 架构文档](ARCHITECTURE.md) | 性能设计背后的模块与数据流 |
+| [📖 用户指南](USER_GUIDE.md) | 配置加载与特性启用 |
+| [📘 API 参考](API_REFERENCE.md) | 涉及的 API 完整签名 |
+| [🧪 测试场景矩阵](TEST_SCENARIOS.md) | 基准与并发场景的验收口径 |

@@ -133,7 +133,7 @@
 
 ```toml
 [dependencies]
-confers = "0.6.0-rc.2"
+confers = "0.6.0-rc.3"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -146,7 +146,7 @@ cargo add confers serde --features serde/derive
 **可选特性：**
 
 ```toml
-confers = { version = "0.6.0-rc.2", features = ["watch", "remote", "cli"] }
+confers = { version = "0.6.0-rc.3", features = ["watch", "remote", "cli"] }
 ```
 
 **安装验证：**
@@ -173,9 +173,9 @@ fn main() {
 | 预设 | 说明 | 适用场景 |
 |:----:|:-----|:---------|
 | `minimal` | 环境变量 + JSON | 只需要基础配置加载 |
-| `recommended` | TOML + JSON + Env + 校验 | 大多数应用（推荐） |
+| `recommended` | TOML + JSON + Env + 校验 + 安全规则 | 大多数应用（推荐） |
 | `dev` | 开发配置（含 watch、snapshot） | 开发与调试 |
-| `production` | 生产配置（含加密） | 生产环境 |
+| `production` | 生产配置（含加密、安全规则、特性开关） | 生产环境 |
 | `distributed` | 分布式系统配置 | 微服务与分布式系统 |
 | `full` | 全部特性 | 需要完整功能 |
 
@@ -184,23 +184,23 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }
+confers = { version = "0.6.0-rc.3", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }
+confers = { version = "0.6.0-rc.3", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.6.0-rc.2", default-features = false, features = ["production"] }
+confers = { version = "0.6.0-rc.3", default-features = false, features = ["production"] }
 
 # 分布式系统配置
 [dependencies]
-confers = { version = "0.6.0-rc.2", default-features = false, features = ["distributed"] }
+confers = { version = "0.6.0-rc.3", default-features = false, features = ["distributed"] }
 
 # 全量特性配置
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["full"] }
+confers = { version = "0.6.0-rc.3", features = ["full"] }
 ```
 
 > 💡 **提示**：默认特性为 `toml`、`json`、`env`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
@@ -314,7 +314,7 @@ struct AppConfig {
 }
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.22", features = ["derive"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`。
 
 ### ❓ Confers 安全吗？
 
@@ -345,6 +345,8 @@ struct AppConfig {
 - 📧 首次响应：48 小时内确认
 - 🔍 初步评估：7 天内
 - 📢 公开披露：修复发布之后
+
+完整安全策略见 [🔒 安全文档](SECURITY.md)。
 
 ---
 
@@ -386,7 +388,7 @@ Confers 的内存占用非常低，标准应用配置通常**小于 1MB**。它�
 
 **问题：**
 
-```
+```text
 Error: Configuration file not found: config.toml
 ```
 
@@ -400,7 +402,7 @@ Error: Configuration file not found: config.toml
 
 **问题：**
 
-```
+```text
 Error: Validation failed: ...
 ```
 

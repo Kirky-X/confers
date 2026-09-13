@@ -14,6 +14,7 @@
 - [特性门控 API](#-特性门控-api)
 - [使用示例](#-使用示例)
 - [最佳实践](#-最佳实践)
+- [相关文档](#-相关文档)
 
 </details>
 
@@ -39,9 +40,9 @@ confers 提供灵活的特性配置，用户可按需选择所需功能：
 | 预设 | 特性 | 适用场景 |
 |------|------|----------|
 | `minimal` | `env` + `json` | 最小依赖（环境变量 + JSON） |
-| `recommended` | `toml` + `json` + `env` + `validation` | 大多数应用的推荐配置 |
+| `recommended` | `toml` + `json` + `env` + `validation` + `security-rules` | 大多数应用的推荐配置 |
 | `dev` | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `watch` + `migration` + `snapshot` + `dynamic` | 开发配置 |
-| `production` | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` | 生产配置 |
+| `production` | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` + `security-rules` + `feature-toggle` | 生产配置 |
 | `distributed` | `toml` + `json` + `env` + `watch` + `validation` + `config-bus` + `progressive-reload` + `audit` | 分布式系统 |
 | `full` | 全部特性 | 完整功能集 |
 
@@ -83,9 +84,20 @@ confers 提供灵活的特性配置，用户可按需选择所需功能：
 | `config-bus` | 配置事件总线 | ❌ |
 | `nats-bus` | NATS 消息总线 | ❌ |
 | `redis-bus` | Redis 消息总线 | ❌ |
+| **变更流** |||
+| `change-stream` | 统一变更流端口（复用 config-bus 传输） | ❌ |
+| **远程扩展** |||
+| `etcd-watch` | etcd 原生 watch 流 | ❌ |
+| `k8s` | Kubernetes ConfigMap/Secret 配置源 | ❌ |
+| `nacos` | Nacos 配置源 | ❌ |
 | **其他** |||
 | `context-aware` | 上下文感知配置 | ❌ |
 | `modules` | 模块化配置 | ❌ |
+| `lazy` | 惰性分段解析（超大 TOML 文档） | ❌ |
+| `tracing` | 关键路径 tracing 埋点 | ❌ |
+| `cloud-kms` | 云密钥后端（Vault transit） | ❌ |
+| `keyring` | 系统钥匙串密钥存储 | ❌ |
+| `openfeature` | OpenFeature 灰度引擎 | ❌ |
 
 ---
 
@@ -699,7 +711,7 @@ pub struct RotationResult {
 
 ### 密钥管理（`key` 特性）
 
-`KeyManager` 提供加密密钥的全面管理，包括轮换、版本控制与密钥存储。需要启用 `encryption` 特性。
+`KeyManager` 提供加密密钥的全面管理，包括轮换、版本控制与密钥存储。需要启用 `key` 特性（隐式启用 `encryption`）。
 
 ```mermaid
 graph TB
@@ -967,7 +979,7 @@ let crypto = XChaCha20Crypto::new();
 **特性：**
 
 - 使用 XChaCha20-Poly1305 算法（ChaCha20 的扩展 nonce 变体）
-- 每次加密生成随机 96 位 nonce
+- 每次加密生成随机 192 位（24 字节）nonce
 - 提供带完整性校验的认证加密
 
 ```rust
@@ -1064,7 +1076,7 @@ validator.validate_env_mapping(&mapping)?;
 
 #### ErrorSanitizer
 
-错误信息中的敏感数据脱敏。
+错误信息中的敏感数据脱敏（`security` 模块内的该项导出由 `encryption` 特性门控）。
 
 ```rust
 use confers::security::ErrorSanitizer;
@@ -1077,7 +1089,18 @@ let clean_msg = sanitizer.sanitize(&error_msg);
 
 安全的配置注入器。
 
-> **注意**：`ConfigInjector` 目前位于 `src/security/config_injector.rs`，但**未被重导出**为公开 API（`src/security/mod.rs` 中的 `mod config_injector` 声明为 `pub(crate)`）。它被视为内部基础设施；如需将配置注入集成到您自己的流水线中，请提交 issue 让维护者暴露稳定接口。
+> **注意**：`ConfigInjector` 由 `security-rules` 特性门控，经 `confers::security::ConfigInjector` 公开导出。它提供带环境变量名校验与进程级限速的运行时配置注入：
+
+```rust
+use confers::security::ConfigInjector;
+
+let injector = ConfigInjector::new()
+    .max_entries(1000)
+    .with_dedicated_rate_limiter();
+
+injector.inject("APP_PORT", "8080")?;
+let port = injector.get("APP_PORT")?;
+```
 
 #### SecurityValidatorRegistry（`security-rules` 特性）
 
@@ -2026,8 +2049,16 @@ RUST_LOG=debug cargo run -p confers-examples --bin basic_usage
 
 ---
 
-### 💝 感谢使用 Confers！
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [📖 用户指南](USER_GUIDE.md) | 安装、核心概念与最佳实践 |
+| [🏗️ 架构文档](ARCHITECTURE.md) | 模块划分与数据流 |
+| [🧩 宏指南](CONFIG_MACRO_GUIDE.md) | `#[derive(Config)]` 全部属性 |
+| [🔒 安全文档](SECURITY.md) | 安全机制与漏洞报告流程 |
+| [⚡ 性能指南](PERFORMANCE.md) | 性能设计与基准数据 |
 
 如有疑问或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
 
-**[🏠 返回首页](../README.md)** • **[📖 用户指南](USER_GUIDE.md)**
+**[🏠 返回首页](../README.md)**

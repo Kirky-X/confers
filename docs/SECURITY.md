@@ -11,6 +11,7 @@ Confers 将安全性作为核心设计目标。本文档介绍 Confers 的安全
 - [漏洞报告流程](#-漏洞报告流程)
 - [安全设计概览](#️-安全设计概览)
 - [安全最佳实践](#-安全最佳实践)
+- [相关文档](#-相关文档)
 
 </details>
 
@@ -102,7 +103,7 @@ cargo audit --fetch-index
 
 ### 漏洞披露时间线
 
-```
+```text
 Day 0：发现漏洞
 Day 1-2：确认收到报告
 Day 3-10：完成定级，开发修复
@@ -127,7 +128,7 @@ Confers 通过多层安全机制保护您的配置数据。
 
 ### 加密（XChaCha20-Poly1305）
 
-所有敏感配置数据都可以使用 XChaCha20-Poly1305 进行静态加密：
+所有敏感配置数据都可以使用 XChaCha20-Poly1305 进行静态加密（需启用 `encryption` 特性）：
 
 ```rust,ignore
 use confers::{Config, XChaCha20Crypto};
@@ -147,8 +148,8 @@ pub struct SecureConfig {
 let crypto = XChaCha20Crypto::new();
 let key: &[u8] = &[0u8; 32]; // 实际应从密钥服务或环境变量读取
 
-// 加密：返回 (密文, nonce)
-let (ciphertext, nonce) = crypto.encrypt(b"敏感数据", key)?;
+// 加密：返回 (nonce, ciphertext)，nonce 为随机 24 字节
+let (nonce, ciphertext) = crypto.encrypt(b"敏感数据", key)?;
 
 // 解密：注意参数顺序为 nonce 在前
 let plaintext = crypto.decrypt(&nonce, &ciphertext, key)?;
@@ -156,13 +157,13 @@ let plaintext = crypto.decrypt(&nonce, &ciphertext, key)?;
 
 ### 内存安全
 
-敏感数据在被丢弃时自动清零（zeroize）：
+敏感数据在被丢弃时自动清零（zeroize，需启用 `encryption` 特性）：
 
 ```rust,ignore
-use confers::security::SecureString;
+use confers::security::{SecureString, SensitivityLevel};
 
 let secret = SecureString::new("api-key-12345", SensitivityLevel::High);
-// 丢弃时自动清零
+// Debug 输出自动脱敏；丢弃时自动清零
 ```
 
 ### 配置安全校验
@@ -187,45 +188,60 @@ if !report.is_ok(false) {
 
 对远程配置 URL 进行校验，防止服务端请求伪造（SSRF）：
 
-```rust,ignore
-use confers::remote::HttpProvider;
+- **来源侧**（`remote` 特性）：`HttpPolledSourceBuilder` 在构建期强制 HTTPS，拒绝封锁网段目标（含回环、私网、链路本地地址）；域名主机在异步轮询路径解析 DNS 后再次校验。
+- **规则侧**（`security-rules` 特性）：`SsrfValidator` 对任意 `ConfigProvider` 中的 URL 配置做同样的封锁网段与 URL 边界匹配检查，可经 `SecurityValidatorRegistry` 统一执行。
 
-let provider = HttpProvider::new()
-    .enable_ssrf_protection()
-    .validate_remote_url("https://config.example.com/app.toml")?;
+```rust,ignore
+use confers::remote::HttpPolledSourceBuilder;
+
+// 明文 http:// 与私网地址会在 build() 阶段被拒绝并返回错误
+let source = HttpPolledSourceBuilder::new()
+    .url("https://config.example.com/app.toml")
+    .build()?;
 ```
 
 ### 审计日志
 
-所有配置访问与变更都会被记录：
+配置加载、密钥访问与解密事件都会被记录（需启用 `audit` 特性）：
 
 ```rust,ignore
-use confers::audit::{AuditConfig, AuditLevel};
+use confers::audit::AuditWriter;
+use std::path::PathBuf;
 
-let audit = AuditConfig::new()
-    .set_level(AuditLevel::All)
-    .enable_sensitive_field_tracking();
+// 以 builder 模式创建审计写入器
+let writer = AuditWriter::builder()
+    .log_dir(PathBuf::from("/var/log/confers"))
+    .enabled(true)
+    .build();
 
-audit.log_access("config.load", "user@example.com")?;
+// 记录审计事件
+writer.log_load("config.toml")?;
+writer.log_key_access("database_password")?;
+writer.log_decrypt("api_key", true)?;
 ```
+
+审计事件落盘前经 HMAC-SHA256 链式签名（链首使用随机 salt），可用 `verify_audit_chain(path)` 校验日志完整性。
 
 ### security 模块 API
 
 ```rust,ignore
-// EnvSecurityValidator - 环境变量安全校验
+// EnvSecurityValidator - 环境变量安全校验（security-rules 特性）
 use confers::security::EnvSecurityValidator;
-let validator = EnvSecurityValidator::new();
-validator.validate_env_vars()?;
+let validator = EnvSecurityValidator::strict();
+validator.validate_env_name("APP_NAME", None)?;
+validator.validate_env_value("production")?;
 
-// ErrorSanitizer - 错误信息中的敏感数据脱敏
+// ErrorSanitizer - 错误信息中的敏感数据脱敏（encryption 特性）
 use confers::security::ErrorSanitizer;
 let sanitizer = ErrorSanitizer::default();
 let safe_error = sanitizer.sanitize(&error_message);
 
-// ConfigInjector - 安全的运行时注入
+// ConfigInjector - 带校验与限速的运行时配置注入（security-rules 特性）
 use confers::security::ConfigInjector;
 let injector = ConfigInjector::new()
-    .enable_input_validation();
+    .max_entries(1000)
+    .with_dedicated_rate_limiter();
+injector.inject("APP_PORT", "8080")?;
 ```
 
 ### 安全审计流程
@@ -263,6 +279,8 @@ let injector = ConfigInjector::new()
 | **启用加密** | 对敏感配置进行静态加密 | 推荐 |
 
 ### 生产环境配置示例
+
+以下是一个应用在自身配置文件中约定安全相关条目的示例（Confers 按字段级属性处理加密与脱敏）：
 
 ```toml
 [security]
@@ -308,9 +326,17 @@ CONFERS_SSRF_BLOCKLIST=/etc/confers/blocklist.txt
 
 ---
 
-## 安全联系方式
+## 📎 安全联系方式
 
 | 角色 | 联系方式 |
 |:-----|:---------|
 | 安全团队 | Kirky-X@outlook.com |
 | 维护者 | Kirky-X@outlook.com |
+
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [📘 API 参考](API_REFERENCE.md) | security / audit / secret 模块完整 API |
+| [📖 用户指南](USER_GUIDE.md) | 安全配置实践章节 |
+| [❓ FAQ](FAQ.md) | 常见安全问题解答 |

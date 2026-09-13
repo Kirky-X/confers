@@ -14,6 +14,7 @@ Confers 是一个生产就绪的 Rust 配置管理库，采用"零样板"设计�
 - [数据流](#-数据流)
 - [安全设计](#-安全设计)
 - [性能设计](#-性能设计)
+- [相关文档](#-相关文档)
 
 </details>
 
@@ -21,7 +22,7 @@ Confers 是一个生产就绪的 Rust 配置管理库，采用"零样板"设计�
 
 ## 🎯 概述
 
-Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审计、可热更新的方式管理来自多处的配置。它的能力边界由 Cargo 特性（feature）精确控制——从最小的 `env` + `json`，到覆盖远程来源、消息总线与加密的 `full` 预设，编译产物只包含您启用的功能。
+Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审计、可热更新的方式管理来自多处的配置。它的能力边界由 Cargo 特性（feature）精确控制：从最小的 `env` + `json`，到覆盖远程来源、消息总线与加密的 `full` 预设，编译产物只包含您启用的功能。
 
 核心能力一览：
 
@@ -35,7 +36,7 @@ Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审
 
 1. **BrickArchitecture 错误分离**：配置阶段错误（`ConfigConfigError`，初始化期缺失字段、解析错误、校验失败，错误码 2001-2999）与运行时错误（`ConfersError`，超时、远程不可用、解密失败）是两个独立类型，调用方可以精确区分"启动就该失败"与"运行中需要重试"两类问题。
 2. **门面 + 内部实现分离（facade / `impl_`）**：`src/` 下的公开模块（`config`、`loader`、`merger`、`format`、`audit`、`dynamic`、`schema`、`lifecycle` 等）只做转发动机（re-export），真正实现位于 `src/impl_/` 内部模块（如 `crate::impl_::config`、`crate::impl_::merger`），不对外暴露实现细节。
-3. **接口隔离原则（ISP）**：`src/interface.rs` 将能力拆分为独立 trait——`ConfigReader` / `ConfigWriter` / `ConfigConnector`（按特性门控的异步/同步读写）、`ConfigProvider`（同步访问）、`ConfigProviderExt`（便捷方法的扩展 trait）、`KeyProvider`（加密密钥提供者）、`MetricsBackend`（指标接口）。
+3. **接口隔离原则（ISP）**：`src/interface.rs` 将能力拆分为独立 trait：`ConfigReader` / `ConfigWriter` / `ConfigConnector`（按特性门控的异步/同步读写）、`ConfigProvider`（同步访问）、`ConfigProviderExt`（便捷方法的扩展 trait）、`KeyProvider`（加密密钥提供者）、`MetricsBackend`（指标接口）。
 4. **一切皆注解值（AnnotatedValue）**：每个配置值都携带来源（`SourceId`）、精确文件位置（`SourceLocation`）与优先级元数据，支撑审计、错误定位与冲突报告（`ConflictReport`）。
 5. **特性门控最小化**：所有可选能力（`validation`、`watch`、`encryption`、`remote`、`config-bus` 等）都是独立特性，未启用的代码不参与编译，最小化编译时间与二进制体积。
 6. **组件生命周期统一**：具备后台行为的组件（如 ConfigBus）实现 `Lifecycle` trait，提供 `health_check()` 与优雅关闭（`shutdown()`）。
@@ -84,7 +85,7 @@ graph TB
 
 对应的仓库物理布局：
 
-```
+```text
 confers/
 ├── src/            # 库本体（门面模块 + impl_ 内部实现）
 │   ├── lib.rs      # 模块声明与重导出（含特性门控）
@@ -147,7 +148,7 @@ confers/
 
 ### 配置加载主流程
 
-```
+```text
 配置声明                     加载                        合并                        输出
 ─────────                   ─────────                   ─────────                   ─────────
 #[derive(Config)]    →   FileSource / EnvSource  →   SourceChain 优先级链   →   serde 反序列化为 T
@@ -164,12 +165,18 @@ confers/
 
 ### 热重载数据流（`watch` / `progressive-reload`）
 
-```
-文件变更 → notify-debouncer-full 事件 → AdaptiveDebouncer 去抖
-        → FsWatcher/MultiFsWatcher 通知
-        → 重新走"加载→合并"流程生成新配置
-        → （progressive-reload）渐进式发布：分批切换实例
-        → 健康检查失败 → 自动回滚（ReloadRolledBack）
+```mermaid
+graph TD
+    A["文件变更"] --> B["notify-debouncer-full 事件"]
+    B --> C["AdaptiveDebouncer 自适应去抖"]
+    C --> D["FsWatcher / MultiFsWatcher 通知"]
+    D --> E["重新执行加载与合并"]
+    E --> F{"启用 progressive-reload？"}
+    F -->|否| G["直接应用新配置"]
+    F -->|是| H["渐进式发布<br/>分批切换实例"]
+    H --> I{"健康检查"}
+    I -->|通过| J["提交新配置"]
+    I -->|失败| K["自动回滚<br/>ReloadRolledBack"]
 ```
 
 动态字段（`dynamic`）提供更细粒度的运行时更新：`#[config(dynamic)]` 生成 `DynamicField` 句柄，内部用 `arc-swap` 保存配置快照，读者无锁读取，写者原子换入新快照，并可注册回调（`CallbackGuard`）与字段监听（`FieldWatcher`）。
@@ -195,10 +202,21 @@ confers/
 
 性能设计目标：配置读取路径接近零开销，重载路径可控且可观测。
 
-1. **无锁动态读取**：`dynamic` 模块基于 `arc-swap` 实现快照发布——读者无锁、写者原子换入，`DynamicField::get()` 无争用。
+1. **无锁动态读取**：`dynamic` 模块基于 `arc-swap` 实现快照发布，读者无锁、写者原子换入，`DynamicField::get()` 无争用。
 2. **并发安全容器**：`feature-toggle` 使用 `dashmap` 分片锁；加载器缓存策略由 `LoaderConfig` 暴露（依赖 `moka` 提供 future/sync 双模式缓存）。
 3. **高效数据结构**：`ConfigValue` 树使用 `IndexMap` 保持键序（保证合并与输出的确定性）；短字符串经 `compact_str` 驻留以降低内存占用。
 4. **解析性能**：TOML 解析启用 `preserve_order`；格式探测支持从内容直接判断，避免重复读盘（大文件建议一次读入后交给 `parse_content`）。
 5. **热路径去抖**：`watcher::AdaptiveDebouncer` 自适应调节去抖窗口，避免编辑器连续写入触发的重载风暴。
 6. **编译期裁剪**：全部可选能力特性门控，配合 `minimal`/`recommended`/`dev`/`production`/`full` 预设，按需控制编译时间与二进制体积。
 7. **持续基准**：`benches/` 内置 8 组 Criterion 基准（load、merge、interpolation、value_path、dynamic_field、hot_path、concurrent_rw、concurrent_access），覆盖从冷加载到并发读写的完整热路径，可通过 `cargo bench` 复现（详见[性能指南](PERFORMANCE.md)）。
+
+---
+
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [📖 用户指南](USER_GUIDE.md) | 面向使用者的功能与最佳实践 |
+| [📘 API 参考](API_REFERENCE.md) | 各模块公开 API 的完整签名 |
+| [⚡ 性能指南](PERFORMANCE.md) | 性能设计与基准数据 |
+| [🧪 测试场景矩阵](TEST_SCENARIOS.md) | 各功能域的验收场景 |

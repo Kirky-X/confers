@@ -1,9 +1,62 @@
-# confers 验收测试场景穷举矩阵
+# 🧪 Confers 测试场景矩阵
 
-> 适用版本：confers **0.6.0-rc.2**（workspace，Rust 1.97.1 / edition 2024）
-> 用途：7 仓库统一 E2E 验收工程第一步 —— 先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
+> 适用版本：confers **0.6.0-rc.3**（workspace，Rust 1.97.1 / edition 2024）
+> 用途：7 仓库统一 E2E 验收工程的第一步：先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
 > 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 61 个 `#[cfg(test)]` 模块、`examples/` 21 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
+
+## 📑 目录
+
+<details>
+<summary>📑 目录（点击展开）</summary>
+
+- [阅读约定](#阅读约定)
+-   [重要发现（编写时盘点得出）](#重要发现编写时盘点得出)
+- [1. 总览：功能域 × feature 分组](#1-总览功能域--feature-分组)
+- [2. 场景矩阵](#2-场景矩阵)
+-   [2.1 格式解析与 Loader（FMT，22 条）](#21-格式解析与-loaderfmt22-条)
+-   [2.2 配置构建 / Source 链 / 合并（BLD，28 条）](#22-配置构建--source-链--合并bld28-条)
+-   [2.3 校验（VAL，8 条）](#23-校验val8-条)
+-   [2.4 插值（IPL，9 条）](#24-插值ipl9-条)
+-   [2.5 加密与 Secret（ENC，23 条）](#25-加密与-secretenc23-条)
+-   [2.6 密钥管理（KEY，13 条）](#26-密钥管理key13-条)
+-   [2.7 安全规则与注入（SEC，18 条）](#27-安全规则与注入sec18-条)
+-   [2.8 审计（AUD，11 条）](#28-审计aud11-条)
+-   [2.9 文件热更新（WAT，18 条）](#29-文件热更新wat18-条)
+-   [2.10 渐进重载（PGR，12 条）](#210-渐进重载pgr12-条)
+-   [2.11 动态字段（DYN，14 条）](#211-动态字段dyn14-条)
+-   [2.12 特性开关（TGL，6 条）](#212-特性开关tgl6-条)
+-   [2.13 版本迁移（MIG，12 条）](#213-版本迁移mig12-条)
+-   [2.14 快照（SNP，10 条）](#214-快照snp10-条)
+-   [2.15 模块 / 配置分组（MOD，11 条）](#215-模块--配置分组mod11-条)
+-   [2.16 上下文感知（CTX，9 条）](#216-上下文感知ctx9-条)
+-   [2.17 HTTP 轮询远程源（REM，11 条）](#217-http-轮询远程源rem11-条)
+-   [2.18 etcd（ETC，10 条）](#218-etcdetc10-条)
+-   [2.19 Consul（CSL，8 条）](#219-consulcsl8-条)
+-   [2.20 配置总线 — 进程内（BUS，10 条）](#220-配置总线--进程内bus10-条)
+-   [2.21 NATS 总线（NAT，7 条）](#221-nats-总线nat7-条)
+-   [2.22 Redis 总线（RDS，7 条）](#222-redis-总线rds7-条)
+-   [2.23 Schema（SCH，5 条）](#223-schemasch5-条)
+-   [2.24 CLI（CLI，24 条，二进制 `confers`，`cargo run --features cli -- …` 或 assert_cmd 形态）](#224-clicli24-条二进制-conferscargo-run---features-cli-----或-assert_cmd-形态)
+-   [2.25 派生宏与属性（MAC，18 条）](#225-派生宏与属性mac18-条)
+-   [2.26 feature 组合交互（CMP，17 条）](#226-feature-组合交互cmp17-条)
+-   [2.27 并发与竞态（CCY，8 条）](#227-并发与竞态ccy8-条)
+-   [2.28 feature 预设编译矩阵（PRS，8 条）](#228-feature-预设编译矩阵prs8-条)
+- [3. feature 互斥 / 组合矩阵](#3-feature-互斥--组合矩阵)
+-   [3.1 依赖链（由 Cargo.toml `[features]` 固化，组合测试无需单独验证的部分）](#31-依赖链由-cargotoml-features-固化组合测试无需单独验证的部分)
+-   [3.2 组合测试矩阵（CMP-01…17 的输入依据）](#32-组合测试矩阵cmp-0117-的输入依据)
+-   [3.3 预设覆盖关系（预设 → 展开清单，验证用 PRS-02…07）](#33-预设覆盖关系预设--展开清单验证用-prs-0207)
+- [4. Docker 服务需求汇总](#4-docker-服务需求汇总)
+- [5. 执行计划](#5-执行计划)
+-   [5.1 层级与命令](#51-层级与命令)
+-   [5.2 examples 运行清单（21 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）](#52-examples-运行清单21-个cargo-run--p-confers-examples---bin-name依赖-examples-crate-默认-featuresfull)
+-   [5.3 场景 ID → E2E 文件映射汇总](#53-场景-id--e2e-文件映射汇总)
+-   [5.4 建议执行顺序](#54-建议执行顺序)
+- [6. 统计汇总](#6-统计汇总)
+
+</details>
+
+---
 
 ## 阅读约定
 
@@ -563,7 +616,7 @@
 
 ### 3.1 依赖链（由 Cargo.toml `[features]` 固化，组合测试无需单独验证的部分）
 
-```
+```text
 security          → encryption, hex
 security-rules    → security (→encryption), ipnet
 key               → encryption, chrono, rand, hex
@@ -579,7 +632,7 @@ dotenv            → env
 default           → toml, json, env
 ```
 
-结论：**不存在互斥 feature**——所有 feature 均可自由叠加；约束只体现为"开子项自动带上父项"。E2E 组合矩阵按 3.2 的显式组合清单验证交互行为（编译兼容由 PRS 矩阵保证）。
+结论：**不存在互斥 feature**，所有 feature 均可自由叠加；约束只体现为"开子项自动带上父项"。E2E 组合矩阵按 3.2 的显式组合清单验证交互行为（编译兼容由 PRS 矩阵保证）。
 
 ### 3.2 组合测试矩阵（CMP-01…17 的输入依据）
 
@@ -637,7 +690,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | Consul | hashicorp/consul:1.19（dev + ui） | **8500** | `wget http://127.0.0.1:8500/v1/status/leader` | CSL-01…03/05/07/08、REM-10/11、CMP-07；`tests/remote/consul.rs` | `is_service_available` 守卫跳过（Consul dev 模式默认 token 为空/`dev-…`，E2E 固化时以 ACL 关闭态为准） |
 
 无服务依赖域（本地文件/纯内存，可在无 docker 的 CI 沙箱跑）：FMT、BLD、VAL、IPL、ENC、KEY、SEC、AUD、WAT、PGR、DYN、TGL、MIG、SNP、MOD、CTX、SCH、CLI、MAC、CCY、PRS。
-**E2E 原则**：集成/E2E 层禁 mock —— 依赖服务的场景必须打真实 compose 服务；"远程不可达"类异常场景一律使用显式不可达地址（如 `127.0.0.1:1`），不依赖网络波动。
+**E2E 原则**：集成/E2E 层禁 mock，依赖服务的场景必须打真实 compose 服务；"远程不可达"类异常场景一律使用显式不可达地址（如 `127.0.0.1:1`），不依赖网络波动。
 
 ---
 
@@ -742,3 +795,14 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 完全无外部依赖（纯内存/编译期）的场景 | 188 |
 
 > 说明：既有覆盖口径存在合法重叠（一条场景可同时引用 tests/ 集成测试与 src 内联测试）；"需新增"取最强缺口判定。后续落地阶段允许将粒度过细的场景合并实现，但 **ID 保持稳定**以便追溯。
+
+---
+
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [🏗️ 架构文档](ARCHITECTURE.md) | 场景涉及的模块与数据流 |
+| [📘 API 参考](API_REFERENCE.md) | 场景引用的公共 API |
+| [⚡ 性能指南](PERFORMANCE.md) | 基准套件与性能基线 |
+| [🤝 贡献指南](CONTRIBUTING.md) | 测试编写与提交规范 |

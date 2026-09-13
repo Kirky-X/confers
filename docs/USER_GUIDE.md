@@ -1,6 +1,6 @@
 # 📖 Confers 用户指南
 
-**confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用的配置加载、校验与管理。它支持从文件（JSON、TOML、YAML）、环境变量、命令行参数以及远程来源（Etcd、HTTP）加载配置。本指南将带您从安装入门一路走到进阶用法与最佳实践。
+**confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用的配置加载、校验与管理。它支持从文件（JSON、TOML、YAML、INI）、环境变量、命令行参数以及远程来源（HTTP、Etcd、Consul）加载配置。本指南将带您从安装入门一路走到进阶用法与最佳实践。
 
 ## 📋 目录
 
@@ -32,6 +32,7 @@
   - [推荐的设计模式](#-推荐的设计模式)
   - [安全配置实践](#-安全配置实践)
 - [故障排查](#-故障排查)
+- [延伸阅读](#-延伸阅读)
 
 </details>
 
@@ -47,8 +48,6 @@
 | **灵活配置** | 支持多种来源与格式 |
 | **最佳实践** | 学习规范的配置管理方式 |
 | **进阶特性** | 掌握热重载与远程配置 |
-
-**confers** 是一个功能强大的 Rust 配置管理库，旨在简化应用的配置加载、校验与管理。它支持从文件（JSON、TOML、YAML）、环境变量、命令行参数以及远程来源（Etcd、HTTP）加载配置。
 
 > 💡 **提示**：本指南假设您具备基础的 Rust 知识。如果您是 Rust 新手，建议先阅读 [Rust 官方教程](https://doc.rust-lang.org/book/)。
 
@@ -93,20 +92,20 @@ cargo --version
 
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.6.0-rc.2"` | 包含 toml、json、env |
-| **最小化** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["minimal"] }` | 仅环境变量 |
-| **推荐** | `confers = { version = "0.6.0-rc.2", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 |
-| **全量** | `confers = { version = "0.6.0-rc.2", features = ["full"] }` | 全部特性 |
+| **默认** | `confers = "0.6.0-rc.3"` | 包含 toml、json、env |
+| **最小化** | `confers = { version = "0.6.0-rc.3", default-features = false, features = ["minimal"] }` | 仅环境变量 |
+| **推荐** | `confers = { version = "0.6.0-rc.3", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
+| **全量** | `confers = { version = "0.6.0-rc.3", features = ["full"] }` | 全部特性 |
 
 **可用的特性预设：**
 
 | 预设 | 特性 | 适用场景 |
 |------|------|----------|
 | `minimal` | `env`、`json` | 环境变量 + JSON |
-| `recommended` | `toml`、`json`、`env`、`validation` | 配置加载 + 校验 |
+| `recommended` | `toml`、`json`、`env`、`validation`、`security-rules` | 配置加载 + 校验 + 安全规则 |
 | `dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 全工具开发环境 |
-| `production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot` | 生产就绪配置 |
-| `distributed` | `toml`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
+| `production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产就绪配置 |
+| `distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
 | `full` | 全部特性 | 完整功能集 |
 
 **单项特性：**
@@ -122,7 +121,7 @@ cargo --version
 | `watch` | 文件监听与热重载 | ❌ |
 | `audit` | 审计日志 | ❌ |
 | `schema` | JSON Schema 生成 | ❌ |
-| `remote` | 远程配置（etcd、consul、http） | ❌ |
+| `remote` | 远程配置（HTTP/Etcd/Consul） | ❌ |
 | `encryption` | 配置加密 | ❌ |
 
 如果需要异步/远程支持，请添加 tokio：
@@ -134,7 +133,7 @@ tokio = { version = "1.0", features = ["full"] }
 
 ### 💡 第一步
 
-让我们用一个简单示例验证安装。我们将定义一个带默认值和环境变量映射的配置结构体：
+让我们用一个简单示例验证安装。定义一个带默认值和环境变量映射的配置结构体：
 
 ```rust
 use confers::{Config, ConfigBuilder};
@@ -160,32 +159,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
+```
 
-// 或者使用 FsWatcher 实现真正的热重载（推荐）
+需要热重载能力时，使用 `FsWatcher` 监听文件变更并重建配置（推荐）：
+
+```rust
+use confers::{Config, ConfigBuilder};
+use confers::watcher::FsWatcher;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Config)]
+struct AppConfig {
+    #[config(default = 8080)]
+    port: u16,
+    #[config(default = "\"localhost\".to_string()")]
+    host: String,
+}
+
 #[tokio::main]
-async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
-    use confers::watcher::FsWatcher;
-    let config = ConfigBuilder::<AppConfig>::new()
-        .file("config.toml")
-        .build()?;
-
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut watcher = FsWatcher::new("config.toml", 200).await?;
     while watcher.recv().await.is_some() {
-        // 配置文件变更 —— 重建并应用
-        let _new_config = ConfigBuilder::<AppConfig>::new()
+        // 配置文件变更，重建并应用
+        let new_config = ConfigBuilder::<AppConfig>::new()
             .file("config.toml")
             .build()?;
     }
-
-    println!("🚀 Server running at: {}:{}", config.host, config.port);
     Ok(())
 }
 ```
 
 **说明**：`Config` 派生宏提供类型安全的配置。使用 `ConfigBuilder` 进行加载：
-- `ConfigBuilder::<T>::new().build()` —— 同步加载
-- `ConfigBuilder::<T>::new().build_with_fallback(fallback)` —— 带回退配置
-- `ConfigBuilder::<T>::new().build_with_watcher().await` —— **⚠️ 自 0.3.0 起已弃用**（不再随文件变更重新加载；热重载请直接使用 `FsWatcher`/`MultiFsWatcher`）
+- `ConfigBuilder::<T>::new().build()` ：同步加载
+- `ConfigBuilder::<T>::new().build_with_fallback(fallback)` ：带回退配置
+- `ConfigBuilder::<T>::new().build_with_watcher().await` ：**⚠️ 自 0.3.0 起已弃用**（不再随文件变更重新加载；热重载请直接使用 `FsWatcher`/`MultiFsWatcher`）
 
 ---
 
@@ -199,10 +206,10 @@ graph TB
         A["配置文件<br/>JSON, TOML, YAML"]
         B["环境变量"]
         C["CLI 参数"]
-        D["远程来源<br/>Etcd, Consul, HTTP"]
+        D["远程来源<br/>HTTP, Etcd, Consul"]
     end
 
-    subgraph Priority ["优先级（从高到低）"]
+    subgraph Priority ["优先级从高到低"]
         P1["CLI 参数<br/>最高优先级"]
         P2["环境变量"]
         P3["配置文件"]
@@ -234,9 +241,9 @@ graph TB
 
 您可以轻松组合来自不同来源的配置：
 
-- **文件**：支持自动探测 JSON、TOML、YAML 格式。
+- **文件**：支持自动探测 JSON、TOML、YAML、INI 格式。
 - **环境变量**：通过 `env_prefix` 自动映射环境变量。
-- **远程**：支持 Etcd、Consul 以及 HTTP 轮询/监听。
+- **远程**：支持 HTTP 轮询、Etcd 与 Consul。
 
 ### 配置文件搜索路径
 
@@ -244,7 +251,7 @@ graph TB
 
 #### 默认搜索路径
 
-使用 `Config::load_sync()` 或 `Config::create_loader()` 时，`confers` 按以下优先级搜索配置文件：
+使用 `Config::load_sync()`（`#[derive(Config)]` 生成）时，`confers` 按以下优先级搜索配置文件：
 
 | 优先级 | 搜索路径 | 条件 | 文件格式 |
 |--------|----------|------|----------|
@@ -269,7 +276,7 @@ pub struct AppConfig {
 
 **设置了 app_name 时的搜索路径**：
 
-```
+```text
 ./myapp/config.toml              ✅
 ~/.config/myapp/config.toml      ✅
 ~/.config/config.toml            ✅
@@ -280,7 +287,7 @@ pub struct AppConfig {
 
 **未设置 app_name 时的搜索路径**：
 
-```
+```text
 ./config.toml                    ✅
 ~/.config/config.toml            ✅
 ~/config.toml                    ✅
@@ -423,23 +430,19 @@ let config = ConfigBuilder::<MyConfig>::new()
     .env_prefix("MYAPP_")
     .build()?;
 
-// 启用校验
+// 设置资源上限（文件大小、嵌套深度、键数量等）
+use confers::ConfigLimits;
 let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
-    .validate(true)
+    .limits(ConfigLimits::default())
     .build()?;
 
-// 支持热重载（异步）- 使用 FsWatcher（推荐）
+// 热重载（异步）- 使用 FsWatcher（推荐，需要 watch 特性）
 #[cfg(feature = "watch")]
-use confers::watcher::FsWatcher;
-#[cfg(feature = "watch")]
-let initial = ConfigBuilder::<MyConfig>::new()
-    .file("config.toml")
-    .validate(true)
-    .build()?;
-#[cfg(feature = "watch")]
-let mut watcher = FsWatcher::new("config.toml", 200).await?;
+let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
 ```
+
+> 💡 **提示**：校验由 `validation` 特性与 `#[config(validate)]` 属性控制，在构建阶段自动执行（见[校验与清洗](#-校验与清洗)一节）。
 
 ### 🔢 默认值与环境变量
 
@@ -448,197 +451,127 @@ let mut watcher = FsWatcher::new("config.toml", 200).await?;
 
 ### 💻 命令行工具
 
-confers 提供功能齐全的命令行工具，支持配置文件生成、校验、加密、差异对比等能力。
+confers 内置一个基于配置类型生成代码的诊断 CLI（`cli` 特性），支持配置检查、导出、差异对比、快照管理与健康诊断。
 
 #### 安装 CLI
 
 ```bash
-# 从源码安装
-cargo install confers
+# 从源码安装（启用 cli 特性）
+cargo install confers --features cli
 
-# 或从 crates.io 安装
-cargo install confers-cli
-
-# 检查版本
-confers --version
-
-# 查看帮助
+# 查看帮助与版本
 confers --help
+confers --version
 ```
 
 #### 命令参考
 
-```bash
-confers 0.6.0-rc.2
-A powerful Rust configuration management library
+```text
+Configuration diagnostics tool for confers
 
-USAGE:
-    confers [OPTIONS] <SUBCOMMAND>
+Usage: confers [OPTIONS] <COMMAND>
 
-OPTIONS:
-    -h, --help         Print help information
-    -V, --version      Print version information
-    -v, --verbose      Enable verbose output (-vv for more detail)
+Commands:
+  inspect   Inspect configuration - list all keys with their sources
+  validate  Validate configuration against schema
+  export    Export merged configuration (sanitized)
+  diff      Diff two configurations
+  snapshot  Manage configuration snapshots
+  schema    Output JSON Schema for the configuration type
+  get       Get a specific configuration value by key path (dot-separated)
+  docs      Documentation output（--agent 输出机器可读知识包）
+  doctor    Diagnose configuration health and print a single-line JSON report
+  help      Print this message or the help of the given subcommand(s)
 
-SUBCOMMANDS:
-    diff       Compare differences between two configuration files
-    generate   Generate configuration template
-    validate   Validate configuration file
-    encrypt    Encrypt sensitive configuration
-    wizard     Interactive configuration generation wizard
-    key        Generate and manage encryption keys
-    help       Print help information
+Options:
+  -c, --config <CONFIG>      Configuration file(s) to load
+      --env-file <ENV_FILE>  Additional environment file
+      --allow-absolute-paths Allow absolute paths for config files
+      --fields <FIELDS>      Filter output to specified fields (comma-separated dot-paths)
+  -h, --help                 Print help
+  -V, --version              Print version
 ```
 
-#### diff - 配置差异对比
-
-对比两个配置文件之间的差异，支持多种输出格式：
+#### inspect - 配置检视
 
 ```bash
-# 基础用法 - 对比两个配置文件
-confers diff config1.toml config2.toml
+# 以文本表格列出全部键及其来源（KEY/VALUE/SOURCE/LOCATION）
+confers -c app.toml inspect
 
-# 指定输出格式
-confers diff config1.toml config2.toml --format unified    # unified diff 格式
-confers diff config1.toml config2.toml --format context    # context diff 格式
-confers diff config1.toml config2.toml --format normal     # 标准 diff 格式
-confers diff config1.toml config2.toml --format side-by-side  # 并排对比格式
-confers diff config1.toml config2.toml --format strict     # 严格模式
+# 输出可解析 JSON（溯源树）
+confers -c app.toml inspect --format json
 
-# 生成报告
-confers diff config1.toml config2.toml -o diff_report.md
+# 只看指定键；不存在的键输出 [NOT FOUND]
+confers -c app.toml inspect -k server.port
 
-# 查看详细帮助
-confers diff --help
+# 显示被覆盖键的冲突标记
+confers -c app.toml inspect --show-conflicts
 ```
-
-**输出格式说明：**
-
-| 格式 | 说明 | 适用场景 |
-|------|------|----------|
-| `unified` | 带行号与上下文的 unified diff 格式 | 代码评审、版本对比 |
-| `context` | context diff 格式 | 查看变更上下文 |
-| `normal` | 标准 diff 格式 | 简单差异对比 |
-| `side-by-side` | 并排对比格式 | 可视化对比 |
-| `strict` | 严格模式，仅显示真实差异 | 精确差异分析 |
-
-#### generate - 模板生成
-
-```bash
-# 基础用法
-confers generate --struct "AppConfig" --output config_template.toml
-
-# 指定输出格式
-confers generate --struct "AppConfig" --format toml --output config.toml
-confers generate --struct "AppConfig" --format yaml --output config.yaml
-confers generate --struct "AppConfig" --format json --output config.json
-
-# 指定输出级别
-confers generate --struct "AppConfig" --level minimal    # 最小输出
-confers generate --struct "AppConfig" --level full       # 完整输出
-confers generate --struct "AppConfig" --level doc        # 带文档输出
-
-# 查看详细帮助
-confers generate --help
-```
-
-**输出级别说明：**
-
-| 级别 | 说明 | 适用场景 |
-|------|------|----------|
-| `minimal` | 仅必填字段与注释 | 快速上手 |
-| `full` | 全部字段、默认值与注释 | 完整配置 |
-| `doc` | 包含字段描述 | 文档生成 |
 
 #### validate - 配置校验
 
 ```bash
-# 基础用法 - 校验配置文件
-confers validate config.toml
+# 校验配置（合法时输出 "All validation checks passed"）
+confers -c app.toml validate
 
-# 指定输出级别
-confers validate config.toml --level minimal    # 最小输出
-confers validate config.toml --level full       # 完整输出
-confers validate config.toml --level doc        # 带文档输出
+# 严格模式：把警告按错误处理，issue 存在时非零退出
+confers -c app.toml validate --strict
 
-# 跳过严格模式
-confers validate config.toml --no-strict
-
-# 校验并生成报告
-confers validate config.toml -o validation_report.md
-
-# 查看详细帮助
-confers validate --help
+# JSON 输出：{"valid":...,"issues":[...]}
+confers -c app.toml validate --format json
 ```
 
-#### encrypt - 配置加密
+#### export - 配置导出
 
 ```bash
-# 加密配置文件
-confers encrypt input.toml --key-file secret.key --output encrypted.toml
+# 导出合并后的配置（默认 json，自动脱敏敏感值）
+confers -c app.toml export --format toml
 
-# 加密单个值
-confers encrypt "sensitive_value" --key-file secret.key
+# 写入文件；-o 指向目录时自动生成时间戳文件名
+confers -c app.toml export -o merged.json
 
-# 解密配置文件
-confers encrypt encrypted.toml --key-file secret.key --decrypt --output decrypted.toml
-
-# 查看详细帮助
-confers encrypt --help
+# 附带来源信息（source/location 溯源树）
+confers -c app.toml export --with-provenance
 ```
 
-**使用示例：**
+#### diff - 配置差异对比
 
 ```bash
-# 生成密钥并加密
-confers key -o secret.key
-confers encrypt config.toml --key-file secret.key -o config.encrypted.toml
+# 对比两份配置，输出 unified diff
+confers diff --base base.toml --overlay overlay.toml
 
-# 解密以使用
-confers encrypt config.encrypted.toml --key-file secret.key --decrypt -o config.toml
+# 结构化 JSON 输出；--sanitize 控制是否脱敏（默认开启）
+confers diff --base a.toml --overlay b.toml --format json
 ```
 
-#### wizard - 交互式向导
+#### snapshot - 快照管理
 
 ```bash
-# 启动交互式向导
-confers wizard
+# 列出快照目录中的快照
+confers snapshot list --directory ./snapshots
 
-# 指定配置文件类型
-confers wizard --format toml
-confers wizard --format yaml
-confers wizard --format json
+# 对比最近 N 份快照
+confers snapshot diff --latest 2
 
-# 查看详细帮助
-confers wizard --help
+# 清理过期快照（如 7 天前）
+confers snapshot prune --older-than 7d
 ```
 
-**向导流程：**
-
-1. 输入配置名称
-2. 设置服务器参数（host、port）
-3. 配置数据库连接（url、pool）
-4. 配置日志级别
-5. 生成配置文件
-
-#### key - 密钥管理
+#### doctor - 健康诊断
 
 ```bash
-# 生成新密钥
-confers key -o encryption.key
-
-# 生成 256 位密钥
-confers key --length 256 -o encryption.key
-
-# 从口令派生密钥
-confers key --derive --password "your_password" -o derived.key
-
-# 查看密钥信息
-confers key --info encryption.key
-
-# 查看详细帮助
-confers key --help
+# 五项检查：schema 结构 / 来源优先级链 / 加密字段可解密 / env 覆盖冲突 / 加载
+# 输出单行 JSON 报告；退出码 0 健康 / 1 警告 / 2 错误
+confers -c app.toml doctor
 ```
+
+#### 退出码契约
+
+| 退出码 | 含义 |
+|:------:|:-----|
+| 0 | 成功（doctor：全部健康） |
+| 1 | 配置错误（doctor：存在警告） |
+| 2 | I/O 错误（doctor：存在错误） |
 
 ---
 
@@ -662,7 +595,7 @@ struct MyConfig {
 }
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.22", features = ["derive"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`。
 
 ### ☁️ 远程配置（Etcd/Consul/HTTP）
 
@@ -671,25 +604,23 @@ struct MyConfig {
 启用 `remote` 特性后，可以从远程来源加载配置：
 
 ```rust
-// 注意：远程配置也可以实现自定义 Source
-// 完整实现参见 examples 目录
-
-// 使用 HTTP 轮询来源（内置）
+// 使用 HTTP 轮询来源（内置）；自定义 Source 完整实现参见 examples 目录
 #[cfg(feature = "remote")]
 use confers::remote::HttpPolledSourceBuilder;
 
 #[cfg(feature = "remote")]
 let http_source = HttpPolledSourceBuilder::new()
     .url("https://api.example.com/config")
-    .bearer_token("your-token")
+    .interval(std::time::Duration::from_secs(30))
     .build()?;
 
 #[cfg(feature = "remote")]
 let config = ConfigBuilder::<MyConfig>::new()
     .source(Box::new(http_source))
     .build()?;
-    .await?;
 ```
+
+etcd 与 Consul 后端分别由 `etcd`、`consul` 特性提供，使用 `EtcdSourceBuilder`（`build()` 为异步方法）与 `ConsulSourceBuilder`。
 
 ### 📝 审计日志与安全
 
@@ -783,13 +714,13 @@ struct SecureConfig {
 - **分层配置**：将配置拆分为多个小结构体（如 `DatabaseConfig`、`ServerConfig`），再组合成 `AppConfig`。
 - **环境隔离**：为不同环境使用不同的 `env_prefix`（如 `DEV_`、`PROD_`）。
 - **防御式加载**：可选字段始终使用 `Option<T>`，关键字段提供 `default` 默认值。
-- **校验与清洗**：始终启用 `validate` 属性，并使用 `with_sanitizer` 清洗输入（如去除字符串首尾空白）。
+- **校验约束**：始终派生 `garde::Validate` 并启用 `#[config(validate)]`，把非法配置挡在启动阶段。
 - **安全**：用 `sensitive = true` 标记敏感字段，防止审计日志泄露。
 
 **应避免的做法**
 
 - **全局静态变量**：避免用全局 `static` 存储配置。建议通过依赖注入或 `Arc` 传递配置。
-- **忽略错误**：生产环境应严格检查 `ConfigError`，尤其是 `MemoryLimitExceeded` 与 `ValidationError`。
+- **忽略错误**：生产环境应严格检查 `ConfigError`，尤其是 `SizeLimitExceeded` 与 `ValidationFailed`。
 - **硬编码**：任何可能随环境变化的参数都应通过配置管理，而不是硬编码。
 - **明文存储敏感信息**：敏感配置应使用加密特性保护。
 
@@ -823,7 +754,7 @@ struct SecureConfig {
 **推荐做法：**
 
 - 使用环境变量存储敏感信息
-- 使用 `confers encrypt` 命令加密敏感配置
+- 使用 `#[config(encrypt = "xchacha20")]` 加密敏感配置字段
 - 将密钥存放在密钥管理系统（如 AWS Secrets Manager、HashiCorp Vault）
 
 #### 2. 配置加密
@@ -852,10 +783,9 @@ let decrypted_password = crypto.decrypt(&nonce, &encrypted_password, &key)?;
 
 ```rust
 use confers::key::KeyManager;
-use std::path::PathBuf;
 
 // 创建密钥管理器
-let mut key_manager = KeyManager::new(PathBuf::from("./secure_keys"))?;
+let mut key_manager = KeyManager::new()?;
 
 // 初始化密钥环（仅首次需要）
 let master_key = [0u8; 32]; // 从安全位置获取
@@ -893,7 +823,7 @@ println!("Key rotated from version {} to {}",
 配置审计日志以追踪所有配置的加载与修改操作。
 
 ```rust
-use confers::audit::{AuditWriter, AuditConfig};
+use confers::audit::AuditWriter;
 use std::path::PathBuf;
 
 // 以 builder 模式创建审计写入器
@@ -903,11 +833,11 @@ let audit_writer = AuditWriter::builder()
     .build();
 
 // 记录配置加载事件
-audit_writer.log_load("config.toml");
+audit_writer.log_load("config.toml")?;
 
 // 记录敏感操作
-audit_writer.log_key_access("database_password");
-audit_writer.log_decrypt("api_key", true);
+audit_writer.log_key_access("database_password")?;
+audit_writer.log_decrypt("api_key", true)?;
 ```
 
 **审计日志最佳实践：**
@@ -923,16 +853,14 @@ audit_writer.log_decrypt("api_key", true);
 从远程来源加载配置时，必须确保连接安全。
 
 ```rust
-use confers::ConfigBuilder;
+use confers::remote::HttpPolledSourceBuilder;
 
-// 使用 TLS 加密连接（需要 remote 特性）
-let config = ConfigBuilder::<MyConfig>::new()
-    .file("config.toml")
-    .env()
+// HttpPolledSourceBuilder 在构建期强制 HTTPS 并拒绝封锁网段目标
+let source = HttpPolledSourceBuilder::new()
+    .url("https://config.example.com/app.toml")
     .build()?;
 
-// 远程配置请使用 remote 特性与 HttpPolledSource
-// 完整示例参见 examples/remote_consul.rs
+// 远程配置完整示例参见 examples/remote_consul.rs
 ```
 
 **远程配置安全最佳实践：**
@@ -950,7 +878,7 @@ let config = ConfigBuilder::<MyConfig>::new()
 使用校验器确保配置值处于预期范围内。
 
 ```rust
-use confers::{Config, Validate};
+use confers::{Config, ConfigBuilder};
 use serde::Deserialize;
 use garde::Validate;
 
@@ -969,14 +897,13 @@ struct ValidatedConfig {
 }
 
 // 配置加载过程中会自动执行校验
-// 校验失败时返回 ConfigError::ValidationError
+// 校验失败时返回 ConfigError::ValidationFailed
 let config = ConfigBuilder::<ValidatedConfig>::new()
     .file("config.toml")
-    .validate(true)
     .build()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.22", features = ["derive", "email", "url", "regex"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email", "url", "regex"] }`。
 
 **配置校验最佳实践：**
 
@@ -989,12 +916,12 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
 
 #### 7. 安全校验规则
 
-`security-rules` 特性提供一套标准化的安全校验规则库。内置校验器覆盖 JWT 密钥强度、CORS 配置、SSRF 防护与 TLS 设置 —— 全部在启动时自动执行。
+`security-rules` 特性提供一套标准化的安全校验规则库。内置校验器覆盖 JWT 密钥强度、CORS 配置、SSRF 防护与 TLS 设置 ：全部在启动时自动执行。
 
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["security-rules"] }
+confers = { version = "0.6.0-rc.3", features = ["security-rules"] }
 ```
 
 ```rust
@@ -1036,7 +963,7 @@ if !report.is_ok(false) {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["feature-toggle"] }
+confers = { version = "0.6.0-rc.3", features = ["feature-toggle"] }
 ```
 
 ```rust
@@ -1093,9 +1020,9 @@ beta_api = false
 | 问题 | 解决方案 |
 |------|----------|
 | **❓ 环境变量不生效** | 1. 检查 `#[config(env_prefix = "APP")]` 是否设置正确。<br>2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。<br>3. 嵌套结构体使用双下划线，例如 `APP_DB__HOST` 映射到 `db.host`。 |
-| **❓ 加载时报 MemoryLimitExceeded 错误** | 1. 检查配置文件是否过大或存在循环引用。<br>2. 调高 `with_memory_limit(mb)` 阈值（默认不限制）。 |
-| **❓ 校验失败 ValidationError** | 1. 检查 `validator` 约束逻辑。`confers` 在加载完成后立即执行校验。<br>2. 查看错误输出，其中会指出哪个字段未通过哪条约束。 |
-| **❓ 远程配置加载失败 RemoteError** | 1. 检查网络连接与 URL 正确性。<br>2. 若启用了 TLS，确保证书路径正确且有效。<br>3. 检查认证令牌或用户名/口令是否过期。 |
+| **❓ 加载时报 SizeLimitExceeded 错误** | 1. 检查配置文件是否过大或存在循环引用。<br>2. 通过 `.limits(ConfigLimits { .. })` 调整文件大小、嵌套深度、键数量等上限。 |
+| **❓ 校验失败 ValidationFailed** | 1. 检查 `garde` 约束逻辑。`confers` 在构建阶段立即执行校验。<br>2. 查看错误输出，其中会指出哪个字段未通过哪条约束。 |
+| **❓ 远程配置加载失败 RemoteUnavailable** | 1. 检查网络连接与 URL 正确性。<br>2. 若启用了 TLS，确保证书路径正确且有效。<br>3. 检查认证令牌或用户名/口令是否过期。 |
 
 **💬 还需要帮助？** [提交 Issue](https://github.com/Kirky-X/confers/issues) 或访问 [在线 API 文档](https://docs.rs/confers)。
 
@@ -1107,5 +1034,8 @@ beta_api = false
 |:-----|:-----|
 | [📚 API 参考](API_REFERENCE.md) | 详细的接口文档 |
 | [🏗️ 架构文档](ARCHITECTURE.md) | 了解内部机制 |
-| [💻 示例代码](../examples/) | 真实场景代码示例 |
+| [🧩 宏指南](CONFIG_MACRO_GUIDE.md) | `#[derive(Config)]` 全部属性详解 |
+| [🔒 安全文档](SECURITY.md) | 安全策略与漏洞报告流程 |
+| [⚡ 性能指南](PERFORMANCE.md) | 性能优化与基准数据 |
 | [❓ FAQ](FAQ.md) | 常见问题解答 |
+| [💻 示例代码](../examples/) | 真实场景代码示例 |

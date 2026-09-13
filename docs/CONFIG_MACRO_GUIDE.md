@@ -31,7 +31,7 @@
 
 ## 🏗️ 结构体级属性
 
-### 1.1 启用校验
+### 启用校验
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -48,7 +48,7 @@ pub struct AppConfig {
 
 ---
 
-### 1.2 环境变量前缀
+### 环境变量前缀
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -65,7 +65,7 @@ pub struct AppConfig {
 
 ---
 
-### 1.3 应用名称
+### 应用名称
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -81,7 +81,7 @@ pub struct AppConfig {
 
 ---
 
-### 1.4 严格模式
+### 严格模式
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -97,7 +97,7 @@ pub struct AppConfig {
 
 ---
 
-### 1.5 文件监听（热重载）
+### 文件监听（热重载）
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -110,11 +110,11 @@ pub struct AppConfig {
 
 **效果**：
 - 需要启用 `watch` 特性
-- 使用 `ConfigBuilder::build_with_watcher()` 获取监听器
+- 配合 `FsWatcher` / `MultiFsWatcher` 实现真正的热重载（`build_with_watcher()` 已弃用，它不会随文件变更重载）
 
 ---
 
-### 1.6 配置版本
+### 配置版本
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -130,9 +130,41 @@ pub struct AppConfig {
 
 ---
 
+### 批量重命名（rename_all）
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(rename_all = "camelCase")]  // 配置文件键使用 camelCase
+pub struct AppConfig {
+    pub database_url: String,  // 配置键为 databaseUrl
+}
+```
+
+**效果**：
+- codegen 在反序列化前把外部键映射回 serde 字段名（serde 名显式出现时优先）
+- 非法风格在宏展开期报错；支持 `camelCase`、`snake_case`、`kebab-case`
+
+---
+
+### Profile 覆盖
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Config)]
+#[config(profile, profile_env = "APP_ENV")]  // APP_ENV=production 激活 production 覆盖
+pub struct AppConfig {
+    pub log_level: String,
+}
+```
+
+**效果**：
+- 依据 `profile_env` 指定的环境变量激活对应的 profile overlay
+- 需要与 `modules` 特性的配置分组配合使用
+
+---
+
 ## 🏷️ 字段级属性
 
-### 2.1 默认值
+### 默认值
 
 **方式一：新语法（推荐）**
 ```rust
@@ -167,7 +199,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.2 字段描述
+### 字段描述
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -186,7 +218,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.3 配置键名映射
+### 配置键名映射
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -201,7 +233,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.4 环境变量名映射
+### 环境变量名映射
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -216,7 +248,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.5 CLI 参数名
+### CLI 参数名
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -234,7 +266,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.6 校验规则
+### 校验规则
 
 Confers 使用 `garde` 校验库。要启用校验，请派生 `garde::Validate` 并在字段上添加校验属性：
 
@@ -281,7 +313,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.7 敏感字段
+### 敏感字段
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -300,7 +332,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.8 扁平化字段
+### 扁平化字段
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -338,7 +370,7 @@ pub struct InnerConfig {
 
 ---
 
-### 2.9 跳过字段
+### 跳过字段
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -356,7 +388,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.10 加密字段
+### 加密字段
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -376,7 +408,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.11 变量插值
+### 变量插值
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -393,7 +425,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.12 合并策略
+### 合并策略
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -415,7 +447,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.13 动态字段
+### 动态字段
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -432,7 +464,7 @@ pub struct AppConfig {
 
 ---
 
-### 2.14 模块分组
+### 模块分组
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
@@ -542,7 +574,7 @@ pub struct DatabaseConfig {
 
 使用 `#[derive(Config)]` 宏之后，结构体会自动获得以下方法：
 
-### 4.1 配置构建器
+### 配置构建器
 
 ```rust
 use confers::ConfigBuilder;
@@ -559,14 +591,17 @@ let config = ConfigBuilder::<AppConfig>::new()
     .env_prefix("APP_")
     .build()?;
 
-// 支持热重载（需要 watch 特性）
-let (rx, guard) = ConfigBuilder::<AppConfig>::new()
-    .file("config.toml")
-    .watch(true)
-    .build_with_watcher().await?;
+// 热重载（需要 watch 特性）：直接使用 FsWatcher
+let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
+while let Some(changed_path) = watcher.recv().await {
+    let config = ConfigBuilder::<AppConfig>::new()
+        .file("config.toml")
+        .build()?;
+    // 将新配置应用到应用状态
+}
 ```
 
-### 4.2 辅助函数
+### 辅助函数
 
 ```rust
 // 便捷的 config() 函数
@@ -576,7 +611,7 @@ let config = confers::config::<AppConfig>()
     .build()?;
 ```
 
-### 4.3 Schema 生成
+### Schema 生成
 
 ```rust
 // 生成 JSON Schema（需要 schema 特性）
@@ -587,7 +622,7 @@ let schema = AppConfig::json_schema();
 let ts_type = AppConfig::typescript_type();
 ```
 
-### 4.4 其他方法
+### 其他方法
 
 ```rust
 // 获取默认值
@@ -601,7 +636,7 @@ let value = config.some_field;
 
 ## 💡 完整使用示例
 
-### 5.1 基础用法
+### 基础用法
 
 **定义配置结构体**
 ```rust
@@ -654,7 +689,7 @@ export APP_ENABLED=true
 cargo run
 ```
 
-### 5.2 敏感配置加密
+### 敏感配置加密
 
 ```rust
 use confers::Config;
@@ -672,7 +707,7 @@ pub struct SecureConfig {
 
 **加密使用 XChaCha20-Poly1305 算法。nonce 与密文一同存储。**
 
-### 5.3 热重载
+### 热重载
 
 ```rust
 use confers::ConfigBuilder;
@@ -686,16 +721,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pub port: u16,
     }
 
-    let (rx, guard) = ConfigBuilder::<HotReloadConfig>::new()
+    let config = ConfigBuilder::<HotReloadConfig>::new()
         .file("config.toml")
-        .watch(true)
-        .build_with_watcher().await?;
+        .build()?;
 
-    let config = rx.borrow().clone();
     println!("Initial port: {}", config.port);
 
-    // 应用持续运行……
-    // 配置文件变更时，rx 会收到更新
+    // 监听文件变更并重建配置
+    let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
+    while let Some(changed_path) = watcher.recv().await {
+        println!("Config file changed: {:?}", changed_path);
+        let new_config = ConfigBuilder::<HotReloadConfig>::new()
+            .file("config.toml")
+            .build()?;
+        // 将 new_config 应用到应用状态
+    }
 
     Ok(())
 }
@@ -715,6 +755,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `strict` | CLI 解析严格模式 |
 | `watch` | 启用文件监听 |
 | `version` | 用于迁移的配置版本号 |
+| `rename_all` | 批量重命名配置键（`camelCase` / `snake_case` / `kebab-case`） |
+| `profile` | 启用 profile 覆盖 |
+| `profile_env` | 指定驱动 profile 切换的环境变量名（如 `APP_ENV`） |
 
 ### 字段级属性
 
@@ -733,6 +776,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `interpolate` | 启用变量插值 |
 | `merge_strategy` | 多来源合并策略 |
 | `dynamic` | 生成 DynamicField 句柄 |
+| `watch` | 字段级热重载订阅器（`field_watcher`） |
 | `module_group` | 模块化配置的分组 |
 
 ---
@@ -741,7 +785,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 校验由 `garde` crate 负责。请派生 `garde::Validate` 并使用 `#[garde(...)]` 属性：
 
-### 7.1 范围校验
+### 范围校验
 
 ```rust
 #[garde(range(min = 1, max = 65535))]
@@ -753,7 +797,7 @@ pub port: u16,
 - i8, i16, i32, i64, i128, isize
 - f32, f64
 
-### 7.2 长度校验
+### 长度校验
 
 ```rust
 #[garde(length(min = 0, max = 100))]
@@ -764,7 +808,7 @@ pub username: String,
 - 字符串长度
 - 数组长度
 
-### 7.3 内置校验器
+### 内置校验器
 
 **邮箱校验**
 ```rust
@@ -784,7 +828,7 @@ pub website: String,
 pub id_code: String,
 ```
 
-### 7.4 自定义校验
+### 自定义校验
 
 ```rust
 #[garde(custom(my_validator))]
@@ -819,35 +863,35 @@ fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
 
 ## 🌟 最佳实践
 
-### 9.1 推荐配置
+### 推荐配置
 
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["recommended"] }
-garde = { version = "0.22", features = ["derive"] }
+confers = { version = "0.6.0-rc.3", features = ["recommended"] }
+garde = { version = "0.23", features = ["derive"] }
 ```
 
 `recommended` 特性包含：`toml`、`json`、`env`、`validation`
 
-### 9.2 开发环境配置
+### 开发环境配置
 
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["dev"] }
-garde = { version = "0.22", features = ["derive"] }
+confers = { version = "0.6.0-rc.3", features = ["dev"] }
+garde = { version = "0.23", features = ["derive"] }
 ```
 
 `dev` 特性包含面向开发便利的大多数特性。
 
-### 9.3 生产环境配置
+### 生产环境配置
 
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["production"] }
-garde = { version = "0.22", features = ["derive"] }
+confers = { version = "0.6.0-rc.3", features = ["production"] }
+garde = { version = "0.23", features = ["derive"] }
 ```
 
 `production` 特性包含：`toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`
@@ -856,7 +900,7 @@ garde = { version = "0.22", features = ["derive"] }
 
 ## 🔧 故障排查
 
-### 10.1 常见问题
+### 常见问题
 
 **问：配置值加载不正确？**
 答：检查环境变量前缀是否正确，并确认配置文件格式匹配。
@@ -868,8 +912,18 @@ garde = { version = "0.22", features = ["derive"] }
 答：确保使用 `sensitive = true` 属性标记敏感字段。
 
 **问：热重载不生效？**
-答：确保已启用 `watch` 特性，并且使用的是 `load_with_watcher()` 方法。
+答：确保已启用 `watch` 特性，并使用 `FsWatcher` / `MultiFsWatcher` 监听变更后重建配置（`build_with_watcher()` 已弃用，不会随文件变更重载）。
 
 ---
 
-*本文档基于 Confers v0.5.0 编写。*
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [📖 用户指南](USER_GUIDE.md) | 配置加载与搜索路径 |
+| [📘 API 参考](API_REFERENCE.md) | 派生宏生成代码用到的运行时 API |
+| [⚡ 性能指南](PERFORMANCE.md) | 宏 codegen 对编译产物体积的影响控制 |
+
+---
+
+*本文档基于 Confers v0.6.0-rc.3 编写。*

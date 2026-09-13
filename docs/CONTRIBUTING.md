@@ -1,6 +1,6 @@
 # 🤝 Confers 贡献指南
 
-<img src="docs/assets/confers.png" alt="Confers Logo" width="150">
+<img src="assets/confers.png" alt="Confers Logo" width="150">
 
 感谢您关注 **confers**！无论您是在修复缺陷、添加新特性、改进文档还是帮助他人，您的贡献都弥足珍贵。
 
@@ -153,8 +153,8 @@ cargo build
 # 运行全部测试
 cargo test --all-features
 
-# 运行示例
-cargo run --example basic --features watch
+# 运行示例（examples 成员默认启用 full 特性）
+cargo run -p confers-examples --bin basic_usage
 ```
 
 ---
@@ -313,7 +313,7 @@ git worktree remove /path/to/worktree
 - ✅ 不要让已完成的分支滞留在仓库中
 - ✅ 如果合并失败，先修复问题并重跑质量检查后再重试
 - ✅ 基于 worktree 的开发，合并后务必移除 worktree
-- ❌ 不要跳过清理 —— 分支堆积会让仓库变得混乱
+- ❌ 不要跳过清理，分支堆积会让仓库变得混乱
 
 ### 测试要求
 
@@ -477,4 +477,4 @@ Closes #123
 
 ### 💝 感谢您为 Confers 做出贡献！
 
-**[📖 用户指南](USER_GUIDE.md)** • **[❓ FAQ](FAQ.md)** • **[🐛 报告问题](https://github.com/Kirky-X/confers/issues)**
+**[📖 用户指南](USER_GUIDE.md)** • **[🏗️ 架构文档](ARCHITECTURE.md)** • **[🧪 测试场景矩阵](TEST_SCENARIOS.md)** • **[❓ FAQ](FAQ.md)** • **[🐛 报告问题](https://github.com/Kirky-X/confers/issues)**

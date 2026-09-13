@@ -29,7 +29,7 @@
 
 ```toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["toml", "json", "env"] }
+confers = { version = "0.6.0-rc.3", features = ["toml", "json", "env"] }
 ```
 
 ### 2. 基本用法
@@ -73,14 +73,14 @@ let value = ConfigBuilder::<serde_json::Value>::new()
 
 ### 来源链
 
-如需更精细的优先级控制，请使用 `SourceChainBuilder`：
+如需更精细的优先级控制，请使用 `SourceChainBuilder`（方法与 `ConfigBuilder` 同构：`file()`、`file_optional()`、`env()`、`env_with_prefix()`、`defaults()`、`memory()` 等）：
 
 ```rust
-use confers::{SourceChainBuilder, FileSource, EnvSource};
+use confers::SourceChainBuilder;
 
 let chain = SourceChainBuilder::new()
-    .add_source(FileSource::new("base.toml"))
-    .add_source(EnvSource::new())
+    .file("base.toml")
+    .env_with_prefix("MYAPP_")
     .build();
 ```
 
@@ -126,11 +126,11 @@ let source = HttpPolledSourceBuilder::new()
     .build()?;
 ```
 
-如需 etcd 或 Consul 后端，请启用 `etcd` 或 `consul` 特性，并分别使用 `EtcdSourceBuilder` / `ConsulSourceBuilder`。
+如需 etcd 或 Consul 后端，请启用 `etcd` 或 `consul` 特性，并分别使用 `EtcdSourceBuilder`（`build()` 为异步方法，内部建立 gRPC 连接）与 `ConsulSourceBuilder`。
 
 ## 🎨 特性标志
 
-本库按特性门控。完整的特性预设列表（`default`、`recommended`、`dev`、`production`、`full`）见 `Cargo.toml`。常用特性：
+本库按特性门控。完整的特性预设列表（`default`、`minimal`、`recommended`、`dev`、`production`、`distributed`、`full`）见 `Cargo.toml`。常用特性：
 
 | 特性 | 说明 |
 | -------------- | ---------------------------------------- |
@@ -148,8 +148,8 @@ let source = HttpPolledSourceBuilder::new()
 
 本库区分**配置阶段**错误与**运行时**错误：
 
-- `ConfigConfigError` —— 初始化阶段失败（缺少字段、解析错误、校验失败）。
-- `ConfersError` —— 运行时失败（超时、远程不可用、解密失败）。
+- `ConfigConfigError`：初始化阶段失败（缺少字段、解析错误、校验失败）。
+- `ConfersError`：运行时失败（超时、远程不可用、解密失败）。
 
 ```rust
 use confers::{ConfigConfigError, ConfersError};
@@ -165,6 +165,8 @@ match result {
 }
 ```
 
+完整变体清单见 [API 参考](API_REFERENCE.md#-错误类型)。
+
 ## 🔄 从旧版 ConfersCli 快照迁移
 
 如果您以前依赖过引用 `confers::ConfersCli`、`confers::commands::key::KeySubcommand` 或 `confers::commands::validate::{ValidateCommand, ValidateLevel}` 的代码片段，请迁移到上文的公开 API。这些类型从来不属于公开导出面，现已从文档中移除；CLI 可执行文件内部使用 `clap`，相关类型保持 crate 内私有。
@@ -177,7 +179,7 @@ match result {
 
 ```toml
 [dependencies]
-confers = { version = "0.6.0-rc.2", features = ["validation", "encryption"] }
+confers = { version = "0.6.0-rc.3", features = ["validation", "encryption"] }
 ```
 
 ### 加密密钥问题
@@ -186,11 +188,20 @@ confers = { version = "0.6.0-rc.2", features = ["validation", "encryption"] }
 
 ```rust
 use confers::key::KeyManager;
-use std::path::PathBuf;
 
-let mut km = KeyManager::new(PathBuf::from("./secure_keys"))?;
+let mut km = KeyManager::new()?;
 ```
 
 ### 校验失败
 
 请检查 `ValidationResult`，其中包含未通过的规则列表与出错的字段路径。每个 `ValidationRule` 会报告字段路径、规则名称以及人类可读的错误消息。
+
+---
+
+## 📚 相关文档
+
+| 文档 | 说明 |
+|:-----|:-----|
+| [📘 API 参考](API_REFERENCE.md) | 本指南涉及 API 的完整签名 |
+| [🔒 安全文档](SECURITY.md) | 加密与密钥管理的安全实践 |
+| [🧩 宏指南](CONFIG_MACRO_GUIDE.md) | `#[derive(Config)]` 全部属性 |
