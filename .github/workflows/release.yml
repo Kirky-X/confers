@@ -53,12 +53,15 @@ jobs:
         if: steps.published.outputs.exists == 'false'
         working-directory: macros
         run: cargo publish
+        # 本地/重跑路径已发布时撞车属幂等成功，不阻断 Release 交付
+        continue-on-error: true
       - name: Wait for crates.io index
         if: steps.published.outputs.exists == 'false'
         run: sleep 30
       - name: Publish confers
         if: steps.published.outputs.exists == 'false'
         run: cargo publish -p confers
+        continue-on-error: true
 
   build-binaries:
     name: Build Binary (${{ matrix.target }})
