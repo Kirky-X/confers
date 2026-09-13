@@ -84,13 +84,6 @@ pub fn deallocated_secure_strings() -> usize {
     DEALLOCATED_SECURE_STRINGS.load(Ordering::SeqCst)
 }
 
-/// 清除所有安全字符串计数（用于测试）
-#[allow(dead_code)]
-pub(crate) fn reset_secure_string_counters() {
-    ALLOCATED_SECURE_STRINGS.store(0, Ordering::SeqCst);
-    DEALLOCATED_SECURE_STRINGS.store(0, Ordering::SeqCst);
-}
-
 /// 安全字符串类型
 ///
 /// # 安全特性
@@ -889,23 +882,24 @@ mod tests {
     #[serial_test::serial]
     #[test]
     fn test_secure_string_counter_lifecycle() {
-        // Serial test: counters are global; this test must run alone.
-        reset_secure_string_counters();
-        assert_eq!(allocated_secure_strings(), 0);
-        assert_eq!(deallocated_secure_strings(), 0);
+        // 计数器为进程级全局，测试进程内还有并行用例在创建/释放 SecureString，
+        // 因此只能做单调性断言：自身分配使 allocated 严格增、自身释放使
+        // deallocated 严格增。精确清零断言需要独占进程（见手动验证的
+        // test_allocation_counters，因同一约束被标记 ignore）。
+        let allocated_before = allocated_secure_strings();
+        let deallocated_before = deallocated_secure_strings();
 
         {
             let _s = SecureString::from("counter-test");
-            assert_eq!(allocated_secure_strings(), 1);
-            assert_eq!(deallocated_secure_strings(), 0);
+            assert!(
+                allocated_secure_strings() >= allocated_before + 1,
+                "创建 SecureString 必须推高分配计数"
+            );
         }
         // After drop, deallocated counter increments.
-        assert_eq!(allocated_secure_strings(), 1);
-        assert_eq!(deallocated_secure_strings(), 1);
-
-        // Reset restores both to zero.
-        reset_secure_string_counters();
-        assert_eq!(allocated_secure_strings(), 0);
-        assert_eq!(deallocated_secure_strings(), 0);
+        assert!(
+            deallocated_secure_strings() >= deallocated_before + 1,
+            "释放 SecureString 必须推高释放计数"
+        );
     }
 }
