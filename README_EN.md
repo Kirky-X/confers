@@ -35,10 +35,9 @@ Declare your config structs with `#[derive(Config)]` and let the library do the 
 
 ## 📋 Table of Contents
 
-<details open style="padding:16px">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 Table of Contents (Click to expand)</summary>
+<details open>
+<summary>📑 目录</summary>
 
-- [📋 Table of Contents](#-table-of-contents)
 - [✨ Features](#-features)
 - [🚀 Quick Start](#-quick-start)
 - [🎨 Feature Flags](#-feature-flags)

@@ -35,10 +35,9 @@
 
 ## 📋 目录
 
-<details open style="padding:16px">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">📑 目录（点击展开）</summary>
+<details open>
+<summary>📑 目录</summary>
 
-- [📋 目录](#-目录)
 - [✨ 功能特性](#-功能特性)
 - [🚀 快速开始](#-快速开始)
 - [🎨 特性标志](#-特性标志)
