@@ -268,48 +268,7 @@ pub struct AppConfig {
 
 ### 校验规则
 
-Confers 使用 `garde` 校验库。要启用校验，请派生 `garde::Validate` 并在字段上添加校验属性：
-
-**范围校验**
-```rust
-use confers::Config;
-use garde::Validate;
-
-#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
-#[config(validate)]
-pub struct AppConfig {
-    #[garde(range(min = 1, max = 65535))]
-    pub port: u16,
-
-    #[garde(range(min = 0, max = 100))]
-    pub rate: i32,
-}
-```
-
-**长度校验**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
-#[config(validate)]
-pub struct AppConfig {
-    #[garde(length(min = 3, max = 50))]
-    pub username: String,
-}
-```
-
-**内置校验器**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
-#[config(validate)]
-pub struct AppConfig {
-    #[garde(email)]
-    pub email: String,
-
-    #[garde(url)]
-    pub website: String,
-}
-```
-
-**注意**：`#[config(validate)]` 属性用于在构建时启用校验，而具体的校验规则通过 `garde` crate 的 `#[garde(...)]` 属性指定。
+Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(...)]` 属性声明规则（范围、长度、邮箱、URL、模式、自定义函数等），并以 `#[config(validate)]` 在构建时启用校验。各类规则的写法统一见 [✅ 使用 Garde 进行校验](#-使用-garde-进行校验) 一节。
 
 ---
 
@@ -590,16 +549,9 @@ let config = ConfigBuilder::<AppConfig>::new()
     .file("config.toml")
     .env_prefix("APP_")
     .build()?;
-
-// 热重载（需要 watch 特性）：直接使用 FsWatcher
-let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
-while let Some(changed_path) = watcher.recv().await {
-    let config = ConfigBuilder::<AppConfig>::new()
-        .file("config.toml")
-        .build()?;
-    // 将新配置应用到应用状态
-}
 ```
+
+热重载（需要 `watch` 特性）不经过 `ConfigBuilder` 链式方法，而是直接使用 `FsWatcher`；完整监听循环见 [完整使用示例 · 热重载](#热重载)。
 
 ### 辅助函数
 
@@ -872,7 +824,7 @@ confers = { version = "0.6.0-rc.3", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
-`recommended` 特性包含：`toml`、`json`、`env`、`validation`
+`recommended` 预设包含的特性清单见 [README · 功能预设](../README.md#-特性标志)。
 
 ### 开发环境配置
 
@@ -894,7 +846,7 @@ confers = { version = "0.6.0-rc.3", features = ["production"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
-`production` 特性包含：`toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`
+`production` 预设包含的特性清单同样见 [README · 功能预设](../README.md#-特性标志)。
 
 ---
 

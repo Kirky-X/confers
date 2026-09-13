@@ -99,30 +99,11 @@ cargo --version
 
 **可用的特性预设：**
 
-| 预设 | 特性 | 适用场景 |
-|------|------|----------|
-| `minimal` | `env`、`json` | 环境变量 + JSON |
-| `recommended` | `toml`、`json`、`env`、`validation`、`security-rules` | 配置加载 + 校验 + 安全规则 |
-| `dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 全工具开发环境 |
-| `production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产就绪配置 |
-| `distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
-| `full` | 全部特性 | 完整功能集 |
+`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../README.md#-特性标志)。
 
 **单项特性：**
 
-| 特性 | 说明 | 默认启用 |
-|------|------|----------|
-| `toml` | TOML 格式支持 | ✅ |
-| `json` | JSON 格式支持 | ✅ |
-| `env` | 环境变量支持 | ✅ |
-| `yaml` | YAML 格式支持 | ❌ |
-| `validation` | 配置校验（garde） | ❌ |
-| `cli` | 命令行工具 | ❌ |
-| `watch` | 文件监听与热重载 | ❌ |
-| `audit` | 审计日志 | ❌ |
-| `schema` | JSON Schema 生成 | ❌ |
-| `remote` | 远程配置（HTTP/Etcd/Consul） | ❌ |
-| `encryption` | 配置加密 | ❌ |
+每个可选能力均为独立特性标志；完整的单项特性矩阵（含默认启用状态与说明，逐项对应 `Cargo.toml` 的 `[features]` 定义）见 [README · 功能矩阵](../README.md#-功能矩阵)。
 
 如果需要异步/远程支持，请添加 tokio：
 
@@ -161,33 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-需要热重载能力时，使用 `FsWatcher` 监听文件变更并重建配置（推荐）：
-
-```rust
-use confers::{Config, ConfigBuilder};
-use confers::watcher::FsWatcher;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize, Config)]
-struct AppConfig {
-    #[config(default = 8080)]
-    port: u16,
-    #[config(default = "\"localhost\".to_string()")]
-    host: String,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut watcher = FsWatcher::new("config.toml", 200).await?;
-    while watcher.recv().await.is_some() {
-        // 配置文件变更，重建并应用
-        let new_config = ConfigBuilder::<AppConfig>::new()
-            .file("config.toml")
-            .build()?;
-    }
-    Ok(())
-}
-```
+需要热重载能力时，使用 `FsWatcher` 监听文件变更并重建配置（推荐），完整用法见 [👀 文件监听与热重载](#-文件监听与热重载)。
 
 **说明**：`Config` 派生宏提供类型安全的配置。使用 `ConfigBuilder` 进行加载：
 - `ConfigBuilder::<T>::new().build()` ：同步加载
@@ -436,13 +391,9 @@ let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
     .limits(ConfigLimits::default())
     .build()?;
-
-// 热重载（异步）- 使用 FsWatcher（推荐，需要 watch 特性）
-#[cfg(feature = "watch")]
-let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
 ```
 
-> 💡 **提示**：校验由 `validation` 特性与 `#[config(validate)]` 属性控制，在构建阶段自动执行（见[校验与清洗](#-校验与清洗)一节）。
+> 💡 **提示**：校验由 `validation` 特性与 `#[config(validate)]` 属性控制，在构建阶段自动执行（见[校验与清洗](#-校验与清洗)一节）。热重载（异步，需 `watch` 特性）经 `FsWatcher` 实现，见[文件监听与热重载](#-文件监听与热重载)一节。
 
 ### 🔢 默认值与环境变量
 
@@ -759,23 +710,7 @@ struct SecureConfig {
 
 #### 2. 配置加密
 
-使用 XChaCha20-Poly1305 加密算法保护敏感配置信息。
-
-```rust
-use confers::XChaCha20Crypto;
-
-// 创建加密器实例
-let crypto = XChaCha20Crypto::new();
-
-// 生成 32 字节密钥（务必妥善保存！）
-let key = [0u8; 32]; // 生产环境请使用安全的随机密钥
-
-// 加密敏感值 - 返回 (nonce, ciphertext)
-let (nonce, encrypted_password) = crypto.encrypt(b"my_secret_password", &key)?;
-
-// 解密配置
-let decrypted_password = crypto.decrypt(&nonce, &encrypted_password, &key)?;
-```
+使用 XChaCha20-Poly1305 加密敏感配置信息，并在结构体字段上声明 `#[config(encrypt = "xchacha20")]`，加载时自动解密。`XChaCha20Crypto` 的加密/解密用法与配置结构体写法见 [🔐 敏感数据加密](#-敏感数据加密) 一节；密钥务必妥善保存，不得提交到版本控制系统。
 
 #### 3. 密钥管理
 
@@ -820,25 +755,7 @@ println!("Key rotated from version {} to {}",
 
 #### 4. 审计日志配置
 
-配置审计日志以追踪所有配置的加载与修改操作。
-
-```rust
-use confers::audit::AuditWriter;
-use std::path::PathBuf;
-
-// 以 builder 模式创建审计写入器
-let audit_writer = AuditWriter::builder()
-    .log_dir(PathBuf::from("/var/log/confers"))
-    .enabled(true)
-    .build();
-
-// 记录配置加载事件
-audit_writer.log_load("config.toml")?;
-
-// 记录敏感操作
-audit_writer.log_key_access("database_password")?;
-audit_writer.log_decrypt("api_key", true)?;
-```
+配置审计日志以追踪所有配置的加载与修改操作。`AuditWriter` 的构建与事件记录示例见 [🔒 安全文档 · 审计日志](SECURITY.md#审计日志)，完整 API 签名见 [API 参考 · 审计日志配置](API_REFERENCE.md#审计日志配置)。
 
 **审计日志最佳实践：**
 

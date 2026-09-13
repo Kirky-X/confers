@@ -33,71 +33,7 @@
 
 ### 📦 特性说明
 
-confers 提供灵活的特性配置，用户可按需选择所需功能：
-
-**特性预设：**
-
-| 预设 | 特性 | 适用场景 |
-|------|------|----------|
-| `minimal` | `env` + `json` | 最小依赖（环境变量 + JSON） |
-| `recommended` | `toml` + `json` + `env` + `validation` + `security-rules` | 大多数应用的推荐配置 |
-| `dev` | `toml` + `json` + `yaml` + `env` + `cli` + `validation` + `schema` + `audit` + `watch` + `migration` + `snapshot` + `dynamic` | 开发配置 |
-| `production` | `toml` + `env` + `watch` + `encryption` + `validation` + `audit` + `schema` + `cli` + `migration` + `dynamic` + `progressive-reload` + `snapshot` + `security-rules` + `feature-toggle` | 生产配置 |
-| `distributed` | `toml` + `json` + `env` + `watch` + `validation` + `config-bus` + `progressive-reload` + `audit` | 分布式系统 |
-| `full` | 全部特性 | 完整功能集 |
-
-**单项特性：**
-
-| 特性 | 说明 | 默认启用 |
-|------|------|----------|
-| **格式支持** |||
-| `toml` | TOML 格式支持 | ✅ |
-| `json` | JSON 格式支持 | ✅ |
-| `yaml` | YAML 格式支持 | ❌ |
-| `ini` | INI 格式支持 | ❌ |
-| `env` | 环境变量支持 | ✅ |
-| `dotenv` | `.env` 文件支持（`env` 的别名） | ❌ |
-| **核心特性** |||
-| `validation` | 配置校验（garde） | ❌ |
-| `watch` | 文件监听与热重载 | ❌ |
-| `encryption` | XChaCha20 加密 | ❌ |
-| `cli` | 命令行集成 | ❌ |
-| `schema` | JSON Schema 生成 | ❌ |
-| `typescript-schema` | TypeScript 类型生成 | ❌ |
-| **安全** |||
-| `security` | 安全模块 | ❌ |
-| `security-rules` | 安全校验规则 | ❌ |
-| `key` | 密钥管理系统 | ❌ |
-| **进阶特性** |||
-| `feature-toggle` | 运行时特性开关 | ❌ |
-| `audit` | 审计日志 | ❌ |
-| `dynamic` | 动态字段 | ❌ |
-| `progressive-reload` | 渐进式发布 | ❌ |
-| `migration` | 配置迁移 | ❌ |
-| `snapshot` | 快照回滚 | ❌ |
-| `interpolation` | 变量插值 | ❌ |
-| **远程来源** |||
-| `remote` | HTTP 轮询 | ❌ |
-| `etcd` | Etcd 集成 | ❌ |
-| `consul` | Consul 集成 | ❌ |
-| **消息总线** |||
-| `config-bus` | 配置事件总线 | ❌ |
-| `nats-bus` | NATS 消息总线 | ❌ |
-| `redis-bus` | Redis 消息总线 | ❌ |
-| **变更流** |||
-| `change-stream` | 统一变更流端口（复用 config-bus 传输） | ❌ |
-| **远程扩展** |||
-| `etcd-watch` | etcd 原生 watch 流 | ❌ |
-| `k8s` | Kubernetes ConfigMap/Secret 配置源 | ❌ |
-| `nacos` | Nacos 配置源 | ❌ |
-| **其他** |||
-| `context-aware` | 上下文感知配置 | ❌ |
-| `modules` | 模块化配置 | ❌ |
-| `lazy` | 惰性分段解析（超大 TOML 文档） | ❌ |
-| `tracing` | 关键路径 tracing 埋点 | ❌ |
-| `cloud-kms` | 云密钥后端（Vault transit） | ❌ |
-| `keyring` | 系统钥匙串密钥存储 | ❌ |
-| `openfeature` | OpenFeature 灰度引擎 | ❌ |
+confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../README.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
 
 ---
 
@@ -1565,133 +1501,19 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 配置校验
 
-始终在加载时校验配置：启用 `validation` 特性并使用 `#[config(validate)]`，配置构建阶段即执行 garde 校验：
-
-```rust
-use confers::Config;
-use garde::Validate;
-use serde::{Deserialize, Serialize};
-
-#[derive(Config, Validate, Serialize, Deserialize, Debug)]
-#[config(validate)]
-struct DatabaseConfig {
-    #[serde(default = "default_url")]
-    #[garde(length(min = 1))]
-    url: String,
-
-    #[serde(default = "default_pool_size")]
-    #[garde(range(min = 1, max = 100))]
-    pool_size: usize,
-}
-
-fn default_url() -> String {
-    "postgres://localhost:5432/app".to_string()
-}
-
-fn default_pool_size() -> usize {
-    10
-}
-```
+始终在加载时校验配置：启用 `validation` 特性并使用 `#[config(validate)]`，配置构建阶段即执行 garde 校验。完整示例与规则写法见 [用户指南 · 校验与清洗](USER_GUIDE.md#-校验与清洗) 与 [宏指南 · 使用 Garde 进行校验](CONFIG_MACRO_GUIDE.md#-使用-garde-进行校验)。
 
 ### 密钥管理安全
 
-⚠️ 在生产环境中，务必安全管理密钥：
-
-```rust
-use confers::key::KeyManager;
-
-fn setup_secure_key_management() -> Result<(), Box<dyn std::error::Error>> {
-    // 从环境变量或安全存储获取主密钥
-    let master_key = std::env::var("MASTER_KEY")
-        .map(|s| {
-            let mut key = [0u8; 32];
-            let key_bytes = s.as_bytes();
-            key.copy_from_slice(&key_bytes[..32.min(key_bytes.len())]);
-            key
-        })?;
-
-    let mut km = KeyManager::new()?;
-
-    // 初始化密钥环
-    km.initialize(
-        &master_key,
-        "production".to_string(),
-        "security-team".to_string(),
-    )?;
-
-    // 定期轮换密钥（建议每 90 天）
-    let rotation_result = km.rotate_key(
-        &master_key,
-        Some("production".to_string()),
-        "security-team".to_string(),
-        Some("Scheduled rotation".to_string()),
-    )?;
-
-    println!("Key rotated from version {} to {}",
-        rotation_result.previous_version,
-        rotation_result.new_version);
-
-    Ok(())
-}
-```
+⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key 特性）](#密钥管理key-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 ### 热重载配置
 
-使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性）：
-
-```rust
-use confers::watcher::{FsWatcher, WatcherConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let watcher_config = WatcherConfig::builder()
-        .with_debounce(300) // 防抖间隔（毫秒）
-        .build();
-
-    // 以指定防抖间隔监听配置文件
-    let mut watcher = FsWatcher::new("config.toml", watcher_config.debounce_ms).await?;
-
-    // 每次文件变更都重新加载配置（load_sync 为 Config 派生宏生成的方法）
-    while let Some(changed_path) = watcher.recv().await {
-        println!("检测到配置变更: {:?}", changed_path);
-        let config = AppConfig::load_sync()?;
-        println!("配置已重载: {:?}", config);
-    }
-
-    Ok(())
-}
-```
-
-**注意**：热重载功能需要启用 `watch` 特性。`ConfigBuilder::build_with_watcher()` 已弃用（不会在文件变更时重载），请直接使用 `FsWatcher`/`MultiFsWatcher`。
+使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性），防抖等参数经 `WatcherConfig::builder()` 调整；监听循环的完整写法见 [用户指南 · 文件监听与热重载](USER_GUIDE.md#-文件监听与热重载)。`build_with_watcher()` 的弃用说明见 [ConfigBuilder · build_with_watcher()](#build_with_watcher异步已弃用)。
 
 ### 敏感数据加密
 
-加密敏感配置值：
-
-```rust
-use confers::XChaCha20Crypto;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct Secrets {
-    // encrypt 属性需要显式指定算法
-    #[config(encrypt = "xchacha20")]
-    api_key: String,
-
-    #[config(encrypt = "xchacha20")]
-    database_password: String,
-}
-
-fn decrypt_secrets() -> Result<(), Box<dyn std::error::Error>> {
-    let crypto = XChaCha20Crypto::new();
-    let key = load_encryption_key()?; // 32 字节密钥
-
-    let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
-    let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
-
-    Ok(())
-}
-```
+在结构体字段上声明 `#[config(encrypt = "xchacha20")]` 即可在加载时自动解密敏感配置值；`XChaCha20Crypto` 的 encrypt/decrypt 用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
 
 ### 性能优化
 
@@ -1773,23 +1595,7 @@ impl CachedConfig {
 
 **如何加密敏感数据：**
 
-```rust
-use confers::XChaCha20Crypto;
-
-// 创建加密器
-let crypto = XChaCha20Crypto::new();
-
-// 生成或加载 32 字节密钥
-let key = load_encryption_key()?;
-
-// 加密敏感值
-let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
-println!("Encrypted {} bytes", ciphertext.len());
-
-// 解密敏感值
-let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
-assert_eq!(decrypted, b"my-secret-api-key");
-```
+使用 `XChaCha20Crypto` 的 `encrypt` / `decrypt`（返回 `(nonce, ciphertext)`，密钥须恰好 32 字节），用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
 
 **⚠️ 安全提示：**
 
@@ -1817,22 +1623,7 @@ let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 
 **如何轮换密钥：**
 
-```rust
-use confers::key::KeyManager;
-
-let mut km = KeyManager::new()?;
-let master_key = load_master_key()?; // 从安全存储加载主密钥
-
-// 轮换密钥
-let result = km.rotate_key(
-    &master_key,
-    Some("production".to_string()),
-    "security-team".to_string(),
-    Some("Scheduled key rotation".to_string())
-)?;
-
-println!("Key version rotated from {} to {}", result.previous_version, result.new_version);
-```
+使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key 特性）](#密钥管理key-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 **⚠️ 安全提示：**
 

@@ -141,7 +141,7 @@ confers/
 | 成员 | 说明 |
 |------|------|
 | `macros/` | `confers-macros`：`#[derive(Config)]` 过程宏，`parse.rs` 解析 `#[config(...)]` 属性，`codegen.rs` 生成加载/校验/CLI 辅助代码 |
-| `examples/` | 13 个可运行示例 |
+| `examples/` | 21 个可运行示例 |
 | `fuzz/` | cargo-fuzz 模糊测试目标 |
 
 ## 🌊 数据流
@@ -208,7 +208,7 @@ graph TD
 4. **解析性能**：TOML 解析启用 `preserve_order`；格式探测支持从内容直接判断，避免重复读盘（大文件建议一次读入后交给 `parse_content`）。
 5. **热路径去抖**：`watcher::AdaptiveDebouncer` 自适应调节去抖窗口，避免编辑器连续写入触发的重载风暴。
 6. **编译期裁剪**：全部可选能力特性门控，配合 `minimal`/`recommended`/`dev`/`production`/`full` 预设，按需控制编译时间与二进制体积。
-7. **持续基准**：`benches/` 内置 8 组 Criterion 基准（load、merge、interpolation、value_path、dynamic_field、hot_path、concurrent_rw、concurrent_access），覆盖从冷加载到并发读写的完整热路径，可通过 `cargo bench` 复现（详见[性能指南](PERFORMANCE.md)）。
+7. **持续基准**：`benches/` 内置 9 组 Criterion 基准，覆盖从冷加载到并发读写的完整热路径，可通过 `cargo bench` 复现；基准套件清单与基线数据统一见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)。
 
 ---
 

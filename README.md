@@ -90,26 +90,7 @@
 </tr>
 </table>
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🧩 更多能力</summary>
-
-| 能力 | 特性标志 | 说明 |
-|---------|---------|------|
-| 配置版本迁移 | `migration` | 结构升级时的数据迁移 |
-| 快照与回滚 | `snapshot` | 配置快照持久化、diff 与回滚 |
-| 变量插值 | `interpolation` | `${VAR}` 与 `${VAR:-default}` 引用 |
-| 模块化配置 | `modules` | 按特性注册配置分组 |
-| 上下文感知 | `context-aware` | 租户等上下文维度的取值规则 |
-| 运行时特性开关 | `feature-toggle` | 线程安全的开关注册表 |
-| OpenFeature 风格评估 | `openfeature` | 特性评估 API |
-| 安全规则校验器 | `security-rules` | JWT、CORS、SSRF、TLS 内置校验器与注册表 |
-| 密钥管理与轮换 | `key` | 密钥版本、状态与定时轮换 |
-| 密钥存储后端 | `keyring` | 文件、MasterKey、secret-tool 等存储 |
-| 云 KMS 密钥提供方 | `cloud-kms` | Vault Transit 等后端 |
-| 惰性分段解析 | `lazy` | 超大文档按需解析 |
-| 统一变更流 | `change-stream` | 跨传输的变更事件端口 |
-
-</details>
+除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 定义）见 [🎨 特性标志](#-特性标志) 一节。
 
 ---
 
@@ -488,16 +469,7 @@ cargo fuzz run parser
 
 ### 🛡️ 安全设计
 
-| 要点 | 说明 |
-|------|------|
-| 认证加密 | XChaCha20-Poly1305 AEAD，每次加密生成随机 nonce，密文附带 Poly1305 认证标签 |
-| 字段级密钥派生 | HKDF-SHA256 从主密钥按字段路径与密钥版本派生子密钥（`derive_field_key`） |
-| 内存安全 | `SecretBytes` / `ZeroizingBytes` 丢弃即清零，`secrecy` 防止敏感值进入日志，`SecureString` 禁止 `Clone` |
-| 密钥治理 | `KeyManager` 与 `KeyRegistry` 管理密钥版本、状态与轮换，含熵值校验 |
-| 输入防护 | `EnvSecurityValidator` 环境变量注入防护；内置 JWT、CORS、SSRF、TLS 校验器，SSRF 覆盖 18 个封锁网段并做 URL 边界匹配 |
-| 输出脱敏 | `ErrorSanitizer` 错误信息脱敏，`#[config(sensitive = true)]` 字段在日志与 debug 输出中自动遮蔽 |
-| 审计追踪 | 审计日志带 HMAC 签名保护完整性，支持敏感字段追踪 |
-| 远程来源防护 | SSRF 校验与熔断器，避免内网地址探测与故障扩散 |
+Confers 的安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全（`SecretBytes` / `ZeroizingBytes`，`SecureString` 禁止 `Clone`）、密钥版本与轮换治理、环境变量注入防护与内置 JWT/CORS/SSRF/TLS 校验规则（SSRF 覆盖 18 个封锁网段并做 URL 边界匹配）、错误脱敏与 HMAC 签名的审计日志，以及远程来源的 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
 
 ### ⛓️ 供应链与门禁
 

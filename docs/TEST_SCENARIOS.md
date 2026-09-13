@@ -107,7 +107,7 @@
 | 27 | 并发与竞态 | CCY | dynamic, watch, feature-toggle, config-bus, snapshot, audit | — |
 | 28 | feature 预设编译矩阵 | PRS | recommended/dev/production/full/minimal/distributed + 单 feature | `cargo check --features …` |
 
-场景总数：**357**（正常 152 + 双断言 8+3 / 异常 84 / 边界 110，程序化核对见 §6）。
+场景总数：**357**，按类型、依赖服务等维度的程序化统计见 [6. 统计汇总](#6-统计汇总)。
 
 ---
 

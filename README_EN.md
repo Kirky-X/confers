@@ -90,26 +90,7 @@ Declare your config structs with `#[derive(Config)]` and let the library do the 
 </tr>
 </table>
 
-<details style="padding:16px; margin: 16px 0">
-<summary style="cursor:pointer; font-weight:600; color:#1E293B">🧩 More Capabilities</summary>
-
-| Capability | Feature | Description |
-|---------|---------|------|
-| Config migration | `migration` | Data migration across structure upgrades |
-| Snapshot & rollback | `snapshot` | Persistent config snapshots with diff and rollback |
-| Variable interpolation | `interpolation` | `${VAR}` and `${VAR:-default}` references |
-| Modular configuration | `modules` | Register config groups by capability |
-| Context-aware config | `context-aware` | Value rules per tenant or context |
-| Runtime feature toggles | `feature-toggle` | Thread-safe toggle registry |
-| OpenFeature-style evaluation | `openfeature` | Feature evaluation API |
-| Security rule validators | `security-rules` | Built-in JWT, CORS, SSRF, TLS validators with a registry |
-| Key management & rotation | `key` | Key versions, states, and scheduled rotation |
-| Key storage backends | `keyring` | File, MasterKey, secret-tool stores |
-| Cloud KMS providers | `cloud-kms` | Vault Transit and other backends |
-| Lazy segmented parsing | `lazy` | On-demand parsing of oversized documents |
-| Unified change stream | `change-stream` | Change-event port across transports |
-
-</details>
+Beyond the core capabilities above, config migration, snapshots and rollback, variable interpolation, modular configuration, context-aware values, runtime feature toggles, OpenFeature-style evaluation, security rule validators, key management and cloud KMS, lazy segmented parsing, and the unified change stream are all provided as independent feature flags as well; the complete feature matrix (mirroring the `[features]` section of `Cargo.toml`) lives in the [🎨 Feature Flags](#-feature-flags) section.
 
 ---
 
@@ -488,16 +469,7 @@ Performance design highlights: dynamic fields read lock-free via `arc-swap`; the
 
 ### 🛡️ Security Design
 
-| Aspect | Description |
-|------|------|
-| Authenticated encryption | XChaCha20-Poly1305 AEAD with a fresh random nonce per encryption and a Poly1305 authentication tag |
-| Per-field key derivation | HKDF-SHA256 derives a subkey per field path and key version from the master key (`derive_field_key`) |
-| Memory safety | `SecretBytes` / `ZeroizingBytes` zeroize on drop, `secrecy` keeps sensitive values out of logs, `SecureString` forbids `Clone` |
-| Key governance | `KeyManager` and `KeyRegistry` manage key versions, states, and rotation with entropy checks |
-| Input protection | `EnvSecurityValidator` guards against env injection; built-in JWT, CORS, SSRF, and TLS validators, with SSRF covering 18 blocked CIDR ranges and URL boundary matching |
-| Output sanitization | `ErrorSanitizer` sanitizes error messages; `#[config(sensitive = true)]` fields are masked automatically in logs and debug output |
-| Audit trail | Audit logs are HMAC-signed for integrity and support sensitive-field tracking |
-| Remote source protection | SSRF validation and a circuit breaker prevent internal network probing and failure propagation |
+Confers' security design centers on protecting sensitive data across its full lifecycle: XChaCha20-Poly1305 authenticated encryption with HKDF-SHA256 per-field key derivation, zeroize-on-drop memory safety (`SecretBytes` / `ZeroizingBytes`, with `SecureString` forbidding `Clone`), key version and rotation governance, environment variable injection protection with built-in JWT/CORS/SSRF/TLS validators (SSRF covers 18 blocked CIDR ranges with URL boundary matching), error sanitization and HMAC-signed audit logs, plus SSRF validation and a circuit breaker for remote sources. Mechanism-level details live in the [Architecture doc · Security Design](docs/ARCHITECTURE.md#-安全设计); security best practices and the vulnerability handling process are covered by the [Security doc](docs/SECURITY.md).
 
 ### ⛓️ Supply Chain and Gates
 

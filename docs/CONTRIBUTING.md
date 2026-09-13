@@ -104,37 +104,7 @@ cargo build
 
 **默认特性：** `toml`、`json`、`env`
 
-**格式支持：**
-- `toml`：TOML 格式支持（默认）
-- `json`：JSON 格式支持（默认）
-- `yaml`：YAML 格式支持
-- `ini`：INI 格式支持
-- `env`：环境变量支持（默认）
-
-**核心特性：**
-- `validation`：配置校验（garde）
-- `watch`：文件监听与热重载
-- `encryption`：配置加密（XChaCha20-Poly1305）
-- `cli`：命令行工具
-- `schema`：JSON Schema 生成
-
-**进阶特性：**
-- `audit`：审计日志
-- `dynamic`：动态字段
-- `progressive-reload`：渐进式重载
-- `migration`：配置迁移
-- `snapshot`：快照回滚
-- `interpolation`：变量插值
-
-**远程来源：**
-- `remote`：HTTP 轮询
-- `etcd`：Etcd 集成
-- `consul`：Consul 集成
-
-**消息总线：**
-- `config-bus`：配置事件总线
-- `nats-bus`：NATS 消息总线
-- `redis-bus`：Redis 消息总线
+全部单项特性与功能预设的完整清单（逐项对应 `Cargo.toml` 的 `[features]` 定义）统一由 [README · 功能矩阵](../README.md#-功能矩阵) 维护。
 
 运行测试时可以使用不同的特性组合：
 
