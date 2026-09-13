@@ -201,8 +201,6 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     #[inline]
     async fn publish_canary_stage(&self, _stage: &'static str, _detail: &str) {}
 
-
-
     /// Begin a staged reload of the configuration.
     ///
     /// The reload lock is held for the entire duration of the call: for
@@ -593,7 +591,6 @@ mod tests {
         );
     }
 
-
     #[cfg(all(feature = "change-stream", feature = "progressive-reload"))]
     mod canary_events {
         use super::*;
@@ -617,9 +614,8 @@ mod tests {
 
             async fn subscribe(
                 &self,
-            ) -> ConfigResult<
-                Pin<Box<dyn futures_util::Stream<Item = ChangeEvent> + Send>>,
-            > {
+            ) -> ConfigResult<Pin<Box<dyn futures_util::Stream<Item = ChangeEvent> + Send>>>
+            {
                 self.inner.subscribe().await
             }
 
@@ -681,8 +677,16 @@ mod tests {
                 .iter()
                 .map(|e| {
                     (
-                        e.old_value.as_ref().and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        e.new_value.as_ref().and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        e.old_value
+                            .as_ref()
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        e.new_value
+                            .as_ref()
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     )
                 })
                 .collect();

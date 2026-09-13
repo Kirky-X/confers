@@ -94,7 +94,7 @@ pub fn is_ip_blocked(ip: IpAddr) -> bool {
 ///
 /// This is the single resolution primitive shared by the poll-path pre-check
 /// ([`resolve_host_with_validation`]) and the pinned reqwest DNS resolver
-/// ([`ValidatingResolver`]): the addresses reqwest connects to come from the
+/// (`ValidatingResolver`): the addresses reqwest connects to come from the
 /// very same resolution that passed the blacklist checks, so a DNS rebinding
 /// attacker cannot show a benign IP to the validation and a private IP to
 /// the connection.
@@ -245,7 +245,7 @@ fn is_domain_whitelisted(domain: &str, allowed_domains: &[String]) -> bool {
 /// 2. The URL must have a host
 /// 3. Direct IP hosts are validated against blocked ranges
 ///
-/// Domain hosts only need DNS-based validation (see [`validate_url_full`]);
+/// Domain hosts only need DNS-based validation (see `validate_url_full`);
 /// the whitelist only decides whether that DNS check is performed, so it is
 /// not consulted here.
 fn validate_url_parts(parsed: &url::Url) -> ConfigResult<()> {
@@ -300,7 +300,7 @@ fn validate_url_parts(parsed: &url::Url) -> ConfigResult<()> {
 /// Parses the URL and applies the static SSRF checks (HTTPS-only scheme, host
 /// presence, blocked-range checks for direct IP hosts). DNS resolution for
 /// domain hosts is NOT performed here; it happens asynchronously on the poll
-/// path via [`validate_url_full`].
+/// path via `validate_url_full`.
 ///
 /// Returns the parsed URL on success.
 fn validate_url(url: &str) -> ConfigResult<url::Url> {
@@ -321,7 +321,7 @@ fn validate_url(url: &str) -> ConfigResult<url::Url> {
 /// validation for non-whitelisted domain hosts (DNS rebinding protection).
 /// Whitelisted domains skip DNS validation entirely — the whitelist only
 /// bypasses this domain-level pre-check; the client's pinned resolver
-/// ([`ValidatingResolver`]) still validates every address at connection
+/// (`ValidatingResolver`) still validates every address at connection
 /// time, so a whitelisted domain that resolves to a private IP is rejected
 /// when connecting.
 async fn validate_url_full(parsed: &url::Url, allowed_domains: &[String]) -> ConfigResult<()> {
@@ -346,7 +346,7 @@ async fn validate_url_full(parsed: &url::Url, allowed_domains: &[String]) -> Con
 /// same DNS-free SSRF checks as for the original URL are applied: HTTPS-only
 /// scheme, host presence and blocked-IP ranges. DNS-based validation for
 /// domain hops is performed separately on the async path (see
-/// [`validate_url_full`]).
+/// `validate_url_full`).
 fn validate_redirect_hop(current: &url::Url, location: &str) -> ConfigResult<url::Url> {
     let next = current
         .join(location)
@@ -399,7 +399,7 @@ pub trait PolledSource: Send + Sync {
 /// resolved and validated on every poll request, and redirects are followed
 /// manually with the same per-hop validation, so a redirect cannot bypass
 /// the SSRF rules. The HTTP client additionally pins DNS resolution
-/// ([`ValidatingResolver`]): addresses reqwest connects to come from the
+/// (`ValidatingResolver`): addresses reqwest connects to come from the
 /// same resolution that was checked against the blacklist, so a rebinding
 /// attacker cannot show a different IP to the connection than to the
 /// validation.
@@ -508,7 +508,7 @@ impl HttpPolledSourceBuilder {
     /// Add a domain to the allowed whitelist.
     ///
     /// Whitelisted domains skip the domain-level DNS pre-check on the poll
-    /// path (see [`validate_url_full`]). The IP blacklist itself is NOT
+    /// path (see `validate_url_full`). The IP blacklist itself is NOT
     /// relaxed: the client's pinned DNS resolver checks every resolved
     /// address unconditionally, so a whitelisted domain that resolves to a
     /// private/loopback IP is still rejected at connection time.
@@ -569,7 +569,7 @@ impl HttpPolledSourceBuilder {
     /// - URL host is a blocked private IP
     ///
     /// Domain hosts are resolved on the async poll path (see
-    /// [`validate_url_full`]); `build()` deliberately performs no blocking
+    /// `validate_url_full`); `build()` deliberately performs no blocking
     /// DNS resolution.
     pub fn build(self) -> ConfigResult<HttpPolledSource> {
         let url = self.url.ok_or_else(|| ConfigError::InvalidValue {
@@ -653,8 +653,7 @@ impl PolledSource for HttpPolledSource {
     /// consecutive failures have occurred, returning an error immediately
     /// without making an HTTP request.
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        super::record_fetch_metrics(&self.source_id.clone(), self.poll_with_circuit_breaker())
-            .await
+        super::record_fetch_metrics(&self.source_id.clone(), self.poll_with_circuit_breaker()).await
     }
 
     fn poll_interval(&self) -> Option<Duration> {
@@ -1506,15 +1505,11 @@ mod tests {
         let source = source_against_local(closed_addr);
         assert!(source.poll().await.is_err(), "closed port must fail");
         assert!(
-            recorder
-                .counter_count(crate::metrics::names::REMOTE_FETCH_ERRORS_TOTAL)
-                >= 1,
+            recorder.counter_count(crate::metrics::names::REMOTE_FETCH_ERRORS_TOTAL) >= 1,
             "fetch errors must be counted"
         );
         assert!(
-            recorder
-                .histogram_count(crate::metrics::names::REMOTE_FETCH_DURATION_SECONDS)
-                >= 1,
+            recorder.histogram_count(crate::metrics::names::REMOTE_FETCH_DURATION_SECONDS) >= 1,
             "fetch latency must be recorded"
         );
 

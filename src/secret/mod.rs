@@ -42,10 +42,12 @@ pub mod keyring;
 pub mod providers_cloud;
 
 #[cfg(feature = "cloud-kms")]
-pub use providers_cloud::{CloudKmsBackend, CloudKmsVendor, VaultTransitKeyProvider, VaultTransitKeyProviderBuilder};
+pub use providers_cloud::{
+    CloudKmsBackend, CloudKmsVendor, VaultTransitKeyProvider, VaultTransitKeyProviderBuilder,
+};
 
 #[cfg(feature = "keyring")]
 pub use keyring::{
-    FileKeyringStore, KeyringStore, MasterKeyStore, SecretToolKeyringStore,
-    MASTER_KEY_ACCOUNT, MASTER_KEY_SERVICE,
+    FileKeyringStore, KeyringStore, MASTER_KEY_ACCOUNT, MASTER_KEY_SERVICE, MasterKeyStore,
+    SecretToolKeyringStore,
 };

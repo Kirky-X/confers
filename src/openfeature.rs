@@ -7,7 +7,7 @@
 //!
 //! Bridges confers' toggle systems onto OpenFeature semantics: a
 //! [`FeatureProvider`] resolves flag keys against an
-//! [`EvaluationContext`](crate::context::EvaluationContext) and returns
+//! [`EvaluationContext`] and returns
 //! [`EvaluationDetail`] (value + variant + reason), exactly one client
 //! provider at a time ([`OpenFeatureClient`]) and deterministic rollout
 //! buckets from the targeting key ([`StaticFlagProvider`]).
@@ -270,7 +270,12 @@ impl StaticFlagProvider {
         self
     }
 
-    fn resolve_variant(&self, flag: &FlagConfig, key: &str, ctx: &EvaluationContext) -> (String, ResolutionReason) {
+    fn resolve_variant(
+        &self,
+        flag: &FlagConfig,
+        key: &str,
+        ctx: &EvaluationContext,
+    ) -> (String, ResolutionReason) {
         // 1. Targeting rules, first match wins.
         for rule in &flag.targeting {
             if rule.matches(ctx) {
@@ -358,7 +363,12 @@ impl FeatureProvider for ToggleRegistryProvider {
         _ctx: &EvaluationContext,
     ) -> EvaluationDetail<bool> {
         // Unknown flags keep the caller's default (fail-safe).
-        if self.registry.list().iter().any(|info| info.name == flag_key) {
+        if self
+            .registry
+            .list()
+            .iter()
+            .any(|info| info.name == flag_key)
+        {
             EvaluationDetail::with_reason(
                 self.registry.is_enabled(flag_key),
                 None,
@@ -410,7 +420,7 @@ impl OpenFeatureClient {
 
     /// Swap the provider (OpenFeature `set_provider`).
     pub fn set_provider(&self, provider: Arc<dyn FeatureProvider>) {
-                // A provider that panicked while evaluated must not wedge the client
+        // A provider that panicked while evaluated must not wedge the client
         // for good: recover the (possibly inconsistent) lock like the other
         // poisoned-lock call sites in this crate.
         *self
@@ -421,7 +431,11 @@ impl OpenFeatureClient {
 
     /// The active provider's name.
     pub fn provider_name(&self) -> String {
-        self.provider.read().expect("provider lock").name().to_string()
+        self.provider
+            .read()
+            .expect("provider lock")
+            .name()
+            .to_string()
     }
 
     /// Resolve a boolean flag to a bare value.
@@ -447,12 +461,7 @@ impl OpenFeatureClient {
     }
 
     /// Resolve a string flag to a bare value.
-    pub fn string_value(
-        &self,
-        flag_key: &str,
-        default: &str,
-        ctx: &EvaluationContext,
-    ) -> String {
+    pub fn string_value(&self, flag_key: &str, default: &str, ctx: &EvaluationContext) -> String {
         self.provider
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -500,35 +509,30 @@ mod tests {
         let detail = client.bool_details("anything", true, &ctx_with("user", &[]));
         assert!(detail.value);
         assert_eq!(detail.reason, ResolutionReason::Default);
-        assert_eq!(client.string_value("anything", "fallback", &ctx_with("u", &[])), "fallback");
+        assert_eq!(
+            client.string_value("anything", "fallback", &ctx_with("u", &[])),
+            "fallback"
+        );
     }
 
     #[test]
     fn static_provider_attribute_rules_match_first() {
         let provider = StaticFlagProvider::new().with_flag(
             "checkout",
-            FlagConfig::on_off(false).with_rule(TargetingRule::when_attribute(
-                "region",
-                "eu",
-                "on",
-            )),
+            FlagConfig::on_off(false)
+                .with_rule(TargetingRule::when_attribute("region", "eu", "on")),
         );
         let client = OpenFeatureClient::with_provider(Arc::new(provider));
 
-        let eu = client.bool_details(
-            "checkout",
-            true,
-            &ctx_with("user-1", &[("region", "eu")]),
-        );
+        let eu = client.bool_details("checkout", true, &ctx_with("user-1", &[("region", "eu")]));
         assert!(eu.value);
         assert_eq!(eu.reason, ResolutionReason::TargetingMatch);
 
-        let us = client.bool_details(
-            "checkout",
-            true,
-            &ctx_with("user-1", &[("region", "us")]),
+        let us = client.bool_details("checkout", true, &ctx_with("user-1", &[("region", "us")]));
+        assert!(
+            !us.value,
+            "non-matching context falls to the static default"
         );
-        assert!(!us.value, "non-matching context falls to the static default");
         assert_eq!(us.reason, ResolutionReason::Static);
     }
 
@@ -546,11 +550,7 @@ mod tests {
 
         let mut in_group = 0;
         for i in 0..1000 {
-            let enabled = client.bool_value(
-                "beta-ui",
-                false,
-                &ctx_with(&format!("user-{i}"), &[]),
-            );
+            let enabled = client.bool_value("beta-ui", false, &ctx_with(&format!("user-{i}"), &[]));
             in_group += u32::from(enabled);
         }
         assert!(
@@ -580,9 +580,8 @@ mod tests {
         registry.register("dark-mode", "dark theme", false);
         registry.enable("dark-mode");
 
-        let client = OpenFeatureClient::with_provider(Arc::new(
-            ToggleRegistryProvider::new(registry),
-        ));
+        let client =
+            OpenFeatureClient::with_provider(Arc::new(ToggleRegistryProvider::new(registry)));
         let detail = client.bool_details("dark-mode", false, &ctx_with("u", &[]));
         assert!(detail.value);
         assert_eq!(detail.reason, ResolutionReason::Static);
@@ -598,8 +597,7 @@ mod tests {
         let client = OpenFeatureClient::new();
         assert_eq!(client.provider_name(), "noop");
         client.set_provider(Arc::new(
-            StaticFlagProvider::new()
-                .with_flag("f", FlagConfig::on_off(true)),
+            StaticFlagProvider::new().with_flag("f", FlagConfig::on_off(true)),
         ));
         assert_eq!(client.provider_name(), "static");
         assert!(client.bool_value("f", false, &ctx_with("u", &[])));

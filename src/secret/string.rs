@@ -12,7 +12,7 @@ use zeroize::{Zeroize, Zeroizing};
 /// # Security model
 ///
 /// The internal buffer is owned and scrubbed on drop, and [`Debug`] and
-/// [`Display`] are intentionally redacted (`[REDACTED]`) so the secret cannot
+/// [`std::fmt::Display`] are intentionally redacted (`[REDACTED]`) so the secret cannot
 /// leak through formatting, logging, or `to_string()`. Unlike
 /// [`SecretBytes`](crate::secret::SecretBytes), this type **does** implement
 /// [`Clone`]: cloning is safe with respect to zeroization (each clone owns
@@ -21,7 +21,7 @@ use zeroize::{Zeroize, Zeroizing};
 ///
 /// # WARNING: unmanaged plaintext escape hatches
 ///
-/// [`Deref`] (to [`str`]) and [`SecretString::expose`] hand out the plaintext
+/// [`std::ops::Deref`] (to [`str`]) and [`SecretString::expose`] hand out the plaintext
 /// as ordinary, **unmanaged** Rust data, and [`SecretString::expose_clone`]
 /// duplicates it while both copies are alive. Anything derived from those
 /// values (`&str` copies, slices, substrings, formatted output) is *not*

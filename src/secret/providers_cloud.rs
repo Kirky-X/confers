@@ -446,7 +446,13 @@ mod tests {
 
         let err = provider.get_key().await.expect_err("must fail");
         server.abort();
-        assert!(matches!(err, ConfigError::RemoteUnavailable { retryable: false, .. }));
+        assert!(matches!(
+            err,
+            ConfigError::RemoteUnavailable {
+                retryable: false,
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
@@ -465,7 +471,8 @@ mod tests {
     }
 
     #[test]
-    fn builder_requires_all_fields() {        assert!(VaultTransitKeyProviderBuilder::new().build().is_err());
+    fn builder_requires_all_fields() {
+        assert!(VaultTransitKeyProviderBuilder::new().build().is_err());
         assert!(
             VaultTransitKeyProviderBuilder::new()
                 .vault_addr("https://vault:8200")
@@ -477,7 +484,11 @@ mod tests {
     #[test]
     fn aws_and_gcp_are_documented_extension_points() {
         // Marker port check: vendors enumerate; only Vault is implemented.
-        let vendors = [CloudKmsVendor::Vault, CloudKmsVendor::Aws, CloudKmsVendor::Gcp];
+        let vendors = [
+            CloudKmsVendor::Vault,
+            CloudKmsVendor::Aws,
+            CloudKmsVendor::Gcp,
+        ];
         assert_eq!(vendors.len(), 3);
         assert_ne!(vendors[0], CloudKmsVendor::Aws);
     }

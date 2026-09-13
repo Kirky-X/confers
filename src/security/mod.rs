@@ -386,7 +386,7 @@ impl EnvSecurityValidator {
     ///
     /// When `allow_encrypted_values` is enabled and the value starts with
     /// `"enc:"`, **only the base64 character set of the payload is verified**
-    /// (see [`validate_encrypted_format`]). Control-character, null-byte,
+    /// (see `validate_encrypted_format`). Control-character, null-byte,
     /// shell-expansion, dangerous-pattern, and length checks are all skipped,
     /// and the payload is never decrypted or otherwise inspected here — the
     /// scope of validation for `enc:` values is exactly this format check.

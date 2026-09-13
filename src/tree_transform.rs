@@ -114,7 +114,6 @@ fn scalar_to_string(value: &serde_json::Value) -> String {
     }
 }
 
-
 /// Rename top-level object keys from their external (file) form to the serde
 /// field names, as configured by `#[config(rename_all = "...")]`.
 ///
@@ -130,12 +129,10 @@ pub fn rename_tree_keys(json: &mut serde_json::Value, mappings: &[(&str, &str)])
             continue;
         }
         if let Some(external_value) = obj.remove(*external) {
-            obj.entry(serde_name.to_string())
-                .or_insert(external_value);
+            obj.entry(serde_name.to_string()).or_insert(external_value);
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -196,7 +193,10 @@ mod tests {
     #[test]
     fn renames_external_keys_to_serde_names() {
         let mut json = json!({"userName": "amy", "isActive": true, "host": "db"});
-        rename_tree_keys(&mut json, &[("userName", "user_name"), ("isActive", "is_active")]);
+        rename_tree_keys(
+            &mut json,
+            &[("userName", "user_name"), ("isActive", "is_active")],
+        );
         assert_eq!(json["user_name"], json!("amy"));
         assert_eq!(json["is_active"], json!(true));
         assert!(json.get("userName").is_none(), "external key is consumed");

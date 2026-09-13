@@ -242,9 +242,7 @@ fn generate_rename_all_call(
 ///
 /// Transforms compose in registration order (flatten before interpolate).
 /// The returned statements assume a `builder` variable in scope.
-fn generate_map_json_calls(
-    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
-) -> Vec<TokenStream> {
+fn generate_map_json_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> Vec<TokenStream> {
     let mut calls = Vec::new();
 
     // `flatten`: one combined pass with every flattened field's spec.
@@ -413,14 +411,12 @@ fn generate_load_file_method(
     } else {
         quote! { mut }
     };
-    let file_builder_mut = if skip_defaults.is_empty()
-        && map_json_calls.is_empty()
-        && rename_call.is_none()
-    {
-        quote! {}
-    } else {
-        quote! { mut }
-    };
+    let file_builder_mut =
+        if skip_defaults.is_empty() && map_json_calls.is_empty() && rename_call.is_none() {
+            quote! {}
+        } else {
+            quote! { mut }
+        };
     let env_builder_mut = if skip_defaults_in_env_loader.is_empty()
         && env_calls.is_empty()
         && map_json_calls_in_env_loader.is_empty()
@@ -504,4 +500,3 @@ fn generate_env_mapping(
         }
     }
 }
-

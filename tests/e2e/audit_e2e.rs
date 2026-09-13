@@ -12,7 +12,7 @@
 //! AUD-01…10 已有覆盖(tests/security/audit.rs);
 //! CCY-06(8 线程压力档)固化于 concurrency_e2e.rs。
 
-use confers::audit::{verify_audit_chain, AuditWriter};
+use confers::audit::{AuditWriter, verify_audit_chain};
 use std::collections::HashSet;
 
 #[test]

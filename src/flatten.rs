@@ -47,11 +47,7 @@ pub trait ConfigFieldKeys {
 /// when hoistable keys exist: the top-level keys are the configuration the
 /// user actually wrote, and the displaced scalar could not deserialize into
 /// the nested struct anyway.
-pub fn hoist_flattened(
-    json: &mut serde_json::Value,
-    own_keys: &[&str],
-    specs: &[FlattenSpec],
-) {
+pub fn hoist_flattened(json: &mut serde_json::Value, own_keys: &[&str], specs: &[FlattenSpec]) {
     let Some(obj) = json.as_object_mut() else {
         return;
     };
@@ -68,9 +64,7 @@ pub fn hoist_flattened(
             .nested_keys
             .iter()
             .copied()
-            .filter(|k| {
-                !own_keys.contains(k) && obj.contains_key(*k) && !nested_contains(k)
-            })
+            .filter(|k| !own_keys.contains(k) && obj.contains_key(*k) && !nested_contains(k))
             .collect();
         if hoistable.is_empty() {
             continue;
@@ -93,10 +87,7 @@ pub fn hoist_flattened(
                 }
             }
             _ => {
-                obj.insert(
-                    spec.field_key.to_string(),
-                    serde_json::Value::Object(moved),
-                );
+                obj.insert(spec.field_key.to_string(), serde_json::Value::Object(moved));
             }
         }
     }
@@ -135,7 +126,11 @@ mod tests {
                 nested_keys: &["host", "port"],
             }],
         );
-        assert_eq!(json["host"], json!("top"), "parent's own field is untouched");
+        assert_eq!(
+            json["host"],
+            json!("top"),
+            "parent's own field is untouched"
+        );
         assert_eq!(json["database"]["port"], 1);
         assert!(json["database"].get("host").is_none());
     }

@@ -892,13 +892,13 @@ mod tests {
         {
             let _s = SecureString::from("counter-test");
             assert!(
-                allocated_secure_strings() >= allocated_before + 1,
+                allocated_secure_strings() > allocated_before,
                 "创建 SecureString 必须推高分配计数"
             );
         }
         // After drop, deallocated counter increments.
         assert!(
-            deallocated_secure_strings() >= deallocated_before + 1,
+            deallocated_secure_strings() > deallocated_before,
             "释放 SecureString 必须推高释放计数"
         );
     }

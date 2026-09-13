@@ -103,7 +103,7 @@ mod tests {
         let seen_spans = spans.lock().unwrap().clone();
         let seen_events = events.lock().unwrap().clone();
         assert!(
-            seen_spans.iter().any(|name| *name == "confers.load"),
+            seen_spans.contains(&"confers.load"),
             "spans recorded: {seen_spans:?}"
         );
         assert_eq!(seen_events.len(), 1, "events recorded: {seen_events:?}");

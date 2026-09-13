@@ -91,8 +91,8 @@ pub use etcd_watch::{
 };
 #[cfg(feature = "k8s")]
 pub use k8s::{
-    in_cluster_api_host, K8sApiSource, K8sApiSourceBuilder, K8sMountedSource, K8sObjectKind,
+    K8sApiSource, K8sApiSourceBuilder, K8sMountedSource, K8sObjectKind, in_cluster_api_host,
 };
 #[cfg(feature = "nacos")]
-pub use nacos::{NacosSource, NacosSourceBuilder, DEFAULT_NACOS_GROUP};
+pub use nacos::{DEFAULT_NACOS_GROUP, NacosSource, NacosSourceBuilder};
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};

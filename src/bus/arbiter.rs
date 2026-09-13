@@ -215,10 +215,7 @@ mod tests {
 
         // A duplicate replay of version 1, straight on the wrapped bus
         // (simulating a replaying producer): dropped, nothing delivered.
-        bus.inner()
-            .publish(event("replica-1", "1"))
-            .await
-            .unwrap();
+        bus.inner().publish(event("replica-1", "1")).await.unwrap();
 
         // A genuinely fresh event still flows (wrapper stamps version 2).
         bus.publish(event("replica-1", "x")).await.unwrap();
@@ -226,14 +223,8 @@ mod tests {
         assert_eq!(fresh.checksum, "2");
 
         // Stale replays of 1 and a duplicate of 2: both dropped.
-        bus.inner()
-            .publish(event("replica-1", "1"))
-            .await
-            .unwrap();
-        bus.inner()
-            .publish(event("replica-1", "2"))
-            .await
-            .unwrap();
+        bus.inner().publish(event("replica-1", "1")).await.unwrap();
+        bus.inner().publish(event("replica-1", "2")).await.unwrap();
 
         // The stream stays healthy: the next wrapper event (version 3)
         // arrives despite the interleaved drops.

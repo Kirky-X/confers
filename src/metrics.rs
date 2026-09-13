@@ -99,10 +99,12 @@ pub(crate) mod test_support {
     use crate::interface::MetricsBackend;
     use std::sync::{Arc, Mutex};
 
+    type MetricLabels = Vec<(String, String)>;
+
     /// Recording backend counting emissions per metric name.
     pub(crate) struct RecordingBackend {
-        counters: Mutex<Vec<(String, Vec<(String, String)>)>>,
-        histograms: Mutex<Vec<(String, f64, Vec<(String, String)>)>>,
+        counters: Mutex<Vec<(String, MetricLabels)>>,
+        histograms: Mutex<Vec<(String, f64, MetricLabels)>>,
     }
 
     impl Default for RecordingBackend {
@@ -196,7 +198,11 @@ mod tests {
 
         record_counter(names::LOADER_LOADS_TOTAL, &[("result", "ok")]);
         record_counter(names::SECRET_DECRYPT_ERRORS_TOTAL, &[]);
-        record_histogram(names::REMOTE_FETCH_DURATION_SECONDS, 0.25, &[("source", "http:x")]);
+        record_histogram(
+            names::REMOTE_FETCH_DURATION_SECONDS,
+            0.25,
+            &[("source", "http:x")],
+        );
 
         clear_metrics_backend();
 

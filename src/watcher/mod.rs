@@ -35,7 +35,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-
 /// Guard for managing watcher lifecycle.
 ///
 /// When dropped, the watcher will be stopped automatically.

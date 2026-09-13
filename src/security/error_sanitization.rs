@@ -168,7 +168,7 @@ impl ErrorSanitizer {
 
     /// 脱敏错误消息
     ///
-    /// Input longer than [`MAX_SANITIZE_INPUT_CHARS`] characters is truncated
+    /// Input longer than `MAX_SANITIZE_INPUT_CHARS` characters is truncated
     /// before matching (see the constant's documentation).
     pub fn sanitize(&self, message: &str) -> String {
         // Truncate oversized input before matching, counting characters so the

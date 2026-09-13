@@ -97,7 +97,10 @@ fn mac03_name_derived_env_override_reaches_field() {
         cfg.host, "env-host",
         "name-derived env override must reach the field"
     );
-    assert_eq!(cfg.port, 9090, "name-derived env override applies to all fields");
+    assert_eq!(
+        cfg.port, 9090,
+        "name-derived env override applies to all fields"
+    );
 }
 
 /// MAC-03(互不污染):声明 name_env 后,env 键与默认命名规则互不串扰。
@@ -233,12 +236,13 @@ struct FlattenParent {
 #[serial]
 fn mac06_flatten_hoists_top_level_keys_into_nested_struct() {
     // 顶层直接写 database 的字段(flat 风格),flatten codegen 负责归位。
-    let (_file, path) = write_cwd_toml(
-        "app_name = \"orders\"\nhost = \"flat-db\"\nport = 6543\n",
-    );
+    let (_file, path) = write_cwd_toml("app_name = \"orders\"\nhost = \"flat-db\"\nport = 6543\n");
     let cfg = FlattenParent::load_file_with_env(&path).expect("flatten load");
     assert_eq!(cfg.app_name, "orders");
-    assert_eq!(cfg.database.host, "flat-db", "top-level key hoisted into flatten field");
+    assert_eq!(
+        cfg.database.host, "flat-db",
+        "top-level key hoisted into flatten field"
+    );
     assert_eq!(cfg.database.port, 6543);
 
     // 嵌套写法(database.host)依旧原生支持,且显式嵌套值优先于顶层同名键。
@@ -283,7 +287,10 @@ struct InterpolatedStruct {
 fn mac18_interpolate_resolves_field_template_against_merged_tree() {
     let (_file, path) = write_cwd_toml("host = \"db.internal\"\nurl = \"http://${host}:8080\"\n");
     let cfg = InterpolatedStruct::load_file_with_env(&path).expect("interpolate load");
-    assert_eq!(cfg.url, "http://db.internal:8080", "${{host}} resolved from merged tree");
+    assert_eq!(
+        cfg.url, "http://db.internal:8080",
+        "${{host}} resolved from merged tree"
+    );
 
     // 不可解析引用 + 默认值回退。
     let (_file, path) = write_cwd_toml("host = \"db.internal\"\nurl = \"${missing:fallback}\"\n");

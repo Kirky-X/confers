@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::loader::{parse_content, Format};
+use crate::loader::{Format, parse_content};
 use crate::types::{AnnotatedValue, SourceId};
 
 const SOURCE_NAME: &str = "lazy";
@@ -50,9 +50,7 @@ impl LazySegmentedConfig {
             }
             // `[[array]]` form: strip the double opening bracket first so
             // the first `]` terminates the name.
-            let rest = trimmed
-                .strip_prefix("[[")
-                .unwrap_or_else(|| &trimmed[1..]);
+            let rest = trimmed.strip_prefix("[[").unwrap_or_else(|| &trimmed[1..]);
             let end = rest.find(']')?;
             let name = rest[..end].trim();
             if name.is_empty() {
@@ -72,10 +70,7 @@ impl LazySegmentedConfig {
                     segments.entry(current_name.clone()).or_default().push(line);
                 }
                 None => {
-                    segments
-                        .entry(current_name.clone())
-                        .or_default()
-                        .push(line);
+                    segments.entry(current_name.clone()).or_default().push(line);
                 }
             }
         }
@@ -119,10 +114,8 @@ impl LazySegmentedConfig {
             None => return Ok(None),
         };
 
-        if let Ok(cache) = self.parsed.lock() {
-            if let Some(cached) = cache.get(key) {
-                return Ok(Some(Arc::clone(cached)));
-            }
+        if let Some(cached) = self.parsed.lock().ok().and_then(|c| c.get(key).cloned()) {
+            return Ok(Some(cached));
         }
 
         let value = parse_content(
@@ -183,7 +176,10 @@ name = "s2"
     fn segments_parse_on_first_access_and_cache() {
         let lazy = LazySegmentedConfig::from_toml_document(BIG_DOC);
 
-        let database = lazy.get_segment("database").expect("parse").expect("present");
+        let database = lazy
+            .get_segment("database")
+            .expect("parse")
+            .expect("present");
         assert_eq!(lazy.parsed_count(), 1, "only the accessed segment parsed");
         assert!(lazy.is_parsed("database"));
         assert!(!lazy.is_parsed("cache"), "untouched segments stay unparsed");
@@ -208,7 +204,10 @@ name = "s2"
         assert_eq!(port, Some(5432));
 
         // Second access hits the cache (no new parse).
-        let again = lazy.get_segment("database").expect("cached").expect("present");
+        let again = lazy
+            .get_segment("database")
+            .expect("cached")
+            .expect("present");
         assert!(Arc::ptr_eq(&database, &again), "cached handle is shared");
         assert_eq!(lazy.parsed_count(), 1);
     }
@@ -217,7 +216,10 @@ name = "s2"
     fn array_of_tables_form_their_own_segment() {
         let lazy = LazySegmentedConfig::from_toml_document(BIG_DOC);
         eprintln!("RAW SEGMENT: {:?}", lazy.segments.get("servers"));
-        let servers = lazy.get_segment("servers").expect("parse").expect("present");
+        let servers = lazy
+            .get_segment("servers")
+            .expect("parse")
+            .expect("present");
         // The [[servers]] entries parse into an array under the segment name.
         let count = servers
             .inner

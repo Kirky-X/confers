@@ -28,15 +28,15 @@ use crate::impl_::lifecycle::Lifecycle;
 use crate::interface::sealed::Sealed;
 use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
 use crate::types::{AnnotatedValue, SourceId};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 // ============== Async Implementation (feature-gated) ==============
 
 /// Zero-copy read port: fetch the shared handle (`Arc`) to a stored value
 /// instead of a deep clone.
 ///
-/// Implemented by [`InMemoryConfig`]; pair it with [`crate::new_in_memory`]
+/// Implemented by `InMemoryConfig`; pair it with [`crate::new_in_memory`]
 /// for allocation-free hot-path reads of large values. Only available in
 /// async builds (one of `remote`/`config-bus`/`encryption`/`watch`); the
 /// minimal sync build keeps zero dependencies.
@@ -188,9 +188,7 @@ mod async_impl {
     #[async_trait]
     impl ConfigWriter for InMemoryConfig {
         async fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()> {
-            self.cache
-                .insert(key.to_string(), Arc::new(value))
-                .await;
+            self.cache.insert(key.to_string(), Arc::new(value)).await;
             self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
@@ -900,12 +898,15 @@ mod tests {
     }
 }
 
-#[cfg(all(test, any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(all(
+    test,
+    any(
+        feature = "remote",
+        feature = "config-bus",
+        feature = "encryption",
+        feature = "watch"
+    )
+))]
 mod zero_copy_tests {
     use super::*;
     use crate::types::{ConfigValue, SourceId};

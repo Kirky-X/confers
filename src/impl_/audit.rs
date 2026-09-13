@@ -26,8 +26,8 @@ fn hmac_sha256(key: &[u8], prev_hash: &[u8], canonical_event: &[u8]) -> [u8; CHA
     use hmac::digest::KeyInit;
 
     type HmacSha256 = hmac::Hmac<sha2::Sha256>;
-    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(key)
-        .expect("HMAC accepts keys of any length");
+    let mut mac =
+        <HmacSha256 as KeyInit>::new_from_slice(key).expect("HMAC accepts keys of any length");
     hmac::Mac::update(&mut mac, prev_hash);
     hmac::Mac::update(&mut mac, canonical_event);
     let out = hmac::Mac::finalize(mac).into_bytes();
@@ -71,7 +71,7 @@ fn chain_event_line(
                 key: "audit.event".into(),
                 expected_type: "object-shaped audit event".into(),
                 message: format!("unexpected non-object audit event payload: {other}"),
-            })
+            });
         }
     };
     obj.insert(
@@ -376,13 +376,12 @@ impl AuditWriter {
         let filename = format!("audit_{}.log", event.event_timestamp().format("%Y%m%d"));
         let path = dir.join(filename);
         let sanitized = self.sanitize(event);
-        let event_value = serde_json::to_value(&sanitized).map_err(|e| {
-            ConfigError::InvalidValue {
+        let event_value =
+            serde_json::to_value(&sanitized).map_err(|e| ConfigError::InvalidValue {
                 key: "audit.event".into(),
                 expected_type: "serializable audit event".into(),
                 message: e.to_string(),
-            }
-        })?;
+            })?;
         let canonical = canonical_event_bytes(&event_value)?;
 
         let _guard = self
@@ -418,15 +417,15 @@ impl AuditWriter {
         };
 
         let entry_hash = hmac_sha256(&state.salt, &state.prev_hash, &canonical);
-        let line = chain_event_line(event_value, &hex::encode(state.prev_hash), &hex::encode(
-            entry_hash,
-        ))?;
-        let mut line_str = serde_json::to_string(&line).map_err(|e| {
-            ConfigError::InvalidValue {
-                key: "audit.event".into(),
-                expected_type: "serializable audit event".into(),
-                message: e.to_string(),
-            }
+        let line = chain_event_line(
+            event_value,
+            &hex::encode(state.prev_hash),
+            &hex::encode(entry_hash),
+        )?;
+        let mut line_str = serde_json::to_string(&line).map_err(|e| ConfigError::InvalidValue {
+            key: "audit.event".into(),
+            expected_type: "serializable audit event".into(),
+            message: e.to_string(),
         })?;
         line_str.push('\n');
         state.prev_hash = entry_hash;
@@ -452,13 +451,12 @@ impl AuditWriter {
             "algorithm": "hmac-sha256",
             "salt": hex::encode(salt),
         });
-        let mut header_str = serde_json::to_string(&header).map_err(|e| {
-            ConfigError::InvalidValue {
+        let mut header_str =
+            serde_json::to_string(&header).map_err(|e| ConfigError::InvalidValue {
                 key: "audit.chain_header".into(),
                 expected_type: "serializable chain header".into(),
                 message: e.to_string(),
-            }
-        })?;
+            })?;
         header_str.push('\n');
         std::fs::OpenOptions::new()
             .create(true)
@@ -919,7 +917,13 @@ mod tests {
         let rewritten: Vec<String> = lines
             .iter()
             .enumerate()
-            .map(|(i, l)| if i == events[1] { tampered.clone() } else { l.clone() })
+            .map(|(i, l)| {
+                if i == events[1] {
+                    tampered.clone()
+                } else {
+                    l.clone()
+                }
+            })
             .collect();
         std::fs::write(&path, rewritten.join("\n") + "\n").unwrap();
 
@@ -1104,7 +1108,10 @@ mod tests {
         let captured = sink.captured();
         assert_eq!(captured.len(), 3, "sink sees every accepted event");
         assert!(matches!(&captured[0], AuditEvent::KeyAccess { key, .. } if key == "alpha"));
-        assert!(matches!(&captured[2], AuditEvent::Decrypt { success: true, .. }));
+        assert!(matches!(
+            &captured[2],
+            AuditEvent::Decrypt { success: true, .. }
+        ));
     }
 
     #[test]
@@ -1132,7 +1139,6 @@ mod tests {
             fn write(&self, _: &[AuditEvent]) {
                 if !self.failed.swap(true, std::sync::atomic::Ordering::SeqCst) {
                     // Sink-side failure (e.g. downstream unavailable).
-                    return;
                 }
             }
         }
@@ -1148,18 +1154,21 @@ mod tests {
 
         // Sink-side failures never surface as writer errors and never skip
         // the local (HMAC-chained) persistence.
-        writer.write(key_access("survivor")).expect("local write ok");
+        writer
+            .write(key_access("survivor"))
+            .expect("local write ok");
         writer.write(key_access("after")).expect("writer reusable");
 
         let lines = audit_lines(dir.path());
         let keys: Vec<String> = lines
             .iter()
             .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-            .filter_map(|v| {
-                v["KeyAccess"]["key"].as_str().map(|s| s.to_string())
-            })
+            .filter_map(|v| v["KeyAccess"]["key"].as_str().map(|s| s.to_string()))
             .collect();
-        assert!(keys.contains(&"survivor".to_string()), "local file keeps the event: {lines:?}");
+        assert!(
+            keys.contains(&"survivor".to_string()),
+            "local file keeps the event: {lines:?}"
+        );
         assert!(keys.contains(&"after".to_string()));
     }
 
@@ -1169,7 +1178,9 @@ mod tests {
         let mut writer = AuditWriter::builder().enabled(false).build();
         writer.add_sink(Arc::clone(&sink) as Arc<dyn AuditSink>);
 
-        writer.write(key_access("dropped")).expect("disabled write is Ok");
+        writer
+            .write(key_access("dropped"))
+            .expect("disabled write is Ok");
         assert!(sink.captured().is_empty(), "sinks only see accepted events");
     }
 }

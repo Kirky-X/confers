@@ -127,14 +127,13 @@ impl K8sMountedSource {
         if !changed {
             return Ok(None);
         }
-        if let Some(t) = target {
-            if let Ok(mut guard) = self.observed_target.try_lock() {
-                *guard = Some(Arc::from(t.as_str()));
-            }
+        if let Some(t) = target
+            && let Ok(mut guard) = self.observed_target.try_lock()
+        {
+            *guard = Some(Arc::from(t.as_str()));
         }
         let value = self.read_volume()?;
-        self.cached
-            .store(Arc::new(Some(Arc::new(value.clone()))));
+        self.cached.store(Arc::new(Some(Arc::new(value.clone()))));
         Ok(Some(value))
     }
 
@@ -333,11 +332,7 @@ pub struct K8sApiSourceBuilder {
 
 impl K8sApiSourceBuilder {
     /// Watch `<namespace>/<kind>/<name>`.
-    pub fn new(
-        namespace: impl Into<String>,
-        name: impl Into<String>,
-        kind: K8sObjectKind,
-    ) -> Self {
+    pub fn new(namespace: impl Into<String>, name: impl Into<String>, kind: K8sObjectKind) -> Self {
         Self {
             namespace: namespace.into(),
             name: name.into(),
@@ -389,7 +384,13 @@ impl K8sApiSourceBuilder {
                 .ok()
                 .map(|t| t.trim().to_string()),
         };
-        let url = format!("{}/api/v1/namespaces/{}/{}/{}", api_host, self.namespace, self.kind.segment(), self.name);
+        let url = format!(
+            "{}/api/v1/namespaces/{}/{}/{}",
+            api_host,
+            self.namespace,
+            self.kind.segment(),
+            self.name
+        );
         Ok(K8sApiSource {
             url,
             kind: self.kind,
@@ -397,7 +398,12 @@ impl K8sApiSourceBuilder {
             interval: self.interval,
             client: reqwest::Client::new(),
             cached: ArcSwap::new(Arc::new(None)),
-            source_id: SourceId::new(format!("{SOURCE_NAME}:api:{}:{}/{}", self.namespace, self.kind.segment(), self.name)),
+            source_id: SourceId::new(format!(
+                "{SOURCE_NAME}:api:{}:{}/{}",
+                self.namespace,
+                self.kind.segment(),
+                self.name
+            )),
         })
     }
 }
@@ -435,11 +441,14 @@ impl K8sApiSource {
         if let Some(ref token) = self.token {
             request = request.bearer_auth(token);
         }
-        let response = request.send().await.map_err(|e| ConfigError::InvalidValue {
-            key: SOURCE_NAME.to_string(),
-            expected_type: "k8s API response".to_string(),
-            message: format!("k8s API request failed: {e}"),
-        })?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "k8s API response".to_string(),
+                message: format!("k8s API request failed: {e}"),
+            })?;
         let status = response.status();
         if !status.is_success() {
             return Err(ConfigError::InvalidValue {
@@ -448,38 +457,40 @@ impl K8sApiSource {
                 message: format!("k8s API returned {status} for {}", self.url),
             });
         }
-        let body: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| ConfigError::InvalidValue {
-                key: SOURCE_NAME.to_string(),
-                expected_type: "k8s API JSON body".to_string(),
-                message: format!("k8s API returned invalid JSON: {e}"),
-            })?;
+        let body: serde_json::Value =
+            response
+                .json()
+                .await
+                .map_err(|e| ConfigError::InvalidValue {
+                    key: SOURCE_NAME.to_string(),
+                    expected_type: "k8s API JSON body".to_string(),
+                    message: format!("k8s API returned invalid JSON: {e}"),
+                })?;
 
-        let data = body.get("data").and_then(|d| d.as_object()).ok_or_else(|| {
-            ConfigError::InvalidValue {
+        let data = body
+            .get("data")
+            .and_then(|d| d.as_object())
+            .ok_or_else(|| ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "object with a data map".to_string(),
                 message: format!("k8s API response for {} has no data map", self.url),
-            }
-        })?;
+            })?;
 
         let mut map = indexmap::IndexMap::new();
         for (key, value) in data {
             let raw = value.as_str().unwrap_or_default();
             let content = match self.kind {
                 K8sObjectKind::ConfigMap => raw.to_string(),
-                K8sObjectKind::Secret => decode_base64(raw).ok_or_else(|| {
-                    ConfigError::InvalidValue {
+                K8sObjectKind::Secret => {
+                    decode_base64(raw).ok_or_else(|| ConfigError::InvalidValue {
                         key: SOURCE_NAME.to_string(),
                         expected_type: "base64 secret value".to_string(),
                         message: format!("secret key '{key}' is not valid base64"),
-                    }
-                })?,
+                    })?
+                }
             };
-            let parsed = try_parse_value_with_format(&content, None, SOURCE_NAME)
-                .unwrap_or_else(|| {
+            let parsed =
+                try_parse_value_with_format(&content, None, SOURCE_NAME).unwrap_or_else(|| {
                     AnnotatedValue::new(
                         ConfigValue::String(content),
                         SourceId::new(SOURCE_NAME),
@@ -511,8 +522,7 @@ fn decode_base64(input: &str) -> Option<String> {
 impl crate::remote::PolledSource for K8sApiSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
         let fresh = crate::remote::record_fetch_metrics(&self.source_id, self.fetch()).await?;
-        self.cached
-            .store(Arc::new(Some(Arc::new(fresh.clone()))));
+        self.cached.store(Arc::new(Some(Arc::new(fresh.clone()))));
         Ok(fresh)
     }
 
@@ -594,7 +604,11 @@ mod tests {
         assert!(third.is_some(), "swapped generation must reload");
         let v = third.unwrap();
         let host = get_path(&v, "config.toml", "host");
-        assert_eq!(host.and_then(|h| h.as_str()), Some("v2"), "new generation wins");
+        assert_eq!(
+            host.and_then(|h| h.as_str()),
+            Some("v2"),
+            "new generation wins"
+        );
     }
 
     #[test]
@@ -638,7 +652,10 @@ mod tests {
 
         let source = K8sMountedSource::new(mount);
         let value = source.read_volume().expect("read volume");
-        assert!(get_path(&value, "key", "").is_some(), "regular file is a key");
+        assert!(
+            get_path(&value, "key", "").is_some(),
+            "regular file is a key"
+        );
         assert!(
             get_path(&value, "..data", "").is_none()
                 && get_path(&value, "..2024_01_01_00_00_00.000", "").is_none(),
@@ -655,7 +672,10 @@ mod tests {
         let polled = crate::remote::PolledSource::poll(&source)
             .await
             .expect("poll");
-        assert_eq!(get_path(&polled, "a", "").and_then(|v| v.as_str()), Some("1"));
+        assert_eq!(
+            get_path(&polled, "a", "").and_then(|v| v.as_str()),
+            Some("1")
+        );
     }
 
     #[test]
@@ -710,9 +730,12 @@ mod tests {
         server.abort();
 
         // The nested `config.json` key parses as JSON and yields a map.
-        let log_level = get_path(&polled, "config.json", "log_level")
-            .and_then(|v| v.as_str());
-        assert_eq!(log_level, Some("debug"), "configmap data projected as config keys");
+        let log_level = get_path(&polled, "config.json", "log_level").and_then(|v| v.as_str());
+        assert_eq!(
+            log_level,
+            Some("debug"),
+            "configmap data projected as config keys"
+        );
     }
 
     #[test]

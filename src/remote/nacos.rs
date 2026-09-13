@@ -21,8 +21,8 @@ use arc_swap::ArcSwap;
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
-use crate::remote::common::try_parse_value_with_format;
 use crate::remote::circuit_breaker::CircuitBreaker;
+use crate::remote::common::try_parse_value_with_format;
 use crate::types::{AnnotatedValue, SourceId};
 
 const SOURCE_NAME: &str = "nacos";
@@ -133,10 +133,7 @@ impl NacosSourceBuilder {
                 })?,
             cached: ArcSwap::new(Arc::new(None)),
             last_content: ArcSwap::new(Arc::new(None)),
-            source_id: SourceId::new(format!(
-                "{SOURCE_NAME}:{}:{}",
-                self.group, self.data_id
-            )),
+            source_id: SourceId::new(format!("{SOURCE_NAME}:{}:{}", self.group, self.data_id)),
             circuit_breaker: std::sync::Mutex::new(
                 CircuitBreaker::new().with_threshold(self.cb_threshold),
             ),
@@ -179,16 +176,16 @@ impl NacosSource {
 
     /// Fetch the current content from the server.
     async fn fetch(&self) -> ConfigResult<String> {
-        let response =
-            self.client
-                .get(self.url.as_ref())
-                .send()
-                .await
-                .map_err(|e| ConfigError::InvalidValue {
-                    key: SOURCE_NAME.to_string(),
-                    expected_type: "nacos API response".to_string(),
-                    message: format!("nacos request failed: {e}"),
-                })?;
+        let response = self
+            .client
+            .get(self.url.as_ref())
+            .send()
+            .await
+            .map_err(|e| ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "nacos API response".to_string(),
+                message: format!("nacos request failed: {e}"),
+            })?;
         let status = response.status();
         if !status.is_success() {
             return Err(ConfigError::InvalidValue {
@@ -282,8 +279,7 @@ impl crate::remote::PolledSource for NacosSource {
         let value = self.project(&content);
         self.last_content
             .store(Arc::new(Some(Arc::from(content.as_str()))));
-        self.cached
-            .store(Arc::new(Some(Arc::new(value.clone()))));
+        self.cached.store(Arc::new(Some(Arc::new(value.clone()))));
         Ok(value)
     }
 
@@ -382,8 +378,16 @@ mod tests {
             .await
             .expect("second poll (unchanged)");
         assert_eq!(
-            first.inner.as_map().and_then(|m| m.get("log_level")).and_then(|v| v.as_str()),
-            second.inner.as_map().and_then(|m| m.get("log_level")).and_then(|v| v.as_str()),
+            first
+                .inner
+                .as_map()
+                .and_then(|m| m.get("log_level"))
+                .and_then(|v| v.as_str()),
+            second
+                .inner
+                .as_map()
+                .and_then(|m| m.get("log_level"))
+                .and_then(|v| v.as_str()),
             "unchanged content serves the cached snapshot"
         );
         assert!(hits.load(Ordering::SeqCst) >= 2, "server hit on every poll");
@@ -398,14 +402,28 @@ mod tests {
         .await;
         let source = source_for(addr, "DEFAULT_GROUP");
 
-        let before = crate::remote::PolledSource::poll(&source).await.expect("initial");
+        let before = crate::remote::PolledSource::poll(&source)
+            .await
+            .expect("initial");
         let after = crate::remote::PolledSource::poll(&source)
             .await
             .expect("after publish");
-        let a = before.inner.as_map().and_then(|m| m.get("log_level")).and_then(|v| v.as_str());
-        let b = after.inner.as_map().and_then(|m| m.get("log_level")).and_then(|v| v.as_str());
+        let a = before
+            .inner
+            .as_map()
+            .and_then(|m| m.get("log_level"))
+            .and_then(|v| v.as_str());
+        let b = after
+            .inner
+            .as_map()
+            .and_then(|m| m.get("log_level"))
+            .and_then(|v| v.as_str());
         assert_eq!(a, Some("info"));
-        assert_eq!(b, Some("trace"), "server-side publish must reach the next poll");
+        assert_eq!(
+            b,
+            Some("trace"),
+            "server-side publish must reach the next poll"
+        );
     }
 
     #[tokio::test]
@@ -429,8 +447,14 @@ mod tests {
             .build()
             .expect("build");
         let url = source.url();
-        assert!(url.contains("/nacos/v1/cs/configs?"), "open api path: {url}");
-        assert!(url.contains("dataId=app%20config.toml"), "dataId encoded: {url}");
+        assert!(
+            url.contains("/nacos/v1/cs/configs?"),
+            "open api path: {url}"
+        );
+        assert!(
+            url.contains("dataId=app%20config.toml"),
+            "dataId encoded: {url}"
+        );
         assert!(url.contains("group=MY_GROUP"), "group: {url}");
         assert!(url.contains("tenant=prod%20tenant"), "tenant: {url}");
     }

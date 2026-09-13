@@ -15,8 +15,8 @@
 //! ending) tears the watch down and re-establishes it — events keep flowing
 //! to the callback without the caller doing anything.
 
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 /// Upper bound for establishing one watch stream (lock + gRPC creation).
@@ -137,9 +137,7 @@ impl EtcdWatcher {
             match self.source.watch().await {
                 Ok(mut stream) => {
                     attempt = 0;
-                    while let Some(item) =
-                        futures_util::StreamExt::next(&mut stream).await
-                    {
+                    while let Some(item) = futures_util::StreamExt::next(&mut stream).await {
                         match item {
                             Ok(event) => {
                                 if event.mod_revision > 0 {
@@ -220,16 +218,13 @@ impl WatchEventSource for EtcdGrpcWatchSource {
         // slow or unresponsive cluster must surface as a transient error so
         // the reconnect backoff engages instead of hanging this future
         // forever. The returned stream itself is long-lived and unaffected.
-        let watch_stream = tokio::time::timeout(
-            WATCH_ESTABLISH_TIMEOUT,
-            async {
-                self.client
-                    .lock()
-                    .await
-                    .watch(self.prefix.as_str(), Some(options))
-                    .await
-            },
-        )
+        let watch_stream = tokio::time::timeout(WATCH_ESTABLISH_TIMEOUT, async {
+            self.client
+                .lock()
+                .await
+                .watch(self.prefix.as_str(), Some(options))
+                .await
+        })
         .await
         .map_err(|_| crate::error::ConfigError::InvalidValue {
             key: "etcd".to_string(),
@@ -258,8 +253,7 @@ impl WatchEventSource for EtcdGrpcWatchSource {
                                 let Some(kv) = event.kv() else {
                                     continue;
                                 };
-                                let (Ok(key), rev) = (kv.key_str(), kv.mod_revision())
-                                else {
+                                let (Ok(key), rev) = (kv.key_str(), kv.mod_revision()) else {
                                     continue;
                                 };
                                 let item = match event.event_type() {
@@ -267,8 +261,7 @@ impl WatchEventSource for EtcdGrpcWatchSource {
                                         .value_str()
                                         .ok()
                                         .map(|value| {
-                                            last_revision
-                                                .fetch_max(rev, Ordering::AcqRel);
+                                            last_revision.fetch_max(rev, Ordering::AcqRel);
                                             Ok(EtcdWatchEvent {
                                                 key: key.to_string(),
                                                 value: Some(value.to_string()),
@@ -399,10 +392,8 @@ mod tests {
 
     #[tokio::test]
     async fn change_events_reach_the_callback() {
-        let source = MockWatchSource::new(
-            vec![vec![put("app/db/url", "postgres://v2", 5)]],
-            vec![],
-        );
+        let source =
+            MockWatchSource::new(vec![vec![put("app/db/url", "postgres://v2", 5)]], vec![]);
         let watcher = EtcdWatcher::new(source);
         let sink: EventSink = Arc::new(Mutex::new(Vec::new()));
 

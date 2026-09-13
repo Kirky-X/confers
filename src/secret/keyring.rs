@@ -103,17 +103,19 @@ impl SecretToolKeyringStore {
                 message: format!("cannot spawn secret-tool: {e}"),
             })?;
 
-        if let Some(data) = input {
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(data).map_err(|e| ConfigError::KeyError {
-                    message: format!("cannot pipe secret into secret-tool: {e}"),
-                })?;
-            }
+        if let Some(data) = input
+            && let Some(mut stdin) = child.stdin.take()
+        {
+            stdin.write_all(data).map_err(|e| ConfigError::KeyError {
+                message: format!("cannot pipe secret into secret-tool: {e}"),
+            })?;
         }
 
-        let out = child.wait_with_output().map_err(|e| ConfigError::KeyError {
-            message: format!("secret-tool failed: {e}"),
-        })?;
+        let out = child
+            .wait_with_output()
+            .map_err(|e| ConfigError::KeyError {
+                message: format!("secret-tool failed: {e}"),
+            })?;
         if !out.status.success() {
             return Err(ConfigError::KeyError {
                 message: format!("secret-tool exited with {}", out.status),
@@ -259,10 +261,7 @@ impl MasterKeyStore {
         if SecretToolKeyringStore::is_available() {
             Box::new(SecretToolKeyringStore::new())
         } else {
-            crate::metrics::record_counter(
-                "confers_keyring_fallback_total",
-                &[("store", "file")],
-            );
+            crate::metrics::record_counter("confers_keyring_fallback_total", &[("store", "file")]);
             log::warn!(
                 "OS keyring (secret-tool/Secret Service) unavailable; falling back to a \
                  chmod-600 file store — the master key is protected by file permissions only"
@@ -272,9 +271,7 @@ impl MasterKeyStore {
     }
 
     /// Convenience: read the master key through the selected store.
-    pub fn load_master_key(
-        store: &dyn KeyringStore,
-    ) -> ConfigResult<Option<Vec<u8>>> {
+    pub fn load_master_key(store: &dyn KeyringStore) -> ConfigResult<Option<Vec<u8>>> {
         store.get_secret(MASTER_KEY_SERVICE, MASTER_KEY_ACCOUNT)
     }
 
@@ -312,7 +309,9 @@ mod tests {
             Some(vec![1, 2, 3, 4])
         );
 
-        store.delete_secret("confers", "master-key").expect("delete");
+        store
+            .delete_secret("confers", "master-key")
+            .expect("delete");
         assert!(store.get_secret("confers", "master-key").unwrap().is_none());
     }
 
@@ -331,9 +330,11 @@ mod tests {
     fn file_fallback_permissions_are_owner_only() {
         use std::os::unix::fs::PermissionsExt;
         let store = file_store();
-        store.set_secret("confers", "master-key", &[7; 8]).expect("set");
-        let meta = std::fs::metadata(store.path().join("confers-master-key.key"))
-            .expect("metadata");
+        store
+            .set_secret("confers", "master-key", &[7; 8])
+            .expect("set");
+        let meta =
+            std::fs::metadata(store.path().join("confers-master-key.key")).expect("metadata");
         assert_eq!(meta.permissions().mode() & 0o777, 0o600);
     }
 

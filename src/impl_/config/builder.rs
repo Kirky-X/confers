@@ -39,6 +39,9 @@ use crate::interface::Source;
 ///
 /// This is the main entry point for loading configuration. It supports
 /// multiple sources, validation, encryption, and hot reload.
+/// JSON-tree 变换闭包：合并结果反序列化前的后处理步骤（如 `#[config(flatten)]` hoist）
+type JsonMapFn = Box<dyn Fn(&mut serde_json::Value) + Send + Sync>;
+
 pub struct ConfigBuilder<T> {
     /// Source chain builder.
     chain_builder: SourceChainBuilder,
@@ -64,7 +67,7 @@ pub struct ConfigBuilder<T> {
     reload_health_check: Option<Arc<dyn ReloadHealthCheck>>,
     /// JSON-tree transformations applied to the merged value right before
     /// deserialization (e.g. `#[config(flatten)]` hoisting).
-    json_maps: Vec<Box<dyn Fn(&mut serde_json::Value) + Send + Sync>>,
+    json_maps: Vec<JsonMapFn>,
     /// Type marker.
     _marker: PhantomData<T>,
     /// Lifecycle registry for managing component startup/shutdown.
@@ -312,10 +315,7 @@ where
                 );
             }
             Err(_) => {
-                crate::metrics::record_counter(
-                    crate::metrics::names::LOADER_FAILURES_TOTAL,
-                    &[],
-                );
+                crate::metrics::record_counter(crate::metrics::names::LOADER_FAILURES_TOTAL, &[]);
             }
         }
         result

@@ -367,8 +367,14 @@ mod tests {
 
         assert_eq!(event.key, "server.host");
         assert_eq!(event.source, ChangeSource::File);
-        assert_eq!(event.old_value.as_ref().and_then(|v| v.as_str()), Some("old"));
-        assert_eq!(event.new_value.as_ref().and_then(|v| v.as_str()), Some("new"));
+        assert_eq!(
+            event.old_value.as_ref().and_then(|v| v.as_str()),
+            Some("old")
+        );
+        assert_eq!(
+            event.new_value.as_ref().and_then(|v| v.as_str()),
+            Some("new")
+        );
         assert!(event.version > 0);
     }
 
@@ -402,7 +408,12 @@ mod tests {
 
         for i in 0..3 {
             stream
-                .publish(ChangeEvent::new(format!("k{i}"), None, None, ChangeSource::Bus))
+                .publish(ChangeEvent::new(
+                    format!("k{i}"),
+                    None,
+                    None,
+                    ChangeSource::Bus,
+                ))
                 .await
                 .unwrap();
         }

@@ -134,10 +134,7 @@ impl XChaCha20Crypto {
         let result = self.decrypt_with_aad_inner(nonce, ciphertext, key, aad);
         if result.is_err() {
             // Critical-path metric: secret decryption failure.
-            crate::metrics::record_counter(
-                crate::metrics::names::SECRET_DECRYPT_ERRORS_TOTAL,
-                &[],
-            );
+            crate::metrics::record_counter(crate::metrics::names::SECRET_DECRYPT_ERRORS_TOTAL, &[]);
         }
         result
     }
@@ -149,7 +146,6 @@ impl XChaCha20Crypto {
         key: &[u8],
         aad: &[u8],
     ) -> Result<Vec<u8>, CryptoError> {
-
         // Critical-path span: field decryption.
         #[cfg(feature = "tracing")]
         let decrypt_span = tracing::info_span!("confers.decrypt");

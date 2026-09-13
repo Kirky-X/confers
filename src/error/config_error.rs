@@ -335,7 +335,7 @@ impl ConfigConfigError {
     /// Get a message suitable for audit logging.
     ///
     /// Free-form field values (`message`, `cause`) are quoted and escaped via
-    /// [`Self::quote_audit_value`] so that whitespace, quotes, and newlines
+    /// `Self::quote_audit_value` so that whitespace, quotes, and newlines
     /// inside them cannot corrupt the `key=value` structure.
     pub fn audit_message(&self) -> String {
         let base = format!(

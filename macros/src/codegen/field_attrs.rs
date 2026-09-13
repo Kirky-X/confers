@@ -34,7 +34,10 @@ use crate::parse::FieldAttrs;
 /// `FIELD_KEYS` lists the serde field names (the keys the loader writes into
 /// the merged JSON tree), in declaration order. Used by `flatten` codegen to
 /// know which top-level keys belong to a flattened nested struct.
-pub fn generate_field_keys_impl(struct_ident: &Ident, fields: &[(&Ident, &syn::Type, FieldAttrs)]) -> TokenStream {
+pub fn generate_field_keys_impl(
+    struct_ident: &Ident,
+    fields: &[(&Ident, &syn::Type, FieldAttrs)],
+) -> TokenStream {
     let keys: Vec<TokenStream> = fields
         .iter()
         .map(|(_, _, f)| {
@@ -111,7 +114,7 @@ pub fn generate_field_attr_impls(
         }
     };
 
-    if dynamic_methods_is_empty(&fields) && watch_fields.is_empty() {
+    if dynamic_methods_is_empty(fields) && watch_fields.is_empty() {
         return TokenStream::new();
     }
 

@@ -339,7 +339,6 @@ fn cli24_inspect_truncates_long_strings_char_safely() {
     assert!(!body.contains('\u{fffd}'), "no replacement chars allowed");
 }
 
-
 #[test]
 fn t005_schema_outputs_valid_json() {
     let dir = setup_dir();
@@ -351,8 +350,8 @@ fn t005_schema_outputs_valid_json() {
         stderr(&out)
     );
     let body = stdout(&out);
-    let parsed: serde_json::Value =
-        serde_json::from_str(&body).unwrap_or_else(|e| panic!("schema output must be valid JSON: {e}\n{body}"));
+    let parsed: serde_json::Value = serde_json::from_str(&body)
+        .unwrap_or_else(|e| panic!("schema output must be valid JSON: {e}\n{body}"));
     // serde_json::Value schema 至少含 $schema 或 type 字段
     assert!(
         parsed.get("$schema").is_some() || parsed.get("type").is_some(),
@@ -377,8 +376,8 @@ fn t005_get_existing_key_returns_json_value() {
         stderr(&out)
     );
     let body = stdout(&out).trim().to_string();
-    let parsed: serde_json::Value =
-        serde_json::from_str(&body).unwrap_or_else(|e| panic!("get output must be valid JSON: {e}\n{body}"));
+    let parsed: serde_json::Value = serde_json::from_str(&body)
+        .unwrap_or_else(|e| panic!("get output must be valid JSON: {e}\n{body}"));
     assert_eq!(parsed, serde_json::json!("localhost"));
 }
 
@@ -433,10 +432,7 @@ fn t005_fields_filters_get_output() {
 fn t005_exit_code_contract_config_error() {
     let dir = setup_dir();
     // 不存在文件时 build_config 跳过该文件(空配置), get 输出 null → exit 0
-    let out = run_cli(
-        &dir,
-        &["-c", "nonexistent.toml", "get", "some.key"],
-    );
+    let out = run_cli(&dir, &["-c", "nonexistent.toml", "get", "some.key"]);
     let code = out.status.code().unwrap_or(0);
     // 不存在文件 → 可能是 exit 1 (config error) 或 exit 0 (空配置 + null 输出)
     // 固化行为: 文件不存在时 build_config 返回空配置(不报错), get 输出 null

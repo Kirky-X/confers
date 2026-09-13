@@ -45,7 +45,7 @@ pub struct FsWatcher {
     watch_path: Arc<PathBuf>,
     /// Receiver for debounced file events
     rx: Option<mpsc::Receiver<PathBuf>>,
-    /// Shared sender store for closing the channel (see [`SenderStore`])
+    /// Shared sender store for closing the channel (see `SenderStore`)
     tx: SenderStore,
     /// Handle to the watcher thread
     watcher_thread: Option<std::thread::JoinHandle<()>>,
@@ -165,7 +165,7 @@ impl FsWatcher {
     ///
     /// The `is_running()` check is a fast path only: if the watcher thread
     /// fails while a `recv()` call is already awaiting, the thread closes
-    /// the channel (see [`SenderStore`]) and the pending `recv()` returns
+    /// the channel (see `SenderStore`) and the pending `recv()` returns
     /// `None` — it can never hang.
     pub async fn recv(&mut self) -> Option<PathBuf> {
         // A stopped or failed watcher can never produce events again;
@@ -231,7 +231,7 @@ impl FsWatcher {
     /// `tx_store` is the shared sender store: on any failure this thread
     /// empties it and drops its own sender clone on return, closing the
     /// channel so a concurrently awaiting `recv()` returns `None` instead of
-    /// hanging (see [`SenderStore`]).
+    /// hanging (see `SenderStore`).
     fn run_watcher(
         path: &Path,
         debounce_ms: u64,
@@ -367,7 +367,7 @@ pub struct MultiFsWatcher {
     watch_paths: Arc<HashSet<PathBuf>>,
     /// Receiver for debounced file events
     rx: Option<mpsc::Receiver<PathBuf>>,
-    /// Shared sender store for closing the channel (see [`SenderStore`])
+    /// Shared sender store for closing the channel (see `SenderStore`)
     tx: SenderStore,
     /// Handle to the watcher thread
     watcher_thread: Option<std::thread::JoinHandle<()>>,
@@ -504,7 +504,7 @@ impl MultiFsWatcher {
     ///
     /// The `is_running()` check is a fast path only: if the watcher thread
     /// fails while a `recv()` call is already awaiting, the thread closes
-    /// the channel (see [`SenderStore`]) and the pending `recv()` returns
+    /// the channel (see `SenderStore`) and the pending `recv()` returns
     /// `None` — it can never hang.
     pub async fn recv(&mut self) -> Option<PathBuf> {
         // A stopped or failed watcher can never produce events again;
@@ -562,7 +562,7 @@ impl MultiFsWatcher {
     /// `tx_store` is the shared sender store: on any failure this thread
     /// empties it and drops its own sender clone on return, closing the
     /// channel so a concurrently awaiting `recv()` returns `None` instead of
-    /// hanging (see [`SenderStore`]).
+    /// hanging (see `SenderStore`).
     fn run_watcher(
         paths: &HashSet<PathBuf>,
         debounce_ms: u64,

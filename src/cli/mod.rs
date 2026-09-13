@@ -88,7 +88,7 @@ static ENV_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// `std::env::set_var`, which is not thread-safe. It **must be called before
 /// spawning any threads** in the process (including threads spawned by
 /// libraries invoked afterwards). All environment writes performed by this
-/// crate are serialized behind [`ENV_WRITE_LOCK`], but environment reads from
+/// crate are serialized behind `ENV_WRITE_LOCK`, but environment reads from
 /// unrelated threads cannot be synchronized from here.
 pub fn load_env_file(path: &PathBuf) -> Result<()> {
     if !path.exists() {
@@ -433,7 +433,12 @@ where
             }
         }
         Commands::Get { key } => {
-            cmd_get(&config_paths, &key, allow_absolute_paths, fields_filter.as_deref())?;
+            cmd_get(
+                &config_paths,
+                &key,
+                allow_absolute_paths,
+                fields_filter.as_deref(),
+            )?;
         }
         Commands::Doctor { format } => {
             cmd_doctor(&config_paths, &format, allow_absolute_paths)?;
@@ -869,8 +874,11 @@ fn cmd_export(
 
         // Sanitized by default; `--raw` opts out (see the warning above).
         let annotated_json = serde_json::to_value(&annotated_config)?;
-        let annotated_json =
-            if raw { annotated_json } else { sanitize_json_strings(&annotated_json, 0) };
+        let annotated_json = if raw {
+            annotated_json
+        } else {
+            sanitize_json_strings(&annotated_json, 0)
+        };
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
@@ -901,7 +909,11 @@ fn cmd_export(
         let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
 
         // Sanitized by default; `--raw` opts out (see the warning above).
-        let config = if raw { config } else { sanitize_json_strings(&config, 0) };
+        let config = if raw {
+            config
+        } else {
+            sanitize_json_strings(&config, 0)
+        };
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
@@ -1283,7 +1295,6 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-
 /// Output JSON Schema for configuration type `T`.
 fn cmd_schema<T: JsonSchema>() -> Result<()> {
     let schema = schemars::schema_for!(T);
@@ -1329,10 +1340,7 @@ fn infer_schema_inner(value: &serde_json::Value, depth: usize) -> serde_json::Va
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
             for (key, child) in map {
-                properties.insert(
-                    key.clone(),
-                    infer_schema_inner(child, depth + 1),
-                );
+                properties.insert(key.clone(), infer_schema_inner(child, depth + 1));
                 required.push(serde_json::Value::String(key.clone()));
             }
             serde_json::json!({
@@ -1375,7 +1383,6 @@ fn infer_schema_inner(value: &serde_json::Value, depth: usize) -> serde_json::Va
     }
 }
 
-
 /// Get a specific configuration value by dot-separated key path.
 ///
 /// Output is single-line stable JSON. Missing keys emit `null` (exit 0).
@@ -1410,10 +1417,7 @@ fn cmd_get(
 fn navigate_json<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
     let mut current = value;
     for key in path.split('.') {
-        match current.get(key) {
-            Some(v) => current = v,
-            None => return None,
-        }
+        current = current.get(key)?;
     }
     Some(current)
 }
@@ -1511,12 +1515,8 @@ impl DoctorReport {
     }
 
     fn from_checks(checks: Vec<DoctorCheck>) -> Self {
-        let has_error = checks
-            .iter()
-            .any(|c| c.severity == DoctorSeverity::Error);
-        let has_warning = checks
-            .iter()
-            .any(|c| c.severity == DoctorSeverity::Warning);
+        let has_error = checks.iter().any(|c| c.severity == DoctorSeverity::Error);
+        let has_warning = checks.iter().any(|c| c.severity == DoctorSeverity::Warning);
         let (status, exit_code) = if has_error {
             ("error", 2)
         } else if has_warning {
@@ -1552,10 +1552,7 @@ pub fn run_doctor_checks(
             checks.push(DoctorCheck {
                 name: "load",
                 severity: DoctorSeverity::Ok,
-                message: format!(
-                    "configuration loaded from {} file(s)",
-                    config_paths.len()
-                ),
+                message: format!("configuration loaded from {} file(s)", config_paths.len()),
             });
             value
         }
@@ -1594,7 +1591,11 @@ pub fn run_doctor_checks(
         message: if schema_issues.is_empty() {
             "no schema issues detected".to_string()
         } else {
-            format!("{} schema issue(s): {}", schema_issues.len(), schema_issues.join("; "))
+            format!(
+                "{} schema issue(s): {}",
+                schema_issues.len(),
+                schema_issues.join("; ")
+            )
         },
     });
 
@@ -1618,11 +1619,7 @@ struct DoctorLeaf<'a> {
 }
 
 /// Collect scalar leaves with their provenance.
-fn collect_leaves<'a>(
-    value: &'a AnnotatedValue,
-    prefix: &str,
-    out: &mut Vec<DoctorLeaf<'a>>,
-) {
+fn collect_leaves<'a>(value: &'a AnnotatedValue, prefix: &str, out: &mut Vec<DoctorLeaf<'a>>) {
     const MAX_DOCTOR_DEPTH: usize = 32;
     match &value.inner {
         crate::types::ConfigValue::Map(map) => {
@@ -1713,17 +1710,17 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
         .flat_map(|(_, priorities)| priorities.iter().max().copied())
         .max();
 
-    if let (Some(env_p), Some(file_p)) = (env_priority, max_file_priority) {
-        if env_p <= file_p {
-            return DoctorCheck {
-                name: "sources",
-                severity: DoctorSeverity::Warning,
-                message: format!(
-                    "env priority ({env_p}) is not above the file priority ({file_p}); \
-                     env overrides would lose"
-                ),
-            };
-        }
+    if let (Some(env_p), Some(file_p)) = (env_priority, max_file_priority)
+        && env_p <= file_p
+    {
+        return DoctorCheck {
+            name: "sources",
+            severity: DoctorSeverity::Warning,
+            message: format!(
+                "env priority ({env_p}) is not above the file priority ({file_p}); \
+                 env overrides would lose"
+            ),
+        };
     }
 
     let sources: Vec<String> = priority_by_source
@@ -1733,7 +1730,10 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
     DoctorCheck {
         name: "sources",
         severity: DoctorSeverity::Ok,
-        message: format!("priority chain coherent across source(s): {}", sources.join(", ")),
+        message: format!(
+            "priority chain coherent across source(s): {}",
+            sources.join(", ")
+        ),
     }
 }
 
@@ -1778,9 +1778,7 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
         let crypto = crate::secret::XChaCha20Crypto::new();
         let failures: Vec<String> = candidates
             .iter()
-            .filter(|(_, envelope)| {
-                !verify_envelope(&crypto, envelope, &key)
-            })
+            .filter(|(_, envelope)| !verify_envelope(&crypto, envelope, &key))
             .map(|(path, _)| path.clone())
             .collect();
 
@@ -1819,11 +1817,7 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
 
 /// Depth-bounded walk collecting `enc:v1:` string values.
 #[cfg(feature = "encryption")]
-fn collect_encrypted_values(
-    value: &AnnotatedValue,
-    prefix: &str,
-    out: &mut Vec<(String, String)>,
-) {
+fn collect_encrypted_values(value: &AnnotatedValue, prefix: &str, out: &mut Vec<(String, String)>) {
     const MAX_DOCTOR_DEPTH: usize = 32;
     match &value.inner {
         crate::types::ConfigValue::Map(map) => {
@@ -1839,10 +1833,8 @@ fn collect_encrypted_values(
                 collect_encrypted_values(child, &path, out);
             }
         }
-        crate::types::ConfigValue::String(s) => {
-            if s.starts_with(DOCTOR_ENVELOPE_PREFIX) {
-                out.push((prefix.to_string(), s.clone()));
-            }
+        crate::types::ConfigValue::String(s) if s.starts_with(DOCTOR_ENVELOPE_PREFIX) => {
+            out.push((prefix.to_string(), s.clone()));
         }
         _ => {}
     }
@@ -1850,11 +1842,7 @@ fn collect_encrypted_values(
 
 /// Decrypt `enc:v1:<base64(nonce||ciphertext)>` with `key`.
 #[cfg(feature = "encryption")]
-fn verify_envelope(
-    crypto: &crate::secret::XChaCha20Crypto,
-    envelope: &str,
-    key: &[u8],
-) -> bool {
+fn verify_envelope(crypto: &crate::secret::XChaCha20Crypto, envelope: &str, key: &[u8]) -> bool {
     use base64::Engine;
 
     let Some(encoded) = envelope.strip_prefix(DOCTOR_ENVELOPE_PREFIX) else {
@@ -1867,17 +1855,19 @@ fn verify_envelope(
     if blob.len() <= NONCE_SIZE {
         return false;
     }
-    crypto.decrypt(&blob[..NONCE_SIZE], &blob[NONCE_SIZE..], key).is_ok()
+    crypto
+        .decrypt(&blob[..NONCE_SIZE], &blob[NONCE_SIZE..], key)
+        .is_ok()
 }
 
 /// Decode the doctor master key: hex (64 chars) or raw 32-byte ASCII.
 #[cfg(feature = "encryption")]
 fn decode_master_key(key_str: &str) -> Option<Vec<u8>> {
     let trimmed = key_str.trim();
-    if let Ok(bytes) = hex_decode(trimmed) {
-        if bytes.len() == 32 {
-            return Some(bytes);
-        }
+    if let Ok(bytes) = hex_decode(trimmed)
+        && bytes.len() == 32
+    {
+        return Some(bytes);
     }
     if trimmed.len() == 32 {
         return Some(trimmed.as_bytes().to_vec());
@@ -1888,7 +1878,7 @@ fn decode_master_key(key_str: &str) -> Option<Vec<u8>> {
 /// Minimal hex decoder (avoids a hard hex-crate dependency in the CLI).
 #[cfg(feature = "encryption")]
 fn hex_decode(input: &str) -> Result<Vec<u8>, ()> {
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err(());
     }
     let mut out = Vec::with_capacity(input.len() / 2);
@@ -1919,7 +1909,10 @@ fn check_env_override_conflicts(annotated: &AnnotatedValue) -> DoctorCheck {
         let lower = name.to_ascii_lowercase();
         // Direct key (`HOST` → `host`).
         if paths.contains(&lower) {
-            mappings.entry(lower.clone()).or_default().insert(name.clone());
+            mappings
+                .entry(lower.clone())
+                .or_default()
+                .insert(name.clone());
         }
         // Underscore-split dot path (`DATABASE_HOST` → `database.host`).
         let dotted = lower.replace('_', ".");
@@ -1938,10 +1931,8 @@ fn check_env_override_conflicts(annotated: &AnnotatedValue) -> DoctorCheck {
     let mut conflicts: Vec<String> = Vec::new();
     for (path, vars) in &mappings {
         if vars.len() > 1 {
-            let values: std::collections::BTreeSet<String> = vars
-                .iter()
-                .filter_map(|v| std::env::var(v).ok())
-                .collect();
+            let values: std::collections::BTreeSet<String> =
+                vars.iter().filter_map(|v| std::env::var(v).ok()).collect();
             if values.len() > 1 {
                 conflicts.push(format!("{} <- {}", path, {
                     let mut sorted: Vec<&String> = vars.iter().collect();
@@ -1976,7 +1967,11 @@ fn check_env_override_conflicts(annotated: &AnnotatedValue) -> DoctorCheck {
 }
 
 /// Depth-bounded dot-path collection.
-fn collect_paths(value: &AnnotatedValue, prefix: &str, out: &mut std::collections::HashSet<String>) {
+fn collect_paths(
+    value: &AnnotatedValue,
+    prefix: &str,
+    out: &mut std::collections::HashSet<String>,
+) {
     const MAX_DOCTOR_DEPTH: usize = 16;
     match &value.inner {
         crate::types::ConfigValue::Map(map) => {
@@ -2057,7 +2052,14 @@ pub fn agent_knowledge_markdown() -> String {
             "- **{}** — {} (args: {})\n",
             sub["name"].as_str().unwrap_or("?"),
             sub["purpose"].as_str().unwrap_or(""),
-            sub["key_args"].as_array().map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default(),
+            sub["key_args"]
+                .as_array()
+                .map(|a| a
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "))
+                .unwrap_or_default(),
         ));
     }
     out.push_str("\n## Exit codes\n\n- `0` success (doctor: healthy)\n- `1` config error / doctor warnings\n- `2` I/O error / doctor errors\n");
@@ -2094,9 +2096,17 @@ fn cmd_doctor(
 
     match format {
         "text" => {
-            println!("Doctor (status: {}, exit: {})", report.status, report.exit_code);
+            println!(
+                "Doctor (status: {}, exit: {})",
+                report.status, report.exit_code
+            );
             for check in &report.checks {
-                println!("  [{:>7}] {:>14}: {}", check.severity.as_str(), check.name, check.message);
+                println!(
+                    "  [{:>7}] {:>14}: {}",
+                    check.severity.as_str(),
+                    check.name,
+                    check.message
+                );
             }
         }
         _ => {
@@ -4219,7 +4229,7 @@ mod tests {
 
     // ============== doctor ==============
 
-    use super::{DoctorSeverity, DOCTOR_ENVELOPE_PREFIX, DOCTOR_MASTER_KEY_ENV};
+    use super::{DOCTOR_ENVELOPE_PREFIX, DOCTOR_MASTER_KEY_ENV, DoctorSeverity};
 
     fn annotated_from_value(value: crate::types::ConfigValue) -> AnnotatedValue {
         AnnotatedValue::new(value, crate::types::SourceId::new("doctor-test"), "")
@@ -4232,18 +4242,14 @@ mod tests {
             .map(|(k, v)| {
                 (
                     Arc::from(k),
-                    AnnotatedValue::new(
-                        v,
-                        crate::types::SourceId::new("doctor-test"),
-                        k,
-                    ),
+                    AnnotatedValue::new(v, crate::types::SourceId::new("doctor-test"), k),
                 )
             })
             .collect();
         annotated_from_value(crate::types::ConfigValue::Map(Arc::new(map)))
     }
 
-    fn severity_of<'a>(report: &'a super::DoctorReport, name: &str) -> DoctorSeverity {
+    fn severity_of(report: &super::DoctorReport, name: &str) -> DoctorSeverity {
         report
             .checks
             .iter()
@@ -4312,9 +4318,7 @@ mod tests {
     fn doctor_encrypted_field_decrypts_with_valid_key() {
         let key = [7u8; 32];
         let crypto = crate::secret::XChaCha20Crypto::new();
-        let (nonce, ciphertext) = crypto
-            .encrypt(b"secret-value", &key)
-            .expect("encrypt");
+        let (nonce, ciphertext) = crypto.encrypt(b"secret-value", &key).expect("encrypt");
         let mut blob = nonce;
         blob.extend_from_slice(&ciphertext);
         use base64::Engine;
@@ -4334,7 +4338,10 @@ mod tests {
         unsafe { std::env::set_var(DOCTOR_MASTER_KEY_ENV, &hex_key) };
         let report = super::run_doctor_checks(&ok_result, &[]);
         unsafe { std::env::remove_var(DOCTOR_MASTER_KEY_ENV) };
-        assert!(severity_of(&report, "encryption") == DoctorSeverity::Ok, "{report:?}");
+        assert!(
+            severity_of(&report, "encryption") == DoctorSeverity::Ok,
+            "{report:?}"
+        );
 
         // Wrong key → decryption fails with an error.
         let wrong: String = [9u8; 32].iter().map(|b| format!("{b:02x}")).collect();
@@ -4376,16 +4383,17 @@ mod tests {
             .iter()
             .find(|c| c.name == "env_overrides")
             .expect("env_overrides check present");
-        assert!(check.severity == DoctorSeverity::Warning, "{:?}", check.message);
+        assert!(
+            check.severity == DoctorSeverity::Warning,
+            "{:?}",
+            check.message
+        );
         assert_eq!(report.exit_code, 1);
     }
 
     #[test]
     fn doctor_report_json_is_single_line_serializable() {
-        let config = doctor_map(vec![(
-            "k",
-            crate::types::ConfigValue::string("v"),
-        )]);
+        let config = doctor_map(vec![("k", crate::types::ConfigValue::string("v"))]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
         let report = super::run_doctor_checks(&ok_result, &[]);
         let line = serde_json::to_string(&report.to_json_line()).expect("json");
@@ -4439,8 +4447,14 @@ mod tests {
         assert_eq!(schema["properties"]["tags"]["type"], "array");
         assert_eq!(schema["properties"]["tags"]["items"]["type"], "string");
         // Mixed array widens items to "any".
-        assert_eq!(schema["properties"]["mixed"]["items"], serde_json::json!({}));
-        assert_eq!(schema["properties"]["empty"]["items"], serde_json::json!({}));
+        assert_eq!(
+            schema["properties"]["mixed"]["items"],
+            serde_json::json!({})
+        );
+        assert_eq!(
+            schema["properties"]["empty"]["items"],
+            serde_json::json!({})
+        );
         assert_eq!(schema["properties"]["ratio"]["type"], "number");
         assert_eq!(schema["properties"]["enabled"]["type"], "boolean");
         // null infers to the permissive schema.
@@ -4462,13 +4476,14 @@ mod tests {
                     }
                     let props = s["properties"].as_object().unwrap();
                     let required = s["required"].as_array().unwrap();
-                    obj.iter().all(|(k, val)| {
-                        props.contains_key(k) && validate(val, &props[k])
-                    }) && required.iter().all(|r| obj.contains_key(r.as_str().unwrap()))
+                    obj.iter()
+                        .all(|(k, val)| props.contains_key(k) && validate(val, &props[k]))
+                        && required
+                            .iter()
+                            .all(|r| obj.contains_key(r.as_str().unwrap()))
                 }
                 (serde_json::Value::Array(items), s) => {
-                    s["type"] == "array"
-                        && items.iter().all(|i| validate(i, &s["items"]))
+                    s["type"] == "array" && items.iter().all(|i| validate(i, &s["items"]))
                 }
                 (serde_json::Value::String(_), s) => s["type"] == "string",
                 (serde_json::Value::Number(n), s) => {
@@ -4500,12 +4515,19 @@ mod docs_agent_tests {
         assert_eq!(pack["knowledge_version"], 1);
         let subs = pack["subcommands"].as_array().expect("subcommands");
         let names: Vec<&str> = subs.iter().filter_map(|s| s["name"].as_str()).collect();
-        for expected in ["inspect", "validate", "export", "doctor", "get", "schema", "docs"] {
+        for expected in [
+            "inspect", "validate", "export", "doctor", "get", "schema", "docs",
+        ] {
             assert!(names.contains(&expected), "missing subcommand {expected}");
         }
         // Exit-code contract documented.
         assert_eq!(pack["exit_codes"]["0"], "success (or doctor: healthy)");
-        assert!(pack["exit_codes"]["2"].as_str().unwrap().contains("I/O error"));
+        assert!(
+            pack["exit_codes"]["2"]
+                .as_str()
+                .unwrap()
+                .contains("I/O error")
+        );
         // Recipes are copy-pasteable (non-empty commands).
         for recipe in pack["recipes"].as_array().expect("recipes") {
             assert!(!recipe["command"].as_str().unwrap().is_empty());
@@ -4521,6 +4543,10 @@ mod docs_agent_tests {
         assert!(md.contains("## Recipes"));
         assert!(md.contains("doctor"), "doctor recipe documented");
         // Knowledge pack stays compact (<= 200 lines, per spec).
-        assert!(md.lines().count() <= 200, "pack too long: {}", md.lines().count());
+        assert!(
+            md.lines().count() <= 200,
+            "pack too long: {}",
+            md.lines().count()
+        );
     }
 }

@@ -63,9 +63,7 @@ fn bench_watch_callback(c: &mut Criterion) {
                     .await
                     .expect("publish");
                 for rx in receivers.iter_mut() {
-                    futures_util::StreamExt::next(rx)
-                        .await
-                        .expect("delivered");
+                    futures_util::StreamExt::next(rx).await.expect("delivered");
                 }
             })
         })

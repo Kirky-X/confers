@@ -114,8 +114,8 @@ mod parse;
 
 use codegen::{
     generate_clap_impl, generate_defaults_impl, generate_field_attr_impls,
-    generate_field_keys_impl, generate_load_impl, generate_migration_impl,
-    generate_modules_impl, generate_schema_impl, generate_validate_impl,
+    generate_field_keys_impl, generate_load_impl, generate_migration_impl, generate_modules_impl,
+    generate_schema_impl, generate_validate_impl,
 };
 use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 
@@ -222,8 +222,7 @@ pub fn config_clap_derive(input: TokenStream) -> TokenStream {
 
 fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     // Parse struct-level attributes
-    let struct_attrs =
-        StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
+    let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     // Validate struct attributes
     struct_attrs.validate(input).map_err(syn::Error::from)?;
@@ -310,8 +309,7 @@ fn generate_sensitive_paths(
 }
 
 fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
-    let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(syn::Error::from)?;
+    let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -333,8 +331,7 @@ fn impl_config_schema_derive(input: &DeriveInput) -> syn::Result<proc_macro2::To
 }
 
 fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
-    let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(syn::Error::from)?;
+    let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -356,8 +353,7 @@ fn impl_config_migration_derive(input: &DeriveInput) -> syn::Result<proc_macro2:
 }
 
 fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
-    let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(syn::Error::from)?;
+    let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 
@@ -379,8 +375,7 @@ fn impl_config_modules_derive(input: &DeriveInput) -> syn::Result<proc_macro2::T
 }
 
 fn impl_config_clap_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
-    let struct_attrs = StructAttrs::from_derive_input(input)
-        .map_err(syn::Error::from)?;
+    let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
 
     let struct_ident = &input.ident;
 

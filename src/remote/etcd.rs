@@ -406,10 +406,7 @@ impl EtcdSource {
     /// })));
     /// ```
     pub fn watch_transport(&self) -> crate::remote::EtcdGrpcWatchSource {
-        crate::remote::EtcdGrpcWatchSource::new(
-            (*self.client).clone(),
-            self.prefix.to_string(),
-        )
+        crate::remote::EtcdGrpcWatchSource::new((*self.client).clone(), self.prefix.to_string())
     }
 }
 
