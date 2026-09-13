@@ -508,7 +508,7 @@ Performance design highlights: dynamic fields read lock-free via `arc-swap`; the
 
 ### 🚨 Reporting Security Issues
 
-Please do not report security vulnerabilities through public issues. Use the private GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/advisories/new) disclosure channel instead. The project commits to acknowledging reports within 48 hours and providing an initial assessment within 7 days. See the full policy in [SECURITY.md](SECURITY.md) and the [security doc](docs/SECURITY.md).
+Please do not report security vulnerabilities through public issues. Use the private GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/advisories/new) disclosure channel instead. The project commits to acknowledging reports within 48 hours and providing an initial assessment within 7 days. See the full policy in [SECURITY.md](docs/SECURITY.md).
 
 ---
 
