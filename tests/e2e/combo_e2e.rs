@@ -8,7 +8,7 @@
 //! 场景固化(docs/TEST_SCENARIOS.md §2.26,组合矩阵 §3.2 C1…C17):
 //! - CMP-01 encryption+watch:文件携带新密文,热更后解密生效;错钥 → 保留旧明文(回滚)
 //! - CMP-02 migration+snapshot:v1 配置迁移 v2 → 快照 → 回放得到 v2 内容
-//! - CMP-03 / TGL-06 dynamic+toggle:开关门控动态字段回调
+//! - TGL-06 dynamic+toggle:开关门控动态字段回调
 //! - CMP-04 watch+config-bus:FsWatcher 事件 → 总线广播 → 订阅方执行重载
 //! - CMP-05 watch+migration:文件回退旧版本 → 自动迁移后生效 v2 语义
 //! - CMP-06 progressive-reload+validation:garde 校验作为健康检查,坏配置回滚
@@ -21,7 +21,7 @@
 //! - CMP-14 full 全功能烟囱:构建+快照+加密+审计+热更一次跑通
 //! - CMP-15 snapshot+watch:每次重载各自快照,可回放任一历史
 //! - CMP-16 nats-bus 双实例:A 广播变更,B 收到事件
-//! - CMP-17 / CTX-09 context-aware+feature-toggle+dynamic:上下文+开关共同决定动态值
+//! - CTX-09 context-aware+feature-toggle+dynamic:上下文+开关共同决定动态值
 //!
 //! CMP-07(remote+encryption 自动解密注入)无法落地:远程值解密注入管线未实现,
 //! 且 HttpPolledSource 仅允许 HTTPS(SSRF 阻断本地端点),见报告。
@@ -67,7 +67,7 @@ fn decrypt_value(enc: &str, master: &[u8; 32], field: &str) -> Option<Vec<u8>> {
         .ok()
 }
 
-/// CMP-01:热更后新密文解密生效;错误密钥解密失败 → 保留上一份好明文(回滚)。
+/// 热更后新密文解密生效;错误密钥解密失败 → 保留上一份好明文(回滚)。
 #[tokio::test]
 #[serial]
 async fn cmp01_encryption_plus_watch_hot_reload_with_key_rotation() {
@@ -111,7 +111,7 @@ async fn cmp01_encryption_plus_watch_hot_reload_with_key_rotation() {
     watcher.stop();
 }
 
-/// CMP-02:migration+snapshot —— v1 → v2 迁移后快照,回放为 v2 内容。
+/// migration+snapshot —— v1 → v2 迁移后快照,回放为 v2 内容。
 #[test]
 fn cmp02_migrated_config_snapshots_and_replays_as_v2() {
     let annotated = |version: i64| {
@@ -163,7 +163,7 @@ fn cmp02_migrated_config_snapshots_and_replays_as_v2() {
     );
 }
 
-/// CMP-03 / TGL-06:开关门控动态字段回调的生效。
+/// 开关门控动态字段回调的生效。
 #[test]
 fn cmp03_feature_toggle_gates_dynamic_field_callback() {
     let toggle = Arc::new(FeatureToggleRegistry::new());
@@ -190,7 +190,7 @@ fn cmp03_feature_toggle_gates_dynamic_field_callback() {
     assert_eq!(*applied.lock().unwrap(), vec![80]);
 }
 
-/// CMP-04:FsWatcher 事件 → ConfigBus 广播 → 订阅方执行重载。
+/// FsWatcher 事件 → ConfigBus 广播 → 订阅方执行重载。
 #[tokio::test]
 async fn cmp04_watch_event_broadcast_over_bus_triggers_reload() {
     let dir = tempfile::tempdir().unwrap();
@@ -236,7 +236,7 @@ async fn cmp04_watch_event_broadcast_over_bus_triggers_reload() {
     watcher.stop();
 }
 
-/// CMP-05:文件回退旧版本 → 迁移注册表自动迁移 → 生效 v2 语义。
+/// 文件回退旧版本 → 迁移注册表自动迁移 → 生效 v2 语义。
 #[test]
 fn cmp05_watched_file_reverted_then_auto_migrated() {
     let dir = tempfile::tempdir().unwrap();
@@ -281,7 +281,7 @@ fn cmp05_watched_file_reverted_then_auto_migrated() {
     );
 }
 
-/// CMP-06:garde 结构校验作为 ReloadHealthCheck,坏配置 Critical → 回滚。
+/// garde 结构校验作为 ReloadHealthCheck,坏配置 Critical → 回滚。
 #[tokio::test]
 async fn cmp06_progressive_reload_with_validation_health_check() {
     use confers::interface::ConfigProvider;
@@ -378,7 +378,7 @@ impl confers::interface::ConfigProvider for PortProvider {
     }
 }
 
-/// CMP-08:etcd KV 轮询驱动 DynamicField。
+/// etcd KV 轮询驱动 DynamicField。
 #[tokio::test]
 async fn cmp08_etcd_poll_drives_dynamic_field() {
     use base64::Engine;
@@ -445,7 +445,7 @@ async fn cmp08_etcd_poll_drives_dynamic_field() {
         .await;
 }
 
-/// CMP-09:audit+key —— 轮换留痕且旧版本密钥仍可解密旧数据。
+/// audit+key —— 轮换留痕且旧版本密钥仍可解密旧数据。
 #[test]
 #[serial]
 fn cmp09_key_rotation_audited_and_old_key_still_decrypts() {
@@ -486,7 +486,7 @@ fn cmp09_key_rotation_audited_and_old_key_still_decrypts() {
     );
 }
 
-/// CMP-10:validation+security-rules 双层校验串联。
+/// validation+security-rules 双层校验串联。
 #[test]
 fn cmp10_dual_layer_structural_and_security_validation() {
     use confers::security::rules::{SecurityValidatorRegistry, ViolationSeverity};
@@ -541,7 +541,7 @@ fn cmp10_dual_layer_structural_and_security_validation() {
     );
 }
 
-/// CMP-11:modules+profile —— 激活 profile 的文件并入主配置链。
+/// modules+profile —— 激活 profile 的文件并入主配置链。
 #[test]
 fn cmp11_active_profile_module_merged_into_main_chain() {
     let dir = tempfile::tempdir().unwrap();
@@ -575,7 +575,7 @@ fn cmp11_active_profile_module_merged_into_main_chain() {
     assert_eq!(merged["database"]["port"], 6432);
 }
 
-/// CMP-12:interpolation+env+file —— 文件模板由 env 注入解析。
+/// interpolation+env+file —— 文件模板由 env 注入解析。
 #[test]
 #[serial]
 fn cmp12_file_template_resolved_by_env_injection() {
@@ -597,7 +597,7 @@ fn cmp12_file_template_resolved_by_env_injection() {
     unsafe { std::env::remove_var("DB_PORT") };
 }
 
-/// CMP-13:cli+schema —— ConfigClap 参数覆盖文件值(构建层)。
+/// cli+schema —— ConfigClap 参数覆盖文件值(构建层)。
 #[test]
 fn cmp13_clap_args_override_file_config() {
     use std::ffi::OsString;
@@ -639,7 +639,7 @@ fn cmp13_clap_args_override_file_config() {
     assert_eq!(merged["port"], 9090);
 }
 
-/// CMP-14:full 全功能烟囱 —— 构建+快照+加密+审计+热更一次跑通。
+/// full 全功能烟囱 —— 构建+快照+加密+审计+热更一次跑通。
 #[test]
 #[serial]
 fn cmp14_full_stack_smoke() {
@@ -708,7 +708,7 @@ fn cmp14_full_stack_smoke() {
     assert!(audit.is_some(), "audit record for the load must exist");
 }
 
-/// CMP-15:snapshot+watch —— 三次重载各自快照,可回放任一历史。
+/// snapshot+watch —— 三次重载各自快照,可回放任一历史。
 #[tokio::test]
 async fn cmp15_snapshots_before_each_reload_allow_rollback() {
     let dir = tempfile::tempdir().unwrap();
@@ -763,7 +763,7 @@ async fn cmp15_snapshots_before_each_reload_allow_rollback() {
     }
 }
 
-/// CMP-16:nats-bus 双实例 —— A 广播变更事件,B 收到后可重载一致。
+/// nats-bus 双实例 —— A 广播变更事件,B 收到后可重载一致。
 #[tokio::test]
 async fn cmp16_nats_bus_syncs_two_instances() {
     use confers::bus::{ConfigBus as _, ConfigChangeEvent, NatsBusBuilder};
@@ -811,7 +811,7 @@ async fn cmp16_nats_bus_syncs_two_instances() {
     assert_eq!(received.checksum, "cmp16-sum");
 }
 
-/// CMP-17 / CTX-09:context + toggle + dynamic 三方联合决定动态值。
+/// context + toggle + dynamic 三方联合决定动态值。
 #[test]
 fn cmp17_context_and_toggle_decide_dynamic_value() {
     use confers::context::{ContextAwareField, ContextValue, EvaluationContext};

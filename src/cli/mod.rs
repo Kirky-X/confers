@@ -3614,7 +3614,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    /// A-H-17/S-M-5: verify that removed_count counts only successful removals
+    /// verify that removed_count counts only successful removals
     /// and that old files are actually deleted.
     #[test]
     fn test_cmd_snapshot_prune_removes_old_files_and_counts_correctly() {

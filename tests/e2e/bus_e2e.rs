@@ -17,7 +17,7 @@
 //! - RDS-07 连接不可达 Redis → 明确错误;真实服务恢复收发
 //!
 //! BUS-01…03/05…07、NAT-01…05、RDS-01…05 已有覆盖(tests/remote/bus.rs);
-//! NAT-07/RDS-07 的总线驱动热更组合固化于 combo_e2e.rs(CMP-04/16)。
+//! RDS-07 的总线驱动热更组合固化于 combo_e2e.rs(16)。
 
 use confers::bus::{BusBuilder, ConfigBus, ConfigChangeEvent, InMemoryBus};
 use futures_util::StreamExt;
@@ -48,7 +48,7 @@ async fn redis_ready() -> bool {
     std::net::TcpStream::connect("127.0.0.1:16379").is_ok()
 }
 
-/// BUS-04:capacity=1,订阅者不消费时连发 5 条 → 不 panic,只补发最新一条。
+/// capacity=1,订阅者不消费时连发 5 条 → 不 panic,只补发最新一条。
 #[tokio::test]
 async fn bus04_capacity_one_drops_lagged_events_without_panic() {
     let bus: InMemoryBus = BusBuilder::new().capacity(1).build();
@@ -89,7 +89,7 @@ async fn bus04_capacity_one_drops_lagged_events_without_panic() {
     assert_eq!(ev.changed_keys, vec!["after".to_string()]);
 }
 
-/// BUS-09:InMemoryBus 生命周期为 no-op,stop 后 publish/subscribe 仍可用。
+/// InMemoryBus 生命周期为 no-op,stop 后 publish/subscribe 仍可用。
 #[tokio::test]
 async fn bus09_lifecycle_stop_is_noop_for_in_memory_bus() {
     use confers::lifecycle::Lifecycle;
@@ -110,7 +110,7 @@ async fn bus09_lifecycle_stop_is_noop_for_in_memory_bus() {
     assert_eq!(ev.instance_id, "post-stop");
 }
 
-/// BUS-10:订阅者 drop 后计数递减;零订阅者 publish 正常返回。
+/// 订阅者 drop 后计数递减;零订阅者 publish 正常返回。
 #[tokio::test]
 async fn bus10_dropped_receiver_decrements_and_publish_stays_safe() {
     let bus: InMemoryBus = BusBuilder::new().build();
@@ -133,7 +133,7 @@ async fn bus10_dropped_receiver_decrements_and_publish_stays_safe() {
         .expect("publish with zero subscribers must be Ok");
 }
 
-/// NAT-06:不可达地址 → 明确连接错误;真实服务恢复收发。
+/// 不可达地址 → 明确连接错误;真实服务恢复收发。
 #[tokio::test]
 async fn nat06_unreachable_nats_errors_then_real_service_recovers() {
     use confers::bus::{NatsBusBuilder, NatsConfigBus};
@@ -170,7 +170,7 @@ async fn nat06_unreachable_nats_errors_then_real_service_recovers() {
     assert_eq!(ev.instance_id, "nat06-recovered");
 }
 
-/// RDS-06:并发发布不丢消息(单条多路复用连接,无连接池)。
+/// 并发发布不丢消息(单条多路复用连接,无连接池)。
 #[tokio::test]
 async fn rds06_concurrent_publish_delivers_all() {
     use confers::bus::RedisBusBuilder;
@@ -226,7 +226,7 @@ async fn rds06_concurrent_publish_delivers_all() {
     assert_eq!(received, TASKS * PER_TASK);
 }
 
-/// RDS-07:不可达 Redis → 明确错误;真实服务恢复收发。
+/// 不可达 Redis → 明确错误;真实服务恢复收发。
 /// 行为固化:builder 连接惰性建立 —— build() 返回 Ok,
 /// 首次 subscribe/publish 才暴露 RemoteUnavailable。
 #[tokio::test]

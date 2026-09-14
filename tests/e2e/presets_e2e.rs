@@ -225,7 +225,7 @@ fn prs07_full_preset_covers_all_domain_features() {
         "full preset must stay the full capability surface"
     );
 
-    // full 构建态正向断言(PRS-07:full 编译 + 测试可通过)。
+    // full 构建态正向断言(full 编译 + 测试可通过)。
     #[cfg(feature = "full")]
     {
         assert!(

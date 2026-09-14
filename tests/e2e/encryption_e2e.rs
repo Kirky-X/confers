@@ -24,7 +24,7 @@ use serial_test::serial;
 /// 恰好 32 字节的测试密钥(满足 XChaCha20 256-bit;仅测试用,非真实凭据)。
 const TEST_MASTER_KEY: &str = "test-key-with-exactly-32-bytes!!";
 
-/// ENC-20:env 密钥 → 派生字段密钥 → 加密 → 文件携带密文 → 解密还原。
+/// env 密钥 → 派生字段密钥 → 加密 → 文件携带密文 → 解密还原。
 #[test]
 #[serial]
 fn enc20_encrypted_config_roundtrip_via_env_key() {

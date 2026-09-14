@@ -153,7 +153,7 @@ async fn wat18_rapid_writes_collapse_via_debounce() {
     watcher.stop();
 }
 
-/// WAT-11:事件流 + `min_reload_interval_ms` 节流的应用模式。
+/// 事件流 + `min_reload_interval_ms` 节流的应用模式。
 #[tokio::test]
 async fn wat11_min_reload_interval_throttles_reload_execution() {
     let dir = tempfile::tempdir().unwrap();
@@ -202,7 +202,7 @@ async fn wat11_min_reload_interval_throttles_reload_execution() {
     watcher.stop();
 }
 
-/// WAT-12:连续失败计数 + `failure_pause_ms` 暂停的应用模式。
+/// 连续失败计数 + `failure_pause_ms` 暂停的应用模式。
 #[tokio::test]
 async fn wat12_consecutive_failures_trigger_failure_pause() {
     let dir = tempfile::tempdir().unwrap();
@@ -257,7 +257,7 @@ async fn wat12_consecutive_failures_trigger_failure_pause() {
     watcher.stop();
 }
 
-/// WAT-13:重载失败回滚到上一份好配置的应用模式。
+/// 重载失败回滚到上一份好配置的应用模式。
 #[tokio::test]
 async fn wat13_rollback_keeps_last_good_config_on_failed_reload() {
     let dir = tempfile::tempdir().unwrap();

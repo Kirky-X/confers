@@ -87,7 +87,7 @@ fn fmt11_source_chain_file_source_size_limit() {
     );
 }
 
-/// FMT-19:TOML 解析器接受 UTF-8 BOM(行为固化:BOM 被剥离后正常解析)。
+/// TOML 解析器接受 UTF-8 BOM(行为固化:BOM 被剥离后正常解析)。
 #[test]
 fn fmt19_toml_with_utf8_bom_parses() {
     let dir = tempfile::tempdir().unwrap();
@@ -98,7 +98,7 @@ fn fmt19_toml_with_utf8_bom_parses() {
     assert_eq!(value.to_json()["key"], "value");
 }
 
-/// FMT-19:JSON 解析器对 UTF-8 BOM 明确报错(行为固化:报 ParseError 而非静默成功)。
+/// JSON 解析器对 UTF-8 BOM 明确报错(行为固化:报 ParseError 而非静默成功)。
 #[test]
 fn fmt19_json_with_utf8_bom_reports_parse_error() {
     let dir = tempfile::tempdir().unwrap();
@@ -112,7 +112,7 @@ fn fmt19_json_with_utf8_bom_reports_parse_error() {
     );
 }
 
-/// FMT-20:`load_file(path)` 与 `parse_content(content, detect(path))` 对同一内容等价。
+/// `load_file(path)` 与 `parse_content(content, detect(path))` 对同一内容等价。
 #[test]
 fn fmt20_load_file_and_parse_content_are_equivalent() {
     let dir = tempfile::tempdir().unwrap();
@@ -141,7 +141,7 @@ fn fmt20_load_file_and_parse_content_are_equivalent() {
     );
 }
 
-/// FMT-16:未知扩展名 → 路径嗅探返回 None,load_file 报"未知格式"解析错误。
+/// 未知扩展名 → 路径嗅探返回 None,load_file 报"未知格式"解析错误。
 #[test]
 fn fmt16_unknown_extension_reports_unknown_format() {
     let dir = tempfile::tempdir().unwrap();
@@ -162,7 +162,7 @@ fn fmt16_unknown_extension_reports_unknown_format() {
     );
 }
 
-/// FMT-18:INI 只有单层 section 语义,`[a]` 下的键前缀化为 `a.b`。
+/// INI 只有单层 section 语义,`[a]` 下的键前缀化为 `a.b`。
 #[test]
 fn fmt18_ini_section_keys_are_flat_prefixed() {
     let dir = tempfile::tempdir().unwrap();

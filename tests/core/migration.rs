@@ -315,7 +315,7 @@ mod migration_on_reload_tests {
 
     #[test]
     fn test_migration_on_reload_variants() {
-        // T-C-1 C3: old test just constructed variants with `let _ = ...` and
+        // old test just constructed variants with `let _ = ...` and
         // no assertions. Now verify the default and equality semantics.
         assert_eq!(
             MigrationOnReload::default(),

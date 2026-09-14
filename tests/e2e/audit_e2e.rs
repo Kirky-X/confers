@@ -89,7 +89,7 @@ fn aud11_concurrent_writes_produce_one_intact_line_each() {
         "no interleaving may corrupt or duplicate records"
     );
 
-    // AUD-12:并发写入后整条 HMAC 链必须可校验。
+    // 并发写入后整条 HMAC 链必须可校验。
     for file in &files {
         assert!(
             verify_audit_chain(file).expect("chain verification must not IO-error"),

@@ -305,7 +305,7 @@ mod etcd_tests {
             .endpoint("invalid-hostname:2379")
             .prefix("test");
 
-        // T-C-1 A2: the original `is_ok() || is_err()` was tautological.
+        // the original `is_ok() || is_err()` was tautological.
         // build() succeeds because etcd-client defers actual connection.
         let source = builder
             .build()
@@ -323,7 +323,7 @@ mod etcd_tests {
             .endpoint("127.0.0.1:9999") // Non-existent port
             .prefix("test");
 
-        // T-C-1 A3: the original `is_ok() || is_err()` was tautological.
+        // the original `is_ok() || is_err()` was tautological.
         // build() succeeds; the TCP failure would only surface on fetch.
         let source = builder
             .build()

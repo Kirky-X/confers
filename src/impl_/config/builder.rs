@@ -547,7 +547,7 @@ where
         // Build the initial configuration once. The previous implementation
         // spawned a polling task that detected file modifications but could not
         // rebuild the source chain (no access to original sources), so it
-        // silently discarded every change — pure dead code. Removed per S-M-6.
+        // silently discarded every change — pure dead code. Removed.
         let initial = self.build()?;
         let (_tx, rx) = tokio::sync::watch::channel(Arc::new(initial));
         let guard = crate::watcher::WatcherGuard::new();
@@ -766,7 +766,7 @@ mod tests {
         let builder1: ConfigBuilder<TestConfig> = ConfigBuilder::new();
         // Use Default::default() to avoid collision with inherent `default()` method
         let builder2: ConfigBuilder<TestConfig> = Default::default();
-        // T-C-1 D4d: old code used `let _ = builder.build()` which silently
+        // old code used `let _ = builder.build()` which silently
         // swallowed Err. Now assert both builders produce valid configs.
         let config1 = builder1
             .build()

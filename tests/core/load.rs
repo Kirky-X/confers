@@ -92,7 +92,7 @@ missing_bracket = true
 
         let result: Result<serde_json::Value, _> = ConfigBuilder::new().file(&path).build();
 
-        // T-C-1 D5a: old code used `if let Ok(config) = result { assert!(...) }`
+        // old code used `if let Ok(config) = result { assert!(...) }`
         // which silently passed when result was Err — zero assertions executed.
         // An empty TOML file is valid TOML (empty table) and must parse successfully.
         let config = result.expect("empty TOML file should parse successfully");

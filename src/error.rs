@@ -1734,7 +1734,7 @@ mod tests {
 
     #[test]
     fn test_confers_result_type_alias() {
-        // T-C-1 C1: old test asserted `Ok(42).is_ok()` which is tautological.
+        // old test asserted `Ok(42).is_ok()` which is tautological.
         // Now verify the type alias participates in error code mapping by
         // destructuring with match (avoids clippy unnecessary_literal_unwrap).
         let ok: ConfersResult<i32> = Ok(42);
@@ -1752,7 +1752,7 @@ mod tests {
 
     #[test]
     fn test_config_result_type_alias() {
-        // T-C-1 C2: old test asserted `Ok(0).is_ok()` which is tautological.
+        // old test asserted `Ok(0).is_ok()` which is tautological.
         // Now verify the type alias propagates error codes correctly.
         let ok: ConfigResult<i32> = Ok(0);
         match ok {

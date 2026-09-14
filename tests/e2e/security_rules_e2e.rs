@@ -6,16 +6,16 @@
 //! E2E: 安全规则与注入(tests/e2e/security_rules_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.7):
-//! - SEC-01/02 `EnvSecurityValidator` 合法 env 名/值放行;注入字符(shell 元字符/
+//! - 02 `EnvSecurityValidator` 合法 env 名/值放行;注入字符(shell 元字符/
 //!   空格/换行)拒绝
-//! - SEC-03/04 `EnvironmentValidationConfig` 长度上限拒绝;strict() 与 lenient()
+//! - 04 `EnvironmentValidationConfig` 长度上限拒绝;strict() 与 lenient()
 //!   对同一超长输入结论不同
 //! - SEC-05 `sanitize_for_logging` 按真实行为固化(>100 字符截断为前 97 字符+…)
-//! - SEC-12/14/15 Cors/JwtSecret/Tls 三个内置验证器分别检出违规
+//! - 14/15 Cors/JwtSecret/Tls 三个内置验证器分别检出违规
 //! - SEC-13 `SsrfValidator` 拒绝私网/链路本地目标(127.0.0.1/10.x/169.254.x),
 //!   公网 HTTPS 放行(is_ip_blocked 交叉验证见 tests/remote)
 //! - SEC-16 `SecurityReport` 聚合各验证器违规,按真实行为固化(critical/warning 计数)
-//! - SEC-17/SEC-18(ConfigInjector/SensitiveDataDetector)为 pub(crate) 内部 API,
+//! - SEC-18(ConfigInjector/SensitiveDataDetector)为 pub(crate) 内部 API,
 //!   无公开路径可达,由 src 内联 tests(config_injector.rs / input_validation.rs)
 //!   覆盖;本文件固化公开面 `EncryptionPrefix`(enc: 前缀识别/剥离)。
 //!

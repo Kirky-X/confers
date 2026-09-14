@@ -9,7 +9,7 @@
 //! - SCH-04 嵌套 struct/Option/Vec 字段的 schema 输出正确性
 //!   (含 SCH-02 的 TypeScriptGenerator 生成面)
 //!
-//! SCH-01/02 已有 derive 级覆盖(tests/core/derive.rs);
+//! 02 已有 derive 级覆盖(tests/core/derive.rs);
 //! SCH-03(typescript-schema 别名)由本目标的 required-features = ["typescript-schema"]
 //! 直接证明:别名开启即编译出全部 schema 能力并运行通过。
 //! SCH-05(schema 与 CLI validate 联动)固化于 cli_e2e.rs。

@@ -367,7 +367,7 @@ mod tests {
             reg.stop_all().await.unwrap();
         }
 
-        /// Regression test for C-13: stop_all previously swallowed stop() errors
+        /// Regression test: stop_all previously swallowed stop() errors
         /// via `let _ = c.1.stop().await;`. Verifies that:
         /// 1. stop_all returns Err when any component's stop() fails
         /// 2. ALL components are still stopped (no short-circuit), per ADR-041

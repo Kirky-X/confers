@@ -276,7 +276,7 @@ fn bld20_type_mismatch_object_to_primitive_is_rejected() {
     );
 }
 
-/// BLD-21:单源损坏时 build_resilient 不中断构建(其余源照常合并,无降级),
+/// 单源损坏时 build_resilient 不中断构建(其余源照常合并,无降级),
 /// 且被跳过的源必须以 SourceError warning 呈现(不再完全静默)。
 #[test]
 fn bld21_resilient_build_survives_partial_source_failure() {
@@ -306,7 +306,7 @@ fn bld21_resilient_build_survives_partial_source_failure() {
     assert_eq!(result.config.port, 8080);
 }
 
-/// BLD-21:全部源损坏 → Degraded,配置回落到类型默认值并携带原因。
+/// 全部源损坏 → Degraded,配置回落到类型默认值并携带原因。
 #[test]
 fn bld21_resilient_build_degrades_when_all_sources_fail() {
     let dir = tempfile::tempdir().unwrap();
@@ -326,7 +326,7 @@ fn bld21_resilient_build_degrades_when_all_sources_fail() {
     assert_eq!(result.config, AppConfig::default());
 }
 
-/// BLD-22:全部源失败时 build_with_fallback 回退到给定实例并携带 RemoteFallback warning。
+/// 全部源失败时 build_with_fallback 回退到给定实例并携带 RemoteFallback warning。
 #[test]
 fn bld22_build_with_fallback_returns_fallback_on_total_failure() {
     let dir = tempfile::tempdir().unwrap();

@@ -6,17 +6,17 @@
 //! E2E: 渐进重载(tests/e2e/progressive_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.10):
-//! - PGR-01/02 Immediate:真实 toml 文件构建新配置提交;current() 始终为完整
+//! - 02 Immediate:真实 toml 文件构建新配置提交;current() 始终为完整
 //!   旧值或完整新值(arc-swap 原子性),Arc 快照指针稳定
-//! - PGR-03/04/05 Canary:真实健康检查读 provider 值——Healthy 提交、Critical
+//! - 04/05 Canary:真实健康检查读 provider 值——Healthy 提交、Critical
 //!   以 Err(ConfigError::ReloadRolledBack) 回滚(真实行为,非 Ok(RolledBack))、
 //!   Degraded 继续推进不回滚
 //! - PGR-06 Canary 无 health_check 默认放行提交
 //! - PGR-07 Linear 分步提交
 //! - PGR-08 自定义 ReloadHealthCheck(真实校验函数)拒绝无效新配置
-//! - PGR-09/10 Clone 语义与 builder 链式构建
+//! - 10 Clone 语义与 builder 链式构建
 //!
-//! PGR-11/12(变体完备、ConfigProvider 适配)已有覆盖(tests/core/progressive.rs)。
+//! 12(变体完备、ConfigProvider 适配)已有覆盖(tests/core/progressive.rs)。
 
 use async_trait::async_trait;
 use confers::error::ConfigError;

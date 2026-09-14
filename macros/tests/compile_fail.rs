@@ -3,7 +3,7 @@
 // Licensed under the MIT License
 // See LICENSE file in the project root for full license information.
 
-//! 编译期验收(MAC-09 / MAC-17 / ENC-23):非法宏属性必须在宏展开期报错。
+//! 编译期验收(ENC-23):非法宏属性必须在宏展开期报错。
 //! 运行:cargo test -p confers-macros(需要 trybuild dev-dependency)
 
 #[test]

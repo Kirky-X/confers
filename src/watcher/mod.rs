@@ -189,7 +189,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
 
-    /// Regression test for A-H-10: shutdown with no task handle returns Ok(true)
+    /// Regression test: shutdown with no task handle returns Ok(true)
     /// and does not block on the timeout.
     #[tokio::test]
     async fn test_shutdown_no_task_handle_returns_true() {
@@ -207,7 +207,7 @@ mod tests {
         );
     }
 
-    /// A-H-10: shutdown with a task that completes quickly returns Ok(true).
+    /// shutdown with a task that completes quickly returns Ok(true).
     #[tokio::test]
     async fn test_shutdown_task_completes_within_timeout_returns_true() {
         let running = Arc::new(AtomicBool::new(true));
@@ -222,7 +222,7 @@ mod tests {
         );
     }
 
-    /// A-H-10: shutdown with a task that sleeps longer than the timeout
+    /// shutdown with a task that sleeps longer than the timeout
     /// returns Ok(false), indicating the task did not finish in time.
     #[tokio::test]
     async fn test_shutdown_task_exceeds_timeout_returns_false() {

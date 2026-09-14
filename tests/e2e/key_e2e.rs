@@ -6,13 +6,13 @@
 //! E2E: 密钥管理(tests/e2e/key_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.6):
-//! - KEY-01/02 `KeyBundle::generate` 随机 32 字节密钥;正确 master 解出明文,错误 master 报错
-//! - KEY-03/04/05 `KeyRing` 生命周期:rotate 切换默认版本、查无此版本 → None、
+//! - 02 `KeyBundle::generate` 随机 32 字节密钥;正确 master 解出明文,错误 master 报错
+//! - 04/05 `KeyRing` 生命周期:rotate 切换默认版本、查无此版本 → None、
 //!   deactivate 后标记 Deprecated、多版本共存且旧版本仍可解密
 //! - KEY-06 `KeyRotationSchedule` 到期/未到期两分支与 update_after_rotation
-//! - KEY-07/08/09 `KeyManager` initialize/generate_key/rotate_key 全流程,
+//! - 08/09 `KeyManager` initialize/generate_key/rotate_key 全流程,
 //!   get_rotation_status 反映状态;get_key_info(不存在) → 错误
-//! - KEY-10/11/12/13 plan/cleanup/deprecate/default 的错误路径与时间边界
+//! - 11/12/13 plan/cleanup/deprecate/default 的错误路径与时间边界
 //!
 //! 既有覆盖为 src 内联 key tests(孤立函数级);本文件固化跨 API 端到端业务流。
 

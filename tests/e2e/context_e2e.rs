@@ -6,11 +6,11 @@
 //! E2E: 上下文感知(tests/e2e/context_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.16):
-//! - CTX-01/06 `EvaluationContext` 默认/with_key/attr/clone/debug 与
+//! - 06 `EvaluationContext` 默认/with_key/attr/clone/debug 与
 //!   environment/region 维度切换
-//! - CTX-02/03/04/05 `ContextAwareField` 真实业务流:规则命中返回规则值、
+//! - 03/04/05 `ContextAwareField` 真实业务流:规则命中返回规则值、
 //!   无命中返回 default、多规则按序首条命中(优先序固化)、evaluate 引用语义
-//! - CTX-07/08 upload-limit 用例端到端 + `Send+Sync` 跨线程求值
+//! - 08 upload-limit 用例端到端 + `Send+Sync` 跨线程求值
 //!
 //! CTX-09(context-aware+dynamic 组合)固化于 combo_e2e.rs(CMP-17)。
 //! 既有覆盖(tests/core/context.rs)为孤立函数级;本文件固化跨 API 端到端流。
@@ -45,7 +45,7 @@ fn ctx0106_evaluation_context_dimensions() {
 
 #[test]
 fn ctx02030405_field_rules_priority_and_default() {
-    // 真实业务流:按 region/environment 决定上传上限(CTX-02/06)。
+    // 真实业务流:按 region/environment 决定上传上限(06)。
     let upload_limit = ContextAwareField::builder()
         .default(100u64)
         .when(|ctx| ctx.region().as_ref() == "cn-north-1", 1024)
@@ -101,7 +101,7 @@ fn ctx02030405_field_rules_priority_and_default() {
 
 #[test]
 fn ctx0708_upload_limit_use_case_and_send_sync() {
-    // CTX-07:按 region 限流上传上限(用例端到端)。
+    // 按 region 限流上传上限(用例端到端)。
     let upload_limit = Arc::new(
         ContextAwareField::builder()
             .default(50u64)
@@ -116,7 +116,7 @@ fn ctx0708_upload_limit_use_case_and_send_sync() {
         assert_eq!(*upload_limit.evaluate(&ctx), expected, "region {region}");
     }
 
-    // CTX-08:Send+Sync,多线程并发求值结果一致。
+    // Send+Sync,多线程并发求值结果一致。
     let handles: Vec<_> = (0..8)
         .map(|i| {
             let field = Arc::clone(&upload_limit);

@@ -809,7 +809,7 @@ mod tests {
 
     #[test]
     fn test_values_equal_map_same_arc_true() {
-        // S-C-5 regression: same Arc allocation means merge is a no-op
+        // regression: same Arc allocation means merge is a no-op
         let shared = Arc::new(IndexMap::from_iter([(
             Arc::from("k"),
             AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("s"), "k"),
@@ -822,7 +822,7 @@ mod tests {
 
     #[test]
     fn test_merge_maps_with_cow_ptr_eq_fast_path() {
-        // S-C-5 regression: merging a map with itself (same Arc) must reuse the
+        // regression: merging a map with itself (same Arc) must reuse the
         // same Arc allocation without cloning
         let e = MergeEngine::new();
         let shared = Arc::new(IndexMap::from_iter([(

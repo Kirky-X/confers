@@ -224,7 +224,7 @@ mod tests {
     }
 
     /// Test 11: Verify BestEffort events are actually persisted to log file.
-    /// Regression test for S-H-2: write_best_effort was previously a no-op
+    /// Regression test: write_best_effort was previously a no-op
     /// that sanitized the event then discarded the result without writing.
     #[test]
     fn test_audit_best_effort_event_persists_to_file() {

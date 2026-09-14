@@ -437,7 +437,7 @@ mod tests {
 
         let result = crypto.encrypt(&[1, 2, 3], &long_key);
         // encrypt() returns Err(InvalidKeyLength(64)) for keys != 32 bytes.
-        // The old assertion `is_ok() || is_err()` was tautological (T-C-1 A1).
+        // The old assertion `is_ok() || is_err()` was tautological.
         assert!(
             matches!(result, Err(CryptoError::InvalidKeyLength(64))),
             "64-byte key should be rejected with InvalidKeyLength(64), got: {result:?}"

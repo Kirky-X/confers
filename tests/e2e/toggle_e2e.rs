@@ -9,7 +9,7 @@
 //! - TGL-02 对未注册 toggle 执行 enable/disable/toggle/is_enabled → 返回 false,
 //!   不 panic,注册表状态保持自洽
 //!
-//! TGL-01/03/04/05 已有覆盖(tests/core/toggle.rs);
+//! 03/04/05 已有覆盖(tests/core/toggle.rs);
 //! TGL-06(toggle × dynamic 组合)固化于 combo_e2e.rs(CMP-03)。
 
 use confers::toggle::FeatureToggleRegistry;

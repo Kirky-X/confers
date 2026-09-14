@@ -436,7 +436,7 @@ async fn test_fs_watcher_file_creation_detection() {
     watcher.stop();
 
     // File creation should be detected within the patience window.
-    // The old assertion `is_ok() || is_err()` was tautological (T-C-1 A4).
+    // The old assertion `is_ok() || is_err()` was tautological.
     assert!(
         event.is_some(),
         "file creation should be detected within 5s; \
@@ -467,7 +467,7 @@ async fn test_fs_watcher_file_modification_detection() {
     // Cleanup
     watcher.stop();
 
-    // File modification should be detected (T-C-1 A5: old assertion was tautological).
+    // File modification should be detected.
     assert!(
         event.is_some(),
         "file modification should be detected within 5s via a real FS event"
@@ -496,7 +496,7 @@ async fn test_fs_watcher_file_deletion_detection() {
     // Cleanup
     watcher.stop();
 
-    // File deletion should be detected (T-C-1 A6: old assertion was tautological).
+    // File deletion should be detected.
     assert!(
         event.is_some(),
         "file deletion should be detected within 5s via a real FS event"

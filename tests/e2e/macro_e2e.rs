@@ -8,14 +8,14 @@
 //! 场景固化(docs/TEST_SCENARIOS.md §2.25):
 //! - MAC-03 `name` / `name_env` 字段属性覆盖默认键名/env 名(端到端加载)
 //! - MAC-07 `skip = true` 字段不参与 env 加载(端到端)
-//! - MAC-09/MAC-17/ENC-23 的宏展开期错误(非法 merge_strategy / env_prefix /
+//! - ENC-23 的宏展开期错误(非法 merge_strategy / env_prefix /
 //!   encrypt 算法)固化于 macros crate 的 trybuild 用例(macros/tests/compile_fail.rs)
 //!
 //! 行为固化说明(见报告):`flatten` / `interpolate` / `dynamic` /
 //! `watch` 属性曾在 rc.3 前由宏解析但 codegen 未消费 —— rc.4 起四属性
-//! codegen 真实生效,MAC-06/08/11/12/18 以集成级语义断言固化于本文件。
+//! codegen 真实生效,08/11/12/18 以集成级语义断言固化于本文件。
 //!
-//! MAC-01/02/04/05/10/13…16 已有覆盖(tests/core/derive.rs、tests/core/env_types.rs、src 内联)。
+//! 02/04/05/10/13…16 已有覆盖(tests/core/derive.rs、tests/core/env_types.rs、src 内联)。
 
 use serial_test::serial;
 use std::io::Write;
@@ -34,7 +34,7 @@ fn write_cwd_toml(content: &str) -> (tempfile::NamedTempFile, PathBuf) {
     (file, relative)
 }
 
-/// MAC-03:自定义键名 + 自定义 env 名。
+/// 自定义键名 + 自定义 env 名。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct NamedFields {
     #[config(name = "bind_host", name_env = "NAMED_FIELDS_CUSTOM_HOST")]
@@ -74,7 +74,7 @@ fn mac03_name_and_name_env_override_key_mapping() {
     );
 }
 
-/// MAC-03:仅声明 `name`(无 name_env)时,name 派生的 env 名必须真实覆盖字段。
+/// 仅声明 `name`(无 name_env)时,name 派生的 env 名必须真实覆盖字段。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct NameOnlyFields {
     #[config(name = "bind_host")]
@@ -143,7 +143,7 @@ fn mac03_name_env_does_not_pollute_default_naming() {
     assert_eq!(cfg.plain, "plain-env");
 }
 
-/// MAC-07:skip 字段行为。
+/// skip 字段行为。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct SkippedField {
     pub visible: String,
@@ -178,7 +178,7 @@ fn mac07_skipped_field_behavior() {
     );
 }
 
-/// MAC-07:skip 字段从任何来源(env/文件)取得的值都不得覆盖其 default。
+/// skip 字段从任何来源(env/文件)取得的值都不得覆盖其 default。
 #[test]
 #[serial]
 fn mac07_skip_default_not_overridden_by_env_or_file() {
@@ -202,7 +202,7 @@ fn mac07_skip_default_not_overridden_by_env_or_file() {
     );
 }
 
-/// MAC-07:skip + default 组合在键缺失时加载成功(default 物化)。
+/// skip + default 组合在键缺失时加载成功(default 物化)。
 #[test]
 #[serial]
 fn mac07_skip_materializes_value_instead_of_failing() {
@@ -217,7 +217,7 @@ fn mac07_skip_materializes_value_instead_of_failing() {
     assert_eq!(cfg.hidden, "default-value");
 }
 
-/// MAC-06:`flatten` 字段并入父命名空间 —— 顶层键提升进嵌套结构。
+/// `flatten` 字段并入父命名空间 —— 顶层键提升进嵌套结构。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct FlattenDatabase {
     pub host: String,
@@ -253,7 +253,7 @@ fn mac06_flatten_hoists_top_level_keys_into_nested_struct() {
     assert_eq!(cfg.database.host, "nested-db", "explicit nested value wins");
 }
 
-/// MAC-08:`dynamic` 字段生成 DynamicField 句柄(加载值作为初值)。
+/// `dynamic` 字段生成 DynamicField 句柄(加载值作为初值)。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct DynamicFieldStruct {
     #[config(dynamic)]
@@ -272,7 +272,7 @@ fn mac08_dynamic_field_generates_runtime_handle() {
     assert_eq!(handle.get(), 5);
 }
 
-/// MAC-18:`interpolate` 字段值模板 ${key} 在加载后按合并树解析。
+/// `interpolate` 字段值模板 ${key} 在加载后按合并树解析。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct InterpolatedStruct {
     #[allow(dead_code)]
@@ -298,7 +298,7 @@ fn mac18_interpolate_resolves_field_template_against_merged_tree() {
     assert_eq!(cfg.url, "fallback", ":default applies when key missing");
 }
 
-/// MAC-12:`watch` 字段生成字段级热重载订阅器(与 watch feature 联动)。
+/// `watch` 字段生成字段级热重载订阅器(与 watch feature 联动)。
 #[derive(Debug, Clone, confers::Config, serde::Deserialize)]
 struct WatchedStruct {
     #[config(watch)]
@@ -347,7 +347,7 @@ async fn mac12_watch_generates_field_level_hot_reload_subscription() {
     assert_eq!(snapshot.port, 2);
 }
 
-/// 四属性组合使用不冲突(MAC-06/08/12/18 交叠)。
+/// 四属性组合使用不冲突(08/12/18 交叠)。
 #[derive(Debug, Clone, confers::Config, serde::Deserialize)]
 struct ComboNested {
     pub host: String,

@@ -6,17 +6,17 @@
 //! E2E: 版本迁移(tests/e2e/migration_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.13):
-//! - MIG-01/02 `Versioned` trait(手写 + `ConfigMigration` derive)与
+//! - 02 `Versioned` trait(手写 + `ConfigMigration` derive)与
 //!   `MigrationRegistry` builder 链式注册
-//! - MIG-03/04 真实 toml v1 文件 → 链式迁移 v1→v2→v3(字段改名 + 默认值补充)
+//! - 04 真实 toml v1 文件 → 链式迁移 v1→v2→v3(字段改名 + 默认值补充)
 //! - MIG-05 同版本迁移 no-op
 //! - MIG-06 未注册路径 → `MigrationError`(MigrationFailed 族)
 //! - MIG-07 迁移 fn 内部出错 → 错误传播,不产出半成品
 //! - MIG-08 `precompute_paths` 多分支选路:direct 路径优先于链
-//! - MIG-09/10 `MigrationOnReload` 三态语义与 derive version 属性透传
+//! - 10 `MigrationOnReload` 三态语义与 derive version 属性透传
 //!
-//! MIG-11/12(migration+snapshot / migration+watch 组合)固化于 combo_e2e.rs
-//! (CMP-02/CMP-05)。
+//! 12(migration+snapshot / migration+watch 组合)固化于 combo_e2e.rs
+//! (CMP-05)。
 
 use confers::migration::{MigrationOnReload, MigrationRegistry, Versioned};
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
@@ -34,7 +34,7 @@ impl Versioned for CurrentConfigV4 {
     const VERSION: u32 = 4;
 }
 
-/// `ConfigMigration` derive:version 属性透传(MIG-01/10)。
+/// `ConfigMigration` derive:version 属性透传(10)。
 #[derive(Debug, confers::ConfigMigration)]
 #[config(version = 7)]
 #[allow(dead_code)] // 字段仅经 derive 生成物使用(同 tests/core/derive.rs 约定)。
@@ -174,7 +174,7 @@ fn mig030405_real_file_chain_migration_and_noop() {
 fn mig060708_no_path_error_and_failure_propagation_and_direct_preference() {
     let mut registry = MigrationRegistry::new();
 
-    // MIG-06:未注册路径 → MigrationError。
+    // 未注册路径 → MigrationError。
     let err = registry
         .migrate(
             AnnotatedValue::new(ConfigValue::null(), SourceId::new("e2e"), ""),
@@ -187,7 +187,7 @@ fn mig060708_no_path_error_and_failure_propagation_and_direct_preference() {
         "migration-not-found must surface as MigrationFailed, got {err:?}"
     );
 
-    // MIG-07:迁移 fn 内部出错 → 传播,调用方拿不到半成品。
+    // 迁移 fn 内部出错 → 传播,调用方拿不到半成品。
     registry.register(10, 11, |v| {
         let _ = v;
         Err(ConfigError::migration_failed(
@@ -209,7 +209,7 @@ fn mig060708_no_path_error_and_failure_propagation_and_direct_preference() {
         "fn error must surface as MigrationFailed, got {err:?}"
     );
 
-    // MIG-08:direct 路径优先于链。
+    // direct 路径优先于链。
     let mut multi = MigrationRegistry::new();
     let direct_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let chain_ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -247,7 +247,7 @@ fn mig060708_no_path_error_and_failure_propagation_and_direct_preference() {
 
 #[test]
 fn mig0910_on_reload_semantics_and_derive_version_attribute() {
-    // MIG-09:三态与默认值。
+    // 三态与默认值。
     assert_eq!(
         MigrationOnReload::default(),
         MigrationOnReload::OnVersionChange
@@ -263,6 +263,6 @@ fn mig0910_on_reload_semantics_and_derive_version_attribute() {
         assert_eq!(cloned, *v, "Copy must round-trip");
     }
 
-    // MIG-10:derive 的 version 属性透传(非 1 的任意值)。
+    // derive 的 version 属性透传(非 1 的任意值)。
     assert_eq!(<E2eDerivedConfig as Versioned>::VERSION, 7);
 }

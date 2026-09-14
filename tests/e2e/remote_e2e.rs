@@ -20,7 +20,7 @@
 //! - CSL-08 DoS 防护:`max_kv_entries` 超限拒绝
 //!
 //! 偏差说明(见报告):
-//! - REM-11(轮询内容变化生效)由 ETC-09/CSL-07 以受支持的远程源承载:
+//! - REM-11(轮询内容变化生效)由 CSL-07 以受支持的远程源承载:
 //!   HttpPolledSource 仅允许 HTTPS 且 SSRF 默认阻断回环地址,
 //!   无法以本地 Consul(127.0.0.1:8500,明文 HTTP)作轮询端点。
 //! - REM-10 仅覆盖"半开探测 + 失败重开"语义;完整"恢复后重新可用"
@@ -93,7 +93,7 @@ async fn etcd_delete_prefix_keys(keys: &[String]) {
     }
 }
 
-/// REM-09:连续失败达阈值 → 熔断打开,后续 poll 快速失败。
+/// 连续失败达阈值 → 熔断打开,后续 poll 快速失败。
 #[tokio::test]
 async fn rem09_circuit_breaker_opens_after_threshold_failures() {
     // localhost 在 allowed_domain 白名单内(跳过 SSRF IP 校验),
@@ -130,7 +130,7 @@ async fn rem09_circuit_breaker_opens_after_threshold_failures() {
     }
 }
 
-/// REM-10:冷却后熔断进入半开,放行一次真实探测;失败后重新打开。
+/// 冷却后熔断进入半开,放行一次真实探测;失败后重新打开。
 #[tokio::test]
 async fn rem10_half_open_probes_then_reopens_on_failure() {
     let source = HttpPolledSourceBuilder::new()
@@ -172,7 +172,7 @@ async fn rem10_half_open_probes_then_reopens_on_failure() {
     );
 }
 
-/// ETC-09:写 KV → poll 读到 → 改 KV → poll 读到新值。
+/// 写 KV → poll 读到 → 改 KV → poll 读到新值。
 #[tokio::test]
 #[ignore] // 需要 etcd 服务，CI 未配置
 async fn etc09_etcd_kv_changes_reflected_across_polls() {
@@ -205,7 +205,7 @@ async fn etc09_etcd_kv_changes_reflected_across_polls() {
     etcd_delete_prefix_keys(&[key]).await;
 }
 
-/// ETC-10:并发写多个 key 后轮询读取,prefix 树完整。
+/// 并发写多个 key 后轮询读取,prefix 树完整。
 #[tokio::test]
 #[ignore] // 需要 etcd 服务，CI 未配置
 async fn etc10_concurrent_kv_writes_yield_complete_prefix_tree() {
@@ -241,7 +241,7 @@ async fn etc10_concurrent_kv_writes_yield_complete_prefix_tree() {
     etcd_delete_prefix_keys(&keys).await;
 }
 
-/// CSL-07:Consul 写 KV → poll 读到 → 删除 KV → 空配置处理。
+/// Consul 写 KV → poll 读到 → 删除 KV → 空配置处理。
 #[tokio::test]
 #[ignore] // 需要 consul 服务，CI 未配置
 async fn csl07_consul_kv_write_poll_delete() {
@@ -301,7 +301,7 @@ async fn csl07_consul_kv_write_poll_delete() {
     }
 }
 
-/// CSL-08:DoS 防护 —— max_kv_entries 超限拒绝。
+/// DoS 防护 —— max_kv_entries 超限拒绝。
 #[tokio::test]
 #[ignore] // 需要 consul 服务，CI 未配置
 async fn csl08_max_kv_entries_rejects_oversized_response() {

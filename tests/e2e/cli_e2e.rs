@@ -19,7 +19,7 @@
 //! - CLI-24 inspect 对长字符串截断;UTF-8 多字节按字符截断不 panic
 //! - SCH-05 validate `--format json` 对坏配置输出 `valid:false + issues`(schema 语义联动)
 //!
-//! CLI-01/02/05/07…13/15(空目录)/18…22 已有覆盖(tests/cli/、src 内联)。
+//! 02/05/07…13/15(空目录)/18…22 已有覆盖(tests/cli/、src 内联)。
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
