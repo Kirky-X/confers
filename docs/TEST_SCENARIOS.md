@@ -5,10 +5,8 @@
 > 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 61 个 `#[cfg(test)]` 模块、`examples/` 21 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
 
-## 📑 目录
+## 📋 目录
 
-<details>
-<summary>📑 目录（点击展开）</summary>
 
 - [阅读约定](#阅读约定)
 -   [重要发现（编写时盘点得出）](#重要发现编写时盘点得出)
@@ -54,7 +52,6 @@
 -   [5.4 建议执行顺序](#54-建议执行顺序)
 - [6. 统计汇总](#6-统计汇总)
 
-</details>
 
 ---
 
@@ -704,6 +701,10 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（需先修复 §重要发现-1 的死文件问题：把 `error` 注册回 `tests/core/mod.rs` 或迁移内容） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 21 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
 | L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 新增 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
+| 宏测试 | `macros/tests`（trybuild 编译失败用例与属性校验） | `cargo test -p confers-macros` | 允许 |
+| 模糊测试 | `fuzz/`（cargo-fuzz 目标：`parser`、`merger`、`interpolation`） | `cargo fuzz run parser`（在 `fuzz/` 目录下） | 禁 mock |
+| 基准测试 | `benches/`（9 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev --benches` | — |
+| 文档测试 | 公开 API rustdoc 示例 | 随 `cargo test --workspace` 执行 | — |
 
 前置修复项（落地 E2E 前完成）：
 1. `tests/core/mod.rs` 注册 `mod error;`（42 个测试复活）或将其迁移至 e2e；删除与 `tests/security/encryption.rs` 重复的 `tests/core/encryption.rs`（或二选一保留）。
@@ -795,6 +796,20 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 完全无外部依赖（纯内存/编译期）的场景 | 188 |
 
 > 说明：既有覆盖口径存在合法重叠（一条场景可同时引用 tests/ 集成测试与 src 内联测试）；"需新增"取最强缺口判定。后续落地阶段允许将粒度过细的场景合并实现，但 **ID 保持稳定**以便追溯。
+
+### 代码内测试规模
+
+（按 `#[test]` / `#[tokio::test]` 函数 grep 统计，截至 v0.6.0-rc.3 工作区）
+
+| 类别 | 数量 |
+|------|------|
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块） | 2141 |
+| 集成与 E2E（`tests/`，53 个文件） | 600 |
+| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 24 |
+| 模糊测试目标（`fuzz/`） | 3 |
+| Criterion 基准组（`benches/`） | 9 |
+
+覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。
 
 ---
 

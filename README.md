@@ -14,18 +14,18 @@
 
 ---
 
-<div align="center" style="padding: 32px; margin: 24px 0">
+<div align="center">
 
-### 🎯 声明式配置管理
+### 🎯 一处声明，多来源汇入
 
-通过 `#[derive(Config)]` 派生宏声明配置结构，库负责剩下的工作：
+给结构体标注 `#[derive(Config)]`，按优先级合并各来源，编译期产出强类型字段：
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
-<td align="center" width="25%" style="padding: 12px">🧩<br><b>派生宏驱动</b><br><span style="color:#64748B">编译期生成加载代码</span></td>
-<td align="center" width="25%" style="padding: 12px">🛡️<br><b>类型安全</b><br><span style="color:#64748B">多来源合并 强类型输出</span></td>
-<td align="center" width="25%" style="padding: 12px">🔄<br><b>热重载</b><br><span style="color:#64748B">渐进发布 健康检查回滚</span></td>
-<td align="center" width="25%" style="padding: 12px">🔐<br><b>端到端加密</b><br><span style="color:#64748B">XChaCha20-Poly1305</span></td>
+<td align="center" width="25%">🧩<br><b>派生宏驱动</b><br><span style="color:#64748B">加载 · 默认值 · 环境覆盖</span></td>
+<td align="center" width="25%">🛡️<br><b>类型安全</b><br><span style="color:#64748B">合并即定型 · 可选校验</span></td>
+<td align="center" width="25%">🔄<br><b>热重载</b><br><span style="color:#64748B">渐进发布 · 异常自动回滚</span></td>
+<td align="center" width="25%">🔐<br><b>端到端加密</b><br><span style="color:#64748B">认证加密 · 字段级子密钥</span></td>
 </tr>
 </table>
 
@@ -34,9 +34,6 @@
 ---
 
 ## 📋 目录
-
-<details open>
-<summary>📑 目录</summary>
 
 - [✨ 功能特性](#-功能特性)
 - [🚀 快速开始](#-快速开始)
@@ -54,8 +51,6 @@
 - [🙏 致谢](#-致谢)
 - [📞 联系与支持](#-联系与支持)
 - [⭐ Star 历史](#-star-历史)
-
-</details>
 
 ---
 
@@ -100,14 +95,7 @@
 cargo add confers
 ```
 
-要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`env`。
-
-| 预设 | 安装方式 | 适用场景 |
-|------|----------|----------|
-| 默认 | `cargo add confers` | TOML、JSON、环境变量 |
-| 最小化 | `cargo add confers --no-default-features --features minimal` | 仅环境变量与 JSON |
-| 推荐 | `cargo add confers --no-default-features --features recommended` | 默认格式加校验与安全规则 |
-| 完整 | `cargo add confers --features full` | 全部能力 |
+要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`env`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#-特性标志) 一节。
 
 ### 💡 最小示例
 
@@ -160,14 +148,15 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ### 📦 功能预设
 
-| 预设 | 包含特性 | 适用场景 |
-|------|----------|----------|
-| `minimal` | `env`、`json` | 最小化加载 |
-| `recommended` | `toml`、`env`、`validation`、`json`、`security-rules` | 大多数应用 |
-| `dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
-| `production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
-| `distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
-| `full` | 全部特性 | 完整能力集 |
+| 预设 | 安装方式 | 包含特性 | 适用场景 |
+|------|----------|----------|----------|
+| 默认 | `cargo add confers` | `toml`、`json`、`env` | 开箱即用 |
+| `minimal` | `cargo add confers --no-default-features --features minimal` | `env`、`json` | 最小化加载 |
+| `recommended` | `cargo add confers --no-default-features --features recommended` | `toml`、`env`、`validation`、`json`、`security-rules` | 大多数应用 |
+| `dev` | `cargo add confers --features dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
+| `production` | `cargo add confers --features production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
+| `distributed` | `cargo add confers --features distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
+| `full` | `cargo add confers --features full` | 全部特性 | 完整能力集 |
 
 ### 📋 功能矩阵
 
@@ -246,31 +235,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ## 💻 示例
 
-全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标。
-
-| 示例 | 文件 | 所需特性 | 描述 |
-|------|------|----------|------|
-| basic_usage | `examples/src/examples/basic_usage.rs` | `toml`、`env` | 从默认值与环境变量加载基础配置 |
-| hot_reload | `examples/src/examples/hot_reload.rs` | `watch` | 配置文件变更监听与自动重载 |
-| encryption | `examples/src/examples/encryption.rs` | `encryption` | XChaCha20-Poly1305 加密保护敏感字段 |
-| key_rotation | `examples/src/examples/key_rotation.rs` | `key` | 加密密钥的安全轮转 |
-| migration | `examples/src/examples/migration.rs` | `migration` | 配置版本迁移 |
-| dynamic_fields | `examples/src/examples/dynamic_fields.rs` | `dynamic` | DynamicField 运行时配置更新与回调 |
-| config_groups | `examples/src/examples/config_groups.rs` | `modules` | 配置分组管理 |
-| progressive_reload | `examples/src/examples/progressive_reload.rs` | `progressive-reload` | ProgressiveReloader 渐进式热更新 |
-| config_bus | `examples/src/examples/config_bus.rs` | `config-bus` | ConfigBus 配置变更事件广播 |
-| snapshot | `examples/src/examples/snapshot.rs` | `snapshot` | SnapshotManager 配置快照持久化 |
-| remote_consul | `examples/src/examples/remote_consul.rs` | `consul` | 从 Consul KV Store 加载配置 |
-| remote_etcd | `examples/src/examples/remote_etcd.rs` | `etcd` | 从 etcd KV Store 加载配置 |
-| validation | `examples/src/examples/validation.rs` | `validation` | 使用 garde 进行配置校验 |
-| json_schema | `examples/src/examples/json_schema.rs` | `schema` | ConfigSchema 派生宏生成 JSON Schema |
-| interpolation | `examples/src/examples/interpolation.rs` | `interpolation` | `${VAR}` 变量插值与默认值 |
-| audit | `examples/src/examples/audit.rs` | `audit` | AuditConfig 与 AuditWriter 审计日志 |
-| context_aware | `examples/src/examples/context_aware.rs` | `context-aware` | ContextAwareField 上下文取值规则 |
-| security | `examples/src/examples/security.rs` | `security` | EncryptionPrefix 加密值识别与处理 |
-| modules_demo | `examples/src/examples/modules_demo.rs` | `modules` | ModuleRegistry 模块系统 |
-| cli_integration | `examples/src/examples/cli_integration.rs` | `cli` | ConfigClap 派生宏与 CLI 集成 |
-| full_stack | `examples/src/examples/full_stack.rs` | `full` | 完整功能集展示 |
+全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（HTTP / etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
 
 ```bash
 # 运行单个示例（在 examples/ 目录下）
@@ -283,111 +248,21 @@ cd examples && ./verify_examples.sh
 
 ### 🤖 CLI 工具
 
-除运行示例外，也可以使用随库附带的 CLI 诊断工具排查真实项目中的配置。
-
-`confers` 二进制（`src/cli/main.rs`，需启用 `cli` 特性）提供配置诊断能力：
+除运行示例外，也可以使用随库附带的 CLI 诊断工具（`cli` 特性，入口 `src/cli/main.rs`）排查真实项目中的配置：
 
 ```bash
 cargo install confers --features cli
 ```
 
-| 命令 | 描述 |
-|------|------|
-| `inspect` | 列出全部配置键及其来源，支持冲突展示与 JSON 输出 |
-| `validate` | 校验配置，`--strict` 模式将警告视为错误 |
-| `export` | 导出合并后配置（json、toml、yaml），默认脱敏敏感值 |
-| `diff` | 对比 base 与 overlay 两份配置 |
-| `snapshot` | 快照管理：`list`、`diff`、`prune` |
-| `schema` | 输出配置类型的 JSON Schema，支持从实例反推 |
-| `get` | 按键路径读取单个配置值 |
-| `doctor` | 配置健康诊断，输出单行 JSON 报告 |
-| `docs --agent` | 输出面向代理的机器可读知识包 |
-
-```bash
-# 常用命令
-confers --config config.toml inspect
-confers --config config.toml validate --strict
-confers --config config.toml export --format json
-confers diff --base config1.toml --overlay config2.toml
-```
-
-全局选项：`--config <文件>`（可多次）、`--env-file <文件>`、`--fields <点路径列表>`。退出码约定：0 成功、1 配置错误、2 I/O 错误。
+提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。全部命令的参数、输出与用法示例见 [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
 
 ---
 
 ## 🏗️ 架构
 
-Confers 采用门面与内部实现分离的分层设计：`src/` 下的公开模块（`config`、`loader`、`merger`、`format`、`types`、`interface`、`error`、`lifecycle`）只做转发动机，真正实现位于 `src/impl_/` 内部模块；可选能力（`validator`、`watcher`、`secret`、`remote`、`bus`、`cli` 等）按 feature 独立门控。派生宏由 workspace 内的 `confers-macros` 过程宏 crate 提供，`macros/src/parse.rs` 解析 `#[config(...)]` 属性，codegen 生成加载与校验代码。核心数据通路为：来源链注册、loader 格式探测与解析（错误精确到行列）、`MergeEngine` 沿来源链深度合并、serde 反序列化为用户类型并可选执行 garde 校验与敏感字段解密。接口层遵循接口隔离原则，拆分为 `ConfigReader`、`ConfigWriter`、`ConfigConnector`、`ConfigProvider` 等独立 trait。
+Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块只做转发动机，真正实现位于 `src/impl_/`，可选能力按 feature 独立门控；核心数据通路为来源链注册 → loader 格式探测与解析（错误精确到行列）→ `MergeEngine` 沿来源链深度合并 → serde 反序列化为强类型结构体（可选 garde 校验与敏感字段解密），派生宏由 workspace 内的 `confers-macros` 过程宏 crate 在编译期生成加载代码。
 
-```mermaid
-flowchart LR
-    subgraph MACROS["confers-macros 编译期"]
-        DM["derive 宏<br/>解析 config 属性并生成加载代码"]
-    end
-
-    subgraph SOURCES["来源层"]
-        FS["FileSource<br/>TOML JSON YAML INI"]
-        ES["EnvSource<br/>环境变量与 .env"]
-        MS["MemorySource"]
-        RS["remote<br/>HTTP 轮询 etcd Consul"]
-    end
-
-    subgraph CORE["核心引擎"]
-        LD["loader<br/>格式探测与解析"]
-        SC["SourceChain 优先级链"]
-        MG["merger<br/>MergeEngine 深度合并"]
-    end
-
-    subgraph OPS["运维与安全"]
-        WT["watcher 热重载"]
-        BUS["bus 变更广播"]
-        AU["audit 审计日志"]
-        SE["secret 加密"]
-    end
-
-    APP["类型化配置结构体 T"]
-
-    SOURCES --> LD
-    LD --> SC
-    SC --> MG
-    MG --> APP
-    DM -.为 T 生成加载代码.-> APP
-    WT -.重载触发.-> LD
-    BUS -.变更通知.-> APP
-    SE -.解密敏感字段.-> MG
-    AU -.记录访问.-> MG
-```
-
-> 完整的模块划分与数据流说明见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
-
-### 🔄 核心流程
-
-以下时序图展示配置加载与热重载的真实执行路径（对照 `docs/ARCHITECTURE.md` 数据流一节与 `src/watcher` 实现）：
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App as 应用
-    participant Bld as ConfigBuilder
-    participant Ldr as loader
-    participant Mrg as merger
-    participant Wtr as watcher
-
-    App->>Bld: 声明来源链 文件与环境变量
-    App->>Bld: build 触发加载
-    Bld->>Ldr: 逐来源探测格式并解析
-    Ldr->>Mrg: ConfigValue 树 携带来源与位置
-    Mrg->>Mrg: 沿 SourceChain 深度合并
-    Mrg-->>App: 反序列化为 T 可选校验与解密
-
-    Note over Wtr: 文件变更事件
-    Wtr->>Ldr: 自适应去抖后触发重载
-    Ldr->>Mrg: 重新加载与合并
-    Mrg-->>Wtr: 生成新配置
-    Wtr-->>App: 渐进发布 健康检查失败自动回滚
-```
-
-启用 `progressive-reload` 后，新配置按批次切换实例；健康检查失败时自动回滚（`ReloadRolledBack`）。启用 `dynamic` 时，字段级更新经 `arc-swap` 快照原子换入，读者无锁。
+架构图、公开核心与特性门控模块表、加载 / 热重载 / 多实例变更广播数据流，以及接口隔离（`ConfigReader` / `ConfigWriter` / `ConfigConnector` / `ConfigProvider` 等 trait）与安全、性能设计，详见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
 
 ---
 
@@ -395,15 +270,7 @@ sequenceDiagram
 
 ### 🎯 测试策略
 
-| 层级 | 位置 | 说明 |
-|------|------|------|
-| 单元测试 | `src/` 内联 `#[cfg(test)]` 模块 | 覆盖各特性门控下的核心逻辑 |
-| 集成测试 | `tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli` | 按功能域组织的门控套件 |
-| 端到端测试 | `tests/e2e`（24 个套件，经 `[[test]]` 显式注册） | 覆盖格式、构建器、加密、总线、渐进发布等场景，场景矩阵见 [测试场景文档](docs/TEST_SCENARIOS.md) |
-| 宏测试 | `macros/tests` | trybuild 编译失败用例与属性校验 |
-| 模糊测试 | `fuzz/` | cargo-fuzz 目标：`parser`、`merger`、`interpolation` |
-| 基准测试 | `benches/` | 9 组 Criterion 基准 |
-| 文档测试 | 公开 API rustdoc 示例 | 随 `cargo test` 执行 |
+测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、24 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
 
 ### ▶️ 运行命令（与 CI 一致）
 
@@ -429,35 +296,13 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-> 规模为 `#[test]` / `#[tokio::test]` 函数的 grep 统计，截至 v0.6.0-rc.3。
-
-| 类别 | 数量 |
-|------|------|
-| 单元测试（`src/` 内联） | 约 2100+ |
-| 集成与 E2E（`tests/`） | 600（53 个文件） |
-| 模糊测试目标 | 3 |
-| Criterion 基准 | 9 组 |
-
-覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。
+截至 v0.6.0-rc.3：单元测试约 2100+（`src/` 内联）、集成与 E2E 共 600 个（`tests/`，53 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 
 ## 📊 性能
 
-> 口径沿用 [📈 性能优化指南](docs/PERFORMANCE.md)：基线在开发机（WSL2、linux 6.6、16 线程）本地采集，数值为 criterion 区间估计的 estimate（中位数口径），非默认参数运行使用 `--warm-up-time 1 --measurement-time 2 --sample-size 20`。实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。
-
-<table style="width:100%; border-collapse: collapse">
-<tr><th style="text-align:left">路径</th><th style="text-align:left">用例</th><th style="text-align:left">耗时</th></tr>
-<tr><td>加载</td><td><code>load / 50 fields</code></td><td>约 691 ns</td></tr>
-<tr><td>加载</td><td><code>load / 200 fields</code></td><td>约 713 ns</td></tr>
-<tr><td>合并</td><td><code>merge_shallow / size 10</code></td><td>约 263 ns</td></tr>
-<tr><td>合并</td><td><code>merge_shallow / size 1000</code></td><td>约 20.9 µs</td></tr>
-<tr><td>变更流</td><td><code>change_stream_roundtrip / 1 订阅者</code></td><td>约 1.98 µs</td></tr>
-<tr><td>变更流</td><td><code>change_stream_roundtrip / 8 订阅者</code></td><td>约 3.72 µs</td></tr>
-<tr><td>大值读取</td><td><code>get_shared</code>（Arc 句柄）对比 <code>get_raw</code>（深拷贝）</td><td>约 161 ns 对比约 337 ns，约 2.1 倍提升</td></tr>
-</table>
-
-性能设计要点：动态字段基于 `arc-swap` 无锁读取；`ConfigValue` 树使用 `IndexMap` 保持键序、短字符串经 `compact_str` 驻留；watcher 自适应去抖抑制重载风暴；全部可选能力特性门控以控制编译时间与二进制体积。更多优化建议见 [📈 性能优化指南](docs/PERFORMANCE.md)。
+基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、`compact_str` 驻留、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
 
 ---
 
@@ -465,13 +310,11 @@ cargo fuzz run parser
 
 ### 🛡️ 安全设计
 
-Confers 的安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全（`SecretBytes` / `ZeroizingBytes`，`SecureString` 禁止 `Clone`）、密钥版本与轮换治理、环境变量注入防护与内置 JWT/CORS/SSRF/TLS 校验规则（SSRF 覆盖 18 个封锁网段并做 URL 边界匹配）、错误脱敏与 HMAC 签名的审计日志，以及远程来源的 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
+安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
 
 ### ⛓️ 供应链与门禁
 
-- `cargo deny check`：漏洞、许可证、禁用依赖与来源校验（`deny.toml`）。
-- `cargo audit`：RustSec 安全公告扫描，CI 与 pre-push 钩子执行。
-- pre-commit 私钥扫描（lefthook `no-private-key`）。
+`cargo deny check`、`cargo audit` 与 lefthook 私钥扫描、覆盖率门禁等供应链门禁在 CI 与本地 Git 钩子双重执行，完整清单见 [🔒 安全文档 · 供应链与门禁](docs/SECURITY.md#供应链与门禁)。
 
 ### 🚨 报告安全漏洞
 
@@ -501,12 +344,7 @@ Confers 的安全设计围绕敏感数据全生命周期防护展开：XChaCha20
 
 ### 🛠️ 开发环境
 
-| 项 | 要求 |
-|----|------|
-| 工具链 | Rust 1.97.1（`rust-toolchain.toml` 锁定） |
-| 格式与 Lint | `cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings` |
-| Git 钩子 | [lefthook](https://github.com/evilmartians/lefthook)：pre-commit 运行 rustfmt、clippy、`cargo deny check` 与私钥扫描；pre-push 运行 `cargo audit` 与覆盖率门禁 |
-| 提交信息 | Conventional Commits（`feat`、`fix`、`docs` 等，由 commit-msg 钩子校验） |
+工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#-环境准备)。
 
 ### 💖 贡献方式
 
@@ -539,8 +377,6 @@ Confers 的安全设计围绕敏感数据全生命周期防护展开：XChaCha20
 </tr>
 </table>
 
-<img src="https://contrib.rocks/image?repo=Kirky-X/confers" alt="Contributors">
-
 ---
 
 ## 📋 更新日志
@@ -549,9 +385,9 @@ Confers 的安全设计围绕敏感数据全生命周期防护展开：XChaCha20
 
 | 版本 | 日期 | 要点 |
 |------|------|------|
+| 0.6.0-rc.3 | 2026-09-10 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析 |
 | 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |
 | 0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时开关；修复 SSRF 白名单绕过与 TLS 版本比较等问题 |
-| 0.5.0 | 2026-08-04 | 精简 `ConfigBuilder`（移除 6 个无效方法）；新增熔断器；增强密钥熵值校验与错误信息脱敏 |
 
 ---
 

@@ -4,16 +4,11 @@ Confers 将安全性作为核心设计目标。本文档介绍 Confers 的安全
 
 ## 📋 目录
 
-<details open>
-<summary>📑 目录（点击展开）</summary>
-
 - [支持版本](#-支持版本)
 - [漏洞报告流程](#-漏洞报告流程)
 - [安全设计概览](#️-安全设计概览)
 - [安全最佳实践](#-安全最佳实践)
 - [相关文档](#-相关文档)
-
-</details>
 
 ---
 
@@ -57,6 +52,17 @@ cargo audit --fetch-index
 | `serde` | 复杂序列化逻辑 | 经过广泛审计，必不可少 |
 | `tokio` | 二进制体积较大 | 仅在启用异步相关特性时引入 |
 | `reqwest` | HTTP 客户端攻击面 | 显式启用 TLS |
+
+### 供应链与门禁
+
+仓库通过以下自动化门禁保障供应链安全，CI 与本地 Git 钩子（lefthook）双重执行：
+
+| 门禁 | 工具 | 执行时机 | 说明 |
+|:-----|:-----|:---------|:-----|
+| 依赖漏洞 / 许可证 / 禁用依赖 / 来源校验 | `cargo deny check`（配置见 `deny.toml`） | CI 与 pre-commit | 阻断含已知漏洞、许可证不合规或被禁用的依赖 |
+| RustSec 安全公告扫描 | `cargo audit` | CI 与 pre-push | 扫描 `Cargo.lock` 中的 RustSec 已知漏洞 |
+| 私钥泄露扫描 | lefthook `no-private-key` | pre-commit | 阻止 PEM 私钥与 `sk-` 形式令牌进入提交 |
+| 覆盖率门禁 | `cargo llvm-cov --fail-under-lines 80` | CI 与 pre-push | 行覆盖率不低于 80% |
 
 ---
 

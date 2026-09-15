@@ -6,17 +6,12 @@
 
 ## 📋 目录
 
-<details open>
-<summary>📑 目录（点击展开）</summary>
-
 - [欢迎](#-欢迎)
 - [环境准备](#-环境准备)
 - [开发工作流（TDD）](#-开发工作流tdd)
 - [代码规范](#-代码规范)
 - [提交与 PR 流程](#-提交与-pr-流程)
 - [行为准则](#-行为准则)
-
-</details>
 
 ---
 
@@ -113,6 +108,16 @@ cargo test --all-features  # 运行全部特性的测试
 cargo test --features cli  # 仅运行 CLI 相关测试
 cargo test --features remote  # 仅运行远程配置相关测试
 ```
+
+### Git 钩子（lefthook）
+
+仓库使用 [lefthook](https://github.com/evilmartians/lefthook) 执行本地质量门禁（启用：`lefthook install` 或 `bash scripts/install-pre-commit.sh`）：
+
+| 钩子 | 检查项 |
+|:-----|:-----|
+| pre-commit | `cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo deny check`、私钥扫描（`no-private-key`） |
+| commit-msg | Conventional Commits 格式校验（`feat`、`fix`、`docs` 等） |
+| pre-push | `cargo audit`、覆盖率门禁（`cargo llvm-cov --fail-under-lines 80`） |
 
 ### 构建与测试
 
