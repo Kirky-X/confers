@@ -1410,7 +1410,7 @@ mod tests {
     }
 
     // =============================================================================
-    // Real Local HTTP Interaction (R-real-env-001: HTTP 远程源真实本地交互)
+    // Real Local HTTP Interaction (HTTP 远程源真实本地交互)
     // =============================================================================
 
     /// Serve one HTTP/1.1 response with the given status, headers and body,

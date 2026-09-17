@@ -141,6 +141,12 @@ pub struct EnvSource {
     file_suffix_enabled: bool,
     /// The file suffix for Docker secrets convention (default: "_FILE").
     file_suffix: &'static str,
+    /// Config paths (post prefix-strip/lowercase/separator-replace) to skip.
+    ///
+    /// Use for env vars whose raw string value cannot be coerced into the
+    /// target config field type (e.g. enum variants the embedder parses
+    /// itself) and must not enter the merged config.
+    excluded_keys: Vec<String>,
 }
 
 impl EnvSource {
@@ -153,6 +159,7 @@ impl EnvSource {
             source_id: SourceId::new("env"),
             file_suffix_enabled: true,
             file_suffix: "_FILE",
+            excluded_keys: Vec::new(),
         }
     }
 
@@ -165,6 +172,7 @@ impl EnvSource {
             source_id: SourceId::new("env"),
             file_suffix_enabled: true,
             file_suffix: "_FILE",
+            excluded_keys: Vec::new(),
         }
     }
 
@@ -190,6 +198,21 @@ impl EnvSource {
     pub fn file_suffix(mut self, suffix: &'static str) -> Self {
         self.file_suffix = suffix;
         self
+    }
+
+    /// Exclude config paths from collection.
+    ///
+    /// Keys are matched against the parsed config path (prefix stripped,
+    /// lowercased, separator replaced with `.`), e.g. `exclude_keys(["rate_limit_backend"])`
+    /// skips `GARRISON_RATE_LIMIT_BACKEND` when the prefix is `GARRISON_`.
+    pub fn exclude_keys(mut self, keys: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.excluded_keys.extend(keys.into_iter().map(Into::into));
+        self
+    }
+
+    /// Whether a parsed config path is excluded.
+    fn is_excluded(&self, config_path: &str) -> bool {
+        self.excluded_keys.iter().any(|k| k == config_path)
     }
 
     /// Parse an environment variable name into a config path.
@@ -376,6 +399,9 @@ impl Source for EnvSource {
                         continue;
                     };
                     if let Some(config_path) = self.parse_key(&env_key) {
+                        if self.is_excluded(&config_path) {
+                            continue;
+                        }
                         let resolved = self.resolve_value(&env_val, &env_key)?;
                         let value = AnnotatedValue::new(
                             Self::infer_config_value(&resolved),
@@ -393,6 +419,9 @@ impl Source for EnvSource {
         // Process real environment variables (higher priority, override .env)
         for (key, value) in std::env::vars() {
             if let Some(config_path) = self.parse_key(&key) {
+                if self.is_excluded(&config_path) {
+                    continue;
+                }
                 let resolved = self.resolve_value(&value, &key)?;
                 let value = AnnotatedValue::new(
                     Self::infer_config_value(&resolved),
@@ -721,6 +750,52 @@ mod tests {
 
     #[test]
     #[serial]
+    fn test_env_source_exclude_keys() {
+        // excluded_keys：按解析后的 config path（前缀剥离 + 小写 + 分隔符替换）
+        // 精确排除，其余前缀变量正常收集
+        let unique = format!("EXCL{}", std::process::id());
+        let excluded_var = format!("CONFERS_{}_BACKEND", unique);
+        let kept_var = format!("CONFERS_{}_HOST", unique);
+        // SAFETY: single-threaded env mutation with process-unique variable
+        // names; removed immediately after collection (test-only).
+        unsafe { std::env::set_var(&excluded_var, "redis") };
+        unsafe { std::env::set_var(&kept_var, "localhost") };
+        let lower_unique = unique.to_lowercase();
+
+        // 默认 separator "_"：解析后的 config path 下划线折叠为 "."
+        let source = EnvSource::with_prefix("CONFERS_")
+            .exclude_keys(vec![format!("{}.backend", lower_unique)]);
+        let collected = source.collect().expect("collect should succeed");
+
+        unsafe { std::env::remove_var(&excluded_var) };
+        unsafe { std::env::remove_var(&kept_var) };
+
+        if let ConfigValue::Map(map) = &collected.inner {
+            // "excl{pid}.host" / "excl{pid}.backend" 是嵌套路径：顶层 key 为
+            // `excl{pid}`，叶子在子 map 中
+            let group_key = lower_unique.clone();
+            let nested = map
+                .keys()
+                .find(|k| k.as_ref() == group_key)
+                .and_then(|k| map.get(k))
+                .and_then(|v| match &v.inner {
+                    ConfigValue::Map(m) => Some(m.clone()),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            assert!(
+                !nested.keys().any(|k| k.as_ref() == "backend"),
+                "excluded leaf must not be collected"
+            );
+            assert!(
+                nested.keys().any(|k| k.as_ref() == "host"),
+                "non-excluded leaves must still be collected"
+            );
+        } else {
+            panic!("expected a map");
+        }
+    }
+
     fn test_env_source_prefix() {
         // Set test environment variables
         // FIXME: Audit that the environment access only happens in single-threaded code.

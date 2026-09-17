@@ -61,6 +61,14 @@ pub struct LoaderConfig {
     /// inferring the format from the file extension. Useful for files whose
     /// extension is missing or not one of the recognized ones.
     pub format: Option<Format>,
+    /// Redact filesystem paths in error payloads (default: false).
+    ///
+    /// When enabled, `load_file`'s `FileNotFound` error carries only the
+    /// file's `file_name()` instead of the full resolved path — for embedders
+    /// that must not leak server filesystem structure through error messages
+    /// (logs, API responses). Off by default to preserve existing
+    /// error-message behavior for current consumers.
+    pub redact_error_paths: bool,
 }
 
 impl Default for LoaderConfig {
@@ -74,6 +82,7 @@ impl Default for LoaderConfig {
             allow_absolute: false,
             check_symlinks: true,
             format: None,
+            redact_error_paths: false,
         }
     }
 }
@@ -123,6 +132,16 @@ impl LoaderConfig {
     /// Disable symlink checking (not recommended for security).
     pub fn no_symlink_check(mut self) -> Self {
         self.check_symlinks = false;
+        self
+    }
+
+    /// Redact filesystem paths in `load_file` error payloads.
+    ///
+    /// When enabled, `FileNotFound` errors carry only the file's
+    /// `file_name()` instead of the full resolved path — for embedders that
+    /// must not leak server filesystem structure through error messages.
+    pub fn redact_error_paths(mut self) -> Self {
+        self.redact_error_paths = true;
         self
     }
 }
@@ -567,15 +586,42 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
             message: format!("Path validation failed: {}", e),
         })?;
 
+    // Error payload redaction: report only the file name (not the resolved
+    // server path) when the embedder opts in.
+    let reported_path = |p: &Path| -> PathBuf {
+        if config.redact_error_paths {
+            p.file_name()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| "<config>".into())
+        } else {
+            p.to_path_buf()
+        }
+    };
+
     // Open the file once, then enforce the size limit against the opened
     // handle's own metadata and read through the handle. Re-resolving the
     // path for a second stat/read would race with a concurrent rename or
     // replace (TOCTOU) and could read content that was never validated.
-    let mut file = std::fs::File::open(&validated_path).map_err(|e| ConfigError::FileNotFound {
-        filename: validated_path.clone(),
+    let file = std::fs::File::open(&validated_path).map_err(|e| ConfigError::FileNotFound {
+        filename: reported_path(&validated_path),
         source: Some(e),
     })?;
     let metadata = file.metadata().map_err(ConfigError::IoError)?;
+    // Reject special files (character devices like /dev/zero, FIFOs,
+    // directories): reading them can block indefinitely or never terminate,
+    // turning read_to_string into a memory-exhaustion DoS. `is_file()` is
+    // true only for regular files (and symlinks already resolved to regular
+    // files by canonicalization above).
+    if !metadata.is_file() {
+        return Err(ConfigError::InvalidValue {
+            key: "path".to_string(),
+            expected_type: "regular file".to_string(),
+            message: format!(
+                "Path is not a regular file: {:?}",
+                reported_path(&validated_path)
+            ),
+        });
+    }
     // Compare as u64: casting `metadata.len()` to usize truncates on 32-bit
     // targets and would let oversized files slip through.
     if metadata.len() > config.max_size as u64 {
@@ -594,10 +640,22 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
             location: None,
             source: None,
         })?;
-    let mut content = String::new();
+    // Read through the opened handle, capped at max_size + 1 at the I/O
+    // layer: if the file is swapped for a larger one between metadata() and
+    // read (TOCTOU), the oversized tail is simply never read, and the
+    // post-read length check below turns the swap into a clean error.
     use std::io::Read;
-    file.read_to_string(&mut content)
+    let mut content = String::new();
+    std::io::BufReader::new(file)
+        .take(config.max_size as u64 + 1)
+        .read_to_string(&mut content)
         .map_err(ConfigError::IoError)?;
+    if content.len() > config.max_size {
+        return Err(ConfigError::SizeLimitExceeded {
+            actual: content.len(),
+            limit: config.max_size,
+        });
+    }
     let source = SourceId::new(
         validated_path
             .file_name()
@@ -1702,5 +1760,91 @@ mod tests {
         }
 
         let _ = std::fs::remove_file(test_file);
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_load_file_rejects_non_regular_file() {
+        // 目录（非普通文件）必须在 is_file 检查处被拒绝，
+        // 而不是在 read_to_string 阶段产生 EISDIR 或阻塞
+        let temp_dir = std::env::temp_dir().join("confers_test_not_a_file_dir");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let result = load_file(
+            &temp_dir,
+            &LoaderConfig::new()
+                .allow_absolute()
+                .with_format(Format::Toml),
+        );
+        let _ = std::fs::remove_dir(&temp_dir);
+        let err = result.expect_err("directory must be rejected");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("regular file"),
+            "error should mention non-regular file: {}",
+            msg
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_load_file_redacts_error_paths() {
+        // redact_error_paths 开启：错误载荷只携带 file_name，不泄露父目录。
+        // 用「存在的目录」驱动 is_file 错误路径（canonicalize 可解析、
+        // open 成功、metadata.is_file() == false），使 reported_path 生效。
+        let dir = std::env::temp_dir().join("confers_redact_test_dir");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let config = LoaderConfig::new()
+            .allow_absolute()
+            .with_format(Format::Toml)
+            .redact_error_paths();
+        let err = load_file(&dir, &config).expect_err("directory must be rejected");
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("confers_redact_test_dir"),
+            "file_name should still appear: {}",
+            rendered
+        );
+        assert!(
+            !rendered.contains("temp"),
+            "redacted error must not contain parent dirs: {}",
+            rendered
+        );
+
+        // 默认关闭：保留完整路径（现有消费者行为不变）
+        let config_plain = LoaderConfig::new()
+            .allow_absolute()
+            .with_format(Format::Toml);
+        let err_plain = load_file(&dir, &config_plain).expect_err("directory must be rejected");
+        let _ = std::fs::remove_dir(&dir);
+        assert!(
+            err_plain
+                .to_string()
+                .contains(std::path::MAIN_SEPARATOR_STR),
+            "default errors keep the full path: {}",
+            err_plain
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_load_file_take_guard_rejects_oversized_content() {
+        // I/O 层 take(max+1) 双保险：内容超过 max_size 时经读取后长度
+        // 检查返回 SizeLimitExceeded（而非静默截断）
+        let test_file = std::env::temp_dir().join("confers_test_oversize.toml");
+        std::fs::write(&test_file, "a = 1\n".repeat(64)).unwrap();
+        let config = LoaderConfig::new()
+            .allow_absolute()
+            .with_format(Format::Toml)
+            .max_size(16);
+        let result = load_file(&test_file, &config);
+        let _ = std::fs::remove_file(&test_file);
+        match result {
+            Err(ConfigError::SizeLimitExceeded { actual, limit }) => {
+                assert_eq!(limit, 16);
+                assert!(actual > 16, "actual should exceed limit: {}", actual);
+            }
+            other => panic!("expected SizeLimitExceeded, got {:?}", other.map(|_| ())),
+        }
     }
 }

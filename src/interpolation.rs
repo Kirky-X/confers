@@ -9,5 +9,5 @@
 
 pub use crate::impl_::interpolation::{
     InterpolationConfig, InterpolationContext, InterpolationResult, InterpolationWarning,
-    interpolate, interpolate_tracked,
+    interpolate, interpolate_tracked, interpolate_with_config,
 };

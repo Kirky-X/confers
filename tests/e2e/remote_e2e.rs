@@ -10,20 +10,20 @@
 //! - Consul 127.0.0.1:8500
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.17–2.19):
-//! - REM-09 轮询级熔断:不可达目标连续失败达 `circuit_breaker_threshold`
+//! - 轮询级熔断:不可达目标连续失败达 `circuit_breaker_threshold`
 //!   → 快速失败(`CircuitBreakerOpen`),不再发起网络请求
-//! - REM-10 熔断半开:冷却后允许一次真实探测(错误类型从 CircuitBreakerOpen
+//! - 熔断半开:冷却后允许一次真实探测(错误类型从 CircuitBreakerOpen
 //!   变回真实网络错误),失败后重新打开
 //! - ETC-09 端到端:写 KV → poll 读到 → 改 KV → 再读到新值(远程热更语义)
 //! - ETC-10 并发写多个 key 后轮询读取:prefix 树完整
-//! - CSL-07 端到端:Consul 写 KV → poll 读到新值 → 删除 KV → 处理空配置
-//! - CSL-08 DoS 防护:`max_kv_entries` 超限拒绝
+//! - 端到端:Consul 写 KV → poll 读到新值 → 删除 KV → 处理空配置
+//! - DoS 防护:`max_kv_entries` 超限拒绝
 //!
 //! 偏差说明(见报告):
-//! - REM-11(轮询内容变化生效)由 CSL-07 以受支持的远程源承载:
+//! - 轮询内容变化生效由上述端到端场景以受支持的远程源承载:
 //!   HttpPolledSource 仅允许 HTTPS 且 SSRF 默认阻断回环地址,
 //!   无法以本地 Consul(127.0.0.1:8500,明文 HTTP)作轮询端点。
-//! - REM-10 仅覆盖"半开探测 + 失败重开"语义;完整"恢复后重新可用"
+//! - 熔断半开仅覆盖"半开探测 + 失败重开"语义;完整"恢复后重新可用"
 //!   需要可恢复的真实 HTTPS 端点,沙箱内无法提供自签信任。
 
 use confers::remote::{
