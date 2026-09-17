@@ -12,7 +12,7 @@ cargo-fuzz = true
 workspace = true
 
 [dependencies]
-confers = { path = "..", features = ["full"] }
+confers = { version = "0.6.0-rc.4", path = "..", features = ["full"] }
 libfuzzer-sys = "0.4"
 
 [[bin]]

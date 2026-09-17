@@ -95,7 +95,7 @@ name = "modules_demo"
 path = "src/examples/modules_demo.rs"
 
 [dependencies]
-confers = { path = "..", features = ["full"] }
+confers = { version = "0.6.0-rc.4", path = "..", features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 clap = { workspace = true }
