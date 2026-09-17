@@ -37,20 +37,10 @@ pub(crate) mod sealed {
 // async (feature-gated) and sync (minimal builds) variants. The feature gate selects
 // which version is active at compile time — they are never both visible.
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 pub use async_traits_impl::*;
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 mod async_traits_impl {
     use super::sealed::Sealed;
     use super::*;
@@ -122,20 +112,10 @@ mod async_traits_impl {
 
 // ============== Sync Traits (for minimal builds) ==============
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 pub use sync_traits::*;
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 mod sync_traits {
     use super::sealed::Sealed;
     use super::*;

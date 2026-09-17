@@ -189,8 +189,8 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>security</code></td><td align="center">❌</td><td>Security module: encryption integration, error sanitization, env validation (includes <code>encryption</code>)</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>Built-in JWT, CORS, SSRF, TLS validators with a registry</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
-<tr><td><code>keyring</code></td><td align="center">❌</td><td>Key storage backends (file, MasterKey, secret-tool)</td></tr>
-<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers including Vault Transit (requires <code>remote</code>)</td></tr>
+<tr><td><code>keyring</code></td><td align="center">❌</td><td>Key storage backends (file, MasterKey, secret-tool; includes <code>encryption</code>)</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers including Vault Transit (includes <code>encryption</code>, requires <code>remote</code>)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Remote Sources</b></td></tr>
 <tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP polling source with SSRF protection and circuit breaker</td></tr>
 <tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 integration (includes <code>remote</code>)</td></tr>

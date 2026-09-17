@@ -30,12 +30,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 // ============== Async Implementation (feature-gated) ==============
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 mod async_impl {
     use super::*;
     use crate::interface::sealed::Sealed;
@@ -284,23 +279,13 @@ mod async_impl {
     }
 }
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 #[allow(unused_imports)]
 pub use async_impl::{ConfigImpl, ConfigImplBuilder};
 
 // ============== Sync Implementation (for minimal builds) ==============
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 mod sync_impl {
     use super::*;
     use crate::interface::sealed::Sealed;
@@ -544,12 +529,7 @@ mod sync_impl {
     }
 }
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 #[allow(unused_imports)]
 pub use sync_impl::{ConfigImpl, ConfigImplBuilder};
 
@@ -559,12 +539,7 @@ pub use sync_impl::{ConfigImpl, ConfigImplBuilder};
 mod tests {
     use super::*;
 
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     mod async_tests {
         use super::*;
 
@@ -1082,12 +1057,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    )))]
+    #[cfg(not(feature = "async-core"))]
     mod sync_tests {
         use super::*;
 

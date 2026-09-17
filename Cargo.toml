@@ -14,6 +14,10 @@ categories.workspace = true
 autobenches = false
 autotests = false
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--generate-link-to-definition"]
+
 [lints]
 workspace = true
 
@@ -28,12 +32,12 @@ chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
 compact_str = { version = "0.10", features = ["serde"] }
 confers-macros = { version = "0.6.0-rc.4", path = "macros" }
-dashmap = { version = "6.1", optional = true }
+dashmap = { version = "6.2", optional = true }
 garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
 futures-util = { version = "0.3", optional = true }
 hkdf = { version = "0.13", optional = true }
 hmac = { version = "0.13", optional = true }
-indexmap = { version = "2.13", features = ["serde"] }
+indexmap = { version = "2.14", features = ["serde"] }
 notify-debouncer-full = { version = "0.7", optional = true }
 reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", optional = true }
@@ -48,19 +52,19 @@ dotenvy = { version = "0.15", optional = true }
 aes-gcm = { version = "0.11", optional = true }
 serde_ini = { version = "0.2", optional = true }
 tracing = { version = "0.1", optional = true }
-regex = "1.11"
+regex = "1.13"
 anyhow = "1.0"
-tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"], optional = true }
+tokio = { version = "1.53", features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.1", features = ["preserve_order"], optional = true }
-zeroize = { version = "1.8", features = ["derive"], optional = true }
+zeroize = { version = "1.9", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 etcd-client = { version = "0.20", features = ["tls"], optional = true }
-ipnet = { version = "2.11", optional = true }
-redis = { version = "1.1", features = ["tokio-comp"], optional = true }
+ipnet = { version = "2.12", optional = true }
+redis = { version = "1.7", features = ["tokio-comp"], optional = true }
 url = "2.5"
 hex = { version = "0.4", optional = true }
 rand = { version = "0.10", optional = true }
-similar = { version = "3.1", optional = true }
+similar = { version = "3.2", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
 getset = "0.1"
 itoa = "1.0"
@@ -86,32 +90,34 @@ categories = ["config", "development-tools"]
 
 [workspace.dependencies]
 anyhow = "1.0"
+async-nats = "0.50"
 base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"] }
 compact_str = { version = "0.10", features = ["serde"] }
 darling = "0.24"
 futures = "0.3"
+garde = { version = "0.23", features = ["derive", "email", "url", "regex"] }
 
-indexmap = { version = "2.13", features = ["serde"] }
+indexmap = { version = "2.14", features = ["serde"] }
 log = "0.4"
 proc-macro2 = "1.0"
 proptest = "1.11"
 quote = "1.0"
-regex = "1.11"
+regex = "1.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_spanned = "1.1"
 serde_yaml_ng = "0.10"
-similar = "3.1"
+similar = "3.2"
 syn = { version = "3.0", features = ["full", "parsing", "extra-traits"] }
 tempfile = "3.27"
 thiserror = "2.0"
-tokio = { version = "1.50", features = ["rt", "sync", "time", "fs"] }
+tokio = { version = "1.53", features = ["rt", "sync", "time", "fs"] }
 tokio-stream = "0.1"
 toml = { version = "1.1", features = ["preserve_order"] }
 trybuild = "1.0"
-serial_test = "3.5" # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
+serial_test = "4.0" # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
 
 [workspace.lints.rust]
 
@@ -132,13 +138,17 @@ env = ["dep:dotenvy"]
 dotenv = ["env"]
 
 # Core features
+# Internal aggregate predicate: true whenever any async background capability
+# (remote / config-bus / encryption / watch) is enabled. Implementation cfg's
+# gate on this instead of repeating the four-feature disjunction.
+async-core = []
 validation = ["dep:garde"]
 typescript-schema = ["schema"]
 security = ["encryption", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
-watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log"]
-encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm", "dep:getrandom"]
+watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log", "async-core"]
+encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm", "dep:getrandom", "async-core"]
 cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono", "schema"]
 schema = ["dep:schemars"]
 dynamic = ["dep:arc-swap", "dep:tokio", "dep:dashmap"]
@@ -151,21 +161,21 @@ interpolation = []
 tracing = ["dep:tracing"]
 
 # Remote sources
-remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap"]
+remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap", "async-core"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 etcd-watch = ["etcd", "dep:futures-util"]
 k8s = ["remote", "toml", "json", "yaml"]
-cloud-kms = ["remote"]
-keyring = ["dep:log"]
+cloud-kms = ["encryption", "remote"]
+keyring = ["encryption", "dep:log"]
 openfeature = ["feature-toggle", "context-aware"]
 lazy = ["toml"]
 nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
 # Message bus
-config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream", "dep:log"]
+config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream", "dep:log", "async-core"]
 nats-bus = ["config-bus", "dep:async-nats"]
 redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 

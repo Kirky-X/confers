@@ -283,14 +283,6 @@ impl SnapshotManager {
                         }
                     })?
                 }
-                #[cfg(not(feature = "json"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "json".to_string(),
-                        message: "enable json feature".to_string(),
-                    });
-                }
             }
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
@@ -304,14 +296,6 @@ impl SnapshotManager {
                         }
                     })?
                 }
-                #[cfg(not(feature = "toml"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "toml".to_string(),
-                        message: "enable toml feature".to_string(),
-                    });
-                }
             }
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
@@ -324,14 +308,6 @@ impl SnapshotManager {
                             source: Some(Box::new(e)),
                         }
                     })?
-                }
-                #[cfg(not(feature = "yaml"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "yaml".to_string(),
-                        message: "enable yaml feature".to_string(),
-                    });
                 }
             }
         };
@@ -486,14 +462,6 @@ impl SnapshotManager {
                         }
                     })?
                 }
-                #[cfg(not(feature = "json"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "json".to_string(),
-                        message: "enable json feature".to_string(),
-                    });
-                }
             }
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
@@ -507,14 +475,6 @@ impl SnapshotManager {
                         }
                     })?
                 }
-                #[cfg(not(feature = "toml"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "toml".to_string(),
-                        message: "enable toml feature".to_string(),
-                    });
-                }
             }
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
@@ -527,14 +487,6 @@ impl SnapshotManager {
                             source: Some(Box::new(e)),
                         }
                     })?
-                }
-                #[cfg(not(feature = "yaml"))]
-                {
-                    return Err(crate::error::ConfigError::InvalidValue {
-                        key: "format".to_string(),
-                        expected_type: "yaml".to_string(),
-                        message: "enable yaml feature".to_string(),
-                    });
                 }
             }
         };

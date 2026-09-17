@@ -21,12 +21,7 @@
 
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 mod async_impl {
     use super::*;
     use async_trait::async_trait;
@@ -109,12 +104,7 @@ mod async_impl {
     }
 }
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 mod sync_impl {
     use super::*;
 
@@ -191,33 +181,13 @@ mod sync_impl {
     }
 }
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 pub use async_impl::Lifecycle;
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 pub(crate) use async_impl::LifecycleRegistry;
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 pub use sync_impl::Lifecycle;
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 #[allow(unused_imports)] // LifecycleRegistry re-exported for API completeness
 pub(crate) use sync_impl::LifecycleRegistry;
 
@@ -240,12 +210,7 @@ mod tests {
     }
 
     // Lifecycle is imported from the active impl (sync or async depending on features)
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     mod async_tests {
         use super::*;
         use crate::Lifecycle;
@@ -459,12 +424,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    )))]
+    #[cfg(not(feature = "async-core"))]
     mod sync_tests {
         use super::*;
         // Bring the `Lifecycle` trait into scope so its `start()`/`stop()`

@@ -189,8 +189,8 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>security</code></td><td align="center">❌</td><td>安全模块：加密集成、错误脱敏、环境变量校验（含 <code>encryption</code>）</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>内置 JWT、CORS、SSRF、TLS 校验器与注册表</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
-<tr><td><code>keyring</code></td><td align="center">❌</td><td>密钥存储后端（文件、MasterKey、secret-tool）</td></tr>
-<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方，含 Vault Transit（依赖 <code>remote</code>）</td></tr>
+<tr><td><code>keyring</code></td><td align="center">❌</td><td>密钥存储后端（文件、MasterKey、secret-tool，含 <code>encryption</code>）</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方，含 Vault Transit（含 <code>encryption</code>，依赖 <code>remote</code>）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>远程来源</b></td></tr>
 <tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP 轮询来源，含 SSRF 防护与熔断器</td></tr>
 <tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 集成（含 <code>remote</code>）</td></tr>

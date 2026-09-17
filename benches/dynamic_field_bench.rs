@@ -11,7 +11,6 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-#[cfg(feature = "dynamic")]
 fn bench_dynamic_field_get(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
@@ -22,7 +21,6 @@ fn bench_dynamic_field_get(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "dynamic")]
 fn bench_dynamic_field_get_ref(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
@@ -36,7 +34,6 @@ fn bench_dynamic_field_get_ref(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "dynamic")]
 fn bench_dynamic_field_get_clone(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
@@ -50,7 +47,6 @@ fn bench_dynamic_field_get_clone(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "dynamic")]
 fn bench_dynamic_field_trigger(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
@@ -66,7 +62,6 @@ fn bench_dynamic_field_trigger(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "dynamic")]
 fn bench_dynamic_field_trigger_multiple(c: &mut Criterion) {
     use confers::dynamic::DynamicField;
 
@@ -87,7 +82,6 @@ fn bench_dynamic_field_trigger_multiple(c: &mut Criterion) {
 #[cfg(not(feature = "dynamic"))]
 fn bench_dynamic_field_disabled(_c: &mut Criterion) {}
 
-#[cfg(feature = "dynamic")]
 criterion_group!(
     benches,
     bench_dynamic_field_get,

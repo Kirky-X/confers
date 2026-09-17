@@ -40,23 +40,13 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 /// for allocation-free hot-path reads of large values. Only available in
 /// async builds (one of `remote`/`config-bus`/`encryption`/`watch`); the
 /// minimal sync build keeps zero dependencies.
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 #[async_trait::async_trait]
 pub trait SharedValueReader: Send + Sync {
     async fn get_shared(&self, key: &str) -> ConfersResult<Option<Arc<AnnotatedValue>>>;
 }
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 mod async_impl {
     use super::*;
     use async_trait::async_trait;
@@ -317,23 +307,13 @@ mod async_impl {
     }
 }
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 #[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
 pub use async_impl::{InMemoryConfig, InMemoryConfigBuilder};
 
 // ============== Sync Implementation (for minimal builds) ==============
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 mod sync_impl {
     use super::*;
     use moka::sync::Cache;
@@ -573,12 +553,7 @@ mod sync_impl {
     }
 }
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 #[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
 pub use sync_impl::{InMemoryConfig, InMemoryConfigBuilder};
 
@@ -589,12 +564,7 @@ mod tests {
     use super::*;
     use crate::types::ConfigValue;
 
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     mod async_tests {
         use super::*;
 
@@ -807,12 +777,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    )))]
+    #[cfg(not(feature = "async-core"))]
     mod sync_tests {
         use super::*;
 
@@ -898,15 +863,7 @@ mod tests {
     }
 }
 
-#[cfg(all(
-    test,
-    any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    )
-))]
+#[cfg(all(test, feature = "async-core"))]
 mod zero_copy_tests {
     use super::*;
     use crate::types::{ConfigValue, SourceId};

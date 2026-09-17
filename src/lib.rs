@@ -276,32 +276,17 @@ pub use toggle::{FeatureInfo, FeatureToggle, FeatureToggleRegistry};
 /// # Ok(())
 /// # }
 /// ```
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 pub fn new_in_memory() -> impl ConfigConnector + impl_::memory::SharedValueReader {
     impl_::memory::InMemoryConfig::new()
 }
 
-#[cfg(not(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-)))]
+#[cfg(not(feature = "async-core"))]
 pub fn new_in_memory() -> impl ConfigConnector {
     impl_::memory::InMemoryConfig::new()
 }
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 pub use impl_::memory::SharedValueReader;
 
 // ============== Prelude ==============

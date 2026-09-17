@@ -13,12 +13,7 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-#[cfg(any(
-    feature = "remote",
-    feature = "config-bus",
-    feature = "encryption",
-    feature = "watch"
-))]
+#[cfg(feature = "async-core")]
 use crate::impl_::lifecycle::LifecycleRegistry;
 
 #[cfg(feature = "config-bus")]
@@ -71,12 +66,7 @@ pub struct ConfigBuilder<T> {
     /// Type marker.
     _marker: PhantomData<T>,
     /// Lifecycle registry for managing component startup/shutdown.
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     lifecycle_registry: LifecycleRegistry,
 }
 
@@ -104,12 +94,7 @@ impl<T> ConfigBuilder<T> {
             #[cfg(feature = "progressive-reload")]
             reload_health_check: None,
             json_maps: Vec::new(),
-            #[cfg(any(
-                feature = "remote",
-                feature = "config-bus",
-                feature = "encryption",
-                feature = "watch"
-            ))]
+            #[cfg(feature = "async-core")]
             lifecycle_registry: LifecycleRegistry::new(),
             _marker: PhantomData,
         }
@@ -248,12 +233,7 @@ impl<T> ConfigBuilder<T> {
     }
 
     /// Register a lifecycle component for managed startup/shutdown.
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     pub fn register_lifecycle(
         mut self,
         name: &'static str,
@@ -1094,12 +1074,7 @@ mod tests {
             ConfigBuilder::new().reload_health_check(Arc::new(DummyCheck));
     }
 
-    #[cfg(any(
-        feature = "remote",
-        feature = "config-bus",
-        feature = "encryption",
-        feature = "watch"
-    ))]
+    #[cfg(feature = "async-core")]
     #[test]
     fn test_builder_register_lifecycle() {
         use async_trait::async_trait;
