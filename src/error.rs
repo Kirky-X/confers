@@ -815,7 +815,9 @@ impl crate::i18n::LocalizedMsg for ConfigError {
     fn message_key(&self) -> &'static str {
         match self {
             ConfigError::FileNotFound { .. } => "error-file-not-found",
-            ConfigError::ParseError { location: Some(_), .. } => "error-parse-error-at",
+            ConfigError::ParseError {
+                location: Some(_), ..
+            } => "error-parse-error-at",
             ConfigError::ParseError { .. } => "error-parse-error",
             ConfigError::ValidationFailed { .. } => "error-validation-failed",
             ConfigError::SchemaValidationFailed { .. } => "error-schema-validation-failed",
@@ -854,10 +856,7 @@ impl crate::i18n::LocalizedMsg for ConfigError {
                 location,
                 ..
             } => {
-                let mut args = vec![
-                    ("format", format.clone()),
-                    ("message", message.clone()),
-                ];
+                let mut args = vec![("format", format.clone()), ("message", message.clone())];
                 if let Some(loc) = location {
                     args.push(("location", loc.to_string()));
                 }
@@ -883,15 +882,16 @@ impl crate::i18n::LocalizedMsg for ConfigError {
                 ("found", found.to_string()),
                 ("expected", expected.to_string()),
             ],
-            ConfigError::MigrationFailed { from, to, reason, .. } => vec![
+            ConfigError::MigrationFailed {
+                from, to, reason, ..
+            } => vec![
                 ("from", from.to_string()),
                 ("to", to.to_string()),
                 ("reason", reason.clone()),
             ],
-            ConfigError::ModuleNotFound { group, module } => vec![
-                ("module", module.clone()),
-                ("group", group.clone()),
-            ],
+            ConfigError::ModuleNotFound { group, module } => {
+                vec![("module", module.clone()), ("group", group.clone())]
+            }
             ConfigError::ReloadRolledBack { reason } => vec![("reason", reason.clone())],
             ConfigError::IoError(source) => vec![("message", source.to_string())],
             ConfigError::InvalidValue { key, message, .. } => {
@@ -903,10 +903,9 @@ impl crate::i18n::LocalizedMsg for ConfigError {
             ConfigError::Timeout { duration_ms } => {
                 vec![("duration_ms", duration_ms.to_string())]
             }
-            ConfigError::SizeLimitExceeded { actual, limit } => vec![
-                ("actual", actual.to_string()),
-                ("limit", limit.to_string()),
-            ],
+            ConfigError::SizeLimitExceeded { actual, limit } => {
+                vec![("actual", actual.to_string()), ("limit", limit.to_string())]
+            }
             ConfigError::InterpolationError { variable, message } => {
                 vec![("variable", variable.clone()), ("message", message.clone())]
             }

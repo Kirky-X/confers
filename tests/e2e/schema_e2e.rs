@@ -58,7 +58,10 @@ fn sch04_json_schema_covers_all_fields_with_primitive_types() {
     let schema = ConfersSchema::json_schema();
     let obj = schema.as_object().expect("schema must be an object");
     assert_eq!(obj.get("type").and_then(|v| v.as_str()), Some("object"));
-    assert_eq!(obj.get("title").and_then(|v| v.as_str()), Some("ConfersSchema"));
+    assert_eq!(
+        obj.get("title").and_then(|v| v.as_str()),
+        Some("ConfersSchema")
+    );
 
     let properties = obj
         .get("properties")
