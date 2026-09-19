@@ -805,6 +805,137 @@ pub type ConfersError = ConfigError;
 /// configuration operations (get/set/delete/health_check/shutdown).
 pub type ConfersResult<T> = Result<T, ConfersError>;
 
+// ============================================================================
+// i18n 集成 — fluent 键位于 locales/{en,zh}/errors.ftl，键与变体一一对应；
+// 英文模板逐字符镜像 thiserror `#[error]` 的规范 Display 串
+// （由下方 tests 中的 translate_en == Display 守卫测试强制）。
+// ============================================================================
+
+impl crate::i18n::LocalizedMsg for ConfigError {
+    fn message_key(&self) -> &'static str {
+        match self {
+            ConfigError::FileNotFound { .. } => "error-file-not-found",
+            ConfigError::ParseError { location: Some(_), .. } => "error-parse-error-at",
+            ConfigError::ParseError { .. } => "error-parse-error",
+            ConfigError::ValidationFailed { .. } => "error-validation-failed",
+            ConfigError::SchemaValidationFailed { .. } => "error-schema-validation-failed",
+            ConfigError::DecryptionFailed { .. } => "error-decryption-failed",
+            ConfigError::RemoteUnavailable { .. } => "error-remote-unavailable",
+            ConfigError::VersionMismatch { .. } => "error-version-mismatch",
+            ConfigError::MigrationFailed { .. } => "error-migration-failed",
+            ConfigError::ModuleNotFound { .. } => "error-module-not-found",
+            ConfigError::ReloadRolledBack { .. } => "error-reload-rolled-back",
+            ConfigError::IoError(_) => "error-io",
+            ConfigError::InvalidValue { .. } => "error-invalid-value",
+            ConfigError::SourceChainError { .. } => "error-source-chain",
+            ConfigError::Timeout { .. } => "error-timeout",
+            ConfigError::SizeLimitExceeded { .. } => "error-size-limit-exceeded",
+            ConfigError::InterpolationError { .. } => "error-interpolation",
+            ConfigError::KeyError { .. } => "error-key",
+            ConfigError::CircularReference { .. } => "error-circular-reference",
+            ConfigError::LockPoisoned { .. } => "error-lock-poisoned",
+            ConfigError::MultiSource { .. } => "error-multi-source",
+            ConfigError::ConcurrencyConflict { .. } => "error-concurrency-conflict",
+            ConfigError::KeyRotationFailed { .. } => "error-key-rotation-failed",
+            ConfigError::WatcherError { .. } => "error-watcher",
+            ConfigError::OverrideBlocked { .. } => "error-override-blocked",
+            ConfigError::HealthCheckFailed { .. } => "error-health-check-failed",
+        }
+    }
+
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        match self {
+            ConfigError::FileNotFound { filename, .. } => {
+                vec![("filename", filename.display().to_string())]
+            }
+            ConfigError::ParseError {
+                format,
+                message,
+                location,
+                ..
+            } => {
+                let mut args = vec![
+                    ("format", format.clone()),
+                    ("message", message.clone()),
+                ];
+                if let Some(loc) = location {
+                    args.push(("location", loc.to_string()));
+                }
+                args
+            }
+            ConfigError::ValidationFailed {
+                field,
+                rule,
+                message,
+            } => vec![
+                ("field", field.clone()),
+                ("message", message.clone()),
+                ("rule", rule.clone()),
+            ],
+            ConfigError::SchemaValidationFailed { count } => {
+                vec![("count", count.to_string())]
+            }
+            ConfigError::DecryptionFailed { message } | ConfigError::KeyError { message } => {
+                vec![("message", message.clone())]
+            }
+            ConfigError::RemoteUnavailable { .. } => Vec::new(),
+            ConfigError::VersionMismatch { found, expected } => vec![
+                ("found", found.to_string()),
+                ("expected", expected.to_string()),
+            ],
+            ConfigError::MigrationFailed { from, to, reason, .. } => vec![
+                ("from", from.to_string()),
+                ("to", to.to_string()),
+                ("reason", reason.clone()),
+            ],
+            ConfigError::ModuleNotFound { group, module } => vec![
+                ("module", module.clone()),
+                ("group", group.clone()),
+            ],
+            ConfigError::ReloadRolledBack { reason } => vec![("reason", reason.clone())],
+            ConfigError::IoError(source) => vec![("message", source.to_string())],
+            ConfigError::InvalidValue { key, message, .. } => {
+                vec![("key", key.clone()), ("message", message.clone())]
+            }
+            ConfigError::SourceChainError { message, .. } => {
+                vec![("message", message.clone())]
+            }
+            ConfigError::Timeout { duration_ms } => {
+                vec![("duration_ms", duration_ms.to_string())]
+            }
+            ConfigError::SizeLimitExceeded { actual, limit } => vec![
+                ("actual", actual.to_string()),
+                ("limit", limit.to_string()),
+            ],
+            ConfigError::InterpolationError { variable, message } => {
+                vec![("variable", variable.clone()), ("message", message.clone())]
+            }
+            ConfigError::CircularReference { path } => vec![("path", path.clone())],
+            ConfigError::LockPoisoned { resource } => vec![("resource", resource.clone())],
+            ConfigError::MultiSource { .. } => Vec::new(),
+            ConfigError::ConcurrencyConflict { key, message, .. } => {
+                vec![("key", key.clone()), ("message", message.clone())]
+            }
+            ConfigError::KeyRotationFailed {
+                from_version,
+                to_version,
+                reason,
+            } => vec![
+                ("from_version", from_version.clone()),
+                ("to_version", to_version.clone()),
+                ("reason", reason.clone()),
+            ],
+            ConfigError::WatcherError { message, .. } => {
+                vec![("message", message.clone())]
+            }
+            ConfigError::OverrideBlocked { key, reason, .. } => {
+                vec![("key", key.clone()), ("reason", reason.clone())]
+            }
+            ConfigError::HealthCheckFailed { reason } => vec![("reason", reason.clone())],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1950,5 +2081,199 @@ mod tests {
         let audit = err.audit_message();
         assert!(audit.contains("error_code=901"));
         assert!(audit.contains("CONCURRENCY_CONFLICT"));
+    }
+
+    // =============================================================================
+    // translate_en == Display 守卫（locales/*/errors.ftl 英文模板必须逐字符
+    // 镜像 thiserror `#[error]` 规范串——任一侧漂移都会在此失败）
+    // =============================================================================
+
+    #[test]
+    fn test_translate_en_matches_display_for_all_variants() {
+        use crate::i18n::I18nExt;
+
+        let err = ConfigError::FileNotFound {
+            filename: PathBuf::from("app.toml"),
+            source: None,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad syntax".into(),
+            location: Some(ParseLocation::new("app.toml", 3, 7)),
+            source: None,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ParseError {
+            format: "json".into(),
+            message: "unexpected token".into(),
+            location: None,
+            source: None,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ValidationFailed {
+            field: "port".into(),
+            rule: "range".into(),
+            message: "out of range".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::SchemaValidationFailed { count: 2 };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::DecryptionFailed {
+            message: "bad key".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::RemoteUnavailable {
+            error_type: "network".into(),
+            retryable: true,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::VersionMismatch {
+            found: 1,
+            expected: 2,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::MigrationFailed {
+            from: 1,
+            to: 2,
+            reason: "removed field".into(),
+            source: None,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ModuleNotFound {
+            group: "db".into(),
+            module: "postgres".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ReloadRolledBack {
+            reason: "invalid new config".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::IoError(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no such file",
+        ));
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::InvalidValue {
+            key: "port".into(),
+            expected_type: "u16".into(),
+            message: "not a number".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::SourceChainError {
+            message: "all sources failed".into(),
+            source_index: 2,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::Timeout { duration_ms: 1500 };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::SizeLimitExceeded {
+            actual: 2048,
+            limit: 1024,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::InterpolationError {
+            variable: "host".into(),
+            message: "missing".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::KeyError {
+            message: "weak key".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::CircularReference {
+            path: "a.b.a".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::LockPoisoned {
+            resource: "cache".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::MultiSource {
+            source: MultiSourceError::new(
+                2,
+                vec![
+                    ("db", ConfigError::Timeout { duration_ms: 1 }),
+                    ("http", ConfigError::Timeout { duration_ms: 2 }),
+                ],
+            ),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ConcurrencyConflict {
+            key: "port".into(),
+            message: "write during read".into(),
+            expected_type: Some("u16".into()),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::KeyRotationFailed {
+            from_version: "v1".into(),
+            to_version: "v2".into(),
+            reason: "version missing".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::WatcherError {
+            message: "watch failed".into(),
+            path: Some(PathBuf::from("app.toml")),
+            recoverable: true,
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::OverrideBlocked {
+            key: "port".into(),
+            reason: "protected key".into(),
+            override_source: Some("env".into()),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::HealthCheckFailed {
+            reason: "db unreachable".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+    }
+
+    #[test]
+    fn test_to_localized_string_uses_catalog_keys() {
+        use crate::i18n::{I18nExt, LocalizedMsg};
+
+        // 键必须真实存在于 catalog（缺失时 translate 会原样回退键名，
+        // 该断言可捕获键名拼写漂移）。
+        let err = ConfigError::Timeout { duration_ms: 1500 };
+        assert_eq!(err.message_key(), "error-timeout");
+        let localized = err.to_localized_string();
+        assert!(localized.contains("1500"));
+
+        let err = ConfigError::ParseError {
+            format: "toml".into(),
+            message: "bad syntax".into(),
+            location: None,
+            source: None,
+        };
+        assert_eq!(err.message_key(), "error-parse-error");
+        let localized = err.to_localized_string();
+        assert!(localized.contains("toml"));
+        assert!(!localized.contains("error-parse-error"));
     }
 }
