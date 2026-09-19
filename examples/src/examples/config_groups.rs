@@ -32,7 +32,7 @@ use std::path::PathBuf;
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct ConfersConfig {
     /// 应用元数据
-    pub app: AppMeta,
+    pub app: ConfersMeta,
 
     /// 服务器配置
     pub server: ServerConfig,
@@ -60,7 +60,7 @@ pub struct ConfersConfig {
 
 /// 应用元数据
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
-pub struct AppMeta {
+pub struct ConfersMeta {
     /// 应用名称
     pub name: String,
 

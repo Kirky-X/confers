@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 /// 应用配置结构
 ///
-/// `ConfigClap` 派生宏自动生成 `AppConfigCliArgs` 结构体（实现 `clap::Parser`），
+/// `ConfigClap` 派生宏自动生成 `ConfersConfigCliArgs` 结构体（实现 `clap::Parser`），
 /// 以及 `ConfersConfig::clap_args()` / `clap_app()` 方法。
 ///
 /// 字段类型与 CLI 参数的对应关系：

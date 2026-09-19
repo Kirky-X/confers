@@ -23,7 +23,7 @@ use schemars::JsonSchema;
 /// 嵌套结构:父 struct 持有嵌套 struct、Option、Vec 字段。
 #[derive(Debug, ConfigSchema, JsonSchema)]
 #[allow(dead_code)] // 字段仅经 schema 生成面使用。
-struct AppSchema {
+struct ConfersSchema {
     #[config(name = "name")]
     name: String,
 
@@ -55,10 +55,10 @@ struct RetrySchema {
 
 #[test]
 fn sch04_json_schema_covers_all_fields_with_primitive_types() {
-    let schema = AppSchema::json_schema();
+    let schema = ConfersSchema::json_schema();
     let obj = schema.as_object().expect("schema must be an object");
     assert_eq!(obj.get("type").and_then(|v| v.as_str()), Some("object"));
-    assert_eq!(obj.get("title").and_then(|v| v.as_str()), Some("AppSchema"));
+    assert_eq!(obj.get("title").and_then(|v| v.as_str()), Some("ConfersSchema"));
 
     let properties = obj
         .get("properties")
@@ -94,7 +94,7 @@ fn sch04_json_schema_covers_all_fields_with_primitive_types() {
 /// 该边界已在验收报告中记录;完整嵌套语义走 schemars + TypeScriptGenerator。
 #[test]
 fn sch04_config_schema_derive_nested_struct_current_mapping() {
-    let schema = AppSchema::json_schema();
+    let schema = ConfersSchema::json_schema();
     let properties = schema
         .get("properties")
         .and_then(|v| v.as_object())
@@ -116,10 +116,10 @@ fn sch04_config_schema_derive_nested_struct_current_mapping() {
 
 #[test]
 fn sch04_typescript_generator_maps_nested_structure() {
-    let ts = TypeScriptGenerator::generate::<AppSchema>().expect("TS generation must succeed");
+    let ts = TypeScriptGenerator::generate::<ConfersSchema>().expect("TS generation must succeed");
 
     assert!(
-        ts.contains("interface AppSchema"),
+        ts.contains("interface ConfersSchema"),
         "TS output must name the root interface, got: {ts}"
     );
     assert!(
@@ -142,9 +142,9 @@ fn sch04_typescript_generator_maps_nested_structure() {
 
 #[test]
 fn sch04_typescript_type_static_output_is_an_interface() {
-    let ts = AppSchema::typescript_type();
+    let ts = ConfersSchema::typescript_type();
     assert!(
-        ts.contains("export interface AppSchema"),
+        ts.contains("export interface ConfersSchema"),
         "typescript_type must emit an exported interface declaration, got: {ts}"
     );
 }

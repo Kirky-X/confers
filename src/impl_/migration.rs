@@ -62,11 +62,11 @@ use std::collections::{BTreeMap, HashMap};
 /// ```rust
 /// use confers::migration::Versioned;
 ///
-/// struct AppConfigV1 { /* fields */ }
-/// struct AppConfigV2 { /* fields */ }
+/// struct ConfersConfigV1 { /* fields */ }
+/// struct ConfersConfigV2 { /* fields */ }
 ///
-/// impl Versioned for AppConfigV1 { const VERSION: u32 = 1; }
-/// impl Versioned for AppConfigV2 { const VERSION: u32 = 2; }
+/// impl Versioned for ConfersConfigV1 { const VERSION: u32 = 1; }
+/// impl Versioned for ConfersConfigV2 { const VERSION: u32 = 2; }
 /// ```
 pub trait Versioned {
     /// The version number of this configuration schema.
