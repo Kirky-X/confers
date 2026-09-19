@@ -481,7 +481,10 @@ fn cmd_inspect(
     println!();
     println!(
         "{}",
-        tr_args("cli-inspect-loaded-sources", &[("count", config_paths.len().to_string())])
+        tr_args(
+            "cli-inspect-loaded-sources",
+            &[("count", config_paths.len().to_string())]
+        )
     );
     println!();
 
@@ -522,7 +525,13 @@ fn cmd_inspect(
                     );
                 }
                 None => {
-                    println!("{:<35} {:<25} {:<20} {:<20}", key, tr("cli-not-found"), "-", "-");
+                    println!(
+                        "{:<35} {:<25} {:<20} {:<20}",
+                        key,
+                        tr("cli-not-found"),
+                        "-",
+                        "-"
+                    );
                 }
             }
         }
@@ -580,7 +589,10 @@ fn format_location(location: &Option<crate::types::SourceLocation>) -> String {
     match location {
         Some(loc) => tr_args(
             "cli-location-line-col",
-            &[("line", loc.line.to_string()), ("col", loc.column.to_string())],
+            &[
+                ("line", loc.line.to_string()),
+                ("col", loc.column.to_string()),
+            ],
         ),
         None => "-".to_string(),
     }

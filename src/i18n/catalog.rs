@@ -133,7 +133,11 @@ mod tests {
             Some("Configuration diagnostics tool for confers".to_string())
         );
         assert_eq!(
-            format_from_bundle("en", "error-timeout", &[("duration_ms", "5000".to_string())]),
+            format_from_bundle(
+                "en",
+                "error-timeout",
+                &[("duration_ms", "5000".to_string())]
+            ),
             Some("Operation timed out after 5000ms".to_string())
         );
     }
@@ -145,7 +149,11 @@ mod tests {
             Some("confers 配置诊断工具".to_string())
         );
         assert_eq!(
-            format_from_bundle("zh", "error-timeout", &[("duration_ms", "5000".to_string())]),
+            format_from_bundle(
+                "zh",
+                "error-timeout",
+                &[("duration_ms", "5000".to_string())]
+            ),
             Some("操作在 5000ms 后超时".to_string())
         );
     }
@@ -223,10 +231,7 @@ mod tests {
 
     #[test]
     fn test_en_zh_key_parity() {
-        for (en, zh) in [
-            (EN_ERRORS_FTL, ZH_ERRORS_FTL),
-            (EN_CLI_FTL, ZH_CLI_FTL),
-        ] {
+        for (en, zh) in [(EN_ERRORS_FTL, ZH_ERRORS_FTL), (EN_CLI_FTL, ZH_CLI_FTL)] {
             let en_keys = ftl_keys(en);
             let zh_keys = ftl_keys(zh);
             assert!(!en_keys.is_empty(), "en catalog must not be empty");
@@ -248,7 +253,10 @@ mod tests {
                 std::fs::read_dir(locales_dir.join(lang)).expect("locales/{lang} must exist");
             for entry in entries.filter_map(|e| e.ok()) {
                 if entry.path().extension().and_then(|e| e.to_str()) == Some("ftl") {
-                    disk_files.push(format!("locales/{lang}/{}", entry.file_name().to_string_lossy()));
+                    disk_files.push(format!(
+                        "locales/{lang}/{}",
+                        entry.file_name().to_string_lossy()
+                    ));
                 }
             }
         }
@@ -264,7 +272,9 @@ mod tests {
         );
 
         for (path, content) in EMBEDDED_LOCALES {
-            let rel = path.strip_prefix("locales/").expect("paths are locales/-relative");
+            let rel = path
+                .strip_prefix("locales/")
+                .expect("paths are locales/-relative");
             let on_disk = std::fs::read_to_string(locales_dir.join(rel))
                 .unwrap_or_else(|e| panic!("read {path}: {e}"));
             assert_eq!(

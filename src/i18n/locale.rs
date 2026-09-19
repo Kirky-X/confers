@@ -107,12 +107,7 @@ fn detect_from(
 /// maps every `zh*` to `zh` and every `en*` to `en`. Returns `None` for
 /// `C`/`POSIX` (chain continues) and for any unsupported language.
 fn normalize(raw: &str) -> Option<LanguageIdentifier> {
-    let s = raw
-        .split('@')
-        .next()?
-        .split('.')
-        .next()?
-        .replace('_', "-");
+    let s = raw.split('@').next()?.split('.').next()?.replace('_', "-");
     // C / POSIX mean "unspecified": let the detection chain continue.
     if matches!(s.as_str(), "C" | "POSIX") {
         return None;
@@ -141,7 +136,15 @@ mod tests {
 
     #[test]
     fn test_normalize_zh_variants_collapse_to_zh() {
-        for raw in ["zh", "zh-CN", "zh_CN", "zh_TW", "zh_HK", "zh-Hans", "zh_SG.UTF-8"] {
+        for raw in [
+            "zh",
+            "zh-CN",
+            "zh_CN",
+            "zh_TW",
+            "zh_HK",
+            "zh-Hans",
+            "zh_SG.UTF-8",
+        ] {
             let locale = normalize(raw).expect(raw);
             assert_eq!(locale.language.as_str(), "zh", "normalize({raw})");
             assert_eq!(locale.to_string(), "zh", "zh* must collapse to plain zh");
@@ -158,7 +161,18 @@ mod tests {
 
     #[test]
     fn test_normalize_unsupported_or_invalid_returns_none() {
-        for raw in ["fr_FR", "de-DE", "es", "ja_JP.UTF-8", "C", "POSIX", "C.UTF-8", "", "garbage!!", "12345"] {
+        for raw in [
+            "fr_FR",
+            "de-DE",
+            "es",
+            "ja_JP.UTF-8",
+            "C",
+            "POSIX",
+            "C.UTF-8",
+            "",
+            "garbage!!",
+            "12345",
+        ] {
             assert!(normalize(raw).is_none(), "normalize({raw}) must be None");
         }
     }
@@ -229,7 +243,10 @@ mod tests {
 
     #[test]
     fn test_detect_from_env_lang_beats_system_locale() {
-        let locale = detect_from(env_map(&[("LANG", "en_US.UTF-8")]), Some("zh_CN.UTF-8".into()));
+        let locale = detect_from(
+            env_map(&[("LANG", "en_US.UTF-8")]),
+            Some("zh_CN.UTF-8".into()),
+        );
         assert_eq!(locale.to_string(), "en");
         // System locale is used only when the env chain yields nothing.
         let locale = detect_from(env_map(&[]), Some("zh_CN".into()));

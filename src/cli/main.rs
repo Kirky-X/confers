@@ -37,10 +37,12 @@ fn main() {
 fn localized_chain(e: &anyhow::Error) -> String {
     use confers::i18n::I18nExt;
     e.chain()
-        .map(|cause| match cause.downcast_ref::<confers::ConfersError>() {
-            Some(config_err) => config_err.to_localized_string(),
-            None => cause.to_string(),
-        })
+        .map(
+            |cause| match cause.downcast_ref::<confers::ConfersError>() {
+                Some(config_err) => config_err.to_localized_string(),
+                None => cause.to_string(),
+            },
+        )
         .collect::<Vec<_>>()
         .join(": ")
 }
