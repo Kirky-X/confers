@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! E2E: 配置构建 / Source 链 / 合并(tests/e2e/builder_e2e.rs)
 //!
@@ -31,7 +29,7 @@ fn write_temp_file(dir: &Path, name: &str, content: &str) -> PathBuf {
 }
 
 #[derive(Debug, Deserialize, Default, PartialEq)]
-struct AppConfig {
+struct ConfersConfig {
     name: String,
     port: u16,
 }
@@ -45,7 +43,7 @@ fn bld10_memory_source_wins_over_file_by_default_priority() {
     memory.insert("name".to_string(), ConfigValue::string("from-memory"));
     memory.insert("port".to_string(), ConfigValue::integer(8080));
 
-    let config: AppConfig = ConfigBuilder::new()
+    let config: ConfersConfig = ConfigBuilder::new()
         .allow_absolute_paths()
         .file(&file)
         .memory(memory)
@@ -212,7 +210,7 @@ fn bld19_missing_required_field_reports_missing_field_not_panic() {
     let dir = tempfile::tempdir().unwrap();
     let file = write_temp_file(dir.path(), "partial.toml", "other = \"value\"\n");
 
-    let err: confers::ConfigError = ConfigBuilder::<AppConfig>::new()
+    let err: confers::ConfigError = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&file)
         .build()
@@ -230,7 +228,7 @@ fn bld20_type_mismatch_string_to_u16_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let file = write_temp_file(dir.path(), "mismatch.toml", "port = \"abc\"\n");
 
-    let err: confers::ConfigError = ConfigBuilder::<AppConfig>::new()
+    let err: confers::ConfigError = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&file)
         .build()
@@ -247,7 +245,7 @@ fn bld20_type_mismatch_integer_to_string_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let file = write_temp_file(dir.path(), "int_name.toml", "name = 12345\nport = 1\n");
 
-    let err: confers::ConfigError = ConfigBuilder::<AppConfig>::new()
+    let err: confers::ConfigError = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&file)
         .build()
@@ -264,7 +262,7 @@ fn bld20_type_mismatch_object_to_primitive_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let file = write_temp_file(dir.path(), "obj_port.toml", "port = { a = 1 }\n");
 
-    let err: confers::ConfigError = ConfigBuilder::<AppConfig>::new()
+    let err: confers::ConfigError = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&file)
         .build()
@@ -283,7 +281,7 @@ fn bld21_resilient_build_survives_partial_source_failure() {
     let dir = tempfile::tempdir().unwrap();
     let corrupt = write_temp_file(dir.path(), "corrupt.toml", "invalid toml {{{\n");
 
-    let result = ConfigBuilder::<AppConfig>::new()
+    let result = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .default("name", ConfigValue::string("fallback-name"))
         .default("port", ConfigValue::integer(8080))
@@ -312,7 +310,7 @@ fn bld21_resilient_build_degrades_when_all_sources_fail() {
     let dir = tempfile::tempdir().unwrap();
     let corrupt = write_temp_file(dir.path(), "corrupt.toml", "invalid toml {{{\n");
 
-    let result = ConfigBuilder::<AppConfig>::new()
+    let result = ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&corrupt)
         .build_resilient()
@@ -323,7 +321,7 @@ fn bld21_resilient_build_degrades_when_all_sources_fail() {
         result.degraded_reason.is_some(),
         "degraded result must carry a reason"
     );
-    assert_eq!(result.config, AppConfig::default());
+    assert_eq!(result.config, ConfersConfig::default());
 }
 
 /// 全部源失败时 build_with_fallback 回退到给定实例并携带 RemoteFallback warning。
@@ -332,7 +330,7 @@ fn bld22_build_with_fallback_returns_fallback_on_total_failure() {
     let dir = tempfile::tempdir().unwrap();
     let corrupt = write_temp_file(dir.path(), "corrupt.toml", "invalid toml {{{\n");
 
-    let fallback = AppConfig {
+    let fallback = ConfersConfig {
         name: "fallback".to_string(),
         port: 9999,
     };
@@ -365,7 +363,7 @@ fn bld22_build_with_fallback_ok_when_build_succeeds() {
     let dir = tempfile::tempdir().unwrap();
     let file = write_temp_file(dir.path(), "ok.toml", "name = \"real\"\nport = 80\n");
 
-    let fallback = AppConfig {
+    let fallback = ConfersConfig {
         name: "unused".to_string(),
         port: 0,
     };

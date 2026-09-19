@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 // 非法加密算法名必须在宏展开期报错并列出支持的算法。
 use confers::Config;
 

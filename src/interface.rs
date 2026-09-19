@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Core trait definitions for confers.
 //!
@@ -1249,18 +1247,18 @@ mod tests {
 
     #[test]
     fn test_versioned_trait_interface() {
-        struct AppConfig;
-        impl Versioned for AppConfig {
+        struct ConfersConfig;
+        impl Versioned for ConfersConfig {
             const VERSION: u32 = 5;
         }
-        assert_eq!(AppConfig::VERSION, 5);
+        assert_eq!(ConfersConfig::VERSION, 5);
 
         struct LegacyConfig;
         impl Versioned for LegacyConfig {
             const VERSION: u32 = 1;
         }
         assert_eq!(LegacyConfig::VERSION, 1);
-        assert_ne!(AppConfig::VERSION, LegacyConfig::VERSION);
+        assert_ne!(ConfersConfig::VERSION, LegacyConfig::VERSION);
     }
 
     // =============================================================================

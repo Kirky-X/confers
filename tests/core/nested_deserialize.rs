@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! End-to-end regression test for nested table/object/mapping deserialization.
 //!
 //! Prior to fix-0.4.1, `convert.rs` used the dotted path (e.g.
@@ -6,7 +9,7 @@
 //! sub-structs because `serde_json::from_value` looks up fields by the bare
 //! key ("write_url"), not the dotted path. This test verifies the fix by
 //! loading real TOML / JSON / YAML files containing nested tables into a
-//! typed `AppConfig` struct.
+//! typed `ConfersConfig` struct.
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 use serde::Deserialize;
@@ -30,7 +33,7 @@ struct DbConfig {
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
 #[derive(Debug, Default, PartialEq, Deserialize)]
-struct AppConfig {
+struct ConfersConfig {
     database: DbConfig,
 }
 
@@ -57,7 +60,7 @@ fn create_local_temp_config(content: &str, extension: &str) -> (tempfile::NamedT
 }
 
 #[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
-fn assert_app_config(config: &AppConfig) {
+fn assert_app_config(config: &ConfersConfig) {
     assert_eq!(
         config.database.host, "localhost",
         "nested database.host should deserialize to 'localhost'"
@@ -78,10 +81,10 @@ port = 5432
 "#;
     let (_file, path) = create_local_temp_config(content, ".toml");
 
-    let config: AppConfig = ConfigBuilder::new()
+    let config: ConfersConfig = ConfigBuilder::new()
         .file(&path)
         .build()
-        .expect("TOML with nested [database] table should deserialize into AppConfig");
+        .expect("TOML with nested [database] table should deserialize into ConfersConfig");
 
     assert_app_config(&config);
 }
@@ -97,10 +100,10 @@ fn test_nested_json_deserializes_into_struct() {
 }"#;
     let (_file, path) = create_local_temp_config(content, ".json");
 
-    let config: AppConfig = ConfigBuilder::new()
+    let config: ConfersConfig = ConfigBuilder::new()
         .file(&path)
         .build()
-        .expect("JSON with nested database object should deserialize into AppConfig");
+        .expect("JSON with nested database object should deserialize into ConfersConfig");
 
     assert_app_config(&config);
 }
@@ -115,10 +118,10 @@ database:
 "#;
     let (_file, path) = create_local_temp_config(content, ".yaml");
 
-    let config: AppConfig = ConfigBuilder::new()
+    let config: ConfersConfig = ConfigBuilder::new()
         .file(&path)
         .build()
-        .expect("YAML with nested database mapping should deserialize into AppConfig");
+        .expect("YAML with nested database mapping should deserialize into ConfersConfig");
 
     assert_app_config(&config);
 }

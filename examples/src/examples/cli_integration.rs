@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! CLI 集成示例 - ConfigClap 派生宏
 //!
@@ -24,7 +22,7 @@ use std::collections::HashMap;
 /// 应用配置结构
 ///
 /// `ConfigClap` 派生宏自动生成 `AppConfigCliArgs` 结构体（实现 `clap::Parser`），
-/// 以及 `AppConfig::clap_args()` / `clap_app()` 方法。
+/// 以及 `ConfersConfig::clap_args()` / `clap_app()` 方法。
 ///
 /// 字段类型与 CLI 参数的对应关系：
 /// - `Option<T>` → 可选参数 `--flag <VALUE>`（未提供时为 None）
@@ -35,7 +33,7 @@ use std::collections::HashMap;
 /// - CLI 参数自动生成为 `--server-host`（点号替换为连字符）
 #[derive(Config, Deserialize, ConfigClap, Debug, Clone)]
 #[config(env_prefix = "APP_")]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// 服务器地址（配置键 server.host，CLI 参数 --server-host）
     #[config(
         name = "server.host",
@@ -69,7 +67,7 @@ pub struct AppConfig {
 }
 
 /// 打印配置
-fn print_config(label: &str, config: &AppConfig) {
+fn print_config(label: &str, config: &ConfersConfig) {
     println!("\n[{}]", label);
     println!("  host (server.host): {:?}", config.host);
     println!("  port (server.port): {:?}", config.port);
@@ -95,9 +93,9 @@ fn print_overrides(map: &HashMap<String, confers::ConfigValue>) {
 /// 注意：`to_config_map()` 的键是 Rust 字段名（如 "host"），
 /// 不是 `#[config(name = ...)]` 的值（如 "server.host"）。
 fn merge_config(
-    config: &AppConfig,
+    config: &ConfersConfig,
     overrides: &HashMap<String, confers::ConfigValue>,
-) -> AppConfig {
+) -> ConfersConfig {
     let mut result = config.clone();
 
     if let Some(confers::ConfigValue::String(v)) = overrides.get("host") {
@@ -129,14 +127,14 @@ fn main() -> anyhow::Result<()> {
 
     // 步骤 1: 加载默认配置（来自 #[config(default = ...)]）
     println!("\n=== 步骤 1: 默认配置 ===");
-    let config = AppConfig::default();
+    let config = ConfersConfig::default();
     print_config("默认配置 (Default)", &config);
 
     // 步骤 2: 解析 CLI 参数
     // clap_args() 调用 clap::Parser::parse()，解析 std::env::args()
     // 传入 --help 时 clap 会打印帮助并退出
     println!("\n=== 步骤 2: 解析 CLI 参数 (clap_args) ===");
-    let cli_args = AppConfig::clap_args();
+    let cli_args = ConfersConfig::clap_args();
     println!("\n[CLI 解析结果]");
     println!("  host:      {:?}", cli_args.host);
     println!("  port:      {:?}", cli_args.port);

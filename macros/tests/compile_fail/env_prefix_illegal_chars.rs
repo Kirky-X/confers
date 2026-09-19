@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 // env_prefix 含非法字符必须在宏展开期报错。
 use confers::Config;
 

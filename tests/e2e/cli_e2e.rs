@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! E2E: CLI(tests/e2e/cli_e2e.rs)—— 真实二进制 `confers`(
 //! `CARGO_BIN_EXE_confers`,cargo 以 `--features cli` 构建后注入)。

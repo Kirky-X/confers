@@ -1,13 +1,10 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Etcd remote configuration source.
 //!
 //! This module provides an etcd-backed implementation of the `PolledSource` trait,
 //! using the etcd-client SDK (gRPC) to interact with etcd's KV store.
-
 use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
@@ -293,7 +290,7 @@ impl EtcdSource {
         let kvs = get_response.kvs();
         for kv in kvs.iter() {
             // Get key as bytes and convert to string.
-            // M6: Use String::from_utf8 (not from_utf8_lossy) to surface
+            // Use String::from_utf8 (not from_utf8_lossy) to surface
             // invalid UTF-8 as an error instead of silently replacing
             // invalid bytes with U+FFFD (Rule 12: Fail Loud).
             let key_bytes: &[u8] = kv.key();
@@ -304,7 +301,7 @@ impl EtcdSource {
                     message: format!("etcd key is not valid UTF-8: {}", e),
                 })?;
 
-            // Get value as bytes and convert to string (same M6 fix).
+            // Get value as bytes and convert to string (same fix).
             let value_bytes: &[u8] = kv.value();
             let value =
                 String::from_utf8(value_bytes.to_vec()).map_err(|e| ConfigError::InvalidValue {

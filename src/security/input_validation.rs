@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! # 输入验证增强
 //!
@@ -13,7 +11,6 @@
 //! - **敏感数据检测**: 自动检测和标记敏感数据
 //! - **输入清理**: 提供输入清理和验证功能
 //! - **白名单验证**: 支持白名单格式验证
-
 use crate::security::patterns::{
     SENSITIVE_DETECTION_PATTERNS, SENSITIVE_KEYWORDS, is_match_with_token_boundary,
 };
@@ -26,7 +23,7 @@ static DEFAULT_DANGEROUS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         // Note: & is excluded from the char class because it is a valid URL
         // query-string separator. The && and || patterns below still catch
-        // shell logical operators. See M7 fix for details.
+        // shell logical operators. See fix for details.
         Regex::new(r"[;<>|`$()]").unwrap(),
         Regex::new(r"\$\{.*\}").unwrap(),
         Regex::new(r"`[^`]+`").unwrap(),

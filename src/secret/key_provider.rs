@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! Key provider implementations for secret management.
 //!
 //! This module provides various ways to supply encryption keys to the confers library.

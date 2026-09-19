@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! 渐进式重载示例
 //!
@@ -18,7 +16,7 @@ use std::time::Duration;
 
 /// 示例配置类型
 #[derive(Debug, Clone, PartialEq)]
-struct AppConfig {
+struct ConfersConfig {
     port: u16,
     host: String,
 }
@@ -41,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  渐进式重载示例");
     println!("========================================\n");
 
-    let initial = Arc::new(AppConfig {
+    let initial = Arc::new(ConfersConfig {
         port: 8080,
         host: "0.0.0.0".to_string(),
     });
@@ -52,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
     let reloader = ProgressiveReloader::new(initial.clone(), ReloadStrategy::Immediate);
     println!("初始配置: port={}, host={}", initial.port, initial.host);
 
-    let new_config = Arc::new(AppConfig {
+    let new_config = Arc::new(ConfersConfig {
         port: 9090,
         host: "127.0.0.1".to_string(),
     });
@@ -77,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         .build();
     println!("初始配置: port={}", canary_reloader.current().port);
 
-    let canary_config = Arc::new(AppConfig {
+    let canary_config = Arc::new(ConfersConfig {
         port: 8443,
         host: "0.0.0.0".to_string(),
     });
@@ -98,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
         .build();
     println!("初始配置: port={}", linear_reloader.current().port);
 
-    let linear_config = Arc::new(AppConfig {
+    let linear_config = Arc::new(ConfersConfig {
         port: 3000,
         host: "127.0.0.1".to_string(),
     });

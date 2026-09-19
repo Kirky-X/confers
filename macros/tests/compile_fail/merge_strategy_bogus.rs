@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 // 非法 merge_strategy 值必须在宏展开期报错(而非静默忽略)。
 use confers::Config;
 

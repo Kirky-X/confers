@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! 热重载示例 - 配置文件变更监听
 //!
@@ -19,7 +17,7 @@ use serde::Deserialize;
 use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Deserialize)]
-struct AppConfig {
+struct ConfersConfig {
     application: ApplicationConfig,
     server: ServerConfig,
     logging: LoggingConfig,
@@ -62,10 +60,10 @@ struct CacheConfig {
     max_size_mb: u32,
 }
 
-impl AppConfig {
+impl ConfersConfig {
     fn load(path: impl AsRef<std::path::Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path.as_ref())?;
-        let config: AppConfig = toml::from_str(&content)?;
+        let config: ConfersConfig = toml::from_str(&content)?;
         Ok(config)
     }
 }
@@ -109,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut watcher = FsWatcher::new(&config_path, watcher_config.debounce_ms).await?;
 
-    let config = AppConfig::load(&config_path)?;
+    let config = ConfersConfig::load(&config_path)?;
 
     print_config(&config);
 
@@ -139,7 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 info!("检测到配置文件变化: {:?}", changed_path);
 
-                match AppConfig::load(&changed_path) {
+                match ConfersConfig::load(&changed_path) {
                     Ok(new_config) => {
                         consecutive_failures = 0;
                         last_reload_time = now;
@@ -173,7 +171,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn print_config(config: &AppConfig) {
+fn print_config(config: &ConfersConfig) {
     println!("\n{}", "=".repeat(60));
     println!("当前配置 (已重载)");
     println!("{}", "=".repeat(60));

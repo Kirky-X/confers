@@ -117,7 +117,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP")]
-struct AppConfig {
+struct ConfersConfig {
     #[config(default = 8080)]
     port: u16,
 
@@ -127,7 +127,7 @@ struct AppConfig {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 使用 ConfigBuilder 加载配置
-    let config = ConfigBuilder::<AppConfig>::new()
+    let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env_prefix("APP_")
         .build()?;
@@ -218,7 +218,7 @@ graph TB
 ```rust
 #[derive(Debug, Serialize, Deserialize, Config)]
 #[config(app_name = "myapp")]  // ✅ 显式设置 app_name
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub host: String,
     pub port: u16,
 }
@@ -288,12 +288,12 @@ pub struct SimpleConfig {
 
 ```rust
 #[derive(Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
 }
 
 // 使用 ConfigBuilder 指定确切路径
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .file("/etc/myapp/production.toml")
     .build()?;
 ```
@@ -657,7 +657,7 @@ struct SecureConfig {
 
 **推荐做法**
 
-- **分层配置**：将配置拆分为多个小结构体（如 `DatabaseConfig`、`ServerConfig`），再组合成 `AppConfig`。
+- **分层配置**：将配置拆分为多个小结构体（如 `DatabaseConfig`、`ServerConfig`），再组合成 `ConfersConfig`。
 - **环境隔离**：为不同环境使用不同的 `env_prefix`（如 `DEV_`、`PROD_`）。
 - **防御式加载**：可选字段始终使用 `Option<T>`，关键字段提供 `default` 默认值。
 - **校验约束**：始终派生 `garde::Validate` 并启用 `#[config(validate)]`，把非法配置挡在启动阶段。

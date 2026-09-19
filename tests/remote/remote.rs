@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for remote configuration sources.
 //!
 //! These tests verify the remote configuration functionality including:

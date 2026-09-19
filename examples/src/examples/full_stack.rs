@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Full Stack - Complete Feature Set Example
 //!
@@ -15,7 +13,7 @@ use serde::Deserialize;
 use tracing::info;
 
 #[derive(Config, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(default = "myapp".to_string())]
     pub name: String,
 
@@ -74,7 +72,7 @@ fn demo_config_loading() -> Result<(), Box<dyn std::error::Error>> {
     info!("Demo 1: Configuration Loading");
     info!("============================================================");
 
-    let config = AppConfig::load_sync()?;
+    let config = ConfersConfig::load_sync()?;
 
     info!("App Name: {}", config.name);
     info!("App Version: {}", config.version);

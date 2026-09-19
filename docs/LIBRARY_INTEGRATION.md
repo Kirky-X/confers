@@ -34,13 +34,13 @@ use confers::{ConfigBuilder, ConfigConnector, ConfigReader};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
-struct AppConfig {
+struct ConfersConfig {
     pub name: String,
     pub port: u16,
 }
 
 fn main() -> confers::BuildResult<()> {
-    let config = ConfigBuilder::<AppConfig>::new()
+    let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()
         .build()?;

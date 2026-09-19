@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! E2E: 文件热更新(tests/e2e/watch_e2e.rs)
 //!
@@ -32,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Debug, Deserialize, Clone, Default)]
-struct AppConfig {
+struct ConfersConfig {
     port: u16,
 }
 
@@ -40,8 +38,8 @@ fn write_config(path: &Path, port: u16) {
     std::fs::write(path, format!("port = {port}\n")).expect("write config");
 }
 
-fn load_config(path: &Path) -> AppConfig {
-    ConfigBuilder::<AppConfig>::new()
+fn load_config(path: &Path) -> ConfersConfig {
+    ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(path)
         .build()
@@ -230,7 +228,7 @@ async fn wat12_consecutive_failures_trigger_failure_pause() {
             .await
             .expect("event must arrive")
             .expect("channel open");
-        let result = ConfigBuilder::<AppConfig>::new()
+        let result = ConfigBuilder::<ConfersConfig>::new()
             .allow_absolute_paths()
             .file(&path)
             .build();
@@ -270,7 +268,7 @@ async fn wat13_rollback_keeps_last_good_config_on_failed_reload() {
         .build();
     assert!(watcher_config.rollback_on_validation_failure);
 
-    let current: Arc<Mutex<Option<AppConfig>>> = Arc::new(Mutex::new(Some(load_config(&path))));
+    let current: Arc<Mutex<Option<ConfersConfig>>> = Arc::new(Mutex::new(Some(load_config(&path))));
     let mut watcher = FsWatcher::new(&path, watcher_config.debounce_ms)
         .await
         .expect("watcher starts");
@@ -282,7 +280,7 @@ async fn wat13_rollback_keeps_last_good_config_on_failed_reload() {
         .await
         .expect("event must arrive")
         .expect("channel open");
-    match ConfigBuilder::<AppConfig>::new()
+    match ConfigBuilder::<ConfersConfig>::new()
         .allow_absolute_paths()
         .file(&path)
         .build()

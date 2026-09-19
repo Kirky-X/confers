@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! JSON Schema Example - ConfigSchema Derive Macro
 //!
@@ -761,18 +759,18 @@ fn demo_config_schema_derive() {
     println!("使用 #[derive(ConfigSchema)] 自动生成 Schema:");
     println!();
     println!("  #[derive(ConfigSchema, Serialize, Deserialize)]");
-    println!("  pub struct AppConfig {{");
+    println!("  pub struct ConfersConfig {{");
     println!("      pub host: String,");
     println!("      pub port: u16,");
     println!("      pub debug: bool,");
     println!("  }}");
     println!();
     println!("  // 自动生成方法:");
-    println!("  // - AppConfig::json_schema() -> serde_json::Value");
-    println!("  // - AppConfig::typescript_type() -> String");
+    println!("  // - ConfersConfig::json_schema() -> serde_json::Value");
+    println!("  // - ConfersConfig::typescript_type() -> String");
     println!();
-    println!("  let schema = AppConfig::json_schema();");
-    println!("  let ts_type = AppConfig::typescript_type();");
+    println!("  let schema = ConfersConfig::json_schema();");
+    println!("  let ts_type = ConfersConfig::typescript_type();");
     println!();
     println!("  // 导出 schema:");
     println!("  let schema_json = serde_json::to_string_pretty(&schema).unwrap();");

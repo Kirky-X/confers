@@ -31,7 +31,7 @@
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(validate)]  // 启用配置校验
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
 }
@@ -48,7 +48,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP_")]  // 读取 APP_NAME、APP_PORT 等
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
 }
@@ -65,7 +65,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(app_name = "myapp")]  // 配置目录名
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
 }
 ```
@@ -81,7 +81,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(strict = true)]  // CLI 参数解析出错时直接报错退出
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
 }
 ```
@@ -97,7 +97,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(watch = true)]  // 启用文件监听
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(default = 8080)]
     pub port: u16,
 }
@@ -114,7 +114,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(version = 2)]  // 用于迁移的配置版本号
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
 }
 ```
@@ -130,7 +130,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(rename_all = "camelCase")]  // 配置文件键使用 camelCase
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub database_url: String,  // 配置键为 databaseUrl
 }
 ```
@@ -146,7 +146,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(profile, profile_env = "APP_ENV")]  // APP_ENV=production 激活 production 覆盖
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub log_level: String,
 }
 ```
@@ -164,7 +164,7 @@ pub struct AppConfig {
 **方式一：新语法（推荐）**
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(default = "default_value")]
     pub name: String,
 
@@ -182,7 +182,7 @@ pub struct AppConfig {
 **方式二：字符串类型的旧语法**
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(default = "\"default_value\".to_string()")]
     pub name: String,
 }
@@ -198,7 +198,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(description = "Server port number")]
     pub port: u16,
 
@@ -217,7 +217,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(name = "app_name")]  // 配置文件中使用 app_name
     pub name: String,
 }
@@ -233,7 +233,7 @@ pub struct AppConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP")]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(name_env = "CUSTOM_PORT")]  // 读取 APP_CUSTOM_PORT
     pub port: u16,
 }
@@ -247,7 +247,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(name_clap_long = "server-port")]
     pub port: u16,
 
@@ -271,7 +271,7 @@ Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(..
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(sensitive = true)]
     pub password: String,
 
@@ -296,7 +296,7 @@ pub struct DatabaseConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(flatten)]
     pub database: DatabaseConfig,
 
@@ -328,7 +328,7 @@ pub struct InnerConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
 
     #[config(skip)]
@@ -346,7 +346,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(encrypt = "xchacha20")]
     pub database_password: String,
 
@@ -366,7 +366,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(interpolate)]
     pub database_url: String,  // 支持 ${VAR} 语法
 }
@@ -383,7 +383,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(merge_strategy = "append")]
     pub hosts: Vec<String>,
 }
@@ -405,7 +405,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(dynamic)]
     pub feature_flags: HashMap<String, bool>,
 }
@@ -422,7 +422,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(module_group = "database")]
     pub db_host: String,
 
@@ -454,7 +454,7 @@ use serde::{Deserialize, Serialize};
     watch = false,                               // 不监听文件变更
     version = 1,                                 // 配置版本
 )]
-pub struct AppConfig {
+pub struct ConfersConfig {
     // ============ 基础类型 ============
     #[config(description = "Application name")]
     pub name: String,
@@ -534,13 +534,13 @@ pub struct DatabaseConfig {
 use confers::ConfigBuilder;
 
 // 使用 ConfigBuilder 进行基础加载
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .env()
     .build()?;
 
 // 带环境变量前缀
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .env_prefix("APP_")
     .build()?;
@@ -552,7 +552,7 @@ let config = ConfigBuilder::<AppConfig>::new()
 
 ```rust
 // 便捷的 config() 函数
-let config = confers::config::<AppConfig>()
+let config = confers::config::<ConfersConfig>()
     .file("config.toml")
     .env()
     .build()?;
@@ -563,17 +563,17 @@ let config = confers::config::<AppConfig>()
 ```rust
 // 生成 JSON Schema（需要 schema 特性）
 // 注意：需要派生 ConfigSchema
-let schema = AppConfig::json_schema();
+let schema = ConfersConfig::json_schema();
 
 // 生成 TypeScript 类型（需要 typescript-schema 特性）
-let ts_type = AppConfig::typescript_type();
+let ts_type = ConfersConfig::typescript_type();
 ```
 
 ### 其他方法
 
 ```rust
 // 获取默认值
-let default = AppConfig::default();
+let default = ConfersConfig::default();
 
 // 访问配置值
 let value = config.some_field;

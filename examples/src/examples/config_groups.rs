@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! =============================================================================
 //! 配置组（Config Groups）示例
@@ -32,7 +30,7 @@ use std::path::PathBuf;
 ///
 /// 使用 `ConfigBuilder` 配合 `SourceChain` 实现配置加载。
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// 应用元数据
     pub app: AppMeta,
 
@@ -193,7 +191,7 @@ pub struct ProductionConfig {
 ///
 /// ConfigBuilder 允许你精确控制配置源的优先级和组合顺序。
 /// 优先级规则：先添加的源优先级低，后添加的源优先级高（后者覆盖前者）。
-fn load_with_config_builder(env: &str) -> Result<AppConfig, Box<dyn std::error::Error>> {
+fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
     println!("\n========== 使用 ConfigBuilder 加载配置 ==========");
     println!("环境: {}", env);
 
@@ -202,7 +200,7 @@ fn load_with_config_builder(env: &str) -> Result<AppConfig, Box<dyn std::error::
 
     // 使用 ConfigBuilder 构建配置
     // 优先级从低到高：base.toml < {env}.toml < 环境变量
-    let app_config: AppConfig = config::<AppConfig>()
+    let app_config: ConfersConfig = config::<ConfersConfig>()
         // 第 1 层：基础配置（最低优先级）
         .file(config_dir.join("base.toml"))
         // 第 2 层：环境配置（中等优先级）
@@ -215,7 +213,7 @@ fn load_with_config_builder(env: &str) -> Result<AppConfig, Box<dyn std::error::
 }
 
 /// 示例 2：使用 SourceChainBuilder 手动构建配置源链
-fn load_with_source_chain(env: &str) -> Result<AppConfig, Box<dyn std::error::Error>> {
+fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
     println!("\n========== 使用 SourceChainBuilder 加载配置 ==========");
     println!("环境: {}", env);
 
@@ -244,7 +242,7 @@ fn load_with_source_chain(env: &str) -> Result<AppConfig, Box<dyn std::error::Er
     let _merged = chain.collect()?;
 
     // 转换为目标配置结构
-    let app_config: AppConfig = config::<AppConfig>()
+    let app_config: ConfersConfig = config::<ConfersConfig>()
         .file(config_dir.join("base.toml"))
         .file(config_dir.join(format!("{}.toml", env)))
         .env_prefix("APP_")
@@ -297,7 +295,7 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
 // =============================================================================
 
 /// 打印完整配置信息
-fn print_config(config: &AppConfig) {
+fn print_config(config: &ConfersConfig) {
     println!("\n========== 最终配置 ==========");
 
     // 应用元数据

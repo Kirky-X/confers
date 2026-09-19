@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! E2E: 渐进重载(tests/e2e/progressive_e2e.rs)
 //!
@@ -31,7 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Clone, confers::Config, Deserialize)]
-struct AppConfig {
+struct ConfersConfig {
     pub timeout_ms: u32,
     pub max_connections: u32,
 }
@@ -102,7 +100,7 @@ fn write_config(path: &std::path::Path, timeout_ms: u32, max_connections: u32) {
     .expect("write config file");
 }
 
-fn load(path: &std::path::Path) -> AppConfig {
+fn load(path: &std::path::Path) -> ConfersConfig {
     ConfigBuilder::new()
         .allow_absolute_paths()
         .file(path)
@@ -163,8 +161,8 @@ async fn pgr01020910_immediate_real_file_flow_atomic_and_clone() {
     );
 
     // builder 链式构建等价(PGR-10)。
-    let built = ProgressiveReloader::<AppConfig>::builder()
-        .initial(Arc::new(AppConfig {
+    let built = ProgressiveReloader::<ConfersConfig>::builder()
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -180,7 +178,7 @@ async fn pgr01020910_immediate_real_file_flow_atomic_and_clone() {
 async fn pgr03040506_canary_health_driven_outcomes() {
     // Healthy → 提交(PGR-03)。
     let healthy = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -192,7 +190,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
         .build();
     let outcome = healthy
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 150,
                 max_connections: 30,
             }),
@@ -209,7 +207,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
 
     // Critical → 回滚,旧配置保持服务(PGR-04)。
     let critical = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -222,7 +220,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
     // 真实行为:回滚以 Err(ConfigError::ReloadRolledBack) 传播(非 Ok(RolledBack))。
     let err = critical
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 0,
                 max_connections: 30,
             }),
@@ -246,7 +244,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
 
     // Degraded → 继续推进不回滚(PGR-05)。
     let degraded = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -260,7 +258,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
         .build();
     let outcome = degraded
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 180,
                 max_connections: 20,
             }),
@@ -280,7 +278,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
 
     // 无 health_check → 默认放行提交(PGR-06)。
     let no_check = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -291,7 +289,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
         .build();
     let outcome = no_check
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 210,
                 max_connections: 5,
             }),
@@ -307,7 +305,7 @@ async fn pgr03040506_canary_health_driven_outcomes() {
 async fn pgr0708_linear_steps_and_real_validation_rejects_bad_config() {
     // Linear:分步就绪后逐步提交(PGR-07)。
     let linear = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -319,7 +317,7 @@ async fn pgr0708_linear_steps_and_real_validation_rejects_bad_config() {
         .build();
     let outcome = linear
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 300,
                 max_connections: 30,
             }),
@@ -336,7 +334,7 @@ async fn pgr0708_linear_steps_and_real_validation_rejects_bad_config() {
 
     // 真实校验函数拒绝无效新配置:timeout=0 → Critical → 回滚(PGR-08)。
     let guard = ProgressiveReloader::builder()
-        .initial(Arc::new(AppConfig {
+        .initial(Arc::new(ConfersConfig {
             timeout_ms: 100,
             max_connections: 10,
         }))
@@ -348,7 +346,7 @@ async fn pgr0708_linear_steps_and_real_validation_rejects_bad_config() {
         .build();
     let err = guard
         .begin_reload(
-            Arc::new(AppConfig {
+            Arc::new(ConfersConfig {
                 timeout_ms: 0,
                 max_connections: 10,
             }),

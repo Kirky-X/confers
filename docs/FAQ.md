@@ -236,7 +236,7 @@ use serde::{Deserialize, Serialize};
 // 1. 定义配置结构
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "APP_")]
-struct AppConfig {
+struct ConfersConfig {
     host: String,
     port: u16,
     debug: bool,
@@ -244,7 +244,7 @@ struct AppConfig {
 
 fn main() -> anyhow::Result<()> {
     // 2. 从默认来源加载配置
-    let config = AppConfig::load_sync()?;
+    let config = ConfersConfig::load_sync()?;
 
     println!("Host: {}, Port: {}", config.host, config.port);
     Ok(())
@@ -293,7 +293,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Validate, Debug)]
 #[config(validate)]
-struct AppConfig {
+struct ConfersConfig {
     #[garde(length(min = 1))]
     host: String,
 

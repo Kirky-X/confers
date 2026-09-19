@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! End-to-end regression test for EnvSource type inference (fix-0.4.1 Bug 2).
 //!
 //! Prior to fix-0.4.1, `EnvSource::collect()` returned all values as

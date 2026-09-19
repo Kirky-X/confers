@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Validation Example - Configuration Validation with Garde
 //!
@@ -34,7 +32,7 @@ use serde::Deserialize;
 /// ```rust,ignore
 /// #[derive(Config, Deserialize, Validate)]
 /// #[config(validate)]
-/// struct AppConfig {
+/// struct ConfersConfig {
 ///     #[garde(length(min = 1, max = 253))]
 ///     pub host: String,
 ///
@@ -43,7 +41,7 @@ use serde::Deserialize;
 /// }
 /// ```
 #[derive(Debug, Clone, Deserialize)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// 服务器主机地址
     pub host: String,
 
@@ -66,7 +64,7 @@ pub struct AppConfig {
     pub timeout_seconds: f64,
 }
 
-impl Default for AppConfig {
+impl Default for ConfersConfig {
     fn default() -> Self {
         Self {
             host: "localhost".to_string(),
@@ -447,7 +445,7 @@ impl ValidationContext {
     }
 
     /// 运行完整验证
-    pub fn validate(&self, config: &AppConfig) -> ValidationReport {
+    pub fn validate(&self, config: &ConfersConfig) -> ValidationReport {
         let mut errors = Vec::new();
 
         // 主机验证
@@ -621,7 +619,7 @@ fn demo_format_validation() {
 fn demo_validation_context() {
     println!("\n=== 演示 3: 验证上下文 ===\n");
 
-    let config = AppConfig {
+    let config = ConfersConfig {
         host: "".to_string(),
         port: 80,
         max_connections: 0,
@@ -660,7 +658,7 @@ fn demo_validation_context() {
 fn demo_valid_config() {
     println!("\n=== 演示 4: 有效配置验证 ===\n");
 
-    let config = AppConfig::default();
+    let config = ConfersConfig::default();
 
     println!("验证默认配置:");
     println!("  host: {}", config.host);
@@ -702,7 +700,7 @@ fn demo_rule_parsing() {
 fn demo_error_handling() {
     println!("\n=== 演示 6: 错误处理策略 ===\n");
 
-    let config = AppConfig {
+    let config = ConfersConfig {
         host: "".to_string(),
         port: 0,
         max_connections: 0,
@@ -744,7 +742,7 @@ fn demo_config_integration() {
     println!();
     println!("  #[derive(Config, Deserialize, Validate)]");
     println!("  #[config(validate)]");
-    println!("  struct AppConfig {{");
+    println!("  struct ConfersConfig {{");
     println!("      #[garde(length(min = 1, max = 253))]");
     println!("      pub host: String,");
     println!();
@@ -756,7 +754,7 @@ fn demo_config_integration() {
     println!("  方式 2: 手动调用 validate() 方法");
     println!();
     println!("  ```rust");
-    println!("  let config = AppConfig::load_sync()?;");
+    println!("  let config = ConfersConfig::load_sync()?;");
     println!("  if let Err(report) = config.validate() {{");
     println!("      eprintln!(\"验证失败: {{:?}}\", report);");
     println!("      return Err(\"Invalid config\".into());");

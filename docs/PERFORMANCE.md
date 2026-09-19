@@ -43,13 +43,13 @@ use confers::Config;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // 异步加载允许并发 I/O
-    let config = AppConfig::load().await?;
+    let config = ConfersConfig::load().await?;
     Ok(())
 }
 
 // 简单脚本可使用同步加载
 fn main() -> anyhow::Result<()> {
-    let config = AppConfig::load_sync()?;
+    let config = ConfersConfig::load_sync()?;
     Ok(())
 }
 ```
@@ -125,7 +125,7 @@ Confers 内部已对短字符串做驻留优化（`compact_str`），并使用 `
 ```rust
 use confers::{ConfigBuilder, ConfigLimits};
 
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .limits(ConfigLimits {
         max_file_size_bytes: 64 * 1024 * 1024, // 单文件上限 64 MB
@@ -176,7 +176,7 @@ use std::sync::Arc;
 use confers::{ConfigBuilder, ConfigProviderExt};
 
 let config = Arc::new(
-    ConfigBuilder::<AppConfig>::new()
+    ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()
         .build()?

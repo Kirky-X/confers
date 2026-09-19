@@ -74,7 +74,7 @@ pub fn new() -> Self
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new();
+let builder = ConfigBuilder::<ConfersConfig>::new();
 ```
 
 **说明**：`ConfigBuilder` 实现了 `Default` trait。`new()` 方法返回一个带合理默认值的实例。
@@ -97,7 +97,7 @@ let mut defaults = HashMap::new();
 defaults.insert("port".to_string(), ConfigValue::uint(8080));
 defaults.insert("host".to_string(), ConfigValue::string("localhost"));
 
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .defaults(defaults);
 ```
 
@@ -114,7 +114,7 @@ pub fn file(mut self, path: impl Into<PathBuf>) -> Self
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .file("config/base.toml")
     .file("config/development.toml");
 ```
@@ -132,7 +132,7 @@ pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .file_optional("config.local.toml"); // 可能不存在
 ```
@@ -148,7 +148,7 @@ pub fn env(mut self) -> Self
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .env();
 ```
@@ -164,7 +164,7 @@ pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .env_prefix("APP");
 // 加载 APP_PORT、APP_HOST 等
 ```
@@ -172,7 +172,7 @@ let builder = ConfigBuilder::<AppConfig>::new()
 **示例：**
 
 ```rust
-let builder = ConfigBuilder::<AppConfig>::new()
+let builder = ConfigBuilder::<ConfersConfig>::new()
     .env()
     .env_prefix("APP");
 ```
@@ -236,7 +236,7 @@ let http_source = HttpPolledSourceBuilder::new()
     .timeout(Duration::from_secs(30))
     .build()?;
 
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .source(Box::new(http_source))
     .build()?;
 ```
@@ -253,7 +253,7 @@ let etcd_source = EtcdSourceBuilder::new()
     .build()
     .await?;
 
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .source(Box::new(etcd_source))
     .build()?;
 ```
@@ -268,7 +268,7 @@ let consul_source = ConsulSourceBuilder::new()
     .prefix("myapp/config")
     .build()?;
 
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .source(Box::new(consul_source))
     .build()?;
 ```
@@ -300,7 +300,7 @@ pub fn build_with_fallback(self, fallback: T) -> BuildResult<T>
 **示例：**
 
 ```rust
-let result = builder.build_with_fallback(AppConfig::default());
+let result = builder.build_with_fallback(ConfersConfig::default());
 if result.degraded {
     println!("Using fallback: {:?}", result.degraded_reason);
 }
@@ -1257,13 +1257,13 @@ use schemars::JsonSchema;
 
 // generate 要求类型实现 schemars::JsonSchema
 #[derive(confers::Config, JsonSchema)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
     pub debug: bool,
 }
 
-let ts = TypeScriptGenerator::generate::<AppConfig>()?;
+let ts = TypeScriptGenerator::generate::<ConfersConfig>()?;
 println!("{}", ts);
 ```
 
@@ -1271,7 +1271,7 @@ println!("{}", ts);
 
 ```typescript
 // Auto-generated from Rust
-export interface AppConfig {
+export interface ConfersConfig {
   name: string;
   port: number;
   debug: boolean;
@@ -1293,7 +1293,7 @@ use schemars::JsonSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct AppConfig {
+pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
 }
@@ -1312,14 +1312,14 @@ use confers::ConfigBuilder;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
-struct AppConfig {
+struct ConfersConfig {
     database_url: String,
     port: u16,
     debug: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ConfigBuilder::<AppConfig>::new()
+    let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()
         .env_prefix("MYAPP")
@@ -1478,7 +1478,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
     if versions.len() >= 2 {
         let previous_version = &versions[versions.len() - 2];
 
-        let config = ConfigBuilder::<AppConfig>::new()
+        let config = ConfigBuilder::<ConfersConfig>::new()
             .file(previous_version)
             .build()?;
 
@@ -1522,7 +1522,7 @@ use confers::ConfigBuilder;
 fn load_config_efficiently() -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
 
-    let config = ConfigBuilder::<AppConfig>::new()
+    let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()
         .build()?;
@@ -1544,7 +1544,7 @@ use tokio::sync::RwLock;
 use confers::ConfigBuilder;
 
 struct CachedConfig {
-    cache: Arc<RwLock<Option<AppConfig>>>,
+    cache: Arc<RwLock<Option<ConfersConfig>>>,
 }
 
 impl CachedConfig {
@@ -1554,7 +1554,7 @@ impl CachedConfig {
         }
     }
 
-    async fn get(&self) -> Result<AppConfig, Box<dyn std::error::Error>> {
+    async fn get(&self) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
         {
             let cached = self.cache.read().await;
             if let Some(config) = &*cached {
@@ -1562,7 +1562,7 @@ impl CachedConfig {
             }
         }
 
-        let config = ConfigBuilder::<AppConfig>::new()
+        let config = ConfigBuilder::<ConfersConfig>::new()
             .file("config.toml")
             .env()
             .build()?;
@@ -1682,7 +1682,7 @@ let remote_source = HttpPolledSourceBuilder::new()
     .timeout(std::time::Duration::from_secs(30))
     .build()?;
 
-let config = ConfigBuilder::<AppConfig>::new()
+let config = ConfigBuilder::<ConfersConfig>::new()
     .source(Box::new(remote_source))
     .build()?;
 ```

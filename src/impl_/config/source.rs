@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! Built-in configuration source implementations.
 //!
 //! The `Source` and `AsyncSource` traits are defined in `crate::interface`.

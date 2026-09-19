@@ -106,7 +106,7 @@ use confers::Config;
 use serde::Deserialize;
 
 #[derive(Config, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// Server bind address
     #[config(default = "127.0.0.1".to_string())]
     pub host: String,
@@ -122,7 +122,7 @@ pub struct AppConfig {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load field defaults; the HOST, PORT, and LOG_LEVEL env vars override them
-    let config = AppConfig::load_sync()?;
+    let config = ConfersConfig::load_sync()?;
 
     println!("Listening on {}:{}", config.host, config.port);
     Ok(())

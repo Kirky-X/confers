@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Dynamic field-level configuration handles.
 //!
@@ -14,7 +12,6 @@
 //! - True lock-free reads: ArcSwap based on RCU mechanism, O(1) read operations
 //! - High concurrency callback registration: DashMap replaces Mutex\<Vec\>
 //! - CallbackGuard: RAII-based callback lifecycle management
-
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -27,7 +24,7 @@ type CallbackId = u64;
 ///
 /// Uses `Arc<dyn Fn>` (not `Box`) so callbacks can be snapshotted out of the
 /// DashMap without holding the shard read lock during callback execution
-/// (M3: prevents deadlock if a callback registers/unregisters callbacks).
+/// (prevents deadlock if a callback registers/unregisters callbacks).
 type CallbackStorage<T> = Arc<DashMap<CallbackId, Arc<dyn Fn(&T) + Send + Sync>>>;
 
 /// Snapshot of a callback taken out of the DashMap for lock-free invocation.
@@ -112,7 +109,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// Update value and trigger all callbacks.
     ///
     /// Callbacks are snapshotted out of the DashMap before invocation to
-    /// avoid holding a shard read lock during callback execution (M3: a
+    /// avoid holding a shard read lock during callback execution (a
     /// callback that calls `on_change` or `update` would otherwise deadlock
     /// on the same shard's write lock — CWE-667).
     pub fn update(&self, new_val: T) {
@@ -426,7 +423,7 @@ mod tests {
         assert_eq!(field.callback_count(), 0);
     }
 
-    /// M3 regression: a callback that registers a NEW callback during
+    /// regression: a callback that registers a NEW callback during
     /// `update()` must not deadlock. The old implementation held a DashMap
     /// shard read lock during iteration, so `on_change()` (which needs a
     /// write lock on the same shard) would block forever.
@@ -460,7 +457,7 @@ mod tests {
         );
     }
 
-    /// M3 regression: a callback that calls `update()` (reentrant) must not
+    /// regression: a callback that calls `update()` (reentrant) must not
     /// deadlock. The snapshotted iteration ensures no lock is held during
     /// callback execution.
     #[test]

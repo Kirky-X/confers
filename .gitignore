@@ -17,7 +17,6 @@ openspec/
 
 # Cargo
 .cargo/
-Cargo.lock
 
 # Environment
 .env

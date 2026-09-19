@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Procedural macros for the confers configuration library.
 //!
@@ -24,7 +22,7 @@
 //!
 //! #[derive(Config, Deserialize, Debug)]
 //! #[config(env_prefix = "APP_")]
-//! struct AppConfig {
+//! struct ConfersConfig {
 //!     #[config(default = "localhost")]
 //!     host: String,
 //!
@@ -36,7 +34,7 @@
 //! }
 //!
 //! // Load configuration
-//! let config = AppConfig::load_sync().expect("config should load");
+//! let config = ConfersConfig::load_sync().expect("config should load");
 //! println!("{:?}", config);
 //! ```
 //!
@@ -129,7 +127,7 @@ use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 ///
 /// #[derive(Config, Deserialize)]
 /// #[config(env_prefix = "APP_")]
-/// struct AppConfig {
+/// struct ConfersConfig {
 ///     #[config(default = "localhost")]
 ///     host: String,
 ///
@@ -141,7 +139,7 @@ use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 /// }
 ///
 /// // Load configuration
-/// let config = AppConfig::load().expect("config should load");
+/// let config = ConfersConfig::load().expect("config should load");
 /// ```
 ///
 /// # Struct Attributes

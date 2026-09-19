@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Basic Usage - 基础配置加载示例
 //!
@@ -19,7 +17,7 @@ use serde::Deserialize;
 /// 使用 `#[derive(Config)]` 宏自动实现配置加载功能。
 /// 使用 `#[config(default = ...)]` 为每个字段指定默认值。
 #[derive(Config, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// 服务器监听地址
     #[config(default = "127.0.0.1".to_string())]
     pub host: String,
@@ -66,7 +64,7 @@ pub struct AppConfig {
 // ============================================================================
 
 /// 打印配置信息（用于演示）
-fn print_config(config: &AppConfig) {
+fn print_config(config: &ConfersConfig) {
     println!("\n========== 配置信息 ==========");
 
     // 服务器配置
@@ -95,7 +93,7 @@ fn print_config(config: &AppConfig) {
 }
 
 /// 验证配置的有效性
-fn validate_config(config: &AppConfig) -> Result<(), String> {
+fn validate_config(config: &ConfersConfig) -> Result<(), String> {
     // 验证端口范围
     if config.port == 0 {
         return Err("服务器端口不能为 0".to_string());
@@ -150,7 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 加载配置 - 使用 load_sync() 自动从环境变量加载
     println!("\n正在加载配置...");
 
-    let config = AppConfig::load_sync().map_err(|e| format!("配置加载失败: {:?}", e))?;
+    let config = ConfersConfig::load_sync().map_err(|e| format!("配置加载失败: {:?}", e))?;
 
     // 打印配置信息
     print_config(&config);

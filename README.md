@@ -106,7 +106,7 @@ use confers::Config;
 use serde::Deserialize;
 
 #[derive(Config, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     /// 服务器监听地址
     #[config(default = "127.0.0.1".to_string())]
     pub host: String,
@@ -122,7 +122,7 @@ pub struct AppConfig {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 读取字段默认值，环境变量 HOST、PORT、LOG_LEVEL 可覆盖
-    let config = AppConfig::load_sync()?;
+    let config = ConfersConfig::load_sync()?;
 
     println!("监听地址: {}:{}", config.host, config.port);
     Ok(())

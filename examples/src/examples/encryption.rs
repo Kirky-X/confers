@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Encryption Example - Sensitive Data Protection
 //!
@@ -19,7 +17,7 @@ use confers::secret::{
 use serde::Deserialize;
 
 #[derive(Config, Deserialize, Debug, Clone)]
-pub struct AppConfig {
+pub struct ConfersConfig {
     #[config(default = "myapp".to_string())]
     pub name: String,
 
@@ -318,7 +316,7 @@ fn demonstrate_config_loading() {
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     // Load config with defaults
-    let config = AppConfig::load_sync().expect("Failed to load config");
+    let config = ConfersConfig::load_sync().expect("Failed to load config");
 
     println!("App name: {}", config.name);
     println!("App version: {}", config.version);

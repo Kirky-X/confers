@@ -1,13 +1,10 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Consul remote configuration source.
 //!
 //! This module provides a Consul-backed implementation of the `PolledSource` trait,
 //! using the Consul KV REST API via reqwest.
-
 use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
@@ -371,7 +368,7 @@ impl ConsulSource {
             });
         }
 
-        // H1 (CWE-400 + CWE-502): Enforce response size limit BEFORE
+        // (CWE-400 + CWE-502): Enforce response size limit BEFORE
         // deserialization to prevent DoS/OOM from oversized responses.
         // 1. Check Content-Length header first (fail fast, no body read).
         if let Some(content_length) = response.content_length()
@@ -869,7 +866,7 @@ mod tests {
         assert_eq!(result, "config value");
     }
 
-    /// M5: base64-decoded bytes that are NOT valid UTF-8 must return an
+    /// base64-decoded bytes that are NOT valid UTF-8 must return an
     /// error, not silently become an empty string (Rule 12: Fail Loud).
     #[test]
     fn test_base64_decode_invalid_utf8_returns_error() {
@@ -1358,7 +1355,7 @@ mod tests {
         );
     }
 
-    // --- H1 regression tests: response size & entry count limits ---
+    // --- regression tests: response size & entry count limits ---
 
     #[test]
     fn test_builder_max_response_bytes() {
@@ -1382,7 +1379,7 @@ mod tests {
         assert_eq!(DEFAULT_MAX_CONSUL_KV_ENTRIES, 10_000);
     }
 
-    /// H1: A response body larger than `max_response_bytes` is rejected with
+    /// A response body larger than `max_response_bytes` is rejected with
     /// `ConfigError::SizeLimitExceeded`, never reaching the JSON parser.
     #[tokio::test]
     async fn test_poll_internal_oversize_body_rejected() {
@@ -1413,7 +1410,7 @@ mod tests {
         );
     }
 
-    /// H1: A response with more KV entries than `max_kv_entries` is rejected
+    /// A response with more KV entries than `max_kv_entries` is rejected
     /// with `ConfigError::SizeLimitExceeded` after deserialization.
     #[tokio::test]
     async fn test_poll_internal_too_many_entries_rejected() {
@@ -1438,7 +1435,7 @@ mod tests {
         );
     }
 
-    /// H1: A response that fits within both limits is accepted normally.
+    /// A response that fits within both limits is accepted normally.
     #[tokio::test]
     async fn test_poll_internal_within_limits_succeeds() {
         let body = r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();

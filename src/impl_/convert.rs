@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
+
 //! Shared format-to-ConfigValue conversion functions.
 //!
 //! These functions are used by both the loader and the format converter modules
