@@ -1,15 +1,10 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Confers CLI - Configuration diagnostics and inspection tool.
 //!
 //! This tool provides runtime configuration observability for confers,
 //! answering questions like "Where did this value come from?" and "Why is it this value?".
-
-#![allow(clippy::incompatible_msrv)]
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use schemars::JsonSchema;
@@ -19,6 +14,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use crate::AnnotatedValue;
 use crate::ConfigBuilder;
 use crate::ConfigResult;
+use crate::i18n::{tr, tr_args};
 
 const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
 
@@ -200,7 +196,7 @@ fn sanitize_json_strings(value: &serde_json::Value, depth: usize) -> serde_json:
 /// Confers CLI - Configuration diagnostics and inspection tool
 #[derive(Parser, Debug)]
 #[command(name = "confers")]
-#[command(about = "Configuration diagnostics tool for confers", long_about = None)]
+#[command(about = crate::i18n::tr("cli-about"), long_about = None)]
 #[command(version)]
 struct Cli {
     /// Configuration file(s) to load
@@ -361,7 +357,7 @@ enum SnapshotCommands {
 /// Run the CLI entry point
 ///
 /// Generic over the config type `T` for type-safe validation and schema
-/// generation. Use with `confers::cli::run::<AppConfig>()`.
+/// generation. Use with `confers::cli::run::<ConfersConfig>()`.
 ///
 /// # Exit codes
 ///
@@ -372,6 +368,9 @@ pub fn run<T>() -> Result<()>
 where
     T: serde::de::DeserializeOwned + JsonSchema + Send + Sync + 'static,
 {
+    // Localize before anything user-facing (including clap help/about) is
+    // produced; idempotent and safe to call repeatedly.
+    crate::i18n::init();
     let cli = Cli::parse();
 
     if let Some(env_file) = &cli.env_file {
@@ -477,27 +476,36 @@ fn cmd_inspect(
         }
     }
 
-    println!("Configuration Inspection");
+    println!("{}", tr("cli-inspect-title"));
     println!("=======================");
     println!();
-    println!("Loaded {} configuration source(s)", config_paths.len());
+    println!(
+        "{}",
+        tr_args("cli-inspect-loaded-sources", &[("count", config_paths.len().to_string())])
+    );
     println!();
 
     if keys.is_empty() {
-        println!("All configuration keys:");
+        println!("{}", tr("cli-inspect-all-keys"));
         println!(
             "{:<35} {:<25} {:<20} {:<20}",
-            "KEY", "VALUE", "SOURCE", "LOCATION"
+            tr("cli-col-key"),
+            tr("cli-col-value"),
+            tr("cli-col-source"),
+            tr("cli-col-location")
         );
         println!("{}", "-".repeat(100));
 
         print_config_value(&annotated_config, "", show_conflicts);
     } else {
         // Show requested keys
-        println!("Requested keys:");
+        println!("{}", tr("cli-inspect-requested-keys"));
         println!(
             "{:<35} {:<25} {:<20} {:<20}",
-            "KEY", "VALUE", "SOURCE", "LOCATION"
+            tr("cli-col-key"),
+            tr("cli-col-value"),
+            tr("cli-col-source"),
+            tr("cli-col-location")
         );
         println!("{}", "-".repeat(100));
 
@@ -514,7 +522,7 @@ fn cmd_inspect(
                     );
                 }
                 None => {
-                    println!("{:<35} {:<25} {:<20} {:<20}", key, "[NOT FOUND]", "-", "-");
+                    println!("{:<35} {:<25} {:<20} {:<20}", key, tr("cli-not-found"), "-", "-");
                 }
             }
         }
@@ -570,7 +578,10 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
 /// Format location information for display
 fn format_location(location: &Option<crate::types::SourceLocation>) -> String {
     match location {
-        Some(loc) => format!("line {}, col {}", loc.line, loc.column),
+        Some(loc) => tr_args(
+            "cli-location-line-col",
+            &[("line", loc.line.to_string()), ("col", loc.column.to_string())],
+        ),
         None => "-".to_string(),
     }
 }

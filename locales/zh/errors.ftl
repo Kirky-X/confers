@@ -1,0 +1,29 @@
+# confers 错误目录(zh)。与 en/errors.ftl 键一一对应。
+
+error-file-not-found = 配置文件未找到: { $filename }
+error-parse-error = 解析 { $format } 失败: { $message }
+error-parse-error-at = 解析 { $format } 失败(位置 { $location }): { $message }
+error-validation-failed = 字段 '{ $field }' 校验失败: { $message }(规则: { $rule })
+error-schema-validation-failed = schema 校验发现 { $count } 个错误
+error-decryption-failed = 解密失败: { $message }
+error-remote-unavailable = 远程配置源不可用
+error-version-mismatch = 配置版本不匹配: 期望 { $expected },实际 { $found }
+error-migration-failed = 从 v{ $from } 迁移到 v{ $to } 失败: { $reason }
+error-module-not-found = 组 '{ $group }' 中未找到模块 '{ $module }'
+error-reload-rolled-back = 配置重载已回滚: { $reason }
+error-io = IO 错误: { $message }
+error-invalid-value = 配置项 '{ $key }' 的值无效: { $message }
+error-source-chain = 配置源链错误: { $message }
+error-timeout = 操作在 { $duration_ms }ms 后超时
+error-size-limit-exceeded = 配置大小超出限制: { $actual } 字节(上限: { $limit })
+error-interpolation = 变量 '{ $variable }' 插值错误: { $message }
+error-key = 加密密钥错误: { $message }
+error-circular-reference = 检测到循环引用: { $path }
+error-lock-poisoned = 资源 '{ $resource }' 的锁已中毒
+error-multi-source = 多个配置源加载失败
+error-multi-source-detail = 多个配置源加载失败: { $failed }/{ $total }
+error-concurrency-conflict = 配置键 '{ $key }' 发生并发冲突: { $message }
+error-key-rotation-failed = 密钥轮换从 '{ $from_version }' 到 '{ $to_version }' 失败: { $reason }
+error-watcher = 配置监视器错误: { $message }
+error-override-blocked = 配置键 '{ $key }' 的覆盖被阻止: { $reason }
+error-health-check-failed = 健康检查失败: { $reason }

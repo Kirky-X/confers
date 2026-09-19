@@ -30,16 +30,16 @@ base64 = "0.23"
 chacha20poly1305 = { version = "0.11", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
-compact_str = { version = "0.10", features = ["serde"] }
 confers-macros = { version = "0.6.0-rc.4", path = "macros" }
 dashmap = { version = "6.2", optional = true }
 garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
+fluent-bundle = "0.16"
 futures-util = { version = "0.3", optional = true }
 hkdf = { version = "0.13", optional = true }
 hmac = { version = "0.13", optional = true }
 indexmap = { version = "2.14", features = ["serde"] }
 notify-debouncer-full = { version = "0.7", optional = true }
-reqwest = { version = "0.13", features = ["json", "rustls"], optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", optional = true }
 secrecy = { version = "0.10", features = ["serde"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
@@ -47,6 +47,7 @@ serde_json = "1.0"
 serde_yaml_ng = { version = "0.10", optional = true }
 sha2 = { version = "0.11", optional = true }
 getrandom = { version = "0.4", optional = true }
+sys-locale = "0.3"
 thiserror = "2.0"
 dotenvy = { version = "0.15", optional = true }
 aes-gcm = { version = "0.11", optional = true }
@@ -58,6 +59,7 @@ tokio = { version = "1.53", features = ["rt", "sync", "time", "fs"], optional = 
 toml = { version = "1.1", features = ["preserve_order"], optional = true }
 zeroize = { version = "1.9", features = ["derive"], optional = true }
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
+unic-langid = "0.9"
 etcd-client = { version = "0.20", features = ["tls"], optional = true }
 ipnet = { version = "2.12", optional = true }
 redis = { version = "1.7", features = ["tokio-comp"], optional = true }
@@ -66,7 +68,6 @@ hex = { version = "0.4", optional = true }
 rand = { version = "0.10", optional = true }
 similar = { version = "3.2", optional = true }
 moka = { version = "0.12", features = ["future", "sync"] }
-getset = "0.1"
 itoa = "1.0"
 log = { workspace = true, optional = true }
 
@@ -81,7 +82,7 @@ edition = "2024"
 rust-version = "1.97.1"
 description = "Production-ready Rust configuration library with zero boilerplate"
 license = "MIT"
-authors = ["Kirky <Kirky-X@outlook.com>"]
+authors = ["Kirky-X <Kirky-X@outlook.com>"]
 repository = "https://github.com/Kirky-X/confers"
 homepage = "https://github.com/Kirky-X/confers"
 documentation = "https://docs.rs/confers"
@@ -170,7 +171,8 @@ k8s = ["remote", "toml", "json", "yaml"]
 cloud-kms = ["encryption", "remote"]
 keyring = ["encryption", "dep:log"]
 openfeature = ["feature-toggle", "context-aware"]
-lazy = ["toml"]
+# 惰性分段解析超大文档（lazy_parse 模块；语义见 src/lazy.rs——按 SOURCE_NAME 分段懒加载）
+lazy-parse = ["toml"]
 nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
@@ -182,17 +184,17 @@ redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 # Unified change stream port (reuses the config-bus transport)
 change-stream = ["config-bus", "watch"]
 
-# Context-aware
+# Context-aware：上下文感知配置（src/context——按调用方上下文解析/取值）
 context-aware = []
 
-# Modules
+# Modules：模块注册表——按 feature 装配配置模块（ModuleConfig/ModuleRegistry，src/modules.rs）
 modules = ["toml"]
 
 # Feature presets
 recommended = ["toml", "env", "validation", "json", "security-rules"]
 dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy", "tracing"]
+full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy-parse", "tracing"]
 minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 

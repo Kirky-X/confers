@@ -1,7 +1,5 @@
-// Copyright (c) 2025 Kirky.X
-//
-// Licensed under the MIT License
-// See LICENSE file in the project root for full license information.
+// Copyright (c) 2026 Kirky.X🌠
+// SPDX-License-Identifier: MIT
 
 //! Confers - Production-ready Rust configuration library.
 //!
@@ -47,13 +45,12 @@
 //!
 //! let config = new_in_memory();
 //! ```
-
-// ============== Public Modules ==============
-
 pub mod config;
 pub mod error;
 pub mod flatten;
 pub mod format;
+// ICU + Fluent internationalization (en/zh; core capability, no feature flag).
+pub mod i18n;
 pub mod interface;
 pub mod loader;
 pub mod merger;
@@ -63,8 +60,8 @@ pub mod metrics;
 #[cfg(feature = "openfeature")]
 pub mod openfeature;
 
-// Lazy segmented parsing for oversized documents (lazy feature).
-#[cfg(feature = "lazy")]
+// Lazy segmented parsing for oversized documents (lazy-parse feature).
+#[cfg(feature = "lazy-parse")]
 pub mod lazy;
 pub mod tree_transform;
 
