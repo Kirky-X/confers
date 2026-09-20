@@ -1,5 +1,5 @@
 error: env_prefix must only contain alphanumeric characters and underscores
- --> tests/compile_fail/env_prefix_illegal_chars.rs:6:8
+ --> tests/compile_fail/env_prefix_illegal_chars.rs:9:8
   |
-6 | struct Doc {
+9 | struct Doc {
   |        ^^^

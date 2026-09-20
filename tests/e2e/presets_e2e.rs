@@ -201,6 +201,7 @@ fn prs07_full_preset_covers_all_domain_features() {
         "config-bus",
         "nats-bus",
         "redis-bus",
+        "change-stream",
         "context-aware",
         "modules",
         "etcd",
@@ -213,7 +214,8 @@ fn prs07_full_preset_covers_all_domain_features() {
         "cloud-kms",
         "keyring",
         "openfeature",
-        "lazy",
+        // rc.4 改名:lazy → lazy-parse(lazy 解析语义,避免与惰性求值混淆)。
+        "lazy-parse",
         "tracing",
     ];
     assert_contains(&features, "full", &domains);

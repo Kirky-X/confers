@@ -1,6 +1,6 @@
 error: unsupported rename_all style 'PascalCase'
        supported styles: "camelCase", "snake_case", "kebab-case"
- --> tests/compile_fail/rename_all_bad_style.rs:6:8
+ --> tests/compile_fail/rename_all_bad_style.rs:9:8
   |
-6 | struct Doc {
+9 | struct Doc {
   |        ^^^

@@ -366,8 +366,10 @@ mod tests {
         std::net::TcpStream::connect(("127.0.0.1", 4222)).is_ok()
     }
 
-    /// Process-unique, NATS-safe (alphanumeric-only) name for subjects and
-    /// stream names to keep parallel tests isolated.
+    /// Run- and process-unique, NATS-safe (alphanumeric-only) name for
+    /// subjects and stream names to keep parallel tests isolated. JetStream
+    /// streams outlive the test process, so the name must also be unique
+    /// across repeated runs against the same server, not just within one.
     fn unique(suffix: &str) -> String {
         use std::sync::atomic::{AtomicU64, Ordering};
         static N: AtomicU64 = AtomicU64::new(0);
@@ -375,7 +377,14 @@ mod tests {
             .chars()
             .filter(|c| c.is_ascii_alphanumeric())
             .collect();
-        format!("confersunit{}{}", N.fetch_add(1, Ordering::SeqCst), clean)
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+        format!(
+            "confersunit{nanos}{}{clean}",
+            N.fetch_add(1, Ordering::SeqCst)
+        )
     }
 
     fn event(checksum: &str) -> ConfigChangeEvent {
