@@ -22,7 +22,7 @@ pub fn init() {
 ///
 /// Resolution order:
 /// 1. Override set via [`set_locale()`]
-/// 2. Global default (detected once on first access via [`detect_locale()`])
+/// 2. Global default (detected once on first access via `detect_locale()`)
 pub fn current_locale() -> LanguageIdentifier {
     if let Ok(guard) = OVERRIDE_LOCALE.read()
         && let Some(locale) = guard.as_ref()
