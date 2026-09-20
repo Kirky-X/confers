@@ -1,0 +1,29 @@
+# typos 配置 — 词表白名单（修复 pre-commit 门禁摩擦）
+#
+# 背景：pre-commit 的 typos 钩子（crate-ci/typos v1.28）默认带 `--write-changes`，
+# 命中即原地改写文件。本仓存在若干「有意为之」的专有名词与算法常量，若不在此放行，
+# 会被改写成语义错误的内容（例如 TLS_RSA_WITH_3DES_EDE_CBC_SHA →
+# TLS_RSA_WITH_3DES_EDGE_CBC_SHA，导致 3DES/SWEET32 弱套件不再被安全规则识别，属安全回归）。
+#
+# 本文件只做最小范围的词级放行：不放宽钩子 args、不删除钩子、不改动安全规则原值。
+
+[default.extend-words]
+# 3DES 的 EDE（Encrypt-Decrypt-Encrypt）工作模式。
+# IANA 注册的密码套件名 TLS_RSA_WITH_3DES_EDE_CBC_SHA /
+# TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA 中的 "EDE" 会被 typos 误判为 "EDGE"，
+# 改写后将破坏 src/security/rules/tls.rs 的 WEAK_CIPHER_SUITES 检测（安全回归）。
+ede = "ede"
+
+# HashiCorp —— 公司与产品专有名词（HashiCorp Vault / Consul）。
+# typos 会把 "Hashi" 误判为 "Hash"（约 5 个文件受影响：README/README_EN/
+# docs/USER_GUIDE.md/examples/encryption.rs/src/secret/*）。
+hashi = "hashi"
+
+# flate2 —— 依赖 crate 名（DEFLATE 压缩算法），typos 会把 "flate" 误判为 "flat"。
+# 命中位置：docs/CHANGELOG.md 中记录 Cargo.toml 新增 flate2 依赖。
+flate = "flate"
+
+# unparseable —— 合法英文变体（与 unparsable 并存），并非拼写错误。
+# 命中位置：src/bus/redis.rs、src/remote/poll.rs、src/security/rules/ssrf.rs、
+# src/security/rules/tls.rs 的注释与断言消息。
+unparseable = "unparseable"
