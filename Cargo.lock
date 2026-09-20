@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "confers"
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "confers-examples"
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "confers-macros"
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 dependencies = [
  "confers",
  "darling",

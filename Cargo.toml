@@ -30,7 +30,7 @@ base64 = "0.23"
 chacha20poly1305 = { version = "0.11", optional = true }
 chrono = { version = "0.4", optional = true, features = ["serde"] }
 clap = { version = "4.6", features = ["derive", "env"], optional = true }
-confers-macros = { version = "0.6.0-rc.4", path = "macros" }
+confers-macros = { version = "0.6.0-rc.5", path = "macros" }
 dashmap = { version = "6.2", optional = true }
 garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
 fluent-bundle = "0.16"
@@ -77,7 +77,7 @@ exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0-rc.4"
+version = "0.6.0-rc.5"
 edition = "2024"
 rust-version = "1.97.1"
 description = "Production-ready Rust configuration library with zero boilerplate"
