@@ -1088,8 +1088,6 @@ impl Drop for ZeroizingBytes {
         // crate does without forcing the dependency into the core types.
         // T044: spare capacity is zeroized too — a realloc could otherwise
         // hand residual secret bytes to a future allocation.
-        let capacity = self.0.capacity();
-        self.0.reserve_exact(capacity - self.0.len());
         for slot in self.0.spare_capacity_mut() {
             // SAFETY: writing a valid `u8` through `MaybeUninit` within the
             // vector's own spare allocation; the volatile write neither
