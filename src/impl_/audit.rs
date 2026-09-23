@@ -34,6 +34,20 @@ fn hmac_sha256(key: &[u8], prev_hash: &[u8], canonical_event: &[u8]) -> [u8; CHA
     bytes
 }
 
+/// Constant-time equality for same-length byte strings (no early exit on the
+/// first differing byte). Lengths are compared first; length itself is not
+/// treated as secret here because hex encodings are shown in headers anyway.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 /// Draw a random chain salt from the OS RNG.
 fn random_chain_salt() -> ConfigResult<[u8; CHAIN_SALT_LEN]> {
     let mut salt = [0u8; CHAIN_SALT_LEN];
@@ -201,6 +215,16 @@ pub struct AuditConfig {
     /// Directory the audit log files are written to. Required for durable
     /// events once auditing is enabled.
     pub log_dir: Option<std::path::PathBuf>,
+    /// Optional externally managed HMAC key for the chain MAC.
+    ///
+    /// Threat model: by default the chain salt doubles as the HMAC key and is
+    /// stored in the file header, so the chain only protects against partial,
+    /// lazy, or read-only tampering — anyone who can rewrite the whole file
+    /// can re-forge a valid chain. Supplying `hmac_key` moves the MAC key out
+    /// of band (env, secret manager, KMS): the file alone is then useless for
+    /// forgery, and verification must pass the same key via
+    /// [`verify_audit_chain_with_key`].
+    pub hmac_key: Option<Vec<u8>>,
 }
 
 impl AuditConfig {
@@ -212,6 +236,7 @@ impl AuditConfig {
 pub struct AuditConfigBuilder {
     enabled: bool,
     log_dir: Option<std::path::PathBuf>,
+    hmac_key: Option<Vec<u8>>,
 }
 
 impl AuditConfigBuilder {
@@ -220,6 +245,7 @@ impl AuditConfigBuilder {
         // explicitly enabled (and given a log_dir).
         Self {
             enabled: false,
+            hmac_key: None,
             log_dir: None,
         }
     }
@@ -234,10 +260,18 @@ impl AuditConfigBuilder {
         self
     }
 
+    /// Set an out-of-band HMAC key for the chain MAC (see
+    /// [`AuditConfig::hmac_key`] for the threat model).
+    pub fn hmac_key(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.hmac_key = Some(key.into());
+        self
+    }
+
     pub fn build(self) -> AuditConfig {
         AuditConfig {
             enabled: self.enabled,
             log_dir: self.log_dir,
+            hmac_key: self.hmac_key,
         }
     }
 }
@@ -324,10 +358,13 @@ impl AuditWriter {
         };
 
         // Fan the accepted event out to every injected sink (best effort:
-        // sink outcomes never affect the local persistence result).
+        // sink outcomes never affect the local persistence result). T050:
+        // sinks receive the SANITIZED event — the same redaction the durable
+        // file path applies — so external log stacks never see raw key names.
         if !self.sinks.is_empty() {
+            let sanitized = self.sanitize(&event);
             for sink in &self.sinks {
-                sink.write(std::slice::from_ref(&event));
+                sink.write(std::slice::from_ref(&sanitized));
             }
         }
 
@@ -414,7 +451,8 @@ impl AuditWriter {
             }
         };
 
-        let entry_hash = hmac_sha256(&state.salt, &state.prev_hash, &canonical);
+        let mac_key: &[u8] = self.config.hmac_key.as_deref().unwrap_or(&state.salt);
+        let entry_hash = hmac_sha256(mac_key, &state.prev_hash, &canonical);
         let line = chain_event_line(
             event_value,
             &hex::encode(state.prev_hash),
@@ -456,6 +494,20 @@ impl AuditWriter {
                 message: e.to_string(),
             })?;
         header_str.push('\n');
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .mode(0o600)
+                .open(path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    file.write_all(header_str.as_bytes())
+                })?;
+        }
+        #[cfg(not(unix))]
         std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -471,33 +523,9 @@ impl AuditWriter {
     }
 
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {
-        // Extended list of sensitive field keywords for redaction
-        const SENSITIVE_KEYWORDS: &[&str] = &[
-            "password",
-            "secret",
-            "key",
-            "token",
-            "credential",
-            "auth",
-            "api_key",
-            "apikey",
-            "access_key",
-            "private_key",
-            "session_id",
-            "sessionid",
-            "bearer",
-            "refresh_token",
-            "client_secret",
-            "encryption_key",
-            "encrypt_key",
-            "master_key",
-            "service_account",
-        ];
-
-        let is_sensitive_field = |field: &str| {
-            let lower = field.to_lowercase();
-            SENSITIVE_KEYWORDS.iter().any(|kw| lower.contains(kw))
-        };
+        // T049: 敏感字段名判定统一走 crate::sensitive_names 单一来源
+        // (此前这里维护着第三套关键词表,与 security::patterns 漂移)。
+        let is_sensitive_field = |field: &str| crate::sensitive_names::is_sensitive_name(field);
 
         match event {
             AuditEvent::Decrypt {
@@ -594,6 +622,20 @@ impl Drop for AuditWriter {
                 continue;
             };
             line.push('\n');
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                let _ = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .mode(0o600)
+                    .open(path)
+                    .and_then(|mut file| {
+                        use std::io::Write;
+                        file.write_all(line.as_bytes())
+                    });
+            }
+            #[cfg(not(unix))]
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -617,6 +659,16 @@ impl Drop for AuditWriter {
 /// and are skipped. `Ok(false)` is also returned for a missing file;
 /// `Err` is reserved for IO failures other than a missing file.
 pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
+    verify_audit_chain_with_key(path, None)
+}
+
+/// Like [`verify_audit_chain`], but verifies the chain MAC against an
+/// externally managed key (see [`AuditConfig::hmac_key`]). Chains written
+/// with `hmac_key` set can ONLY be verified through this variant.
+pub fn verify_audit_chain_with_key(
+    path: &std::path::Path,
+    hmac_key: Option<&[u8]>,
+) -> ConfigResult<bool> {
     use std::io::ErrorKind;
 
     let content = match std::fs::read_to_string(path) {
@@ -681,8 +733,11 @@ pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
         };
 
         // Deletion / reordering detection: every entry must continue the
-        // exact chain position it claims.
-        if prev_hash_hex != hex::encode(&prev_hash) {
+        // exact chain position it claims. Constant-time comparison: avoids
+        // leaking chain positions through early-exit timing.
+        let prev_matches =
+            constant_time_eq(prev_hash_hex.as_bytes(), hex::encode(&prev_hash).as_bytes());
+        if !prev_matches {
             return Ok(false);
         }
 
@@ -690,7 +745,9 @@ pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
         event_obj.remove("prev_hash");
         event_obj.remove("hmac");
         let canonical = canonical_event_bytes(&serde_json::Value::Object(event_obj))?;
-        if hmac_hex != hex::encode(hmac_sha256(&salt, &prev_hash, &canonical)) {
+        let mac_key: &[u8] = hmac_key.unwrap_or(&salt);
+        let expected_hmac = hex::encode(hmac_sha256(mac_key, &prev_hash, &canonical));
+        if !constant_time_eq(hmac_hex.as_bytes(), expected_hmac.as_bytes()) {
             return Ok(false);
         }
 
@@ -723,6 +780,13 @@ impl AuditWriterBuilder {
 
     pub fn log_dir(mut self, dir: std::path::PathBuf) -> Self {
         self.config.log_dir = Some(dir);
+        self
+    }
+
+    /// Set an out-of-band HMAC key for the chain MAC (see
+    /// [`AuditConfig::hmac_key`]).
+    pub fn hmac_key(mut self, key: impl Into<Vec<u8>>) -> Self {
+        self.config.hmac_key = Some(key.into());
         self
     }
 
@@ -1110,6 +1174,108 @@ mod tests {
             &captured[2],
             AuditEvent::Decrypt { success: true, .. }
         ));
+    }
+
+    #[test]
+    fn t050_sink_receives_sanitized_events() {
+        // T050: AuditSink 收到与落盘一致的脱敏事件 —— 敏感 key 名
+        // (含 authorization 这类新增模式)不得原样外流。
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let sink = MemorySink::new();
+        let mut writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build();
+        writer.add_sink(Arc::clone(&sink) as Arc<dyn AuditSink>);
+
+        writer
+            .write(AuditEvent::Decrypt {
+                field: "authorization_header".to_string(),
+                success: true,
+                timestamp: chrono::Utc::now(),
+            })
+            .expect("write");
+
+        let captured = sink.captured();
+        assert_eq!(captured.len(), 1);
+        assert!(
+            matches!(&captured[0], AuditEvent::Decrypt { field, .. } if field == "***REDACTED***"),
+            "sink must receive the sanitized field name, got {:?}",
+            captured[0]
+        );
+    }
+
+    #[test]
+    fn t043_audit_log_file_permissions_0600() {
+        // T043: 审计日志新建文件必须是 0600(unix)。
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build();
+        writer.write(key_access("perm-check")).expect("write");
+
+        let path = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .next()
+            .expect("audit log exists");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(
+                mode & 0o777,
+                0o600,
+                "audit log must be 0600, got {:o}",
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn t050_external_hmac_key_requires_key_for_verification() {
+        // T050: 外置 HMAC 密钥的链文件 —— 用 salt(默认 verify)必须失败,
+        // 用同一外置密钥必须通过。
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let key = b"external-kms-key-material-0123";
+
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .hmac_key(key.to_vec())
+            .build();
+        writer.write(key_access("alpha")).expect("write 1");
+        writer.write(key_access("beta")).expect("write 2");
+
+        // writer 落盘的是 log_dir/audit_<date>.log
+        let path = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .next()
+            .expect("audit log file exists");
+
+        // 默认(salt 作密钥)验证:外置密钥链不再可信。
+        assert!(
+            !verify_audit_chain(&path).unwrap(),
+            "salt-based verification must reject an externally keyed chain"
+        );
+        // 外置密钥验证:完整链通过。
+        assert!(
+            verify_audit_chain_with_key(&path, Some(key)).unwrap(),
+            "key-based verification must accept the intact chain"
+        );
+        // 篡改检测仍然生效。
+        let content = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("beta", "bet@");
+        std::fs::write(&path, content).unwrap();
+        assert!(
+            !verify_audit_chain_with_key(&path, Some(key)).unwrap(),
+            "tampering must still be detected with an external key"
+        );
     }
 
     #[test]

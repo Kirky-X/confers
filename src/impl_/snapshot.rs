@@ -7,8 +7,73 @@ use crate::error::{ConfigError, ConfigResult};
 use crate::types::{AnnotatedValue, ConfigValue, SerializeMode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Unix file mode for snapshot files (T043): snapshots may contain sensitive
+/// configuration, so they are created owner-only (0600) instead of the
+/// process-default 0644.
+#[cfg(unix)]
+const SNAPSHOT_FILE_MODE: u32 = 0o600;
+
+/// Sibling temp-file path for `path` (same directory → same filesystem, so
+/// the final rename is atomic).
+fn sibling_tmp_path(path: &Path) -> PathBuf {
+    let mut name = path
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    name.push(".tmp");
+    path.with_file_name(name)
+}
+
+/// Atomically persist `content` at `path` (T034).
+///
+/// The data is written to a sibling temp file, fsynced, and then renamed over
+/// the target. A crash mid-write leaves at most a `.tmp` sibling — never a
+/// truncated/half-written target file. The temp file is removed when the
+/// write itself fails.
+///
+/// On unix the file is created with mode 0600 (T043).
+fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    let tmp_path = sibling_tmp_path(path);
+
+    let write_result: std::io::Result<()> = (|| {
+        #[cfg(unix)]
+        let mut file = {
+            use std::fs::OpenOptions;
+            use std::os::unix::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(SNAPSHOT_FILE_MODE)
+                .open(&tmp_path)?
+        };
+        #[cfg(not(unix))]
+        let mut file = {
+            use std::fs::OpenOptions;
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&tmp_path)?
+        };
+        file.write_all(content.as_bytes())?;
+        // fsync so the data is on disk before the rename makes it visible.
+        file.sync_all()?;
+        Ok(())
+    })();
+
+    if let Err(e) = write_result {
+        // Clean up the temp file so failed writes leave no residue.
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+
+    std::fs::rename(&tmp_path, path)
+}
 
 /// Rebuild an [`AnnotatedValue`] tree from the plain (non-annotated) JSON a
 /// snapshot file contains. Returns `None` when the value looks like the legacy
@@ -310,9 +375,17 @@ impl SnapshotManager {
             }
         };
 
-        tokio::fs::write(&path, content)
+        // T034: atomic tmp+rename write (and T043: unix 0600) — offloaded to
+        // the blocking pool like the prune step below.
+        let write_path = path.clone();
+        tokio::task::spawn_blocking(move || write_atomic(&write_path, &content))
             .await
-            .map_err(crate::error::ConfigError::IoError)?;
+            .map_err(|e| {
+                crate::error::ConfigError::IoError(std::io::Error::other(format!(
+                    "spawn_blocking: {}",
+                    e
+                )))
+            })??;
 
         // Run prune on the blocking thread pool to avoid blocking the async runtime
         let dir = self.config.dir.clone();
@@ -388,7 +461,8 @@ impl SnapshotManager {
             }),
         }?;
 
-        std::fs::write(&path, content).map_err(crate::error::ConfigError::IoError)?;
+        // T034: atomic tmp+rename write (and T043: unix 0600).
+        write_atomic(&path, &content).map_err(crate::error::ConfigError::IoError)?;
         prune_blocking(
             &self.config.dir,
             self.config.max_snapshots,
@@ -1271,6 +1345,108 @@ version = 0
         let content = std::fs::read_to_string(&path).unwrap();
         // A top-level string value serializes to a JSON string; provenance is not attached.
         assert!(!content.contains("_provenance"));
+    }
+
+    // ---- T034: atomic write / T043: 0600 permissions ----
+
+    /// T034 acceptance: an interrupted write (temp file present, rename never
+    /// happened) leaves NO file at the target path; the rename completes the
+    /// picture.
+    #[test]
+    fn test_interrupted_write_leaves_no_half_target() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("config-interrupted.json");
+
+        // Simulate a crash right after the temp write: only the .tmp sibling
+        // exists.
+        let tmp_path = sibling_tmp_path(&target);
+        std::fs::write(&tmp_path, "{\"partial\": tru").unwrap();
+        assert!(
+            !target.exists(),
+            "the target must not exist while only the temp file was written"
+        );
+
+        // The rename completes the atomic publication.
+        std::fs::rename(&tmp_path, &target).unwrap();
+        assert!(target.exists(), "the rename publishes the target");
+        assert!(!tmp_path.exists(), "the temp file is gone after rename");
+    }
+
+    /// T034: a successful atomic write leaves the target and cleans up the
+    /// temp sibling; a failing write removes the temp file.
+    #[test]
+    fn test_write_atomic_cleans_up_temp_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("snap.json");
+
+        write_atomic(&target, "{\"ok\": true}").expect("atomic write");
+        let content = std::fs::read_to_string(&target).unwrap();
+        assert_eq!(content, "{\"ok\": true}");
+        assert!(
+            !sibling_tmp_path(&target).exists(),
+            "the temp sibling must be cleaned up after a successful write"
+        );
+    }
+
+    /// T034: the temp file lives in the same directory as the target (rename
+    /// stays within one filesystem) and keeps the extension in its name so
+    /// the prune listing (extension filter) cannot pick it up.
+    #[test]
+    fn test_sibling_tmp_path_stays_in_directory() {
+        let target = Path::new("/data/snaps/config-2026.json");
+        let tmp = sibling_tmp_path(target);
+        assert_eq!(tmp.parent(), target.parent());
+        assert!(tmp.to_string_lossy().ends_with("config-2026.json.tmp"));
+        assert_ne!(tmp.extension(), target.extension());
+    }
+
+    /// T043 acceptance: snapshot files are created with unix mode 0600.
+    #[cfg(unix)]
+    #[test]
+    fn test_snapshot_files_are_owner_only_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let manager = SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 30,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        });
+
+        // Async path.
+        let path = futures_executor_block_on(manager.save(&make_value(), &[])).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "async save must create 0600 files, got {:o}",
+            mode & 0o777
+        );
+
+        // Blocking path.
+        let path2 = manager.save_blocking(&make_value(), &[]).unwrap();
+        let mode = std::fs::metadata(&path2).unwrap().permissions().mode();
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "save_blocking must create 0600 files, got {:o}",
+            mode & 0o777
+        );
+    }
+
+    /// Minimal block-on helper for one future in sync tests (avoids a tokio
+    /// dependency on the test's part while `save` is async).
+    #[cfg(unix)]
+    fn futures_executor_block_on<F: std::future::Future>(fut: F) -> F::Output {
+        // A tiny hand-rolled reactor is unnecessary: tokio is available in
+        // the crate (feature snapshot depends on it), so spin a current-thread
+        // runtime just for this call.
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime")
+            .block_on(fut)
     }
 
     // ---- save + prune integration ----

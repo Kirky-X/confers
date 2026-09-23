@@ -40,6 +40,15 @@ pub struct ConfigChangeEvent {
     pub source: String,
     pub changed_keys: Vec<String>,
     pub checksum: String,
+    /// Process-level random epoch of the publishing instance (T030).
+    ///
+    /// The monotonic `checksum` version only orders events *within* one
+    /// publisher epoch: a restarting process draws a fresh epoch and may
+    /// restart its sequence at 1, which the arbiter must treat as a new
+    /// track instead of discarding as stale. `0` means "not stamped"
+    /// (legacy producers) and is accepted fail-open.
+    #[serde(default)]
+    pub publisher_epoch: u64,
 }
 
 impl ConfigChangeEvent {
@@ -55,6 +64,7 @@ impl ConfigChangeEvent {
             source: source.into(),
             changed_keys,
             checksum: checksum.into(),
+            publisher_epoch: 0,
         }
     }
 }

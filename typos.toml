@@ -27,3 +27,7 @@ flate = "flate"
 # 命中位置：src/bus/redis.rs、src/remote/poll.rs、src/security/rules/ssrf.rs、
 # src/security/rules/tls.rs 的注释与断言消息。
 unparseable = "unparseable"
+
+# 测试夹具:自签名 CA PEM(base64 内容会被误判为拼写错误且无词级放行意义)。
+[files]
+extend-exclude = ["src/remote/testdata/test-ca.pem"]

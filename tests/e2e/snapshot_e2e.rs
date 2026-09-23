@@ -308,3 +308,63 @@ async fn snp10_with_snapshot_auto_snapshots_on_build() {
     assert_eq!(restored.to_json()["name"], "snapshotted");
     assert_eq!(restored.to_json()["port"], 80);
 }
+
+/// T045(builder 快照接入敏感路径):derive 生成的 `sensitive_paths()` 经
+/// `ConfigBuilder::sensitive_paths` 注册后,自动快照必须对敏感字段输出
+/// `[REDACTED]`(而非明文),且文件权限为 0600。
+mod t045 {
+    use super::SnapshotConfig;
+    use confers::secret::SecretString;
+    use confers::types::ConfigValue;
+    use confers::{Config, ConfigBuilder};
+    use serde::Deserialize;
+
+    #[derive(Debug, Config, Deserialize)]
+    #[allow(dead_code)] // 字段值经快照内容断言,而非结构体读取
+    pub struct RedactProbe {
+        pub host: String,
+
+        #[config(sensitive = true)]
+        pub api_key: SecretString,
+    }
+
+    #[test]
+    fn t045_builder_snapshot_redacts_sensitive_paths() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let snap_dir = dir.path().join("snaps");
+
+        let _cfg: RedactProbe = ConfigBuilder::new()
+            .default("host", ConfigValue::string("db.internal"))
+            .default("api_key", ConfigValue::string("super-secret-plaintext"))
+            .sensitive_paths(RedactProbe::sensitive_paths())
+            .with_snapshot(SnapshotConfig::new(snap_dir.clone()))
+            .build()
+            .expect("build with snapshot");
+
+        let entries: Vec<_> = std::fs::read_dir(&snap_dir)
+            .expect("snapshot dir")
+            .filter_map(|e| e.ok())
+            .collect();
+        assert!(!entries.is_empty(), "snapshot must be written");
+        let content = std::fs::read_to_string(entries[0].path()).unwrap();
+        assert!(
+            !content.contains("super-secret-plaintext"),
+            "snapshot must not contain the plaintext secret: {content}"
+        );
+        assert!(
+            content.contains("[REDACTED]"),
+            "sensitive field must be redacted in the snapshot"
+        );
+
+        // 文件权限 0600(unix)。
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(entries[0].path())
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600, "snapshot must be 0600, got {:o}", mode);
+        }
+    }
+}

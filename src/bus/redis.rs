@@ -4,6 +4,7 @@
 //! Redis-based ConfigBus implementation.
 
 use std::pin::Pin;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::{Stream, StreamExt};
@@ -22,10 +23,16 @@ const DEFAULT_ERROR_RETRY_WAIT_SECS: u64 = 1;
 /// Redis default port.
 const DEFAULT_REDIS_PORT: u16 = 6379;
 
+/// Initial reconnect backoff after the pubsub connection drops (T029).
+pub const REDIS_RECONNECT_INITIAL_DELAY: Duration = Duration::from_secs(1);
+
+/// Cap of the exponential reconnect backoff (T029): 1s → 2s → 4s → … → 30s.
+pub const REDIS_RECONNECT_MAX_DELAY: Duration = Duration::from_secs(30);
+
 pub struct RedisConfigBus {
     client: redis::Client,
     channel: String,
-    /// Retry wait time in milliseconds when no message available.
+    /// Retry wait time in milliseconds when no message is available.
     ///
     /// Historical field retained for builder API compatibility. The new
     /// `subscribe()` implementation uses a dedicated PubSub connection with
@@ -38,6 +45,10 @@ pub struct RedisConfigBus {
     /// `retry_wait_ms` for context.
     #[allow(dead_code)]
     error_retry_wait_secs: u64,
+    /// Initial reconnect backoff for the subscription loop (T029).
+    reconnect_initial: Duration,
+    /// Reconnect backoff cap for the subscription loop (T029).
+    reconnect_max: Duration,
 }
 
 impl RedisConfigBus {
@@ -80,7 +91,42 @@ impl RedisConfigBus {
             channel: channel.into(),
             retry_wait_ms,
             error_retry_wait_secs,
+            reconnect_initial: REDIS_RECONNECT_INITIAL_DELAY,
+            reconnect_max: REDIS_RECONNECT_MAX_DELAY,
         })
+    }
+
+    /// Establish a dedicated PubSub connection and subscribe to the channel.
+    ///
+    /// Used by the reconnecting `subscribe()` loop: each iteration opens a
+    /// fresh connection, because a connection lost is not reusable.
+    async fn connect_pubsub(
+        client: &redis::Client,
+        channel: &str,
+    ) -> ConfigResult<redis::aio::PubSub> {
+        // Use a dedicated PubSub connection (not multiplexed). Redis' SUBSCRIBE
+        // command transitions the connection into subscription mode, which is
+        // incompatible with multiplexed-connection query semantics. The previous
+        // implementation used `redis::cmd("SUBSCRIBE").query_async()` on a
+        // multiplexed connection, which never delivers real published messages.
+        let mut pubsub =
+            client
+                .get_async_pubsub()
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: format!("redis_pubsub: {}", e),
+                    retryable: true,
+                })?;
+
+        pubsub
+            .subscribe(channel)
+            .await
+            .map_err(|e| ConfigError::RemoteUnavailable {
+                error_type: format!("redis_subscribe: {}", e),
+                retryable: true,
+            })?;
+
+        Ok(pubsub)
     }
 }
 
@@ -125,44 +171,68 @@ impl ConfigBus for RedisConfigBus {
     async fn subscribe(
         &self,
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
-        // Use a dedicated PubSub connection (not multiplexed). Redis' SUBSCRIBE
-        // command transitions the connection into subscription mode, which is
-        // incompatible with multiplexed-connection query semantics. The previous
-        // implementation used `redis::cmd("SUBSCRIBE").query_async()` on a
-        // multiplexed connection, which never delivers real published messages.
-        let mut pubsub =
-            self.client
-                .get_async_pubsub()
-                .await
-                .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: format!("redis_pubsub: {}", e),
-                    retryable: true,
-                })?;
+        // The first connection is established eagerly so a dead endpoint
+        // still surfaces as an immediate `subscribe()` error (the historical
+        // contract, pinned by tests). T029: every subsequent connection is
+        // managed by the reconnecting loop below — the pubsub stream ends
+        // whenever the connection drops (network blip, server restart, idle
+        // timeout); previously that terminated the returned stream silently,
+        // so subscribers stopped receiving events forever. Now the loop
+        // reconnects with exponential backoff (`reconnect_initial` →
+        // `reconnect_max`, doubling), logging a warning for every drop so
+        // the outage is observable. Payload decode errors and JSON
+        // deserialization errors are skipped (Rule 12: errors that cannot be
+        // meaningfully surfaced to the stream consumer are skipped via
+        // continue, not silently swallowed).
+        let client = self.client.clone();
+        let channel = self.channel.clone();
+        let reconnect_initial = self.reconnect_initial;
+        let reconnect_max = self.reconnect_max;
+        let mut pubsub = Self::connect_pubsub(&client, &channel).await?;
 
-        pubsub
-            .subscribe(&self.channel)
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("redis_subscribe: {}", e),
-                retryable: true,
-            })?;
-
-        // on_message(&mut self) borrows pubsub and returns a Stream<Item = Msg>.
-        // Wrap the polling loop in async_stream::stream! so pubsub is owned by
-        // the stream future itself (avoids E0515: cannot return reference to
-        // local). Payload decode errors and JSON deserialization errors are
-        // skipped (Rule 12: errors that cannot be meaningfully surfaced to the
-        // stream consumer are skipped via continue, not silently swallowed).
         let stream = async_stream::stream! {
-            let mut msg_stream = pubsub.on_message();
-            while let Some(msg) = msg_stream.next().await {
-                let payload: Vec<u8> = match msg.get_payload() {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                };
-                match serde_json::from_slice::<ConfigChangeEvent>(&payload) {
-                    Ok(event) => yield event,
-                    Err(_) => continue,
+            let mut backoff = reconnect_initial;
+            loop {
+                {
+                    let mut msg_stream = pubsub.on_message();
+                    while let Some(msg) = msg_stream.next().await {
+                        let payload: Vec<u8> = match msg.get_payload() {
+                            Ok(p) => p,
+                            Err(_) => continue,
+                        };
+                        match serde_json::from_slice::<ConfigChangeEvent>(&payload) {
+                            Ok(event) => yield event,
+                            Err(_) => continue,
+                        }
+                    }
+                }
+                log::warn!(
+                    "Redis config-bus pubsub connection lost (channel '{}'); \
+                     reconnecting in {:?}",
+                    channel,
+                    backoff
+                );
+                // Reconnect with exponential backoff until the subscription
+                // is re-established, then reset the backoff.
+                loop {
+                    tokio::time::sleep(backoff).await;
+                    backoff = backoff.saturating_mul(2).min(reconnect_max);
+                    match Self::connect_pubsub(&client, &channel).await {
+                        Ok(new_pubsub) => {
+                            backoff = reconnect_initial;
+                            pubsub = new_pubsub;
+                            break;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Redis config-bus pubsub reconnect failed (channel '{}'): {}; \
+                                 retrying in {:?}",
+                                channel,
+                                e,
+                                backoff
+                            );
+                        }
+                    }
                 }
             }
         };
@@ -174,10 +244,14 @@ impl ConfigBus for RedisConfigBus {
 pub struct RedisBusBuilder {
     url: Option<String>,
     channel: Option<String>,
-    /// Retry wait time in milliseconds when no message available.
+    /// Retry wait time in milliseconds when no message is available.
     retry_wait_ms: u64,
     /// Error retry wait time in seconds.
     error_retry_wait_secs: u64,
+    /// Initial reconnect backoff for the subscription loop (T029).
+    reconnect_initial: Duration,
+    /// Reconnect backoff cap for the subscription loop (T029).
+    reconnect_max: Duration,
 }
 
 impl RedisBusBuilder {
@@ -187,6 +261,8 @@ impl RedisBusBuilder {
             channel: None,
             retry_wait_ms: DEFAULT_RETRY_WAIT_MS,
             error_retry_wait_secs: DEFAULT_ERROR_RETRY_WAIT_SECS,
+            reconnect_initial: REDIS_RECONNECT_INITIAL_DELAY,
+            reconnect_max: REDIS_RECONNECT_MAX_DELAY,
         }
     }
 
@@ -216,6 +292,24 @@ impl RedisBusBuilder {
         self
     }
 
+    /// Set the initial reconnect backoff of the subscription loop (T029).
+    ///
+    /// Default: 1 second. The backoff doubles up to `reconnect_delay_max`
+    /// while the connection keeps failing and resets on a successful
+    /// (re)subscription.
+    pub fn reconnect_delay_initial(mut self, delay: Duration) -> Self {
+        self.reconnect_initial = delay;
+        self
+    }
+
+    /// Set the reconnect backoff cap of the subscription loop (T029).
+    ///
+    /// Default: 30 seconds.
+    pub fn reconnect_delay_max(mut self, delay: Duration) -> Self {
+        self.reconnect_max = delay;
+        self
+    }
+
     pub async fn build(self) -> ConfigResult<RedisConfigBus> {
         let url = self.url.ok_or(ConfigError::InvalidValue {
             key: "redis_url".to_string(),
@@ -225,13 +319,16 @@ impl RedisBusBuilder {
 
         let channel = self.channel.unwrap_or_else(|| "config:events".to_string());
 
-        RedisConfigBus::connect_with_config(
+        let mut bus = RedisConfigBus::connect_with_config(
             &url,
             channel,
             self.retry_wait_ms,
             self.error_retry_wait_secs,
         )
-        .await
+        .await?;
+        bus.reconnect_initial = self.reconnect_initial;
+        bus.reconnect_max = self.reconnect_max;
+        Ok(bus)
     }
 }
 
@@ -538,5 +635,158 @@ mod tests {
         // The invalid payload must have been skipped, leaving the valid event.
         assert_eq!(received.checksum, "good-ck");
         assert_eq!(received.instance_id, ev.instance_id);
+    }
+
+    // ==================== T029: pubsub reconnect loop (mock) ====================
+
+    /// RESP helpers for a hand-rolled Redis pubsub mock (same convention as
+    /// the hand-written TCP mocks in remote/k8s.rs and remote/nacos.rs).
+    mod resp_mock {
+        /// Bulk string: `$<len>\r\n<data>\r\n`.
+        fn bulk(data: &[u8]) -> Vec<u8> {
+            let mut out = format!("${}\r\n", data.len()).into_bytes();
+            out.extend_from_slice(data);
+            out.extend_from_slice(b"\r\n");
+            out
+        }
+
+        /// Server confirmation for `SUBSCRIBE <channel>`:
+        /// `*3\r\n$9\r\nsubscribe\r\n<channel>\r\n:1\r\n`.
+        pub fn subscribe_confirmation(channel: &str) -> Vec<u8> {
+            let mut out = b"*3\r\n".to_vec();
+            out.extend_from_slice(&bulk(b"subscribe"));
+            out.extend_from_slice(&bulk(channel.as_bytes()));
+            out.extend_from_slice(b":1\r\n");
+            out
+        }
+
+        /// Pushed message: `*3\r\n$7\r\nmessage\r\n<channel>\r\n<payload>\r\n`.
+        pub fn message(channel: &str, payload: &[u8]) -> Vec<u8> {
+            let mut out = b"*3\r\n".to_vec();
+            out.extend_from_slice(&bulk(b"message"));
+            out.extend_from_slice(&bulk(channel.as_bytes()));
+            out.extend_from_slice(&bulk(payload));
+            out
+        }
+
+        /// Reply `+OK\r\n` once per command array found in `buf` (the client
+        /// pipelines setup commands like `CLIENT SETINFO` before SUBSCRIBE).
+        pub fn ok_replies(buf: &[u8]) -> Vec<u8> {
+            // Each RESP array command begins with `*<n>\r\n`.
+            let commands = buf
+                .split(|&b| b == b'*')
+                .skip(1)
+                .filter(|f| !f.is_empty())
+                .count();
+            b"+OK\r\n".repeat(commands)
+        }
+    }
+
+    /// T029 acceptance: after the pubsub connection drops, the subscription
+    /// loop reconnects (short backoff configured via the builder) and a
+    /// subsequently published event is delivered again — the stream no
+    /// longer terminates silently.
+    #[tokio::test]
+    async fn test_subscribe_reconnects_after_connection_drop() {
+        use std::sync::Arc as StdArc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let channel = format!("confers-reconnect-test-{}", std::process::id());
+
+        let conns = StdArc::new(AtomicUsize::new(0));
+        let conns_server = conns.clone();
+        let channel_server = channel.clone();
+        let server = tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let conns = conns_server.clone();
+                let channel = channel_server.clone();
+                tokio::spawn(async move {
+                    let n = conns.fetch_add(1, Ordering::SeqCst) + 1;
+                    // Read the client's pipelined commands (setup + SUBSCRIBE).
+                    let mut buf = [0u8; 8192];
+                    let read = stream.read(&mut buf).await.expect("read");
+                    // Reply +OK to every non-subscribe command.
+                    let _ = stream.write_all(&resp_mock::ok_replies(&buf[..read])).await;
+                    // Confirm the subscription, then push one valid event.
+                    // The payload is serialized from the real event type —
+                    // exactly what `publish()` puts on the wire.
+                    let event = ConfigChangeEvent::new(
+                        "reconnect-test",
+                        "mock",
+                        vec!["key.alpha".to_string()],
+                        format!("drop-{n}"),
+                    );
+                    let _ = stream
+                        .write_all(&resp_mock::subscribe_confirmation(&channel))
+                        .await;
+                    let _ = stream
+                        .write_all(&resp_mock::message(
+                            &channel,
+                            serde_json::to_vec(&event)
+                                .expect("serialize event")
+                                .as_slice(),
+                        ))
+                        .await;
+                    let _ = stream.flush().await;
+                    // Drop the connection: the pubsub stream must end and the
+                    // loop must reconnect.
+                });
+            }
+        });
+
+        let bus = RedisBusBuilder::new()
+            .url(format!("redis://{addr}"))
+            .channel(channel.clone())
+            // Fast backoffs so the test stays quick; production defaults are
+            // 1s → 30s.
+            .reconnect_delay_initial(Duration::from_millis(50))
+            .reconnect_delay_max(Duration::from_millis(200))
+            .build()
+            .await
+            .expect("build against mock");
+
+        let mut rx = bus.subscribe().await.expect("subscribe");
+
+        // Event 1 arrives on the first connection.
+        let first = timeout(Duration::from_secs(2), rx.next())
+            .await
+            .expect("timed out waiting for first event")
+            .expect("stream ended");
+        assert_eq!(first.checksum, "drop-1");
+
+        // The server already dropped connection 1; the loop must reconnect
+        // and deliver event 2 — previously the stream ended silently here.
+        let second = timeout(Duration::from_secs(3), rx.next())
+            .await
+            .expect("timed out waiting for post-reconnect event (T029 reconnect failed)")
+            .expect("stream ended");
+        assert_eq!(second.checksum, "drop-2");
+        assert!(
+            conns.load(Ordering::SeqCst) >= 2,
+            "a second connection must have been accepted"
+        );
+
+        server.abort();
+    }
+
+    /// T029: the reconnect backoff constants and their builder overrides.
+    #[test]
+    fn test_reconnect_backoff_configuration() {
+        assert_eq!(REDIS_RECONNECT_INITIAL_DELAY, Duration::from_secs(1));
+        assert_eq!(REDIS_RECONNECT_MAX_DELAY, Duration::from_secs(30));
+
+        let builder = RedisBusBuilder::new()
+            .reconnect_delay_initial(Duration::from_millis(250))
+            .reconnect_delay_max(Duration::from_secs(5));
+        assert_eq!(builder.reconnect_initial, Duration::from_millis(250));
+        assert_eq!(builder.reconnect_max, Duration::from_secs(5));
     }
 }

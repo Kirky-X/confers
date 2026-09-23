@@ -5,40 +5,17 @@
 
 use super::{SecurityValidator, SecurityViolation, ViolationSeverity};
 use crate::interface::ConfigProvider;
-use ipnet::IpNet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use std::sync::LazyLock;
 
-/// Private/reserved IP ranges that should be blocked for SSRF protection.
-static BLOCKED_NETWORKS: LazyLock<Vec<IpNet>> = LazyLock::new(|| {
-    vec![
-        // IPv4 private ranges
-        IpNet::from_str("127.0.0.0/8").unwrap(),   // Loopback
-        IpNet::from_str("10.0.0.0/8").unwrap(),    // Class A private
-        IpNet::from_str("172.16.0.0/12").unwrap(), // Class B private
-        IpNet::from_str("192.168.0.0/16").unwrap(), // Class C private
-        IpNet::from_str("169.254.0.0/16").unwrap(), // Link-local
-        IpNet::from_str("0.0.0.0/8").unwrap(),     // Current network
-        IpNet::from_str("100.64.0.0/10").unwrap(), // Shared address space (CGN)
-        IpNet::from_str("192.0.0.0/24").unwrap(),  // IETF protocol assignments
-        IpNet::from_str("192.0.2.0/24").unwrap(),  // TEST-NET-1
-        IpNet::from_str("198.51.100.0/24").unwrap(), // TEST-NET-2
-        IpNet::from_str("203.0.113.0/24").unwrap(), // TEST-NET-3
-        IpNet::from_str("224.0.0.0/4").unwrap(),   // Multicast
-        IpNet::from_str("240.0.0.0/4").unwrap(),   // Reserved
-        IpNet::from_str("255.255.255.255/32").unwrap(), // Broadcast
-        // IPv6 private/reserved ranges
-        IpNet::from_str("::1/128").unwrap(),   // Loopback
-        IpNet::from_str("fc00::/7").unwrap(),  // Unique local
-        IpNet::from_str("fe80::/10").unwrap(), // Link-local
-        IpNet::from_str("::ffff:127.0.0.0/104").unwrap(), // IPv4-mapped loopback
-        IpNet::from_str("::ffff:10.0.0.0/104").unwrap(), // IPv4-mapped private
-        IpNet::from_str("::ffff:172.16.0.0/108").unwrap(), // IPv4-mapped private
-        IpNet::from_str("::ffff:192.168.0.0/112").unwrap(), // IPv4-mapped private
-        IpNet::from_str("::ffff:169.254.0.0/112").unwrap(), // IPv4-mapped link-local
-    ]
-});
+/// Single-source blocked-network table shared with the remote polled source
+/// (`crate::remote::poll`). Included via `#[path]` so both feature sets
+/// (`security-rules` and `remote`) compile the exact same list — this is the
+/// T024 fix: previously the validator and the runtime enforcement maintained
+/// two divergent hand-written copies.
+use crate::remote::poll::ip_blocklist;
+
+use ip_blocklist::is_ip_blocked;
 
 /// Validates URLs in configuration to prevent SSRF attacks.
 ///
@@ -94,8 +71,12 @@ impl SsrfValidator {
     }
 
     /// Check if an IP address is in a blocked (private/reserved) range.
+    ///
+    /// Delegates to the single-source list shared with the remote polled
+    /// source, so the validator reports exactly the ranges the runtime
+    /// enforcement blocks.
     fn is_blocked_ip(ip: &IpAddr) -> bool {
-        BLOCKED_NETWORKS.iter().any(|net| net.contains(ip))
+        is_ip_blocked(*ip)
     }
 
     /// Check if a URL is in the whitelist.

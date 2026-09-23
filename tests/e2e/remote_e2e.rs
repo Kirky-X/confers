@@ -273,7 +273,8 @@ async fn csl07_consul_kv_write_poll_delete() {
     assert_eq!(value.to_json()["app/host"], "consul-host");
     assert_eq!(value.to_json()["app/port"], "8500");
 
-    // 删除 KV → 后续 poll 反映空配置(报错或空树,不得 panic 或返回旧值)。
+    // 删除 KV → 后续 poll 按 Consul 删除语义推进 index 并返回空配置
+    // (T025: 不得返回旧缓存"续命",也不得因空数组报错)。
     for key in [format!("{prefix}/app/host"), format!("{prefix}/app/port")] {
         let resp = client
             .delete(format!("http://127.0.0.1:8500/v1/kv/{key}"))
@@ -283,20 +284,14 @@ async fn csl07_consul_kv_write_poll_delete() {
         assert!(resp.status().is_success());
     }
 
-    let after = source.poll().await;
-    match after {
-        Ok(v) => assert!(
-            v.to_json().get("app/host").is_none(),
-            "deleted keys must not resurface: {:?}",
-            v.to_json()
-        ),
-        Err(e) => {
-            assert!(
-                !e.to_string().to_lowercase().contains("consul-host"),
-                "error must not leak stale values: {e}"
-            );
-        }
-    }
+    let after = source.poll().await.expect(
+        "poll after KV deletion must succeed with an empty config (delete semantics, T025)",
+    );
+    assert!(
+        after.is_null() || after.to_json().get("app/host").is_none(),
+        "deleted keys must not resurface: {:?}",
+        after.to_json()
+    );
 }
 
 /// DoS 防护 —— max_kv_entries 超限拒绝。

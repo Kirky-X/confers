@@ -8,6 +8,7 @@
 use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
+use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::types::{AnnotatedValue, SourceId};
 use async_trait::async_trait;
 use reqwest::Client;
@@ -63,6 +64,9 @@ pub struct ConsulSourceBuilder {
     request_timeout: Duration,
     max_response_bytes: usize,
     max_kv_entries: usize,
+    cb_threshold: Option<u32>,
+    cb_base_delay: Option<Duration>,
+    cb_max_delay: Option<Duration>,
 }
 
 /// TLS configuration for Consul connection.
@@ -88,6 +92,9 @@ impl ConsulSourceBuilder {
             request_timeout: DEFAULT_CONSUL_REQUEST_TIMEOUT,
             max_response_bytes: DEFAULT_MAX_CONSUL_RESPONSE_BYTES,
             max_kv_entries: DEFAULT_MAX_CONSUL_KV_ENTRIES,
+            cb_threshold: None,
+            cb_base_delay: None,
+            cb_max_delay: None,
         }
     }
 
@@ -185,6 +192,29 @@ impl ConsulSourceBuilder {
         self
     }
 
+    /// Set the circuit breaker failure threshold (T032).
+    ///
+    /// After this many consecutive failed polls, the circuit opens and
+    /// subsequent polls fail fast with `CircuitBreakerOpen` without touching
+    /// the network. Default: 5.
+    pub fn circuit_breaker_threshold(mut self, failures: u32) -> Self {
+        self.cb_threshold = Some(failures);
+        self
+    }
+
+    /// Set the circuit breaker base delay for exponential backoff (T032).
+    /// Default: 1 second.
+    pub fn circuit_breaker_base_delay(mut self, delay: Duration) -> Self {
+        self.cb_base_delay = Some(delay);
+        self
+    }
+
+    /// Set the circuit breaker maximum backoff delay (T032). Default: 60s.
+    pub fn circuit_breaker_max_delay(mut self, delay: Duration) -> Self {
+        self.cb_max_delay = Some(delay);
+        self
+    }
+
     /// Build the Consul source.
     pub fn build(self) -> ConfigResult<ConsulSource> {
         // Issue #326: the client previously had no timeouts at all; bound the
@@ -274,7 +304,31 @@ impl ConsulSourceBuilder {
             max_response_bytes: self.max_response_bytes,
             max_kv_entries: self.max_kv_entries,
             cached_source_id: SourceId::new(format!("consul:{}", self.prefix)),
+            circuit_breaker: std::sync::Mutex::new(Self::build_circuit_breaker(
+                self.cb_threshold,
+                self.cb_base_delay,
+                self.cb_max_delay,
+            )),
         })
+    }
+
+    /// Build the poll circuit breaker from the configured knobs (T032).
+    fn build_circuit_breaker(
+        threshold: Option<u32>,
+        base_delay: Option<Duration>,
+        max_delay: Option<Duration>,
+    ) -> CircuitBreaker {
+        let mut cb = CircuitBreaker::new();
+        if let Some(threshold) = threshold {
+            cb = cb.with_threshold(threshold);
+        }
+        if let Some(base_delay) = base_delay {
+            cb = cb.with_base_delay(base_delay);
+        }
+        if let Some(max_delay) = max_delay {
+            cb = cb.with_max_delay(max_delay);
+        }
+        cb
     }
 }
 
@@ -298,6 +352,9 @@ pub struct ConsulSource {
     max_response_bytes: usize,
     max_kv_entries: usize,
     cached_source_id: SourceId,
+    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// polls fail fast without touching the network.
+    circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
 impl ConsulSource {
@@ -418,7 +475,52 @@ impl ConsulSource {
         }
 
         if kv_responses.is_empty() {
-            // Return cached value if no changes
+            // T025 (delete semantics): a recurse query returning an empty
+            // array means every KV under the prefix was deleted. Consul
+            // still reports the (advanced) Raft index in the `X-Consul-Index`
+            // response header, so the blocking index MUST advance here —
+            // otherwise the next blocking query would wait on an index the
+            // store has already passed and the stale cached config would be
+            // kept alive forever. Only an unchanged index means "no change".
+            let header_index: Option<u64> = response
+                .headers()
+                .get("X-Consul-Index")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.trim().parse::<u64>().ok());
+
+            if let Some(index) = header_index.filter(|index| *index > current_index) {
+                // Deletion confirmed: advance the blocking index and produce
+                // an empty configuration set (Null), replacing any cached
+                // value.
+                {
+                    let mut guard =
+                        self.last_index
+                            .lock()
+                            .map_err(|_| ConfigError::LockPoisoned {
+                                resource: "consul_last_index".to_string(),
+                            })?;
+                    *guard = index;
+                }
+                let result = AnnotatedValue::new(
+                    crate::types::ConfigValue::Null,
+                    SourceId::new("consul"),
+                    "",
+                );
+                {
+                    let mut cached =
+                        self.cached_value
+                            .write()
+                            .map_err(|_| ConfigError::LockPoisoned {
+                                resource: "consul_cached_value".to_string(),
+                            })?;
+                    *cached = Some(result.clone());
+                }
+                return Ok(result);
+            }
+
+            // No observed index change (or the header is absent, e.g. a
+            // non-Consul proxy): treat as no change and keep serving the
+            // cached value.
             let cached = self
                 .cached_value
                 .read()
@@ -557,7 +659,38 @@ fn base64_decode(input: &str) -> Result<String, ConfigError> {
 #[async_trait]
 impl crate::remote::PolledSource for ConsulSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await
+        // T032: circuit breaker around the poll — consecutive failures open
+        // the circuit and subsequent polls fail fast without a request.
+        let allowed = {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_circuit_breaker".to_string(),
+                })?;
+            cb.can_execute()
+        };
+        if !allowed {
+            return Err(ConfigError::RemoteUnavailable {
+                error_type: "CircuitBreakerOpen".to_string(),
+                retryable: false,
+            });
+        }
+        let result =
+            crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await;
+        {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "consul_circuit_breaker".to_string(),
+                })?;
+            match &result {
+                Ok(_) => cb.record_success(),
+                Err(_) => cb.record_failure(),
+            }
+        }
+        result
     }
 
     fn poll_interval(&self) -> Option<Duration> {
@@ -1045,6 +1178,116 @@ mod tests {
         );
     }
 
+    /// T025: like `mock_http_server`, but each response also carries extra
+    /// raw HTTP headers (e.g. `X-Consul-Index`), one connection per entry.
+    fn mock_http_server_with_headers(responses: Vec<(u16, String, String)>) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for (status, extra_headers, body) in responses {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    continue;
+                };
+                use std::io::{Read, Write};
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let response = format!(
+                    "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\n{extra_headers}Connection: close\r\nContent-Length: {len}\r\n\r\n{body}",
+                    status = status,
+                    extra_headers = extra_headers,
+                    len = body.len(),
+                    body = body,
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        format!("127.0.0.1:{}", addr.port())
+    }
+
+    /// T025 delete semantics: after the KV prefix is deleted on the server,
+    /// the recurse query returns an empty array with an ADVANCED
+    /// `X-Consul-Index`. The poll must return an empty configuration set
+    /// (Null) instead of the stale cached value, and the blocking index must
+    /// advance.
+    #[tokio::test]
+    async fn test_poll_internal_empty_array_with_advanced_index_returns_deleted_config() {
+        let non_empty =
+            r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server_with_headers(vec![
+            // First poll: KV present, index 10.
+            (200, "X-Consul-Index: 10\r\n".to_string(), non_empty),
+            // Second poll (blocking on index=10): all KVs deleted, index
+            // advanced to 11.
+            (200, "X-Consul-Index: 11\r\n".to_string(), "[]".to_string()),
+        ]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+
+        let first = source.poll_internal().await;
+        assert!(
+            first.is_ok(),
+            "first poll should succeed: {:?}",
+            first.err()
+        );
+        assert!(first.as_ref().unwrap().is_map(), "KV tree served as map");
+
+        let second = source.poll_internal().await;
+        assert!(
+            second.is_ok(),
+            "poll after deletion must succeed with an empty config: {:?}",
+            second.err()
+        );
+        assert!(
+            second.unwrap().is_null(),
+            "deleted KV prefix must yield an empty (Null) config, not the stale cached value"
+        );
+
+        // The blocking index advanced past the deletion.
+        let last_index = *source.last_index.lock().unwrap();
+        assert_eq!(
+            last_index, 11,
+            "last_index must advance to the X-Consul-Index of the deletion response"
+        );
+    }
+
+    /// T025: an empty array whose `X-Consul-Index` matches the current index
+    /// is "no change" — the cached value keeps being served.
+    #[tokio::test]
+    async fn test_poll_internal_empty_array_with_unchanged_index_returns_cached() {
+        let non_empty =
+            r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server_with_headers(vec![
+            (200, "X-Consul-Index: 10\r\n".to_string(), non_empty),
+            (200, "X-Consul-Index: 10\r\n".to_string(), "[]".to_string()),
+        ]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+
+        let first = source.poll_internal().await;
+        assert!(first.is_ok());
+        assert!(first.as_ref().unwrap().is_map());
+
+        let second = source.poll_internal().await;
+        assert!(
+            second.is_ok(),
+            "unchanged index must serve the cache: {:?}",
+            second.err()
+        );
+        assert!(
+            second.as_ref().unwrap().is_map(),
+            "unchanged index must NOT be treated as a deletion"
+        );
+        let last_index = *source.last_index.lock().unwrap();
+        assert_eq!(last_index, 10, "index must not change without a change");
+    }
+
     #[tokio::test]
     async fn test_poll_internal_token_and_blocking_wait() {
         if super::super::test_support::localhost_proxy_intercept().await {
@@ -1450,5 +1693,95 @@ mod tests {
         let result = source.poll_internal().await;
         assert!(result.is_ok(), "response within limits should succeed");
         assert!(result.unwrap().is_map());
+    }
+
+    // ==================== T032: circuit breaker (consul) ====================
+
+    /// T032 acceptance: consecutive failures open the circuit, after which
+    /// polls fail fast with `CircuitBreakerOpen` without touching the
+    /// network; after the backoff a HalfOpen probe succeeds and normal
+    /// polling resumes.
+    #[tokio::test]
+    async fn test_circuit_breaker_opens_and_recovers() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        // Server: 1 failure (opens the circuit, threshold 1), then a success
+        // for the HalfOpen probe. Extra requests would mean the open circuit
+        // failed to block polls.
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_server = Arc::clone(&hits);
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server_addr = format!("127.0.0.1:{}", addr.port());
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            for i in 0..2 {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                hits_server.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf);
+                let (status, body) = if i == 0 {
+                    ("500 Internal Server Error", "{}".to_string())
+                } else {
+                    (
+                        "200 OK",
+                        r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":3}]"#
+                            .to_string(),
+                    )
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+
+        let source = ConsulSourceBuilder::new()
+            .address(server_addr)
+            .prefix("config")
+            .circuit_breaker_threshold(1)
+            .circuit_breaker_base_delay(Duration::from_millis(80))
+            .circuit_breaker_max_delay(Duration::from_millis(200))
+            .build()
+            .unwrap();
+
+        // 1. First poll: the 500 surfaces the fetch error and records a
+        //    failure → circuit opens (threshold 1).
+        let first = <ConsulSource as crate::remote::PolledSource>::poll(&source).await;
+        assert!(
+            matches!(first, Err(ConfigError::InvalidValue { .. })),
+            "the 500 must surface its own error first: {first:?}"
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+
+        // 2. While open: fail fast with CircuitBreakerOpen, no network.
+        let second = <ConsulSource as crate::remote::PolledSource>::poll(&source).await;
+        match second {
+            Err(ConfigError::RemoteUnavailable {
+                error_type,
+                retryable: false,
+            }) if error_type == "CircuitBreakerOpen" => {}
+            other => panic!("open circuit must fail fast, got: {other:?}"),
+        }
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            1,
+            "open circuit must not touch the network"
+        );
+
+        // 3. After the backoff (base 80ms × 2^1 failures = 160ms): the
+        //    HalfOpen probe succeeds → circuit closes.
+        std::thread::sleep(Duration::from_millis(250));
+        let probe = <ConsulSource as crate::remote::PolledSource>::poll(&source).await;
+        assert!(
+            probe.is_ok(),
+            "HalfOpen probe against a healthy server must succeed: {:?}",
+            probe.err()
+        );
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
     }
 }

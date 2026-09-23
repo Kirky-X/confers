@@ -10,12 +10,16 @@
 //!
 //! - stamps every published event with a **monotonic per-instance version**
 //!   (carried in `ConfigChangeEvent.checksum` as a decimal string — the same
-//!   field the change stream already parses as a number), and
+//!   field the change stream already parses as a number) plus a **process
+//!   epoch** (`ConfigChangeEvent.publisher_epoch`), and
 //! - filters each subscribed stream so every source delivers versions in
-//!   strictly increasing order: stale replays and duplicates are **dropped**
-//!   (and counted), never delivered twice.
+//!   strictly increasing order *per `(publisher_id, epoch)` track*: stale
+//!   replays and duplicates are **dropped** (and counted), never delivered
+//!   twice, while a restarting publisher (fresh epoch, sequence restarting
+//!   at 1) opens a new track and is accepted (T030).
 
 use std::collections::HashMap;
+use std::hash::{BuildHasher, Hasher};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -25,6 +29,22 @@ use futures_util::{Stream, StreamExt};
 
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::ConfigResult;
+
+/// Generate a process-level random publisher epoch (T030).
+///
+/// Without pulling in an RNG dependency, the per-process randomized keys of
+/// `RandomState` (seeded by the OS once per process) provide the entropy;
+/// the wall-clock nanos are mixed in as a second source so two processes
+/// starting in the same nanosecond window still differ with overwhelming
+/// probability.
+pub(crate) fn generate_epoch() -> u64 {
+    let hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    hasher.finish() ^ nanos.rotate_left(17)
+}
 
 /// Per-source monotonic sequence generator.
 #[derive(Default)]
@@ -46,10 +66,11 @@ impl MonotonicSequencer {
     }
 }
 
-/// Per-subscriber ordering state: the highest delivered version per source.
+/// Per-subscriber ordering state: the highest delivered version per
+/// `(publisher_id, epoch)` track (T030).
 #[derive(Default)]
 pub struct OrderedEventFilter {
-    last_seen: HashMap<String, u64>,
+    last_seen: HashMap<(String, u64), u64>,
     dropped: u64,
 }
 
@@ -58,17 +79,25 @@ impl OrderedEventFilter {
         Self::default()
     }
 
-    /// Admit an event version for `source`: `true` when it is newer than
-    /// everything delivered so far, `false` for stale replays/duplicates.
-    pub fn admit(&mut self, source: &str, version: u64) -> bool {
+    /// Admit an event version on the `(source, epoch)` track: `true` when it
+    /// is newer than everything delivered on that track so far, `false` for
+    /// stale replays/duplicates.
+    ///
+    /// - A version of `0` cannot be ordered (un-versioned/legacy producers)
+    ///   and is kept (fail-open).
+    /// - An epoch never seen before starts a fresh track at 0, so a
+    ///   restarting publisher whose sequence restarts at 1 is accepted even
+    ///   though the previous track already delivered higher versions.
+    pub fn admit(&mut self, source: &str, epoch: u64, version: u64) -> bool {
         if version == 0 {
             // Un-versioned events cannot be ordered; keep them (fail-open for
             // producers not using the sequencer).
             return true;
         }
-        let last = self.last_seen.get(source).copied().unwrap_or(0);
+        let key = (source.to_string(), epoch);
+        let last = self.last_seen.get(&key).copied().unwrap_or(0);
         if version > last {
-            self.last_seen.insert(source.to_string(), version);
+            self.last_seen.insert(key, version);
             true
         } else {
             self.dropped += 1;
@@ -87,15 +116,19 @@ impl OrderedEventFilter {
 pub struct VersionArbitratedBus<B> {
     inner: B,
     sequencer: MonotonicSequencer,
+    /// Process-level epoch stamped on every published event (T030).
+    publisher_epoch: u64,
     dropped_total: Arc<AtomicU64>,
 }
 
 impl<B> VersionArbitratedBus<B> {
-    /// Wrap `inner`.
+    /// Wrap `inner`. A fresh random publisher epoch is drawn for this
+    /// process instance.
     pub fn new(inner: B) -> Self {
         Self {
             inner,
             sequencer: MonotonicSequencer::new(),
+            publisher_epoch: generate_epoch(),
             dropped_total: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -103,6 +136,11 @@ impl<B> VersionArbitratedBus<B> {
     /// Access the wrapped bus (e.g. to inject raw events in tests).
     pub fn inner(&self) -> &B {
         &self.inner
+    }
+
+    /// The publisher epoch stamped onto every event this bus publishes.
+    pub fn publisher_epoch(&self) -> u64 {
+        self.publisher_epoch
     }
 
     /// Events dropped as stale/duplicated across all subscribers so far.
@@ -131,9 +169,11 @@ where
     B: ConfigBus + Send + Sync,
 {
     async fn publish(&self, mut event: ConfigChangeEvent) -> ConfigResult<()> {
-        // Stamp the monotonic version into the checksum field (decimal).
+        // Stamp the monotonic version into the checksum field (decimal) and
+        // this process's epoch alongside it (T030).
         let version = self.sequencer.next(&event.instance_id);
         event.checksum = version.to_string();
+        event.publisher_epoch = self.publisher_epoch;
         self.inner.publish(event).await
     }
 
@@ -142,7 +182,8 @@ where
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         let inner_stream = self.inner.subscribe().await?;
         let dropped_total = Arc::clone(&self.dropped_total);
-        // Per-subscriber ordering state, carried through the unfold.
+        // Per-subscriber ordering state, carried through the unfold. Events
+        // are arbitrated per (publisher_id, epoch) track.
         let state = (inner_stream, OrderedEventFilter::new(), dropped_total);
         let stream = futures_util::stream::unfold(
             state,
@@ -151,7 +192,7 @@ where
                     match inner.next().await {
                         Some(event) => {
                             let version = event.checksum.parse::<u64>().unwrap_or(0);
-                            if filter.admit(&event.instance_id, version) {
+                            if filter.admit(&event.instance_id, event.publisher_epoch, version) {
                                 return Some((event, (inner, filter, dropped_total)));
                             }
                             dropped_total.fetch_add(1, Ordering::AcqRel);
@@ -178,6 +219,14 @@ mod tests {
         ConfigChangeEvent::new(instance, "test", vec!["k".to_string()], checksum)
     }
 
+    /// Same as [`event`], but stamped with `epoch` — used to inject events
+    /// "from the wire" as if produced by a specific publisher epoch.
+    fn event_with_epoch(instance: &str, checksum: &str, epoch: u64) -> ConfigChangeEvent {
+        let mut ev = event(instance, checksum);
+        ev.publisher_epoch = epoch;
+        ev
+    }
+
     async fn next_event<S: Stream<Item = ConfigChangeEvent> + Unpin>(
         stream: &mut S,
     ) -> ConfigChangeEvent {
@@ -199,11 +248,20 @@ mod tests {
         let second = next_event(&mut rx).await;
         assert_eq!(first.checksum, "1", "versions start at 1");
         assert_eq!(second.checksum, "2", "versions increase monotonically");
+        assert_eq!(
+            first.publisher_epoch, bus.publisher_epoch,
+            "published events carry the process epoch"
+        );
+        assert_ne!(
+            bus.publisher_epoch, 0,
+            "the generated epoch must not collide with the unstamped sentinel"
+        );
     }
 
     #[tokio::test]
     async fn out_of_order_and_duplicate_versions_are_dropped() {
-        let bus = VersionArbitratedBus::new(InMemoryBus::with_capacity(64));
+        let bus = VersionArbitratedBus::new(InMemoryBus::new());
+        let epoch = bus.publisher_epoch();
         let mut rx = bus.subscribe().await.expect("subscribe");
 
         // Fresh event through the wrapper (version 1 stamped).
@@ -211,18 +269,27 @@ mod tests {
         let delivered = next_event(&mut rx).await;
         assert_eq!(delivered.checksum, "1");
 
-        // A duplicate replay of version 1, straight on the wrapped bus
-        // (simulating a replaying producer): dropped, nothing delivered.
-        bus.inner().publish(event("replica-1", "1")).await.unwrap();
+        // A duplicate replay of version 1 from the SAME publisher epoch,
+        // straight on the wrapped bus: dropped, nothing delivered.
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "1", epoch))
+            .await
+            .unwrap();
 
         // A genuinely fresh event still flows (wrapper stamps version 2).
         bus.publish(event("replica-1", "x")).await.unwrap();
         let fresh = next_event(&mut rx).await;
         assert_eq!(fresh.checksum, "2");
 
-        // Stale replays of 1 and a duplicate of 2: both dropped.
-        bus.inner().publish(event("replica-1", "1")).await.unwrap();
-        bus.inner().publish(event("replica-1", "2")).await.unwrap();
+        // Stale replays of 1 and a duplicate of 2 (same epoch): both dropped.
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "1", epoch))
+            .await
+            .unwrap();
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "2", epoch))
+            .await
+            .unwrap();
 
         // The stream stays healthy: the next wrapper event (version 3)
         // arrives despite the interleaved drops.
@@ -231,6 +298,55 @@ mod tests {
         assert_eq!(third.checksum, "3");
 
         assert_eq!(bus.dropped_total(), 3, "stale replays must be counted");
+    }
+
+    /// T030 acceptance: a restarting publisher (fresh epoch, sequence
+    /// restarting at 1) is accepted even though the old track already
+    /// delivered higher versions.
+    #[tokio::test]
+    async fn publisher_restart_with_new_epoch_is_accepted() {
+        let bus = VersionArbitratedBus::new(InMemoryBus::new());
+        let old_epoch = bus.publisher_epoch();
+        let mut rx = bus.subscribe().await.expect("subscribe");
+
+        // Old publisher instance: versions 1..=5 delivered.
+        for v in 1..=5u64 {
+            bus.inner()
+                .publish(event_with_epoch("replica-1", &v.to_string(), old_epoch))
+                .await
+                .unwrap();
+            let delivered = next_event(&mut rx).await;
+            assert_eq!(delivered.checksum, v.to_string());
+        }
+
+        // The process restarts: a NEW epoch appears and its sequence starts
+        // at 1 again — previously dropped as stale, now a fresh track.
+        let new_epoch = old_epoch ^ 0xDEAD_BEEF;
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "1", new_epoch))
+            .await
+            .unwrap();
+        let restarted = next_event(&mut rx).await;
+        assert_eq!(
+            restarted.checksum, "1",
+            "seq=1 on a new epoch must be delivered"
+        );
+        assert_eq!(restarted.publisher_epoch, new_epoch);
+        assert_eq!(bus.dropped_total(), 0, "nothing may be dropped");
+
+        // The old track is still arbitrated independently: replaying old
+        // version 4 is dropped, while the new track advances to 2.
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "4", old_epoch))
+            .await
+            .unwrap();
+        bus.inner()
+            .publish(event_with_epoch("replica-1", "2", new_epoch))
+            .await
+            .unwrap();
+        let after = next_event(&mut rx).await;
+        assert_eq!(after.checksum, "2", "new track keeps advancing");
+        assert_eq!(bus.dropped_total(), 1, "old-track replay dropped");
     }
 
     #[tokio::test]
@@ -258,14 +374,34 @@ mod tests {
     }
 
     #[test]
-    fn filter_admits_only_newer_versions_and_counts_drops() {
+    fn filter_admits_only_newer_versions_per_epoch_track_and_counts_drops() {
         let mut filter = OrderedEventFilter::new();
-        assert!(filter.admit("src", 5));
-        assert!(!filter.admit("src", 5), "duplicate dropped");
-        assert!(!filter.admit("src", 4), "stale dropped");
-        assert!(filter.admit("src", 6));
-        assert!(filter.admit("other", 1), "sources are independent");
-        assert!(filter.admit("src", 0), "unversioned fails open");
+        assert!(filter.admit("src", 7, 5));
+        assert!(!filter.admit("src", 7, 5), "duplicate dropped");
+        assert!(!filter.admit("src", 7, 4), "stale dropped");
+        assert!(filter.admit("src", 7, 6));
+        assert!(filter.admit("other", 7, 1), "publishers are independent");
+        // T030: a fresh epoch of the same publisher is a new track.
+        assert!(
+            filter.admit("src", 9, 1),
+            "new epoch seq=1 must be accepted after high versions on the old epoch"
+        );
+        assert!(filter.admit("src", 0, 0), "unversioned fails open");
         assert_eq!(filter.dropped(), 2);
+    }
+
+    /// T030: epochs are process-random — distinct calls produce distinct
+    /// values (equality has ~2^-64 probability per pair) and never 0.
+    #[test]
+    fn generated_epochs_are_random_and_nonzero() {
+        let epochs: Vec<u64> = (0..8).map(|_| generate_epoch()).collect();
+        assert!(
+            epochs.iter().any(|e| *e != epochs[0]),
+            "epochs must be randomized"
+        );
+        assert!(
+            epochs.iter().all(|e| *e != 0),
+            "generated epochs must never be the unstamped sentinel"
+        );
     }
 }

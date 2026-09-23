@@ -33,6 +33,16 @@ const CONSUMER_INACTIVE_THRESHOLD: std::time::Duration = std::time::Duration::fr
 /// the deployment.
 const STREAM_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
+/// Maximum deliveries for a single message before the server terminates it
+/// (T033). Without this cap a poison message (undeserializable payload) is
+/// redelivered forever.
+pub const NATS_MAX_DELIVER: i64 = 5;
+
+/// Delay applied when a message is NAKed because it cannot be deserialized
+/// (T033): the redelivery is deferred instead of hammering the consumer in a
+/// tight loop.
+pub const NATS_NAK_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub struct NatsConfigBus {
     client: async_nats::Client,
     subject: String,
@@ -103,7 +113,8 @@ impl NatsConfigBus {
         Ok(stream)
     }
 
-    /// Build a NATS-safe consumer name unique to a single `subscribe()` call.
+    /// Build the consumer configuration for one `subscribe()` call (T033:
+    /// `max_deliver` bounds poison-message redelivery).
     ///
     /// A JetStream consumer delivers each message to exactly one consumer, so
     /// a consumer shared across instances would distribute configuration
@@ -131,6 +142,21 @@ impl NatsConfigBus {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         )
+    }
+
+    /// Build the pull-consumer config used by every `subscribe()` call.
+    ///
+    /// Ephemeral (no durable name), broadcast-friendly, and with
+    /// [`NATS_MAX_DELIVER`] bounding redelivery of poison messages (T033).
+    fn subscriber_consumer_config(subject: &str) -> jetstream::consumer::pull::Config {
+        jetstream::consumer::pull::Config {
+            deliver_policy: DeliverPolicy::New,
+            durable_name: None,
+            name: Some(Self::subscriber_consumer_name(subject)),
+            inactive_threshold: CONSUMER_INACTIVE_THRESHOLD,
+            max_deliver: NATS_MAX_DELIVER,
+            ..Default::default()
+        }
     }
 }
 
@@ -193,7 +219,6 @@ impl ConfigBus for NatsConfigBus {
         // restarting instance re-process every historical change as if it
         // were current — current configuration state comes from the config
         // sources, not from replayed events.
-        let consumer_name = Self::subscriber_consumer_name(&self.subject);
         let max_retries = 3u32;
         let (consumer, last_err) = {
             let mut last_err = None;
@@ -201,16 +226,8 @@ impl ConfigBus for NatsConfigBus {
             for attempt in 0..=max_retries {
                 match self.ensure_stream().await {
                     Ok(stream) => {
-                        match stream
-                            .create_consumer(jetstream::consumer::pull::Config {
-                                deliver_policy: DeliverPolicy::New,
-                                durable_name: None,
-                                name: Some(consumer_name.clone()),
-                                inactive_threshold: CONSUMER_INACTIVE_THRESHOLD,
-                                ..Default::default()
-                            })
-                            .await
-                        {
+                        let consumer_config = Self::subscriber_consumer_config(&self.subject);
+                        match stream.create_consumer(consumer_config).await {
                             Ok(c) => {
                                 consumer = Some(c);
                                 break;
@@ -267,10 +284,15 @@ impl ConfigBus for NatsConfigBus {
                             Some(event)
                         }
                         Err(_) => {
-                            // Deserialization failed — nak so the server can redeliver
-                            // or move to dead-letter. Ignore nak errors (best-effort).
+                            // T033: deserialization failed — NAK with a delay
+                            // so the poison message is redelivered later
+                            // instead of in a tight loop, and only up to
+                            // `NATS_MAX_DELIVER` times (the server terminates
+                            // it afterwards). Best-effort: nak errors ignored.
                             let _ = msg
-                                .ack_with(async_nats::jetstream::AckKind::Nak(None))
+                                .ack_with(async_nats::jetstream::AckKind::Nak(Some(
+                                    NATS_NAK_DELAY,
+                                )))
                                 .await;
                             None
                         }
@@ -515,6 +537,45 @@ mod tests {
             name.starts_with("confers-cfg_events_"),
             "subject must be embedded (sanitized) for debuggability: {name}"
         );
+    }
+
+    // ==================== T033: poison-message delivery cap ====================
+
+    /// T033: the consumer configuration caps redelivery at 5 and keeps the
+    /// broadcast/ephemeral semantics.
+    #[test]
+    fn test_consumer_config_caps_max_deliver() {
+        let config = NatsConfigBus::subscriber_consumer_config("config.events");
+        assert_eq!(
+            config.max_deliver, NATS_MAX_DELIVER,
+            "max_deliver must be set to bound poison-message redelivery"
+        );
+        assert_eq!(config.max_deliver, 5);
+        assert!(
+            config.durable_name.is_none(),
+            "consumers stay ephemeral (broadcast semantics)"
+        );
+        assert_eq!(
+            config.deliver_policy,
+            DeliverPolicy::New,
+            "subscribers still start at New"
+        );
+        assert_eq!(
+            config.inactive_threshold, CONSUMER_INACTIVE_THRESHOLD,
+            "inactive threshold unchanged"
+        );
+        assert!(
+            config.name.is_some(),
+            "the ephemeral consumer name is still embedded"
+        );
+    }
+
+    /// T033: a NAK for an undeserializable payload defers redelivery by 5s
+    /// instead of looping.
+    #[test]
+    fn test_nak_delay_is_five_seconds() {
+        assert_eq!(NATS_NAK_DELAY, Duration::from_secs(5));
+        assert_eq!(NATS_MAX_DELIVER, 5);
     }
 
     // ==================== with_stream_name (not exercised by builder path) ====================

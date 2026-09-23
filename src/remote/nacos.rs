@@ -8,10 +8,15 @@
 //! unchanged content short-circuits into the cached snapshot, so the parse
 //! and merge work only run when the server actually served new content.
 //!
-//! Like every remote source this is an MVP adapter: authentication is out of
-//! scope (Nacos auth can be layered in front), and content is projected with
-//! the standard format pipeline (explicit format or content sniffing).
+//! Authentication (T031): when `username`/`password` are configured, the
+//! source logs in against `/nacos/v1/auth/login` and appends the returned
+//! `accessToken` to every config request; an unauthorized (401) response
+//! triggers one re-login and retry.
+//!
+//! Like every remote source this is an MVP adapter: content is projected
+//! with the standard format pipeline (explicit format or content sniffing).
 
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -29,16 +34,37 @@ const SOURCE_NAME: &str = "nacos";
 pub const DEFAULT_NACOS_GROUP: &str = "DEFAULT_GROUP";
 
 /// Builder for [`NacosSource`].
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NacosSourceBuilder {
     server: String,
     data_id: String,
     group: String,
     namespace: Option<String>,
+    username: Option<String>,
+    /// Never rendered by [`fmt::Debug`] (credentials must not leak through
+    /// logs).
+    password: Option<String>,
     format: Option<Format>,
     interval: Duration,
     timeout: Duration,
     cb_threshold: u32,
+}
+
+impl fmt::Debug for NacosSourceBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NacosSourceBuilder")
+            .field("server", &self.server)
+            .field("data_id", &self.data_id)
+            .field("group", &self.group)
+            .field("namespace", &self.namespace)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .field("format", &self.format)
+            .field("interval", &self.interval)
+            .field("timeout", &self.timeout)
+            .field("cb_threshold", &self.cb_threshold)
+            .finish()
+    }
 }
 
 impl NacosSourceBuilder {
@@ -49,6 +75,8 @@ impl NacosSourceBuilder {
             data_id: data_id.into(),
             group: DEFAULT_NACOS_GROUP.to_string(),
             namespace: None,
+            username: None,
+            password: None,
             format: None,
             interval: Duration::from_secs(30),
             timeout: Duration::from_secs(10),
@@ -65,6 +93,24 @@ impl NacosSourceBuilder {
     /// Set the namespace/tenant.
     pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
         self.namespace = Some(namespace.into());
+        self
+    }
+
+    /// Set the username for Nacos authentication (T031).
+    ///
+    /// Requires `password` to be set as well; with both configured the source
+    /// logs in against `/nacos/v1/auth/login` and appends the returned
+    /// `accessToken` to every config request.
+    pub fn username(mut self, username: impl Into<String>) -> Self {
+        self.username = Some(username.into());
+        self
+    }
+
+    /// Set the password for Nacos authentication (T031).
+    ///
+    /// The value is redacted in `Debug` output and never appears in errors.
+    pub fn password(mut self, password: impl Into<String>) -> Self {
+        self.password = Some(password.into());
         self
     }
 
@@ -108,6 +154,26 @@ impl NacosSourceBuilder {
                 message: "nacos dataId must not be empty".to_string(),
             });
         }
+        // T031: auth requires both credentials or neither.
+        match (&self.username, &self.password) {
+            (Some(_), Some(_)) | (None, None) => {}
+            (Some(_), None) => {
+                return Err(ConfigError::InvalidValue {
+                    key: "nacos.username".to_string(),
+                    expected_type: "both username and password".to_string(),
+                    message: "nacos auth requires both username and password; password is missing"
+                        .to_string(),
+                });
+            }
+            (None, Some(_)) => {
+                return Err(ConfigError::InvalidValue {
+                    key: "nacos.password".to_string(),
+                    expected_type: "both username and password".to_string(),
+                    message: "nacos auth requires both username and password; username is missing"
+                        .to_string(),
+                });
+            }
+        }
         let mut url = format!(
             "{}/nacos/v1/cs/configs?dataId={}&group={}",
             self.server,
@@ -117,8 +183,17 @@ impl NacosSourceBuilder {
         if let Some(ref tenant) = self.namespace {
             url.push_str(&format!("&tenant={}", urlencode(tenant)));
         }
+        let login_url = if self.username.is_some() {
+            Some(format!("{}/nacos/v1/auth/login", self.server))
+        } else {
+            None
+        };
         Ok(NacosSource {
             url: url.into(),
+            login_url: login_url.map(Arc::from),
+            username: self.username.map(Arc::from),
+            password: self.password.map(Arc::from),
+            access_token: ArcSwap::new(Arc::new(None)),
             format: self.format,
             interval: self.interval,
             client: reqwest::Client::builder()
@@ -156,6 +231,14 @@ fn urlencode(input: &str) -> String {
 /// Nacos HTTP Open API configuration source with timed change listening.
 pub struct NacosSource {
     url: Arc<str>,
+    /// Login endpoint (`/nacos/v1/auth/login`), present only when
+    /// username/password auth is configured (T031).
+    login_url: Option<Arc<str>>,
+    username: Option<Arc<str>>,
+    /// Held, never logged and never rendered by `Debug` (T031).
+    password: Option<Arc<str>>,
+    /// Cached `accessToken` from the last successful login (T031).
+    access_token: ArcSwap<Option<Arc<str>>>,
     format: Option<Format>,
     interval: Duration,
     client: reqwest::Client,
@@ -166,40 +249,151 @@ pub struct NacosSource {
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
+/// Outcome of the circuit-breaker gate at the top of `poll` (T031).
+enum Gate {
+    /// A request may be attempted; its outcome is recorded.
+    Record,
+    /// A request may be attempted, but the breaker lock was contended —
+    /// the outcome is NOT recorded (no failure counting, no spurious open).
+    Unrecorded,
+}
+
+/// Internal classification of a failed config fetch (T031): a 401 is
+/// retried once after re-login, everything else propagates.
+enum FetchFailure {
+    Unauthorized(ConfigError),
+    Other(ConfigError),
+}
+
 impl NacosSource {
     /// The Open API endpoint being polled.
     pub fn url(&self) -> &str {
         &self.url
     }
 
-    /// Fetch the current content from the server.
-    async fn fetch(&self) -> ConfigResult<String> {
+    /// Login and cache the returned `accessToken` (T031).
+    ///
+    /// Nacos expects a form-encoded POST and answers with a JSON body
+    /// containing `accessToken`. The password never appears in errors: only
+    /// fixed messages are produced on failure.
+    async fn login(&self) -> ConfigResult<()> {
+        let Some(ref login_url) = self.login_url else {
+            return Ok(());
+        };
+        let (Some(username), Some(password)) = (self.username.as_ref(), self.password.as_ref())
+        else {
+            return Ok(());
+        };
+        let form = format!(
+            "username={}&password={}",
+            urlencode(username),
+            urlencode(password)
+        );
         let response = self
             .client
-            .get(self.url.as_ref())
+            .post(login_url.as_ref())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(form)
             .send()
             .await
-            .map_err(|e| ConfigError::InvalidValue {
+            .map_err(|_| ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
-                expected_type: "nacos API response".to_string(),
-                message: format!("nacos request failed: {e}"),
+                expected_type: "nacos auth response".to_string(),
+                message: "nacos login request failed".to_string(),
             })?;
-        let status = response.status();
-        if !status.is_success() {
+        if !response.status().is_success() {
             return Err(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "2xx status".to_string(),
-                message: format!("nacos returned {status} for {}", self.url),
+                message: format!("nacos login rejected with status {}", response.status()),
             });
         }
-        response
-            .text()
-            .await
-            .map_err(|e| ConfigError::InvalidValue {
+        let body: serde_json::Value =
+            response
+                .json()
+                .await
+                .map_err(|_| ConfigError::InvalidValue {
+                    key: SOURCE_NAME.to_string(),
+                    expected_type: "nacos login JSON body".to_string(),
+                    message: "nacos login returned an unreadable body".to_string(),
+                })?;
+        let token = body
+            .get("accessToken")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "accessToken in login response".to_string(),
+                message: "nacos login response has no accessToken".to_string(),
+            })?;
+        self.access_token
+            .store(Arc::new(Some(Arc::from(token.to_string()))));
+        Ok(())
+    }
+
+    /// Fetch the current content from the server.
+    ///
+    /// With auth configured the cached `accessToken` is appended; an
+    /// unauthorized (401) response triggers exactly one re-login + retry
+    /// (T031).
+    async fn fetch(&self) -> ConfigResult<String> {
+        if self.login_url.is_some() && self.access_token.load().is_none() {
+            self.login().await?;
+        }
+
+        match self.fetch_once().await {
+            Ok(content) => Ok(content),
+            Err(FetchFailure::Unauthorized(err)) => {
+                if self.login_url.is_some() {
+                    // Token expired/invalid: re-login once and retry once.
+                    self.login().await?;
+                    return match self.fetch_once().await {
+                        Ok(content) => Ok(content),
+                        Err(FetchFailure::Unauthorized(err) | FetchFailure::Other(err)) => Err(err),
+                    };
+                }
+                Err(err)
+            }
+            Err(FetchFailure::Other(err)) => Err(err),
+        }
+    }
+
+    /// One config request (no auth orchestration).
+    async fn fetch_once(&self) -> Result<String, FetchFailure> {
+        let mut url = self.url.to_string();
+        if let Some(token) = self.access_token.load().as_ref() {
+            url.push_str(&format!("&accessToken={}", urlencode(token)));
+        }
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            FetchFailure::Other(ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "nacos API response".to_string(),
+                message: format!("nacos request failed: {e}"),
+            })
+        })?;
+        let status = response.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            // The URL is deliberately kept out of the unauthorized message:
+            // access tokens travel in the query string.
+            return Err(FetchFailure::Unauthorized(ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "2xx status".to_string(),
+                message: "nacos returned 401 Unauthorized (accessToken rejected)".to_string(),
+            }));
+        }
+        if !status.is_success() {
+            return Err(FetchFailure::Other(ConfigError::InvalidValue {
+                key: SOURCE_NAME.to_string(),
+                expected_type: "2xx status".to_string(),
+                message: format!("nacos returned {status} for {}", self.url),
+            }));
+        }
+        response.text().await.map_err(|e| {
+            FetchFailure::Other(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "nacos config text".to_string(),
                 message: format!("nacos returned an unreadable body: {e}"),
             })
+        })
     }
 
     /// Project raw content into an annotated config value.
@@ -218,19 +412,26 @@ impl NacosSource {
 impl crate::remote::PolledSource for NacosSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
         // Circuit breaker: a failing server cools the source down instead of
-        // hammering it every interval.
-        let allowed = self
-            .circuit_breaker
-            .try_lock()
-            .map(|mut cb| cb.can_execute())
-            .unwrap_or(false);
-        if !allowed {
-            return Err(ConfigError::InvalidValue {
-                key: SOURCE_NAME.to_string(),
-                expected_type: "available source".to_string(),
-                message: "nacos source circuit breaker is open".to_string(),
-            });
-        }
+        // hammering it every interval. T031: a CONTENDED breaker lock
+        // (`try_lock` WouldBlock, e.g. another poll in flight) is recorded as
+        // `unknown` — the request proceeds but its outcome is not recorded, so
+        // concurrency no longer misreports the circuit as open.
+        let gate = match self.circuit_breaker.try_lock() {
+            Ok(mut cb) => {
+                if cb.can_execute() {
+                    Gate::Record
+                } else {
+                    // Genuinely open: fail fast without a request.
+                    return Err(ConfigError::InvalidValue {
+                        key: SOURCE_NAME.to_string(),
+                        expected_type: "available source".to_string(),
+                        message: "nacos source circuit breaker is open".to_string(),
+                    });
+                }
+            }
+            // Lock contended: skip breaker accounting for this poll.
+            Err(_) => Gate::Unrecorded,
+        };
 
         // Remote-fetch critical-path metrics (manual: fetch resolves to raw
         // text, while record_fetch_metrics is bound to AnnotatedValue).
@@ -244,7 +445,9 @@ impl crate::remote::PolledSource for NacosSource {
         );
         let content = match result {
             Ok(content) => {
-                if let Ok(mut cb) = self.circuit_breaker.try_lock() {
+                if let Gate::Record = gate
+                    && let Ok(mut cb) = self.circuit_breaker.try_lock()
+                {
                     cb.record_success();
                 }
                 content
@@ -254,7 +457,9 @@ impl crate::remote::PolledSource for NacosSource {
                     crate::metrics::names::REMOTE_FETCH_ERRORS_TOTAL,
                     &labels,
                 );
-                if let Ok(mut cb) = self.circuit_breaker.try_lock() {
+                if let Gate::Record = gate
+                    && let Ok(mut cb) = self.circuit_breaker.try_lock()
+                {
                     cb.record_failure();
                 }
                 return Err(err);
@@ -461,5 +666,236 @@ mod tests {
     fn builder_rejects_empty_server_and_dataid() {
         assert!(NacosSourceBuilder::new("", "x").build().is_err());
         assert!(NacosSourceBuilder::new("http://nacos", "").build().is_err());
+    }
+
+    // ==================== T031: auth & circuit-breaker fairness ====================
+
+    /// Mock Nacos server with auth: answers `POST /nacos/v1/auth/login`
+    /// with a JSON `accessToken`, and `GET /nacos/v1/cs/configs` only when
+    /// the request carries the valid token (else 401). Returns the address
+    /// plus counters for logins and (rejected) config requests.
+    #[allow(clippy::type_complexity)]
+    async fn spawn_mock_nacos_with_auth(
+        username: &str,
+        password: &str,
+        token: &'static str,
+    ) -> (
+        std::net::SocketAddr,
+        Arc<AtomicUsize>,
+        Arc<AtomicUsize>,
+        Arc<AtomicUsize>,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().unwrap();
+        let logins = Arc::new(AtomicUsize::new(0));
+        let logins_server = Arc::clone(&logins);
+        let unauthorized = Arc::new(AtomicUsize::new(0));
+        let unauthorized_server = Arc::clone(&unauthorized);
+        let authorized = Arc::new(AtomicUsize::new(0));
+        let authorized_server = Arc::clone(&authorized);
+        let (username, password) = (username.to_string(), password.to_string());
+
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let logins = Arc::clone(&logins_server);
+                let unauthorized = Arc::clone(&unauthorized_server);
+                let authorized = Arc::clone(&authorized_server);
+                let (username, password, token) = (username.clone(), password.clone(), token);
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 8192];
+                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buf[..n]);
+                    let first_line = request.lines().next().unwrap_or_default();
+                    if first_line.starts_with("POST /nacos/v1/auth/login") {
+                        // Validate the form credentials.
+                        let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+                        if body.contains(&format!("username={username}"))
+                            && body.contains(&format!("password={password}"))
+                        {
+                            logins.fetch_add(1, Ordering::SeqCst);
+                            let body = format!(r#"{{"accessToken":"{token}"}}"#);
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            );
+                            let _ = stream.write_all(response.as_bytes()).await;
+                        } else {
+                            let _ = stream
+                                .write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                                .await;
+                        }
+                    } else if first_line.starts_with("GET /nacos/v1/cs/configs") {
+                        if first_line.contains(&format!("accessToken={token}")) {
+                            authorized.fetch_add(1, Ordering::SeqCst);
+                            let body = "log_level = \"debug\"\n";
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            );
+                            let _ = stream.write_all(response.as_bytes()).await;
+                        } else {
+                            unauthorized.fetch_add(1, Ordering::SeqCst);
+                            let _ = stream
+                                .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                                .await;
+                        }
+                    } else {
+                        let _ = stream
+                            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                            .await;
+                    }
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+        (addr, logins, unauthorized, authorized)
+    }
+
+    /// T031: with username/password configured, the source logs in and the
+    /// config request carries the returned accessToken.
+    #[tokio::test]
+    async fn auth_login_sets_token_and_config_request_succeeds() {
+        let (addr, logins, unauthorized, authorized) =
+            spawn_mock_nacos_with_auth("nacos", "secret", "tok-123").await; // pragma: allowlist secret
+        let source = NacosSourceBuilder::new(format!("http://{addr}"), "app-config.toml")
+            .username("nacos")
+            .password("secret") // pragma: allowlist secret
+            .build()
+            .expect("build");
+
+        let polled = crate::remote::PolledSource::poll(&source)
+            .await
+            .expect("poll with auth must succeed");
+        assert_eq!(
+            polled
+                .inner
+                .as_map()
+                .and_then(|m| m.get("log_level"))
+                .and_then(|v| v.as_str()),
+            Some("debug")
+        );
+        assert_eq!(logins.load(Ordering::SeqCst), 1, "exactly one login");
+        assert_eq!(
+            authorized.load(Ordering::SeqCst),
+            1,
+            "config request carried the valid token"
+        );
+        assert_eq!(
+            unauthorized.load(Ordering::SeqCst),
+            0,
+            "no request rejected"
+        );
+    }
+
+    /// T031: when the cached token is rejected with 401, the source re-logins
+    /// exactly once and retries the config request successfully.
+    #[tokio::test]
+    async fn auth_relogins_once_on_401() {
+        let (addr, logins, unauthorized, authorized) =
+            spawn_mock_nacos_with_auth("nacos", "secret", "tok-123").await; // pragma: allowlist secret
+        let source = NacosSourceBuilder::new(format!("http://{addr}"), "app-config.toml")
+            .username("nacos")
+            .password("secret") // pragma: allowlist secret
+            .build()
+            .expect("build");
+
+        // Pre-seed a stale token so the first config request is rejected.
+        source
+            .access_token
+            .store(Arc::new(Some(Arc::from("stale-token"))));
+
+        let polled = crate::remote::PolledSource::poll(&source)
+            .await
+            .expect("poll must succeed after one re-login");
+        assert!(
+            polled
+                .inner
+                .as_map()
+                .and_then(|m| m.get("log_level"))
+                .is_some()
+        );
+        assert_eq!(
+            unauthorized.load(Ordering::SeqCst),
+            1,
+            "the stale-token request was rejected once"
+        );
+        assert_eq!(
+            logins.load(Ordering::SeqCst),
+            1,
+            "exactly one re-login after 401"
+        );
+        assert_eq!(
+            authorized.load(Ordering::SeqCst),
+            1,
+            "the retried request carried the fresh token"
+        );
+    }
+
+    /// T031: builder Debug output redacts the password.
+    #[test]
+    fn builder_debug_redacts_password() {
+        let builder = NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+            .username("nacos")
+            .password("super-secret-password"); // pragma: allowlist secret
+        let debug = format!("{builder:?}");
+        assert!(!debug.contains("super-secret-password"));
+        assert!(debug.contains("[REDACTED]"));
+    }
+
+    /// T031: auth requires both credentials or neither.
+    #[test]
+    fn builder_rejects_partial_credentials() {
+        assert!(
+            NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+                .username("nacos")
+                .build()
+                .is_err(),
+            "username without password must fail the build"
+        );
+        assert!(
+            NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+                .password("secret") // pragma: allowlist secret
+                .build()
+                .is_err(),
+            "password without username must fail the build"
+        );
+    }
+
+    /// T031: a contended circuit-breaker lock (`try_lock` WouldBlock, e.g.
+    /// another poll in flight) is recorded as unknown — the poll proceeds
+    /// and must NOT be misreported as "circuit breaker is open".
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)] // 锁跨 await 正是被测场景
+    async fn contended_circuit_breaker_does_not_report_open() {
+        let body = "log_level = \"info\"\n".to_string();
+        let (addr, _) = spawn_mock_nacos(vec![body]).await;
+        let source = source_for(addr, "DEFAULT_GROUP");
+
+        // Hold the breaker lock to simulate a concurrent poll in flight.
+        let guard = source.circuit_breaker.try_lock().expect("hold lock");
+
+        let result = crate::remote::PolledSource::poll(&source).await;
+        drop(guard);
+        assert!(
+            result.is_ok(),
+            "a contended breaker lock must not fail the poll: {:?}",
+            result.err()
+        );
+
+        // Nothing was recorded while the lock was contended.
+        assert_eq!(
+            source.circuit_breaker.lock().unwrap().failure_count(),
+            0,
+            "no failure may be recorded for a contended round"
+        );
     }
 }

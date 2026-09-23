@@ -8,6 +8,7 @@
 use super::common::{merge_into_map, try_parse_value_with_format};
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
+use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::types::{AnnotatedValue, SourceId};
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
@@ -35,6 +36,7 @@ pub struct EtcdSourceBuilder {
     interval: Option<Duration>,
     tls: Option<EtcdTlsConfig>,
     operation_timeout: Duration,
+    cb_threshold: u32,
 }
 
 /// TLS configuration for etcd connection.
@@ -57,6 +59,7 @@ impl EtcdSourceBuilder {
             interval: None,
             tls: None,
             operation_timeout: DEFAULT_ETCD_OPERATION_TIMEOUT,
+            cb_threshold: 5,
         }
     }
 
@@ -114,6 +117,16 @@ impl EtcdSourceBuilder {
     /// reported as an error instead of hanging forever.
     pub fn operation_timeout(mut self, timeout: Duration) -> Self {
         self.operation_timeout = timeout;
+        self
+    }
+
+    /// Set the circuit breaker failure threshold (T032).
+    ///
+    /// After this many consecutive failed polls, the circuit opens and
+    /// subsequent polls fail fast with `CircuitBreakerOpen` without issuing
+    /// a gRPC call. Default: 5.
+    pub fn circuit_breaker_threshold(mut self, failures: u32) -> Self {
+        self.cb_threshold = failures;
         self
     }
 
@@ -202,6 +215,9 @@ impl EtcdSourceBuilder {
             last_revision: AtomicI64::new(0),
             cached_value: ArcSwap::new(Arc::new(None)),
             cached_source_id: SourceId::new(format!("etcd:{}", self.prefix)),
+            circuit_breaker: std::sync::Mutex::new(
+                CircuitBreaker::new().with_threshold(self.cb_threshold),
+            ),
         })
     }
 }
@@ -224,6 +240,9 @@ pub struct EtcdSource {
     last_revision: AtomicI64,
     cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
     cached_source_id: SourceId,
+    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// polls fail fast without issuing a gRPC call.
+    circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
 impl EtcdSource {
@@ -356,7 +375,38 @@ impl EtcdSource {
 #[async_trait]
 impl crate::remote::PolledSource for EtcdSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await
+        // T032: circuit breaker around the poll — consecutive failures open
+        // the circuit and subsequent polls fail fast without a gRPC call.
+        let allowed = {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "etcd_circuit_breaker".to_string(),
+                })?;
+            cb.can_execute()
+        };
+        if !allowed {
+            return Err(ConfigError::RemoteUnavailable {
+                error_type: "CircuitBreakerOpen".to_string(),
+                retryable: false,
+            });
+        }
+        let result =
+            crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await;
+        {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::LockPoisoned {
+                    resource: "etcd_circuit_breaker".to_string(),
+                })?;
+            match &result {
+                Ok(_) => cb.record_success(),
+                Err(_) => cb.record_failure(),
+            }
+        }
+        result
     }
 
     fn poll_interval(&self) -> Option<Duration> {
@@ -632,6 +682,41 @@ mod tests {
             err.contains("Failed to fetch from etcd"),
             "error should mention fetch failure: {err}"
         );
+    }
+
+    /// T032: after the failure threshold is reached, polls fail fast with
+    /// `CircuitBreakerOpen` without issuing a gRPC call.
+    #[tokio::test]
+    async fn test_circuit_breaker_opens_after_failures() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let source = EtcdSourceBuilder::new()
+            .endpoints(vec![format!("127.0.0.1:{}", port)])
+            .circuit_breaker_threshold(1)
+            .build()
+            .await
+            .expect("lazy connect should succeed");
+
+        use crate::remote::PolledSource;
+        // 1. First poll: the unreachable endpoint surfaces its own error and
+        //    opens the circuit (threshold 1).
+        let first = source.poll().await;
+        assert!(first.is_err(), "unreachable endpoint must fail the poll");
+        assert!(
+            !matches!(first, Err(ConfigError::RemoteUnavailable { ref error_type, .. }) if error_type == "CircuitBreakerOpen"),
+            "the first failure must be the fetch error itself: {first:?}"
+        );
+
+        // 2. While open (1s default base delay): fail fast without a gRPC call.
+        let second = source.poll().await;
+        match second {
+            Err(ConfigError::RemoteUnavailable {
+                error_type,
+                retryable: false,
+            }) if error_type == "CircuitBreakerOpen" => {}
+            other => panic!("open circuit must fail fast, got: {other:?}"),
+        }
     }
 
     #[tokio::test]

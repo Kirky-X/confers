@@ -35,13 +35,30 @@ use reqwest::Client;
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+/// Single-source SSRF blocked-network table (shared with the SsrfValidator
+/// security rule, which includes this file via `#[path]`).
+#[path = "ip_blocklist.rs"]
+pub(crate) mod ip_blocklist;
+
+pub use ip_blocklist::is_ip_blocked;
+
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Default connect timeout for HTTP polled sources (10 seconds).
+///
+/// Applied by the builder when `connect_timeout` is not set, so a hung
+/// endpoint cannot stall the connect phase forever.
+pub const DEFAULT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Default overall request timeout for HTTP polled sources (30 seconds).
+///
+/// Applied by the builder when `timeout` is not set.
+pub const DEFAULT_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Maximum number of HTTP redirects followed per poll.
 ///
@@ -50,42 +67,6 @@ pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);
 /// and SSRF-validated manually before the next request is issued, so a
 /// redirect cannot bypass the checks applied to the original URL.
 const MAX_REDIRECTS: u32 = 10;
-
-static BLOCKED_NETWORKS: LazyLock<Vec<ipnet::IpNet>> = LazyLock::new(|| {
-    vec![
-        "127.0.0.0/8".parse().unwrap(),
-        "10.0.0.0/8".parse().unwrap(),
-        "172.16.0.0/12".parse().unwrap(),
-        "192.168.0.0/16".parse().unwrap(),
-        "169.254.0.0/16".parse().unwrap(),
-        "100.64.0.0/10".parse().unwrap(),
-        "192.0.2.0/24".parse().unwrap(),
-        "198.51.100.0/24".parse().unwrap(),
-        "203.0.113.0/24".parse().unwrap(),
-        "192.0.0.0/24".parse().unwrap(),
-        "fc00::/7".parse().unwrap(),
-        "fe80::/10".parse().unwrap(),
-    ]
-});
-
-/// Check if an IP address is in a blocked range.
-pub fn is_ip_blocked(ip: IpAddr) -> bool {
-    if let IpAddr::V6(ipv6) = ip {
-        let octets = ipv6.octets();
-        if octets[..10] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            && octets[10] == 0xff
-            && octets[11] == 0xff
-        {
-            return true;
-        }
-    }
-
-    if ip.is_loopback() {
-        return true;
-    }
-
-    BLOCKED_NETWORKS.iter().any(|net| net.contains(&ip))
-}
 
 /// Resolve a hostname on tokio's blocking pool, optionally validating every
 /// resolved IP against the SSRF blacklist.
@@ -375,6 +356,18 @@ pub trait PolledSource: Send + Sync {
     fn source_id(&self) -> SourceId;
 }
 
+/// An HTTP header applied to every poll request, whose value is redacted in
+/// `Debug` output (T027: auth credentials must never leak through logs or
+/// debug dumps).
+#[derive(Clone)]
+struct RedactedHeader(String, String);
+
+impl std::fmt::Debug for RedactedHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: [REDACTED]", self.0)
+    }
+}
+
 /// HTTP-polled configuration source.
 ///
 /// Fetches configuration from an HTTP endpoint with support for:
@@ -383,6 +376,9 @@ pub trait PolledSource: Send + Sync {
 /// - Configurable poll intervals
 /// - Automatic format detection
 /// - SSRF protection with configurable domain whitelist
+/// - Custom request headers (e.g. authentication) via
+///   [`HttpPolledSourceBuilder::with_header`]; header values are redacted in
+///   `Debug` output and never appear in errors or logs
 ///
 /// # SSRF Protection
 ///
@@ -430,12 +426,21 @@ pub struct HttpPolledSource {
     format: Option<Format>,
     /// Domains whitelisted for SSRF checks (exact, subdomain or wildcard).
     allowed_domains: Arc<[String]>,
+    /// Extra headers applied to every request (e.g. authentication).
+    /// Values are redacted in `Debug` output (see [`RedactedHeader`]).
+    headers: Arc<[RedactedHeader]>,
     /// Whether per-request SSRF validation is enforced on the poll path.
     ///
     /// `true` for sources built via [`HttpPolledSourceBuilder`]. Direct
     /// construction (tests against local mock servers) may set it to `false`
     /// because loopback HTTP endpoints are rejected by the SSRF rules.
     enforce_ssrf: bool,
+    /// Whether failures may serve the cached value (T028). `false` keeps the
+    /// fail-loud default.
+    stale_on_error: bool,
+    /// How many polls were answered from the cache because of a failure or
+    /// an open circuit (the observable "warning marker" of stale service).
+    stale_served: std::sync::atomic::AtomicU64,
     cached: RwLock<Option<AnnotatedValue>>,
     last_etag: ArcSwap<Option<String>>,
     last_modified: ArcSwap<Option<String>>,
@@ -449,10 +454,13 @@ pub struct HttpPolledSourceBuilder {
     interval: Option<Duration>,
     format: Option<Format>,
     timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
+    headers: Vec<(String, String)>,
     allowed_domains: Vec<String>,
     cb_threshold: Option<u32>,
     cb_base_delay: Option<Duration>,
     cb_max_delay: Option<Duration>,
+    stale_on_error: bool,
 }
 
 impl HttpPolledSourceBuilder {
@@ -463,10 +471,13 @@ impl HttpPolledSourceBuilder {
             interval: None,
             format: None,
             timeout: None,
+            connect_timeout: None,
+            headers: Vec::new(),
             allowed_domains: Vec::new(),
             cb_threshold: None,
             cb_base_delay: None,
             cb_max_delay: None,
+            stale_on_error: false,
         }
     }
 
@@ -498,8 +509,32 @@ impl HttpPolledSourceBuilder {
     }
 
     /// Set the request timeout.
+    ///
+    /// When not set, the client applies [`DEFAULT_HTTP_REQUEST_TIMEOUT`]
+    /// (30 seconds) so a hung endpoint cannot stall the poll forever.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
+        self
+    }
+
+    /// Set the connect timeout.
+    ///
+    /// When not set, the client applies [`DEFAULT_HTTP_CONNECT_TIMEOUT`]
+    /// (10 seconds).
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Add an HTTP header applied to every poll request, on every followed
+    /// redirect hop (T027).
+    ///
+    /// Intended for authentication headers (e.g. `Authorization: Bearer …`).
+    /// The value is stored redacted: it never appears in `Debug` output,
+    /// error messages or logs — reqwest errors are mapped to their type name
+    /// only.
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((name.into(), value.into()));
         self
     }
 
@@ -557,6 +592,23 @@ impl HttpPolledSourceBuilder {
         self
     }
 
+    /// Serve the last known-good (stale) configuration when the circuit
+    /// breaker is open or a poll fails (T028). Default: `false` — fail loud
+    /// with an error, which keeps silent-staleness risks opt-in.
+    ///
+    /// When enabled and a cached value exists, a failed poll returns the
+    /// cached value instead of the error. The degradation is observable:
+    /// - [`HttpPolledSource::stale_served`] counts how many polls were
+    ///   served from cache due to failures ("warning marker"), and
+    /// - the fetch-error metric is still recorded for every stale serve.
+    ///
+    /// Without a cached value (the very first poll never succeeded) the
+    /// error still propagates: there is nothing stale to serve.
+    pub fn stale_on_error(mut self, stale_on_error: bool) -> Self {
+        self.stale_on_error = stale_on_error;
+        self
+    }
+
     /// Build the `HttpPolledSource`.
     ///
     /// # Errors
@@ -590,14 +642,14 @@ impl HttpPolledSourceBuilder {
         // The pinned DNS resolver makes reqwest connect to addresses from the
         // same validated resolution as the poll-path pre-check, eliminating
         // the DNS-rebinding TOCTOU window between validation and connection.
-        let mut client_builder = Client::builder()
+        // T027: default connect/total timeouts are applied when the builder
+        // was not given explicit ones.
+        let client_builder = Client::builder()
             .use_rustls_tls()
             .redirect(reqwest::redirect::Policy::none())
-            .dns_resolver(Arc::new(ValidatingResolver { enforce_ssrf: true }));
-
-        if let Some(timeout) = self.timeout {
-            client_builder = client_builder.timeout(timeout);
-        }
+            .dns_resolver(Arc::new(ValidatingResolver { enforce_ssrf: true }))
+            .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_HTTP_CONNECT_TIMEOUT))
+            .timeout(self.timeout.unwrap_or(DEFAULT_HTTP_REQUEST_TIMEOUT));
 
         let client = client_builder
             .build()
@@ -618,13 +670,22 @@ impl HttpPolledSourceBuilder {
             cb = cb.with_max_delay(max_delay);
         }
 
+        let headers: Arc<[RedactedHeader]> = self
+            .headers
+            .into_iter()
+            .map(|(name, value)| RedactedHeader(name, value))
+            .collect();
+
         Ok(HttpPolledSource {
             url: url_arc,
             interval: self.interval.unwrap_or(DEFAULT_POLL_INTERVAL),
             client,
             format: self.format,
             allowed_domains: self.allowed_domains.into(),
+            headers,
             enforce_ssrf: true,
+            stale_on_error: self.stale_on_error,
+            stale_served: std::sync::atomic::AtomicU64::new(0),
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
@@ -664,17 +725,48 @@ impl PolledSource for HttpPolledSource {
 }
 
 impl HttpPolledSource {
+    /// Number of polls served from the cache because of a failure or an open
+    /// circuit (T028). Zero unless [`HttpPolledSourceBuilder::stale_on_error`]
+    /// was enabled and a failure actually occurred.
+    pub fn stale_served(&self) -> u64 {
+        self.stale_served.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Serve the cached value as stale (T028): record the degradation in the
+    /// fetch-error metric, bump the stale-served marker and return the cache.
+    /// Returns `None` when no cached value exists (nothing stale to serve).
+    async fn serve_stale_if_allowed(&self) -> Option<AnnotatedValue> {
+        if !self.stale_on_error {
+            return None;
+        }
+        let cached = self.cached.read().await.clone()?;
+        crate::metrics::record_counter(
+            crate::metrics::names::REMOTE_FETCH_ERRORS_TOTAL,
+            &[("source", self.source_id.as_str())],
+        );
+        self.stale_served
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        Some(cached)
+    }
+
     /// Poll with circuit-breaker accounting (the original `poll` body).
     async fn poll_with_circuit_breaker(&self) -> ConfigResult<AnnotatedValue> {
-        // Check circuit breaker before making any HTTP request
-        {
+        // Check circuit breaker before making any HTTP request. The std
+        // Mutex guard must be dropped before any `.await` (it is not Send).
+        let cb_allowed = {
             let mut cb = self.circuit_breaker.lock().unwrap();
-            if !cb.can_execute() {
-                return Err(ConfigError::RemoteUnavailable {
-                    error_type: "CircuitBreakerOpen".to_string(),
-                    retryable: false,
-                });
+            cb.can_execute()
+        };
+        if !cb_allowed {
+            // T028: stale_on_error opts into serving the cached value
+            // while the circuit is open; the default stays fail-loud.
+            if let Some(cached) = self.serve_stale_if_allowed().await {
+                return Ok(cached);
             }
+            return Err(ConfigError::RemoteUnavailable {
+                error_type: "CircuitBreakerOpen".to_string(),
+                retryable: false,
+            });
         }
 
         let result = self.do_poll().await;
@@ -688,7 +780,15 @@ impl HttpPolledSource {
             }
         }
 
-        result
+        match result {
+            Ok(value) => Ok(value),
+            // T028: opt-in stale-if-error — a failed poll (transport error,
+            // HTTP error status, parse failure) serves the cached value.
+            Err(err) => match self.serve_stale_if_allowed().await {
+                Some(cached) => Ok(cached),
+                None => Err(err),
+            },
+        }
     }
 
     /// Internal poll implementation (without circuit breaker logic).
@@ -715,6 +815,12 @@ impl HttpPolledSource {
             }
 
             let mut request = self.client.get(current_url.clone());
+
+            // T027: builder-configured headers (e.g. authentication) are
+            // applied to every request, including each followed redirect hop.
+            for header in &*self.headers {
+                request = request.header(header.0.as_str(), header.1.as_str());
+            }
 
             if let Some(etag) = self.last_etag.load().as_ref() {
                 request = request.header("If-None-Match", etag.as_str());
@@ -930,8 +1036,54 @@ mod tests {
     fn test_is_ip_blocked_loopback_v6() {
         // ::1/128
         assert!(is_ip_blocked(IpAddr::V6("::1".parse().unwrap())));
-        // ::0/128 is not blocked
-        assert!(!is_ip_blocked(IpAddr::V6("::0".parse().unwrap())));
+        // ::/128 (the unspecified address) is blocked — T024: it previously
+        // slipped through and a direct connection to `::` could reach the
+        // local host.
+        assert!(is_ip_blocked(IpAddr::V6("::".parse().unwrap())));
+    }
+
+    /// T024: `0.0.0.0/8` ("this network") is blocked — a direct connection
+    /// to `0.0.0.0` targets the local host.
+    #[test]
+    fn test_is_ip_blocked_this_network_v4() {
+        assert!(is_ip_blocked(IpAddr::V4("0.0.0.0".parse().unwrap())));
+        assert!(is_ip_blocked(IpAddr::V4("0.0.0.1".parse().unwrap())));
+        assert!(is_ip_blocked(IpAddr::V4("0.255.255.255".parse().unwrap())));
+        // 1.0.0.0 is outside 0.0.0.0/8 and public — not blocked.
+        assert!(!is_ip_blocked(IpAddr::V4("1.0.0.1".parse().unwrap())));
+    }
+
+    /// T024: the NAT64 well-known prefix `64:ff9b::/96` is blocked.
+    #[test]
+    fn test_is_ip_blocked_nat64_prefix() {
+        assert!(is_ip_blocked(IpAddr::V6(
+            "64:ff9b::192.0.2.1".parse().unwrap()
+        )));
+        assert!(!is_ip_blocked(IpAddr::V6(
+            "64:ff9c::192.0.2.1".parse().unwrap()
+        )));
+    }
+
+    /// T024 acceptance: `https://0.0.0.0:PORT`, the decimal shorthand
+    /// `https://0` (parsed as 0.0.0.0) and `https://[::]/` are all rejected
+    /// by the static URL checks.
+    #[test]
+    fn test_validate_url_rejects_unspecified_addresses() {
+        for url in [
+            "https://0.0.0.0:8443/config.json",
+            "https://0/config.json",
+            "https://0.0.0.1/config.json",
+            "https://[::]/config.json",
+            "https://[::0]/config.json",
+        ] {
+            let result = validate_url(url);
+            assert!(result.is_err(), "{url} must be rejected by SSRF checks");
+            let err = result.unwrap_err();
+            assert!(
+                matches!(err, ConfigError::InvalidValue { .. }),
+                "{url} must fail with InvalidValue"
+            );
+        }
     }
 
     #[test]
@@ -1445,6 +1597,12 @@ mod tests {
         source_against_local_with_cb(addr, CircuitBreaker::new())
     }
 
+    /// A guaranteed-closed local address (bound once, then dropped).
+    fn closed_addr() -> std::net::SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind closed port");
+        listener.local_addr().expect("local addr")
+    }
+
     /// Like [`source_against_local`] but with a caller-supplied circuit breaker
     /// so recovery tests can control the failure threshold and backoff.
     fn source_against_local_with_cb(
@@ -1466,6 +1624,17 @@ mod tests {
         client: Client,
         circuit_breaker: CircuitBreaker,
     ) -> HttpPolledSource {
+        source_against_local_with_options(addr, client, circuit_breaker, Vec::new())
+    }
+
+    /// Direct construction with full control (client, circuit breaker and
+    /// request headers) for tests against loopback mock servers.
+    fn source_against_local_with_options(
+        addr: std::net::SocketAddr,
+        client: Client,
+        circuit_breaker: CircuitBreaker,
+        headers: Vec<(String, String)>,
+    ) -> HttpPolledSource {
         let url = format!("http://{addr}/config.json");
         HttpPolledSource {
             url: url.clone().into(),
@@ -1473,7 +1642,13 @@ mod tests {
             client,
             format: None,
             allowed_domains: Vec::new().into(),
+            headers: headers
+                .into_iter()
+                .map(|(name, value)| RedactedHeader(name, value))
+                .collect(),
             enforce_ssrf: false,
+            stale_on_error: false,
+            stale_served: std::sync::atomic::AtomicU64::new(0),
             cached: RwLock::new(None),
             last_etag: ArcSwap::new(Arc::new(None)),
             last_modified: ArcSwap::new(Arc::new(None)),
@@ -1943,5 +2118,275 @@ mod tests {
         }
 
         server.await.expect("server task");
+    }
+
+    // =============================================================================
+    // T027: Default Timeouts & Auth Header Injection
+    // =============================================================================
+
+    /// T027: the builder applies default timeouts when none are set. The
+    /// client itself does not expose its configuration, so the applied values
+    /// are pinned via the public constants (same convention as the
+    /// Consul/etcd/K8s sources).
+    #[test]
+    fn test_builder_applies_default_timeouts() {
+        assert_eq!(DEFAULT_HTTP_CONNECT_TIMEOUT, Duration::from_secs(10));
+        assert_eq!(DEFAULT_HTTP_REQUEST_TIMEOUT, Duration::from_secs(30));
+
+        // Building without explicit timeouts must succeed (defaults applied
+        // inside the client construction).
+        let source = HttpPolledSourceBuilder::new()
+            .url("https://example.com/config.json")
+            .build()
+            .expect("default-timeout build must succeed");
+        assert_eq!(source.poll_interval(), Some(DEFAULT_POLL_INTERVAL));
+    }
+
+    /// T027: `with_header` injects the header into the outgoing request —
+    /// the loopback mock server asserts the Authorization header arrives.
+    #[tokio::test]
+    async fn test_with_header_is_sent_on_request() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"ok":true}"#;
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 8192];
+            let n = stream.read(&mut buf).await.expect("read request");
+            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+            request
+        });
+
+        let source = source_against_local_with_options(
+            addr,
+            client_no_redirect(),
+            CircuitBreaker::new(),
+            vec![(
+                "Authorization".to_string(),
+                "Bearer test-token-123".to_string(), // pragma: allowlist secret
+            )],
+        );
+
+        let value = source.poll().await.expect("poll must succeed");
+        assert!(value.inner.as_map().is_some(), "config body parsed");
+
+        let request = server.await.expect("server task");
+        // reqwest normalizes header names to lowercase on the wire.
+        assert!(
+            request
+                .to_lowercase()
+                .contains("authorization: bearer test-token-123"),
+            "the injected auth header must appear in the request, got: {request}"
+        );
+    }
+
+    /// T027: header values are redacted in `Debug` output — the token value
+    /// must never appear, while the header name stays diagnosable.
+    #[test]
+    fn test_with_header_value_is_redacted_in_debug() {
+        let token = "super-secret-token-value"; // pragma: allowlist secret
+        let source = HttpPolledSourceBuilder::new()
+            .url("https://example.com/config.json")
+            .with_header("Authorization", format!("Bearer {token}"))
+            .build()
+            .expect("build with auth header");
+
+        let debug = format!("{source:?}");
+        assert!(
+            debug.contains("Authorization"),
+            "the header name must stay visible for diagnostics"
+        );
+        assert!(
+            !debug.contains(token),
+            "the header value must be redacted from Debug output"
+        );
+        assert!(debug.contains("[REDACTED]"), "redaction marker expected");
+    }
+
+    // =============================================================================
+    // T028: stale_on_error (opt-in disaster fallback; default stays fail-loud)
+    // =============================================================================
+
+    /// T028: with `stale_on_error(false)` (the default) an open circuit
+    /// still fails loud with `CircuitBreakerOpen` — the pre-existing
+    /// fail-loud semantics must not regress.
+    #[tokio::test]
+    async fn test_stale_on_error_default_false_fails_loud_on_open_circuit() {
+        let source = source_against_local_with_cb(
+            closed_addr(),
+            CircuitBreaker::new()
+                .with_threshold(1)
+                .with_base_delay(Duration::from_secs(60)),
+        );
+        // Force the circuit open without any HTTP traffic.
+        source.circuit_breaker.lock().unwrap().record_failure();
+
+        let result = source.poll().await;
+        match result {
+            Err(ConfigError::RemoteUnavailable { error_type, .. })
+                if error_type == "CircuitBreakerOpen" => {}
+            other => panic!("default must fail loud on open circuit, got: {other:?}"),
+        }
+        assert_eq!(source.stale_served(), 0, "no stale served by default");
+    }
+
+    /// T028: with `stale_on_error(true)`, once the circuit opens the poll
+    /// returns the cached value with the stale marker counted, and no
+    /// network request is attempted.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
+    #[tokio::test]
+    async fn test_stale_on_error_serves_cached_when_circuit_opens() {
+        use std::sync::Arc as StdArc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"app":{"host":"cached-host"}}"#;
+
+        let connections = StdArc::new(AtomicUsize::new(0));
+        let conns = connections.clone();
+        let server = tokio::spawn(async move {
+            // 1 success (fills the cache) + 1 failure (opens the circuit,
+            // threshold 1). Everything further must never connect.
+            for n in 0..2 {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                conns.fetch_add(1, Ordering::SeqCst);
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf).await;
+                let (status, payload) = if n == 0 {
+                    ("200 OK", body)
+                } else {
+                    ("500 Internal Server Error", "")
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+                    payload.len()
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let mut source = source_against_local_with_cb(
+            addr,
+            CircuitBreaker::new()
+                .with_threshold(1)
+                .with_base_delay(Duration::from_secs(60))
+                .with_max_delay(Duration::from_secs(60)),
+        );
+        source.stale_on_error = true;
+
+        // 1. Successful poll fills the cache.
+        let first = source.poll().await.expect("first poll succeeds");
+        assert!(first.inner.as_map().is_some());
+
+        // 2. The 500 opens the circuit (threshold 1). With stale_on_error on,
+        //    the failing poll itself already serves the cached value.
+        let after_failure = source.poll().await.expect("stale served on failure");
+        assert_eq!(
+            after_failure
+                .inner
+                .as_map()
+                .and_then(|m| m.get("app"))
+                .and_then(|m| m.inner.as_map())
+                .and_then(|m| m.get("host"))
+                .and_then(|v| v.as_str()),
+            Some("cached-host"),
+            "the failing poll serves the cached value"
+        );
+        assert_eq!(source.stale_served(), 1);
+        assert_eq!(connections.load(Ordering::SeqCst), 2);
+
+        // 3. While the circuit is open, polls keep serving the cached value
+        //    without touching the network.
+        let stale = source.poll().await.expect("stale poll serves the cache");
+        assert_eq!(
+            stale
+                .inner
+                .as_map()
+                .and_then(|m| m.get("app"))
+                .and_then(|m| m.inner.as_map())
+                .and_then(|m| m.get("host"))
+                .and_then(|v| v.as_str()),
+            Some("cached-host"),
+            "the cached value is served while the circuit is open"
+        );
+        assert_eq!(source.stale_served(), 2, "stale marker counted");
+
+        // 4. Still no extra network traffic while open.
+        assert_eq!(connections.load(Ordering::SeqCst), 2);
+
+        server.abort();
+    }
+
+    /// T028: with `stale_on_error(true)` a poll failing on a dead port (no
+    /// circuit involvement) also serves the previously cached value.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
+    #[tokio::test]
+    async fn test_stale_on_error_serves_cached_on_request_failure() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // First: a live server fills the cache.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let body = r#"{"app":{"host":"from-live"}}"#;
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf).await;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+        });
+        let mut source = source_against_local(addr);
+        source.stale_on_error = true;
+        let first = source.poll().await.expect("live poll");
+        assert!(first.inner.as_map().is_some());
+        server.await.expect("server task");
+
+        // Then: point a clone of the source at a closed port — the request
+        // fails and the cached value is served instead.
+        let mut dead = source_against_local(closed_addr());
+        dead.cached = RwLock::new(Some(first));
+        dead.stale_on_error = true;
+
+        let stale = dead.poll().await.expect("stale served despite failure");
+        assert_eq!(
+            stale
+                .inner
+                .as_map()
+                .and_then(|m| m.get("app"))
+                .and_then(|m| m.inner.as_map())
+                .and_then(|m| m.get("host"))
+                .and_then(|v| v.as_str()),
+            Some("from-live"),
+            "the cached value is served after a request failure"
+        );
+        assert_eq!(dead.stale_served(), 1);
     }
 }

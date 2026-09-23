@@ -23,6 +23,7 @@ use arc_swap::ArcSwap;
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::loader::Format;
+use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::remote::common::try_parse_value_with_format;
 use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 
@@ -31,6 +32,19 @@ const SOURCE_NAME: &str = "k8s";
 /// Default service-account token path inside a pod.
 pub const DEFAULT_SERVICE_ACCOUNT_TOKEN: &str =
     "/var/run/secrets/kubernetes.io/serviceaccount/token";
+
+/// Default service-account CA bundle path inside a pod (T026).
+///
+/// The in-cluster API server serves a cluster-specific TLS certificate that
+/// is only trusted via this CA bundle; without loading it every in-cluster
+/// request fails TLS verification.
+pub const DEFAULT_SERVICE_ACCOUNT_CA: &str = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+
+/// Default connect timeout for Kubernetes API requests (10 seconds).
+pub const DEFAULT_K8S_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Default overall request timeout for Kubernetes API requests (30 seconds).
+pub const DEFAULT_K8S_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 // =============================================================================
 // Mounted-volume source (ConfigMap/Secret as files)
@@ -325,6 +339,12 @@ pub struct K8sApiSourceBuilder {
     api_host: Option<String>,
     /// Bearer token (defaults to the service-account token file).
     token: Option<String>,
+    /// CA bundle for the API server TLS certificate (defaults to the
+    /// service-account CA file when it exists).
+    ca_file: Option<PathBuf>,
+    connect_timeout: Duration,
+    request_timeout: Duration,
+    cb_threshold: u32,
     interval: Duration,
 }
 
@@ -337,6 +357,10 @@ impl K8sApiSourceBuilder {
             kind,
             api_host: None,
             token: None,
+            ca_file: None,
+            connect_timeout: DEFAULT_K8S_CONNECT_TIMEOUT,
+            request_timeout: DEFAULT_K8S_REQUEST_TIMEOUT,
+            cb_threshold: 5,
             interval: Duration::from_secs(30),
         }
     }
@@ -355,6 +379,34 @@ impl K8sApiSourceBuilder {
         self
     }
 
+    /// Override the CA bundle used to verify the API server certificate
+    /// (defaults to the in-cluster service-account `ca.crt` when present).
+    pub fn ca_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.ca_file = Some(path.into());
+        self
+    }
+
+    /// Set the connect timeout. Default: 10 seconds.
+    pub fn connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+
+    /// Set the overall request timeout. Default: 30 seconds.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
+        self
+    }
+
+    /// Set the circuit breaker failure threshold (T032).
+    ///
+    /// After this many consecutive failed polls, the circuit opens and
+    /// subsequent polls fail fast with `CircuitBreakerOpen`. Default: 5.
+    pub fn circuit_breaker_threshold(mut self, failures: u32) -> Self {
+        self.cb_threshold = failures;
+        self
+    }
+
     /// Poll interval for change detection.
     pub fn interval(mut self, interval: Duration) -> Self {
         self.interval = interval;
@@ -362,7 +414,8 @@ impl K8sApiSourceBuilder {
     }
 
     /// Build the source. Fails when neither an explicit API host nor the
-    /// in-cluster environment is available.
+    /// in-cluster environment is available, and fails loudly when a
+    /// configured CA file cannot be read or parsed (Rule 12).
     pub fn build(self) -> ConfigResult<K8sApiSource> {
         let api_host = match self.api_host {
             Some(host) => host.trim_end_matches('/').to_string(),
@@ -389,12 +442,17 @@ impl K8sApiSourceBuilder {
             self.kind.segment(),
             self.name
         );
+        let client = build_api_client(
+            self.ca_file.as_deref(),
+            self.connect_timeout,
+            self.request_timeout,
+        )?;
         Ok(K8sApiSource {
             url,
             kind: self.kind,
             token,
             interval: self.interval,
-            client: reqwest::Client::new(),
+            client,
             cached: ArcSwap::new(Arc::new(None)),
             source_id: SourceId::new(format!(
                 "{SOURCE_NAME}:api:{}:{}/{}",
@@ -402,8 +460,82 @@ impl K8sApiSourceBuilder {
                 self.kind.segment(),
                 self.name
             )),
+            circuit_breaker: std::sync::Mutex::new(
+                CircuitBreaker::new().with_threshold(self.cb_threshold),
+            ),
         })
     }
+}
+
+/// Build the reqwest client used by [`K8sApiSource`] (T026).
+///
+/// - `ca_path` (explicit or the in-cluster service-account `ca.crt` when it
+///   exists) is loaded and installed via `add_root_certificate`; unreadable
+///   or unparsable PEM fails loudly.
+/// - The client always carries the connect/total timeouts so a hung API
+///   server cannot stall the poll loop forever.
+fn build_api_client(
+    ca_path: Option<&Path>,
+    connect_timeout: Duration,
+    request_timeout: Duration,
+) -> ConfigResult<reqwest::Client> {
+    let ca_path = match ca_path {
+        Some(p) => Some(p.to_path_buf()),
+        // In-cluster default: only used when the file actually exists, so
+        // out-of-cluster use (tests, local development) keeps working.
+        None => {
+            let default_path = Path::new(DEFAULT_SERVICE_ACCOUNT_CA);
+            default_path.exists().then(|| default_path.to_path_buf())
+        }
+    };
+
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(request_timeout);
+
+    if let Some(ca_path) = ca_path {
+        let ca_pem = std::fs::read(&ca_path).map_err(|e| ConfigError::InvalidValue {
+            key: "k8s.tls.ca_file".to_string(),
+            expected_type: "readable PEM file".to_string(),
+            message: format!(
+                "Failed to read Kubernetes CA file '{}': {e}",
+                ca_path.display()
+            ),
+        })?;
+        // reqwest/rustls silently accept PEM-less bytes, so the certificate
+        // check is done here: a CA file without a certificate block fails
+        // the build loudly instead of producing a client that cannot verify
+        // the API server (Rule 12).
+        if !ca_pem
+            .windows(27)
+            .any(|w| w == b"-----BEGIN CERTIFICATE-----")
+        {
+            return Err(ConfigError::InvalidValue {
+                key: "k8s.tls.ca_file".to_string(),
+                expected_type: "valid PEM certificate".to_string(),
+                message: format!(
+                    "Invalid Kubernetes CA certificate in '{}': no PEM certificate block found",
+                    ca_path.display()
+                ),
+            });
+        }
+        let cert =
+            reqwest::Certificate::from_pem(&ca_pem).map_err(|e| ConfigError::InvalidValue {
+                key: "k8s.tls.ca_file".to_string(),
+                expected_type: "valid PEM certificate".to_string(),
+                message: format!(
+                    "Invalid Kubernetes CA certificate in '{}': {e}",
+                    ca_path.display()
+                ),
+            })?;
+        builder = builder.add_root_certificate(cert);
+    }
+
+    builder.build().map_err(|e| ConfigError::InvalidValue {
+        key: SOURCE_NAME.to_string(),
+        expected_type: "HTTP client".to_string(),
+        message: format!("failed to build k8s HTTP client: {e}"),
+    })
 }
 
 /// Detect the in-cluster API server from the service environment.
@@ -425,6 +557,9 @@ pub struct K8sApiSource {
     client: reqwest::Client,
     cached: ArcSwap<Option<Arc<AnnotatedValue>>>,
     source_id: SourceId,
+    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// polls fail fast without touching the network.
+    circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
 impl K8sApiSource {
@@ -519,7 +654,41 @@ fn decode_base64(input: &str) -> Option<String> {
 #[async_trait::async_trait]
 impl crate::remote::PolledSource for K8sApiSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        let fresh = crate::remote::record_fetch_metrics(&self.source_id, self.fetch()).await?;
+        // T032: circuit breaker around the fetch — consecutive failures open
+        // the circuit and subsequent polls fail fast without a request.
+        let allowed = {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::InvalidValue {
+                    key: SOURCE_NAME.to_string(),
+                    expected_type: "k8s circuit breaker state".to_string(),
+                    message: "k8s circuit breaker lock poisoned".to_string(),
+                })?;
+            cb.can_execute()
+        };
+        if !allowed {
+            return Err(ConfigError::RemoteUnavailable {
+                error_type: "CircuitBreakerOpen".to_string(),
+                retryable: false,
+            });
+        }
+        let fresh = crate::remote::record_fetch_metrics(&self.source_id, self.fetch()).await;
+        {
+            let mut cb = self
+                .circuit_breaker
+                .lock()
+                .map_err(|_| ConfigError::InvalidValue {
+                    key: SOURCE_NAME.to_string(),
+                    expected_type: "k8s circuit breaker state".to_string(),
+                    message: "k8s circuit breaker lock poisoned".to_string(),
+                })?;
+            match &fresh {
+                Ok(_) => cb.record_success(),
+                Err(_) => cb.record_failure(),
+            }
+        }
+        let fresh = fresh?;
         self.cached.store(Arc::new(Some(Arc::new(fresh.clone()))));
         Ok(fresh)
     }
@@ -741,5 +910,138 @@ mod tests {
         assert_eq!(decode_base64("aGVsbG8="), Some("hello".to_string()));
         assert_eq!(decode_base64("aGVs\nbG8="), Some("hello".to_string()));
         assert_eq!(decode_base64("!!!"), None);
+    }
+
+    // ==================== T026: in-cluster client hardening ====================
+
+    /// A valid self-signed PEM used as a stand-in service-account CA bundle
+    /// (fixture file: base64 trips spell-checkers/secret scanners; excluded
+    /// via typos.toml and covered by .secrets.baseline).
+    const TEST_CA_PEM: &str = include_str!("testdata/test-ca.pem");
+
+    /// T026: the client is built with the SA CA bundle installed and the
+    /// default timeouts applied (connect 10s / total 30s). A readable,
+    /// parsable PEM must be accepted by the client builder — proving the
+    /// `add_root_certificate` path executes.
+    #[test]
+    fn api_client_loads_ca_and_applies_default_timeouts() {
+        let dir = TempDir::new().expect("tempdir");
+        let ca_path = dir.path().join("ca.crt");
+        fs::write(&ca_path, TEST_CA_PEM).expect("write CA pem");
+
+        // Explicit CA file: must build (CA parsed and installed).
+        let client = build_api_client(
+            Some(&ca_path),
+            DEFAULT_K8S_CONNECT_TIMEOUT,
+            DEFAULT_K8S_REQUEST_TIMEOUT,
+        );
+        assert!(
+            client.is_ok(),
+            "client with a valid CA must build: {:?}",
+            client.err()
+        );
+
+        // The in-cluster default path resolution: pointing the builder at a
+        // CA-less environment (no explicit ca_file, default path absent in
+        // the test environment) still builds — the default CA is optional
+        // off-cluster.
+        let source = K8sApiSourceBuilder::new("default", "app-config", K8sObjectKind::ConfigMap)
+            .api_host("https://kubernetes.default.svc")
+            .build();
+        assert!(source.is_ok(), "build without CA must succeed off-cluster");
+    }
+
+    /// T026: an unreadable or unparsable CA file fails loudly instead of
+    /// silently building a client that cannot verify the API server.
+    #[test]
+    fn api_client_fails_loud_on_bad_ca_file() {
+        // Missing file.
+        let missing = build_api_client(
+            Some(Path::new("/nonexistent/confers/ca.crt")),
+            DEFAULT_K8S_CONNECT_TIMEOUT,
+            DEFAULT_K8S_REQUEST_TIMEOUT,
+        );
+        assert!(missing.is_err(), "missing CA file must fail the build");
+        let err = missing.unwrap_err().to_string();
+        assert!(
+            err.contains("Failed to read Kubernetes CA file"),
+            "error must mention the CA file read failure: {err}"
+        );
+
+        // Unparsable PEM.
+        let dir = TempDir::new().expect("tempdir");
+        let ca_path = dir.path().join("ca.crt");
+        fs::write(&ca_path, "not a pem").expect("write junk pem");
+        let junk = build_api_client(
+            Some(&ca_path),
+            DEFAULT_K8S_CONNECT_TIMEOUT,
+            DEFAULT_K8S_REQUEST_TIMEOUT,
+        );
+        assert!(junk.is_err(), "unparsable PEM must fail the build");
+        let err = junk.unwrap_err().to_string();
+        assert!(
+            err.contains("Invalid Kubernetes CA certificate"),
+            "error must mention the PEM parse failure: {err}"
+        );
+    }
+
+    /// T026: the default timeouts are connect 10s / total 30s and the
+    /// builder applies them unless overridden.
+    #[test]
+    fn api_client_default_timeout_constants() {
+        assert_eq!(DEFAULT_K8S_CONNECT_TIMEOUT, Duration::from_secs(10));
+        assert_eq!(DEFAULT_K8S_REQUEST_TIMEOUT, Duration::from_secs(30));
+
+        // Builder-level override path: the values are plain fields consumed
+        // by build_api_client; assert they round-trip through the builder.
+        let builder = K8sApiSourceBuilder::new("default", "app", K8sObjectKind::ConfigMap)
+            .connect_timeout(Duration::from_secs(3))
+            .timeout(Duration::from_secs(7));
+        assert_eq!(builder.connect_timeout, Duration::from_secs(3));
+        assert_eq!(builder.request_timeout, Duration::from_secs(7));
+
+        // Defaults match the constants.
+        let builder = K8sApiSourceBuilder::new("default", "app", K8sObjectKind::ConfigMap);
+        assert_eq!(builder.connect_timeout, DEFAULT_K8S_CONNECT_TIMEOUT);
+        assert_eq!(builder.request_timeout, DEFAULT_K8S_REQUEST_TIMEOUT);
+    }
+
+    /// T032: after the failure threshold is reached, polls fail fast with
+    /// `CircuitBreakerOpen` without issuing an API request.
+    #[tokio::test]
+    async fn api_source_circuit_breaker_opens_after_failures() {
+        // A guaranteed-closed port: the first poll fails on connect.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        drop(listener);
+
+        let source = K8sApiSourceBuilder::new("default", "app-config", K8sObjectKind::ConfigMap)
+            .api_host(format!("http://{addr}"))
+            .token("test-token")
+            .circuit_breaker_threshold(1)
+            .build()
+            .expect("build");
+
+        use crate::remote::PolledSource;
+        // 1. First poll: the connection failure surfaces its own error and
+        //    opens the circuit (threshold 1).
+        let first = source.poll().await;
+        assert!(first.is_err(), "closed port must fail the poll");
+        assert!(
+            !matches!(first, Err(ConfigError::RemoteUnavailable { ref error_type, .. }) if error_type == "CircuitBreakerOpen"),
+            "the first failure must be the fetch error itself: {first:?}"
+        );
+
+        // 2. While open (1s default base delay): fail fast, no request.
+        let second = source.poll().await;
+        match second {
+            Err(ConfigError::RemoteUnavailable {
+                error_type,
+                retryable: false,
+            }) if error_type == "CircuitBreakerOpen" => {}
+            other => panic!("open circuit must fail fast, got: {other:?}"),
+        }
     }
 }
