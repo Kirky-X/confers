@@ -127,11 +127,15 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
-    /// Add an environment source with prefix.
     /// Register sensitive configuration paths: snapshots written through
-    /// this builder redact these paths' values (and anything nested below).
+    /// this builder redact these paths' values (and anything nested below),
+    /// and conflict reports mask the same paths.
     pub fn sensitive_paths(mut self, paths: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         self.sensitive_paths = paths.into_iter().map(|p| p.as_ref().to_string()).collect();
+        // R1-M1: 同步喂给合并引擎,conflict_report 掩码与快照脱敏共用同一
+        // 份敏感路径清单(避免未来第一个 conflict-report 调用点漏接)。
+        let for_engine = self.sensitive_paths.clone();
+        self.chain_builder = self.chain_builder.with_sensitive_paths(for_engine);
         self
     }
 
@@ -143,6 +147,7 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
+    /// Add an environment source with prefix.
     pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.chain_builder = self.chain_builder.env_with_prefix(prefix);
         self

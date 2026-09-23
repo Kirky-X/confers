@@ -3,7 +3,7 @@
 
 //! Load-pipeline decryption for `#[config(encrypt = "xchacha20")]` fields.
 //!
-//! The derive macro registers [`decrypt_encrypted_fields`] as a `map_json`
+//! The derive macro registers [`decrypt_encrypted_tree`] as a `map_json`
 //! transform for every encrypt-marked field. The transform runs after the
 //! other tree transforms (rename/flatten/interpolate) so it observes the
 //! serde-normalized merge tree.
@@ -26,61 +26,111 @@
 /// 32-byte ASCII secret (same decoding as the CLI doctor).
 pub const MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
 
-/// Decrypt every envelope value found at `keys` in place (see module docs).
-pub fn decrypt_encrypted_fields(json: &mut serde_json::Value, keys: &[&str]) {
-    for key in keys {
-        let Some(value) = crate::tree_transform::get_path(json, key)
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
-        else {
-            continue;
-        };
-        let Some(envelope) = crate::envelope::EncryptedEnvelope::parse(&value) else {
-            // Plain value: nothing to do.
-            continue;
-        };
-
-        #[cfg(feature = "encryption")]
-        {
-            let Some(master_key) = resolve_master_key() else {
-                crate::telemetry::event("confers.encryption.master_key_missing", &[("field", key)]);
-                replace_with_null(json, key);
-                continue;
-            };
-            match decrypt_field_value(&envelope, &master_key, key) {
-                Ok(plaintext) => {
-                    crate::tree_transform::set_path(
-                        json,
-                        key,
-                        serde_json::Value::String(plaintext),
-                    );
-                }
-                Err(reason) => {
-                    crate::telemetry::event(
-                        "confers.encryption.decrypt_failed",
-                        &[("field", key), ("reason", reason)],
-                    );
-                    // Fail loudly at the field: null fails deserialization
-                    // with the field path (serde-path-to_error), never
-                    // handing the ciphertext through as the secret.
-                    replace_with_null(json, key);
-                }
+/// Decrypt every envelope value found anywhere in the tree, in place
+/// (see module docs).
+///
+/// The walk is whole-tree: nested/flatten-hoisted fields participate too —
+/// the derivation path is the value's full dotted path in the serde merge
+/// space (e.g. `inner.api_key` for a hoisted flatten field), which must match
+/// the path the encrypting side used.
+pub fn decrypt_encrypted_tree(json: &mut serde_json::Value) {
+    match json {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                let child_path = k.clone();
+                decrypt_at_path(v, &child_path);
             }
         }
-
-        #[cfg(not(feature = "encryption"))]
-        {
-            let _ = envelope;
-            crate::telemetry::event("confers.encryption.feature_missing", &[("field", key)]);
-            // Leave the envelope in place: without the feature the caller
-            // opted out of encryption support entirely (T036).
+        serde_json::Value::Array(items) => {
+            for (idx, v) in items.iter_mut().enumerate() {
+                decrypt_at_path(v, &idx.to_string());
+            }
         }
+        _ => {}
     }
 }
 
-#[cfg(feature = "encryption")]
-fn replace_with_null(json: &mut serde_json::Value, key: &str) {
-    crate::tree_transform::set_path(json, key, serde_json::Value::Null);
+fn decrypt_at_path(value: &mut serde_json::Value, path: &str) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                let child_path = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
+                decrypt_at_path(v, &child_path);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (idx, v) in items.iter_mut().enumerate() {
+                let child_path = format!("{path}.{idx}");
+                decrypt_at_path(v, &child_path);
+            }
+        }
+        serde_json::Value::String(text) => {
+            let Some(envelope) = crate::envelope::EncryptedEnvelope::parse(text) else {
+                // Plain value, or a malformed `enc:`-prefixed string.
+                if crate::envelope::EncryptedEnvelope::is_encrypted(text) {
+                    // Looks encrypted but does not parse (bad key version,
+                    // non-standard base64, ...): never hand it through as
+                    // the secret — fail loudly at the field (M4).
+                    crate::telemetry::warn(
+                        "confers.encryption.envelope_malformed",
+                        &[("field", path)],
+                    );
+                    *value = decrypt_failure_marker("malformed envelope");
+                }
+                return;
+            };
+
+            #[cfg(feature = "encryption")]
+            {
+                let Some(master_key) = resolve_master_key() else {
+                    crate::telemetry::warn(
+                        "confers.encryption.master_key_missing",
+                        &[("field", path)],
+                    );
+                    *value = decrypt_failure_marker("master key missing");
+                    return;
+                };
+                match decrypt_field_value(&envelope, &master_key, path) {
+                    Ok(plaintext) => {
+                        *value = serde_json::Value::String(plaintext);
+                    }
+                    Err(reason) => {
+                        crate::telemetry::warn(
+                            "confers.encryption.decrypt_failed",
+                            &[("field", path), ("reason", reason)],
+                        );
+                        // Fail loudly at the field: the marker fails
+                        // deserialization for String AND Option<String>
+                        // (null would silently wash the failure into None),
+                        // and the ciphertext is never handed through as the
+                        // secret.
+                        *value = decrypt_failure_marker(reason);
+                    }
+                }
+            }
+
+            #[cfg(not(feature = "encryption"))]
+            {
+                let _ = envelope;
+                crate::telemetry::warn("confers.encryption.feature_missing", &[("field", path)]);
+                // Leave the envelope in place: without the feature the caller
+                // opted out of encryption support entirely (T036).
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Marker value substituted for a failed decryption: a map fails
+/// deserialization for string-shaped fields (with the field path from
+/// serde-path-to_error), so the failure can never be silently swallowed —
+/// including by `Option<String>` fields.
+fn decrypt_failure_marker(reason: &str) -> serde_json::Value {
+    serde_json::json!({ "__confers_decrypt_failed": reason })
 }
 
 /// Decode `CONFERS_MASTER_KEY`: hex-encoded 32 bytes or 32-byte ASCII
@@ -88,7 +138,13 @@ fn replace_with_null(json: &mut serde_json::Value, key: &str) {
 #[cfg(feature = "encryption")]
 fn resolve_master_key() -> Option<Vec<u8>> {
     let raw = std::env::var(MASTER_KEY_ENV).ok()?;
-    decode_master_key_bytes(raw.trim())
+    let key = decode_master_key_bytes(raw.trim())?;
+    // M5: 与 EnvKeyProvider 同源的弱密钥防护 —— 常量字节主密钥不因走了
+    // 加载管线而被绕过。
+    if crate::secret::crypto::is_weak_key(&key) {
+        return None;
+    }
+    Some(key)
 }
 
 #[cfg(feature = "encryption")]
@@ -191,7 +247,7 @@ mod tests {
         });
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&master)) };
-        decrypt_encrypted_fields(&mut json, &["api_key"]);
+        decrypt_encrypted_tree(&mut json);
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
 
@@ -201,20 +257,26 @@ mod tests {
 
     #[test]
     #[serial]
-    fn t035_decrypt_failure_fails_loudly_with_null() {
+    fn t035_decrypt_failure_fails_loudly_with_marker() {
         let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
         let envelope = make_envelope(&master, "api_key", "v1", "tok-abc123"); // pragma: allowlist secret
 
         let mut json = serde_json::json!({ "api_key": envelope });
         // Wrong master key: derivation yields a different field key → AEAD
-        // open fails → the value must become null (never the ciphertext).
+        // open fails → the value must become the failure marker (never the
+        // ciphertext, never null — null would wash the failure into None for
+        // Option<String> fields).
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&[9u8; 32])) };
-        decrypt_encrypted_fields(&mut json, &["api_key"]);
+        decrypt_encrypted_tree(&mut json);
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
 
-        assert_eq!(json["api_key"], serde_json::Value::Null);
+        assert!(
+            json["api_key"].get("__confers_decrypt_failed").is_some(),
+            "failed decryption must leave the loud marker, got {}",
+            json["api_key"]
+        );
     }
 
     #[test]
@@ -224,8 +286,11 @@ mod tests {
         let mut json = serde_json::json!({ "pw": envelope });
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
-        decrypt_encrypted_fields(&mut json, &["pw"]);
-        assert_eq!(json["pw"], serde_json::Value::Null);
+        decrypt_encrypted_tree(&mut json);
+        assert!(
+            json["pw"].get("__confers_decrypt_failed").is_some(),
+            "missing master key must leave the loud marker"
+        );
     }
 
     fn hex_encode(bytes: &[u8]) -> String {
@@ -241,7 +306,7 @@ mod no_feature_tests {
     fn t036_envelope_left_in_place_without_feature() {
         let mut json = serde_json::json!({ "api_key": "enc:v1:k:YWJj" }); // pragma: allowlist secret
         // Valid base64 payload "abc".
-        decrypt_encrypted_fields(&mut json, &["api_key"]);
+        decrypt_encrypted_tree(&mut json);
         assert_eq!(
             json["api_key"], "enc:v1:k:YWJj",
             "without the encryption feature the envelope must be left untouched (warn only)"

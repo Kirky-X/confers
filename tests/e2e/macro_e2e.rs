@@ -637,3 +637,32 @@ fn t007_env_separator_maps_nested_path() {
     let cfg = result.unwrap();
     assert_eq!(cfg.db.host, "nested-env-host");
 }
+
+/// R1-L8:serde(rename) 字段的插值 —— codegen 现以 serde 名为插值键,
+/// rename 后仍须生效。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct RenamedInterpolate {
+    #[serde(rename = "bind_addr")]
+    #[config(interpolate)]
+    pub bind: String,
+
+    #[serde(default = "r8_default_host")]
+    pub host: String,
+}
+
+fn r8_default_host() -> String {
+    "fallback-host".to_string()
+}
+
+#[test]
+#[serial]
+fn r1l8_renamed_field_still_interpolates() {
+    let (_file, path) =
+        write_cwd_toml("bind_addr = \"http://${host}:8080\"\nhost = \"db.internal\"\n");
+    let cfg = RenamedInterpolate::load_file(&path).expect("renamed interpolate load");
+    assert_eq!(
+        cfg.bind, "http://db.internal:8080",
+        "serde-renamed field must interpolate via its serde name"
+    );
+    assert_eq!(cfg.host, "db.internal");
+}

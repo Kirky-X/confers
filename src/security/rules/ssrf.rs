@@ -13,7 +13,7 @@ use std::str::FromStr;
 /// (`security-rules` and `remote`) compile the exact same list — this is the
 /// T024 fix: previously the validator and the runtime enforcement maintained
 /// two divergent hand-written copies.
-use crate::remote::poll::ip_blocklist;
+use crate::ip_blocklist;
 
 use ip_blocklist::is_ip_blocked;
 

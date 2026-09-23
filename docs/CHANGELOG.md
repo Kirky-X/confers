@@ -40,7 +40,7 @@
 
 #### 移除
 
-- 死依赖 `secrecy`、`aes-gcm`；死类型 `KeyCachePolicy`
+- 死依赖 `secrecy`、`aes-gcm`；`KeyCachePolicy` 由死类型改为真实接线（Vault token 缓存按 NoCache/CacheWithTtl/CacheIndefinitely 生效）
 
 ### 新增
 _暂无变更。_

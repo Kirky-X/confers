@@ -42,6 +42,24 @@ pub(crate) fn event(name: &'static str, fields: &[(&'static str, &str)]) {
     }
 }
 
+/// Warning-level structured event. Unlike [`event`], this maps to
+/// `tracing::warn!` when the `tracing` feature is enabled so operators see
+/// degraded conditions (e.g. encryption feature missing) at the right level.
+#[allow(dead_code)]
+#[allow(unused_variables)]
+pub(crate) fn warn(name: &'static str, fields: &[(&'static str, &str)]) {
+    #[cfg(feature = "tracing")]
+    tracing::event!(
+        tracing::Level::WARN,
+        event = name,
+        fields = %fields
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "tracing")]

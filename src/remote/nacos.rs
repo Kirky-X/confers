@@ -364,10 +364,14 @@ impl NacosSource {
             url.push_str(&format!("&accessToken={}", urlencode(token)));
         }
         let response = self.client.get(&url).send().await.map_err(|e| {
+            // R3-M1: reqwest 的错误 Display 含完整 URL——而 accessToken 就
+            // 挂在查询串上,原样格式化会把凭据泄进错误信息/日志。
+            // without_url 原地剥离 URL(含 accessToken 查询串)。
+            let message = format!("nacos request failed: {}", e.without_url());
             FetchFailure::Other(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "nacos API response".to_string(),
-                message: format!("nacos request failed: {e}"),
+                message,
             })
         })?;
         let status = response.status();

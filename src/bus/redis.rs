@@ -109,14 +109,21 @@ impl RedisConfigBus {
         // incompatible with multiplexed-connection query semantics. The previous
         // implementation used `redis::cmd("SUBSCRIBE").query_async()` on a
         // multiplexed connection, which never delivers real published messages.
-        let mut pubsub =
-            client
-                .get_async_pubsub()
-                .await
-                .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: format!("redis_pubsub: {}", e),
-                    retryable: true,
-                })?;
+        // R3-L5: connect 包超时 —— 对黑洞地址(SYN 丢弃)无超时会让重连
+        // 循环无限悬挂、退避停摆。
+        let mut pubsub = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            client.get_async_pubsub(),
+        )
+        .await
+        .map_err(|_| ConfigError::RemoteUnavailable {
+            error_type: "redis_pubsub: connect timeout (10s)".to_string(),
+            retryable: true,
+        })?
+        .map_err(|e| ConfigError::RemoteUnavailable {
+            error_type: format!("redis_pubsub: {}", e),
+            retryable: true,
+        })?;
 
         pubsub
             .subscribe(channel)

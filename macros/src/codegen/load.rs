@@ -306,23 +306,21 @@ fn generate_map_json_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> 
 /// Generate the `map_json` decryption pass for `encrypt` fields (T035).
 ///
 /// `None` when no field carries an `encrypt` attribute. The transform runs
-/// last so it sees serde-normalized keys, and only touches values that match
-/// the unified envelope.
+/// last so it sees serde-normalized keys, and walks the WHOLE tree so
+/// nested/flatten-hoisted envelopes decrypt too (R2-H2).
 fn generate_decrypt_call(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> Option<TokenStream> {
-    let encrypt_keys: Vec<TokenStream> = fields
+    // T035/R2-H2: 全树遍历解密 —— 嵌套与 flatten-hoisted 字段的 envelope
+    // 同样按其完整点路径解密(派生路径=加密时的字段路径),不再只覆盖本层
+    // 顶层字段。存在任一 encrypt 字段即注册该 pass。
+    let has_encrypt = fields
         .iter()
-        .filter(|(_, _, f)| f.encrypt.is_some() && !f.skip)
-        .map(|(_, _, f)| {
-            let key = f.serde_name();
-            quote! { #key }
-        })
-        .collect();
-    if encrypt_keys.is_empty() {
+        .any(|(_, _, f)| f.encrypt.is_some() && !f.skip);
+    if !has_encrypt {
         return None;
     }
     Some(quote! {
         builder = builder.map_json(|json: &mut confers::json::Value| {
-            confers::decrypt_encrypted_fields(json, &[#(#encrypt_keys),*]);
+            confers::decrypt_encrypted_tree(json);
         });
     })
 }

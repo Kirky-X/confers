@@ -89,7 +89,7 @@ impl FileKeyProvider {
         let key_bytes = &key_str.as_bytes()[..32];
         if crate::secret::crypto::is_weak_key(key_bytes) {
             return Err(ConfigError::KeyError {
-                message: "Key file contains weak key material (constant-byte); generate a                           random key instead"
+                message: "Key file contains weak key material (constant-byte); generate a random key instead"
                     .to_string(),
             });
         }

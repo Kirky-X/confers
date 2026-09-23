@@ -52,7 +52,7 @@ pub fn interpolate_keys_with_sensitivity(
             let resolved = resolve_template(&template, &snapshot, 0, &mut refs);
             if resolved != template {
                 if !key_is_sensitive && refs.iter().any(|r| is_sensitive_path(sensitive_keys, r)) {
-                    crate::telemetry::event(
+                    crate::telemetry::warn(
                         "confers.interpolation.sensitive_reference",
                         &[("field", key)],
                     );

@@ -1332,8 +1332,9 @@ mod tests {
         // Without prefix, _FILE vars are skipped (returns None from parse_key).
         // Asserted on parse_key directly: a full collect() folds the entire
         // process environment, so its Ok/Err outcome legitimately depends on
-        // ambient variables (e.g. CARGO vs CARGO_PKG_* collide under the
-        // scalar/nested conflict rule and now error deterministically).
+        // ambient variables. Prefix-less sources resolve scalar/nested
+        // collisions by deterministically dropping the scalar (nested shape
+        // wins + telemetry), so ambient collisions never error the build.
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("MYTEST_NOPREFIX_FILE", "/tmp/x.txt") }; // pragma: allowlist secret
         let source = EnvSource::new(); // no prefix

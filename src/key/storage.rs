@@ -21,12 +21,19 @@ fn open_sensitive_file(path: &Path) -> Result<File, std::io::Error> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        OpenOptions::new()
+        let file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .mode(0o600)
-            .open(path)
+            .open(path)?;
+        // R3-L4: mode 仅在创建时生效 —— 已存在的 0644 目标被 truncate 后
+        // 仍是 0644。显式收紧权限。
+        let _ = file.set_permissions({
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::Permissions::from_mode(0o600)
+        });
+        Ok(file)
     }
     #[cfg(not(unix))]
     {

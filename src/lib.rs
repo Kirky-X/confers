@@ -92,12 +92,15 @@ pub mod envelope;
 
 pub mod field_crypto;
 
+#[cfg(any(feature = "remote", feature = "security-rules"))]
+pub mod ip_blocklist;
+
 pub mod path_validator;
 
 pub mod sensitive_names;
 
 pub use envelope::EncryptedEnvelope;
-pub use field_crypto::decrypt_encrypted_fields;
+pub use field_crypto::decrypt_encrypted_tree;
 pub use path_validator::PathValidator;
 
 #[cfg(feature = "encryption")]

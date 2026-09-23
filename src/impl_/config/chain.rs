@@ -315,6 +315,14 @@ impl SourceChainBuilder {
         self
     }
 
+    /// Register sensitive configuration paths on the merge engine: conflict
+    /// reports redact these paths' values (R1-M1: keep this wired to the
+    /// builder so the first conflict-report caller cannot leak plaintext).
+    pub fn with_sensitive_paths(mut self, paths: Vec<String>) -> Self {
+        self.chain = self.chain.with_sensitive_paths(paths);
+        self
+    }
+
     /// Add an environment source.
     pub fn env(self) -> Self {
         use super::source::EnvSource;

@@ -83,8 +83,10 @@ pub fn generate_field_attr_impls(
                     // calls share the seeded `DynamicField`. This requires
                     // the field type to be `Send + Sync + 'static` (already
                     // implied by `DynamicField`'s own bounds) and to be
-                    // concrete — a generic struct parameter cannot back a
-                    // static.
+                    // concrete — inside a generic function each
+                    // monomorphization gets its own static, which is exactly
+                    // the per-field-singleton behavior we want; what does NOT
+                    // work is naming the static with generic parameters.
                     static HANDLE: ::std::sync::OnceLock<
                         ::std::sync::Arc<confers::DynamicField<#ty>>,
                     > = ::std::sync::OnceLock::new();

@@ -271,11 +271,34 @@ impl FsWatcher {
         // directory survives both replacement and delete+recreate of the
         // watched path. Directory targets are watched directly and need no
         // filter (a directory inode is not swapped by renames of children).
-        let (watch_target, path_filter): (PathBuf, Option<PathBuf>) = if path.is_dir() {
-            (path.to_path_buf(), None)
+        // R3-H1: both the watch root and the filter must be ABSOLUTE.
+        // notify-debouncer-full canonicalizes its watch root and joins event
+        // paths onto it, while `path_filter` would otherwise hold the
+        // caller's raw (possibly relative) path — the two never compare
+        // equal, every event gets filtered out, and the watcher goes
+        // silently deaf even though `is_running()` stays true (the rustdoc
+        // example's `FsWatcher::new("./config.toml", ..)` used to hit
+        // exactly this).
+        let absolutize = |p: &Path| -> PathBuf {
+            std::fs::canonicalize(p).unwrap_or_else(|_| {
+                // Target may not exist yet (delete+recreate flows): fall
+                // back to a lexical absolutization against the current dir.
+                if p.is_absolute() {
+                    p.to_path_buf()
+                } else {
+                    std::env::current_dir().unwrap_or_default().join(p)
+                }
+            })
+        };
+        let absolute = absolutize(path);
+        let (watch_target, path_filter): (PathBuf, Option<PathBuf>) = if absolute.is_dir() {
+            (absolute, None)
         } else {
-            let parent = path.parent().unwrap_or(path).to_path_buf();
-            (parent, Some(path.to_path_buf()))
+            let parent = absolute
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| absolute.clone());
+            (parent, Some(absolute))
         };
 
         // T021 / R-watch-007: for file targets the event outlet passes
@@ -348,6 +371,31 @@ impl FsWatcher {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {
+                            // R3-M3: the watched PARENT directory itself being
+                            // removed/renamed kills the kernel watch (its inode
+                            // is gone) — without detection the watcher stays
+                            // silently deaf forever (is_running stays true, no
+                            // events ever arrive). Mirror the bridge-failure
+                            // protocol: mark failed, close the channel, stop.
+                            if path_filter.is_some()
+                                && matches!(event.kind, EventKind::Remove(_))
+                                && event.paths.iter().any(|p| {
+                                    Some(p.as_path())
+                                        == path_filter.as_ref().and_then(|f| f.parent())
+                                })
+                            {
+                                log::error!(
+                                    "file watcher: watched parent directory {:?} removed; \
+                                     the kernel watch is gone and cannot be re-armed",
+                                    path_filter.as_ref().and_then(|f| f.parent())
+                                );
+                                failed.store(true, Ordering::SeqCst);
+                                running.store(false, Ordering::SeqCst);
+                                if let Ok(mut store) = tx_store.lock() {
+                                    store.take(); // close the channel: recv() returns None
+                                }
+                                return;
+                            }
                             match event.kind {
                                 EventKind::Create(_)
                                 | EventKind::Modify(_)
@@ -1156,5 +1204,55 @@ mod tests {
         // stop() stays a safe cleanup on an already failed watcher.
         watcher.stop();
         assert!(!watcher.is_running());
+    }
+
+    #[tokio::test]
+    async fn t015r_parent_dir_removal_becomes_observable_failure() {
+        // R3-M3 回归:父目录被删(内核 watch 随 inode 消亡)不得静默失聪
+        // ——watcher 必须转为 failed/关闭通道,让调用方可感知重建。
+        let dir = tempfile::TempDir::new().unwrap();
+        let file = dir.path().join("cfg.toml");
+        std::fs::write(&file, "a = 1\n").unwrap();
+
+        let mut watcher = FsWatcher::new(file.clone(), 1).await.expect("watch");
+        std::thread::sleep(std::time::Duration::from_millis(600));
+
+        drop(dir); // 删除父目录(tempdir 删除即整个目录树消失)
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv()).await;
+        // 通道被关闭(Err/None)或事件流已终结 —— 绝不能是"仍在运行但
+        // 永远没有事件"的静默失聪状态。
+        assert!(
+            outcome.is_err() || outcome.unwrap().is_none(),
+            "parent-dir removal must terminate the watch observably"
+        );
+        assert!(
+            !watcher.is_running(),
+            "watcher must report not-running after parent removal"
+        );
+    }
+
+    #[tokio::test]
+    async fn t015r_relative_path_target_still_delivers_events() {
+        // R3-H1 回归:相对路径(含 "./x.toml" 与裸 "x.toml")在过滤器绝对
+        // 化之前永远与事件路径不相等,watcher 静默失聪。
+        // 在 cwd 内创建临时文件,构造真正的相对路径("t015r-cfg.toml")。
+        let cwd = std::env::current_dir().unwrap();
+        let file = cwd.join("t015r-cfg.toml");
+        std::fs::write(&file, "a = 1\n").unwrap();
+        let relative = std::path::PathBuf::from("t015r-cfg.toml");
+        assert!(relative.is_relative(), "test precondition: relative path");
+
+        let mut watcher = FsWatcher::new(relative.clone(), 1)
+            .await
+            .expect("watch relative path");
+
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        std::fs::write(&file, "a = 2\n").unwrap();
+        let event = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv())
+            .await
+            .expect("relative-path watch must deliver the change event (R3-H1)");
+        let _ = std::fs::remove_file(&file);
+        // 事件以绝对化路径上报(过滤器亦为绝对路径),与 MultiFsWatcher 一致。
+        assert_eq!(event, Some(std::path::absolute(&file).unwrap()));
     }
 }

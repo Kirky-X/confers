@@ -69,13 +69,16 @@ static AWS_AK_RE: LazyLock<regex::Regex> =
 /// These complement the value-shape rules below and are the single source of
 /// field-name redaction for every error/CLI output path.
 static FIELD_NAME_RES: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    // R3-M2: 分隔符允许成对引号(紧凑 JSON `"password":"x"`);token 类
+    // 名称允许下划线(`refresh_token=`);值仍取到首个空白为止(多词值的
+    // 后半段是已知局限,见下方文档)。
     [
-        r"(?i)(password|passwd|pwd)[\s]*[:=][\s]*\S+",
-        r"(?i)api[ ]?key[\s]*[:=][\s]*\S+",
-        r"(?i)(access|refresh|auth)[ ]?token[\s]*[:=][\s]*\S+",
-        r"(?i)(secret|private)[ ]?key[\s]*[:=][\s]*\S+",
-        r"(?i)(database[ ]?url|connection[ ]?string)[\s]*[:=][\s]*\S+",
-        r"(?i)authorization[\s]*[:=][\s]*\S+",
+        r#"(?i)(password|passwd|pwd)[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
+        r#"(?i)api[_ ]?key[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
+        r#"(?i)(access|refresh|auth)[_ ]?token[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
+        r#"(?i)(secret|private)[_ ]?key[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
+        r#"(?i)(database[ ]?url|connection[ ]?string)[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
+        r#"(?i)authorization[\s]*["']?[:=][\s]*["']?[^\s,}]+"#,
         r"(?i)bearer\s+\S+",
         r"(?i)basic\s+[a-zA-Z0-9+/=]+",
     ]
@@ -719,7 +722,13 @@ mod tests {
         // 16-31 char hex run with a sensitive keyword nearby is a secret
         let msg = "api_key: 0123456789abcdef01234567 (see logs)"; // pragma: allowlist secret
         let sanitized = sanitize_error_message(msg);
-        assert!(sanitized.contains("<redacted>"), "got: {}", sanitized);
+        // R3-M2 后字段名规则先于 hex 上下文规则命中:整值以 *** 掩码
+        // (旧输出为 <redacted>,同样不可逆,但会保留 "(see logs)" 尾巴)。
+        assert!(
+            sanitized.contains("***") && !sanitized.contains("0123456789abcdef01234567"),
+            "got: {}",
+            sanitized
+        );
         assert!(
             !sanitized.contains("0123456789abcdef01234567"),
             "got: {}",

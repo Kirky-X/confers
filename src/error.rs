@@ -1031,6 +1031,39 @@ mod tests {
     }
 
     #[test]
+    fn test_user_message_sanitizes_compact_json_credentials() {
+        // R3-M2 回归:紧凑 JSON 形状("password":"x")此前完全不掩。
+        let err = ConfigError::InvalidValue {
+            key: "db".to_string(),
+            expected_type: "response".to_string(),
+            message: r#"{"password":"hunter2","host":"db.internal"}"#.to_string(), // pragma: allowlist secret
+        };
+        let msg = err.user_message();
+        assert!(
+            !msg.contains("hunter2"),
+            "compact JSON value must be masked: {msg}"
+        );
+        assert!(
+            msg.contains("db.internal"),
+            "non-secret content stays intact: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_user_message_sanitizes_underscored_tokens() {
+        let err = ConfigError::InvalidValue {
+            key: "http".to_string(),
+            expected_type: "response".to_string(),
+            message: "request failed: refresh_token=tok9999 for user".to_string(), // pragma: allowlist secret
+        };
+        let msg = err.user_message();
+        assert!(
+            !msg.contains("tok9999"),
+            "underscored token value must be masked: {msg}"
+        );
+    }
+
+    #[test]
     fn test_decryption_failed_message_never_reaches_i18n_verbatim() {
         // T047: the i18n param for DecryptionFailed/KeyError is sanitized at
         // the source (templates no longer interpolate it).

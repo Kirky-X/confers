@@ -1,0 +1,53 @@
+name,severity,occurrence,detection,category
+crypto:encrypt宏属性假加密(密文原样进String字段),10,7,9,加密
+watch:FsWatcher单文件inode监听原子替换后静默永久失聪,8,7,10,热重载
+mask:builder自动快照硬编码空脱敏列表明文落盘0644,9,6,10,脱敏
+load:同优先级按source_id字母序默认值覆盖文件+声明顺序失效,9,7,9,加载合并
+load:EnvSource嵌套路径冲突静默丢值随env顺序漂移,8,5,9,加载合并
+mask:CLI inspect/get无脱敏明文回显,7,6,8,脱敏
+mask:export默认脱敏仅按值形状password=xxx直通,7,6,8,脱敏
+crypto:弱密钥(全零/ASCII口令)静默接受+文档示范全零,8,5,8,加密
+watch:事件通道满静默丢事件+回调panic杀死重载循环,7,5,9,热重载
+remote:Consul KV删除后空数组永久续命旧配置,8,4,9,远程高可用
+crypto:无encryption特性时enc:字段零警示doctor返回Ok,8,4,9,加密
+remote:Redis总线断线静默终止无重连永久丢事件,6,5,9,远程高可用
+remote:VersionArbitratedBus发布方重启版本号重置事件全丢,6,5,9,远程高可用
+load:宏load_file_with_env注入全进程环境deny_unknown必炸,8,6,5,加载合并
+crypto:envelope无密钥版本+三套格式互不兼容,7,5,7,加密
+remote:SSRF黑名单缺0.0.0.0/8可打本机任意端口,9,3,9,远程高可用
+mask:ConfigValue/AnnotatedValue derive(Debug)明文+冲突报告内嵌原值,6,5,8,脱敏
+watch:宏dynamic字段x_handle每次调用返回独立handle,6,6,6,热重载
+crypto:Vault token缓存永不失效403不重登永久失败,7,6,5,加密
+crypto:明文密钥逃逸受管类型(派生密钥裸返回等多处),6,5,7,加密
+remote:HTTP轮询源默认无超时且无认证支持,6,6,5,远程高可用
+load:null覆盖语义根级与map内不一致,6,4,8,加载合并
+load:文档特性未实现(merge_strategy/profile/RUN_ENV死属性),6,4,7,加载合并
+remote:K8s REST源in-cluster无CA加载TLS必失败且无超时,7,6,4,远程高可用
+remote:运行期容灾兜底缺失(熔断不回缓存/快照失败路径/无restore),7,5,5,远程高可用
+remote:Nacos无认证+熔断try_lock争用误报,6,5,6,远程高可用
+load:env类型推断与目标字段脱钩报错key为空,5,6,5,加载合并
+load:env双下划线嵌套映射文档不成立且separator不可配,5,5,6,加载合并
+mask:敏感词token边界漏authorization/复数形/passwd/dsn,5,5,6,脱敏
+mask:mask_value等长星号泄露精确长度,4,5,8,脱敏
+remote:InvalidValue错误路径未接sanitize完整URL直通日志,5,4,8,远程高可用
+watch:渐进发布candidate不可观测+rollback/migration死配置,6,5,6,热重载
+watch:ConfigImpl overrides TTL 5分钟静默回退,4,3,9,热重载
+crypto:rotate_master_key不验证旧密钥参数,5,3,8,加密
+mask:审计HMAC密钥明文同存文件头可整链伪造,6,3,8,脱敏
+watch:InMemoryChangeStream FIFO驱逐慢订阅者丢变更,4,4,8,热重载
+mask:AuditSink收未脱敏事件与落盘口径不一致,4,4,8,脱敏
+remote:熔断器仅覆盖HTTP/Nacos其余源无,4,4,8,远程高可用
+load:插值无转义语法+敏感引用无告警+rename后静默失效,4,4,8,加载合并
+watch:AdaptiveDebouncer死代码+去抖测试#[ignore],3,5,3,热重载
+crypto:keys.json/快照/审计文件默认0644无0600,5,3,7,脱敏
+crypto:文档env名错位CONFERS_ENCRYPTION_KEY无消费,3,5,6,加密
+crypto:SecureString masked泄露前2字符+长度特征,3,4,8,加密
+load:MergeEngine无视priority与report_conflict结论矛盾,4,3,7,加载合并
+load:宏_FILE弱化版静默跳过不回退,4,3,7,加载合并
+remote:NATS毒消息无限即时重投,3,3,7,远程高可用
+mask:verify_audit_chain非常量时间比较,3,2,9,脱敏
+load:宏default空值/None产生难懂编译错误,3,4,3,加载合并
+crypto:secrecy/aes-gcm死依赖,2,10,1,加密
+crypto:KeyCachePolicy无任何缓存实现消费,2,4,2,加密
+remote:快照写入非原子无tmp+rename,4,2,6,远程高可用
+watch:DynamicField并发update回调乱序无测试,3,3,8,热重载

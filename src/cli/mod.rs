@@ -546,7 +546,15 @@ fn cmd_inspect(
             let value = find_value_by_key(&annotated_config, key);
             match value {
                 Some(v) => {
-                    let value_str = format_value(&v.inner);
+                    // R3-H3: 显式指定 keys 的分支同样默认脱敏(此前漏网,
+                    // `inspect db.password` 会明文回显)。
+                    let last_segment = key.rsplit('.').next().unwrap_or(key);
+                    let value_str =
+                        if !reveal && crate::sensitive_names::is_sensitive_name(last_segment) {
+                            "\"********\"".to_string()
+                        } else {
+                            format_value(&v.inner)
+                        };
                     let source = v.source.as_str();
                     let location = format_location(&v.location);
                     println!(
@@ -1946,7 +1954,7 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
         let crypto = crate::secret::XChaCha20Crypto::new();
         let failures: Vec<String> = candidates
             .iter()
-            .filter(|(_, envelope)| !verify_envelope(&crypto, envelope, &key))
+            .filter(|(field_path, envelope)| !verify_envelope(&crypto, field_path, envelope, &key))
             .map(|(path, _)| path.clone())
             .collect();
 
@@ -1975,10 +1983,14 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
     #[cfg(not(feature = "encryption"))]
     {
         let _ = annotated;
+        // R2-M6: 编译时未带 encryption 特性属于降级配置 —— 有加密值的
+        // 部署必须被告知,而不是静默 Ok 跳过。
         DoctorCheck {
             name: "encryption",
-            severity: DoctorSeverity::Ok,
-            message: "encryption feature not compiled in; skipped".to_string(),
+            severity: DoctorSeverity::Warning,
+            message: "encryption feature not compiled in; encrypted values \
+                      will not be decrypted at load time"
+                .to_string(),
         }
     }
 }
@@ -2008,15 +2020,30 @@ fn collect_encrypted_values(value: &AnnotatedValue, prefix: &str, out: &mut Vec<
     }
 }
 
-/// Decrypt `enc:v1:<base64(nonce||ciphertext)>` with `key`.
+/// Verify a field envelope against `master_key` (R2-H1): parse via the
+/// unified [`EncryptedEnvelope`] (same grammar as the load pipeline), derive
+/// the per-field key from the envelope's `key_version` + the field path, and
+/// AEAD-open `nonce||ciphertext`. Exactly mirrors
+/// `field_crypto::decrypt_field_value` so the doctor and the pipeline agree
+/// on every value.
 #[cfg(feature = "encryption")]
-fn verify_envelope(crypto: &crate::secret::XChaCha20Crypto, envelope: &str, key: &[u8]) -> bool {
+fn verify_envelope(
+    crypto: &crate::secret::XChaCha20Crypto,
+    field_path: &str,
+    envelope: &str,
+    master_key: &[u8],
+) -> bool {
     use base64::Engine;
 
-    let Some(encoded) = envelope.strip_prefix(DOCTOR_ENVELOPE_PREFIX) else {
+    let Some(parsed) = crate::envelope::EncryptedEnvelope::parse(envelope) else {
         return false;
     };
-    let Ok(blob) = base64::engine::general_purpose::STANDARD.decode(encoded) else {
+    let Ok(field_key) =
+        crate::secret::crypto::derive_field_key(master_key, field_path, &parsed.key_version)
+    else {
+        return false;
+    };
+    let Ok(blob) = base64::engine::general_purpose::STANDARD.decode(&parsed.payload) else {
         return false;
     };
     const NONCE_SIZE: usize = 24;
@@ -2024,7 +2051,11 @@ fn verify_envelope(crypto: &crate::secret::XChaCha20Crypto, envelope: &str, key:
         return false;
     }
     crypto
-        .decrypt(&blob[..NONCE_SIZE], &blob[NONCE_SIZE..], key)
+        .decrypt(
+            &blob[..NONCE_SIZE],
+            &blob[NONCE_SIZE..],
+            field_key.as_slice(),
+        )
         .is_ok()
 }
 
@@ -4510,14 +4541,21 @@ mod tests {
     fn doctor_encrypted_field_decrypts_with_valid_key() {
         let key = [7u8; 32];
         let crypto = crate::secret::XChaCha20Crypto::new();
-        let (nonce, ciphertext) = crypto.encrypt(b"secret-value", &key).expect("encrypt");
+        // R2-H1: 夹具与加载管线同方案 —— 字段派生密钥(api_key,v1)+
+        // 统一 envelope(enc:v1:<keyver>:<payload>)。
+        let field_key = crate::secret::crypto::derive_field_key(&key, "api_key", "v1")
+            .expect("derive field key");
+        let (nonce, ciphertext) = crypto
+            .encrypt(b"secret-value", field_key.as_slice())
+            .expect("encrypt");
         let mut blob = nonce;
         blob.extend_from_slice(&ciphertext);
         use base64::Engine;
-        let envelope = format!(
-            "{DOCTOR_ENVELOPE_PREFIX}{}",
-            base64::engine::general_purpose::STANDARD.encode(&blob)
-        );
+        let envelope = crate::envelope::EncryptedEnvelope::new(
+            "v1",
+            base64::engine::general_purpose::STANDARD.encode(&blob),
+        )
+        .to_envelope_string();
 
         let config = doctor_map(vec![(
             "api_key",

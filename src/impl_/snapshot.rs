@@ -72,7 +72,14 @@ fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
         return Err(e);
     }
 
-    std::fs::rename(&tmp_path, path)
+    // R3-L4: rename 失败也清理 tmp,避免 *.tmp 残骸在快照目录累积。
+    match std::fs::rename(&tmp_path, path) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            Err(e)
+        }
+    }
 }
 
 /// Rebuild an [`AnnotatedValue`] tree from the plain (non-annotated) JSON a

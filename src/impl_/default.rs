@@ -64,9 +64,9 @@ mod async_impl {
                 // entries are PERMANENT. TTL/TTI here silently reverted a
                 // dynamic `set` back to the merged value after ~5 minutes of
                 // inactivity. Entries leave the cache only through
-                // `delete`/`clear`/`invalidate_all`; `max_capacity` bounds
+                // `delete`/`clear`/`invalidate_all` — deliberately NO capacity cap:
                 // memory.
-                overrides: moka::future::Cache::builder().max_capacity(1_000).build(),
+                overrides: moka::future::Cache::builder().build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),
@@ -375,9 +375,9 @@ mod sync_impl {
                 // entries are PERMANENT. TTL/TTI here silently reverted a
                 // dynamic `set` back to the merged value after ~5 minutes of
                 // inactivity. Entries leave the cache only through
-                // `delete`/`clear`/`invalidate_all`; `max_capacity` bounds
+                // `delete`/`clear`/`invalidate_all` — deliberately NO capacity cap:
                 // memory.
-                overrides: moka::sync::Cache::builder().max_capacity(1_000).build(),
+                overrides: moka::sync::Cache::builder().build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),

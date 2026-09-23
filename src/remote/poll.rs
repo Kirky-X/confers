@@ -39,12 +39,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-/// Single-source SSRF blocked-network table (shared with the SsrfValidator
-/// security rule, which includes this file via `#[path]`).
-#[path = "ip_blocklist.rs"]
-pub(crate) mod ip_blocklist;
-
-pub use ip_blocklist::is_ip_blocked;
+// SSRF blocked-network table lives at `crate::ip_blocklist` (ungated, shared
+// with the SsrfValidator security rule and re-exported here).
+pub use crate::ip_blocklist::is_ip_blocked;
 
 /// Default poll interval when not specified (60 seconds).
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(60);

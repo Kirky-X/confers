@@ -231,9 +231,12 @@ fn merge_maps_with_cow(
     engine: &MergeEngine,
     low_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     high_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
-    strategy: &MergeStrategy,
+    _strategy: &MergeStrategy,
     depth: usize,
 ) -> ConfigResult<ConfigValue> {
+    // `_strategy`: per-key strategies are resolved from each child's full
+    // path (R1-H1) — the parent strategy no longer participates in leaf
+    // merges or the equality scan.
     // Fast path: identical Arc → no merge work needed at all
     if Arc::ptr_eq(low_map, high_map) {
         return Ok(ConfigValue::Map(Arc::clone(low_map)));
@@ -259,8 +262,13 @@ fn merge_maps_with_cow(
     for (k, v_high) in high.iter() {
         match low.get(k) {
             Some(v_low) => {
-                // Check if values are actually different
-                if !values_equal(&v_low.inner, &v_high.inner, strategy) {
+                // Check if values are actually different. Leaf equality is
+                // judged with the CHILD path's strategy (same one the merge
+                // below will use) — the parent strategy would wrongly report
+                // "no change" for low==high leaves whose registered Join/
+                // Append/Custom strategy must still run.
+                let child_strategy = engine.get_strategy(&v_low.path);
+                if !values_equal(&v_low.inner, &v_high.inner, child_strategy) {
                     has_changes = true;
                     break;
                 }
@@ -985,6 +993,40 @@ mod tests {
         assert_eq!(merged.as_str(), Some("priority-10"));
         let report = e.report_conflict(&p10, &p5).unwrap();
         assert_eq!(report.winner, ConflictWinner::Low);
+    }
+
+    #[test]
+    fn test_field_strategy_runs_even_when_values_equal() {
+        // R1-H1 regression: the COW fast-path scan used the parent strategy,
+        // so a registered child Join strategy was silently skipped whenever
+        // low and high were already equal.
+        let e = MergeEngine::new()
+            .with_default_strategy(MergeStrategy::Replace)
+            .with_field_strategy("db.k", MergeStrategy::join(":"));
+
+        let mk = |v: &str, s: &str| {
+            AnnotatedValue::new(ConfigValue::string(v), SourceId::new(s), "db.k")
+        };
+        let low_inner = IndexMap::from_iter(vec![(Arc::from("k"), mk("same", "l"))]);
+        let high_inner = IndexMap::from_iter(vec![(Arc::from("k"), mk("same", "h"))]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(low_inner)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_inner)),
+            SourceId::new("h"),
+            "t",
+        );
+
+        let merged = e.merge(&l, &h).unwrap();
+        let k = merged.inner.as_map().unwrap().get("k").unwrap();
+        assert_eq!(
+            k.as_str(),
+            Some("same:same"),
+            "Join must run even for equal values"
+        );
     }
 
     #[test]
