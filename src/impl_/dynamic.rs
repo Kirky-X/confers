@@ -14,11 +14,21 @@
 //! - CallbackGuard: RAII-based callback lifecycle management
 use arc_swap::ArcSwap;
 use dashmap::DashMap;
+use std::cell::Cell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Callback ID type for tracking registered callbacks.
 type CallbackId = u64;
+
+// Dispatch depth on the current thread: `> 0` while a callback of this
+// thread is being invoked by [`DynamicField::update`]. A reentrant
+// `update` from inside a callback must not re-acquire the (non-reentrant)
+// update lock — it stores and dispatches inline, preserving the historical
+// nested-dispatch semantics (T019).
+thread_local! {
+    static DISPATCH_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
 
 /// Callback storage for dynamic field change notifications using DashMap for high concurrency.
 ///
@@ -52,6 +62,21 @@ pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     /// Callbacks storage with DashMap for high-concurrency access.
     callbacks: CallbackStorage<T>,
     next_id: AtomicU64,
+    /// Monotonic version counter for `update` calls (T019). Each update
+    /// claims a version first; the serialized store+dispatch step skips
+    /// versions below the last committed one, so callback observations stay
+    /// in version order and end consistent with the final stored value.
+    next_version: AtomicU64,
+    /// Version of the last committed (stored) value.
+    last_version: AtomicU64,
+    /// Serializes the store+dispatch step of concurrent (non-reentrant)
+    /// updates so callback observation order equals the final stored value
+    /// (T019 / R-watch-005). Reads stay lock-free via ArcSwap.
+    update_lock: std::sync::Mutex<()>,
+    /// Count of callbacks that panicked during dispatch (T017 / R-watch-003).
+    /// A panicking callback is isolated; this counter makes the isolation
+    /// observable instead of silently swallowing the failure.
+    callback_panics: AtomicU64,
 }
 
 impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
@@ -61,6 +86,10 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
             value: ArcSwap::from_pointee(initial),
             callbacks: Arc::new(DashMap::new()),
             next_id: AtomicU64::new(0),
+            next_version: AtomicU64::new(0),
+            last_version: AtomicU64::new(0),
+            update_lock: std::sync::Mutex::new(()),
+            callback_panics: AtomicU64::new(0),
         }
     }
 
@@ -112,17 +141,87 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// avoid holding a shard read lock during callback execution (a
     /// callback that calls `on_change` or `update` would otherwise deadlock
     /// on the same shard's write lock — CWE-667).
+    ///
+    /// A callback that panics is isolated (T017 / R-watch-003): the panic is
+    /// swallowed and counted (see [`callback_panic_count`][Self::callback_panic_count]),
+    /// the remaining callbacks still run, the stored value is unaffected and
+    /// `update` returns normally.
+    ///
+    /// # Ordering under concurrency (T019 / R-watch-005)
+    ///
+    /// Each update claims a monotonic version before storing. The
+    /// store+dispatch step is serialized through an update lock: an update
+    /// whose version is already superseded (a newer update committed first)
+    /// is skipped entirely, so callbacks observe values in version order
+    /// and the last callback observation always equals the final stored
+    /// value. Readers stay lock-free via ArcSwap. A reentrant `update` from
+    /// inside a callback dispatches inline on the same thread (nested
+    /// dispatch, as before) instead of re-acquiring the lock.
     pub fn update(&self, new_val: T) {
+        let version = self.next_version.fetch_add(1, Ordering::SeqCst) + 1;
+
+        // Reentrant call from inside a callback on this thread: the update
+        // lock is already held by the outer dispatch on this thread.
+        // Store and dispatch inline (nested, historical behavior) instead
+        // of deadlocking on the non-reentrant mutex.
+        if DISPATCH_DEPTH.with(Cell::get) > 0 {
+            self.value.store(Arc::new(new_val.clone()));
+            self.last_version.store(version, Ordering::SeqCst);
+            self.dispatch(&new_val);
+            return;
+        }
+
+        let guard = self.update_lock.lock().unwrap_or_else(|e| e.into_inner());
+        // Stale update: a newer version was already stored and dispatched.
+        // Skip it so observations never regress behind the final value.
+        if version < self.last_version.load(Ordering::SeqCst) {
+            drop(guard);
+            return;
+        }
         self.value.store(Arc::new(new_val.clone()));
+        self.last_version.store(version, Ordering::SeqCst);
+        self.dispatch(&new_val);
+        drop(guard);
+    }
+
+    /// Invoke all current callbacks for `new_val`.
+    ///
+    /// Panics inside individual callbacks are isolated by
+    /// [`Self::invoke_callback`], so the depth bookkeeping below cannot be
+    /// skipped by an unwind.
+    fn dispatch(&self, new_val: &T) {
         // Clone Arc references out so no DashMap lock is held during callbacks.
         let snapshots: Vec<CallbackSnapshot<T>> = self
             .callbacks
             .iter()
             .map(|e| Arc::clone(e.value()))
             .collect();
+        DISPATCH_DEPTH.with(|d| d.set(d.get() + 1));
         for callback in &snapshots {
-            callback(&new_val);
+            self.invoke_callback(callback, new_val);
         }
+        DISPATCH_DEPTH.with(|d| d.set(d.get() - 1));
+    }
+
+    /// Invoke a single callback with panic isolation.
+    ///
+    /// `AssertUnwindSafe` is deliberate (design D4): the callback is user
+    /// code behind `Arc<dyn Fn>`, and the library cannot vouch for the
+    /// unwind safety of arbitrary user-captured interior state. It does not
+    /// promise to propagate callback panics either — a poisoning callback
+    /// must not break `update` for every other caller — so the closure is
+    /// wrapped in `AssertUnwindSafe` and the panic is counted instead of
+    /// propagated. The passed value is only read.
+    fn invoke_callback(&self, callback: &CallbackSnapshot<T>, new_val: &T) {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(new_val)));
+        if result.is_err() {
+            self.callback_panics.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    /// Number of callbacks that panicked during `update` dispatch.
+    pub fn callback_panic_count(&self) -> u64 {
+        self.callback_panics.load(Ordering::SeqCst)
     }
 
     pub fn callback_count(&self) -> usize {
@@ -421,6 +520,88 @@ mod tests {
         }
         // After guard drops, callback should be removed
         assert_eq!(field.callback_count(), 0);
+    }
+
+    /// Regression test (T017 / R-watch-003): a panicking callback must not
+    /// poison the update path — `update` returns normally, callbacks after
+    /// the panicking one still execute, the store keeps the new value, and
+    /// the panic is counted. The field stays usable for later updates.
+    #[test]
+    fn panicking_callback_is_isolated_and_counted() {
+        let field = DynamicField::new(0u32);
+        let observed = Arc::new(AtomicUsize::new(0));
+        let observed_clone = Arc::clone(&observed);
+
+        let _panicky = field.on_change(|&val| {
+            if val == 42 {
+                panic!("callback panic must be isolated");
+            }
+        });
+        let _observer = field.on_change(move |&val| {
+            observed_clone.store(val as usize, Ordering::SeqCst);
+        });
+
+        // Must not unwind even though the first callback panics. DashMap
+        // iteration order is unspecified, so the observer may run before or
+        // after the panicking callback — either way it must observe 42.
+        field.update(42);
+
+        assert_eq!(
+            observed.load(Ordering::SeqCst),
+            42,
+            "the non-panicking callback must still run"
+        );
+        assert_eq!(field.get(), 42, "store must hold the new value");
+        assert_eq!(
+            field.callback_panic_count(),
+            1,
+            "the panic must be counted exactly once"
+        );
+
+        // The dispatch path is not poisoned: later updates work normally and
+        // the panic counter stays flat while the callback does not panic.
+        field.update(7);
+        assert_eq!(observed.load(Ordering::SeqCst), 7);
+        assert_eq!(field.callback_panic_count(), 1);
+    }
+
+    /// Regression test (T019 / R-watch-005): under concurrent updates the
+    /// callback observation order must stay consistent with the final stored
+    /// value — stale dispatches are skipped, so the LAST callback
+    /// observation equals the final `get()`.
+    #[test]
+    fn concurrent_updates_observe_final_value_last() {
+        use std::thread;
+
+        let field = Arc::new(DynamicField::new(0u64));
+        let last_observed = Arc::new(AtomicU64::new(0));
+        let sink = Arc::clone(&last_observed);
+        let _guard = field.on_change(move |&val| sink.store(val, Ordering::SeqCst));
+
+        const THREADS: u64 = 8;
+        const UPDATES_PER_THREAD: u64 = 250;
+        let handles: Vec<_> = (0..THREADS)
+            .map(|t| {
+                let field = Arc::clone(&field);
+                thread::spawn(move || {
+                    for i in 1..=UPDATES_PER_THREAD {
+                        // Every update across threads carries a unique value.
+                        field.update(t * UPDATES_PER_THREAD + i);
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().expect("updater thread must not panic");
+        }
+
+        let final_value = field.get();
+        assert!(final_value > 0, "some update must have been stored");
+        assert_eq!(
+            last_observed.load(Ordering::SeqCst),
+            final_value,
+            "the last callback observation must equal the final stored value"
+        );
     }
 
     /// regression: a callback that registers a NEW callback during

@@ -19,7 +19,7 @@ pub use debounce::AdaptiveDebouncer;
 #[cfg(feature = "progressive-reload")]
 pub use progressive::{
     HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
-    ReloadOutcome, ReloadStrategy,
+    ReloadOutcome, ReloadStrategy, ReloadValidator,
 };
 
 #[cfg(feature = "watch")]

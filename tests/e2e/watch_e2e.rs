@@ -124,8 +124,9 @@ async fn wat17_atomic_replace_triggers_exactly_one_event() {
     watcher.stop();
 }
 
+/// WAT-18(T021 去 ignore):库内 FsWatcher 事件出口已接入 AdaptiveDebouncer,
+/// 快速连写被硬性限流合并,不再依赖 CI 时序。
 #[tokio::test]
-#[ignore] // 时序敏感测试，CI 环境负载不同时可能不稳定
 async fn wat18_rapid_writes_collapse_via_debounce() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("app.toml");

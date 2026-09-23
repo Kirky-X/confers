@@ -364,3 +364,34 @@ fn test_callback_with_real_config() {
 
     assert_eq!(field.callback_count(), 1);
 }
+
+// T018 / R-watch-004: the macro-generated `*_handle()` must return the
+// SHARED singleton handle — repeated calls yield the same `Arc`, and an
+// update pushed through one call site is observed through every other.
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct SingletonHandleConfig {
+    #[config(dynamic)]
+    pub replicas: u32,
+}
+
+#[test]
+fn dynamic_handle_returns_shared_singleton() {
+    let cfg = SingletonHandleConfig { replicas: 3 };
+
+    let a = cfg.replicas_handle();
+    let b = cfg.replicas_handle();
+    assert!(
+        Arc::ptr_eq(&a, &b),
+        "repeated *_handle() calls must return the same shared instance"
+    );
+    assert_eq!(a.get(), 3, "handle is seeded with the loaded value");
+
+    // Update through one handle must be visible through the other.
+    a.update(9);
+    assert_eq!(
+        b.get(),
+        9,
+        "update via one handle must be visible via the other"
+    );
+    assert_eq!(a.get(), 9);
+}

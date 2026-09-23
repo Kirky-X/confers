@@ -60,11 +60,13 @@ mod async_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                overrides: moka::future::Cache::builder()
-                    .max_capacity(1_000)
-                    .time_to_live(std::time::Duration::from_secs(300))
-                    .time_to_idle(std::time::Duration::from_secs(60))
-                    .build(),
+                // Overrides are dynamic runtime state (T022 / R-watch-008):
+                // entries are PERMANENT. TTL/TTI here silently reverted a
+                // dynamic `set` back to the merged value after ~5 minutes of
+                // inactivity. Entries leave the cache only through
+                // `delete`/`clear`/`invalidate_all`; `max_capacity` bounds
+                // memory.
+                overrides: moka::future::Cache::builder().max_capacity(1_000).build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),
@@ -275,6 +277,61 @@ mod async_impl {
             ConfigImpl::from_chain(chain)
         }
     }
+
+    // Nested inside `async_impl` so the tests can reach the private
+    // `overrides` cache and inspect its eviction policy.
+    #[cfg(test)]
+    mod overrides_tests {
+        use super::*;
+
+        fn annotated(key: &str, value: ConfigValue) -> AnnotatedValue {
+            AnnotatedValue::new(value, SourceId::new("test"), key)
+        }
+
+        /// T022 / R-watch-008: overrides must be permanent cache entries —
+        /// no TTL/TTI may silently revert a dynamic `set` back to the merged
+        /// value, and a set value must survive maintenance after reads.
+        #[tokio::test]
+        async fn overrides_are_permanent_entries() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "port".to_string(),
+                    ConfigValue::uint(8080),
+                )]))
+                .build()
+                .unwrap();
+
+            let policy = config.overrides.policy();
+            assert_eq!(
+                policy.time_to_live(),
+                None,
+                "overrides must not carry a TTL (a set value must never revert)"
+            );
+            assert_eq!(
+                policy.time_to_idle(),
+                None,
+                "overrides must not carry a TTI (an untouched set value must stay)"
+            );
+
+            // Behavioral: after a dynamic set, any later read — including
+            // after forced cache maintenance, which is where a TTL/TTI
+            // would have expired the entry — still returns the override.
+            config
+                .set("port", annotated("port", ConfigValue::uint(9090)))
+                .await
+                .unwrap();
+            config.overrides.run_pending_tasks().await;
+            let value = config.get_raw("port").await.unwrap().expect("override");
+            assert_eq!(value.inner, ConfigValue::uint(9090));
+
+            // The merged (file/default) value is gone until the override is
+            // explicitly deleted.
+            assert!(config.delete("port").await.unwrap());
+            config.overrides.run_pending_tasks().await;
+            let value = config.get_raw("port").await.unwrap().expect("merged");
+            assert_eq!(value.inner, ConfigValue::uint(8080));
+        }
+    }
 }
 
 #[cfg(feature = "async-core")]
@@ -314,11 +371,13 @@ mod sync_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                overrides: moka::sync::Cache::builder()
-                    .max_capacity(1_000)
-                    .time_to_live(std::time::Duration::from_secs(300))
-                    .time_to_idle(std::time::Duration::from_secs(60))
-                    .build(),
+                // Overrides are dynamic runtime state (T022 / R-watch-008):
+                // entries are PERMANENT. TTL/TTI here silently reverted a
+                // dynamic `set` back to the merged value after ~5 minutes of
+                // inactivity. Entries leave the cache only through
+                // `delete`/`clear`/`invalidate_all`; `max_capacity` bounds
+                // memory.
+                overrides: moka::sync::Cache::builder().max_capacity(1_000).build(),
                 version: AtomicU64::new(0),
                 healthy: AtomicBool::new(true),
                 source_id: SourceId::new("config"),
@@ -523,6 +582,46 @@ mod sync_impl {
         pub fn build(self) -> ConfersResult<ConfigImpl> {
             let chain = self.chain_builder.build();
             ConfigImpl::from_chain(chain)
+        }
+    }
+
+    // Nested inside `sync_impl` so the tests can reach the private
+    // `overrides` cache and inspect its eviction policy.
+    #[cfg(test)]
+    mod overrides_tests {
+        use super::*;
+
+        fn annotated(key: &str, value: ConfigValue) -> AnnotatedValue {
+            AnnotatedValue::new(value, SourceId::new("test"), key)
+        }
+
+        /// T022 / R-watch-008 (sync build): overrides must be permanent
+        /// cache entries — no TTL/TTI may silently revert a dynamic `set`.
+        #[test]
+        fn overrides_are_permanent_entries() {
+            let config = ConfigImpl::builder()
+                .defaults(HashMap::from([(
+                    "port".to_string(),
+                    ConfigValue::uint(8080),
+                )]))
+                .build()
+                .unwrap();
+
+            let policy = config.overrides.policy();
+            assert_eq!(policy.time_to_live(), None, "no TTL on overrides");
+            assert_eq!(policy.time_to_idle(), None, "no TTI on overrides");
+
+            config
+                .set("port", annotated("port", ConfigValue::uint(9090)))
+                .unwrap();
+            config.overrides.run_pending_tasks();
+            let value = config.get_raw("port").unwrap().expect("override");
+            assert_eq!(value.inner, ConfigValue::uint(9090));
+
+            assert!(config.delete("port").unwrap());
+            config.overrides.run_pending_tasks();
+            let value = config.get_raw("port").unwrap().expect("merged");
+            assert_eq!(value.inner, ConfigValue::uint(8080));
         }
     }
 }

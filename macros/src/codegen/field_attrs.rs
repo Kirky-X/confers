@@ -4,10 +4,11 @@
 //! Codegen for opt-in field capabilities: `#[config(dynamic)]` and
 //! `#[config(watch)]`.
 //!
-//! - `dynamic` fields get a `<field>_handle()` method returning a
-//!   [`confers::DynamicField`] seeded with the loaded value: the handle can
-//!   be pushed updates at runtime and read/subscribed without reloading the
-//!   whole struct.
+//! - `dynamic` fields get a `<field>_handle()` method returning the shared
+//!   `Arc<DynamicField>` singleton for that field (seeded with the loaded
+//!   value): the handle can be pushed updates at runtime and read/subscribed
+//!   without reloading the whole struct, and every caller observes the same
+//!   instance.
 //! - `watch` fields are subscribed by a generated `field_watcher`
 //!   constructor wrapping [`confers::watcher::StructFieldWatcher`] (requires
 //!   the `watch` feature).
@@ -68,11 +69,28 @@ pub fn generate_field_attr_impls(
             quote! {
                 /// Runtime handle for this `#[config(dynamic)]` field.
                 ///
-                /// Seeded with the loaded value; push fresh values after a
-                /// reload with [`confers::DynamicField::update`] and read the
-                /// latest value lock-free via `get()`.
-                pub fn #method(&self) -> confers::DynamicField<#ty> {
-                    confers::DynamicField::new(self.#ident.clone())
+                /// Returns the SHARED singleton handle for this field
+                /// (T018 / R-watch-004): repeated calls return clones of the
+                /// same `Arc`, so an update pushed through one call site is
+                /// observed by every reader of any other call site. The
+                /// handle is seeded once with the loaded value of the first
+                /// caller; push fresh values after a reload with
+                /// `confers::DynamicField::update` and read the latest value
+                /// lock-free via `get()`.
+                pub fn #method(&self) -> ::std::sync::Arc<confers::DynamicField<#ty>> {
+                    // Process-wide per-field singleton. A function-local
+                    // `static` is one instance per (method, field type): all
+                    // calls share the seeded `DynamicField`. This requires
+                    // the field type to be `Send + Sync + 'static` (already
+                    // implied by `DynamicField`'s own bounds) and to be
+                    // concrete — a generic struct parameter cannot back a
+                    // static.
+                    static HANDLE: ::std::sync::OnceLock<
+                        ::std::sync::Arc<confers::DynamicField<#ty>>,
+                    > = ::std::sync::OnceLock::new();
+                    ::std::sync::Arc::clone(HANDLE.get_or_init(|| {
+                        ::std::sync::Arc::new(confers::DynamicField::new(self.#ident.clone()))
+                    }))
                 }
             }
         });

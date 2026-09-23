@@ -97,7 +97,63 @@ impl ChangeEvent {
             source,
         }
     }
+
+    /// Synthetic re-synchronization event for a subscriber that fell behind:
+    /// versions below `from` were evicted from the retention store before
+    /// this subscriber could observe them. `missed` is the version whose
+    /// lookup triggered the resync (T020 / R-watch-006).
+    pub fn resync(from: u64, missed: u64) -> Self {
+        Self {
+            version: missed,
+            key: RESYNC_KEY.to_string(),
+            old_value: None,
+            new_value: Some(ConfigValue::uint(from)),
+            source: ChangeSource::Other("resync".to_string()),
+        }
+    }
+
+    /// True for the synthetic re-synchronization events emitted when a
+    /// subscriber fell behind the retention window (see [`Self::resync`]).
+    pub fn is_resync(&self) -> bool {
+        self.key == RESYNC_KEY
+    }
 }
+
+/// `key` carried by the synthetic re-synchronization events a subscriber
+/// receives after its missed versions were already evicted (T020).
+pub const RESYNC_KEY: &str = "__resync__";
+
+/// Error returned when resolving a retained change event fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangeStreamError {
+    /// The requested version was already evicted: the consumer fell behind
+    /// the retention window. `from` is the oldest version still retained,
+    /// so the consumer knows where to re-sync from.
+    Lagged {
+        /// Oldest retained version; every version below it is gone.
+        from: u64,
+    },
+    /// The version was never published on this stream.
+    NotFound {
+        /// The version that could not be resolved.
+        version: u64,
+    },
+}
+
+impl std::fmt::Display for ChangeStreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Lagged { from } => {
+                write!(f, "subscriber lagged: versions below {from} were evicted")
+            }
+            Self::NotFound { version } => {
+                write!(f, "version {version} was not published on this stream")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ChangeStreamError {}
 
 /// Unified configuration change stream port.
 ///
@@ -146,6 +202,8 @@ trait PendingStore: Send {
     fn get(&self, version: u64) -> Option<&ChangeEvent>;
     fn remove(&mut self, version: u64) -> Option<ChangeEvent>;
     fn len(&self) -> usize;
+    /// Watermark: versions below this value were FIFO-evicted (T020).
+    fn min_retained(&self) -> u64;
 }
 
 #[derive(Default)]
@@ -153,6 +211,9 @@ struct BoundedPendingStore {
     map: std::collections::HashMap<u64, ChangeEvent>,
     order: std::collections::VecDeque<u64>,
     capacity: usize,
+    /// Oldest version still retained; everything below was evicted. Used to
+    /// distinguish "lagged" from "never published" (T020 / R-watch-006).
+    min_retained: u64,
 }
 
 impl PendingStore for BoundedPendingStore {
@@ -161,6 +222,9 @@ impl PendingStore for BoundedPendingStore {
             && let Some(evict) = self.order.pop_front()
         {
             self.map.remove(&evict);
+            // Advance the watermark past the evicted version: lookups for it
+            // must be reported as Lagged instead of silently missing (T020).
+            self.min_retained = self.min_retained.max(evict + 1);
         }
         self.order.push_back(version);
         self.map.insert(version, event);
@@ -183,6 +247,10 @@ impl PendingStore for BoundedPendingStore {
     fn len(&self) -> usize {
         self.map.len()
     }
+
+    fn min_retained(&self) -> u64 {
+        self.min_retained
+    }
 }
 
 impl InMemoryChangeStream {
@@ -199,6 +267,7 @@ impl InMemoryChangeStream {
                 map: std::collections::HashMap::new(),
                 order: std::collections::VecDeque::new(),
                 capacity: capacity.max(1),
+                min_retained: 0,
             })),
             next_version: Arc::new(AtomicU64::new(1)),
         }
@@ -235,6 +304,28 @@ impl InMemoryChangeStream {
             ChangeSource::Remote(source.into()),
         ))
         .await
+    }
+
+    /// Resolve the retained payload for `version` (T020 / R-watch-006).
+    ///
+    /// Returns the stored envelope while it is retained (until ack or FIFO
+    /// eviction). A version inside the already-evicted range yields
+    /// [`ChangeStreamError::Lagged`] with the oldest still-retained version
+    /// in `from` — the explicit signal that this consumer fell behind and
+    /// missed events; consumers should re-sync instead of silently
+    /// continuing. A version that was never published yields
+    /// [`ChangeStreamError::NotFound`].
+    pub fn get(&self, version: u64) -> Result<ChangeEvent, ChangeStreamError> {
+        let store = self.payloads.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(event) = store.get(version) {
+            return Ok(event.clone());
+        }
+        if version > 0 && version < store.min_retained() {
+            return Err(ChangeStreamError::Lagged {
+                from: store.min_retained(),
+            });
+        }
+        Err(ChangeStreamError::NotFound { version })
     }
 }
 
@@ -283,10 +374,21 @@ impl ChangeStream for InMemoryChangeStream {
                 let version: u64 = summary.checksum.parse().unwrap_or(0);
                 // Payloads stay retained until acked (see `ack`), so a clone
                 // is delivered here rather than a destructive remove. The
-                // lock is recovered if poisoned: a skipped lookup here would
-                // silently drop the event for this subscriber.
+                // lock is recovered if poisoned.
                 let store = payloads.lock().unwrap_or_else(|p| p.into_inner());
-                store.get(version).cloned()
+                if let Some(event) = store.get(version) {
+                    return Some(event.clone());
+                }
+                // The payload is gone: when the version fell inside the
+                // evicted range the subscriber lagged, and the event must
+                // surface as an explicit resync signal instead of being
+                // swallowed by this filter_map (T020 / R-watch-006).
+                // Version 0 means the checksum could not be parsed at all —
+                // nothing to re-sync from, skip it.
+                if version > 0 && version < store.min_retained() {
+                    return Some(ChangeEvent::resync(store.min_retained(), version));
+                }
+                None
             }
         });
         Ok(Box::pin(mapped))
@@ -451,5 +553,93 @@ mod tests {
         // redelivered within a grace window.
         let redelivered = timeout(Duration::from_millis(80), rx.next()).await;
         assert!(redelivered.is_err(), "acked event must not be redelivered");
+    }
+
+    /// T020 / R-watch-006: versions evicted by the FIFO retention are
+    /// reported explicitly as `Lagged { from }` — never as a silent miss.
+    #[tokio::test]
+    async fn get_reports_lagged_for_evicted_versions() {
+        let stream = InMemoryChangeStream::with_capacity(2);
+        for i in 0..4 {
+            stream
+                .publish(ChangeEvent::new(
+                    format!("k{i}"),
+                    None,
+                    None,
+                    ChangeSource::Bus,
+                ))
+                .await
+                .unwrap();
+        }
+
+        // Versions 1 and 2 were FIFO-evicted; retention starts at 3.
+        assert_eq!(
+            stream.get(1),
+            Err(ChangeStreamError::Lagged { from: 3 }),
+            "evicted versions must be reported as Lagged with the retention start"
+        );
+        assert_eq!(stream.get(2), Err(ChangeStreamError::Lagged { from: 3 }));
+        // Retained versions still resolve.
+        assert_eq!(stream.get(3).unwrap().key, "k2");
+        assert_eq!(stream.get(4).unwrap().key, "k3");
+        // A version that was never published is NotFound, not Lagged.
+        assert_eq!(
+            stream.get(999),
+            Err(ChangeStreamError::NotFound { version: 999 })
+        );
+    }
+
+    /// T020 / R-watch-006: a subscriber whose events were evicted before it
+    /// could observe them receives explicit resync events — the filter_map
+    /// must not swallow the evicted versions silently.
+    #[tokio::test]
+    async fn evicted_events_surface_as_explicit_resync() {
+        let stream = InMemoryChangeStream::with_capacity(2);
+        let mut rx = stream.subscribe().await.unwrap();
+
+        for i in 0..4 {
+            stream
+                .publish(ChangeEvent::new(
+                    format!("k{i}"),
+                    None,
+                    None,
+                    ChangeSource::File,
+                ))
+                .await
+                .unwrap();
+        }
+
+        // Drain the four summaries: the two evicted versions must arrive as
+        // resync events, the two retained ones as normal events.
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            let event = timeout(Duration::from_millis(200), rx.next())
+                .await
+                .expect("timed out waiting for stream event")
+                .expect("stream ended");
+            seen.push(event);
+        }
+
+        let resyncs: Vec<&ChangeEvent> = seen.iter().filter(|e| e.is_resync()).collect();
+        assert_eq!(
+            resyncs.len(),
+            2,
+            "the two evicted versions must surface as resync events, got {seen:?}"
+        );
+        for resync in &resyncs {
+            assert_eq!(
+                resync.new_value.as_ref().and_then(|v| v.as_u64()),
+                Some(3),
+                "resync carries the first retained version"
+            );
+            assert_eq!(resync.source, ChangeSource::Other("resync".into()));
+        }
+
+        let normal: Vec<&ChangeEvent> = seen.iter().filter(|e| !e.is_resync()).collect();
+        assert_eq!(normal.len(), 2, "retained events are delivered normally");
+        assert_eq!(normal[0].key, "k2");
+        assert_eq!(normal[1].key, "k3");
+        assert_eq!(normal[0].version, 3);
+        assert_eq!(normal[1].version, 4);
     }
 }

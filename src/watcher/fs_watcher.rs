@@ -11,6 +11,7 @@ use crate::error::{ConfigError, ConfigResult};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -54,6 +55,9 @@ pub struct FsWatcher {
     /// observable through [`FsWatcher::is_running`] instead of the thread
     /// exiting silently.
     failed: Arc<std::sync::atomic::AtomicBool>,
+    /// Count of change events dropped because the event channel was full
+    /// (slow consumer). Observable through [`FsWatcher::dropped_events`].
+    dropped: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Drop for FsWatcher {
@@ -128,9 +132,11 @@ impl FsWatcher {
         let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let path_clone = Arc::clone(&watch_path);
         let running_clone = Arc::clone(&running);
         let failed_clone = Arc::clone(&failed);
+        let dropped_clone = Arc::clone(&dropped);
         let tx_for_thread = SenderStore::clone(&tx_store);
 
         // Spawn the watcher in a dedicated thread (not tokio task)
@@ -142,6 +148,7 @@ impl FsWatcher {
                 tx_for_thread,
                 running_clone,
                 failed_clone,
+                dropped_clone,
             );
         });
 
@@ -152,6 +159,7 @@ impl FsWatcher {
             watcher_thread: Some(watcher_thread),
             running,
             failed,
+            dropped,
         })
     }
 
@@ -224,6 +232,17 @@ impl FsWatcher {
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Number of change events dropped because the event channel was full
+    /// (slow consumer).
+    ///
+    /// Every dropped event also emits a warning log, but the counter makes
+    /// the loss queryable after the fact — a non-zero value means the
+    /// consumer fell behind and missed file-change notifications (a reload
+    /// trigger was lost and should be reconciled manually).
+    pub fn dropped_events(&self) -> u64 {
+        self.dropped.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Internal watcher function that runs in a dedicated thread.
     ///
     /// `tx_store` is the shared sender store: on any failure this thread
@@ -237,10 +256,41 @@ impl FsWatcher {
         tx_store: SenderStore,
         running: Arc<std::sync::atomic::AtomicBool>,
         failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
     ) {
         use notify_debouncer_full::{
             DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
         };
+
+        // Watch strategy (T015): a file target is watched through its PARENT
+        // directory with an exact-path filter, mirroring the proven
+        // `MultiFsWatcher` rename protection. Watching the file's own inode
+        // loses the watch on `rename(tmp, path)` atomic replacement (notify
+        // does not re-arm on `MOVE_SELF`), so every change after the first
+        // editor-style save would be silently missed. Watching the parent
+        // directory survives both replacement and delete+recreate of the
+        // watched path. Directory targets are watched directly and need no
+        // filter (a directory inode is not swapped by renames of children).
+        let (watch_target, path_filter): (PathBuf, Option<PathBuf>) = if path.is_dir() {
+            (path.to_path_buf(), None)
+        } else {
+            let parent = path.parent().unwrap_or(path).to_path_buf();
+            (parent, Some(path.to_path_buf()))
+        };
+
+        // T021 / R-watch-007: for file targets the event outlet passes
+        // through the library's own `AdaptiveDebouncer` (window =
+        // `debounce_ms`), so rapid consecutive writes collapse into a
+        // bounded number of forwarded events. The notify-level debounce
+        // coalesces within its window; this second layer bounds
+        // cross-window duplicates too. The final value is never lost: every
+        // forwarded event makes the consumer reload the current file
+        // content. Directory targets skip this layer — a single shared
+        // time-throttle across different files would silently drop one
+        // file's event because another file was forwarded just before.
+        let outlet_debouncer = path_filter
+            .as_ref()
+            .map(|_| super::AdaptiveDebouncer::new(debounce_ms));
 
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
@@ -267,8 +317,8 @@ impl FsWatcher {
             };
 
         // Start watching
-        if let Err(e) = debouncer.watch(path, RecursiveMode::Recursive) {
-            log::error!("failed to watch {}: {e}", path.display());
+        if let Err(e) = debouncer.watch(&watch_target, RecursiveMode::Recursive) {
+            log::error!("failed to watch {}: {e}", watch_target.display());
             failed.store(true, std::sync::atomic::Ordering::SeqCst);
             running.store(false, std::sync::atomic::Ordering::SeqCst);
             close_sender(&tx_store);
@@ -307,26 +357,58 @@ impl FsWatcher {
                                     // check was removed because it drops deletion
                                     // events (the path no longer exists) and can
                                     // race with creation events on some platforms.
+                                    //
+                                    // For file targets every forwarded path must
+                                    // equal the watched path exactly (same filter
+                                    // discipline as `MultiFsWatcher`): the parent
+                                    // watch also observes sibling files and the
+                                    // rename source, none of which are changes to
+                                    // the watched file.
                                     for event_path in &event.paths {
-                                        match tx.try_send(event_path.clone()) {
-                                            Ok(_) => {
-                                                // Critical-path metric: watcher
-                                                // trigger forwarded to reload
-                                                // consumers.
-                                                crate::metrics::record_counter(
-                                                    crate::metrics::names::WATCHER_EVENTS_TOTAL,
-                                                    &[],
-                                                );
-                                            }
-                                            Err(mpsc::error::TrySendError::Full(_)) => {
-                                                // Channel full — event silently dropped.
-                                            }
-                                            Err(mpsc::error::TrySendError::Closed(_)) => {
-                                                running.store(
-                                                    false,
-                                                    std::sync::atomic::Ordering::SeqCst,
-                                                );
-                                                return;
+                                        if path_filter
+                                            .as_ref()
+                                            .is_none_or(|filter| filter == event_path)
+                                        {
+                                            // Outlet throttle (file targets only):
+                                            // admit at most one event per window;
+                                            // within-window duplicates are merged.
+                                            let forward = outlet_debouncer
+                                                .as_ref()
+                                                .is_none_or(|d| d.should_process());
+                                            if forward {
+                                                match tx.try_send(event_path.clone()) {
+                                                    Ok(_) => {
+                                                        // Critical-path metric: watcher
+                                                        // trigger forwarded to reload
+                                                        // consumers.
+                                                        crate::metrics::record_counter(
+                                                            crate::metrics::names::WATCHER_EVENTS_TOTAL,
+                                                            &[],
+                                                        );
+                                                    }
+                                                    Err(mpsc::error::TrySendError::Full(_)) => {
+                                                        // Channel full — the consumer fell
+                                                        // behind. Make the loss observable:
+                                                        // warn now, count for later audit
+                                                        // (T016 / R-watch-002).
+                                                        let total = dropped
+                                                            .fetch_add(1, Ordering::SeqCst)
+                                                            + 1;
+                                                        log::warn!(
+                                                            "file watcher event channel full; \
+                                                             dropped change event for {} \
+                                                             (total dropped: {total})",
+                                                            event_path.display()
+                                                        );
+                                                    }
+                                                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                                                        running.store(
+                                                            false,
+                                                            std::sync::atomic::Ordering::SeqCst,
+                                                        );
+                                                        return;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -376,6 +458,9 @@ pub struct MultiFsWatcher {
     /// the failure observable through [`MultiFsWatcher::is_running`] instead
     /// of the thread exiting silently.
     failed: Arc<std::sync::atomic::AtomicBool>,
+    /// Count of change events dropped because the event channel was full
+    /// (slow consumer). Observable through [`MultiFsWatcher::dropped_events`].
+    dropped: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Drop for MultiFsWatcher {
@@ -466,9 +551,11 @@ impl MultiFsWatcher {
         let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let paths_arc = Arc::new(watch_paths);
         let running_clone = Arc::clone(&running);
         let failed_clone = Arc::clone(&failed);
+        let dropped_clone = Arc::clone(&dropped);
         let paths_for_thread = Arc::clone(&paths_arc);
         let tx_for_thread = SenderStore::clone(&tx_store);
 
@@ -481,6 +568,7 @@ impl MultiFsWatcher {
                 tx_for_thread,
                 running_clone,
                 failed_clone,
+                dropped_clone,
             );
         });
 
@@ -491,6 +579,7 @@ impl MultiFsWatcher {
             watcher_thread: Some(watcher_thread),
             running,
             failed,
+            dropped,
         })
     }
 
@@ -555,6 +644,17 @@ impl MultiFsWatcher {
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    /// Number of change events dropped because the event channel was full
+    /// (slow consumer).
+    ///
+    /// Every dropped event also emits a warning log, but the counter makes
+    /// the loss queryable after the fact — a non-zero value means the
+    /// consumer fell behind and missed file-change notifications (a reload
+    /// trigger was lost and should be reconciled manually).
+    pub fn dropped_events(&self) -> u64 {
+        self.dropped.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Internal watcher function that runs in a dedicated thread.
     ///
     /// `tx_store` is the shared sender store: on any failure this thread
@@ -568,6 +668,7 @@ impl MultiFsWatcher {
         tx_store: SenderStore,
         running: Arc<std::sync::atomic::AtomicBool>,
         failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
     ) {
         use notify_debouncer_full::{
             DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
@@ -669,7 +770,18 @@ impl MultiFsWatcher {
                                                     );
                                                 }
                                                 Err(mpsc::error::TrySendError::Full(_)) => {
-                                                    // Channel full — event silently dropped.
+                                                    // Channel full — the consumer fell
+                                                    // behind. Make the loss observable:
+                                                    // warn now, count for later audit
+                                                    // (T016 / R-watch-002).
+                                                    let total =
+                                                        dropped.fetch_add(1, Ordering::SeqCst) + 1;
+                                                    log::warn!(
+                                                        "file watcher event channel full; \
+                                                         dropped change event for {} \
+                                                         (total dropped: {total})",
+                                                        event_path.display()
+                                                    );
                                                 }
                                                 Err(mpsc::error::TrySendError::Closed(_)) => {
                                                     running.store(
@@ -761,6 +873,183 @@ mod tests {
         crate::metrics::clear_metrics_backend();
     }
 
+    /// Bounded event collection: drains up to `expected` events before the
+    /// deadline. A missing event fails the test via `Err` instead of hanging.
+    async fn recv_events(
+        watcher: &mut FsWatcher,
+        expected: usize,
+        patience: Duration,
+    ) -> Result<Vec<PathBuf>, ()> {
+        let deadline = std::time::Instant::now() + patience;
+        let mut events = Vec::new();
+        while events.len() < expected {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(());
+            }
+            match tokio::time::timeout(remaining, watcher.recv()).await {
+                Ok(Some(path)) => events.push(path),
+                Ok(None) => return Err(()), // watcher stopped/failed
+                Err(_elapsed) => return Err(()),
+            }
+        }
+        Ok(events)
+    }
+
+    /// Regression test (T015 / R-watch-001): FsWatcher on a file target must
+    /// keep delivering events across consecutive `rename(tmp, path)` atomic
+    /// replacements. The old implementation watched the file's own inode;
+    /// notify does not re-arm on `MOVE_SELF`, so the first rename silently
+    /// killed the watch and every later change was lost.
+    #[tokio::test]
+    async fn consecutive_atomic_replacements_keep_delivering_events() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("reload.toml");
+        std::fs::write(&path, b"gen = 0").expect("initial content");
+
+        let mut watcher = FsWatcher::with_recv_timeout(&path, 30, 50)
+            .await
+            .expect("watchable file");
+
+        // Let the inotify watch on the parent directory settle before the
+        // first replacement (same pattern as the metrics test above).
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        // Two consecutive editor-style atomic replacements. Both must each
+        // deliver at least one event; the second one is the regression: it
+        // was permanently lost with inode watching.
+        for round in 1..=2u32 {
+            let tmp = dir.path().join("reload.toml.tmp");
+            std::fs::write(&tmp, format!("version = {round}")).expect("write tmp");
+            std::fs::rename(&tmp, &path).expect("atomic replace");
+
+            let events = recv_events(&mut watcher, 1, Duration::from_secs(5))
+                .await
+                .expect("atomic replacement must deliver an event");
+            assert!(
+                events.iter().all(|p| p == &path),
+                "forwarded paths must be the watched file, got {events:?}"
+            );
+        }
+
+        watcher.stop();
+    }
+
+    /// Regression test (T015 / R-watch-001): deleting and recreating the
+    /// watched file must not end the watch — changes to the new file stay
+    /// observable (parent-directory watching, not inode watching).
+    #[tokio::test]
+    async fn delete_and_recreate_keeps_delivering_events() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("reload.toml");
+        std::fs::write(&path, b"v1").expect("initial content");
+
+        let mut watcher = FsWatcher::with_recv_timeout(&path, 30, 50)
+            .await
+            .expect("watchable file");
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        // Delete + recreate, then modify the recreated file.
+        std::fs::remove_file(&path).expect("delete");
+        std::fs::write(&path, b"v2").expect("recreate");
+
+        let events = recv_events(&mut watcher, 1, Duration::from_secs(5))
+            .await
+            .expect("delete/recreate must be observable");
+        assert!(
+            events.iter().all(|p| p == &path),
+            "forwarded paths must be the watched file, got {events:?}"
+        );
+
+        // A later change to the recreated file must still arrive.
+        std::fs::write(&path, b"v3").expect("modify recreated file");
+        let events = recv_events(&mut watcher, 1, Duration::from_secs(5))
+            .await
+            .expect("changes to the recreated file must stay observable");
+        assert!(events.iter().all(|p| p == &path));
+
+        watcher.stop();
+    }
+
+    /// Regression test (T016 / R-watch-002): events overflowing the event
+    /// channel (slow consumer) must be observable through `dropped_events()`
+    /// instead of vanishing silently. A warning log is emitted on the same
+    /// guarded branch; the global `log` slot is process-wide and owned by the
+    /// bus suite's capture logger, so the test pins the counter as the
+    /// queryable signal.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn dropped_events_are_counted_when_consumer_is_slow() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // Directory target: no path filter, every file event is forwarded, so
+        // the debounced batches of many file creations overflow the
+        // 100-slot channel while the consumer never calls recv().
+        let mut watcher = FsWatcher::with_recv_timeout(dir.path(), 30, 50)
+            .await
+            .expect("watchable temp dir");
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        // Create far more files than the channel capacity: each contributes
+        // at least one forwarded event entry.
+        for i in 0..150u32 {
+            let file = dir.path().join(format!("flood-{i}.toml"));
+            std::fs::write(&file, b"x").expect("flood write");
+        }
+
+        // Give the watcher thread time to push the debounced batches into
+        // the undrained channel; once full, every further event drops.
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+
+        assert!(
+            watcher.dropped_events() > 0,
+            "slow-consumer overflow must be observable through dropped_events()"
+        );
+        // A full channel is backpressure, not a failure: the watcher lives on.
+        assert!(watcher.is_running());
+        watcher.stop();
+    }
+
+    /// T021 / R-watch-007: rapid consecutive writes to the watched file must
+    /// be merged through the AdaptiveDebouncer outlet into a bounded number
+    /// of forwarded events, and at least one event must be forwarded so the
+    /// final written value is observable (a reload reads current content).
+    #[tokio::test]
+    async fn rapid_writes_are_merged_by_the_outlet_debouncer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("burst.toml");
+        std::fs::write(&path, b"v0").expect("initial content");
+
+        let mut watcher = FsWatcher::with_recv_timeout(&path, 100, 50)
+            .await
+            .expect("watchable file");
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        // 20 rapid writes, 10ms apart — the whole burst spans one or two
+        // debounce windows.
+        for i in 1..=20u32 {
+            std::fs::write(&path, format!("v{i}")).expect("burst write");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        // Drain events for a bounded window after the burst.
+        let deadline = std::time::Instant::now() + Duration::from_millis(1500);
+        let mut count = 0usize;
+        while std::time::Instant::now() < deadline {
+            match tokio::time::timeout(Duration::from_millis(250), watcher.recv()).await {
+                Ok(Some(_)) => count += 1,
+                _ => break,
+            }
+        }
+
+        assert!(
+            (1..=5).contains(&count),
+            "20 rapid writes must merge into a handful of outlet events, got {count}"
+        );
+        // The final state is intact and observable via a (consumer-side) reload.
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "v20");
+        watcher.stop();
+    }
+
     fn assert_thread_reported_failure(
         running: &std::sync::atomic::AtomicBool,
         failed: &std::sync::atomic::AtomicBool,
@@ -805,6 +1094,7 @@ mod tests {
                     tx_store,
                     running,
                     failed,
+                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 );
             })
         };
@@ -829,7 +1119,15 @@ mod tests {
             let running = Arc::clone(&running);
             let failed = Arc::clone(&failed);
             std::thread::spawn(move || {
-                MultiFsWatcher::run_watcher(&paths, 50, 50, tx_store, running, failed);
+                MultiFsWatcher::run_watcher(
+                    &paths,
+                    50,
+                    50,
+                    tx_store,
+                    running,
+                    failed,
+                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                );
             })
         };
         handle.join().unwrap();
