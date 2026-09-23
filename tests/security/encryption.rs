@@ -136,7 +136,7 @@ mod tests {
             .decrypt(&nonce, &ciphertext, &key)
             .expect("decryption failed");
 
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted.as_slice(), plaintext);
     }
 
     #[test]
@@ -369,11 +369,15 @@ mod tests {
         // 3. Encrypt sensitive data
         let crypto = XChaCha20Crypto::new();
         let password = "my-super-secret-password";
-        let (nonce, ciphertext) = crypto.encrypt(password.as_bytes(), &field_key).unwrap();
+        let (nonce, ciphertext) = crypto
+            .encrypt(password.as_bytes(), field_key.as_slice())
+            .unwrap();
 
         // 4. Decrypt and verify
-        let decrypted = crypto.decrypt(&nonce, &ciphertext, &field_key).unwrap();
-        assert_eq!(decrypted, password.as_bytes());
+        let decrypted = crypto
+            .decrypt(&nonce, &ciphertext, field_key.as_slice())
+            .unwrap();
+        assert_eq!(decrypted.as_slice(), password.as_bytes());
     }
 
     #[test]
@@ -387,7 +391,7 @@ mod tests {
 
         // Decrypt
         let decrypted = crypto.decrypt(&nonce, &ciphertext, &key).unwrap();
-        let decrypted_str = String::from_utf8(decrypted).unwrap();
+        let decrypted_str = String::from_utf8(decrypted.to_vec()).unwrap();
 
         assert_eq!(decrypted_str, "sensitive-data");
 

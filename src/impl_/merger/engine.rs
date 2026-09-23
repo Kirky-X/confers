@@ -14,6 +14,9 @@ const MAX_MERGE_DEPTH: usize = 100;
 pub struct MergeEngine {
     default_strategy: MergeStrategy,
     field_strategies: IndexMap<Arc<str>, MergeStrategy>,
+    /// Configuration paths whose values must never appear verbatim in
+    /// conflict reports (mirrors the macro-generated `sensitive_paths`).
+    sensitive_paths: Vec<String>,
 }
 
 impl Default for MergeEngine {
@@ -27,7 +30,23 @@ impl MergeEngine {
         Self {
             default_strategy: MergeStrategy::Replace,
             field_strategies: IndexMap::new(),
+            sensitive_paths: Vec::new(),
         }
+    }
+
+    /// Register sensitive configuration paths: conflict reports redact the
+    /// values of these paths (and anything nested below them) instead of
+    /// embedding the raw `Debug` text.
+    pub fn with_sensitive_paths(mut self, paths: Vec<String>) -> Self {
+        self.sensitive_paths = paths;
+        self
+    }
+
+    /// Whether `path` targets (or lives under) a registered sensitive path.
+    fn is_sensitive_path(&self, path: &str) -> bool {
+        self.sensitive_paths
+            .iter()
+            .any(|p| path == p || path.starts_with(&format!("{p}.")))
     }
 
     pub fn with_default_strategy(mut self, strategy: MergeStrategy) -> Self {
@@ -55,16 +74,27 @@ impl MergeEngine {
         low: &AnnotatedValue,
         high: &AnnotatedValue,
     ) -> ConfigResult<AnnotatedValue> {
-        Self::merge_with_depth(low.clone(), high.clone(), *self.get_strategy(&low.path), 0)
+        // Normalize argument order to priority order: the structural winner
+        // (the `high` position) must always match the priority winner, so
+        // merge results and `report_conflict` conclusions can never disagree.
+        if low.priority > high.priority {
+            Self::merge_inner(self, high.clone(), low.clone(), 0)
+        } else {
+            Self::merge_inner(self, low.clone(), high.clone(), 0)
+        }
     }
 
-    fn merge_with_depth(
+    /// Recursive merge carrying the engine so field strategies are looked up
+    /// by the **full child path** at every level (root `low.path` is typically
+    /// empty and resolves to the default strategy).
+    fn merge_inner(
+        engine: &MergeEngine,
         low: AnnotatedValue,
         high: AnnotatedValue,
-        strategy: MergeStrategy,
         depth: usize,
     ) -> ConfigResult<AnnotatedValue> {
         check_merge_depth(depth, &high.path)?;
+        let strategy = *engine.get_strategy(&low.path);
 
         // Extract metadata before moving inner values
         let priority = high.priority.max(low.priority);
@@ -78,7 +108,7 @@ impl MergeEngine {
             (low_inner, ConfigValue::Null, _) => low_inner,
             // Map+Map always recursive merges (regardless of strategy), preserving COW optimizations
             (ConfigValue::Map(l), ConfigValue::Map(r), _) => {
-                merge_maps_with_cow(&l, &r, &strategy, depth)?
+                merge_maps_with_cow(engine, &l, &r, &strategy, depth)?
             }
             // Replace: non-Map high values are passed through without cloning
             (ConfigValue::Array(_), ConfigValue::Array(high_arc), MergeStrategy::Replace) => {
@@ -130,12 +160,19 @@ impl MergeEngine {
         if low.inner == high.inner {
             return None;
         }
+        let mask = |value: &AnnotatedValue| {
+            if self.is_sensitive_path(&value.path) {
+                "[REDACTED]".to_string()
+            } else {
+                format!("{:?}", value.inner)
+            }
+        };
         Some(ConflictReport {
             path: high.path.clone(),
-            low_value: format!("{:?}", low.inner),
+            low_value: mask(low),
             low_source: low.source.clone(),
             low_location: low.location.clone(),
-            high_value: format!("{:?}", high.inner),
+            high_value: mask(high),
             high_source: high.source.clone(),
             high_location: high.location.clone(),
             winner: if high.priority >= low.priority {
@@ -191,6 +228,7 @@ fn build_annotated_value(
 /// 3. Single-pass change detection: scan high keys against low to detect no-op case
 /// 4. Single clone: only clone low_map once when modifications are actually needed
 fn merge_maps_with_cow(
+    engine: &MergeEngine,
     low_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     high_map: &Arc<IndexMap<Arc<str>, AnnotatedValue>>,
     strategy: &MergeStrategy,
@@ -252,18 +290,17 @@ fn merge_maps_with_cow(
             );
 
             if needs_recursive {
-                let merged_inner = MergeEngine::merge_with_depth(
-                    v_low.clone(),
-                    v_high.clone(),
-                    *strategy,
-                    depth + 1,
-                )?;
+                let merged_inner =
+                    MergeEngine::merge_inner(engine, v_low.clone(), v_high.clone(), depth + 1)?;
                 result.insert(
                     k.clone(),
                     build_annotated_value(merged_inner.inner, v_high, v_low),
                 );
             } else {
-                let merged = apply_leaf_strategy(&v_low.inner, &v_high.inner, strategy);
+                // Leaf strategy is resolved by the child's full path so
+                // per-field strategies registered on the engine apply.
+                let child_strategy = engine.get_strategy(&v_low.path);
+                let merged = apply_leaf_strategy(&v_low.inner, &v_high.inner, child_strategy);
                 result.insert(k.clone(), build_annotated_value(merged, v_high, v_low));
             }
         } else {
@@ -317,6 +354,11 @@ fn apply_leaf_strategy(
     strategy: &MergeStrategy,
 ) -> ConfigValue {
     match (low, high, strategy) {
+        // Null never overrides an existing value (mirrors the root-level
+        // semantics in merge_with_depth): an explicit null from a
+        // higher-priority source does not erase a real value.
+        (ConfigValue::Null, high_inner, _) => high_inner.clone(),
+        (low_inner, ConfigValue::Null, _) => low_inner.clone(),
         (_, _, MergeStrategy::Replace) => high.clone(),
         // Join and JoinAppend behave identically for String+String; JoinAppend
         // only differs for Array+Array (chained with Append in the arm below).
@@ -878,6 +920,194 @@ mod tests {
             &ConfigValue::I64(2),
             &MergeStrategy::Replace
         ));
+    }
+
+    #[test]
+    fn test_conflict_report_redacts_sensitive_paths() {
+        // T048 regression: conflict reports embedded `format!("{:?}")` of the
+        // raw values, leaking sensitive config into diagnostics.
+        let e = MergeEngine::new().with_sensitive_paths(vec!["db.password".to_string()]);
+        let l = AnnotatedValue::new(
+            ConfigValue::string("hunter2"),
+            SourceId::new("file"),
+            "db.password",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::string("s3cret"),
+            SourceId::new("env"),
+            "db.password",
+        );
+        let report = e.report_conflict(&l, &h).unwrap();
+        assert_eq!(report.low_value, "[REDACTED]");
+        assert_eq!(report.high_value, "[REDACTED]");
+
+        // Nested below a sensitive path is redacted too; unrelated paths are
+        // reported verbatim.
+        let nested = AnnotatedValue::new(
+            ConfigValue::string("v"),
+            SourceId::new("file"),
+            "db.password.confirm",
+        );
+        let other = AnnotatedValue::new(
+            ConfigValue::string("plain"),
+            SourceId::new("env"),
+            "db.host",
+        );
+        assert_eq!(
+            e.report_conflict(&nested, &other).unwrap().low_value,
+            "[REDACTED]"
+        );
+        let report = e.report_conflict(&other, &l).unwrap();
+        assert_eq!(report.low_value, "String(\"plain\")");
+    }
+
+    #[test]
+    fn test_merge_respects_priority_regardless_of_argument_order() {
+        // T010 regression: merge() used to let the `high` position win
+        // structurally even when it carried the LOWER priority, while
+        // report_conflict claimed the priority winner — the two could
+        // disagree. Now the entry normalizes to priority order.
+        let e = MergeEngine::new();
+        let p10 = AnnotatedValue::new(ConfigValue::string("priority-10"), SourceId::new("l"), "t")
+            .with_priority(10);
+        let p5 = AnnotatedValue::new(ConfigValue::string("priority-5"), SourceId::new("h"), "t")
+            .with_priority(5);
+
+        // Priority order: the priority-10 value wins from the high position.
+        let merged = e.merge(&p5, &p10).unwrap();
+        assert_eq!(merged.as_str(), Some("priority-10"));
+        let report = e.report_conflict(&p5, &p10).unwrap();
+        assert_eq!(report.winner, ConflictWinner::High);
+
+        // Arguments passed inverted (priority-10 in the LOW position): the
+        // priority-5 value must not win structurally.
+        let merged = e.merge(&p10, &p5).unwrap();
+        assert_eq!(merged.as_str(), Some("priority-10"));
+        let report = e.report_conflict(&p10, &p5).unwrap();
+        assert_eq!(report.winner, ConflictWinner::Low);
+    }
+
+    #[test]
+    fn test_field_strategy_applies_on_nested_path() {
+        // T008 regression: field strategies were only consulted at the root
+        // path (""), so per-field strategies registered on the engine never
+        // applied to nested leaves.
+        let e = MergeEngine::new()
+            .with_default_strategy(MergeStrategy::Replace)
+            .with_field_strategy("db.tags", MergeStrategy::Append);
+
+        let mk_tags = |vals: &[&str], s: &str, p: &str| {
+            let arr: Vec<AnnotatedValue> = vals
+                .iter()
+                .map(|v| {
+                    AnnotatedValue::new(ConfigValue::string(*v), SourceId::new(s), "t.db.tags.0")
+                })
+                .collect();
+            AnnotatedValue::new(ConfigValue::array(arr), SourceId::new(s), p)
+        };
+        let mk_host = |v: &str, s: &str| {
+            AnnotatedValue::new(ConfigValue::string(v), SourceId::new(s), "db.host")
+        };
+        let low_inner = IndexMap::from_iter(vec![
+            (Arc::from("host"), mk_host("file-host", "l")),
+            (Arc::from("tags"), mk_tags(&["a"], "l", "db.tags")),
+        ]);
+        let high_inner = IndexMap::from_iter(vec![
+            (Arc::from("host"), mk_host("env-host", "h")),
+            (Arc::from("tags"), mk_tags(&["b"], "h", "db.tags")),
+        ]);
+        let l = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(low_inner)),
+            SourceId::new("l"),
+            "t",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(high_inner)),
+            SourceId::new("h"),
+            "t",
+        );
+        let merged = e.merge(&l, &h).unwrap();
+        let db = merged.inner.as_map().unwrap();
+        // Append strategy applied to the nested tags leaf...
+        let tags: Vec<_> = db
+            .get("tags")
+            .unwrap()
+            .inner
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
+        assert_eq!(
+            tags,
+            vec!["a", "b"],
+            "db.tags must use the registered Append strategy"
+        );
+        // ...while the unregistered host leaf keeps the default Replace.
+        assert_eq!(db.get("host").unwrap().as_str(), Some("env-host"));
+    }
+
+    #[test]
+    fn test_null_semantics_consistent_between_root_and_map_leaf() {
+        // T005 regression: map-internal leaf merges used to let a high
+        // (explicit) null overwrite a low value via the Replace fallback,
+        // while root-level merges kept the low value. Both levels must agree:
+        // null never erases an existing value.
+        let e = MergeEngine::new();
+
+        // Root level: high null keeps low value.
+        let l = AnnotatedValue::new(ConfigValue::string("file-host"), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::Null, SourceId::new("h"), "t");
+        assert_eq!(e.merge(&l, &h).unwrap().as_str(), Some("file-host"));
+
+        // Map-internal leaf: high null must also keep the low value.
+        let leaf_l = ConfigValue::string("file-host");
+        let leaf_h = ConfigValue::Null;
+        let kept = apply_leaf_strategy(&leaf_l, &leaf_h, &MergeStrategy::Replace);
+        assert_eq!(kept.as_str(), Some("file-host"));
+
+        // Low null, high real value: high wins at both levels.
+        let filled = apply_leaf_strategy(
+            &ConfigValue::Null,
+            &ConfigValue::string("high"),
+            &MergeStrategy::Replace,
+        );
+        assert_eq!(filled.as_str(), Some("high"));
+
+        // End-to-end: nested map merge with a null high leaf keeps low leaf.
+        let mk_leaf = |v: &str, s: &str| {
+            AnnotatedValue::new(ConfigValue::string(v), SourceId::new(s), "t.db.host")
+        };
+        let mk_leaf_null =
+            |s: &str| AnnotatedValue::new(ConfigValue::Null, SourceId::new(s), "t.db.host");
+        let low_inner = IndexMap::from_iter(vec![(Arc::from("host"), mk_leaf("file-host", "l"))]);
+        let high_inner = IndexMap::from_iter(vec![(Arc::from("host"), mk_leaf_null("h"))]);
+        let low_db = IndexMap::from_iter(vec![(
+            Arc::from("db"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(low_inner)),
+                SourceId::new("l"),
+                "t.db",
+            ),
+        )]);
+        let high_db = IndexMap::from_iter(vec![(
+            Arc::from("db"),
+            AnnotatedValue::new(
+                ConfigValue::Map(Arc::new(high_inner)),
+                SourceId::new("h"),
+                "t.db",
+            ),
+        )]);
+        let l = AnnotatedValue::new(ConfigValue::Map(Arc::new(low_db)), SourceId::new("l"), "t");
+        let h = AnnotatedValue::new(ConfigValue::Map(Arc::new(high_db)), SourceId::new("h"), "t");
+        let merged = e.merge(&l, &h).unwrap();
+        let db = merged.inner.as_map().unwrap().get("db").unwrap();
+        let host = db.inner.as_map().unwrap().get("host").unwrap();
+        assert_eq!(
+            host.as_str(),
+            Some("file-host"),
+            "nested null must not erase file value"
+        );
     }
 
     #[test]

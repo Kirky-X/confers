@@ -88,6 +88,18 @@ pub mod interpolation;
 #[cfg(feature = "watch")]
 pub mod watcher;
 
+pub mod envelope;
+
+pub mod field_crypto;
+
+pub mod path_validator;
+
+pub mod sensitive_names;
+
+pub use envelope::EncryptedEnvelope;
+pub use field_crypto::decrypt_encrypted_fields;
+pub use path_validator::PathValidator;
+
 #[cfg(feature = "encryption")]
 pub mod secret;
 
@@ -170,7 +182,7 @@ pub use loader::{
 };
 
 pub use flatten::{ConfigFieldKeys, FlattenSpec, hoist_flattened};
-pub use tree_transform::{interpolate_keys, rename_tree_keys};
+pub use tree_transform::{interpolate_keys, interpolate_keys_with_sensitivity, rename_tree_keys};
 
 // Re-export derive macros (feature-gated to match their generated code dependencies)
 pub use confers_macros::Config;

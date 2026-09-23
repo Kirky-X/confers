@@ -111,7 +111,7 @@ fn demo_encryption() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
-    info!("Decrypted: {}", String::from_utf8(decrypted)?);
+    info!("Decrypted: {}", String::from_utf8(decrypted.to_vec())?);
 
     // Field key derivation
     let master_key = key;

@@ -87,10 +87,14 @@ fn demonstrate_encryption_with_version() {
     let plaintext = b"my-secret-database-password";
 
     let key_v1 = derive_field_key(&master_key, "database.password", "v1").expect("派生密钥失败");
-    let (nonce_v1, ciphertext_v1) = crypto.encrypt(plaintext, &key_v1).expect("v1 加密失败");
+    let (nonce_v1, ciphertext_v1) = crypto
+        .encrypt(plaintext, key_v1.as_slice())
+        .expect("v1 加密失败");
 
     let key_v2 = derive_field_key(&master_key, "database.password", "v2").expect("派生密钥失败");
-    let (nonce_v2, ciphertext_v2) = crypto.encrypt(plaintext, &key_v2).expect("v2 加密失败");
+    let (nonce_v2, ciphertext_v2) = crypto
+        .encrypt(plaintext, key_v2.as_slice())
+        .expect("v2 加密失败");
 
     tracing::info!("v1 加密 - Nonce: {:02x?}", &nonce_v1[..8]);
     tracing::info!("v1 加密 - 密文: {:02x?}", &ciphertext_v1[..16]);
@@ -101,17 +105,17 @@ fn demonstrate_encryption_with_version() {
     tracing::info!("不同版本密钥产生不同密文: 验证通过");
 
     let decrypted_v1 = crypto
-        .decrypt(&nonce_v1, &ciphertext_v1, &key_v1)
+        .decrypt(&nonce_v1, &ciphertext_v1, key_v1.as_slice())
         .expect("v1 解密失败");
     let decrypted_v2 = crypto
-        .decrypt(&nonce_v2, &ciphertext_v2, &key_v2)
+        .decrypt(&nonce_v2, &ciphertext_v2, key_v2.as_slice())
         .expect("v2 解密失败");
 
-    assert_eq!(decrypted_v1, plaintext.as_slice());
-    assert_eq!(decrypted_v2, plaintext.as_slice());
+    assert_eq!(decrypted_v1.as_slice(), plaintext.as_slice());
+    assert_eq!(decrypted_v2.as_slice(), plaintext.as_slice());
     tracing::info!("各自版本密钥正确解密: 验证通过");
 
-    let cross_fail = crypto.decrypt(&nonce_v1, &ciphertext_v1, &key_v2);
+    let cross_fail = crypto.decrypt(&nonce_v1, &ciphertext_v1, key_v2.as_slice());
     assert!(cross_fail.is_err());
     tracing::info!("跨版本密钥无法解密: 验证通过");
 }
@@ -132,14 +136,16 @@ fn demonstrate_key_rotation() {
     let new_version = "v2";
 
     let old_key = derive_field_key(&master_key, "api.key", old_version).expect("派生旧密钥失败");
-    let (old_nonce, old_ciphertext) = crypto.encrypt(plaintext, &old_key).expect("旧密钥加密失败");
+    let (old_nonce, old_ciphertext) = crypto
+        .encrypt(plaintext, old_key.as_slice())
+        .expect("旧密钥加密失败");
 
     tracing::info!("旧版本: {}", old_version);
     tracing::info!("旧 Nonce: {:02x?}", &old_nonce[..8]);
     tracing::info!("旧密文: {:02x?}", &old_ciphertext[..16]);
 
     let decrypted_with_old = crypto
-        .decrypt(&old_nonce, &old_ciphertext, &old_key)
+        .decrypt(&old_nonce, &old_ciphertext, old_key.as_slice())
         .expect("旧密钥解密失败");
     tracing::info!(
         "旧密钥解密成功: {:?}",
@@ -147,7 +153,9 @@ fn demonstrate_key_rotation() {
     );
 
     let new_key = derive_field_key(&master_key, "api.key", new_version).expect("派生新密钥失败");
-    let (new_nonce, new_ciphertext) = crypto.encrypt(plaintext, &new_key).expect("新密钥加密失败");
+    let (new_nonce, new_ciphertext) = crypto
+        .encrypt(plaintext, new_key.as_slice())
+        .expect("新密钥加密失败");
 
     tracing::info!("新版本: {}", new_version);
     tracing::info!("新 Nonce: {:02x?}", &new_nonce[..8]);
@@ -187,7 +195,7 @@ fn demonstrate_data_migration() {
 
     let old_key = derive_field_key(&master_key, "field.data", old_version).expect("派生旧密钥失败");
     let (old_nonce, old_ciphertext) = crypto
-        .encrypt(original_plaintext, &old_key)
+        .encrypt(original_plaintext, old_key.as_slice())
         .expect("加密失败");
 
     let stored_data = StoredEncryptedData {
@@ -212,10 +220,11 @@ fn demonstrate_data_migration() {
         new_version: &str,
     ) -> Result<StoredEncryptedData, Box<dyn std::error::Error>> {
         let old_key = derive_field_key(master_key, field_name, old_version)?;
-        let plaintext = crypto.decrypt(&old_data.nonce, &old_data.ciphertext, &old_key)?;
+        let plaintext =
+            crypto.decrypt(&old_data.nonce, &old_data.ciphertext, old_key.as_slice())?;
 
         let new_key = derive_field_key(master_key, field_name, new_version)?;
-        let (new_nonce, new_ciphertext) = crypto.encrypt(&plaintext, &new_key)?;
+        let (new_nonce, new_ciphertext) = crypto.encrypt(&plaintext, new_key.as_slice())?;
 
         Ok(StoredEncryptedData {
             version: new_version.to_string(),
@@ -243,14 +252,21 @@ fn demonstrate_data_migration() {
 
     let new_key = derive_field_key(&master_key, "field.data", new_version).expect("派生新密钥失败");
     let migrated_plaintext = crypto
-        .decrypt(&migrated_data.nonce, &migrated_data.ciphertext, &new_key)
+        .decrypt(
+            &migrated_data.nonce,
+            &migrated_data.ciphertext,
+            new_key.as_slice(),
+        )
         .expect("验证解密失败");
 
-    assert_eq!(migrated_plaintext, original_plaintext);
+    assert_eq!(migrated_plaintext.as_slice(), original_plaintext);
     tracing::info!("数据完整性验证: 通过");
 
-    let verification_old =
-        crypto.decrypt(&migrated_data.nonce, &migrated_data.ciphertext, &old_key);
+    let verification_old = crypto.decrypt(
+        &migrated_data.nonce,
+        &migrated_data.ciphertext,
+        old_key.as_slice(),
+    );
     assert!(verification_old.is_err());
     tracing::info!("旧密钥无法解密新数据: 验证通过");
 }
@@ -277,7 +293,7 @@ fn demonstrate_env_key_provider_with_version() {
                     .unwrap_or_else(|_| panic!("派生 {} 密钥失败", version));
 
                 let (nonce, ciphertext) = crypto
-                    .encrypt(plaintext, &field_key)
+                    .encrypt(plaintext, field_key.as_slice())
                     .unwrap_or_else(|_| panic!("{} 加密失败", version));
 
                 tracing::info!(
@@ -288,9 +304,9 @@ fn demonstrate_env_key_provider_with_version() {
                 );
 
                 let decrypted = crypto
-                    .decrypt(&nonce, &ciphertext, &field_key)
+                    .decrypt(&nonce, &ciphertext, field_key.as_slice())
                     .unwrap_or_else(|_| panic!("{} 解密失败", version));
-                assert_eq!(decrypted, plaintext);
+                assert_eq!(decrypted.as_slice(), plaintext);
             }
 
             tracing::info!("EnvKeyProvider 与多版本密钥集成: 验证通过");
@@ -320,7 +336,9 @@ fn demonstrate_rollback_mechanism() {
 
     // Step 1: 使用 v1 加密原始数据
     let key_v1 = derive_field_key(&master_key, field_name, "v1").expect("派生 v1 密钥失败");
-    let (nonce_v1, ciphertext_v1) = crypto.encrypt(plaintext, &key_v1).expect("v1 加密失败");
+    let (nonce_v1, ciphertext_v1) = crypto
+        .encrypt(plaintext, key_v1.as_slice())
+        .expect("v1 加密失败");
 
     tracing::info!("初始状态: 数据使用 v1 加密");
     tracing::info!("v1 nonce: {:02x?}", &nonce_v1[..8]);
@@ -330,12 +348,12 @@ fn demonstrate_rollback_mechanism() {
 
     // 用 v1 解密数据
     let decrypted_for_rotation = crypto
-        .decrypt(&nonce_v1, &ciphertext_v1, &key_v1)
+        .decrypt(&nonce_v1, &ciphertext_v1, key_v1.as_slice())
         .expect("解密旧数据失败");
 
     // 用 v2 重新加密
     let (nonce_v2, ciphertext_v2) = crypto
-        .encrypt(&decrypted_for_rotation, &key_v2)
+        .encrypt(&decrypted_for_rotation, key_v2.as_slice())
         .expect("v2 加密失败");
 
     tracing::info!("轮换后: 数据使用 v2 加密");
@@ -357,9 +375,13 @@ fn demonstrate_rollback_mechanism() {
 
     // Step 4: 验证当前版本密钥可以解密数据
     let current_decrypted = crypto
-        .decrypt(&encrypted_data.nonce, &encrypted_data.ciphertext, &key_v2)
+        .decrypt(
+            &encrypted_data.nonce,
+            &encrypted_data.ciphertext,
+            key_v2.as_slice(),
+        )
         .expect("当前版本解密失败");
-    assert_eq!(current_decrypted, plaintext.as_slice());
+    assert_eq!(current_decrypted.as_slice(), plaintext.as_slice());
     tracing::info!("✓ 当前版本 (v2) 解密成功");
 
     // Step 5: 使用 previous_version 进行回滚 - 解密旧版本数据
@@ -371,9 +393,9 @@ fn demonstrate_rollback_mechanism() {
     // 注意：这里演示的是用 v1 密钥解密 v1 数据（因为 previous_version 记录了之前用的版本）
     // 实际回滚场景是：我们有历史数据，之前用 v1 加密的，现在需要解密
     let historical_decrypted = crypto
-        .decrypt(&nonce_v1, &ciphertext_v1, &rollback_key)
+        .decrypt(&nonce_v1, &ciphertext_v1, rollback_key.as_slice())
         .expect("历史数据解密失败");
-    assert_eq!(historical_decrypted, plaintext.as_slice());
+    assert_eq!(historical_decrypted.as_slice(), plaintext.as_slice());
     tracing::info!("✓ 使用 previous_version 解密历史数据成功");
 
     // Step 6: 演示完整回滚流程 - 清除 previous_version
@@ -396,14 +418,14 @@ fn demonstrate_rollback_mechanism() {
         .decrypt(
             &rolled_back_data.nonce,
             &rolled_back_data.ciphertext,
-            &key_v1,
+            key_v1.as_slice(),
         )
         .expect("最终解密失败");
-    assert_eq!(final_decrypted, plaintext.as_slice());
+    assert_eq!(final_decrypted.as_slice(), plaintext.as_slice());
     tracing::info!("✓ 回滚后数据解密验证通过");
 
     // Step 7: 验证安全性 - v1 密钥无法解密 v2 加密的数据
-    let cross_fail = crypto.decrypt(&nonce_v2, &ciphertext_v2, &key_v1);
+    let cross_fail = crypto.decrypt(&nonce_v2, &ciphertext_v2, key_v1.as_slice());
     assert!(cross_fail.is_err());
     tracing::info!("✓ v1 密钥无法解密 v2 加密的数据（安全性验证通过）");
 }

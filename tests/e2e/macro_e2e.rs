@@ -467,3 +467,173 @@ fn serde_rename_field_addresses_serde_name_everywhere() {
     let cfg = RenamedBind::load_sync().expect("default load");
     assert_eq!(cfg.bind, "fallback");
 }
+
+/// T003(load_file_with_env 不再注入全进程环境):未声明的环境变量(含 cargo
+/// 环境里的 `_`/PATH/HOST)不得进入合并树,`deny_unknown_fields` 结构体必须
+/// 能正常构建;声明的前缀 env 仍真实覆盖。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StrictEnvIsolation {
+    pub garrison_probe: String,
+}
+
+#[test]
+#[serial]
+fn t003_load_file_with_env_does_not_inject_process_env() {
+    let (_file, path) = write_cwd_toml("garrison_probe = \"file-value\"\n");
+    // 与结构体声明无关的变量:旧实现的无前缀 .env() 会把它们折进合并树,
+    // 使 deny_unknown_fields 以 `unknown field` 失败。
+    unsafe { std::env::set_var("T003_UNRELATED_VAR", "noise") };
+    let cfg = StrictEnvIsolation::load_file_with_env(&path)
+        .expect("undeclared env vars must not leak into the merge tree");
+    unsafe { std::env::remove_var("T003_UNRELATED_VAR") };
+    assert_eq!(cfg.garrison_probe, "file-value");
+
+    // 声明的 env 名仍真实覆盖文件值(叠加在文件之上)。
+    let (_file, path) = write_cwd_toml("garrison_probe = \"file-value\"\n");
+    unsafe { std::env::set_var("GARRISON_PROBE", "env-value") };
+    let cfg =
+        StrictEnvIsolation::load_file_with_env(&path).expect("declared env override must apply");
+    unsafe { std::env::remove_var("GARRISON_PROBE") };
+    assert_eq!(cfg.garrison_probe, "env-value");
+}
+
+/// T004(load_file 路径默认值生效):文件缺失字段时使用 `#[config(default)]`,
+/// 不再报 missing field。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct PartialFileDefaults {
+    #[config(default = "fallback-host".to_string())]
+    pub host: String,
+
+    #[config(default = 7001u16)]
+    pub port: u16,
+}
+
+#[test]
+#[serial]
+fn t004_load_file_applies_declared_defaults() {
+    // 文件只提供 host,port 走默认值。
+    let (_file, path) = write_cwd_toml("host = \"file-host\"\n");
+    let cfg = PartialFileDefaults::load_file(&path)
+        .expect("declared defaults must cover missing file keys");
+    assert_eq!(cfg.host, "file-host");
+    assert_eq!(cfg.port, 7001);
+
+    // 文件完整提供时默认值不生效;文件缺失且无默认的字段仍报错由 load_file
+    // 的反序列化保证(此处覆盖 full-file 优先于默认)。
+    let (_file, path) = write_cwd_toml("host = \"file-host\"\nport = 9000\n");
+    let cfg = PartialFileDefaults::load_file(&path).expect("full file load");
+    assert_eq!(cfg.host, "file-host");
+    assert_eq!(cfg.port, 9000);
+
+    // load_file_with_env 同样享受默认值兜底。
+    let (_file, path) = write_cwd_toml("port = 9100\n");
+    let cfg = PartialFileDefaults::load_file_with_env(&path)
+        .expect("env-flavored file loader honors defaults too");
+    assert_eq!(cfg.host, "fallback-host");
+    assert_eq!(cfg.port, 9100);
+}
+
+/// T009(profile 叠加):`#[config(profile)]` 在 RUN_ENV(或 profile_env 指定
+/// 变量)设置时,加载 `<stem>.<env>.<ext>` 环境专属文件覆盖基础文件;
+/// 未设置 env 或叠加文件不存在时行为与原来一致。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[config(profile)]
+struct ProfileBase {
+    pub host: String,
+
+    #[config(default = 7001u16)]
+    pub port: u16,
+}
+
+#[test]
+#[serial]
+fn t009_profile_overlay_applies_when_env_set() {
+    use std::io::Write as _;
+    let cwd = std::env::current_dir().unwrap();
+    let base = tempfile::Builder::new()
+        .prefix("t009_base")
+        .suffix(".toml")
+        .tempfile_in(&cwd)
+        .unwrap();
+    writeln!(base.as_file(), "host = \"base-host\"").unwrap();
+    let base_path = base.path().to_path_buf();
+    let rel = base_path
+        .strip_prefix(&cwd)
+        .unwrap_or(&base_path)
+        .to_path_buf();
+
+    // 叠加文件 <stem>.<env>.toml:host 覆盖,port 走基础默认。
+    let stem = base_path.file_stem().unwrap().to_str().unwrap().to_string();
+    let overlay = base_path.with_file_name(format!("{stem}.production.toml"));
+    std::fs::write(&overlay, "host = \"prod-host\"\nport = 8000\n").unwrap();
+
+    unsafe { std::env::set_var("RUN_ENV", "production") };
+    let cfg = ProfileBase::load_file(&rel).expect("profile overlay load");
+    unsafe { std::env::remove_var("RUN_ENV") };
+    let _ = std::fs::remove_file(&overlay);
+    assert_eq!(cfg.host, "prod-host", "overlay file must override base");
+    assert_eq!(cfg.port, 8000);
+
+    // RUN_ENV 未设置:仅基础文件生效。
+    let cfg = ProfileBase::load_file(&rel).expect("base-only load");
+    assert_eq!(cfg.host, "base-host");
+    assert_eq!(cfg.port, 7001);
+}
+
+/// T006(env 类型错误携带字段路径)/T007(env_separator)/T045(快照脱敏接线)。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+#[allow(dead_code)] // host 仅出现在断言的错误信息中
+struct T006Probe {
+    pub host: String,
+}
+
+#[test]
+#[serial]
+fn t006_env_type_error_names_the_field() {
+    // env 值 "1.0" 被推断为浮点,String 字段反序列化失败时报错必须含字段名。
+    unsafe { std::env::set_var("HOST", "1.0") };
+    let err = T006Probe::load_sync().expect_err("type mismatch must fail");
+    unsafe { std::env::remove_var("HOST") };
+    let msg = err.to_string();
+    assert!(
+        msg.contains("host"),
+        "error must name the field path, got: {msg}"
+    );
+}
+
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct T007Probe {
+    #[serde(default)]
+    pub db: T007Db,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct T007Db {
+    #[serde(default = "default_db_host")]
+    pub host: String,
+}
+
+fn default_db_host() -> String {
+    "fallback-host".to_string()
+}
+
+#[test]
+#[serial]
+fn t007_env_separator_maps_nested_path() {
+    use confers::ConfigBuilder;
+
+    unsafe { std::env::set_var("T007_DB__HOST", "nested-env-host") };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // env(优先级 50)覆盖默认值兜底:嵌套映射 db.host 生效。
+        let cfg: T007Probe = ConfigBuilder::new()
+            .env_separator("__")
+            .env_prefix("T007_")
+            .build()
+            .expect("nested env separator must map db.host");
+        cfg
+    }));
+    unsafe { std::env::remove_var("T007_DB__HOST") };
+    let cfg = result.unwrap();
+    assert_eq!(cfg.db.host, "nested-env-host");
+}

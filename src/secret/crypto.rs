@@ -23,6 +23,7 @@ use chacha20poly1305::{
 use getrandom::fill as fill_from_os_rng;
 use hkdf::Hkdf;
 use sha2::Sha256;
+use zeroize::Zeroizing;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CryptoError {
@@ -32,6 +33,8 @@ pub enum CryptoError {
     DecryptionFailed,
     #[error("invalid key length: expected exactly 32 bytes for XChaCha20-Poly1305, got {0} bytes")]
     InvalidKeyLength(usize),
+    #[error("weak key rejected (constant-byte key material such as all-zero keys is not secure)")]
+    WeakKey,
     #[error("key not found")]
     KeyNotFound,
     #[deprecated(
@@ -109,7 +112,7 @@ impl XChaCha20Crypto {
         nonce: &[u8],
         ciphertext: &[u8],
         key: &[u8],
-    ) -> Result<Vec<u8>, CryptoError> {
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
         self.decrypt_with_aad(nonce, ciphertext, key, &[])
     }
 
@@ -128,13 +131,13 @@ impl XChaCha20Crypto {
         ciphertext: &[u8],
         key: &[u8],
         aad: &[u8],
-    ) -> Result<Vec<u8>, CryptoError> {
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
         let result = self.decrypt_with_aad_inner(nonce, ciphertext, key, aad);
         if result.is_err() {
             // Critical-path metric: secret decryption failure.
             crate::metrics::record_counter(crate::metrics::names::SECRET_DECRYPT_ERRORS_TOTAL, &[]);
         }
-        result
+        result.map(Zeroizing::new)
     }
 
     fn decrypt_with_aad_inner(
@@ -180,19 +183,48 @@ impl Default for XChaCha20Crypto {
     }
 }
 
+/// Whether key material is obviously weak: empty, or a single repeated byte
+/// (all-zero keys, all-`0xFF` fillers, 32 copies of one ASCII character).
+/// T037: such keys were previously accepted silently — the security docs'
+/// own example used an all-zero key.
+pub fn is_weak_key(key: &[u8]) -> bool {
+    if key.is_empty() {
+        return true;
+    }
+    let first = key[0];
+    key.iter().all(|&b| b == first)
+}
+
+#[cfg(test)]
+mod t037_tests {
+    use super::*;
+
+    #[test]
+    fn t037_weak_keys_are_detected() {
+        assert!(is_weak_key(&[0u8; 32]), "all-zero key is weak");
+        assert!(is_weak_key(&[0xFF; 32]), "all-FF key is weak");
+        assert!(
+            is_weak_key(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            "repeated ASCII is weak"
+        );
+        assert!(is_weak_key(&[]), "empty is weak");
+        assert!(!is_weak_key(b"0123456789abcdef0123456789abcdef"));
+    }
+}
+
 pub fn derive_field_key(
     master_key: &[u8],
     field_path: &str,
     key_version: &str,
-) -> Result<[u8; 32], CryptoError> {
+) -> Result<Zeroizing<[u8; 32]>, CryptoError> {
     let hk = Hkdf::<Sha256>::new(None, master_key);
     // NUL cannot appear in key versions or field paths: a `:`-style separator
     // would let ("v1", "a:b") and ("v1:a", "b") collide into the same info
     // string, deriving identical keys for distinct contexts.
     let info = format!("{key_version}\x00{field_path}");
-    let mut field_key = [0u8; 32];
+    let mut field_key = Zeroizing::new([0u8; 32]);
 
-    hk.expand(info.as_bytes(), &mut field_key)
+    hk.expand(info.as_bytes(), field_key.as_mut())
         .map_err(|_| CryptoError::InvalidKeyLength(32))?;
 
     Ok(field_key)
@@ -257,7 +289,7 @@ mod tests {
         let decrypted = cipher
             .decrypt(&nonce, &ciphertext, &TEST_KEY)
             .expect("decrypt");
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted.as_slice(), plaintext);
     }
 
     #[test]
@@ -280,7 +312,7 @@ mod tests {
         let decrypted = cipher
             .decrypt(&nonce, &ciphertext, &TEST_KEY)
             .expect("decrypt");
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted.as_slice(), plaintext);
     }
 
     #[test]
@@ -441,9 +473,11 @@ mod tests {
         let field_key = derive_field_key(&TEST_KEY, "api.token", "v1").unwrap();
         let cipher = XChaCha20Crypto::new();
         let plaintext = b"super secret field value";
-        let (nonce, ciphertext) = cipher.encrypt(plaintext, &field_key).unwrap();
-        let decrypted = cipher.decrypt(&nonce, &ciphertext, &field_key).unwrap();
-        assert_eq!(decrypted, plaintext);
+        let (nonce, ciphertext) = cipher.encrypt(plaintext, field_key.as_slice()).unwrap();
+        let decrypted = cipher
+            .decrypt(&nonce, &ciphertext, field_key.as_slice())
+            .unwrap();
+        assert_eq!(decrypted.as_slice(), plaintext);
     }
 
     #[test]
@@ -473,7 +507,7 @@ mod tests {
         let plaintext = "你好，世界！🌍".as_bytes();
         let (nonce, ciphertext) = cipher.encrypt(plaintext, &TEST_KEY).unwrap();
         let decrypted = cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap();
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted.as_slice(), plaintext);
     }
 
     #[test]
@@ -486,7 +520,7 @@ mod tests {
         let decrypted = cipher
             .decrypt_with_aad(&nonce, &ciphertext, &TEST_KEY, aad)
             .expect("decrypt with aad");
-        assert_eq!(decrypted, b"secret data");
+        assert_eq!(decrypted.as_slice(), b"secret data");
     }
 
     #[test]
@@ -522,14 +556,14 @@ mod tests {
         let decrypted = cipher
             .decrypt_with_aad(&nonce, &ciphertext, &TEST_KEY, &[])
             .expect("empty AAD must match the legacy path");
-        assert_eq!(decrypted, b"secret data");
+        assert_eq!(decrypted.as_slice(), b"secret data");
 
         // ...and the empty-AAD encrypt path decrypts through plain decrypt().
         let (nonce, ciphertext) = cipher
             .encrypt_with_aad(b"secret data", &TEST_KEY, &[])
             .unwrap();
         let decrypted = cipher.decrypt(&nonce, &ciphertext, &TEST_KEY).unwrap();
-        assert_eq!(decrypted, b"secret data");
+        assert_eq!(decrypted.as_slice(), b"secret data");
     }
 
     #[test]

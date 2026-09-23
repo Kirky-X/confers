@@ -187,7 +187,7 @@ impl KeyRegistry {
         &self,
         nonce: &[u8],
         ciphertext: &[u8],
-    ) -> Result<(String, Vec<u8>), CryptoError> {
+    ) -> Result<(String, SecretBytes), CryptoError> {
         use crate::secret::XChaCha20Crypto;
 
         let crypto = XChaCha20Crypto::new();
@@ -196,7 +196,7 @@ impl KeyRegistry {
         for (version, key_version) in keys.iter() {
             let key_bytes = key_version.key.as_slice();
             if let Ok(plaintext) = crypto.decrypt(nonce, ciphertext, key_bytes) {
-                return Ok((version.clone(), plaintext));
+                return Ok((version.clone(), SecretBytes::new(plaintext.to_vec())));
             }
         }
 
@@ -449,7 +449,7 @@ mod tests {
 
         let (version, decrypted) = result.unwrap();
         assert_eq!(version, "v1");
-        assert_eq!(&decrypted, plaintext);
+        assert_eq!(decrypted.as_slice(), plaintext.as_slice());
     }
 
     #[test]

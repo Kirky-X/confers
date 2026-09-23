@@ -177,6 +177,36 @@ impl StructAttrs {
     }
 }
 
+/// Default value attribute, accepting both the bare-word and expression
+/// forms of `#[config(default)]`.
+#[derive(Debug, Clone)]
+pub enum DefaultExpr {
+    /// `#[config(default)]` — derive the default from the field type.
+    TypeDefault,
+    /// `#[config(default = expr)]` — use the given expression.
+    Expr(syn::Expr),
+}
+
+impl darling::FromMeta for DefaultExpr {
+    fn from_word() -> Result<Self, darling::Error> {
+        Ok(Self::TypeDefault)
+    }
+
+    fn from_expr(expr: &syn::Expr) -> Result<Self, darling::Error> {
+        Ok(Self::Expr(expr.clone()))
+    }
+}
+
+impl DefaultExpr {
+    /// Whether the expression is the literal `None` path.
+    pub fn is_none(&self) -> bool {
+        matches!(
+            self,
+            DefaultExpr::Expr(syn::Expr::Path(p)) if p.path.is_ident("None")
+        )
+    }
+}
+
 /// Parsed attributes from a field.
 #[derive(Debug, FromField)]
 #[darling(attributes(config))]
@@ -187,8 +217,10 @@ pub struct FieldAttrs {
     /// Field type
     pub ty: Type,
 
-    /// Default value expression
-    pub default: Option<syn::Expr>,
+    /// Default value expression (supports the bare-word form
+    /// `#[config(default)]` meaning "use the field type's `Default`", the
+    /// explicit form `#[config(default = expr)]`, and `None`).
+    pub default: Option<DefaultExpr>,
 
     /// Field description for documentation
     pub description: Option<String>,
@@ -308,10 +340,18 @@ impl FieldAttrs {
     pub fn validate(&self, _field: &syn::Field) -> darling::Result<()> {
         let mut errors = darling::Error::accumulator();
 
-        // Validate encrypt algorithm
+        // Validate encrypt algorithm. T035: `aes256-gcm` is accepted by the
+        // grammar but NOT implemented at runtime — pretending otherwise is
+        // worse than failing the build (the audit found ciphertexts being
+        // silently treated as usable strings).
         if let Some(ref algo) = self.encrypt {
             match algo.as_str() {
-                "xchacha20" | "aes256-gcm" => {}
+                "xchacha20" => {}
+                "aes256-gcm" => {
+                    errors.push(darling::Error::custom(
+                        "encrypt = \"aes256-gcm\" is not implemented; use \"xchacha20\"",
+                    ));
+                }
                 _ => {
                     if let Some(ident) = self.ident.as_ref() {
                         errors.push(

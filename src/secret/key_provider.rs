@@ -95,12 +95,40 @@ impl SecretKeyProvider for EnvKeyProvider {
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
         }
+        // T037: constant-byte key material (all-zero, repeated ASCII) is
+        // rejected instead of silently accepted.
+        if crate::secret::crypto::is_weak_key(key.as_bytes()) {
+            return Err(CryptoError::WeakKey);
+        }
 
         Ok(SecretBytes::new(key.into_bytes()))
     }
 
     fn provider_type(&self) -> &'static str {
         "env"
+    }
+}
+
+#[cfg(all(test, feature = "env"))]
+mod t037_provider_tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn t037_env_provider_rejects_weak_key() {
+        // 32 个相同字符 = 常量字节弱密钥(env 值不能含 NUL,用 'a' 等价验证)。
+        let weak_key: String = "a".repeat(32);
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("T037_MASTER", weak_key) };
+        let built = EnvKeyProvider::builder().env_var("T037_MASTER").build();
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("T037_MASTER") };
+        assert!(
+            matches!(built, Err(CryptoError::WeakKey)),
+            "constant-byte master key must be rejected at build: {:?}",
+            built.err()
+        );
     }
 }
 
@@ -124,6 +152,9 @@ impl EnvKeyProviderBuilder {
         let key = std::env::var(&env_var).map_err(|_| CryptoError::KeyNotFound)?;
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
+        }
+        if crate::secret::crypto::is_weak_key(key.as_bytes()) {
+            return Err(CryptoError::WeakKey);
         }
         Ok(EnvKeyProvider::new(env_var))
     }

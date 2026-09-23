@@ -75,11 +75,10 @@ mod tests {
     }
 
     fn write_precedence_file() -> (tempfile::NamedTempFile, std::path::PathBuf) {
-        // FileSource default priority is 0 — the same as DefaultSource, and
-        // tie-breaking then depends on source_id ordering (tempfile names sort
-        // before "default"), which would let default win. Give the file source
-        // an explicit mid priority (20) so it reliably beats default (0) and
-        // loses to env/memory (50), asserting the intended precedence chain.
+        // No explicit priority here: default-value sources always merge
+        // before every other source, so a plain file source (priority 0)
+        // must reliably beat default (0) and lose to env/memory (50),
+        // asserting the intended precedence chain regardless of file names.
         let mut file = tempfile::Builder::new()
             .suffix(".toml")
             .tempfile_in(std::env::current_dir().unwrap())
@@ -104,7 +103,7 @@ mod tests {
         let mut builder: confers::ConfigBuilder<PrecedenceConfig> = confers::ConfigBuilder::new()
             .default("host", ConfigValue::string("default-host"))
             .default("port", ConfigValue::uint(7001))
-            .source(Box::new(FileSource::new(rel_path).with_priority(20)));
+            .source(Box::new(FileSource::new(rel_path)));
         if include_env {
             builder = builder.env_prefix(PRECEDENCE_PREFIX);
         }

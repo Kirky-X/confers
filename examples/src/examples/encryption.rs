@@ -172,7 +172,7 @@ fn demonstrate_encryption_decryption() {
         .decrypt(&nonce, &ciphertext, &key)
         .expect("Decryption failed");
 
-    let decrypted_string = String::from_utf8(decrypted).expect("UTF-8 conversion failed");
+    let decrypted_string = String::from_utf8(decrypted.to_vec()).expect("UTF-8 conversion failed");
     println!("Decrypted: {}", decrypted_string);
 
     // Verify same plaintext produces different ciphertext each time (because nonce is random)
@@ -264,7 +264,8 @@ fn demonstrate_env_key_provider() {
                 .decrypt(&nonce, &ciphertext, key.as_slice())
                 .expect("Decryption failed");
 
-            let decrypted_string = String::from_utf8(decrypted).expect("UTF-8 conversion failed");
+            let decrypted_string =
+                String::from_utf8(decrypted.to_vec()).expect("UTF-8 conversion failed");
             println!("Decryption successful: {}", decrypted_string);
         }
         Err(e) => {

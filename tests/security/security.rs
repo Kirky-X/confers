@@ -61,7 +61,7 @@ fn test_key_registry_try_all_keys() {
         .unwrap();
 
     assert_eq!(version, "v2");
-    assert_eq!(decrypted, plaintext);
+    assert_eq!(decrypted.as_slice(), plaintext.as_slice());
 }
 
 #[test]

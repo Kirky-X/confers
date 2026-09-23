@@ -1,103 +1,98 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
-//! E2E: 加密与 Secret(tests/e2e/encryption_e2e.rs)
+//! E2E: `encrypt` 字段属性真实解密(tests/e2e/encryption_e2e.rs)
 //!
-//! 场景固化(docs/TEST_SCENARIOS.md §2.5):
-//! - ENC-20 派生宏 `encrypt = "xchacha20"` 字段的加载集成(按真实行为固化,
-//!   见下方说明)与真实密钥工作流(env 密钥 → 派生 → 加密 → 配置文件携带密文 → 解密还原)
+//! T035 回归:`encrypt = "xchacha20"` 此前只把字段标为敏感、不产生任何
+//! 加解密 —— 密文字符串被原样反序列化后「可用」。现在加载管线必须:
+//! 统一 envelope 密文经字段派生密钥解密注入(主密钥来自
+//! `CONFERS_MASTER_KEY`),明文值原样直通;解密失败该字段反序列化失败。
 //!
-//! 行为固化说明:`encrypt` 字段属性由宏解析并使字段按 sensitive 处理,
-//! 但加载管线当前不自动执行"密文解密注入"(见报告);
-//! 解密由使用方以 `EnvKeyProvider`/`derive_field_key`/`XChaCha20Crypto` 显式完成。
-//! ENC-01…19/22 已有覆盖(tests/security/encryption.rs、src 内联)。
-//! ENC-21(`aes256-gcm` 算法路径)无法测试:宏解析层接受该名称,
-//! 但运行时未实现 AES-256-GCM(见报告)。ENC-23(非法算法编译期报错)
-//! 固化于 macros crate 的 trybuild 用例。
+//! 说明:`encrypt = "aes256-gcm"` 在宏展开期被拒绝(未实现),由
+//! macros/tests/compile_fail.rs 的 ENC-21 用例固化。
 
-use base64::Engine;
-use confers::secret::{EnvKeyProvider, SecretKeyProvider, XChaCha20Crypto, derive_field_key};
+use base64::Engine as _;
+use confers::{
+    Config, EncryptedEnvelope,
+    secret::{XChaCha20Crypto, derive_field_key},
+};
 use serial_test::serial;
 
-/// 恰好 32 字节的测试密钥(满足 XChaCha20 256-bit;仅测试用,非真实凭据)。
-const TEST_MASTER_KEY: &str = "test-key-with-exactly-32-bytes!!";
+const MASTER: &[u8] = b"0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
 
-/// env 密钥 → 派生字段密钥 → 加密 → 文件携带密文 → 解密还原。
-#[test]
-#[serial]
-fn enc20_encrypted_config_roundtrip_via_env_key() {
-    assert_eq!(TEST_MASTER_KEY.len(), 32);
-
-    unsafe { std::env::set_var("CONFERS_E2E_MASTER_KEY", TEST_MASTER_KEY) };
-
-    // 1) 从环境变量取得主密钥(生产者侧)。
-    let provider = EnvKeyProvider::new("CONFERS_E2E_MASTER_KEY");
-    let master = provider.get_key().expect("env key must resolve");
-    assert_eq!(master.len(), 32);
-
-    // 2) 派生字段密钥并加密,密文写入配置文件。
-    let field_key =
-        derive_field_key(master.as_slice(), "secure_app.api_key", "v1").expect("derive field key");
-    let crypto = XChaCha20Crypto::new();
-    let (nonce, ciphertext) = crypto
-        .encrypt(b"plaintext-secret-for-e2e", &field_key)
-        .expect("encrypt");
-    let enc_value = format!(
-        "enc-{}:{}",
-        base64::engine::general_purpose::STANDARD.encode(&nonce),
-        base64::engine::general_purpose::STANDARD.encode(&ciphertext),
-    );
-
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("secure.toml");
-    std::fs::write(
-        &path,
-        format!("name = \"app\"\napi_key = \"{enc_value}\"\n"),
+fn make_envelope(field: &str, key_version: &str, plaintext: &str) -> String {
+    let field_key = derive_field_key(MASTER, field, key_version).unwrap();
+    let (nonce, ct) = XChaCha20Crypto::new()
+        .encrypt(plaintext.as_bytes(), field_key.as_slice())
+        .unwrap();
+    let mut blob = nonce;
+    blob.extend_from_slice(&ct);
+    EncryptedEnvelope::new(
+        key_version,
+        base64::engine::general_purpose::STANDARD.encode(&blob),
     )
-    .unwrap();
-
-    // 3) 消费者侧:加载配置拿到密文,再用同一派生密钥解密。
-    #[derive(Debug, serde::Deserialize, Default)]
-    struct SecureAppConfig {
-        name: String,
-        api_key: String,
-    }
-    let cfg: SecureAppConfig = confers::ConfigBuilder::new()
-        .allow_absolute_paths()
-        .file(&path)
-        .build()
-        .expect("load secure config");
-    assert_eq!(cfg.name, "app");
-    assert!(
-        cfg.api_key.starts_with("enc-"),
-        "ciphertext marker preserved"
-    );
-
-    let consumer_key = derive_field_key(master.as_slice(), "secure_app.api_key", "v1")
-        .expect("derive same field key");
-    let (nonce_b64, ct_b64) = cfg
-        .api_key
-        .trim_start_matches("enc-")
-        .split_once(':')
-        .expect("nonce:ciphertext layout");
-    let plaintext = crypto
-        .decrypt(&decode_b64(nonce_b64), &decode_b64(ct_b64), &consumer_key)
-        .expect("decrypt with the same derived key");
-    assert_eq!(plaintext, b"plaintext-secret-for-e2e");
-
-    // 4) 错误密钥(不同 field path 派生)→ 解密失败,不泄漏明文。
-    let wrong_key = derive_field_key(master.as_slice(), "other.field", "v1").unwrap();
-    assert!(
-        crypto
-            .decrypt(&decode_b64(nonce_b64), &decode_b64(ct_b64), &wrong_key)
-            .is_err()
-    );
-
-    unsafe { std::env::remove_var("CONFERS_E2E_MASTER_KEY") };
+    .to_envelope_string()
 }
 
-fn decode_b64(value: &str) -> Vec<u8> {
-    base64::engine::general_purpose::STANDARD
-        .decode(value)
-        .expect("valid base64")
+#[derive(Debug, Config, serde::Deserialize)]
+struct EncryptedProbe {
+    pub host: String,
+
+    #[config(encrypt = "xchacha20")]
+    pub api_key: String,
+}
+
+#[test]
+#[serial]
+fn enc01_envelope_decrypts_to_plaintext_in_derive_pipeline() {
+    let envelope = make_envelope("api_key", "v1", "tok-e2e-123");
+    let cwd = std::env::current_dir().unwrap();
+    let file = tempfile::Builder::new()
+        .prefix("enc01")
+        .suffix(".toml")
+        .tempfile_in(&cwd)
+        .unwrap();
+    std::fs::write(
+        file.path(),
+        format!("host = \"db.internal\"\napi_key = \"{envelope}\"\n"),
+    )
+    .unwrap();
+    let rel = file.path().strip_prefix(&cwd).unwrap_or(file.path());
+
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe {
+        std::env::set_var(
+            "CONFERS_MASTER_KEY",
+            "3031323334353637383961626364656630313233343536373839616263646566",
+        )
+    };
+    let cfg = EncryptedProbe::load_file(rel).expect("encrypted config must load");
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CONFERS_MASTER_KEY") };
+
+    assert_eq!(cfg.host, "db.internal");
+    assert_eq!(
+        cfg.api_key, "tok-e2e-123",
+        "envelope must decrypt to the original plaintext, not the ciphertext string"
+    );
+}
+
+#[test]
+#[serial]
+fn enc02_plain_values_pass_through_untouched() {
+    let cwd = std::env::current_dir().unwrap();
+    let file = tempfile::Builder::new()
+        .prefix("enc02")
+        .suffix(".toml")
+        .tempfile_in(&cwd)
+        .unwrap();
+    std::fs::write(
+        file.path(),
+        "host = \"db.internal\"\napi_key = \"plain-token\"\n",
+    )
+    .unwrap();
+    let rel = file.path().strip_prefix(&cwd).unwrap_or(file.path());
+
+    let cfg = EncryptedProbe::load_file(rel).expect("plain config must load");
+    assert_eq!(cfg.api_key, "plain-token", "plaintext must pass through");
 }

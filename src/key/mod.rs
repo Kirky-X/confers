@@ -266,12 +266,13 @@ impl KeyBundle {
 
         // `plaintext` only ever holds the base64 ASCII encoding of the key;
         // `key_bytes` holds the raw key material and is zeroized on drop.
-        let plaintext = String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
-            format: "key".to_string(),
-            message: format!("Invalid plaintext UTF-8: {}", e),
-            location: None,
-            source: None,
-        })?;
+        let plaintext =
+            String::from_utf8(plaintext.to_vec()).map_err(|e| ConfigError::ParseError {
+                format: "key".to_string(),
+                message: format!("Invalid plaintext UTF-8: {}", e),
+                location: None,
+                source: None,
+            })?;
         let key_bytes =
             Zeroizing::new(
                 BASE64

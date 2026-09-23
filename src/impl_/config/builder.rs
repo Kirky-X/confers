@@ -43,6 +43,10 @@ pub struct ConfigBuilder<T> {
     /// Snapshot configuration.
     #[cfg(feature = "snapshot")]
     snapshot_config: Option<SnapshotConfig>,
+    /// Sensitive configuration paths for snapshot redaction (T045): when a
+    /// derive-generated loader registers the struct's `sensitive_paths()`,
+    /// snapshots written by this builder redact those paths' values.
+    sensitive_paths: Vec<String>,
     /// Accumulated default values.
     accumulated_defaults: HashMap<String, ConfigValue>,
     /// Accumulated memory values.
@@ -82,6 +86,7 @@ impl<T> ConfigBuilder<T> {
             limits: ConfigLimits::default(),
             #[cfg(feature = "snapshot")]
             snapshot_config: None,
+            sensitive_paths: Vec::new(),
             accumulated_defaults: HashMap::new(),
             accumulated_memory: HashMap::new(),
             memory_priority: 50,
@@ -123,6 +128,21 @@ impl<T> ConfigBuilder<T> {
     }
 
     /// Add an environment source with prefix.
+    /// Register sensitive configuration paths: snapshots written through
+    /// this builder redact these paths' values (and anything nested below).
+    pub fn sensitive_paths(mut self, paths: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        self.sensitive_paths = paths.into_iter().map(|p| p.as_ref().to_string()).collect();
+        self
+    }
+
+    /// Configure the environment-variable nesting separator
+    /// (e.g. `"__"` so `APP_DB__HOST` maps to `db.host`). Must be called
+    /// before [`Self::env`](Self::env)/[`Self::env_prefix`](Self::env_prefix).
+    pub fn env_separator(mut self, separator: impl Into<String>) -> Self {
+        self.chain_builder = self.chain_builder.env_separator(separator);
+        self
+    }
+
     pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.chain_builder = self.chain_builder.env_with_prefix(prefix);
         self
@@ -323,18 +343,35 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
-        self.limits.validate_value(&merged)?;
-        Self::save_snapshot(snapshot_config, &merged)?;
+        // T028 (容灾兜底): when the build fails *after* collection (limit
+        // violation, deserialization error) the merged value is still
+        // persisted so `snapshot restore` can recover it. A failure *during*
+        // collection has no merged value to persist.
+        if let Err(e) = self.limits.validate_value(&merged) {
+            Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+            return Err(e);
+        }
+        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
 
         let mut json = value_to_json(&merged);
         for map in &self.json_maps {
             map(&mut json);
         }
-        let config: T = serde_json::from_value(json).map_err(|e| ConfigError::InvalidValue {
-            key: String::new(),
-            expected_type: std::any::type_name::<T>().to_string(),
-            message: e.to_string(),
-        })?;
+        // T006: serde-path-to_error tracks the field path so type errors name
+        // the offending key instead of an empty string.
+        let config: T = match serde_path_to_error::deserialize(json) {
+            Ok(config) => config,
+            Err(e) => {
+                let err = ConfigError::InvalidValue {
+                    key: e.path().to_string(),
+                    expected_type: std::any::type_name::<T>().to_string(),
+                    message: e.inner().to_string(),
+                };
+                // T028: persist the collected config before failing the build.
+                Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+                return Err(err);
+            }
+        };
 
         Ok(config)
     }
@@ -357,8 +394,12 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
-        self.limits.validate_value(&merged)?;
-        Self::save_snapshot(snapshot_config, &merged)?;
+        if let Err(e) = self.limits.validate_value(&merged) {
+            // T028: persist the collected config before failing the build.
+            Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+            return Err(e);
+        }
+        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
 
         Ok(merged)
     }
@@ -368,11 +409,13 @@ where
     fn save_snapshot(
         snapshot_config: Option<&SnapshotConfig>,
         merged: &AnnotatedValue,
+        sensitive_paths: &[String],
     ) -> ConfigResult<()> {
         match snapshot_config {
             Some(snapshot_config) => {
+                let borrowed: Vec<&str> = sensitive_paths.iter().map(String::as_str).collect();
                 crate::impl_::snapshot::SnapshotManager::new(snapshot_config.clone())
-                    .save_blocking(merged, &[])
+                    .save_blocking(merged, &borrowed)
                     .map(|_| ())
             }
             None => Ok(()),
@@ -384,6 +427,7 @@ where
     fn save_snapshot<Cfg>(
         _snapshot_config: Option<&Cfg>,
         _merged: &AnnotatedValue,
+        _sensitive_paths: &[String],
     ) -> ConfigResult<()> {
         Ok(())
     }
@@ -464,7 +508,7 @@ where
         // `build()` does. Resilient mode tolerates *source* errors, not
         // violated safety limits.
         self.limits.validate_value(&merged)?;
-        Self::save_snapshot(snapshot_config, &merged)?;
+        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
 
         let mut json = value_to_json(&merged);
         for map in &self.json_maps {
@@ -985,6 +1029,59 @@ mod tests {
         assert!(
             std::fs::read_dir(&snap_dir).unwrap().next().is_some(),
             "build_resilient must save a snapshot when configured"
+        );
+    }
+
+    /// T028 (容灾兜底): when the build fails after collection (here: a
+    /// deserialization type error), the merged configuration is still persisted
+    /// so `snapshot restore` can recover the collected values.
+    #[cfg(feature = "snapshot")]
+    #[test]
+    fn test_builder_failure_path_writes_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap_dir = dir.path().join("fail-snaps");
+
+        let result = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("kept-for-restore"))
+            .default("port", ConfigValue::string("not_a_number"))
+            .with_snapshot(SnapshotConfig::new(snap_dir.clone()))
+            .build();
+        assert!(result.is_err(), "the type error must still fail the build");
+
+        let entries: Vec<_> = std::fs::read_dir(&snap_dir)
+            .expect("snapshot dir created")
+            .collect();
+        assert!(
+            !entries.is_empty(),
+            "the failure path must write a disaster-recovery snapshot"
+        );
+        let content = std::fs::read_to_string(entries[0].as_ref().unwrap().path()).unwrap();
+        assert!(
+            content.contains("kept-for-restore"),
+            "the snapshot must contain the collected values: {content}"
+        );
+    }
+
+    /// T028: the same failure-path snapshot guarantee for limit violations.
+    #[cfg(feature = "snapshot")]
+    #[test]
+    fn test_builder_limit_violation_path_writes_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap_dir = dir.path().join("limit-snaps");
+
+        let deep = deep_annotated(6);
+        let result = ConfigBuilder::<TestConfig>::new()
+            .memory(HashMap::from([("deep".to_string(), deep.inner)]))
+            .limits(ConfigLimits::default().with_max_nesting_depth(2))
+            .with_snapshot(SnapshotConfig::new(snap_dir.clone()))
+            .build();
+        assert!(result.is_err(), "the limit violation must fail the build");
+        assert!(
+            std::fs::read_dir(&snap_dir)
+                .expect("snapshot dir created")
+                .next()
+                .is_some(),
+            "the limit-violation path must write a snapshot"
         );
     }
 

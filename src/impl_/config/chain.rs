@@ -99,6 +99,13 @@ impl SourceChain {
         self
     }
 
+    /// Register sensitive configuration paths: conflict reports redact the
+    /// values of these paths (and anything nested below them).
+    pub fn with_sensitive_paths(mut self, paths: Vec<String>) -> Self {
+        self.merge_engine = self.merge_engine.with_sensitive_paths(paths);
+        self
+    }
+
     /// Get the number of sources.
     pub fn len(&self) -> usize {
         self.sources.len()
@@ -156,8 +163,10 @@ impl SourceChain {
             };
         }
 
-        // Collect all source values
-        let mut values: Vec<(String, ConfigResult<AnnotatedValue>)> = Vec::new();
+        // Collect all source values, remembering whether each source supplies
+        // default values so the merge order can put them first regardless of
+        // declaration order or file names.
+        let mut values: Vec<(bool, String, ConfigResult<AnnotatedValue>)> = Vec::new();
         let mut errors: Vec<(String, ConfigError)> = Vec::new();
         // Name + rendered message for every skipped source; ConfigError is
         // not `Clone`, so the report keeps the flattened form only.
@@ -165,10 +174,11 @@ impl SourceChain {
 
         for source in &sources {
             let name = source.name().to_string();
+            let is_defaults = source.source_kind() == SourceKind::Default;
             let result = source.collect();
 
             match result {
-                Ok(value) => values.push((name, Ok(value))),
+                Ok(value) => values.push((is_defaults, name, Ok(value))),
                 Err(e) => {
                     if fail_fast && !source.is_optional() {
                         return ChainOutcome {
@@ -191,17 +201,16 @@ impl SourceChain {
             };
         }
 
-        // Sort by priority (lower priority first), breaking ties by source id
-        // to ensure deterministic merge order across runs.
-        let mut sorted_values: Vec<_> = values
+        // Sort by priority (lower priority first). The sort is stable, so
+        // equal-priority sources keep declaration order ("later declaration
+        // overrides earlier"). Default-value sources always merge before
+        // every other source so they can never override file/env/memory
+        // values, whatever the sources are named or declared.
+        let mut sorted_values: Vec<(bool, AnnotatedValue)> = values
             .into_iter()
-            .filter_map(|(_, result)| result.ok())
+            .filter_map(|(is_defaults, _, result)| result.ok().map(|v| (is_defaults, v)))
             .collect();
-        sorted_values.sort_by(|a, b| {
-            a.priority
-                .cmp(&b.priority)
-                .then_with(|| a.source.as_str().cmp(b.source.as_str()))
-        });
+        sorted_values.sort_by_key(|(is_defaults, value)| (value.priority, !*is_defaults));
 
         // Merge all values
         let mut merged = AnnotatedValue::new(
@@ -210,7 +219,7 @@ impl SourceChain {
             "",
         );
 
-        for value in sorted_values {
+        for (_, value) in sorted_values {
             match merge_engine.merge(&merged, &value) {
                 Ok(m) => merged = m,
                 Err(e) => {
@@ -244,6 +253,9 @@ pub struct SourceChainBuilder {
     chain: SourceChain,
     /// Whether to allow absolute paths for file sources.
     allow_absolute_paths: bool,
+    /// Pending env nesting separator, applied when the next env source is
+    /// created (T007: `env_separator("__")` so `APP_DB__HOST` → `db.host`).
+    env_separator: Option<String>,
 }
 
 impl Default for SourceChainBuilder {
@@ -258,6 +270,7 @@ impl SourceChainBuilder {
         Self {
             chain: SourceChain::new(),
             allow_absolute_paths: false,
+            env_separator: None,
         }
     }
 
@@ -293,16 +306,33 @@ impl SourceChainBuilder {
         self
     }
 
+    /// Set the env nesting separator (e.g. `"__"` so `APP_DB__HOST` maps to
+    /// `db.host`). Applies to the NEXT env source created by
+    /// [`Self::env`](Self::env)/[`Self::env_with_prefix`](Self::env_with_prefix),
+    /// so call it before those.
+    pub fn env_separator(mut self, separator: impl Into<String>) -> Self {
+        self.env_separator = Some(separator.into());
+        self
+    }
+
     /// Add an environment source.
     pub fn env(self) -> Self {
         use super::source::EnvSource;
-        self.source(Box::new(EnvSource::new()))
+        let mut source = EnvSource::new();
+        if let Some(sep) = self.env_separator.clone() {
+            source = source.separator(sep);
+        }
+        self.source(Box::new(source))
     }
 
     /// Add an environment source with prefix.
     pub fn env_with_prefix(self, prefix: impl Into<String>) -> Self {
         use super::source::EnvSource;
-        self.source(Box::new(EnvSource::with_prefix(prefix)))
+        let mut source = EnvSource::with_prefix(prefix);
+        if let Some(sep) = self.env_separator.clone() {
+            source = source.separator(sep);
+        }
+        self.source(Box::new(source))
     }
 
     /// Add a default source.
@@ -713,5 +743,100 @@ mod tests {
             .push(Box::new(DefaultSource::new()));
         let names = chain.source_names();
         assert_eq!(names, vec!["alpha", "beta", "default"]);
+    }
+
+    fn write_temp_toml(
+        name_prefix: &str,
+        body: &str,
+    ) -> (tempfile::NamedTempFile, std::path::PathBuf) {
+        let file = tempfile::Builder::new()
+            .prefix(name_prefix)
+            .suffix(".toml")
+            .tempfile_in(std::env::current_dir().unwrap())
+            .unwrap();
+        std::fs::write(file.path(), body).unwrap();
+        let path = file.path().to_path_buf();
+        let rel = path
+            .strip_prefix(std::env::current_dir().unwrap())
+            .unwrap_or(&path)
+            .to_path_buf();
+        (file, rel)
+    }
+
+    fn map_str(result: &AnnotatedValue, key: &str) -> String {
+        match &result.inner {
+            ConfigValue::Map(map) => match &map.get(key).expect("key should exist").inner {
+                ConfigValue::String(s) => s.clone(),
+                other => panic!("expected string for {key}, got {other:?}"),
+            },
+            _ => panic!("expected map"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_default_never_overrides_file_regardless_of_name() {
+        // Regression: same-priority tie-break used to compare source ids
+        // alphabetically, so a file named before "default" lost to defaults.
+        // Defaults must always merge first, whatever the file is called.
+        let (_f1, path) = write_temp_toml("aaa_config", "host = \"file-host\"\n");
+        let chain = SourceChainBuilder::new()
+            .file(path)
+            .defaults(std::collections::HashMap::from([(
+                "host".to_string(),
+                ConfigValue::string("default-host"),
+            )]))
+            .build();
+        let merged = chain.collect().unwrap();
+        assert_eq!(map_str(&merged, "host"), "file-host");
+
+        // Same outcome when the default source is declared first.
+        let (_f2, path) = write_temp_toml("aaa_config", "host = \"file-host\"\n");
+        let chain = SourceChainBuilder::new()
+            .defaults(std::collections::HashMap::from([(
+                "host".to_string(),
+                ConfigValue::string("default-host"),
+            )]))
+            .file(path)
+            .build();
+        let merged = chain.collect().unwrap();
+        assert_eq!(map_str(&merged, "host"), "file-host");
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_declaration_order_two_files_later_wins() {
+        // Regression: same-priority files used to be ordered by file name
+        // (bbb < mmm), silently inverting the documented "later declaration
+        // overrides earlier" semantics.
+        let (_base, base_path) = write_temp_toml("mmm_base", "host = \"base-host\"\n");
+        let (_over, over_path) = write_temp_toml("bbb_override", "host = \"override-host\"\n");
+        let chain = SourceChainBuilder::new()
+            .file(base_path)
+            .file(over_path)
+            .build();
+        let merged = chain.collect().unwrap();
+        assert_eq!(map_str(&merged, "host"), "override-host");
+    }
+
+    #[test]
+    fn test_same_priority_declaration_order_beats_name_order() {
+        // memory "zzz" declared first must lose to memory "aaa" declared
+        // second, even though "aaa" sorts before "zzz" alphabetically.
+        let chain = SourceChain::new()
+            .push(Box::new(
+                MemorySource::new()
+                    .with_name("zzz")
+                    .set("key", ConfigValue::string("first"))
+                    .with_priority(50),
+            ))
+            .push(Box::new(
+                MemorySource::new()
+                    .with_name("aaa")
+                    .set("key", ConfigValue::string("second"))
+                    .with_priority(50),
+            ));
+        let merged = chain.collect().unwrap();
+        assert_eq!(map_str(&merged, "key"), "second");
     }
 }

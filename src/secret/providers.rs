@@ -84,7 +84,32 @@ impl FileKeyProvider {
             });
         }
 
-        Ok(key_str.as_bytes()[..32].to_vec())
+        // T037: constant-byte key material (all-zero, repeated ASCII) is
+        // rejected rather than silently accepted.
+        let key_bytes = &key_str.as_bytes()[..32];
+        if crate::secret::crypto::is_weak_key(key_bytes) {
+            return Err(ConfigError::KeyError {
+                message: "Key file contains weak key material (constant-byte); generate a                           random key instead"
+                    .to_string(),
+            });
+        }
+
+        // T037: warn when the key file is readable by group/others.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = std::fs::metadata(&self.path) {
+                let mode = meta.permissions().mode() & 0o777;
+                if mode & 0o077 != 0 {
+                    crate::telemetry::event(
+                        "confers.keys.file_permissions_too_open",
+                        &[("path", &self.path.to_string_lossy())],
+                    );
+                }
+            }
+        }
+
+        Ok(key_bytes.to_vec())
     }
 }
 
@@ -278,7 +303,10 @@ pub struct VaultKeyProvider {
     secret_key: String,
     auth: VaultAuth,
     /// Resolved client token after the first successful login.
-    token_cache: std::sync::Mutex<Option<String>>,
+    /// Token cache honoring the provider's [`KeyCachePolicy`]: `NoCache`
+    /// bypasses the cache, `CacheWithTtl` expires entries after the TTL,
+    /// `CacheIndefinitely` keeps them until a 401/403 invalidates them.
+    token_cache: std::sync::Mutex<Option<(String, Option<std::time::Instant>)>>,
     /// Allow plain HTTP (loopback mock tests only).
     allow_http: bool,
     cache_policy: KeyCachePolicy,
@@ -348,13 +376,28 @@ impl VaultKeyProvider {
 
     async fn get_token(&self) -> ConfigResult<String> {
         // Fast path: token already resolved (and cached) by a previous fetch.
-        if let Ok(Some(token)) = self.token_cache.lock().map(|c| c.clone()) {
-            return Ok(token);
+        // T044: the KeyCachePolicy is now actually consumed — NoCache skips
+        // the cache entirely, CacheWithTtl expires after its TTL.
+        if self.cache_policy != KeyCachePolicy::NoCache
+            && let Ok(Some((token, expires_at))) = self.token_cache.lock().map(|c| c.clone())
+        {
+            let expired = expires_at
+                .map(|at| std::time::Instant::now() >= at)
+                .unwrap_or(false);
+            if !expired {
+                return Ok(token);
+            }
         }
         let client = shared_http_client();
         let token = self.auth.resolve(&client, &self.vault_addr).await?;
-        if let Ok(mut cache) = self.token_cache.lock() {
-            *cache = Some(token.clone());
+        if self.cache_policy != KeyCachePolicy::NoCache
+            && let Ok(mut cache) = self.token_cache.lock()
+        {
+            let expires_at = match self.cache_policy {
+                KeyCachePolicy::CacheWithTtl(ttl) => Some(std::time::Instant::now() + ttl),
+                _ => None,
+            };
+            *cache = Some((token.clone(), expires_at));
         }
         Ok(token)
     }
@@ -387,15 +430,37 @@ impl AsyncKeyProvider for VaultKeyProvider {
             self.secret_path
         );
 
-        let response = client
-            .get(&url)
-            .header("X-Vault-Token", token)
-            .send()
-            .await
-            .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("vault_request: {}", e),
-                retryable: true,
-            })?;
+        async fn fetch(
+            client: &reqwest::Client,
+            url: &str,
+            token: &str,
+        ) -> ConfigResult<reqwest::Response> {
+            client
+                .get(url)
+                .header("X-Vault-Token", token)
+                .send()
+                .await
+                .map_err(|e| ConfigError::RemoteUnavailable {
+                    error_type: format!("vault_request: {}", e),
+                    retryable: true,
+                })
+        }
+
+        let mut response = fetch(&client, &url, &token).await?;
+
+        // T039: a cached AppRole/K8s token expires (TTL). 401/403 mean the
+        // cached token is no longer valid — drop it, force a fresh login,
+        // and retry exactly once so the provider recovers instead of failing
+        // forever until process restart.
+        let status = response.status();
+        if status.as_u16() == 401 || status.as_u16() == 403 {
+            if let Ok(mut cache) = self.token_cache.lock() {
+                *cache = None;
+            }
+            let fresh = self.get_token().await?;
+
+            response = fetch(&client, &url, &fresh).await?;
+        }
 
         if !response.status().is_success() {
             let status = response.status();
@@ -937,6 +1002,53 @@ mod tests {
         assert_eq!(provider.auth_method(), "approle");
         let key = provider.get_key().await.expect("key via approle");
         assert!(!key.as_slice().is_empty());
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn t039_expired_token_triggers_relogin_once() {
+        // T039: 缓存 token 过期(403)后必须清缓存重登一次并成功取 key,
+        // 而不是永久失败直到进程重启。响应序列:
+        // 1. AppRole 登录 200 → token A
+        // 2. 用 token A 取 key → 403(过期)
+        // 3. 重新登录 200 → token B
+        // 4. 重试取 key → 200
+        let addr =
+            spawn_mock_vault(vec![
+            (
+                200,
+                serde_json::json!({"auth": {"client_token": "token-a"}}).to_string(),
+            ),
+            (403, serde_json::json!({"error": "permission denied"}).to_string()),
+            (
+                200,
+                serde_json::json!({"auth": {"client_token": "token-b"}}).to_string(),
+            ),
+            (
+                200,
+                serde_json::json!({"data": {"key": "0123456789012345678901234567890123456789"}})
+                    .to_string(),
+            ),
+        ])
+            .await;
+
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::AppRole {
+                role_id: "role-1".to_string(),
+                secret_id: "secret-1".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+
+        let key = provider
+            .get_key()
+            .await
+            .expect("expired cached token must trigger a successful relogin");
+        assert_eq!(key.as_slice().len(), 32);
     }
 
     #[cfg(feature = "remote")]

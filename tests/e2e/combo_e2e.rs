@@ -44,7 +44,9 @@ const TEST_MASTER_KEY: &str = "test-key-with-exactly-32-bytes!!";
 fn encrypt_value(plaintext: &[u8], master: &[u8; 32], field: &str) -> String {
     let field_key = derive_field_key(master, field, "v1").expect("derive");
     let crypto = XChaCha20Crypto::new();
-    let (nonce, ciphertext) = crypto.encrypt(plaintext, &field_key).expect("encrypt");
+    let (nonce, ciphertext) = crypto
+        .encrypt(plaintext, field_key.as_slice())
+        .expect("encrypt");
     format!(
         "enc-{}:{}",
         base64::engine::general_purpose::STANDARD.encode(&nonce),
@@ -61,7 +63,8 @@ fn decrypt_value(enc: &str, master: &[u8; 32], field: &str) -> Option<Vec<u8>> {
             .expect("valid base64")
     };
     XChaCha20Crypto::new()
-        .decrypt(&decode(nonce_b64), &decode(ct_b64), &field_key)
+        .decrypt(&decode(nonce_b64), &decode(ct_b64), field_key.as_slice())
+        .map(|z| (*z).clone())
         .ok()
 }
 
@@ -465,12 +468,12 @@ fn cmp09_key_rotation_audited_and_old_key_still_decrypts() {
     let old_plain = crypto
         .decrypt(&nonce, &ciphertext, &key_v1)
         .expect("old key decrypts old data");
-    assert_eq!(old_plain, b"legacy-payload");
+    assert_eq!(old_plain.as_slice(), b"legacy-payload");
     let (n2, c2) = crypto.encrypt(b"fresh-payload", &key_v2).unwrap();
     let fresh = crypto
         .decrypt(&n2, &c2, &key_v2)
         .expect("new key decrypts new data");
-    assert_eq!(fresh, b"fresh-payload");
+    assert_eq!(fresh.as_slice(), b"fresh-payload");
 
     std::thread::sleep(Duration::from_millis(150));
     let log = std::fs::read_dir(dir.path())

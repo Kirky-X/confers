@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 //! Encryption prefix for identifying encrypted values.
+//!
+//! The unified [`EncryptedEnvelope`](crate::envelope::EncryptedEnvelope)
+//! lives at the crate root so non-security builds can detect envelopes too;
+//! it is re-exported here for compatibility.
 
 use serde::{Deserialize, Serialize};
+
+#[allow(unused_imports)]
+pub use crate::envelope::EncryptedEnvelope;
 use std::str::FromStr;
 
 /// Encryption prefix for identifying encrypted values.

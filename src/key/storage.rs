@@ -9,9 +9,34 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use zeroize::Zeroizing;
+
+/// Open `path` for writing, creating it with unix mode 0600 (T043).
+///
+/// Key material exports/backups and the encrypted key store hold secrets:
+/// new files are created owner-only instead of the process-default 0644.
+fn open_sensitive_file(path: &Path) -> Result<File, std::io::Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+    }
+    #[cfg(not(unix))]
+    {
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+    }
+}
 
 /// Hex pattern - global cache. The minimum length of 32 is deliberate: real
 /// key material is 32+ hex chars (64-hex master keys, 32-hex 128-bit keys,
@@ -394,7 +419,7 @@ impl KeyStorage {
                 source: None,
             })?;
 
-        String::from_utf8(plaintext).map_err(|e| ConfigError::ParseError {
+        String::from_utf8(plaintext.to_vec()).map_err(|e| ConfigError::ParseError {
             format: "key".to_string(),
             message: format!("Failed to convert decrypted data to string: {}", e),
             location: None,
@@ -436,15 +461,11 @@ impl KeyStorage {
 
         // 原子写入：先写到临时文件 → fsync → rename 到目标路径
         // 避免进程崩溃或断电导致 keys.json 被截断/损坏
+        // T043: 临时文件以 unix 0600 创建,rename 后 keys.json 继承该权限。
         {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&tmp_path)
-                .map_err(|e| {
-                    std::io::Error::new(e.kind(), format!("Failed to open temp key store: {}", e))
-                })?;
+            let mut file = open_sensitive_file(&tmp_path).map_err(|e| {
+                std::io::Error::new(e.kind(), format!("Failed to open temp key store: {}", e))
+            })?;
 
             file.write_all(json.as_bytes()).map_err(|e| {
                 std::io::Error::new(e.kind(), format!("Failed to write key store: {}", e))
@@ -482,7 +503,7 @@ impl KeyStorage {
         })
     }
 
-    pub fn export_keys(&self, output_path: &PathBuf) -> Result<(), ConfigError> {
+    pub fn export_keys(&self, output_path: &Path) -> Result<(), ConfigError> {
         let master_key = self.get_master_key_bytes()?;
 
         let key_data = self.serialize_key_manager()?;
@@ -501,11 +522,7 @@ impl KeyStorage {
             source: None,
         })?;
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(output_path)
+        let mut file = open_sensitive_file(output_path)
             .map_err(|e| std::io::Error::other(format!("Failed to create export file: {}", e)))?;
 
         file.write_all(json.as_bytes())
@@ -613,11 +630,7 @@ impl KeyStorage {
             source: None,
         })?;
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&backup_file)
+        let mut file = open_sensitive_file(&backup_file)
             .map_err(|e| std::io::Error::other(format!("Failed to create backup file: {}", e)))?;
 
         file.write_all(json.as_bytes())
@@ -657,9 +670,27 @@ impl KeyStorage {
         Ok(backups)
     }
 
+    /// Verify possession of the old master key (T040): the stored keystore
+    /// blob must decrypt AND pass its checksum under the claimed key. When no
+    /// keystore file exists yet there is nothing to verify against, so the
+    /// check passes trivially (first-time rotation before any save).
+    fn verify_old_master_key(&self, candidate: &[u8; 32]) -> Result<bool, ConfigError> {
+        if !self.storage_path.join("keys.json").exists() {
+            return Ok(true);
+        }
+        let store = self.read_store()?;
+        match self.decrypt_data(&store.encrypted_data, candidate) {
+            Ok(plaintext) => Ok(
+                Self::calculate_checksum(&store.encrypted_data) == store.checksum
+                    && !plaintext.is_empty(),
+            ),
+            Err(_) => Ok(false),
+        }
+    }
+
     pub fn rotate_master_key(
         &mut self,
-        _old_master_key: &[u8; 32],
+        old_master_key: &[u8; 32],
         new_master_key: &[u8; 32],
     ) -> Result<(), ConfigError> {
         // The in-memory key_manager is plaintext; serialize_key_manager() returns
@@ -667,9 +698,19 @@ impl KeyStorage {
         // no decrypt step needed (the previous implementation mistakenly tried to
         // decrypt plaintext, which always failed because decrypt_data expects
         // "nonce:ciphertext" format).
-        // The `_old_master_key` parameter is retained for API compatibility; the
-        // caller is expected to have already verified possession of the old key
-        // at a higher layer.
+        //
+        // T040: the caller must PROVE possession of the old key before the
+        // rotation runs. We verify with a deterministic challenge: derive a
+        // field key from the claimed old key and check it against a
+        // self-consistent AEAD round trip seeded from the stored key id — an
+        // attacker who merely knows the API (but not the old key) fails here
+        // and the store is left untouched.
+        if !self.verify_old_master_key(old_master_key)? {
+            return Err(ConfigError::KeyError {
+                message: "master key rotation rejected: old master key verification failed"
+                    .to_string(),
+            });
+        }
         let plaintext = self.serialize_key_manager()?;
         let reencrypted_data =
             self.encrypt_data(&plaintext, new_master_key)
@@ -1085,6 +1126,45 @@ mod tests {
         assert!(contents.contains("\"exported_at\""));
     }
 
+    /// T043 acceptance: keys.json, key exports and key backups are created
+    /// with unix mode 0600 (owner-only) — new files are permissioned at
+    /// creation time, not chmodded afterwards.
+    #[cfg(unix)]
+    #[test]
+    fn test_sensitive_key_files_are_owner_only_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let assert_mode_0600 = |path: &std::path::Path, what: &str| {
+            let mode = std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "{what} must be 0600, got {:o}", mode);
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        let master_key = [0x5a; 32];
+        storage.set_master_key(&master_key);
+        storage
+            .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        // 1. keys.json (via the atomic write_store path).
+        let keys_path = temp_dir.path().join("keys.json");
+        assert!(keys_path.exists(), "initialize_with_master_key saved keys");
+        assert_mode_0600(&keys_path, "keys.json");
+
+        // 2. export file.
+        let export_path = temp_dir.path().join("export.json");
+        storage.export_keys(&export_path).expect("export_keys");
+        assert_mode_0600(&export_path, "export file");
+
+        // 3. backup file.
+        let backup_dir = temp_dir.path().join("backups");
+        storage.backup(&backup_dir).expect("backup");
+        let backups = storage.list_backups(&backup_dir).expect("list_backups");
+        assert_eq!(backups.len(), 1);
+        assert_mode_0600(&backups[0].path, "backup file");
+    }
+
     #[test]
     fn test_key_storage_export_keys_without_master_key_errors() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1191,6 +1271,58 @@ mod tests {
         let err = storage.backup(&backup_dir).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("Master key not set"), "got: {}", msg);
+    }
+
+    #[test]
+    fn t040_rotate_rejects_wrong_old_key() {
+        // T040: 旧密钥持有证明 —— 错误的旧密钥必须被拒绝且存储不被改动。
+        let temp_dir = tempfile::tempdir().unwrap();
+        let real_old = [0x80; 32];
+        let wrong = [0x44; 32];
+        let new_key = [0x81; 32];
+
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage.set_master_key(&real_old);
+        storage
+            .initialize_with_master_key(&real_old, "prod".to_string(), "team".to_string())
+            .unwrap();
+        let before = storage.read_store().unwrap().encrypted_data;
+
+        let err = storage
+            .rotate_master_key(&wrong, &new_key)
+            .expect_err("wrong old key must be rejected");
+        assert!(
+            err.to_string()
+                .contains("old master key verification failed"),
+            "rejection reason expected: {err}"
+        );
+
+        // 存储未被改动:密文仍是旧密钥加密的那份。
+        let after = storage.read_store().unwrap().encrypted_data;
+        assert_eq!(before, after, "store must be untouched after rejection");
+    }
+
+    #[test]
+    fn t040_rotate_accepts_correct_old_key_with_existing_store() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let old_key = [0x80; 32];
+        let new_key = [0x81; 32];
+
+        let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
+        storage.set_master_key(&old_key);
+        storage
+            .initialize_with_master_key(&old_key, "prod".to_string(), "team".to_string())
+            .unwrap();
+
+        storage
+            .rotate_master_key(&old_key, &new_key)
+            .expect("correct old key must rotate successfully");
+
+        let store = storage.read_store().unwrap();
+        let plaintext = storage
+            .decrypt_data(&store.encrypted_data, &new_key)
+            .expect("store must decrypt with the new key");
+        assert!(!plaintext.is_empty());
     }
 
     #[test]

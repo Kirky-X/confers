@@ -41,16 +41,15 @@ indexmap = { version = "2.14", features = ["serde"] }
 notify-debouncer-full = { version = "0.7", optional = true }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", optional = true }
-secrecy = { version = "0.10", features = ["serde"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_path_to_error = "0.1"
 serde_yaml_ng = { version = "0.10", optional = true }
 sha2 = { version = "0.11", optional = true }
 getrandom = { version = "0.4", optional = true }
 sys-locale = "0.3"
 thiserror = "2.0"
 dotenvy = { version = "0.15", optional = true }
-aes-gcm = { version = "0.11", optional = true }
 serde_ini = { version = "0.2", optional = true }
 tracing = { version = "0.1", optional = true }
 regex = "1.13"
@@ -149,7 +148,7 @@ security = ["encryption", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log", "async-core"]
-encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:secrecy", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:aes-gcm", "dep:getrandom", "async-core"]
+encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:getrandom", "async-core"]
 cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono", "schema"]
 schema = ["dep:schemars"]
 dynamic = ["dep:arc-swap", "dep:tokio", "dep:dashmap"]
@@ -333,7 +332,7 @@ required-features = ["watch", "dynamic"]
 [[test]]
 name = "encryption_e2e"
 path = "tests/e2e/encryption_e2e.rs"
-required-features = ["security"]
+required-features = ["encryption", "toml"]
 
 [[test]]
 name = "snapshot_e2e"
@@ -405,3 +404,13 @@ name = "confers"
 path = "src/cli/main.rs"
 required-features = ["cli"]
 bench = false
+
+[[test]]
+name = "default_attrs_e2e"
+path = "tests/e2e/default_attrs_e2e.rs"
+required-features = ["toml"]
+
+[[test]]
+name = "sensitive_file_e2e"
+path = "tests/e2e/probe_sensitive.rs"
+required-features = ["toml", "encryption"]

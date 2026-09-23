@@ -293,10 +293,8 @@ fn generate_sensitive_paths(
         })
         .collect();
 
-    if sensitive_paths.is_empty() {
-        return TokenStream2::new();
-    }
-
+    // T045: 恒定生成(无敏感字段时为空切片) —— 生成的加载器统一把
+    // sensitive_paths() 注册到 builder,快照据此脱敏。
     quote! {
         impl #struct_ident {
             fn sensitive_paths() -> &'static [&'static str] {

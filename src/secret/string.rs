@@ -65,6 +65,23 @@ impl SecretString {
     }
 }
 
+impl serde::Serialize for SecretString {
+    /// Serializes the secret **verbatim**. The config-value tree needs a
+    /// lossless round trip through deserialization (the merged tree stores
+    /// whatever the source provided — plain text or an encryption envelope);
+    /// user-facing output paths redact separately.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.0.as_str())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SecretString {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::new(s))
+    }
+}
+
 impl Debug for SecretString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[REDACTED]")

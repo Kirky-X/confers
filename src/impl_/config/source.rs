@@ -152,6 +152,98 @@ pub struct EnvSource {
     excluded_keys: Vec<String>,
 }
 
+impl Source for EnvSource {
+    fn collect(&self) -> ConfigResult<AnnotatedValue> {
+        let mut map = indexmap::IndexMap::new();
+
+        // Load .env file entries first (lower priority) if env feature is enabled
+        #[cfg(feature = "env")]
+        {
+            if let Ok(iter) = dotenvy::dotenv_iter() {
+                // Sorted so the built tree is deterministic regardless of the
+                // order the .env file (or the process environment below)
+                // happens to enumerate variables in.
+                let mut dotenv_entries: Vec<(String, String)> =
+                    iter.filter_map(|item| item.ok()).collect();
+                dotenv_entries.sort();
+                for (env_key, env_val) in dotenv_entries {
+                    if let Some(config_path) = self.parse_key(&env_key) {
+                        if self.is_excluded(&config_path) {
+                            continue;
+                        }
+                        let resolved = self.resolve_value(&env_val, &env_key)?;
+                        let value = AnnotatedValue::new(
+                            Self::infer_config_value(&resolved),
+                            self.source_id.clone(),
+                            std::sync::Arc::from(config_path.as_str()),
+                        )
+                        .with_priority(self.priority.saturating_sub(10));
+                        let parts: Vec<&str> = config_path.split('.').collect();
+                        Self::insert_nested(
+                            &mut map,
+                            &parts,
+                            value,
+                            &env_key,
+                            &config_path,
+                            self.prefix.is_some(),
+                        )?;
+                    }
+                }
+            }
+        }
+
+        // Process real environment variables (higher priority, override .env).
+        // Sorted by name so the merged tree is deterministic regardless of
+        // std::env::vars() iteration order.
+        let mut env_vars: Vec<(String, String)> = std::env::vars().collect();
+        env_vars.sort();
+        for (key, value) in env_vars {
+            if let Some(config_path) = self.parse_key(&key) {
+                if self.is_excluded(&config_path) {
+                    continue;
+                }
+                let resolved = self.resolve_value(&value, &key)?;
+                let value = AnnotatedValue::new(
+                    Self::infer_config_value(&resolved),
+                    self.source_id.clone(),
+                    std::sync::Arc::from(config_path.as_str()),
+                )
+                .with_priority(self.priority);
+
+                // Parse the path and build nested structure
+                let parts: Vec<&str> = config_path.split('.').collect();
+                Self::insert_nested(
+                    &mut map,
+                    &parts,
+                    value,
+                    &key,
+                    &config_path,
+                    self.prefix.is_some(),
+                )?;
+            }
+        }
+
+        Ok(AnnotatedValue::new(
+            ConfigValue::Map(std::sync::Arc::new(map)),
+            self.source_id.clone(),
+            "",
+        )
+        .with_priority(self.priority))
+    }
+
+    fn priority(&self) -> u8 {
+        self.priority
+    }
+
+    fn name(&self) -> &str {
+        "env"
+    }
+
+    fn source_kind(&self) -> SourceKind {
+        SourceKind::Environment
+    }
+}
+
 impl EnvSource {
     /// Create a new environment source.
     pub fn new() -> Self {
@@ -290,177 +382,15 @@ impl EnvSource {
     }
 
     /// Validate file path for security (prevent path traversal).
+    ///
+    /// Delegates to [`crate::PathValidator`] so the env-source `_FILE`
+    /// handling and the macro-generated `_FILE` handling share one policy.
     fn validate_file_path(&self, file_path: &str) -> ConfigResult<()> {
-        // Reject empty paths up front with a clear error instead of letting
-        // them through and failing later with a confusing read error.
-        if file_path.is_empty() {
-            return Err(ConfigError::InvalidValue {
-                key: "file_path".to_string(),
-                expected_type: "non-empty file path".to_string(),
-                message: "file path must not be empty".to_string(),
-            });
-        }
-
-        let path = Path::new(file_path);
-
-        // Check for path traversal attempts
-        let canonical = std::fs::canonicalize(path).map_err(|_| ConfigError::FileNotFound {
-            filename: path.to_path_buf(),
-            source: Some(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Cannot resolve file path",
-            )),
-        })?;
-
-        // Block access to sensitive system paths.
-        let sensitive_prefixes = [
-            std::path::Path::new("/etc/shadow"),
-            std::path::Path::new("/etc/passwd"),
-            std::path::Path::new("/root"),
-        ];
-
-        for prefix in &sensitive_prefixes {
-            // Path::starts_with checks path components (not string prefix),
-            // so "/rootkit" does NOT match "/root" — this is correct.
-            if canonical.starts_with(prefix) {
-                return Err(ConfigError::InvalidValue {
-                    key: "file_path".to_string(),
-                    expected_type: "safe file path".to_string(),
-                    message: format!("Access to {:?} is not allowed", prefix),
-                });
-            }
-        }
-
-        // Well-known credential directories, matched per path component so
-        // they are blocked wherever they appear (e.g. /home/alice/.ssh/...)
-        // without denying every file under /home.
-        const CREDENTIAL_DIR_COMPONENTS: &[&str] =
-            &[".ssh", ".aws", ".gnupg", ".kube", ".gcloud", ".env"];
-        let hits_credential_dir = canonical.components().any(|component| {
-            component
-                .as_os_str()
-                .to_str()
-                .is_some_and(|s| CREDENTIAL_DIR_COMPONENTS.contains(&s))
-        });
-        if hits_credential_dir {
-            return Err(ConfigError::InvalidValue {
-                key: "file_path".to_string(),
-                expected_type: "safe file path".to_string(),
-                message: "access to credential directories (.ssh, .aws, .gnupg, .kube, .gcloud, \
-                          .env) is not allowed"
-                    .to_string(),
-            });
-        }
-
-        // Only allow reading regular files
-        if !canonical.is_file() {
-            return Err(ConfigError::InvalidValue {
-                key: "file_path".to_string(),
-                expected_type: "regular file".to_string(),
-                message: "Only regular files can be read".to_string(),
-            });
-        }
-
-        // Only allow specific extensions for security
-        if let Some(ext) = canonical.extension() {
-            let allowed = [
-                "txt", "json", "yaml", "yml", "toml", "ini", "env", "secret", "key", "pem", "crt",
-            ];
-            if !allowed
-                .iter()
-                .any(|&e| ext.to_str().is_some_and(|s| s.eq_ignore_ascii_case(e)))
-            {
-                return Err(ConfigError::InvalidValue {
-                    key: "file_path".to_string(),
-                    expected_type: "allowed extension".to_string(),
-                    message: format!("File extension {:?} is not allowed", ext),
-                });
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl Default for EnvSource {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Source for EnvSource {
-    fn collect(&self) -> ConfigResult<AnnotatedValue> {
-        let mut map = indexmap::IndexMap::new();
-
-        // Load .env file entries first (lower priority) if env feature is enabled
-        #[cfg(feature = "env")]
-        {
-            if let Ok(iter) = dotenvy::dotenv_iter() {
-                for item in iter {
-                    // Skip malformed .env lines silently
-                    let Ok((env_key, env_val)) = item else {
-                        continue;
-                    };
-                    if let Some(config_path) = self.parse_key(&env_key) {
-                        if self.is_excluded(&config_path) {
-                            continue;
-                        }
-                        let resolved = self.resolve_value(&env_val, &env_key)?;
-                        let value = AnnotatedValue::new(
-                            Self::infer_config_value(&resolved),
-                            self.source_id.clone(),
-                            std::sync::Arc::from(config_path.as_str()),
-                        )
-                        .with_priority(self.priority.saturating_sub(10));
-                        let parts: Vec<&str> = config_path.split('.').collect();
-                        Self::insert_nested(&mut map, &parts, value);
-                    }
-                }
-            }
-        }
-
-        // Process real environment variables (higher priority, override .env)
-        for (key, value) in std::env::vars() {
-            if let Some(config_path) = self.parse_key(&key) {
-                if self.is_excluded(&config_path) {
-                    continue;
-                }
-                let resolved = self.resolve_value(&value, &key)?;
-                let value = AnnotatedValue::new(
-                    Self::infer_config_value(&resolved),
-                    self.source_id.clone(),
-                    std::sync::Arc::from(config_path.as_str()),
-                )
-                .with_priority(self.priority);
-
-                // Parse the path and build nested structure
-                let parts: Vec<&str> = config_path.split('.').collect();
-                Self::insert_nested(&mut map, &parts, value);
-            }
-        }
-
-        Ok(AnnotatedValue::new(
-            ConfigValue::Map(std::sync::Arc::new(map)),
-            self.source_id.clone(),
-            "",
-        )
-        .with_priority(self.priority))
+        crate::path_validator::PathValidator::new()
+            .validate_and_resolve(file_path)
+            .map(|_| ())
     }
 
-    fn priority(&self) -> u8 {
-        self.priority
-    }
-
-    fn name(&self) -> &str {
-        "env"
-    }
-
-    fn source_kind(&self) -> SourceKind {
-        SourceKind::Environment
-    }
-}
-
-impl EnvSource {
     /// Infer a `ConfigValue` from a raw string using deterministic type
     /// inference (Rule 5: deterministic logic must be explicit code, not
     /// delegated to a model).
@@ -504,45 +434,133 @@ impl EnvSource {
     }
 
     /// Insert a value into a nested map structure.
+    ///
+    /// Path conflicts (a scalar where other variables already built a nested
+    /// map, or the reverse) are resolved by `strict`:
+    ///
+    /// - `strict` (prefixed sources, user-authored memory/default keys):
+    ///   [`ConfigError::InvalidValue`] naming both the variable and the path.
+    /// - non-strict (prefix-less sources folding the whole ambient
+    ///   environment, where collisions like `CARGO` vs `CARGO_HOME` are not
+    ///   the user's configuration): the **nested map shape wins**, the scalar
+    ///   is dropped, and a `confers.env.path_conflict_dropped` telemetry event
+    ///   is emitted.
+    ///
+    /// Callers must pre-sort their variables so the outcome does not depend
+    /// on enumeration order.
     fn insert_nested(
         map: &mut indexmap::IndexMap<std::sync::Arc<str>, AnnotatedValue>,
         parts: &[&str],
         value: AnnotatedValue,
-    ) {
+        env_key: &str,
+        config_path: &str,
+        strict: bool,
+    ) -> ConfigResult<()> {
         if parts.is_empty() {
-            return;
+            return Ok(());
         }
 
         if parts.len() == 1 {
+            if let Some(existing) = map.get(parts[0])
+                && matches!(existing.inner, ConfigValue::Map(_))
+            {
+                if strict {
+                    return Err(Self::path_conflict_error(
+                        env_key,
+                        config_path,
+                        "a nested map built from other variables",
+                        parts[0],
+                    ));
+                }
+                crate::telemetry::event(
+                    "confers.env.path_conflict_dropped",
+                    &[("var", env_key), ("path", config_path)],
+                );
+                return Ok(());
+            }
             map.insert(std::sync::Arc::from(parts[0]), value);
-            return;
+            return Ok(());
         }
 
         // For nested paths, we need to traverse/build the structure
         let first = parts[0];
         let remaining = &parts[1..];
 
-        // Get or create the nested map entry
-        let nested = map.entry(std::sync::Arc::from(first)).or_insert_with(|| {
-            AnnotatedValue::new(
-                ConfigValue::Map(std::sync::Arc::new(indexmap::IndexMap::new())),
-                value.source.clone(),
+        let slot_is_map = matches!(map.get(first).map(|v| &v.inner), Some(ConfigValue::Map(_)));
+        if !slot_is_map {
+            if map.contains_key(first) {
+                // Scalar placeholder occupies the slot.
+                if strict {
+                    return Err(Self::path_conflict_error(
+                        env_key,
+                        config_path,
+                        "a scalar value set by another variable",
+                        first,
+                    ));
+                }
+                crate::telemetry::event(
+                    "confers.env.path_conflict_dropped",
+                    &[("var", env_key), ("path", config_path)],
+                );
+                map.shift_remove(first);
+            }
+            map.insert(
                 std::sync::Arc::from(first),
-            )
-        });
+                AnnotatedValue::new(
+                    ConfigValue::Map(std::sync::Arc::new(indexmap::IndexMap::new())),
+                    value.source.clone(),
+                    std::sync::Arc::from(first),
+                ),
+            );
+        }
+
+        let nested = map.get_mut(first).expect("slot ensured above");
 
         // Use Arc::get_mut to avoid cloning when possible (copy-on-write)
-        if let ConfigValue::Map(ref mut inner_map) = nested.inner {
-            if let Some(map_ref) = Arc::get_mut(inner_map) {
-                // Arc is uniquely owned, we can mutate directly
-                Self::insert_nested(map_ref, remaining, value);
-            } else {
-                // Arc is shared, need to clone (fallback to original behavior)
-                let mut map_clone = (*inner_map).as_ref().clone();
-                Self::insert_nested(&mut map_clone, remaining, value);
-                *inner_map = Arc::new(map_clone);
+        match &mut nested.inner {
+            ConfigValue::Map(inner_map) => {
+                if let Some(map_ref) = Arc::get_mut(inner_map) {
+                    // Arc is uniquely owned, we can mutate directly
+                    Self::insert_nested(map_ref, remaining, value, env_key, config_path, strict)
+                } else {
+                    // Arc is shared, need to clone (fallback to original behavior)
+                    let mut map_clone = (*inner_map).as_ref().clone();
+                    Self::insert_nested(
+                        &mut map_clone,
+                        remaining,
+                        value,
+                        env_key,
+                        config_path,
+                        strict,
+                    )?;
+                    *inner_map = Arc::new(map_clone);
+                    Ok(())
+                }
             }
+            _ => unreachable!("slot ensured to hold a map above"),
         }
+    }
+
+    /// Build the error for a scalar-vs-nested path collision.
+    fn path_conflict_error(
+        env_key: &str,
+        config_path: &str,
+        existing: &str,
+        at: &str,
+    ) -> ConfigError {
+        ConfigError::InvalidValue {
+            key: env_key.to_string(),
+            expected_type: "unambiguous configuration path".to_string(),
+            message: format!(
+                "variable maps to config path '{config_path}', which collides with {existing} at '{at}'; rename one of the conflicting variables"
+            ),
+        }
+    }
+}
+
+impl Default for EnvSource {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -609,7 +627,13 @@ impl Source for MemorySource {
     fn collect(&self) -> ConfigResult<AnnotatedValue> {
         let mut map = indexmap::IndexMap::new();
 
-        for (key, value) in &self.values {
+        // Sorted so nested-map construction does not depend on HashMap
+        // iteration order, and so scalar/nested key conflicts fail with a
+        // deterministic error instead of silently dropping a value.
+        let mut keys: Vec<&String> = self.values.keys().collect();
+        keys.sort();
+        for key in keys {
+            let value = &self.values[key];
             let annotated = AnnotatedValue::new(
                 value.clone(),
                 self.source_id.clone(),
@@ -618,7 +642,7 @@ impl Source for MemorySource {
             .with_priority(self.priority);
 
             let parts: Vec<&str> = key.split('.').collect();
-            EnvSource::insert_nested(&mut map, &parts, annotated);
+            EnvSource::insert_nested(&mut map, &parts, annotated, key, key, true)?;
         }
 
         Ok(AnnotatedValue::new(
@@ -685,7 +709,11 @@ impl Source for DefaultSource {
     fn collect(&self) -> ConfigResult<AnnotatedValue> {
         let mut map = indexmap::IndexMap::new();
 
-        for (key, value) in &self.defaults {
+        // Sorted for deterministic tree shape (see MemorySource::collect).
+        let mut keys: Vec<&String> = self.defaults.keys().collect();
+        keys.sort();
+        for key in keys {
+            let value = &self.defaults[key];
             let annotated = AnnotatedValue::new(
                 value.clone(),
                 self.source_id.clone(),
@@ -694,7 +722,7 @@ impl Source for DefaultSource {
             .with_priority(0); // Defaults have lowest priority
 
             let parts: Vec<&str> = key.split('.').collect();
-            EnvSource::insert_nested(&mut map, &parts, annotated);
+            EnvSource::insert_nested(&mut map, &parts, annotated, key, key, true)?;
         }
 
         Ok(AnnotatedValue::new(
@@ -886,6 +914,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "toml")]
     fn test_file_source_format() {
         // An explicit format must take effect: a file with no recognizable
         // extension is rejected by extension-based detection, but loads when
@@ -916,6 +945,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "toml")]
     fn test_file_source_format_overrides_extension() {
         // The explicit format also wins over extension-based detection: a
         // .txt file with TOML content parses as TOML.
@@ -1299,15 +1329,20 @@ mod tests {
     #[serial_test::serial]
     #[test]
     fn test_env_source_skips_file_suffix_without_prefix() {
-        // Without prefix, _FILE vars are skipped (returns None from parse_key)
+        // Without prefix, _FILE vars are skipped (returns None from parse_key).
+        // Asserted on parse_key directly: a full collect() folds the entire
+        // process environment, so its Ok/Err outcome legitimately depends on
+        // ambient variables (e.g. CARGO vs CARGO_PKG_* collide under the
+        // scalar/nested conflict rule and now error deterministically).
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("MYTEST_NOPREFIX_FILE", "/tmp/x.txt") }; // pragma: allowlist secret
         let source = EnvSource::new(); // no prefix
-        // This should not error — _FILE vars without prefix are skipped
-        let result = source.collect();
+        assert!(
+            source.parse_key("MYTEST_NOPREFIX_FILE").is_none(),
+            "_FILE vars without prefix must be skipped by parse_key"
+        );
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("MYTEST_NOPREFIX_FILE") }; // pragma: allowlist secret
-        assert!(result.is_ok());
     }
 
     // ===== infer_config_value (fix-0.4.1 Bug 2) =====
@@ -1471,6 +1506,78 @@ mod tests {
         assert_eq!(
             port, 8080,
             "_FILE content '8080' should infer as i64 8080, not stay as string"
+        );
+    }
+    #[test]
+    #[serial]
+    fn test_env_scalar_nested_conflict_is_deterministic_error() {
+        // Regression: X_DB (scalar) + X_DB_HOST (nested) used to silently
+        // drop one value depending on env iteration order; now the collision
+        // is a deterministic error naming the variable and path.
+        unsafe { std::env::set_var("CONFERS_T002_DB", "scalar-value") };
+        unsafe { std::env::set_var("CONFERS_T002_DB_HOST", "nested-host") };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let source = EnvSource::with_prefix("CONFERS_T002_");
+            let err = source.collect().expect_err("path conflict must error");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("CONFERS_T002_DB_HOST"),
+                "error names the colliding var: {msg}"
+            );
+            assert!(
+                msg.contains("db.host"),
+                "error names the config path: {msg}"
+            );
+        }));
+        unsafe { std::env::remove_var("CONFERS_T002_DB") };
+        unsafe { std::env::remove_var("CONFERS_T002_DB_HOST") };
+        result.unwrap();
+    }
+
+    #[test]
+    fn test_insert_nested_scalar_then_map_conflicts_both_directions() {
+        use crate::types::{AnnotatedValue, SourceId};
+        let mk =
+            |path: &str| AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("env"), path);
+
+        // Nested first, scalar second: scalar insert must conflict.
+        let mut map = indexmap::IndexMap::new();
+        EnvSource::insert_nested(
+            &mut map,
+            &["db", "host"],
+            mk("db.host"),
+            "T_DB_HOST",
+            "db.host",
+            true,
+        )
+        .unwrap();
+        let err = EnvSource::insert_nested(&mut map, &["db"], mk("db"), "T_DB", "db", true)
+            .expect_err("scalar over nested map must conflict");
+        assert!(matches!(err, ConfigError::InvalidValue { .. }));
+
+        // Scalar first, nested second: nested insert must conflict.
+        let mut map = indexmap::IndexMap::new();
+        EnvSource::insert_nested(&mut map, &["db"], mk("db"), "T_DB", "db", true).unwrap();
+        let err = EnvSource::insert_nested(
+            &mut map,
+            &["db", "host"],
+            mk("db.host"),
+            "T_DB_HOST",
+            "db.host",
+            true,
+        )
+        .expect_err("nested over scalar must conflict");
+        assert!(matches!(err, ConfigError::InvalidValue { .. }));
+    }
+
+    #[test]
+    fn test_memory_source_conflicting_keys_error() {
+        let source = MemorySource::new()
+            .set("db", ConfigValue::string("scalar"))
+            .set("db.host", ConfigValue::string("nested"));
+        assert!(
+            source.collect().is_err(),
+            "memory source path conflict must error, not drop"
         );
     }
 }

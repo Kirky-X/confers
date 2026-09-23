@@ -7,7 +7,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Ident;
 
-use crate::parse::{FieldAttrs, StructAttrs, parse_field_attrs};
+use crate::parse::{DefaultExpr, FieldAttrs, StructAttrs, parse_field_attrs};
 
 /// Generate the load methods for a struct.
 pub fn generate_load_impl(
@@ -54,39 +54,26 @@ fn generate_default_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> V
     fields
         .iter()
         .filter(|(_, _, f)| f.default.is_some())
-        .map(|(_, _, f)| {
+        .map(|(_, ty, f)| {
             let field_key = f.serde_name();
             let default_expr = f.default.as_ref().unwrap();
+            // `default = None` serializes as the null ConfigValue, which
+            // deserializes back to `None` for Option fields; the bare-word
+            // form pulls the field type's `Default` impl.
+            let value_init = if default_expr.is_none() {
+                quote! { confers::ConfigValue::Null }
+            } else {
+                match default_expr {
+                    DefaultExpr::TypeDefault => {
+                        quote! { <#ty as ::std::default::Default>::default().into() }
+                    }
+                    DefaultExpr::Expr(expr) => quote! { (#expr).into() },
+                }
+            };
 
             quote! {
                 builder = builder.default(#field_key.to_string(), {
-                    let val: confers::ConfigValue = (#default_expr).into();
-                    val
-                });
-            }
-        })
-        .collect()
-}
-
-/// Generate default registration statements for `skip` fields only.
-///
-/// The generated `load_file`/`load_file_with_env` loaders never registered
-/// struct defaults (pre-existing semantics, kept untouched); a skipped field
-/// carrying a `default` attribute is the one exception — without it the value
-/// cannot deserialize when no source provides the key.
-fn generate_skip_default_calls(
-    fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
-) -> Vec<TokenStream> {
-    fields
-        .iter()
-        .filter(|(_, _, f)| f.skip && f.default.is_some())
-        .map(|(_, _, f)| {
-            let field_key = f.serde_name();
-            let default_expr = f.default.as_ref().unwrap();
-
-            quote! {
-                builder = builder.default(#field_key.to_string(), {
-                    let val: confers::ConfigValue = (#default_expr).into();
+                    let val: confers::ConfigValue = #value_init;
                     val
                 });
             }
@@ -116,21 +103,25 @@ fn generate_env_calls(
             if f.is_sensitive_effective() {
                 let file_env_name = format!("{}_FILE", env_name);
                 quote! {
-                    // Check for _FILE suffix first (Docker/K8s secrets pattern)
-                    // Security: Use PathValidator to prevent directory traversal attacks
+                    // Check for _FILE suffix first (Docker/K8s secrets pattern).
+                    // Security: PathValidator prevents directory traversal
+                    // attacks; invalid or unreadable secret files are hard
+                    // errors (never silently skipped, matching EnvSource).
                     if let Ok(file_path) = std::env::var(#file_env_name) {
-                        let validator = confers::security::PathValidator::new();
-                        match validator.validate_and_resolve(&file_path) {
-                            Ok(validated_path) => {
-                                if let Ok(content) = std::fs::read_to_string(&validated_path) {
-                                    let val = content.trim().to_string();
-                                    env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
-                                }
+                        let validator = confers::PathValidator::new();
+                        let validated_path = validator.validate_and_resolve(&file_path)?;
+                        let content = std::fs::read_to_string(&validated_path).map_err(|_| {
+                            confers::ConfigError::InvalidValue {
+                                key: #file_env_name.to_string(),
+                                expected_type: "readable file".to_string(),
+                                message: ::std::format!(
+                                    "Cannot read file referenced by {}",
+                                    #file_env_name
+                                ),
                             }
-                            Err(_) => {
-                                // Silently skip invalid secret file paths
-                            }
-                        }
+                        })?;
+                        let val = content.trim().to_string();
+                        env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     } else if let Ok(val) = std::env::var(#env_name) {
                         env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     }
@@ -162,7 +153,9 @@ fn generate_skip_materialization(
         .filter(|(_, _, f)| f.skip)
         .map(|(ident, _, f)| {
             let init = match f.default.as_ref() {
-                Some(expr) => quote! { #expr },
+                Some(DefaultExpr::TypeDefault) => quote! { ::std::default::Default::default() },
+                Some(e) if e.is_none() => quote! { None },
+                Some(DefaultExpr::Expr(expr)) => quote! { #expr },
                 None => quote! { ::std::default::Default::default() },
             };
             quote! { config.#ident = #init; }
@@ -274,23 +267,64 @@ fn generate_map_json_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> 
     }
 
     // `interpolate`: one combined pass over every interpolated field.
+    //
+    // Keys are the **serde field names** (the merge/deserialization key
+    // space), so `#[serde(rename)]`-renamed fields still interpolate.
+    // Sensitive field keys are forwarded so referencing a sensitive value
+    // from a non-sensitive template emits a warning event.
     let interpolate_keys: Vec<TokenStream> = fields
         .iter()
         .filter(|(_, _, f)| f.interpolate)
-        .map(|(ident, _, _)| {
-            let key = ident.to_string();
+        .map(|(_, _, f)| {
+            let key = f.serde_name();
             quote! { #key }
         })
         .collect();
     if !interpolate_keys.is_empty() {
+        let sensitive_keys: Vec<TokenStream> = fields
+            .iter()
+            .filter(|(_, _, f)| !f.skip && f.is_sensitive_effective())
+            .map(|(_, _, f)| {
+                let key = f.serde_name();
+                quote! { #key }
+            })
+            .collect();
         calls.push(quote! {
             builder = builder.map_json(|json: &mut confers::json::Value| {
-                confers::interpolate_keys(json, &[#(#interpolate_keys),*]);
+                confers::interpolate_keys_with_sensitivity(
+                    json,
+                    &[#(#interpolate_keys),*],
+                    &[#(#sensitive_keys),*],
+                );
             });
         });
     }
 
     calls
+}
+
+/// Generate the `map_json` decryption pass for `encrypt` fields (T035).
+///
+/// `None` when no field carries an `encrypt` attribute. The transform runs
+/// last so it sees serde-normalized keys, and only touches values that match
+/// the unified envelope.
+fn generate_decrypt_call(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> Option<TokenStream> {
+    let encrypt_keys: Vec<TokenStream> = fields
+        .iter()
+        .filter(|(_, _, f)| f.encrypt.is_some() && !f.skip)
+        .map(|(_, _, f)| {
+            let key = f.serde_name();
+            quote! { #key }
+        })
+        .collect();
+    if encrypt_keys.is_empty() {
+        return None;
+    }
+    Some(quote! {
+        builder = builder.map_json(|json: &mut confers::json::Value| {
+            confers::decrypt_encrypted_fields(json, &[#(#encrypt_keys),*]);
+        });
+    })
 }
 
 /// Shared body of every generated loader: defaults first (lowest priority),
@@ -307,7 +341,13 @@ fn loader_body(
     // rename_all runs before the other tree transforms so flatten/interpolate
     // observe serde-normalized keys.
     let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
-    let map_json_calls = generate_map_json_calls(fields);
+    let mut map_json_calls = generate_map_json_calls(fields);
+    // T035: encrypt fields get a decryption pass LAST (after rename/flatten/
+    // interpolate normalize keys), replacing envelopes with plaintext.
+    let decrypt_call = generate_decrypt_call(fields);
+    if let Some(call) = decrypt_call {
+        map_json_calls.push(call);
+    }
     let mut_kw = if skip_assigns.is_empty() {
         quote! {}
     } else {
@@ -316,6 +356,8 @@ fn loader_body(
 
     quote! {
         let mut builder = confers::ConfigBuilder::<Self>::new();
+        // T045: 快照脱敏所需的敏感路径(无敏感字段时为空)。
+        builder = builder.sensitive_paths(Self::sensitive_paths());
 
         // Add defaults first (lowest priority)
         #(#default_calls)*
@@ -392,16 +434,30 @@ fn generate_load_file_method(
     attrs: &StructAttrs,
     fields: &[(&syn::Ident, &syn::Type, FieldAttrs)],
 ) -> TokenStream {
+    // Both file loaders register every field default first: without them a
+    // partial file makes deserialization fail with `missing field` even when
+    // the struct declares `#[config(default)]` for the absent keys.
+    let default_calls = generate_default_calls(fields);
+    let default_calls_in_env_loader = default_calls.clone();
     // load_file_with_env must carry the same declared-env overrides as
     // load_sync: the generic env source alone cannot honor `name_env`
-    // declarations (it only maps UPPER_SNAKE → lower.dot paths).
+    // declarations (it only maps UPPER_SNAKE → lower.dot paths). Only the
+    // declared variables are injected — no blanket process-env source, which
+    // would leak PATH/HOME into the merge tree and break
+    // `deny_unknown_fields` structs with an empty key from `_`.
     let env_calls = generate_env_calls(fields, attrs.effective_env_prefix());
     let skip_assigns = generate_skip_materialization(fields);
     let skip_assigns_in_env_loader = skip_assigns.clone();
-    let skip_defaults = generate_skip_default_calls(fields);
-    let skip_defaults_in_env_loader = skip_defaults.clone();
-    let map_json_calls = generate_map_json_calls(fields);
-    let map_json_calls_in_env_loader = map_json_calls.clone();
+    let mut map_json_calls = generate_map_json_calls(fields);
+    let decrypt_call = generate_decrypt_call(fields);
+    if let Some(call) = decrypt_call.clone() {
+        map_json_calls.push(call);
+    }
+    let mut map_json_calls_in_env_loader = generate_map_json_calls(fields);
+    let decrypt_call_in_env_loader = decrypt_call.clone();
+    if let Some(call) = decrypt_call_in_env_loader.clone() {
+        map_json_calls_in_env_loader.push(call);
+    }
     let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
     let rename_call_in_env_loader = rename_call.clone();
     let mut_kw = if skip_assigns.is_empty() {
@@ -409,16 +465,59 @@ fn generate_load_file_method(
     } else {
         quote! { mut }
     };
-    let file_builder_mut =
-        if skip_defaults.is_empty() && map_json_calls.is_empty() && rename_call.is_none() {
-            quote! {}
-        } else {
-            quote! { mut }
-        };
-    let env_builder_mut = if skip_defaults_in_env_loader.is_empty()
+    // `#[config(profile)]`: when the profile env var (default RUN_ENV) is
+    // set to a non-empty value, `<stem>.<env>.<ext>` next to the base file is
+    // loaded after it (later declaration wins), enabling per-environment
+    // overlays. A missing overlay file is skipped silently.
+    let (overlay_setup, overlay_apply) = if attrs.profile {
+        let env_var = attrs.profile_env.as_deref().unwrap_or("RUN_ENV");
+        (
+            quote! {
+                let overlay_path: Option<std::path::PathBuf> = {
+                    let env_name = std::env::var(#env_var).unwrap_or_default();
+                    if env_name.is_empty() {
+                        None
+                    } else {
+                        let base = path.as_ref();
+                        match (
+                            base.file_stem().and_then(|s| s.to_str()),
+                            base.extension().and_then(|s| s.to_str()),
+                        ) {
+                            (Some(stem), Some(ext)) => {
+                                Some(base.with_file_name(format!("{stem}.{env_name}.{ext}")))
+                            }
+                            _ => None,
+                        }
+                    }
+                };
+            },
+            quote! {
+                if let Some(overlay) = overlay_path {
+                    if overlay.exists() {
+                        builder = builder.file(overlay);
+                    }
+                }
+            },
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
+    let file_builder_mut = if default_calls.is_empty()
+        && map_json_calls.is_empty()
+        && rename_call.is_none()
+        && decrypt_call.is_none()
+        && !attrs.profile
+    {
+        quote! {}
+    } else {
+        quote! { mut }
+    };
+    let env_builder_mut = if default_calls_in_env_loader.is_empty()
         && env_calls.is_empty()
         && map_json_calls_in_env_loader.is_empty()
         && rename_call_in_env_loader.is_none()
+        && decrypt_call_in_env_loader.is_none()
+        && !attrs.profile
     {
         quote! {}
     } else {
@@ -428,10 +527,15 @@ fn generate_load_file_method(
     quote! {
         impl #struct_ident {
             /// Load configuration from a specific file.
+            ///
+            /// Priority: declared defaults (lowest) < file values.
             pub fn load_file(path: impl AsRef<std::path::Path>) -> confers::ConfigResult<Self> {
+                #overlay_setup
                 let #file_builder_mut builder = confers::ConfigBuilder::<Self>::new()
-                    .file(path.as_ref());
-                #(#skip_defaults)*
+                    .file(path.as_ref())
+                    .sensitive_paths(Self::sensitive_paths());
+                #overlay_apply
+                #(#default_calls)*
                 // Field-attribute transforms (rename_all first, then flatten/interpolate)
                 #rename_call
                 #(#map_json_calls)*
@@ -442,11 +546,17 @@ fn generate_load_file_method(
             }
 
             /// Load configuration from a specific file with environment overrides.
+            ///
+            /// Priority: declared defaults (lowest) < file values < declared
+            /// environment variables (highest). Only variables matching the
+            /// struct's declared env names are consulted.
             pub fn load_file_with_env(path: impl AsRef<std::path::Path>) -> confers::ConfigResult<Self> {
+                #overlay_setup
                 let #env_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref())
-                    .env();
-                #(#skip_defaults_in_env_loader)*
+                    .sensitive_paths(Self::sensitive_paths());
+                #overlay_apply
+                #(#default_calls_in_env_loader)*
 
                 let mut env_map = std::collections::HashMap::new();
                 #(#env_calls)*
