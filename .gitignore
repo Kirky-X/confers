@@ -65,7 +65,9 @@ docker-compose.yml
 .security-audit/
 
 # Specmark
-specmark/
+# specmark:活动变更工作区可丢弃,归档与主 specs 入库可追溯
+specmark/changes/
+specmark/.locks/
 
 # AI agent guidelines (kept local only)
 AGENTS.md

@@ -74,7 +74,7 @@
 <td width="50%" style="vertical-align:top; padding: 12px">🌐 <b>远程配置</b><br><span style="color:#64748B">HTTP 轮询、etcd v3、Consul、Nacos、Kubernetes，内置熔断器与 SSRF 防护</span></td>
 </tr>
 <tr>
-<td width="50%" style="vertical-align:top; padding: 12px">📢 <b>变更广播</b><br><span style="color:#64748B">NATS / Redis Pub-Sub 消息总线，多实例配置同步</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">📢 <b>变更广播</b><br><span style="color:#64748B">NATS JetStream（至少一次）/ Redis Pub-Sub（至多一次，断线自动重连）消息总线，多实例配置同步</span></td>
 <td width="50%" style="vertical-align:top; padding: 12px">📊 <b>Schema 生成</b><br><span style="color:#64748B">自动生成 JSON Schema 与 TypeScript 类型定义</span></td>
 </tr>
 <tr>

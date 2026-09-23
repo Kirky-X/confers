@@ -1668,7 +1668,7 @@ writer.log_decrypt("api_key", true);
 # 使用环境变量存储敏感信息
 export APP_DATABASE_URL="postgres://user:password@localhost/db"  # pragma: allowlist secret
 export APP_API_KEY="your-api-key"  # pragma: allowlist secret
-export CONFERS_ENCRYPTION_KEY="base64-encoded-key"  # pragma: allowlist secret
+export CONFERS_MASTER_KEY="base64-encoded-key"  # pragma: allowlist secret
 ```
 
 **远程配置安全配置：**

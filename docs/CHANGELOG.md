@@ -7,6 +7,42 @@
 
 ## [Unreleased]
 
+### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
+
+#### 新增
+
+- `#[config(profile)]` 落地：`RUN_ENV`（或 `profile_env` 指定变量）设置时自动加载 `<stem>.<env>.<ext>` 环境专属文件叠加
+- `encrypt` 字段属性真实化：加载管线对统一 envelope 密文自动解密注入（默认密钥来源 `CONFERS_MASTER_KEY`，可注入 KeyProvider）
+- `enc:v1:<keyver>:<payload>` 统一 envelope（旧格式兼容读）；审计链支持外置 HMAC 密钥（`AuditConfig::hmac_key`）
+- `HttpPolledSource::stale_on_error` 选项（默认关闭，保持 fail-loud）、认证头注入 API、默认超时
+- CLI `inspect`/`get` 默认脱敏 + `--reveal` 显式明文（stderr 警告）
+- 公开 `PathValidator`（crate 根，无特性门控）与 `sensitive_names` 敏感名判定单一来源
+- CLI 新增 `snapshot restore` 子命令（恢复最近或指定快照）；构建失败路径也会写快照供恢复
+- `ConfigBuilder::env_separator`/`sensitive_paths` 方法；env 类型错误经 serde-path-to-error 携带字段路径
+- 观测性：事件通道丢弃计数、`confers.env.path_conflict_dropped` / `confers.interpolation.sensitive_reference` telemetry 事件、`ProgressiveReloader::peek_candidate`
+
+#### 变更（破坏性）
+
+- 同优先级配置源按**声明顺序**合并（此前按 source_id 字母序）；默认值来源恒定最低优先级
+- 带前缀的 env 变量路径冲突（标量 vs 嵌套）返回错误而非静默丢值；无前缀源确定性「嵌套形状胜出」+ 事件
+- `load_file`/`load_file_with_env` 为全部 `#[config(default)]` 字段注册默认值；`load_file_with_env` 不再注入无前缀全进程环境
+- `derive_field_key`/`decrypt`/`fetch_and_register` 等返回受管类型（`Zeroizing`/`SecretBytes`）；`SecureString::masked()` 与 `mask_value` 改定长掩码
+- 宏 `#[config(dynamic)]` 的 `*_handle()` 单例化；`#[config(merge_strategy)]` 字段策略真实生效；null 不再覆盖已有值（全层级一致）
+- `user_message()` 全路径过脱敏；CLI `get`/`inspect` 默认掩码
+- 敏感文件（keys.json/快照/审计日志）落盘 0600
+
+#### 修复
+
+- 单文件 FsWatcher 原子替换后热重载静默失效；事件通道满静默丢事件；回调 panic 杀死重载循环
+- Consul 空数组（KV 删除）永久续命旧配置；K8s in-cluster 缺 CA/超时；Nacos 无认证与熔断误报；Redis 总线断线无重连；总线版本号重启重置
+- SSRF 黑名单补 `0.0.0.0/8` 等；弱密钥（全零等）拒绝；Vault token 过期自动重登；`rotate_master_key` 验证旧密钥
+- `verify_audit_chain` 常量时间比较；冲突报告值脱敏；审计 sink 收到脱敏事件
+
+#### 移除
+
+- 死依赖 `secrecy`、`aes-gcm`；死类型 `KeyCachePolicy`
+
+### 新增
 _暂无变更。_
 
 ---

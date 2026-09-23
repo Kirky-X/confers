@@ -151,8 +151,11 @@ pub struct SecureConfig {
 }
 
 // 低层加密 API：XChaCha20-Poly1305 要求 32 字节密钥
+// T037: 密钥必须随机生成（全零等常量密钥会被库拒绝）。
 let crypto = XChaCha20Crypto::new();
-let key: &[u8] = &[0u8; 32]; // 实际应从密钥服务或环境变量读取
+let mut key_bytes = [0u8; 32];
+getrandom::fill(&mut key_bytes).expect("OS entropy"); // 实际应从密钥服务或环境变量读取
+let key: &[u8] = &key_bytes;
 
 // 加密：返回 (nonce, ciphertext)，nonce 为随机 24 字节
 let (nonce, ciphertext) = crypto.encrypt(b"敏感数据", key)?;
@@ -227,6 +230,10 @@ writer.log_decrypt("api_key", true)?;
 ```
 
 审计事件落盘前经 HMAC-SHA256 链式签名（链首使用随机 salt），可用 `verify_audit_chain(path)` 校验日志完整性。
+
+**威胁模型与外置密钥**：默认模式下 salt 同时充当 HMAC 密钥并明文存于日志文件头，因此该链只防局部篡改、只读审计者与惰性重写——能重写整个文件的攻击者可重新伪造合法链。对更高要求场景，通过 `AuditWriterBuilder::hmac_key(...)` 注入外置密钥（env/密钥服务/KMS），此后文件本身不再包含 MAC 密钥，校验须使用 `verify_audit_chain_with_key(path, key)`。
+
+**加密值信封**：加密值统一为 `enc:v1:<key_version>:<base64(nonce||ciphertext)>` 信封（旧版 `enc:v1:<payload>` 与 `enc:<payload>` 写法可读取，key_version 缺省为 `v1`）；`verify` 与 `doctor` 均按此解析。密钥轮换依赖信封内的 `key_version` 定位解密密钥。
 
 ### security 模块 API
 
@@ -310,7 +317,7 @@ retention_days = 90
 
 ```bash
 # 生产环境必填
-CONFERS_ENCRYPTION_KEY=your-256-bit-key
+CONFERS_MASTER_KEY=your-256-bit-key
 CONFERS_AUDIT_ENABLED=true
 
 # 可选的安全加固

@@ -25,7 +25,7 @@ repos:
         # --baseline: .secrets.baseline 记录已人工核实的误报(测试夹具/文档占位符,
         # 以及 .gitleaks.toml 中作为「假 key 检测样本」有意保留的字面量);
         # 带 --baseline 时基线内的发现放行, 基线外的新发现仍阻断
-        args: [--baseline, .secrets.baseline, --exclude-files, tests/, --exclude-files, examples/]
+        args: [--baseline, .secrets.baseline, --exclude-files, tests/, --exclude-files, examples/, --exclude-files, 'specmark/']
         # 自排除: 基线文件本身(内含凭证哈希)与锁文件不参与扫描
         exclude: '^(Cargo\.lock|\.secrets\.baseline)$'
 
