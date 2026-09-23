@@ -33,6 +33,13 @@ pub(crate) static SENSITIVE_DETECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock:
         Regex::new(r"(?i)session_id").unwrap(),
         Regex::new(r"(?i)database_url").unwrap(),
         Regex::new(r"(?i)connection_string").unwrap(),
+        // T049: 常见漏网模式 —— authorization(此前 auth 的 token 边界
+        // 规则命中不了它)、passwd/pwd、dsn、bearer。
+        Regex::new(r"(?i)authorization").unwrap(),
+        Regex::new(r"(?i)passwd").unwrap(),
+        Regex::new(r"(?i)pwd").unwrap(),
+        Regex::new(r"(?i)dsn").unwrap(),
+        Regex::new(r"(?i)bearer").unwrap(),
     ]
 });
 
@@ -79,10 +86,17 @@ pub(crate) fn is_match_with_token_boundary(pattern: &Regex, text: &str) -> bool 
             .chars()
             .next_back()
             .is_none_or(|c| !c.is_alphanumeric());
-        let after_ok = text[m.end()..]
-            .chars()
-            .next()
-            .is_none_or(|c| !c.is_alphanumeric());
+        // T049: 复数形宽容 —— 命中点后紧跟一个 's' 且其后是边界
+        // (passwords/tokens/keys/credentials)视为命中。
+        let rest = &text[m.end()..];
+        let after_ok = match rest.chars().next() {
+            None => true,
+            Some('s') => rest[1..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_alphanumeric()),
+            Some(c) => !c.is_alphanumeric(),
+        };
         before_ok && after_ok
     })
 }
@@ -104,10 +118,16 @@ pub(crate) fn contains_as_token(text: &str, needle: &str) -> bool {
             .chars()
             .next_back()
             .is_none_or(|c| !c.is_alphanumeric());
-        let after_ok = text[end..]
-            .chars()
-            .next()
-            .is_none_or(|c| !c.is_alphanumeric());
+        // T049: 与 is_match_with_token_boundary 相同的复数形宽容。
+        let rest = &text[end..];
+        let after_ok = match rest.chars().next() {
+            None => true,
+            Some('s') => rest[1..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_alphanumeric()),
+            Some(c) => !c.is_alphanumeric(),
+        };
         before_ok && after_ok
     })
 }
@@ -148,8 +168,44 @@ mod tests {
         // Substrings inside larger words do not match.
         assert!(!contains_as_token("monkey", "key"));
         assert!(!contains_as_token("whiskey", "key"));
-        assert!(!contains_as_token("passwords", "password"));
+        // T049: 复数形现在视为命中(与 is_match_with_token_boundary 一致)。
+        assert!(contains_as_token("passwords", "password"));
         // Empty needle never matches.
         assert!(!contains_as_token("anything", ""));
+    }
+}
+
+#[cfg(test)]
+mod t049_tests {
+    use super::*;
+
+    #[test]
+    fn t049_new_patterns_match_with_boundaries() {
+        let cases: &[(&str, &str)] = &[
+            ("authorization", "authorization"),
+            ("Authorization", "authorization_header_value"),
+            ("passwd", "passwd"),
+            ("pwd", "db.pwd"),
+            ("dsn", "DATABASE_DSN"),
+            ("bearer", "bearer"),
+        ];
+        for &(pattern_text, name) in cases {
+            let re = Regex::new(&format!("(?i){pattern_text}")).unwrap();
+            assert!(
+                is_match_with_token_boundary(&re, name),
+                "{pattern_text} must token-match {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn t049_plural_forms_match_singular_fragments() {
+        let re = Regex::new(r"(?i)password").unwrap();
+        assert!(is_match_with_token_boundary(&re, "passwords"));
+        assert!(is_match_with_token_boundary(&re, "db.passwords"));
+        assert!(!is_match_with_token_boundary(&re, "passwordless"));
+        let key = Regex::new(r"(?i)key").unwrap();
+        assert!(is_match_with_token_boundary(&key, "api_keys"));
+        assert!(!is_match_with_token_boundary(&key, "monkey"));
     }
 }

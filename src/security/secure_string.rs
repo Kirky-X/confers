@@ -278,31 +278,13 @@ impl SecureString {
 
     /// 掩码显示（用于日志）
     ///
-    /// 返回掩码后的字符串，如 "pa****" 或 "**"
+    /// T042: 定长 `********`（8 星号）。旧实现保留前缀并按原文长度生成
+    /// 星号，泄露密钥前缀与精确长度。
     pub fn masked(&self) -> String {
         if self.data.is_empty() {
             return "[empty]".to_string();
         }
-
-        let s = self.as_str();
-        // 按字符计数而非字节，避免多字节 UTF-8 字符切片 panic
-        let char_count = s.chars().count();
-
-        match char_count {
-            0 => "[empty]".to_string(),
-            1..=2 => "*".repeat(char_count),
-            3..=4 => {
-                let visible = if char_count == 3 { 1 } else { 2 };
-                let prefix: String = s.chars().take(visible).collect();
-                format!("{}{}", prefix, "*".repeat(char_count - visible))
-            }
-            _ => {
-                let visible = std::cmp::min(2, char_count / 4);
-                let masked_chars = std::cmp::min(6, char_count - visible);
-                let prefix: String = s.chars().take(visible).collect();
-                format!("{}{}", prefix, "*".repeat(masked_chars))
-            }
-        }
+        "********".to_string()
     }
 }
 
@@ -706,36 +688,22 @@ mod tests {
     }
 
     #[test]
-    fn test_secure_string_masked_single_char() {
-        let secret = SecureString::from("a");
-        assert_eq!(secret.masked(), "*");
+    fn test_secure_string_masked_short_inputs() {
+        // T042: 单/双字符输入同样是定长掩码。
+        assert_eq!(SecureString::from("a").masked(), "********");
+        assert_eq!(SecureString::from("ab").masked(), "********");
     }
 
     #[test]
-    fn test_secure_string_masked_two_chars() {
-        let secret = SecureString::from("ab");
-        assert_eq!(secret.masked(), "**");
-    }
-
-    #[test]
-    fn test_secure_string_masked_three_chars() {
-        let secret = SecureString::from("abc");
-        assert_eq!(secret.masked(), "a**");
-    }
-
-    #[test]
-    fn test_secure_string_masked_four_chars() {
-        let secret = SecureString::from("abcd");
-        assert_eq!(secret.masked(), "ab**");
-    }
-
-    #[test]
-    fn test_secure_string_masked_long_string() {
-        let secret = SecureString::from("very-long-secret-value");
-        let masked = secret.masked();
-        // For len >= 5: visible = min(2, len/4), masked_chars = min(6, len - visible)
-        // len=22 → visible=2, masked_chars=6 → "ve******"
-        assert_eq!(masked, "ve******");
+    fn test_secure_string_masked_fixed_length() {
+        // T042: 掩码定长 8 星号 —— 不泄露前缀与长度。
+        assert_eq!(SecureString::from("abc").masked(), "********");
+        assert_eq!(SecureString::from("abcd").masked(), "********");
+        assert_eq!(
+            SecureString::from("very-long-secret-value").masked(),
+            "********"
+        );
+        assert_eq!(SecureString::from("x").masked(), "********");
     }
 
     #[test]

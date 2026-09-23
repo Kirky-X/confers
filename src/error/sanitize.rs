@@ -16,10 +16,14 @@ use super::ConfigError;
 
 /// Regex pattern for matching file paths (Unix and Windows style), while
 /// keeping whole URLs as one token so their path segments are never rewritten
-/// as local file paths (https://example.com/api/v1/users stays intact)
+/// as local file paths (https://example.com/api/v1/users stays intact).
+/// Unix paths must start with a non-digit segment character so fractions
+/// like "1/3" are not mistaken for paths.
 static PATH_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(https?://\S+)|(/[a-zA-Z0-9_\-./]+)|([a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+)")
-        .expect("PATH_RE regex is valid")
+    regex::Regex::new(
+        r"(https?://\S+)|(/[a-zA-Z_][a-zA-Z0-9_\-./]*)|([a-zA-Z]:\\[a-zA-Z0-9_\-./\\]+)",
+    )
+    .expect("PATH_RE regex is valid")
 });
 
 /// Regex pattern for matching IP addresses
@@ -58,6 +62,47 @@ static JWT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// Regex pattern for matching AWS access key IDs
 static AWS_AK_RE: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\bAKIA[0-9A-Z]{16}\b").expect("AWS_AK_RE regex is valid"));
+
+/// Field-name driven credential patterns: `password = hunter2`,
+/// `api_key: abc123`, `Bearer xyz`, connection strings, and similar
+/// name/value shapes are redacted by NAME, independent of the value's shape.
+/// These complement the value-shape rules below and are the single source of
+/// field-name redaction for every error/CLI output path.
+static FIELD_NAME_RES: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
+    [
+        r"(?i)(password|passwd|pwd)[\s]*[:=][\s]*\S+",
+        r"(?i)api[ ]?key[\s]*[:=][\s]*\S+",
+        r"(?i)(access|refresh|auth)[ ]?token[\s]*[:=][\s]*\S+",
+        r"(?i)(secret|private)[ ]?key[\s]*[:=][\s]*\S+",
+        r"(?i)(database[ ]?url|connection[ ]?string)[\s]*[:=][\s]*\S+",
+        r"(?i)authorization[\s]*[:=][\s]*\S+",
+        r"(?i)bearer\s+\S+",
+        r"(?i)basic\s+[a-zA-Z0-9+/=]+",
+    ]
+    .iter()
+    .map(|p| regex::Regex::new(p).expect("FIELD_NAME_RES regex is valid"))
+    .collect()
+});
+
+/// Redact the value part of field-name credential matches.
+fn redact_field_name_values(result: &str) -> String {
+    let mut result = result.to_string();
+    for re in FIELD_NAME_RES.iter() {
+        result = re
+            .replace_all(&result, |caps: &regex::Captures| {
+                let full = caps.get(0).map(|m| m.as_str()).unwrap_or_default();
+                let trimmed = full.trim_end();
+                let trailing = &full[trimmed.len()..];
+                let name = trimmed
+                    .split_once(['=', ':'])
+                    .map(|(n, _)| n.trim_end())
+                    .unwrap_or(trimmed);
+                format!("{name} = ***{trailing}")
+            })
+            .to_string();
+    }
+    result
+}
 
 /// Regex pattern for matching AWS-secret-shaped tokens (40-char alphanumeric)
 static AWS_SAK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -144,6 +189,10 @@ fn redact_with_context(text: &str, re: &regex::Regex, replacement: &str) -> Stri
 /// CLI `diff --sanitize` output), so all redaction rules live in one place.
 pub(crate) fn sanitize_error_message(msg: &str) -> String {
     let mut result = msg.to_string();
+
+    // Field-name driven redaction FIRST: `password = hunter2` style shapes
+    // must be masked even when the value itself looks innocuous.
+    result = redact_field_name_values(&result);
 
     // Remove URLs with embedded credentials first (before other replacements)
     result = URL_WITH_CREDS_RE

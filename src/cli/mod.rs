@@ -8,7 +8,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use schemars::JsonSchema;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::AnnotatedValue;
@@ -234,6 +234,10 @@ enum Commands {
         /// Output format (text, json)
         #[arg(short, long, default_value = "text")]
         format: String,
+
+        /// Reveal values of sensitive-looking keys (default: masked)
+        #[arg(long)]
+        reveal: bool,
     },
 
     /// Validate configuration against schema
@@ -303,6 +307,10 @@ enum Commands {
     Get {
         /// Configuration key path (e.g., "server.host" or "database.pool.size")
         key: String,
+
+        /// Reveal values of sensitive-looking keys (default: masked)
+        #[arg(long)]
+        reveal: bool,
     },
 
     /// Documentation output. `--agent` emits the machine-readable knowledge
@@ -352,6 +360,17 @@ enum SnapshotCommands {
         #[arg(long, default_value = "./snapshots")]
         directory: PathBuf,
     },
+    /// Restore (load and validate) a snapshot file (T028 disaster recovery)
+    #[cfg(feature = "snapshot")]
+    Restore {
+        /// Snapshot file to restore; defaults to the newest snapshot in the
+        /// directory when omitted
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Directory containing snapshots
+        #[arg(long, default_value = "./snapshots")]
+        directory: PathBuf,
+    },
 }
 
 /// Run the CLI entry point
@@ -386,6 +405,7 @@ where
             key,
             show_conflicts,
             format,
+            reveal,
         } => {
             cmd_inspect(
                 &config_paths,
@@ -393,6 +413,7 @@ where
                 show_conflicts,
                 &format,
                 allow_absolute_paths,
+                reveal,
             )?;
         }
         Commands::Validate { strict, format } => {
@@ -431,12 +452,13 @@ where
                 cmd_schema::<T>()?;
             }
         }
-        Commands::Get { key } => {
+        Commands::Get { key, reveal } => {
             cmd_get(
                 &config_paths,
                 &key,
                 allow_absolute_paths,
                 fields_filter.as_deref(),
+                reveal,
             )?;
         }
         Commands::Doctor { format } => {
@@ -461,13 +483,21 @@ fn cmd_inspect(
     show_conflicts: bool,
     format: &str,
     allow_absolute_paths: bool,
+    reveal: bool,
 ) -> Result<()> {
     let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
+    if reveal {
+        eprintln!("warning: --reveal is set: sensitive values are printed verbatim");
+    }
 
     match format {
         "json" => {
-            // JSON output
-            let json = serde_json::to_string_pretty(&annotated_config)?;
+            // JSON output, sensitive keys masked unless --reveal
+            let mut json_value = serde_json::to_value(&annotated_config)?;
+            if !reveal {
+                redact_sensitive_json(&mut json_value, None);
+            }
+            let json = serde_json::to_string_pretty(&json_value)?;
             println!("{}", json);
             return Ok(());
         }
@@ -499,7 +529,7 @@ fn cmd_inspect(
         );
         println!("{}", "-".repeat(100));
 
-        print_config_value(&annotated_config, "", show_conflicts);
+        print_config_value(&annotated_config, "", show_conflicts, reveal);
     } else {
         // Show requested keys
         println!("{}", tr("cli-inspect-requested-keys"));
@@ -540,8 +570,9 @@ fn cmd_inspect(
     Ok(())
 }
 
-/// Recursively print configuration values
-fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool) {
+/// Recursively print configuration values; sensitive-looking keys are
+/// masked unless `reveal` is set.
+fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool, reveal: bool) {
     match &value.inner {
         crate::types::ConfigValue::Map(map) => {
             for (key, val) in map.iter() {
@@ -553,10 +584,16 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
 
                 match &val.inner {
                     crate::types::ConfigValue::Map(_) => {
-                        print_config_value(val, &full_key, show_conflicts);
+                        print_config_value(val, &full_key, show_conflicts, reveal);
                     }
                     _ => {
-                        let value_str = format_value(&val.inner);
+                        let last_segment = full_key.rsplit('.').next().unwrap_or(&full_key);
+                        let value_str =
+                            if !reveal && crate::sensitive_names::is_sensitive_name(last_segment) {
+                                "\"********\"".to_string()
+                            } else {
+                                format_value(&val.inner)
+                            };
                         let source = val.source.as_str();
                         let location = format_location(&val.location);
                         let conflict_marker = if show_conflicts && val.priority > 0 {
@@ -573,7 +610,12 @@ fn print_config_value(value: &AnnotatedValue, prefix: &str, show_conflicts: bool
             }
         }
         _ => {
-            let value_str = format_value(&value.inner);
+            let last_segment = prefix.rsplit('.').next().unwrap_or(prefix);
+            let value_str = if !reveal && crate::sensitive_names::is_sensitive_name(last_segment) {
+                "\"********\"".to_string()
+            } else {
+                format_value(&value.inner)
+            };
             let source = value.source.as_str();
             let location = format_location(&value.location);
             println!(
@@ -1112,7 +1154,58 @@ fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
         } => {
             cmd_snapshot_prune(&older_than, &directory)?;
         }
+        #[cfg(feature = "snapshot")]
+        SnapshotCommands::Restore { file, directory } => {
+            cmd_snapshot_restore(file.as_ref(), &directory)?;
+        }
+        #[cfg(not(feature = "snapshot"))]
+        _ => {
+            anyhow::bail!("snapshot commands require the `snapshot` feature");
+        }
     }
+    Ok(())
+}
+
+/// Restore a snapshot (T028 disaster recovery): load the snapshot file,
+/// validate that it parses as the configured format, and print a summary.
+/// Without `--file`, the newest snapshot in the directory is restored.
+#[cfg(feature = "snapshot")]
+fn cmd_snapshot_restore(file: Option<&PathBuf>, directory: &Path) -> Result<()> {
+    use crate::impl_::snapshot::{SnapshotConfig, SnapshotManager};
+
+    let target: PathBuf = match file {
+        Some(f) => f.clone(),
+        None => {
+            let manager = SnapshotManager::new(SnapshotConfig::new(directory));
+            let snapshots = manager.list_snapshots()?;
+            let Some(newest) = snapshots.first() else {
+                println!("No snapshots found in {}", directory.display());
+                std::process::exit(1);
+            };
+            newest.path.clone()
+        }
+    };
+
+    if !target.exists() {
+        println!("Snapshot file does not exist: {}", target.display());
+        std::process::exit(1);
+    }
+
+    let config = SnapshotConfig::new(directory);
+    let manager = SnapshotManager::new(config);
+    // load_snapshot is async; drive it on a minimal runtime (CLI is sync).
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| anyhow::anyhow!("runtime build failed: {e}"))?;
+    let merged = rt.block_on(manager.load_snapshot(&target))?;
+
+    let key_count = match &merged.inner {
+        crate::types::ConfigValue::Map(map) => map.len(),
+        _ => 1,
+    };
+    println!("restored: {}", target.display());
+    println!("top-level keys: {key_count}");
     Ok(())
 }
 
@@ -1414,8 +1507,12 @@ fn cmd_get(
     key: &str,
     allow_absolute_paths: bool,
     fields: Option<&str>,
+    reveal: bool,
 ) -> Result<()> {
     let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
+    if reveal {
+        eprintln!("warning: --reveal is set: sensitive values are printed verbatim");
+    }
 
     // "." means the root config object
     let value = if key == "." {
@@ -1425,15 +1522,63 @@ fn cmd_get(
     };
 
     // Apply --fields filtering if provided
-    let output = match (value, fields) {
+    let mut output = match (value, fields) {
         (Some(v), Some(f)) => filter_json_by_fields(v, f),
         (Some(v), None) => v.clone(),
         (None, _) => serde_json::Value::Null,
     };
 
+    // Sensitive-looking keys are masked unless --reveal was given.
+    if !reveal {
+        let queried_name = key.rsplit('.').next().unwrap_or(key);
+        redact_sensitive_json(&mut output, Some(queried_name));
+    }
+
     let json_str = serde_json::to_string(&output)?;
     println!("{json_str}");
     Ok(())
+}
+
+/// Redact values whose owning key name looks sensitive.
+///
+/// Recurses through objects and arrays; a leaf whose parent key matches
+/// [`crate::sensitive_names::is_sensitive_name`] is replaced with `********`.
+/// `root_name` lets a directly-addressed key (e.g. `confers get db.password`)
+/// be judged too.
+fn redact_sensitive_json(value: &mut serde_json::Value, root_name: Option<&str>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                if crate::sensitive_names::is_sensitive_name(k) {
+                    *v = redaction_placeholder(v);
+                } else {
+                    redact_sensitive_json(v, None);
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items.iter_mut() {
+                redact_sensitive_json(item, None);
+            }
+        }
+        _ => {
+            if let Some(name) = root_name
+                && crate::sensitive_names::is_sensitive_name(name)
+            {
+                *value = serde_json::Value::String("********".to_string());
+            }
+        }
+    }
+}
+
+/// Placeholder for a redacted value; non-scalar shapes collapse to a string.
+fn redaction_placeholder(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+            serde_json::Value::String("********".to_string())
+        }
+        _ => serde_json::Value::String("********".to_string()),
+    }
 }
 
 /// Navigate a `serde_json::Value` by dot-separated key path.
@@ -2314,7 +2459,7 @@ mod tests {
         use crate::types::{ConfigValue, SourceId};
         let v = AnnotatedValue::new(ConfigValue::string("test"), SourceId::new("t"), "k");
         // Should not panic
-        print_config_value(&v, "", false);
+        print_config_value(&v, "", false, false);
     }
 
     #[test]
@@ -2332,7 +2477,7 @@ mod tests {
             ),
         );
         let v = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "");
-        print_config_value(&v, "", true);
+        print_config_value(&v, "", true, false);
     }
 
     // ============== format_value: remaining variants ==============
@@ -2982,7 +3127,7 @@ mod tests {
         );
         let av = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "");
         // show_conflicts=true with priority>0 -> conflict marker "*" branch
-        print_config_value(&av, "", true);
+        print_config_value(&av, "", true, false);
     }
 
     #[test]
@@ -2996,7 +3141,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("t"), "k"),
         );
         let av = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "");
-        print_config_value(&av, "", true);
+        print_config_value(&av, "", true, false);
     }
 
     #[test]
@@ -3011,7 +3156,7 @@ mod tests {
         );
         let av = AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("t"), "");
         // show_conflicts=false -> never print marker even with priority
-        print_config_value(&av, "", false);
+        print_config_value(&av, "", false, false);
     }
 
     #[test]
@@ -3035,7 +3180,7 @@ mod tests {
         );
         let av = AnnotatedValue::new(ConfigValue::Map(Arc::new(outer)), SourceId::new("t"), "");
         // Exercises the recursive branch with non-empty prefix
-        print_config_value(&av, "root", false);
+        print_config_value(&av, "root", false, false);
     }
 
     #[test]
@@ -3043,7 +3188,7 @@ mod tests {
         use crate::types::{ConfigValue, SourceId};
         let v = AnnotatedValue::new(ConfigValue::integer(42), SourceId::new("t"), "some.key");
         // Non-map top-level branch with a non-empty prefix
-        print_config_value(&v, "prefix", false);
+        print_config_value(&v, "prefix", false, false);
     }
 
     // ============== build_annotated_from_cli / build_config_from_cli ==============
@@ -3112,7 +3257,7 @@ mod tests {
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
-        let result = cmd_inspect(&paths, &[], false, "json", true);
+        let result = cmd_inspect(&paths, &[], false, "json", true, false);
         assert!(result.is_ok());
     }
 
@@ -3123,7 +3268,7 @@ mod tests {
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
-        let result = cmd_inspect(&paths, &[], false, "text", true);
+        let result = cmd_inspect(&paths, &[], false, "text", true, false);
         assert!(result.is_ok());
     }
 
@@ -3135,7 +3280,7 @@ mod tests {
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
         let keys = vec!["name".to_string(), "port".to_string()];
-        let result = cmd_inspect(&paths, &keys, false, "text", true);
+        let result = cmd_inspect(&paths, &keys, false, "text", true, false);
         assert!(result.is_ok());
     }
 
@@ -3147,8 +3292,31 @@ mod tests {
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
         let keys = vec!["nonexistent.key".to_string()];
-        let result = cmd_inspect(&paths, &keys, false, "text", true);
+        let result = cmd_inspect(&paths, &keys, false, "text", true, false);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_redact_sensitive_json_masks_by_key_name() {
+        // T046: CLI 默认按字段名掩码敏感值,--reveal(false→掩码) 路径。
+        let mut v = serde_json::json!({ // pragma: allowlist secret
+            "host": "db.internal",
+            "password": "hunter2", // pragma: allowlist secret
+            "nested": {"api_key": "abc123", "port": 5432}, // pragma: allowlist secret
+            "list": [{"token": "t-1"}, 7], // pragma: allowlist secret
+        });
+        redact_sensitive_json(&mut v, None);
+        assert_eq!(v["host"], "db.internal", "benign keys stay intact");
+        assert_eq!(v["password"], "********");
+        assert_eq!(v["nested"]["api_key"], "********");
+        assert_eq!(v["nested"]["port"], 5432);
+        assert_eq!(v["list"][0]["token"], "********");
+        assert_eq!(v["list"][1], 7);
+
+        // 直接取键:root_name 参与判定。
+        let mut direct = serde_json::json!("hunter2");
+        redact_sensitive_json(&mut direct, Some("db.password"));
+        assert_eq!(direct, "********");
     }
 
     #[test]
@@ -3158,7 +3326,7 @@ mod tests {
         write!(tf, "name = \"confers\"\nport = 8080\n").unwrap();
         tf.flush().unwrap();
         let paths = vec![tf.path().to_path_buf()];
-        let result = cmd_inspect(&paths, &[], true, "text", true);
+        let result = cmd_inspect(&paths, &[], true, "text", true, false);
         assert!(result.is_ok());
     }
 
@@ -3166,7 +3334,7 @@ mod tests {
     fn test_cmd_inspect_empty_paths_text() {
         // No config files -> builds from env only, prints "0 configuration source(s)"
         let paths: Vec<std::path::PathBuf> = vec![];
-        let result = cmd_inspect(&paths, &[], false, "text", false);
+        let result = cmd_inspect(&paths, &[], false, "text", false, false);
         assert!(result.is_ok());
     }
 
@@ -3726,6 +3894,7 @@ mod tests {
                 key,
                 show_conflicts,
                 format,
+                reveal: _,
             } => {
                 assert_eq!(key, vec!["server.host".to_string()]);
                 assert!(show_conflicts);

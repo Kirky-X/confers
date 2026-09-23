@@ -591,16 +591,12 @@ impl ConfigInjector {
     }
 
     /// 掩码敏感值
+    ///
+    /// T050: 定长 `********`(8 星号)。旧实现按原文长度生成星号并保留
+    /// 前 1-2 个字符,泄露精确长度与前缀;定长掩码两者都不泄露。
     fn mask_value(value: &str) -> String {
-        // 按字符计数避免多字节 UTF-8 切片 panic
-        let char_count = value.chars().count();
-        if char_count <= 4 {
-            "*".repeat(char_count)
-        } else {
-            let visible = std::cmp::min(2, char_count / 4);
-            let prefix: String = value.chars().take(visible).collect();
-            format!("{}{}", prefix, "*".repeat(char_count - visible))
-        }
+        let _ = value;
+        "********".to_string()
     }
 
     /// 获取配置数量
@@ -1088,15 +1084,13 @@ mod tests {
 
     #[test]
     fn test_mask_value_short_and_long() {
-        // 通过 get_safe 间接测试 mask_value：短值（<=4）全部掩码
-        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
-        injector.inject("APP_SECRET", "ab").unwrap(); // pragma: allowlist secret
-        let masked = injector.get_safe("APP_SECRET").unwrap();
-        assert_eq!(masked, "**");
-        // 5 字符值：保留前 1 位（min(2, 5/4=1)），其余掩码
-        injector.inject("APP_KEY", "abcde").unwrap(); // pragma: allowlist secret
-        let masked = injector.get_safe("APP_KEY").unwrap();
-        assert_eq!(masked, "a****");
+        // T050: 定长掩码 —— 不泄露原文长度与前缀。
+        assert_eq!(ConfigInjector::mask_value("ab"), "********");
+        assert_eq!(ConfigInjector::mask_value("hunter2"), "********");
+        assert_eq!(
+            ConfigInjector::mask_value("a-very-long-secret-value-indeed"),
+            "********"
+        );
     }
 
     #[test]

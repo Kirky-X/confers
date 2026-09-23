@@ -440,7 +440,18 @@ impl ConfigError {
     }
 
     /// Get a sanitized message for user display.
+    ///
+    /// The formatted message always passes through
+    /// [`sanitize::sanitize_error_message`], so field-name credentials
+    /// (`password = ...`) and value-shaped secrets (URLs with embedded
+    /// credentials, JWTs, key material) never reach end users — including the
+    /// `InvalidValue` path that remote sources populate with raw URLs.
     pub fn user_message(&self) -> String {
+        sanitize::sanitize_error_message(&self.user_message_raw())
+    }
+
+    /// Format the raw (unsanitized) display message.
+    fn user_message_raw(&self) -> String {
         match self {
             ConfigError::FileNotFound { filename, .. } => {
                 // Sanitize paths that may contain sensitive information
@@ -875,7 +886,9 @@ impl crate::i18n::LocalizedMsg for ConfigError {
                 vec![("count", count.to_string())]
             }
             ConfigError::DecryptionFailed { message } | ConfigError::KeyError { message } => {
-                vec![("message", message.clone())]
+                // The templates no longer interpolate this field; sanitize
+                // anyway so any future template reuse stays safe.
+                vec![("message", sanitize::sanitize_error_message(message))]
             }
             ConfigError::RemoteUnavailable { .. } => Vec::new(),
             ConfigError::VersionMismatch { found, expected } => vec![
@@ -978,6 +991,53 @@ mod tests {
             err.user_message(),
             "Configuration version mismatch: found 1, expected 2"
         );
+    }
+
+    #[test]
+    fn test_user_message_sanitizes_field_name_credentials() {
+        // T047 regression: `password = xxx` style values used to pass
+        // through user_message verbatim.
+        let err = ConfigError::InvalidValue {
+            key: "db".to_string(),
+            expected_type: "string".to_string(),
+            message: "password = hunter2 is invalid".to_string(),
+        };
+        let msg = err.user_message();
+        assert!(
+            !msg.contains("hunter2"),
+            "password value must be masked: {msg}"
+        );
+        assert!(msg.contains("***"), "masked placeholder expected: {msg}");
+    }
+
+    #[test]
+    fn test_user_message_sanitizes_url_with_credentials() {
+        // T047 regression: remote source errors embedded full URLs with
+        // credentials, and InvalidValue bypassed sanitization.
+        let err = ConfigError::InvalidValue {
+            key: "consul".to_string(),
+            expected_type: "response".to_string(),
+            message: "request failed: https://user:secret@consul.internal:8500/v1/kv/x".to_string(), // pragma: allowlist secret
+        };
+        let msg = err.user_message();
+        assert!(
+            !msg.contains("secret@"),
+            "embedded credentials must be redacted: {msg}"
+        );
+        assert!(
+            msg.contains("<redacted_url>"),
+            "redacted url expected: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_decryption_failed_message_never_reaches_i18n_verbatim() {
+        // T047: the i18n param for DecryptionFailed/KeyError is sanitized at
+        // the source (templates no longer interpolate it).
+        let err = ConfigError::DecryptionFailed {
+            message: "password = hunter2 leaked".to_string(),
+        };
+        assert_eq!(err.user_message(), "Failed to decrypt configuration value");
     }
 
     #[test]
@@ -2126,7 +2186,10 @@ mod tests {
         let err = ConfigError::DecryptionFailed {
             message: "bad key".into(),
         };
-        assert_eq!(err.to_string(), err.message_en());
+        // Template intentionally drops the raw message (never interpolated
+        // into localized output), so it no longer matches Display verbatim.
+        assert_eq!(err.message_en(), "Decryption failed.");
+        assert!(err.to_string().contains("bad key"));
 
         let err = ConfigError::RemoteUnavailable {
             error_type: "network".into(),
@@ -2196,7 +2259,10 @@ mod tests {
         let err = ConfigError::KeyError {
             message: "weak key".into(),
         };
-        assert_eq!(err.to_string(), err.message_en());
+        // Same divergence as DecryptionFailed: the template drops the raw
+        // message from localized output.
+        assert_eq!(err.message_en(), "Encryption key error.");
+        assert!(err.to_string().contains("weak key"));
 
         let err = ConfigError::CircularReference {
             path: "a.b.a".into(),
