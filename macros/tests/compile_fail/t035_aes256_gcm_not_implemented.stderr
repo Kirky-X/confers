@@ -1,0 +1,7 @@
+error: encrypt = "aes256-gcm" is not implemented; use "xchacha20"
+ --> tests/compile_fail/t035_aes256_gcm_not_implemented.rs:3:10
+  |
+3 | #[derive(Config)]
+  |          ^^^^^^
+  |
+  = note: this error originates in the derive macro `Config` (in Nightly builds, run with -Z macro-backtrace for more info)
