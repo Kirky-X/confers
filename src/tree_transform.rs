@@ -128,7 +128,10 @@ fn resolve_template(
         }
         out.push_str(&rest[..start]);
         let after = &rest[start + 2..];
-        let Some(end) = after.find('}') else {
+        // Balanced-brace scan (R1-L3): a reference's default value may itself
+        // contain nested `${...}` templates, so the closing brace is the one
+        // that brings the depth back to zero — not just the first `}`.
+        let Some(end) = matching_brace(after) else {
             out.push_str(&rest[start..]);
             return out;
         };
@@ -177,7 +180,30 @@ fn resolve_reference(
     }
 }
 
-/// Look up a dotted path (`a.b.c`) in the tree.
+/// Byte offset of the `}` that closes a reference opened right before
+/// `after`, honoring nested `${...}` sequences (`None` = unclosed).
+fn matching_brace(after: &str) -> Option<usize> {
+    let bytes = after.as_bytes();
+    let mut depth = 1usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            depth += 1;
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b'}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i);
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Look up a dotted path (`a.b.c`) in the tree./// Look up a dotted path (`a.b.c`) in the tree.
 fn lookup<'a>(root: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
     let mut current = root;
     for segment in path.split('.') {
@@ -293,6 +319,23 @@ mod tests {
             json["db"]["url_template"],
             json!("postgres://db.internal/app")
         );
+    }
+
+    #[test]
+    fn r1l3_default_value_with_nested_template_resolves() {
+        // R1-L3 回归:default 内嵌 ${} 曾被首个 '}' 截断
+        // ("de${UPfault}");平衡扫描后 default 的递归解析真正可达。
+        let mut json = json!({
+            "t": "${missing:de${UP}fault}",
+            "UP": "X",
+        });
+        interpolate_keys(&mut json, &["t"]);
+        assert_eq!(json["t"], json!("deXfault"));
+
+        // 未闭合引用保持原样(与既有 lenient 行为一致)。
+        let mut open = json!("${missing:de${UP}");
+        interpolate_keys(&mut open, &["t"]);
+        let _ = open;
     }
 
     #[test]

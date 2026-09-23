@@ -96,3 +96,52 @@ fn enc02_plain_values_pass_through_untouched() {
     let cfg = EncryptedProbe::load_file(rel).expect("plain config must load");
     assert_eq!(cfg.api_key, "plain-token", "plaintext must pass through");
 }
+
+/// R2-M7(主密钥显式注入):ConfigBuilder::master_key 直接注入主密钥,
+/// 绕过 CONFERS_MASTER_KEY 环境查找;弱密钥/错密钥照常失败。
+#[derive(Debug, confers::Config, serde::Deserialize)]
+struct InjectProbe {
+    #[serde(rename = "db_addr")]
+    #[config(encrypt = "xchacha20")]
+    pub db_addr: String,
+}
+
+#[test]
+#[serial]
+fn r2m7_builder_master_key_injection_overrides_env() {
+    let envelope = make_envelope("db_addr", "v1", "tok-injected");
+    let cwd = std::env::current_dir().unwrap();
+    let file = tempfile::Builder::new()
+        .prefix("r2m7")
+        .suffix(".toml")
+        .tempfile_in(&cwd)
+        .unwrap();
+    std::fs::write(file.path(), format!("db_addr = \"{envelope}\"\n")).unwrap();
+    let rel = file
+        .path()
+        .strip_prefix(&cwd)
+        .unwrap_or(file.path())
+        .to_path_buf();
+
+    use confers::secret::{XChaCha20Crypto, derive_field_key};
+    let field_key = derive_field_key(MASTER, "db_addr", "v1").unwrap();
+    let (nonce, ct) = XChaCha20Crypto::new()
+        .encrypt(b"ignored", field_key.as_slice())
+        .unwrap();
+    let _ = (nonce, ct); // 证明确实持有正确字段密钥
+
+    // 环境变量故意设成错误密钥:注入必须优先于环境。
+    unsafe { std::env::set_var("CONFERS_MASTER_KEY", hex_encode(&[1u8; 32])) };
+    let cfg: InjectProbe = confers::ConfigBuilder::new()
+        .file(&rel)
+        .encrypted_fields()
+        .master_key(MASTER.to_vec())
+        .build()
+        .expect("injected master key must decrypt");
+    unsafe { std::env::remove_var("CONFERS_MASTER_KEY") };
+    assert_eq!(cfg.db_addr, "tok-injected");
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}

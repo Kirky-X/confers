@@ -12,7 +12,7 @@
 #### 新增
 
 - `#[config(profile)]` 落地：`RUN_ENV`（或 `profile_env` 指定变量）设置时自动加载 `<stem>.<env>.<ext>` 环境专属文件叠加
-- `encrypt` 字段属性真实化：加载管线对统一 envelope 密文自动解密注入（默认密钥来源 `CONFERS_MASTER_KEY`，可注入 KeyProvider）
+- `encrypt` 字段属性真实化：加载管线对统一 envelope 密文自动解密注入；支持 `ConfigBuilder::master_key` 显式注入主密钥（覆盖 `CONFERS_MASTER_KEY`）；Vault 登录按 `lease_duration` 提前 10% 主动刷新（403 反应式重登保留为兜底）
 - `enc:v1:<keyver>:<payload>` 统一 envelope（旧格式兼容读）；审计链支持外置 HMAC 密钥（`AuditConfig::hmac_key`）
 - `HttpPolledSource::stale_on_error` 选项（默认关闭，保持 fail-loud）、认证头注入 API、默认超时
 - CLI `inspect`/`get` 默认脱敏 + `--reveal` 显式明文（stderr 警告）

@@ -244,15 +244,25 @@ impl VaultAuth {
     }
 
     /// Exchange credentials for a client token (no-op for `Token`).
-    async fn resolve(&self, client: &reqwest::Client, vault_addr: &str) -> ConfigResult<String> {
+    ///
+    /// R2-M7: login responses also carry `auth.lease_duration` (seconds);
+    /// returning it lets the provider refresh proactively instead of only
+    /// reacting to 403s. `None` lease = no expiry information (static token).
+    async fn resolve_with_lease(
+        &self,
+        client: &reqwest::Client,
+        vault_addr: &str,
+    ) -> ConfigResult<(String, Option<u64>)> {
         match self {
             Self::Token { token } => {
                 if token.is_empty() {
-                    std::env::var("VAULT_TOKEN").map_err(|_| ConfigError::KeyError {
-                        message: "Vault token not provided".to_string(),
-                    })
+                    std::env::var("VAULT_TOKEN")
+                        .map_err(|_| ConfigError::KeyError {
+                            message: "Vault token not provided".to_string(),
+                        })
+                        .map(|t| (t, None))
                 } else {
-                    Ok(token.clone())
+                    Ok((token.clone(), None))
                 }
             }
             _ => {
@@ -284,15 +294,29 @@ impl VaultAuth {
                         location: None,
                         source: None,
                     })?;
-                json.get("auth")
+                let token = json
+                    .get("auth")
                     .and_then(|a| a.get("client_token"))
                     .and_then(|t| t.as_str())
                     .map(|t| t.to_string())
                     .ok_or(ConfigError::KeyError {
                         message: "Vault login response missing auth.client_token".to_string(),
-                    })
+                    })?;
+                let lease = json
+                    .get("auth")
+                    .and_then(|a| a.get("lease_duration"))
+                    .and_then(|d| d.as_u64());
+                Ok((token, lease))
             }
         }
+    }
+
+    /// Exchange credentials for a client token (no-op for `Token`).
+    #[allow(dead_code)]
+    async fn resolve(&self, client: &reqwest::Client, vault_addr: &str) -> ConfigResult<String> {
+        self.resolve_with_lease(client, vault_addr)
+            .await
+            .map(|(t, _)| t)
     }
 }
 
@@ -389,13 +413,27 @@ impl VaultKeyProvider {
             }
         }
         let client = shared_http_client();
-        let token = self.auth.resolve(&client, &self.vault_addr).await?;
+        // R2-M7: login lease_duration 驱动主动刷新 —— 到期前 10% 即视为
+        // 过期,重新登录(403 反应式重登仍保留为兜底)。
+        let (token, lease) = self
+            .auth
+            .resolve_with_lease(&client, &self.vault_addr)
+            .await?;
         if self.cache_policy != KeyCachePolicy::NoCache
             && let Ok(mut cache) = self.token_cache.lock()
         {
+            let now = std::time::Instant::now();
             let expires_at = match self.cache_policy {
-                KeyCachePolicy::CacheWithTtl(ttl) => Some(std::time::Instant::now() + ttl),
+                KeyCachePolicy::CacheWithTtl(ttl) => Some(now + ttl),
                 _ => None,
+            };
+            let expires_at = match lease {
+                // lease 到期前 10% 主动刷新(与 design D6 一致)。
+                Some(secs) if secs > 0 => {
+                    let early = (secs / 10).max(1);
+                    Some(now + std::time::Duration::from_secs(secs.saturating_sub(early)))
+                }
+                _ => expires_at,
             };
             *cache = Some((token.clone(), expires_at));
         }
@@ -977,7 +1015,8 @@ mod tests {
         let addr = spawn_mock_vault(vec![
             (
                 200,
-                serde_json::json!({"auth": {"client_token": "approle-token"}}).to_string(),
+                serde_json::json!({"auth": {"client_token": "approle-token", "lease_duration": 300}})
+                    .to_string(),
             ),
             (
                 200,

@@ -174,6 +174,12 @@ pub trait ChangeStream: Send + Sync {
     /// Acknowledge that `version` has been applied. Unacked events are
     /// eligible for redelivery by reliable implementations; the in-memory
     /// implementation uses ack only to release retained payloads.
+    ///
+    /// Semantics note (R3-L2): ack is a GLOBAL release, not per-subscriber —
+    /// once one subscriber acks `version`, the in-memory implementation may
+    /// evict that payload for everyone, and a slower subscriber that has not
+    /// seen it yet receives the explicit `resync` event instead of silent
+    /// data loss.
     async fn ack(&self, version: u64) -> ConfigResult<()>;
 
     /// Number of events published but not yet acked (best-effort).

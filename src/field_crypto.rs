@@ -34,23 +34,34 @@ pub const MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
 /// space (e.g. `inner.api_key` for a hoisted flatten field), which must match
 /// the path the encrypting side used.
 pub fn decrypt_encrypted_tree(json: &mut serde_json::Value) {
+    decrypt_tree_with_key(json, None);
+}
+
+/// Builder-integrated entry point (R2-M7): runs the tree walk with the
+/// builder's injected master key when present, else the environment default.
+#[allow(dead_code)]
+pub(crate) fn apply_field_decryption(json: &mut serde_json::Value, master_key: Option<&[u8]>) {
+    decrypt_tree_with_key(json, master_key);
+}
+
+fn decrypt_tree_with_key(json: &mut serde_json::Value, master_override: Option<&[u8]>) {
     match json {
         serde_json::Value::Object(map) => {
             for (k, v) in map.iter_mut() {
                 let child_path = k.clone();
-                decrypt_at_path(v, &child_path);
+                decrypt_at_path(v, &child_path, master_override);
             }
         }
         serde_json::Value::Array(items) => {
             for (idx, v) in items.iter_mut().enumerate() {
-                decrypt_at_path(v, &idx.to_string());
+                decrypt_at_path(v, &idx.to_string(), master_override);
             }
         }
         _ => {}
     }
 }
 
-fn decrypt_at_path(value: &mut serde_json::Value, path: &str) {
+fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: Option<&[u8]>) {
     match value {
         serde_json::Value::Object(map) => {
             for (k, v) in map.iter_mut() {
@@ -59,13 +70,13 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str) {
                 } else {
                     format!("{path}.{k}")
                 };
-                decrypt_at_path(v, &child_path);
+                decrypt_at_path(v, &child_path, master_override);
             }
         }
         serde_json::Value::Array(items) => {
             for (idx, v) in items.iter_mut().enumerate() {
                 let child_path = format!("{path}.{idx}");
-                decrypt_at_path(v, &child_path);
+                decrypt_at_path(v, &child_path, master_override);
             }
         }
         serde_json::Value::String(text) => {
@@ -86,7 +97,16 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str) {
 
             #[cfg(feature = "encryption")]
             {
-                let Some(master_key) = resolve_master_key() else {
+                // 密钥解析顺序:显式注入(builder master_key)>环境变量;
+                // 注入键同样过 32 字节 + 弱密钥校验。
+                let resolved: Option<Vec<u8>> = match master_override {
+                    Some(k) if k.len() == 32 && !crate::secret::crypto::is_weak_key(k) => {
+                        Some(k.to_vec())
+                    }
+                    Some(_) => None,
+                    None => resolve_master_key(),
+                };
+                let Some(master_key) = resolved else {
                     crate::telemetry::warn(
                         "confers.encryption.master_key_missing",
                         &[("field", path)],
@@ -115,13 +135,15 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str) {
 
             #[cfg(not(feature = "encryption"))]
             {
-                let _ = envelope;
+                let _ = (&envelope, master_override);
                 crate::telemetry::warn("confers.encryption.feature_missing", &[("field", path)]);
                 // Leave the envelope in place: without the feature the caller
                 // opted out of encryption support entirely (T036).
             }
         }
-        _ => {}
+        _ => {
+            let _ = value;
+        }
     }
 }
 

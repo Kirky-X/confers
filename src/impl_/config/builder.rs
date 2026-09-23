@@ -47,6 +47,11 @@ pub struct ConfigBuilder<T> {
     /// derive-generated loader registers the struct's `sensitive_paths()`,
     /// snapshots written by this builder redact those paths' values.
     sensitive_paths: Vec<String>,
+    /// Whether the target type declares `#[config(encrypt)]` fields (set by
+    /// the derive macro); gates the decryption pass.
+    decrypt_fields: bool,
+    /// Explicitly injected master key (R2-M7), overriding the environment.
+    master_key_override: Option<Vec<u8>>,
     /// Accumulated default values.
     accumulated_defaults: HashMap<String, ConfigValue>,
     /// Accumulated memory values.
@@ -87,6 +92,8 @@ impl<T> ConfigBuilder<T> {
             #[cfg(feature = "snapshot")]
             snapshot_config: None,
             sensitive_paths: Vec::new(),
+            decrypt_fields: false,
+            master_key_override: None,
             accumulated_defaults: HashMap::new(),
             accumulated_memory: HashMap::new(),
             memory_priority: 50,
@@ -124,6 +131,26 @@ impl<T> ConfigBuilder<T> {
     /// Add an environment source.
     pub fn env(mut self) -> Self {
         self.chain_builder = self.chain_builder.env();
+        self
+    }
+
+    /// Declare that this configuration contains `#[config(encrypt)]` fields
+    /// (set automatically by the derive macro). The builder then runs the
+    /// field-decryption pass on the merged tree before deserialization.
+    pub fn encrypted_fields(mut self) -> Self {
+        self.decrypt_fields = true;
+        self
+    }
+
+    /// Inject the master key for field decryption directly (R2-M7), bypassing
+    /// the `CONFERS_MASTER_KEY` environment lookup. Must be 32 bytes
+    /// (XChaCha20-Poly1305); weak (constant-byte) keys are rejected.
+    #[cfg(feature = "encryption")]
+    pub fn master_key(mut self, key: impl Into<Vec<u8>>) -> Self {
+        let key = key.into();
+        if key.len() == 32 && !crate::secret::crypto::is_weak_key(&key) {
+            self.master_key_override = Some(key);
+        }
         self
     }
 
@@ -362,6 +389,14 @@ where
         for map in &self.json_maps {
             map(&mut json);
         }
+        // T035/R2-M7: decrypt `encrypt` fields after transforms, before
+        // deserialization — with the injected master key when provided.
+        if self.decrypt_fields {
+            crate::field_crypto::apply_field_decryption(
+                &mut json,
+                self.master_key_override.as_deref(),
+            );
+        }
         // T006: serde-path-to_error tracks the field path so type errors name
         // the offending key instead of an empty string.
         let config: T = match serde_path_to_error::deserialize(json) {
@@ -518,6 +553,14 @@ where
         let mut json = value_to_json(&merged);
         for map in &self.json_maps {
             map(&mut json);
+        }
+        // T035/R2-M7: decrypt `encrypt` fields after transforms, before
+        // deserialization — with the injected master key when provided.
+        if self.decrypt_fields {
+            crate::field_crypto::apply_field_decryption(
+                &mut json,
+                self.master_key_override.as_deref(),
+            );
         }
         let config: T = match serde_json::from_value(json) {
             Ok(c) => c,

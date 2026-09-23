@@ -303,26 +303,12 @@ fn generate_map_json_calls(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> 
     calls
 }
 
-/// Generate the `map_json` decryption pass for `encrypt` fields (T035).
-///
-/// `None` when no field carries an `encrypt` attribute. The transform runs
-/// last so it sees serde-normalized keys, and walks the WHOLE tree so
-/// nested/flatten-hoisted envelopes decrypt too (R2-H2).
-fn generate_decrypt_call(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> Option<TokenStream> {
-    // T035/R2-H2: 全树遍历解密 —— 嵌套与 flatten-hoisted 字段的 envelope
-    // 同样按其完整点路径解密(派生路径=加密时的字段路径),不再只覆盖本层
-    // 顶层字段。存在任一 encrypt 字段即注册该 pass。
-    let has_encrypt = fields
+/// Whether any non-skipped field declares `encrypt` (drives the
+/// builder-level decryption pass + the decrypt marker).
+fn has_encrypt_fields(fields: &[(&syn::Ident, &syn::Type, FieldAttrs)]) -> bool {
+    fields
         .iter()
-        .any(|(_, _, f)| f.encrypt.is_some() && !f.skip);
-    if !has_encrypt {
-        return None;
-    }
-    Some(quote! {
-        builder = builder.map_json(|json: &mut confers::json::Value| {
-            confers::decrypt_encrypted_tree(json);
-        });
-    })
+        .any(|(_, _, f)| f.encrypt.is_some() && !f.skip)
 }
 
 /// Shared body of every generated loader: defaults first (lowest priority),
@@ -339,13 +325,14 @@ fn loader_body(
     // rename_all runs before the other tree transforms so flatten/interpolate
     // observe serde-normalized keys.
     let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
-    let mut map_json_calls = generate_map_json_calls(fields);
-    // T035: encrypt fields get a decryption pass LAST (after rename/flatten/
-    // interpolate normalize keys), replacing envelopes with plaintext.
-    let decrypt_call = generate_decrypt_call(fields);
-    if let Some(call) = decrypt_call {
-        map_json_calls.push(call);
-    }
+    let map_json_calls = generate_map_json_calls(fields);
+    // T035/R2-M7: 加密标记(builder 在反序列化前集中解密);解密必须跑在
+    // 全部 tree transform 之后,故不能进 map_json_calls 的注册序。
+    let decrypt_mark = if has_encrypt_fields(fields) {
+        quote! { builder = builder.encrypted_fields(); }
+    } else {
+        quote! {}
+    };
     let mut_kw = if skip_assigns.is_empty() {
         quote! {}
     } else {
@@ -356,6 +343,7 @@ fn loader_body(
         let mut builder = confers::ConfigBuilder::<Self>::new();
         // T045: 快照脱敏所需的敏感路径(无敏感字段时为空)。
         builder = builder.sensitive_paths(Self::sensitive_paths());
+        #decrypt_mark
 
         // Add defaults first (lowest priority)
         #(#default_calls)*
@@ -446,16 +434,13 @@ fn generate_load_file_method(
     let env_calls = generate_env_calls(fields, attrs.effective_env_prefix());
     let skip_assigns = generate_skip_materialization(fields);
     let skip_assigns_in_env_loader = skip_assigns.clone();
-    let mut map_json_calls = generate_map_json_calls(fields);
-    let decrypt_call = generate_decrypt_call(fields);
-    if let Some(call) = decrypt_call.clone() {
-        map_json_calls.push(call);
-    }
-    let mut map_json_calls_in_env_loader = generate_map_json_calls(fields);
-    let decrypt_call_in_env_loader = decrypt_call.clone();
-    if let Some(call) = decrypt_call_in_env_loader.clone() {
-        map_json_calls_in_env_loader.push(call);
-    }
+    let decrypt_mark = if has_encrypt_fields(fields) {
+        Some(quote! { builder = builder.encrypted_fields(); })
+    } else {
+        None
+    };
+    let map_json_calls = generate_map_json_calls(fields);
+    let map_json_calls_in_env_loader = generate_map_json_calls(fields);
     let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
     let rename_call_in_env_loader = rename_call.clone();
     let mut_kw = if skip_assigns.is_empty() {
@@ -503,7 +488,7 @@ fn generate_load_file_method(
     let file_builder_mut = if default_calls.is_empty()
         && map_json_calls.is_empty()
         && rename_call.is_none()
-        && decrypt_call.is_none()
+        && decrypt_mark.is_none()
         && !attrs.profile
     {
         quote! {}
@@ -514,7 +499,7 @@ fn generate_load_file_method(
         && env_calls.is_empty()
         && map_json_calls_in_env_loader.is_empty()
         && rename_call_in_env_loader.is_none()
-        && decrypt_call_in_env_loader.is_none()
+        && decrypt_mark.is_none()
         && !attrs.profile
     {
         quote! {}
@@ -532,6 +517,7 @@ fn generate_load_file_method(
                 let #file_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref())
                     .sensitive_paths(Self::sensitive_paths());
+                #decrypt_mark
                 #overlay_apply
                 #(#default_calls)*
                 // Field-attribute transforms (rename_all first, then flatten/interpolate)
@@ -553,6 +539,7 @@ fn generate_load_file_method(
                 let #env_builder_mut builder = confers::ConfigBuilder::<Self>::new()
                     .file(path.as_ref())
                     .sensitive_paths(Self::sensitive_paths());
+                #decrypt_mark
                 #overlay_apply
                 #(#default_calls_in_env_loader)*
 
