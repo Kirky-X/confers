@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
-//! Unified encrypted-value envelope parsing/serialization (T038).
+//! Unified encrypted-value envelope parsing/serialization.
 //!
 //! Lives at the crate root (not behind the `security` feature) because the
 //! load pipeline must detect envelope-shaped values in every configuration.
 
 use base64::Engine as _;
 
-/// Unified encrypted-value envelope (T038).
+/// Unified encrypted-value envelope.
 ///
 /// Canonical serialization is `enc:v1:<key_version>:<payload>` where
 /// `payload` is `base64(nonce || ciphertext)`. The `key_version` field lets

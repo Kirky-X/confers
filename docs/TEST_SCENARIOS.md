@@ -1,8 +1,8 @@
 # 🧪 Confers 测试场景矩阵
 
-> 适用版本：confers **0.6.0-rc.3**（workspace，Rust 1.97.1 / edition 2024）
+> 适用版本：confers **0.6.0-rc.5**（workspace，Rust 1.97.1 / edition 2024）
 > 用途：7 仓库统一 E2E 验收工程的第一步：先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
-> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 61 个 `#[cfg(test)]` 模块、`examples/` 21 个示例、`docker-compose.test.yml`。
+> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 91 个 `#[cfg(test)]` 模块、`examples/` 21 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
 
 ## 📋 目录
@@ -58,13 +58,13 @@
 ## 阅读约定
 
 - **类型**：`正常`（合法输入下的预期行为）/ `异常`（错误输入、故障注入，须给出明确错误）/ `边界`（极限值、并发、竞态、组合临界）。
-- **既有覆盖**：`文件::测试名` 表示已有测试（含 `src/**` 内联测试模块）；标注 `⚠死文件` 表示文件存在但**未在对应 `mod.rs` 注册、实际不执行**（见下文重要发现）；`无→需新增` 表示无既有覆盖。
+- **既有覆盖**：`文件::测试名` 表示已有测试（含 `src/**` 内联测试模块）；`无→需新增` 表示无既有覆盖。（历史说明：编写时曾用 `⚠死文件` 标注未注册、不执行的测试文件，该标注已全部清除，见下文重要发现-1。）
 - **E2E 落点**：计划写入 `tests/e2e/` 的目标文件（后续落地阶段创建）。
 - 依赖服务取值：`无` / `本地文件` / `NATS(4222)` / `Redis(16379)` / `etcd(2379)` / `Consul(8500)`（端口见 §4）。
 
 ### 重要发现（编写时盘点得出）
 
-1. **`tests/core/error.rs`（42 个测试）与 `tests/core/encryption.rs`（32 个测试）是死文件**：`tests/core/mod.rs` 只注册了 `context/coverage/derive/dynamic/env_types/load/merge/migration/modules/nested_deserialize/progressive/toggle` 12 个子模块，`error` 与 `encryption` 未注册，**当前 cargo test 不执行它们**。其中 encryption 与 `tests/security/encryption.rs`（已注册）内容重复；error 测试则**仅存在于死文件中**。落地 E2E 前应先把 error 测试迁移注册（或在 e2e 重写），引用处均标注 `⚠死文件`。
+1. **【已完成】死文件问题已解决**：`tests/core/error.rs`（42 个测试）现已在 `tests/core/mod.rs` 注册（`mod error;`），随 `cargo test --test core` 正常执行；与 `tests/security/encryption.rs` 内容重复的 `tests/core/encryption.rs` 已删除。`tests/core/mod.rs` 现注册 13 个测试子模块（context/coverage/derive/dynamic/env_types/error/load/merge/migration/modules/nested_deserialize/progressive/toggle）+ common。本文档正文中对 `tests/core/error.rs` 的引用均按已注册状态理解。
 2. `tests/remote/remote.rs` 内含与 `tests/remote/etcd.rs`、`tests/remote/consul.rs` 重复的 source 测试（两处均编译执行）。
 3. `Cargo.toml` 声明 `autotests = false`，新增 E2E 集成测试必须**显式添加 `[[test]]` 段**并按需声明 `required-features`。
 4. 空文件 `tests/core/load.rs::test_load_empty_file` 等已确认：空文件解析为空 Map 而非错误。
@@ -120,12 +120,12 @@
 | FMT-04 | 合法 INI 文件解析为扁平键值（ini 无嵌套语义，验证 [section] 前缀化） | 正常 | ini | 本地文件 | src 内联 `src/impl_/loader.rs` tests | tests/e2e/format_e2e.rs |
 | FMT-05 | `detect_format_from_path`：.toml/.json/.yaml/.yml/.ini 各扩展名返回对应 Format | 正常 | toml,json,yaml,ini | 无 | `tests/core/coverage.rs::test_detect_from_path_cases` | tests/e2e/format_e2e.rs |
 | FMT-06 | `detect_format_from_content`：无扩展名文件按内容（`{`/`key =`/`key:`）嗅探 | 边界 | toml,json,yaml | 无 | `tests/core/coverage.rs::test_detect_from_content_formats` | tests/e2e/format_e2e.rs |
-| FMT-07 | TOML 语法错误（如 `key =`）→ `ConfigError`，`ConfigErrorCode=2300(CONFIG_PARSE_ERROR)`，携带行列 `ParseLocation` | 异常 | toml | 本地文件 | `tests/core/load.rs::test_load_invalid_toml`；`⚠死文件 tests/core/error.rs::test_invalid_toml_format_error/test_parse_error_location` | tests/e2e/format_e2e.rs |
-| FMT-08 | JSON 语法错误（截断 JSON）→ 解析错误含位置 | 异常 | json | 本地文件 | `tests/core/load.rs::test_load_invalid_json`；`⚠死文件 tests/core/error.rs::test_invalid_json_format_error` | tests/e2e/format_e2e.rs |
-| FMT-09 | YAML 语法错误（tab 缩进等）→ 解析错误 | 异常 | yaml | 本地文件 | `⚠死文件 tests/core/error.rs::test_invalid_yaml_format_error` | tests/e2e/format_e2e.rs |
+| FMT-07 | TOML 语法错误（如 `key =`）→ `ConfigError`，`ConfigErrorCode=2300(CONFIG_PARSE_ERROR)`，携带行列 `ParseLocation` | 异常 | toml | 本地文件 | `tests/core/load.rs::test_load_invalid_toml`；`tests/core/error.rs::test_invalid_toml_format_error/test_parse_error_location` | tests/e2e/format_e2e.rs |
+| FMT-08 | JSON 语法错误（截断 JSON）→ 解析错误含位置 | 异常 | json | 本地文件 | `tests/core/load.rs::test_load_invalid_json`；`tests/core/error.rs::test_invalid_json_format_error` | tests/e2e/format_e2e.rs |
+| FMT-09 | YAML 语法错误（tab 缩进等）→ 解析错误 | 异常 | yaml | 本地文件 | `tests/core/error.rs::test_invalid_yaml_format_error` | tests/e2e/format_e2e.rs |
 | FMT-10 | 空文件（0 字节）→ 成功返回空 Map，不报错 | 边界 | toml | 本地文件 | `tests/core/load.rs::test_load_empty_file` | tests/e2e/format_e2e.rs |
-| FMT-11 | 文件超过 `LoaderConfig::max_size` → 大小超限错误（2400 族），不读入内存 | 异常 | toml | 本地文件 | `⚠死文件 tests/core/error.rs::test_size_limit_exceeded_error`（单测层面）；无 loader 级集成→需新增 | tests/e2e/format_e2e.rs |
-| FMT-12 | `load_file` 不存在的路径 → `ConfigFileNotFound(2200)`，错误含 source 信息 | 异常 | default | 本地文件 | `tests/core/load.rs::test_load_file_not_found`；`⚠死文件 tests/core/error.rs::test_file_not_found_with_source` | tests/e2e/format_e2e.rs |
+| FMT-11 | 文件超过 `LoaderConfig::max_size` → 大小超限错误（2400 族），不读入内存 | 异常 | toml | 本地文件 | `tests/core/error.rs::test_size_limit_exceeded_error`（单测层面）；无 loader 级集成→需新增 | tests/e2e/format_e2e.rs |
+| FMT-12 | `load_file` 不存在的路径 → `ConfigFileNotFound(2200)`，错误含 source 信息 | 异常 | default | 本地文件 | `tests/core/load.rs::test_load_file_not_found`；`tests/core/error.rs::test_file_not_found_with_source` | tests/e2e/format_e2e.rs |
 | FMT-13 | 路径穿越：`config/../../etc/passwd.toml` 被 `normalize_and_validate_path` 拒绝 | 异常 | default | 本地文件 | src 内联 `src/impl_/loader.rs`（`check_path_traversal_attempt` tests） | tests/e2e/format_e2e.rs |
 | FMT-14 | 符号链接指向 allowed_dir 之外 → 默认拒绝；`no_symlink_check()` 放行 | 异常 | default | 本地文件 | src 内联 `src/impl_/loader.rs` | tests/e2e/format_e2e.rs |
 | FMT-15 | 绝对路径默认拒绝；`allow_absolute()` / `ConfigBuilder::allow_absolute_paths()` 放行 | 异常 | default | 本地文件 | `tests/cli/commands.rs::test_diff_command`（绝对路径 bail 分支）；src 内联 loader tests | tests/e2e/format_e2e.rs |
@@ -154,14 +154,14 @@
 | BLD-11 | 完整优先级链 default < file < env < memory：同一键四处定义，最终取 memory | 正常 | env | 无 | `tests/core/merge.rs::test_precedence_default_file_env_memory` | tests/e2e/builder_e2e.rs |
 | BLD-12 | 全局 `MergeStrategy` 五种：Replace/Join/Append/Prepend/JoinAppend 各验证合并结果（Map 之间无条件深合并，已无 DeepMerge 变体） | 正常 | default | 无 | `tests/core/merge.rs::test_merge_replace_strategy` 等 5 例 | tests/e2e/builder_e2e.rs |
 | BLD-13 | `.field_strategy("tags", Append)` 字段级策略覆盖全局策略 | 边界 | default | 无 | `tests/core/merge.rs::test_field_specific_strategy` | tests/e2e/builder_e2e.rs |
-| BLD-14 | `ConfigLimits::max_file_size_bytes` 超限 → `ConfigSizeLimitExceeded(2400)` | 异常 | default | 本地文件 | `⚠死文件 tests/core/error.rs::test_size_limit_exceeded_error`；集成级→需新增 | tests/e2e/builder_e2e.rs |
+| BLD-14 | `ConfigLimits::max_file_size_bytes` 超限 → `ConfigSizeLimitExceeded(2400)` | 异常 | default | 本地文件 | `tests/core/error.rs::test_size_limit_exceeded_error`；集成级→需新增 | tests/e2e/builder_e2e.rs |
 | BLD-15 | 嵌套深度超 `max_nesting_depth` → 明确错误 | 异常 | default | 本地文件 | src 内联 limits tests（`src/impl_/config/limits.rs`）→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-16 | 键总数超 `max_total_fields` → 超限错误 | 异常 | default | 本地文件 | src 内联 limits tests→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-17 | 数组长度超 `max_array_length` → 超限错误 | 异常 | default | 本地文件 | src 内联 limits tests→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-18 | 字符串超 `max_string_length` → 超限错误 | 异常 | default | 本地文件 | src 内联 limits tests→需集成新增 | tests/e2e/builder_e2e.rs |
-| BLD-19 | 必填字段缺失（无 default 的非 Option 字段）→ `MissingField(2001)` | 异常 | default | 本地文件 | `⚠死文件 tests/core/error.rs::test_missing_required_field_error/test_missing_nested_required_field` | tests/e2e/builder_e2e.rs |
-| BLD-20 | 类型不匹配（port="abc" 对 u16）→ 类型错误而非 panic；int↔string 互转边界各自报错 | 异常 | default | 本地文件 | `⚠死文件 tests/core/error.rs::test_type_mismatch_error/test_integer_to_string_mismatch/test_string_to_integer_mismatch/test_object_to_primitive_mismatch` | tests/e2e/builder_e2e.rs |
-| BLD-21 | `build_resilient()` + `fail_fast(false)`：单源损坏不中断，`BuildResult::Degraded` 携带 `SourceWarning` | 边界 | default | 本地文件 | `⚠死文件 tests/core/error.rs::test_build_result_degraded/test_build_result_with_warnings/test_multi_source_error_partial_config` | tests/e2e/builder_e2e.rs |
+| BLD-19 | 必填字段缺失（无 default 的非 Option 字段）→ `MissingField(2001)` | 异常 | default | 本地文件 | `tests/core/error.rs::test_missing_required_field_error/test_missing_nested_required_field` | tests/e2e/builder_e2e.rs |
+| BLD-20 | 类型不匹配（port="abc" 对 u16）→ 类型错误而非 panic；int↔string 互转边界各自报错 | 异常 | default | 本地文件 | `tests/core/error.rs::test_type_mismatch_error/test_integer_to_string_mismatch/test_string_to_integer_mismatch/test_object_to_primitive_mismatch` | tests/e2e/builder_e2e.rs |
+| BLD-21 | `build_resilient()` + `fail_fast(false)`：单源损坏不中断，`BuildResult::Degraded` 携带 `SourceWarning` | 边界 | default | 本地文件 | `tests/core/error.rs::test_build_result_degraded/test_build_result_with_warnings/test_multi_source_error_partial_config` | tests/e2e/builder_e2e.rs |
 | BLD-22 | `build_with_fallback(fallback)`：所有源失败时回退默认实例并标记 warning | 异常 | default | 本地文件 | src 内联 builder tests（`src/impl_/config/builder.rs`）→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-23 | `.file_optional(不存在路径)` → 跳过该源，构建成功 | 边界 | default | 本地文件 | `tests/core/coverage.rs::test_file_source_optional_flag` | tests/e2e/builder_e2e.rs |
 | BLD-24 | `.file(不存在路径)`（非 optional）→ `ConfigFileNotFound(2200)` | 异常 | default | 本地文件 | `tests/core/load.rs::test_load_file_not_found` | tests/e2e/builder_e2e.rs |
@@ -175,11 +175,11 @@
 | ID | 场景描述 | 类型 | 涉及 feature | 依赖服务 | 既有覆盖 | E2E 落点 |
 |----|---------|------|-------------|---------|---------|---------|
 | VAL-01 | `#[derive(Config)] #[config(validate = true)]` 合法配置通过校验并成功 build | 正常 | validation | 本地文件 | `tests/core/coverage.rs::test_validate_trait_is_accessible`；端到端→需新增 | tests/e2e/validation_e2e.rs |
-| VAL-02 | 非法值（如 email 格式错 / range 越界）→ `ConfigValidationFailed(2500)`，错误含字段路径 | 异常 | validation | 本地文件 | `tests/core/error.rs`⚠死文件`::test_config_validation_failure`（已注册版在 src 内联 validator tests） | tests/e2e/validation_e2e.rs |
+| VAL-02 | 非法值（如 email 格式错 / range 越界）→ `ConfigValidationFailed(2500)`，错误含字段路径 | 异常 | validation | 本地文件 | `tests/core/error.rs::test_config_validation_failure`（另在 src 内联 validator tests 有已注册版） | tests/e2e/validation_e2e.rs |
 | VAL-03 | `ValidationRule::from_str("length(1..)")/"range(0..100)"` 解析为规则 | 正常 | validation | 无 | `tests/core/coverage.rs::test_validation_rule_from_str_length/range/simple` | tests/e2e/validation_e2e.rs |
 | VAL-04 | 非法规则字符串 → 解析错误（而非静默忽略） | 异常 | validation | 无 | `tests/core/coverage.rs::test_validation_rule_from_str_invalid` | tests/e2e/validation_e2e.rs |
 | VAL-05 | 自定义 validator 注册进链路并被调用 | 正常 | validation | 无 | src 内联 `src/impl_/validator.rs` tests | tests/e2e/validation_e2e.rs |
-| VAL-06 | garde 报告 → `ConfigError` 转换保留字段信息；`user_message` 输出可读文案 | 异常 | validation | 无 | `⚠死文件 tests/core/error.rs::test_validation_error_from_garde_report/test_validation_error_user_message` | tests/e2e/validation_e2e.rs |
+| VAL-06 | garde 报告 → `ConfigError` 转换保留字段信息；`user_message` 输出可读文案 | 异常 | validation | 无 | `tests/core/error.rs::test_validation_error_from_garde_report/test_validation_error_user_message` | tests/e2e/validation_e2e.rs |
 | VAL-07 | 多字段同时违规 → 错误聚合为一条含全部字段的结果 | 边界 | validation | 无 | src 内联 validator tests→需集成新增 | tests/e2e/validation_e2e.rs |
 | VAL-08 | ValidationRule 相等性/Clone/Debug（规则作为配置的一部分可比较） | 边界 | validation | 无 | `tests/core/coverage.rs::test_validation_rule_equality/test_validation_rule_clone_and_debug/test_validation_result_type_alias` | tests/e2e/validation_e2e.rs |
 
@@ -189,10 +189,10 @@
 |----|---------|------|-------------|---------|---------|---------|
 | IPL-01 | `${VAR}` 由 resolver 解析替换（`interpolate("Server: ${HOST}")` → `Server: localhost`） | 正常 | interpolation | 无 | src 内联 `src/impl_/interpolation.rs::`（line 649 断言） | tests/e2e/interpolation_e2e.rs |
 | IPL-02 | `${VAR:8080}` 默认值语法：VAR 缺失时取默认 | 正常 | interpolation | 无 | src 内联 interpolation tests（doc 与 tests 覆盖） | tests/e2e/interpolation_e2e.rs |
-| IPL-03 | 未定义变量且无默认 → `InterpolationConfigError(2800)`/undefined variable 错误 | 异常 | interpolation | 无 | `⚠死文件 tests/core/error.rs::test_undefined_variable_error` | tests/e2e/interpolation_e2e.rs |
-| IPL-04 | 循环引用 A→B→A → `ConfigCircularReference(2900)` | 异常 | interpolation | 无 | `⚠死文件 tests/core/error.rs::test_circular_reference_detection` | tests/e2e/interpolation_e2e.rs |
-| IPL-05 | 自引用 `${A}` 定义于 A 自身 → 报循环 | 异常 | interpolation | 无 | `⚠死文件 tests/core/error.rs::test_self_reference_error` | tests/e2e/interpolation_e2e.rs |
-| IPL-06 | 嵌套循环链（3+ 节点）检测并报路径 | 异常 | interpolation | 无 | `⚠死文件 tests/core/error.rs::test_nested_circular_reference` | tests/e2e/interpolation_e2e.rs |
+| IPL-03 | 未定义变量且无默认 → `InterpolationConfigError(2800)`/undefined variable 错误 | 异常 | interpolation | 无 | `tests/core/error.rs::test_undefined_variable_error` | tests/e2e/interpolation_e2e.rs |
+| IPL-04 | 循环引用 A→B→A → `ConfigCircularReference(2900)` | 异常 | interpolation | 无 | `tests/core/error.rs::test_circular_reference_detection` | tests/e2e/interpolation_e2e.rs |
+| IPL-05 | 自引用 `${A}` 定义于 A 自身 → 报循环 | 异常 | interpolation | 无 | `tests/core/error.rs::test_self_reference_error` | tests/e2e/interpolation_e2e.rs |
+| IPL-06 | 嵌套循环链（3+ 节点）检测并报路径 | 异常 | interpolation | 无 | `tests/core/error.rs::test_nested_circular_reference` | tests/e2e/interpolation_e2e.rs |
 | IPL-07 | 敏感变量标记：`interpolate_tracked("${API_KEY}", …, true)` → `InterpolationResult::has_sensitive_refs/referenced("API_KEY")`；`InterpolationContext.record` 后 `is_sensitive_ref` 生效 | 正常 | interpolation | 无 | src 内联 interpolation tests（sensitive 断言组） | tests/e2e/interpolation_e2e.rs |
 | IPL-08 | 截断模板 `"${VAR"`（未闭合）→ 明确解析错误不 panic | 异常 | interpolation | 无 | src 内联 interpolation tests（line ~798 断言 Err） | tests/e2e/interpolation_e2e.rs |
 | IPL-09 | `examples/interpolation` 全链路：文件+env 混合模板插值输出（示例可跑通） | 边界 | interpolation,env | 本地文件 | examples/interpolation（运行验收） | tests/e2e/combo_e2e.rs（引用示例） |
@@ -237,7 +237,7 @@
 | KEY-06 | `KeyRotationSchedule::is_rotation_due/days_until_rotation/update_after_rotation`（到期/未到期两分支） | 正常/边界 | key | 无 | src 内联 key tests | tests/e2e/key_e2e.rs |
 | KEY-07 | `KeyManager::initialize/generate_key` 初始化与随机生成 | 正常 | key | 无 | src 内联 `src/key/manager.rs` tests | tests/e2e/key_e2e.rs |
 | KEY-08 | `create_key_ring/rotate_key` 全流程；`get_rotation_status` 反映状态 | 正常 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
-| KEY-09 | `get_key_info(不存在 key_id)` → 错误（`KeyRotationFailed` 族，见 875 行死文件测试名 `⚠死文件 tests/core/error.rs::test_key_rotation_failed_error`） | 异常 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
+| KEY-09 | `get_key_info(不存在 key_id)` → 错误（`KeyRotationFailed` 族，见 `tests/core/error.rs::test_key_rotation_failed_error`） | 异常 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
 | KEY-10 | `plan_rotation/cleanup_old_keys(keep_n)`：清理后保留版本数正确、默认键不被清理 | 边界 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
 | KEY-11 | `deprecate_version` 弃用版本后 get_key_by_version 仍可取但标记弃用 | 边界 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
 | KEY-12 | `set_default_key_id(非法 id)` → 错误 | 异常 | key | 无 | src 内联 manager tests | tests/e2e/key_e2e.rs |
@@ -252,7 +252,7 @@
 | SEC-03 | env 名/值超过 `EnvironmentValidationConfig` 上限 → 拒绝 | 异常 | security | 无 | src 内联 input_validation tests（长度分支） | tests/e2e/security_rules_e2e.rs |
 | SEC-04 | `strict()` vs `lenient()` 同一输入结论不同（如加密值/特殊模式放行差异） | 边界 | security | 无 | src 内联 input_validation tests | tests/e2e/security_rules_e2e.rs |
 | SEC-05 | `sanitize_for_logging`：敏感值输出为掩码 | 正常 | security | 无 | src 内联 input_validation tests | tests/e2e/security_rules_e2e.rs |
-| SEC-06 | 错误信息脱敏：`ConfersError` 展示链不含密钥/密码片段 | 正常 | security | 无 | `tests/security/security.rs::test_error_sanitization`；`⚠死文件 tests/core/error.rs::test_error_sanitized_chain/test_error_user_message_formatting` | tests/e2e/security_rules_e2e.rs |
+| SEC-06 | 错误信息脱敏：`ConfersError` 展示链不含密钥/密码片段 | 正常 | security | 无 | `tests/security/security.rs::test_error_sanitization`；`tests/core/error.rs::test_error_sanitized_chain/test_error_user_message_formatting` | tests/e2e/security_rules_e2e.rs |
 | SEC-07 | `SecurityValidatorRegistry` 默认规则集验证一份完整 server 配置 | 正常 | security-rules | 无 | `tests/security/security.rs::test_registry_with_defaults_validates_all` | tests/e2e/security_rules_e2e.rs |
 | SEC-08 | 一份坏配置（弱 JWT 密钥+错误 CORS+私网 SSRF）一次检出多个 `SecurityViolation` | 异常 | security-rules | 无 | `tests/security/security.rs::test_registry_detects_multiple_violations` | tests/e2e/security_rules_e2e.rs |
 | SEC-09 | 干净配置全部通过，`SecurityReport` 无 violation | 正常 | security-rules | 无 | `tests/security/security.rs::test_registry_clean_config_passes` | tests/e2e/security_rules_e2e.rs |
@@ -361,7 +361,7 @@
 | MIG-03 | 直接迁移 v1→v2 数据转换正确 | 正常 | migration | 无 | `tests/core/migration.rs::test_migrate_direct` | tests/e2e/migration_e2e.rs |
 | MIG-04 | 链式迁移 v1→v3（经 v2）按序执行 | 正常 | migration | 无 | `tests/core/migration.rs::test_migrate_chain/test_precompute_paths_chain` | tests/e2e/migration_e2e.rs |
 | MIG-05 | 同版本迁移 → no-op 直接返回 | 边界 | migration | 无 | `tests/core/migration.rs::test_migrate_same_version` | tests/e2e/migration_e2e.rs |
-| MIG-06 | 无迁移路径（v1→v9 未注册）→ `MigrationError`（2600 版本不匹配族） | 异常 | migration | 无 | `tests/core/migration.rs::test_migrate_no_path`；`⚠死文件 tests/core/error.rs::test_migration_error` | tests/e2e/migration_e2e.rs |
+| MIG-06 | 无迁移路径（v1→v9 未注册）→ `MigrationError`（2600 版本不匹配族） | 异常 | migration | 无 | `tests/core/migration.rs::test_migrate_no_path`；`tests/core/error.rs::test_migration_error` | tests/e2e/migration_e2e.rs |
 | MIG-07 | 迁移 fn 内部出错 → 错误向调用方传播，不产出半成品配置 | 异常 | migration | 无 | `tests/core/migration.rs::test_migrate_failure` | tests/e2e/migration_e2e.rs |
 | MIG-08 | `precompute_paths` 复杂图（多分支）选路正确；direct 路径优先于链 | 边界 | migration | 无 | `tests/core/migration.rs::test_precompute_paths_direct/complex_graph/direct_preferred_over_chain/no_path` | tests/e2e/migration_e2e.rs |
 | MIG-09 | `MigrationOnReload` 三态（Skip/Always/IfChanged）语义与默认值 | 边界 | migration | 无 | `tests/core/migration.rs::test_migration_on_reload_variants/default/clone/debug` | tests/e2e/migration_e2e.rs |
@@ -392,7 +392,7 @@
 | MOD-02 | default profile 推断：有 default 时用它，无 default 时取第一个 | 边界 | modules | 本地文件 | `tests/core/modules.rs::test_module_config_default_profile_with_default/without_default` | tests/e2e/modules_e2e.rs |
 | MOD-03 | `set_active_profile`：合法切换成功；非法 profile/group → 错误 | 异常 | modules | 本地文件 | `tests/core/modules.rs::test_set_active_profile/nonexistent_profile/nonexistent_group` | tests/e2e/modules_e2e.rs |
 | MOD-04 | `load_module` 加载 toml/json profile 文件成功 | 正常 | modules | 本地文件 | `tests/core/modules.rs::test_load_module_success_toml/test_load_module_success_json` | tests/e2e/modules_e2e.rs |
-| MOD-05 | `load_module(group 不存在)` → `ModuleNotFound` 错误 | 异常 | modules | 本地文件 | `tests/core/modules.rs::test_load_module_not_found_group`；`⚠死文件 tests/core/error.rs::test_module_not_found_error` | tests/e2e/modules_e2e.rs |
+| MOD-05 | `load_module(group 不存在)` → `ModuleNotFound` 错误 | 异常 | modules | 本地文件 | `tests/core/modules.rs::test_load_module_not_found_group`；`tests/core/error.rs::test_module_not_found_error` | tests/e2e/modules_e2e.rs |
 | MOD-06 | `load_module(profile 不存在)` → 错误 | 异常 | modules | 本地文件 | `tests/core/modules.rs::test_load_module_not_found_profile` | tests/e2e/modules_e2e.rs |
 | MOD-07 | `load_module(文件不存在)` → 文件错误而非 panic | 异常 | modules | 本地文件 | `tests/core/modules.rs::test_load_module_file_not_found` | tests/e2e/modules_e2e.rs |
 | MOD-08 | `load_active`：按当前激活 profile 加载；无激活 → 错误 | 正常/异常 | modules | 本地文件 | `tests/core/modules.rs::test_load_active_success/test_load_active_not_found` | tests/e2e/modules_e2e.rs |
@@ -697,17 +697,17 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 61 个 `#[cfg(test)]` 模块（~1868 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
-| L2 集成 | `tests/{core,security,remote,watcher,cli}`（需先修复 §重要发现-1 的死文件问题：把 `error` 注册回 `tests/core/mod.rs` 或迁移内容） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
+| L1 单元 | src 内 91 个 `#[cfg(test)]` 模块（~2268 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 21 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
-| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 新增 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
+| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 26 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
 | 宏测试 | `macros/tests`（trybuild 编译失败用例与属性校验） | `cargo test -p confers-macros` | 允许 |
 | 模糊测试 | `fuzz/`（cargo-fuzz 目标：`parser`、`merger`、`interpolation`） | `cargo fuzz run parser`（在 `fuzz/` 目录下） | 禁 mock |
 | 基准测试 | `benches/`（9 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev --benches` | — |
 | 文档测试 | 公开 API rustdoc 示例 | 随 `cargo test --workspace` 执行 | — |
 
 前置修复项（落地 E2E 前完成）：
-1. `tests/core/mod.rs` 注册 `mod error;`（42 个测试复活）或将其迁移至 e2e；删除与 `tests/security/encryption.rs` 重复的 `tests/core/encryption.rs`（或二选一保留）。
+1. ✅ 已完成：`tests/core/mod.rs` 已注册 `mod error;`（42 个测试复活）；重复的 `tests/core/encryption.rs` 已删除。
 2. `Cargo.toml` 增补 `[[test]]` 段：每个 `tests/e2e/*.rs` 一条，按需 `required-features`。
 
 ### 5.2 examples 运行清单（21 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）
@@ -766,10 +766,12 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | combo_e2e.rs | CMP-01…17、TGL-06、CTX-09、IPL-09 | CMP-07/08/16 需 Consul/etcd/NATS |
 | concurrency_e2e.rs | CCY-01…08 | 否 |
 | presets_e2e.rs | PRS-01…08、SCH-03 | 否 |
+| default_attrs_e2e.rs | 矩阵外回归：`#[config(default)]` 裸字形式与 `default = None` 边界写法 | 否 |
+| probe_sensitive.rs | 矩阵外回归：敏感字段 `<VAR>_FILE` 引用（有效路径读取、缺失路径硬错误、无 `_FILE` 回退普通变量，t012 系列） | 否 |
 
 ### 5.4 建议执行顺序
 
-1. 修复死文件（5.3 前置修复项）→ 2. L1+L2 全绿（无 docker 先跑非 remote 组）→ 3. compose 起 4 服务跑 L2 remote + L3 21 示例 → 4. 按 e2e 文件逐个落地场景（优先 CMP/CCY/异常类，因既有覆盖最薄）→ 5. PRS 编译门禁进 CI（每个 PR 与 nightly 各跑一轮）。
+1. ✅ 死文件修复已完成（§5.3 前置修复项 1）→ 2. L1+L2 全绿（无 docker 先跑非 remote 组）→ 3. compose 起 4 服务跑 L2 remote + L3 21 示例 → 4. 按 e2e 文件逐个落地场景（优先 CMP/CCY/异常类，因既有覆盖最薄）→ 5. PRS 编译门禁进 CI（每个 PR 与 nightly 各跑一轮）。
 
 ---
 
@@ -789,7 +791,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 需新增断言/集成的场景（已有单测或示例，但缺集成/行为级断言，"…→需新增"） | 36 |
 | 引用 `tests/` 既有集成测试的场景（与其他口径有重叠） | 222 |
 | 引用 src 内联测试的场景（与其他口径有重叠） | 91 |
-| 引用 `⚠死文件` 测试的场景（落地前须迁移注册，见 §重要发现-1） | 18 |
+| 引用 `⚠死文件` 测试的场景（原 18 处；§重要发现-1 已解决，标注全部清除） | 0 |
 | 引用 examples 验收的场景 | 9 |
 | 依赖 docker 服务的场景（NATS/Redis/etcd/Consul 任一） | 30 |
 | 仅依赖本地文件的场景 | 139 |
@@ -799,13 +801,13 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 代码内测试规模
 
-（按 `#[test]` / `#[tokio::test]` 函数 grep 统计，截至 v0.6.0-rc.3 工作区）
+（按 `#[test]` / `#[tokio::test]` 函数 grep 统计，截至 v0.6.0-rc.5 工作区）
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块） | 2141 |
-| 集成与 E2E（`tests/`，53 个文件） | 600 |
-| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 24 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，91 个） | 2268 |
+| 集成与 E2E（`tests/`，55 个文件） | 615 |
+| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 26 |
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 9 |
 

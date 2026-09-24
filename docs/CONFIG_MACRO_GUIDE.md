@@ -64,48 +64,34 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(app_name = "myapp")]  // 配置目录名
+#[config(app_name = "myapp")]  // 应用标识符
 pub struct ConfersConfig {
     pub name: String,
 }
 ```
 
 **效果**：
-- 指定搜索配置文件时使用的目录名
-- 会在 `~/.config/myapp/`、`/etc/myapp/` 等路径中搜索
+- 可选的应用标识符，宏展开期仅做长度与非空校验
+- 在生成的 CLI 辅助代码中作为应用显示名
+- **不参与**任何配置文件目录搜索；`confers` 没有自动搜索 `~/.config/`、`/etc/` 等目录的逻辑，配置文件须通过 `ConfigBuilder::file()` 显式指定路径
 
 ---
 
-### 严格模式
+### 严格模式与文件监听（保留属性）
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(strict = true)]  // CLI 参数解析出错时直接报错退出
-pub struct ConfersConfig {
-    pub name: String,
-}
-```
-
-**效果**：
-- CLI 参数解析失败时返回错误
-- 非严格模式会忽略错误
-
----
-
-### 文件监听（热重载）
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(watch = true)]  // 启用文件监听
+#[config(strict = true, watch = true)]
 pub struct ConfersConfig {
     #[config(default = 8080)]
     pub port: u16,
 }
 ```
 
-**效果**：
-- 需要启用 `watch` 特性
-- 配合 `FsWatcher` / `MultiFsWatcher` 实现真正的热重载（`build_with_watcher()` 已弃用，它不会随文件变更重载）
+**现状**：
+- `strict` 与 `watch` 是结构体级属性，宏会解析它们，但当前生成的代码不读取这两个开关——它们**暂无实际效果**
+- CLI 参数解析的容错行为不受 `strict` 控制；热重载不受结构体级 `watch` 控制
+- 热重载请直接使用 `FsWatcher` / `MultiFsWatcher`（需 `watch` 特性；`build_with_watcher()` 已弃用，它不会随文件变更重载），完整监听循环见 [完整使用示例 · 热重载](#热重载)
 
 ---
 
@@ -153,7 +139,7 @@ pub struct ConfersConfig {
 
 **效果**：
 - 依据 `profile_env` 指定的环境变量激活对应的 profile overlay
-- 需要与 `modules` 特性的配置分组配合使用
+- 独立生效，与 `modules` 特性无关：当 `APP_ENV` 非空时，在基础文件同目录查找 `config.production.toml`（`<stem>.<env>.<ext>`）叠加加载，叠加文件缺失时静默跳过
 
 ---
 
@@ -270,13 +256,17 @@ Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(..
 ### 敏感字段
 
 ```rust
+use confers::secret::SecretString;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct ConfersConfig {
+    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性），
+    // 否则宏展开期报错
     #[config(sensitive = true)]
-    pub password: String,
+    pub password: SecretString,
 
     #[config(sensitive = true)]
-    pub api_key: String,
+    pub api_key: SecretString,
 }
 ```
 
@@ -442,6 +432,7 @@ pub struct ConfersConfig {
 
 ```rust
 use confers::Config;
+use confers::secret::SecretString;
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
@@ -450,8 +441,6 @@ use serde::{Deserialize, Serialize};
     validate,                                    // 启用校验
     env_prefix = "APP_",                         // 环境变量前缀
     app_name = "myapp",                         // 应用名称
-    strict = false,                              // 非严格模式
-    watch = false,                               // 不监听文件变更
     version = 1,                                 // 配置版本
 )]
 pub struct ConfersConfig {
@@ -486,12 +475,12 @@ pub struct ConfersConfig {
     #[config(description = "Website URL")]
     pub website: String,
 
-    // ============ 敏感字段 ============
+    // ============ 敏感字段（必须为 SecretString / SecretBytes，需 encryption 特性） ============
     #[config(sensitive = true, description = "Database password")]
-    pub db_password: String,
+    pub db_password: SecretString,
 
     #[config(sensitive = true, description = "API key")]
-    pub api_key: String,
+    pub api_key: SecretString,
 
     // ============ 加密字段 ============
     #[config(encrypt = "xchacha20", description = "Secret token")]
@@ -566,7 +555,10 @@ let config = confers::config::<ConfersConfig>()
 let schema = ConfersConfig::json_schema();
 
 // 生成 TypeScript 类型（需要 typescript-schema 特性）
-let ts_type = ConfersConfig::typescript_type();
+// 派生宏自带的 typescript_type() 目前是占位桩（只返回接口名，不含字段），
+// 真实的 TS 生成请使用 TypeScriptGenerator：
+use confers::schema::TypeScriptGenerator;
+let ts_type = TypeScriptGenerator::generate::<ConfersConfig>()?;
 ```
 
 ### 其他方法
@@ -640,12 +632,14 @@ cargo run
 
 ```rust
 use confers::Config;
+use confers::secret::SecretString;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct SecureConfig {
+    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性）
     #[config(sensitive = true)]
-    pub password: String,
+    pub password: SecretString,
 
     #[config(encrypt = "xchacha20")]
     pub api_secret: String,
@@ -698,9 +692,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 |------|------|
 | `validate` | 启用配置校验（需要派生 garde::Validate） |
 | `env_prefix` | 环境变量前缀 |
-| `app_name` | 应用名称（配置目录） |
-| `strict` | CLI 解析严格模式 |
-| `watch` | 启用文件监听 |
+| `app_name` | 应用名称（校验 + CLI 显示名，不参与目录搜索） |
+| `strict` | ⚠️ 当前无实际效果（被解析但 codegen 不读取） |
+| `watch` | ⚠️ 结构体级写法当前无实际效果；字段级 `watch` 生成 field watcher 正常生效 |
 | `version` | 用于迁移的配置版本号 |
 | `rename_all` | 批量重命名配置键（`camelCase` / `snake_case` / `kebab-case`） |
 | `profile` | 启用 profile 覆盖 |
@@ -716,7 +710,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `name_env` | 覆盖环境变量名 |
 | `name_clap_long` | CLI 长参数名 |
 | `name_clap_short` | CLI 短参数字符 |
-| `sensitive` | 标记为敏感字段（日志中隐藏） |
+| `sensitive` | 标记为敏感字段（日志中隐藏）；字段类型必须为 `SecretString` / `SecretBytes`（需 `encryption` 特性） |
 | `encrypt` | 加密算法（如 "xchacha20"） |
 | `flatten` | 扁平化嵌套配置 |
 | `skip` | 加载时跳过该字段 |
@@ -796,9 +790,9 @@ fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
 | 属性/方法 | 所需特性 |
 |-----------|----------|
 | `#[config(validate)]` | `validation` |
-| `#[config(watch = true)]` | `watch` |
+| `#[config(watch = true)]`（结构体级，当前无实际效果） | `watch` |
 | `json_schema()` | `schema` |
-| `typescript_type()` | `typescript-schema` |
+| `TypeScriptGenerator::generate::<T>()` | `typescript-schema` |
 | CLI 参数支持 | `cli` |
 | 加密支持 | `encryption` |
 | 远程配置 | `remote` |
@@ -815,7 +809,7 @@ fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["recommended"] }
+confers = { version = "0.6.0-rc.5", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -826,7 +820,7 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["dev"] }
+confers = { version = "0.6.0-rc.5", features = ["dev"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -837,7 +831,7 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["production"] }
+confers = { version = "0.6.0-rc.5", features = ["production"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -853,10 +847,10 @@ garde = { version = "0.23", features = ["derive"] }
 答：检查环境变量前缀是否正确，并确认配置文件格式匹配。
 
 **问：校验失败但不知道原因？**
-答：使用 `strict = true` 模式查看详细的错误信息。
+答：使用 `#[config(validate)]` 启用校验并检查 garde 报告的字段路径与错误信息。
 
 **问：敏感字段在日志中泄露？**
-答：确保使用 `sensitive = true` 属性标记敏感字段。
+答：确保使用 `sensitive = true` 属性标记敏感字段，且字段类型为 `SecretString` / `SecretBytes`（需 `encryption` 特性）——普通 `String` 字段标注 `sensitive` 会在宏展开期报错。
 
 **问：热重载不生效？**
 答：确保已启用 `watch` 特性，并使用 `FsWatcher` / `MultiFsWatcher` 监听变更后重建配置（`build_with_watcher()` 已弃用，不会随文件变更重载）。
@@ -867,10 +861,10 @@ garde = { version = "0.23", features = ["derive"] }
 
 | 文档 | 说明 |
 |:-----|:-----|
-| [📖 用户指南](USER_GUIDE.md) | 配置加载与搜索路径 |
+| [📖 用户指南](USER_GUIDE.md) | 配置加载方式与来源组合 |
 | [📘 API 参考](API_REFERENCE.md) | 派生宏生成代码用到的运行时 API |
 | [⚡ 性能指南](PERFORMANCE.md) | 宏 codegen 对编译产物体积的影响控制 |
 
 ---
 
-*本文档基于 Confers v0.6.0-rc.3 编写。*
+*本文档基于 Confers v0.6.0-rc.5 编写。*

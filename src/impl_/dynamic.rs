@@ -25,7 +25,7 @@ type CallbackId = u64;
 // thread is being invoked by [`DynamicField::update`]. A reentrant
 // `update` from inside a callback must not re-acquire the (non-reentrant)
 // update lock — it stores and dispatches inline, preserving the historical
-// nested-dispatch semantics (T019).
+// nested-dispatch semantics.
 thread_local! {
     static DISPATCH_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
@@ -62,7 +62,7 @@ pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     /// Callbacks storage with DashMap for high-concurrency access.
     callbacks: CallbackStorage<T>,
     next_id: AtomicU64,
-    /// Monotonic version counter for `update` calls (T019). Each update
+    /// Monotonic version counter for `update` calls. Each update
     /// claims a version first; the serialized store+dispatch step skips
     /// versions below the last committed one, so callback observations stay
     /// in version order and end consistent with the final stored value.
@@ -71,9 +71,9 @@ pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     last_version: AtomicU64,
     /// Serializes the store+dispatch step of concurrent (non-reentrant)
     /// updates so callback observation order equals the final stored value
-    /// (T019 / R-watch-005). Reads stay lock-free via ArcSwap.
+    /// (R-watch-005). Reads stay lock-free via ArcSwap.
     update_lock: std::sync::Mutex<()>,
-    /// Count of callbacks that panicked during dispatch (T017 / R-watch-003).
+    /// Count of callbacks that panicked during dispatch (R-watch-003).
     /// A panicking callback is isolated; this counter makes the isolation
     /// observable instead of silently swallowing the failure.
     callback_panics: AtomicU64,
@@ -142,12 +142,12 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// callback that calls `on_change` or `update` would otherwise deadlock
     /// on the same shard's write lock — CWE-667).
     ///
-    /// A callback that panics is isolated (T017 / R-watch-003): the panic is
+    /// A callback that panics is isolated (R-watch-003): the panic is
     /// swallowed and counted (see [`callback_panic_count`][Self::callback_panic_count]),
     /// the remaining callbacks still run, the stored value is unaffected and
     /// `update` returns normally.
     ///
-    /// # Ordering under concurrency (T019 / R-watch-005)
+    /// # Ordering under concurrency (R-watch-005)
     ///
     /// Each update claims a monotonic version before storing. The
     /// store+dispatch step is serialized through an update lock: an update
@@ -522,7 +522,7 @@ mod tests {
         assert_eq!(field.callback_count(), 0);
     }
 
-    /// Regression test (T017 / R-watch-003): a panicking callback must not
+    /// Regression test (R-watch-003): a panicking callback must not
     /// poison the update path — `update` returns normally, callbacks after
     /// the panicking one still execute, the store keeps the new value, and
     /// the panic is counted. The field stays usable for later updates.
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(field.callback_panic_count(), 1);
     }
 
-    /// Regression test (T019 / R-watch-005): under concurrent updates the
+    /// Regression test (R-watch-005): under concurrent updates the
     /// callback observation order must stay consistent with the final stored
     /// value — stale dispatches are skipped, so the LAST callback
     /// observation equals the final `get()`.

@@ -10,7 +10,7 @@
 ### 新增
 
 - 全面的安全模块，包含路径穿越防护
-- 基于 `secrecy` crate 的敏感数据保护
+- 敏感数据保护：敏感字段强制使用内置 `SecretString` / `SecretBytes` 类型（zeroize 语义，脱敏 `Debug`/`Display`；不依赖外部 `secrecy` crate——该死依赖已在 confers 主仓 Unreleased 变更中移除）
 - 类型安全的 Schema 生成
 - 完善的测试套件（覆盖率目标 80% 以上）
 - 类型解析性能优化（速度提升 50% 以上）

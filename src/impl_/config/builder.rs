@@ -43,7 +43,7 @@ pub struct ConfigBuilder<T> {
     /// Snapshot configuration.
     #[cfg(feature = "snapshot")]
     snapshot_config: Option<SnapshotConfig>,
-    /// Sensitive configuration paths for snapshot redaction (T045): when a
+    /// Sensitive configuration paths for snapshot redaction when a
     /// derive-generated loader registers the struct's `sensitive_paths()`,
     /// snapshots written by this builder redact those paths' values.
     sensitive_paths: Vec<String>,
@@ -159,7 +159,7 @@ impl<T> ConfigBuilder<T> {
     /// and conflict reports mask the same paths.
     pub fn sensitive_paths(mut self, paths: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         self.sensitive_paths = paths.into_iter().map(|p| p.as_ref().to_string()).collect();
-        // R1-M1: 同步喂给合并引擎,conflict_report 掩码与快照脱敏共用同一
+        // R1-: 同步喂给合并引擎,conflict_report 掩码与快照脱敏共用同一
         // 份敏感路径清单(避免未来第一个 conflict-report 调用点漏接)。
         let for_engine = self.sensitive_paths.clone();
         self.chain_builder = self.chain_builder.with_sensitive_paths(for_engine);
@@ -375,7 +375,7 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
-        // T028 (容灾兜底): when the build fails *after* collection (limit
+        // (容灾兜底): when the build fails *after* collection (limit
         // violation, deserialization error) the merged value is still
         // persisted so `snapshot restore` can recover it. A failure *during*
         // collection has no merged value to persist.
@@ -389,7 +389,7 @@ where
         for map in &self.json_maps {
             map(&mut json);
         }
-        // T035/R2-M7: decrypt `encrypt` fields after transforms, before
+        // decrypt `encrypt` fields after transforms, before
         // deserialization — with the injected master key when provided.
         if self.decrypt_fields {
             crate::field_crypto::apply_field_decryption(
@@ -397,7 +397,7 @@ where
                 self.master_key_override.as_deref(),
             );
         }
-        // T006: serde-path-to_error tracks the field path so type errors name
+        // serde-path-to_error tracks the field path so type errors name
         // the offending key instead of an empty string.
         let config: T = match serde_path_to_error::deserialize(json) {
             Ok(config) => config,
@@ -407,7 +407,7 @@ where
                     expected_type: std::any::type_name::<T>().to_string(),
                     message: e.inner().to_string(),
                 };
-                // T028: persist the collected config before failing the build.
+                // persist the collected config before failing the build.
                 Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
                 return Err(err);
             }
@@ -435,7 +435,7 @@ where
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
         if let Err(e) = self.limits.validate_value(&merged) {
-            // T028: persist the collected config before failing the build.
+            // persist the collected config before failing the build.
             Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
             return Err(e);
         }
@@ -554,7 +554,7 @@ where
         for map in &self.json_maps {
             map(&mut json);
         }
-        // T035/R2-M7: decrypt `encrypt` fields after transforms, before
+        // decrypt `encrypt` fields after transforms, before
         // deserialization — with the injected master key when provided.
         if self.decrypt_fields {
             crate::field_crypto::apply_field_decryption(
@@ -1080,7 +1080,7 @@ mod tests {
         );
     }
 
-    /// T028 (容灾兜底): when the build fails after collection (here: a
+    /// (容灾兜底): when the build fails after collection (here: a
     /// deserialization type error), the merged configuration is still persisted
     /// so `snapshot restore` can recover the collected values.
     #[cfg(feature = "snapshot")]
@@ -1110,7 +1110,7 @@ mod tests {
         );
     }
 
-    /// T028: the same failure-path snapshot guarantee for limit violations.
+    /// the same failure-path snapshot guarantee for limit violations.
     #[cfg(feature = "snapshot")]
     #[test]
     fn test_builder_limit_violation_path_writes_snapshot() {

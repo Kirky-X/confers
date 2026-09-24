@@ -8,7 +8,7 @@
 //! unchanged content short-circuits into the cached snapshot, so the parse
 //! and merge work only run when the server actually served new content.
 //!
-//! Authentication (T031): when `username`/`password` are configured, the
+//! Authentication when `username`/`password` are configured, the
 //! source logs in against `/nacos/v1/auth/login` and appends the returned
 //! `accessToken` to every config request; an unauthorized (401) response
 //! triggers one re-login and retry.
@@ -96,7 +96,7 @@ impl NacosSourceBuilder {
         self
     }
 
-    /// Set the username for Nacos authentication (T031).
+    /// Set the username for Nacos authentication.
     ///
     /// Requires `password` to be set as well; with both configured the source
     /// logs in against `/nacos/v1/auth/login` and appends the returned
@@ -106,7 +106,7 @@ impl NacosSourceBuilder {
         self
     }
 
-    /// Set the password for Nacos authentication (T031).
+    /// Set the password for Nacos authentication.
     ///
     /// The value is redacted in `Debug` output and never appears in errors.
     pub fn password(mut self, password: impl Into<String>) -> Self {
@@ -154,7 +154,7 @@ impl NacosSourceBuilder {
                 message: "nacos dataId must not be empty".to_string(),
             });
         }
-        // T031: auth requires both credentials or neither.
+        // auth requires both credentials or neither.
         match (&self.username, &self.password) {
             (Some(_), Some(_)) | (None, None) => {}
             (Some(_), None) => {
@@ -232,12 +232,12 @@ fn urlencode(input: &str) -> String {
 pub struct NacosSource {
     url: Arc<str>,
     /// Login endpoint (`/nacos/v1/auth/login`), present only when
-    /// username/password auth is configured (T031).
+    /// username/password auth is configured.
     login_url: Option<Arc<str>>,
     username: Option<Arc<str>>,
-    /// Held, never logged and never rendered by `Debug` (T031).
+    /// Held, never logged and never rendered by `Debug`.
     password: Option<Arc<str>>,
-    /// Cached `accessToken` from the last successful login (T031).
+    /// Cached `accessToken` from the last successful login.
     access_token: ArcSwap<Option<Arc<str>>>,
     format: Option<Format>,
     interval: Duration,
@@ -249,7 +249,7 @@ pub struct NacosSource {
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
 
-/// Outcome of the circuit-breaker gate at the top of `poll` (T031).
+/// Outcome of the circuit-breaker gate at the top of `poll`.
 enum Gate {
     /// A request may be attempted; its outcome is recorded.
     Record,
@@ -258,7 +258,7 @@ enum Gate {
     Unrecorded,
 }
 
-/// Internal classification of a failed config fetch (T031): a 401 is
+/// Internal classification of a failed config fetch a 401 is
 /// retried once after re-login, everything else propagates.
 enum FetchFailure {
     Unauthorized(ConfigError),
@@ -271,7 +271,7 @@ impl NacosSource {
         &self.url
     }
 
-    /// Login and cache the returned `accessToken` (T031).
+    /// Login and cache the returned `accessToken`.
     ///
     /// Nacos expects a form-encoded POST and answers with a JSON body
     /// containing `accessToken`. The password never appears in errors: only
@@ -334,7 +334,6 @@ impl NacosSource {
     ///
     /// With auth configured the cached `accessToken` is appended; an
     /// unauthorized (401) response triggers exactly one re-login + retry
-    /// (T031).
     async fn fetch(&self) -> ConfigResult<String> {
         if self.login_url.is_some() && self.access_token.load().is_none() {
             self.login().await?;
@@ -364,7 +363,7 @@ impl NacosSource {
             url.push_str(&format!("&accessToken={}", urlencode(token)));
         }
         let response = self.client.get(&url).send().await.map_err(|e| {
-            // R3-M1: reqwest 的错误 Display 含完整 URL——而 accessToken 就
+            // R3-: reqwest 的错误 Display 含完整 URL——而 accessToken 就
             // 挂在查询串上,原样格式化会把凭据泄进错误信息/日志。
             // without_url 原地剥离 URL(含 accessToken 查询串)。
             let message = format!("nacos request failed: {}", e.without_url());
@@ -416,7 +415,7 @@ impl NacosSource {
 impl crate::remote::PolledSource for NacosSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
         // Circuit breaker: a failing server cools the source down instead of
-        // hammering it every interval. T031: a CONTENDED breaker lock
+        // hammering it every interval. a CONTENDED breaker lock
         // (`try_lock` WouldBlock, e.g. another poll in flight) is recorded as
         // `unknown` — the request proceeds but its outcome is not recorded, so
         // concurrency no longer misreports the circuit as open.
@@ -672,7 +671,7 @@ mod tests {
         assert!(NacosSourceBuilder::new("http://nacos", "").build().is_err());
     }
 
-    // ==================== T031: auth & circuit-breaker fairness ====================
+    // ==================== auth & circuit-breaker fairness ====================
 
     /// Mock Nacos server with auth: answers `POST /nacos/v1/auth/login`
     /// with a JSON `accessToken`, and `GET /nacos/v1/cs/configs` only when
@@ -764,7 +763,7 @@ mod tests {
         (addr, logins, unauthorized, authorized)
     }
 
-    /// T031: with username/password configured, the source logs in and the
+    /// with username/password configured, the source logs in and the
     /// config request carries the returned accessToken.
     #[tokio::test]
     async fn auth_login_sets_token_and_config_request_succeeds() {
@@ -800,7 +799,7 @@ mod tests {
         );
     }
 
-    /// T031: when the cached token is rejected with 401, the source re-logins
+    /// when the cached token is rejected with 401, the source re-logins
     /// exactly once and retries the config request successfully.
     #[tokio::test]
     async fn auth_relogins_once_on_401() {
@@ -844,7 +843,7 @@ mod tests {
         );
     }
 
-    /// T031: builder Debug output redacts the password.
+    /// builder Debug output redacts the password.
     #[test]
     fn builder_debug_redacts_password() {
         let builder = NacosSourceBuilder::new("http://nacos:8848", "app.toml")
@@ -855,7 +854,7 @@ mod tests {
         assert!(debug.contains("[REDACTED]"));
     }
 
-    /// T031: auth requires both credentials or neither.
+    /// auth requires both credentials or neither.
     #[test]
     fn builder_rejects_partial_credentials() {
         assert!(
@@ -874,7 +873,7 @@ mod tests {
         );
     }
 
-    /// T031: a contended circuit-breaker lock (`try_lock` WouldBlock, e.g.
+    /// a contended circuit-breaker lock (`try_lock` WouldBlock, e.g.
     /// another poll in flight) is recorded as unknown — the poll proceeds
     /// and must NOT be misreported as "circuit breaker is open".
     #[tokio::test]

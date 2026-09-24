@@ -354,7 +354,7 @@ pub trait PolledSource: Send + Sync {
 }
 
 /// An HTTP header applied to every poll request, whose value is redacted in
-/// `Debug` output (T027: auth credentials must never leak through logs or
+/// `Debug` output (auth credentials must never leak through logs or
 /// debug dumps).
 #[derive(Clone)]
 struct RedactedHeader(String, String);
@@ -432,7 +432,7 @@ pub struct HttpPolledSource {
     /// construction (tests against local mock servers) may set it to `false`
     /// because loopback HTTP endpoints are rejected by the SSRF rules.
     enforce_ssrf: bool,
-    /// Whether failures may serve the cached value (T028). `false` keeps the
+    /// Whether failures may serve the cached value. `false` keeps the
     /// fail-loud default.
     stale_on_error: bool,
     /// How many polls were answered from the cache because of a failure or
@@ -524,7 +524,7 @@ impl HttpPolledSourceBuilder {
     }
 
     /// Add an HTTP header applied to every poll request, on every followed
-    /// redirect hop (T027).
+    /// redirect hop.
     ///
     /// Intended for authentication headers (e.g. `Authorization: Bearer …`).
     /// The value is stored redacted: it never appears in `Debug` output,
@@ -590,7 +590,7 @@ impl HttpPolledSourceBuilder {
     }
 
     /// Serve the last known-good (stale) configuration when the circuit
-    /// breaker is open or a poll fails (T028). Default: `false` — fail loud
+    /// breaker is open or a poll fails. Default: `false` — fail loud
     /// with an error, which keeps silent-staleness risks opt-in.
     ///
     /// When enabled and a cached value exists, a failed poll returns the
@@ -639,7 +639,7 @@ impl HttpPolledSourceBuilder {
         // The pinned DNS resolver makes reqwest connect to addresses from the
         // same validated resolution as the poll-path pre-check, eliminating
         // the DNS-rebinding TOCTOU window between validation and connection.
-        // T027: default connect/total timeouts are applied when the builder
+        // default connect/total timeouts are applied when the builder
         // was not given explicit ones.
         let client_builder = Client::builder()
             .use_rustls_tls()
@@ -723,13 +723,13 @@ impl PolledSource for HttpPolledSource {
 
 impl HttpPolledSource {
     /// Number of polls served from the cache because of a failure or an open
-    /// circuit (T028). Zero unless [`HttpPolledSourceBuilder::stale_on_error`]
+    /// circuit. Zero unless [`HttpPolledSourceBuilder::stale_on_error`]
     /// was enabled and a failure actually occurred.
     pub fn stale_served(&self) -> u64 {
         self.stale_served.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// Serve the cached value as stale (T028): record the degradation in the
+    /// Serve the cached value as stale record the degradation in the
     /// fetch-error metric, bump the stale-served marker and return the cache.
     /// Returns `None` when no cached value exists (nothing stale to serve).
     async fn serve_stale_if_allowed(&self) -> Option<AnnotatedValue> {
@@ -755,7 +755,7 @@ impl HttpPolledSource {
             cb.can_execute()
         };
         if !cb_allowed {
-            // T028: stale_on_error opts into serving the cached value
+            // stale_on_error opts into serving the cached value
             // while the circuit is open; the default stays fail-loud.
             if let Some(cached) = self.serve_stale_if_allowed().await {
                 return Ok(cached);
@@ -779,7 +779,7 @@ impl HttpPolledSource {
 
         match result {
             Ok(value) => Ok(value),
-            // T028: opt-in stale-if-error — a failed poll (transport error,
+            // opt-in stale-if-error — a failed poll (transport error,
             // HTTP error status, parse failure) serves the cached value.
             Err(err) => match self.serve_stale_if_allowed().await {
                 Some(cached) => Ok(cached),
@@ -813,7 +813,7 @@ impl HttpPolledSource {
 
             let mut request = self.client.get(current_url.clone());
 
-            // T027: builder-configured headers (e.g. authentication) are
+            // builder-configured headers (e.g. authentication) are
             // applied to every request, including each followed redirect hop.
             for header in &*self.headers {
                 request = request.header(header.0.as_str(), header.1.as_str());
@@ -1033,13 +1033,13 @@ mod tests {
     fn test_is_ip_blocked_loopback_v6() {
         // ::1/128
         assert!(is_ip_blocked(IpAddr::V6("::1".parse().unwrap())));
-        // ::/128 (the unspecified address) is blocked — T024: it previously
+        // ::/128 (the unspecified address) is blocked — it previously
         // slipped through and a direct connection to `::` could reach the
         // local host.
         assert!(is_ip_blocked(IpAddr::V6("::".parse().unwrap())));
     }
 
-    /// T024: `0.0.0.0/8` ("this network") is blocked — a direct connection
+    /// `0.0.0.0/8` ("this network") is blocked — a direct connection
     /// to `0.0.0.0` targets the local host.
     #[test]
     fn test_is_ip_blocked_this_network_v4() {
@@ -1050,7 +1050,7 @@ mod tests {
         assert!(!is_ip_blocked(IpAddr::V4("1.0.0.1".parse().unwrap())));
     }
 
-    /// T024: the NAT64 well-known prefix `64:ff9b::/96` is blocked.
+    /// the NAT64 well-known prefix `64:ff9b::/96` is blocked.
     #[test]
     fn test_is_ip_blocked_nat64_prefix() {
         assert!(is_ip_blocked(IpAddr::V6(
@@ -1061,7 +1061,7 @@ mod tests {
         )));
     }
 
-    /// T024 acceptance: `https://0.0.0.0:PORT`, the decimal shorthand
+    /// acceptance: `https://0.0.0.0:PORT`, the decimal shorthand
     /// `https://0` (parsed as 0.0.0.0) and `https://[::]/` are all rejected
     /// by the static URL checks.
     #[test]
@@ -2118,10 +2118,10 @@ mod tests {
     }
 
     // =============================================================================
-    // T027: Default Timeouts & Auth Header Injection
+    // Default Timeouts & Auth Header Injection
     // =============================================================================
 
-    /// T027: the builder applies default timeouts when none are set. The
+    /// the builder applies default timeouts when none are set. The
     /// client itself does not expose its configuration, so the applied values
     /// are pinned via the public constants (same convention as the
     /// Consul/etcd/K8s sources).
@@ -2139,7 +2139,7 @@ mod tests {
         assert_eq!(source.poll_interval(), Some(DEFAULT_POLL_INTERVAL));
     }
 
-    /// T027: `with_header` injects the header into the outgoing request —
+    /// `with_header` injects the header into the outgoing request —
     /// the loopback mock server asserts the Authorization header arrives.
     #[tokio::test]
     async fn test_with_header_is_sent_on_request() {
@@ -2189,7 +2189,7 @@ mod tests {
         );
     }
 
-    /// T027: header values are redacted in `Debug` output — the token value
+    /// header values are redacted in `Debug` output — the token value
     /// must never appear, while the header name stays diagnosable.
     #[test]
     fn test_with_header_value_is_redacted_in_debug() {
@@ -2213,10 +2213,10 @@ mod tests {
     }
 
     // =============================================================================
-    // T028: stale_on_error (opt-in disaster fallback; default stays fail-loud)
+    // stale_on_error (opt-in disaster fallback; default stays fail-loud)
     // =============================================================================
 
-    /// T028: with `stale_on_error(false)` (the default) an open circuit
+    /// with `stale_on_error(false)` (the default) an open circuit
     /// still fails loud with `CircuitBreakerOpen` — the pre-existing
     /// fail-loud semantics must not regress.
     #[tokio::test]
@@ -2239,7 +2239,7 @@ mod tests {
         assert_eq!(source.stale_served(), 0, "no stale served by default");
     }
 
-    /// T028: with `stale_on_error(true)`, once the circuit opens the poll
+    /// with `stale_on_error(true)`, once the circuit opens the poll
     /// returns the cached value with the stale marker counted, and no
     /// network request is attempted.
     #[cfg_attr(
@@ -2333,7 +2333,7 @@ mod tests {
         server.abort();
     }
 
-    /// T028: with `stale_on_error(true)` a poll failing on a dead port (no
+    /// with `stale_on_error(true)` a poll failing on a dead port (no
     /// circuit involvement) also serves the previously cached value.
     #[cfg_attr(
         not(feature = "json"),

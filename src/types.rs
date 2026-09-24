@@ -1086,7 +1086,7 @@ impl Drop for ZeroizingBytes {
         // `fill(0)` may be elided entirely when the buffer is deallocated
         // right after and never read again. This mirrors what the `zeroize`
         // crate does without forcing the dependency into the core types.
-        // T044: spare capacity is zeroized too — a realloc could otherwise
+        // spare capacity is zeroized too — a realloc could otherwise
         // hand residual secret bytes to a future allocation.
         for slot in self.0.spare_capacity_mut() {
             // SAFETY: writing a valid `u8` through `MaybeUninit` within the

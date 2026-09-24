@@ -326,7 +326,7 @@ fn loader_body(
     // observe serde-normalized keys.
     let rename_call = generate_rename_all_call(attrs.rename_all.as_ref(), fields);
     let map_json_calls = generate_map_json_calls(fields);
-    // T035/R2-M7: 加密标记(builder 在反序列化前集中解密);解密必须跑在
+    // 加密标记(builder 在反序列化前集中解密);解密必须跑在
     // 全部 tree transform 之后,故不能进 map_json_calls 的注册序。
     let decrypt_mark = if has_encrypt_fields(fields) {
         quote! { builder = builder.encrypted_fields(); }
@@ -341,7 +341,7 @@ fn loader_body(
 
     quote! {
         let mut builder = confers::ConfigBuilder::<Self>::new();
-        // T045: 快照脱敏所需的敏感路径(无敏感字段时为空)。
+        // 快照脱敏所需的敏感路径(无敏感字段时为空)。
         builder = builder.sensitive_paths(Self::sensitive_paths());
         #decrypt_mark
 

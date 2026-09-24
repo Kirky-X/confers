@@ -254,7 +254,7 @@ pub struct SourceChainBuilder {
     /// Whether to allow absolute paths for file sources.
     allow_absolute_paths: bool,
     /// Pending env nesting separator, applied when the next env source is
-    /// created (T007: `env_separator("__")` so `APP_DB__HOST` → `db.host`).
+    /// created (`env_separator("__")` so `APP_DB__HOST` → `db.host`).
     env_separator: Option<String>,
 }
 
@@ -316,7 +316,7 @@ impl SourceChainBuilder {
     }
 
     /// Register sensitive configuration paths on the merge engine: conflict
-    /// reports redact these paths' values (R1-M1: keep this wired to the
+    /// reports redact these paths' values (R1-: keep this wired to the
     /// builder so the first conflict-report caller cannot leak plaintext).
     pub fn with_sensitive_paths(mut self, paths: Vec<String>) -> Self {
         self.chain = self.chain.with_sensitive_paths(paths);

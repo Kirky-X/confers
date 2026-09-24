@@ -33,7 +33,7 @@ pub(crate) static SENSITIVE_DETECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock:
         Regex::new(r"(?i)session_id").unwrap(),
         Regex::new(r"(?i)database_url").unwrap(),
         Regex::new(r"(?i)connection_string").unwrap(),
-        // T049: 常见漏网模式 —— authorization(此前 auth 的 token 边界
+        // 常见漏网模式 —— authorization(此前 auth 的 token 边界
         // 规则命中不了它)、passwd/pwd、dsn、bearer。
         Regex::new(r"(?i)authorization").unwrap(),
         Regex::new(r"(?i)passwd").unwrap(),
@@ -86,7 +86,7 @@ pub(crate) fn is_match_with_token_boundary(pattern: &Regex, text: &str) -> bool 
             .chars()
             .next_back()
             .is_none_or(|c| !c.is_alphanumeric());
-        // T049: 复数形宽容 —— 命中点后紧跟一个 's' 且其后是边界
+        // 复数形宽容 —— 命中点后紧跟一个 's' 且其后是边界
         // (passwords/tokens/keys/credentials)视为命中。
         let rest = &text[m.end()..];
         let after_ok = match rest.chars().next() {
@@ -118,7 +118,7 @@ pub(crate) fn contains_as_token(text: &str, needle: &str) -> bool {
             .chars()
             .next_back()
             .is_none_or(|c| !c.is_alphanumeric());
-        // T049: 与 is_match_with_token_boundary 相同的复数形宽容。
+        // 与 is_match_with_token_boundary 相同的复数形宽容。
         let rest = &text[end..];
         let after_ok = match rest.chars().next() {
             None => true,
@@ -168,7 +168,7 @@ mod tests {
         // Substrings inside larger words do not match.
         assert!(!contains_as_token("monkey", "key"));
         assert!(!contains_as_token("whiskey", "key"));
-        // T049: 复数形现在视为命中(与 is_match_with_token_boundary 一致)。
+        // 复数形现在视为命中(与 is_match_with_token_boundary 一致)。
         assert!(contains_as_token("passwords", "password"));
         // Empty needle never matches.
         assert!(!contains_as_token("anything", ""));

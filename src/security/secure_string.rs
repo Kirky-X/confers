@@ -278,7 +278,7 @@ impl SecureString {
 
     /// 掩码显示（用于日志）
     ///
-    /// T042: 定长 `********`（8 星号）。旧实现保留前缀并按原文长度生成
+    /// 定长 `********`（8 星号）。旧实现保留前缀并按原文长度生成
     /// 星号，泄露密钥前缀与精确长度。
     pub fn masked(&self) -> String {
         if self.data.is_empty() {
@@ -689,14 +689,14 @@ mod tests {
 
     #[test]
     fn test_secure_string_masked_short_inputs() {
-        // T042: 单/双字符输入同样是定长掩码。
+        // 单/双字符输入同样是定长掩码。
         assert_eq!(SecureString::from("a").masked(), "********");
         assert_eq!(SecureString::from("ab").masked(), "********");
     }
 
     #[test]
     fn test_secure_string_masked_fixed_length() {
-        // T042: 掩码定长 8 星号 —— 不泄露前缀与长度。
+        // 掩码定长 8 星号 —— 不泄露前缀与长度。
         assert_eq!(SecureString::from("abc").masked(), "********");
         assert_eq!(SecureString::from("abcd").masked(), "********");
         assert_eq!(

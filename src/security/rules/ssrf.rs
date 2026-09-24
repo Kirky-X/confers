@@ -11,7 +11,7 @@ use std::str::FromStr;
 /// Single-source blocked-network table shared with the remote polled source
 /// (`crate::remote::poll`). Included via `#[path]` so both feature sets
 /// (`security-rules` and `remote`) compile the exact same list — this is the
-/// T024 fix: previously the validator and the runtime enforcement maintained
+/// fix: previously the validator and the runtime enforcement maintained
 /// two divergent hand-written copies.
 use crate::ip_blocklist;
 

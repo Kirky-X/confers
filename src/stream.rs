@@ -101,7 +101,7 @@ impl ChangeEvent {
     /// Synthetic re-synchronization event for a subscriber that fell behind:
     /// versions below `from` were evicted from the retention store before
     /// this subscriber could observe them. `missed` is the version whose
-    /// lookup triggered the resync (T020 / R-watch-006).
+    /// lookup triggered the resync (R-watch-006).
     pub fn resync(from: u64, missed: u64) -> Self {
         Self {
             version: missed,
@@ -120,7 +120,7 @@ impl ChangeEvent {
 }
 
 /// `key` carried by the synthetic re-synchronization events a subscriber
-/// receives after its missed versions were already evicted (T020).
+/// receives after its missed versions were already evicted.
 pub const RESYNC_KEY: &str = "__resync__";
 
 /// Error returned when resolving a retained change event fails.
@@ -208,7 +208,7 @@ trait PendingStore: Send {
     fn get(&self, version: u64) -> Option<&ChangeEvent>;
     fn remove(&mut self, version: u64) -> Option<ChangeEvent>;
     fn len(&self) -> usize;
-    /// Watermark: versions below this value were FIFO-evicted (T020).
+    /// Watermark: versions below this value were FIFO-evicted.
     fn min_retained(&self) -> u64;
 }
 
@@ -218,7 +218,7 @@ struct BoundedPendingStore {
     order: std::collections::VecDeque<u64>,
     capacity: usize,
     /// Oldest version still retained; everything below was evicted. Used to
-    /// distinguish "lagged" from "never published" (T020 / R-watch-006).
+    /// distinguish "lagged" from "never published" (R-watch-006).
     min_retained: u64,
 }
 
@@ -229,7 +229,7 @@ impl PendingStore for BoundedPendingStore {
         {
             self.map.remove(&evict);
             // Advance the watermark past the evicted version: lookups for it
-            // must be reported as Lagged instead of silently missing (T020).
+            // must be reported as Lagged instead of silently missing.
             self.min_retained = self.min_retained.max(evict + 1);
         }
         self.order.push_back(version);
@@ -312,7 +312,7 @@ impl InMemoryChangeStream {
         .await
     }
 
-    /// Resolve the retained payload for `version` (T020 / R-watch-006).
+    /// Resolve the retained payload for `version` (R-watch-006).
     ///
     /// Returns the stored envelope while it is retained (until ack or FIFO
     /// eviction). A version inside the already-evicted range yields
@@ -388,7 +388,7 @@ impl ChangeStream for InMemoryChangeStream {
                 // The payload is gone: when the version fell inside the
                 // evicted range the subscriber lagged, and the event must
                 // surface as an explicit resync signal instead of being
-                // swallowed by this filter_map (T020 / R-watch-006).
+                // swallowed by this filter_map (R-watch-006).
                 // Version 0 means the checksum could not be parsed at all —
                 // nothing to re-sync from, skip it.
                 if version > 0 && version < store.min_retained() {
@@ -561,7 +561,7 @@ mod tests {
         assert!(redelivered.is_err(), "acked event must not be redelivered");
     }
 
-    /// T020 / R-watch-006: versions evicted by the FIFO retention are
+    /// / R-watch-006: versions evicted by the FIFO retention are
     /// reported explicitly as `Lagged { from }` — never as a silent miss.
     #[tokio::test]
     async fn get_reports_lagged_for_evicted_versions() {
@@ -595,7 +595,7 @@ mod tests {
         );
     }
 
-    /// T020 / R-watch-006: a subscriber whose events were evicted before it
+    /// / R-watch-006: a subscriber whose events were evicted before it
     /// could observe them receives explicit resync events — the filter_map
     /// must not swallow the evicted versions silently.
     #[tokio::test]

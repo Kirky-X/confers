@@ -40,7 +40,7 @@ pub struct ConfigChangeEvent {
     pub source: String,
     pub changed_keys: Vec<String>,
     pub checksum: String,
-    /// Process-level random epoch of the publishing instance (T030).
+    /// Process-level random epoch of the publishing instance.
     ///
     /// The monotonic `checksum` version only orders events *within* one
     /// publisher epoch: a restarting process draws a fresh epoch and may

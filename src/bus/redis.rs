@@ -23,10 +23,10 @@ const DEFAULT_ERROR_RETRY_WAIT_SECS: u64 = 1;
 /// Redis default port.
 const DEFAULT_REDIS_PORT: u16 = 6379;
 
-/// Initial reconnect backoff after the pubsub connection drops (T029).
+/// Initial reconnect backoff after the pubsub connection drops.
 pub const REDIS_RECONNECT_INITIAL_DELAY: Duration = Duration::from_secs(1);
 
-/// Cap of the exponential reconnect backoff (T029): 1s → 2s → 4s → … → 30s.
+/// Cap of the exponential reconnect backoff 1s → 2s → 4s → … → 30s.
 pub const REDIS_RECONNECT_MAX_DELAY: Duration = Duration::from_secs(30);
 
 pub struct RedisConfigBus {
@@ -45,9 +45,9 @@ pub struct RedisConfigBus {
     /// `retry_wait_ms` for context.
     #[allow(dead_code)]
     error_retry_wait_secs: u64,
-    /// Initial reconnect backoff for the subscription loop (T029).
+    /// Initial reconnect backoff for the subscription loop.
     reconnect_initial: Duration,
-    /// Reconnect backoff cap for the subscription loop (T029).
+    /// Reconnect backoff cap for the subscription loop.
     reconnect_max: Duration,
 }
 
@@ -180,7 +180,7 @@ impl ConfigBus for RedisConfigBus {
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         // The first connection is established eagerly so a dead endpoint
         // still surfaces as an immediate `subscribe()` error (the historical
-        // contract, pinned by tests). T029: every subsequent connection is
+        // contract, pinned by tests). every subsequent connection is
         // managed by the reconnecting loop below — the pubsub stream ends
         // whenever the connection drops (network blip, server restart, idle
         // timeout); previously that terminated the returned stream silently,
@@ -255,9 +255,9 @@ pub struct RedisBusBuilder {
     retry_wait_ms: u64,
     /// Error retry wait time in seconds.
     error_retry_wait_secs: u64,
-    /// Initial reconnect backoff for the subscription loop (T029).
+    /// Initial reconnect backoff for the subscription loop.
     reconnect_initial: Duration,
-    /// Reconnect backoff cap for the subscription loop (T029).
+    /// Reconnect backoff cap for the subscription loop.
     reconnect_max: Duration,
 }
 
@@ -299,7 +299,7 @@ impl RedisBusBuilder {
         self
     }
 
-    /// Set the initial reconnect backoff of the subscription loop (T029).
+    /// Set the initial reconnect backoff of the subscription loop.
     ///
     /// Default: 1 second. The backoff doubles up to `reconnect_delay_max`
     /// while the connection keeps failing and resets on a successful
@@ -309,7 +309,7 @@ impl RedisBusBuilder {
         self
     }
 
-    /// Set the reconnect backoff cap of the subscription loop (T029).
+    /// Set the reconnect backoff cap of the subscription loop.
     ///
     /// Default: 30 seconds.
     pub fn reconnect_delay_max(mut self, delay: Duration) -> Self {
@@ -644,7 +644,7 @@ mod tests {
         assert_eq!(received.instance_id, ev.instance_id);
     }
 
-    // ==================== T029: pubsub reconnect loop (mock) ====================
+    // ==================== pubsub reconnect loop (mock) ====================
 
     /// RESP helpers for a hand-rolled Redis pubsub mock (same convention as
     /// the hand-written TCP mocks in remote/k8s.rs and remote/nacos.rs).
@@ -689,7 +689,7 @@ mod tests {
         }
     }
 
-    /// T029 acceptance: after the pubsub connection drops, the subscription
+    /// acceptance: after the pubsub connection drops, the subscription
     /// loop reconnects (short backoff configured via the builder) and a
     /// subsequently published event is delivered again — the stream no
     /// longer terminates silently.
@@ -784,7 +784,7 @@ mod tests {
         server.abort();
     }
 
-    /// T029: the reconnect backoff constants and their builder overrides.
+    /// the reconnect backoff constants and their builder overrides.
     #[test]
     fn test_reconnect_backoff_configuration() {
         assert_eq!(REDIS_RECONNECT_INITIAL_DELAY, Duration::from_secs(1));

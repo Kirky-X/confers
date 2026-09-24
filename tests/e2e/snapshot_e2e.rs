@@ -309,7 +309,7 @@ async fn snp10_with_snapshot_auto_snapshots_on_build() {
     assert_eq!(restored.to_json()["port"], 80);
 }
 
-/// T045(builder 快照接入敏感路径):derive 生成的 `sensitive_paths()` 经
+/// (builder 快照接入敏感路径):derive 生成的 `sensitive_paths()` 经
 /// `ConfigBuilder::sensitive_paths` 注册后,自动快照必须对敏感字段输出
 /// `[REDACTED]`(而非明文),且文件权限为 0600。
 mod t045 {

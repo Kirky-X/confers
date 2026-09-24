@@ -293,7 +293,7 @@ fn generate_sensitive_paths(
         })
         .collect();
 
-    // T045: 恒定生成(无敏感字段时为空切片) —— 生成的加载器统一把
+    // 恒定生成(无敏感字段时为空切片) —— 生成的加载器统一把
     // sensitive_paths() 注册到 builder,快照据此脱敏。
     quote! {
         impl #struct_ident {

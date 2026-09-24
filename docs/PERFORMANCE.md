@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
 
 ### 惰性分段解析
 
-对超大 TOML 文档（`lazy` 特性），`LazySegmentedConfig` 按顶层表头把文档切分为段：切分是一次廉价的行扫描，段在首次访问时才真正解析并缓存，从未被访问的段永远不会被解析。
+对超大 TOML 文档（`lazy-parse` 特性），`LazySegmentedConfig` 按顶层表头把文档切分为段：切分是一次廉价的行扫描，段在首次访问时才真正解析并缓存，从未被访问的段永远不会被解析。
 
 ```rust
 use confers::lazy::LazySegmentedConfig;
@@ -90,7 +90,7 @@ println!("已解析 {}/{} 段", config.parsed_count(), config.segment_keys().len
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["validation"] }
+confers = { version = "0.6.0-rc.5", features = ["validation"] }
 ```
 
 ### 校验缓存
@@ -149,7 +149,7 @@ let shared = config.get_shared("large_key").await?;
 
 ### 大文件的处理
 
-`confers` 目前没有内置流式加载 API。对于超过 10 MB 的文件，建议先将文件一次性读入 `String`，再传给 `confers::parse_content`，让解析器直接在内存缓冲区上工作，避免反复读盘；TOML 超大文档可进一步考虑 `lazy` 特性的惰性分段解析（见[惰性分段解析](#惰性分段解析)一节）。
+`confers` 目前没有内置流式加载 API。对于超过 10 MB 的文件，建议先将文件一次性读入 `String`，再传给 `confers::parse_content`，让解析器直接在内存缓冲区上工作，避免反复读盘；TOML 超大文档可进一步考虑 `lazy-parse` 特性的惰性分段解析（见[惰性分段解析](#惰性分段解析)一节）。
 
 ---
 
@@ -274,8 +274,8 @@ Criterion 会在 `target/criterion/` 下生成含分布图与回归检测的 HTM
 cargo install flamegraph
 cargo flamegraph --bench load_bench
 
-# 或直接对运行中的示例采样
-perf record -g cargo run --example basic_usage -p confers-examples
+# 或直接对运行中的示例采样（示例登记为 [[bin]] 目标，用 --bin 而非 --example）
+perf record -g cargo run --bin basic_usage -p confers-examples
 perf report
 ```
 

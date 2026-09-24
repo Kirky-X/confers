@@ -185,7 +185,7 @@ impl Default for XChaCha20Crypto {
 
 /// Whether key material is obviously weak: empty, or a single repeated byte
 /// (all-zero keys, all-`0xFF` fillers, 32 copies of one ASCII character).
-/// T037: such keys were previously accepted silently — the security docs'
+/// such keys were previously accepted silently — the security docs'
 /// own example used an all-zero key.
 pub fn is_weak_key(key: &[u8]) -> bool {
     if key.is_empty() {

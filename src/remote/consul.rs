@@ -192,7 +192,7 @@ impl ConsulSourceBuilder {
         self
     }
 
-    /// Set the circuit breaker failure threshold (T032).
+    /// Set the circuit breaker failure threshold.
     ///
     /// After this many consecutive failed polls, the circuit opens and
     /// subsequent polls fail fast with `CircuitBreakerOpen` without touching
@@ -202,14 +202,14 @@ impl ConsulSourceBuilder {
         self
     }
 
-    /// Set the circuit breaker base delay for exponential backoff (T032).
+    /// Set the circuit breaker base delay for exponential backoff.
     /// Default: 1 second.
     pub fn circuit_breaker_base_delay(mut self, delay: Duration) -> Self {
         self.cb_base_delay = Some(delay);
         self
     }
 
-    /// Set the circuit breaker maximum backoff delay (T032). Default: 60s.
+    /// Set the circuit breaker maximum backoff delay. Default: 60s.
     pub fn circuit_breaker_max_delay(mut self, delay: Duration) -> Self {
         self.cb_max_delay = Some(delay);
         self
@@ -312,7 +312,7 @@ impl ConsulSourceBuilder {
         })
     }
 
-    /// Build the poll circuit breaker from the configured knobs (T032).
+    /// Build the poll circuit breaker from the configured knobs.
     fn build_circuit_breaker(
         threshold: Option<u32>,
         base_delay: Option<Duration>,
@@ -352,7 +352,7 @@ pub struct ConsulSource {
     max_response_bytes: usize,
     max_kv_entries: usize,
     cached_source_id: SourceId,
-    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// Poll circuit breaker repeated failures open the circuit and
     /// polls fail fast without touching the network.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
@@ -475,7 +475,7 @@ impl ConsulSource {
         }
 
         if kv_responses.is_empty() {
-            // T025 (delete semantics): a recurse query returning an empty
+            // (delete semantics): a recurse query returning an empty
             // array means every KV under the prefix was deleted. Consul
             // still reports the (advanced) Raft index in the `X-Consul-Index`
             // response header, so the blocking index MUST advance here —
@@ -659,7 +659,7 @@ fn base64_decode(input: &str) -> Result<String, ConfigError> {
 #[async_trait]
 impl crate::remote::PolledSource for ConsulSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        // T032: circuit breaker around the poll — consecutive failures open
+        // circuit breaker around the poll — consecutive failures open
         // the circuit and subsequent polls fail fast without a request.
         let allowed = {
             let mut cb = self
@@ -1178,7 +1178,7 @@ mod tests {
         );
     }
 
-    /// T025: like `mock_http_server`, but each response also carries extra
+    /// like `mock_http_server`, but each response also carries extra
     /// raw HTTP headers (e.g. `X-Consul-Index`), one connection per entry.
     fn mock_http_server_with_headers(responses: Vec<(u16, String, String)>) -> String {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1205,7 +1205,7 @@ mod tests {
         format!("127.0.0.1:{}", addr.port())
     }
 
-    /// T025 delete semantics: after the KV prefix is deleted on the server,
+    /// delete semantics: after the KV prefix is deleted on the server,
     /// the recurse query returns an empty array with an ADVANCED
     /// `X-Consul-Index`. The poll must return an empty configuration set
     /// (Null) instead of the stale cached value, and the blocking index must
@@ -1254,7 +1254,7 @@ mod tests {
         );
     }
 
-    /// T025: an empty array whose `X-Consul-Index` matches the current index
+    /// an empty array whose `X-Consul-Index` matches the current index
     /// is "no change" — the cached value keeps being served.
     #[tokio::test]
     async fn test_poll_internal_empty_array_with_unchanged_index_returns_cached() {
@@ -1695,9 +1695,9 @@ mod tests {
         assert!(result.unwrap().is_map());
     }
 
-    // ==================== T032: circuit breaker (consul) ====================
+    // ==================== circuit breaker (consul) ====================
 
-    /// T032 acceptance: consecutive failures open the circuit, after which
+    /// acceptance: consecutive failures open the circuit, after which
     /// polls fail fast with `CircuitBreakerOpen` without touching the
     /// network; after the backoff a HalfOpen probe succeeds and normal
     /// polling resumes.

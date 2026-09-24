@@ -468,7 +468,7 @@ fn serde_rename_field_addresses_serde_name_everywhere() {
     assert_eq!(cfg.bind, "fallback");
 }
 
-/// T003(load_file_with_env 不再注入全进程环境):未声明的环境变量(含 cargo
+/// (load_file_with_env 不再注入全进程环境):未声明的环境变量(含 cargo
 /// 环境里的 `_`/PATH/HOST)不得进入合并树,`deny_unknown_fields` 结构体必须
 /// 能正常构建;声明的前缀 env 仍真实覆盖。
 #[derive(Debug, confers::Config, serde::Deserialize)]
@@ -498,7 +498,7 @@ fn t003_load_file_with_env_does_not_inject_process_env() {
     assert_eq!(cfg.garrison_probe, "env-value");
 }
 
-/// T004(load_file 路径默认值生效):文件缺失字段时使用 `#[config(default)]`,
+/// (load_file 路径默认值生效):文件缺失字段时使用 `#[config(default)]`,
 /// 不再报 missing field。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct PartialFileDefaults {
@@ -534,7 +534,7 @@ fn t004_load_file_applies_declared_defaults() {
     assert_eq!(cfg.port, 9100);
 }
 
-/// T009(profile 叠加):`#[config(profile)]` 在 RUN_ENV(或 profile_env 指定
+/// (profile 叠加):`#[config(profile)]` 在 RUN_ENV(或 profile_env 指定
 /// 变量)设置时,加载 `<stem>.<env>.<ext>` 环境专属文件覆盖基础文件;
 /// 未设置 env 或叠加文件不存在时行为与原来一致。
 #[derive(Debug, confers::Config, serde::Deserialize)]
@@ -581,7 +581,7 @@ fn t009_profile_overlay_applies_when_env_set() {
     assert_eq!(cfg.port, 7001);
 }
 
-/// T006(env 类型错误携带字段路径)/T007(env_separator)/T045(快照脱敏接线)。
+/// (env 类型错误携带字段路径)/(env_separator)/(快照脱敏接线)。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 #[allow(dead_code)] // host 仅出现在断言的错误信息中
 struct T006Probe {

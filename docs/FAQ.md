@@ -54,7 +54,10 @@
 - ✅ 支持主流格式（TOML、JSON、YAML）
 - ✅ 环境变量覆盖
 - ✅ 校验框架
-- ✅ 远程来源（Etcd、Consul）
+
+**测试期（Beta）的特性：**
+
+- 🚧 远程来源（`remote`、`etcd`、`consul`）：接口可能调整（与 [README 路线图](../README.md#️-开发路线图)一致）
 
 **成熟度指标：**
 
@@ -107,14 +110,18 @@
 
 ### ❓ 项目采用什么许可证？
 
-本项目基于 [MIT 许可证](../LICENSE) 发布。
+本项目基于 [MIT 许可证 + Commons Clause v1.0](../LICENSE) 发布：在 MIT 条款之上附加 Commons Clause 条件——**未经单独授权，不得销售本软件**。License 整体不是 OSI 认证的开源许可证（与 [README · 许可证](../README.md#-许可证)一致）。
 
 **您获得的权利：**
 
-- ✅ 商业使用
+- ✅ 使用
 - ✅ 修改
 - ✅ 分发
 - ✅ 私有使用
+
+**限制：**
+
+- ❌ 销售（未经版权方单独授权不得将本软件作为商品出售；[Commons Clause](../LICENSE) v1.0 条件）
 
 ---
 
@@ -128,7 +135,7 @@
 
 ```toml
 [dependencies]
-confers = "0.6.0-rc.3"
+confers = "0.6.0-rc.5"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -141,7 +148,7 @@ cargo add confers serde --features serde/derive
 **可选特性：**
 
 ```toml
-confers = { version = "0.6.0-rc.3", features = ["watch", "remote", "cli"] }
+confers = { version = "0.6.0-rc.5", features = ["watch", "remote", "cli"] }
 ```
 
 **安装验证：**
@@ -172,23 +179,23 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.6.0-rc.3", default-features = false, features = ["minimal"] }
+confers = { version = "0.6.0-rc.5", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.6.0-rc.3", default-features = false, features = ["recommended"] }
+confers = { version = "0.6.0-rc.5", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.6.0-rc.3", default-features = false, features = ["production"] }
+confers = { version = "0.6.0-rc.5", default-features = false, features = ["production"] }
 
 # 分布式系统配置
 [dependencies]
-confers = { version = "0.6.0-rc.3", default-features = false, features = ["distributed"] }
+confers = { version = "0.6.0-rc.5", default-features = false, features = ["distributed"] }
 
 # 全量特性配置
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["full"] }
+confers = { version = "0.6.0-rc.5", features = ["full"] }
 ```
 
 > 💡 **提示**：默认特性为 `toml`、`json`、`env`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。

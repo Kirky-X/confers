@@ -60,7 +60,7 @@ mod async_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                // Overrides are dynamic runtime state (T022 / R-watch-008):
+                // Overrides are dynamic runtime state (R-watch-008)
                 // entries are PERMANENT. TTL/TTI here silently reverted a
                 // dynamic `set` back to the merged value after ~5 minutes of
                 // inactivity. Entries leave the cache only through
@@ -288,7 +288,7 @@ mod async_impl {
             AnnotatedValue::new(value, SourceId::new("test"), key)
         }
 
-        /// T022 / R-watch-008: overrides must be permanent cache entries —
+        /// / R-watch-008: overrides must be permanent cache entries —
         /// no TTL/TTI may silently revert a dynamic `set` back to the merged
         /// value, and a set value must survive maintenance after reads.
         #[tokio::test]
@@ -371,7 +371,7 @@ mod sync_impl {
             let merged = chain.collect()?;
             Ok(Self {
                 merged: std::sync::RwLock::new(merged),
-                // Overrides are dynamic runtime state (T022 / R-watch-008):
+                // Overrides are dynamic runtime state (R-watch-008)
                 // entries are PERMANENT. TTL/TTI here silently reverted a
                 // dynamic `set` back to the merged value after ~5 minutes of
                 // inactivity. Entries leave the cache only through
@@ -595,7 +595,7 @@ mod sync_impl {
             AnnotatedValue::new(value, SourceId::new("test"), key)
         }
 
-        /// T022 / R-watch-008 (sync build): overrides must be permanent
+        /// / R-watch-008 (sync build): overrides must be permanent
         /// cache entries — no TTL/TTI may silently revert a dynamic `set`.
         #[test]
         fn overrides_are_permanent_entries() {

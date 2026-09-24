@@ -340,7 +340,7 @@ impl FieldAttrs {
     pub fn validate(&self, _field: &syn::Field) -> darling::Result<()> {
         let mut errors = darling::Error::accumulator();
 
-        // Validate encrypt algorithm. T035: `aes256-gcm` is accepted by the
+        // Validate encrypt algorithm. `aes256-gcm` is accepted by the
         // grammar but NOT implemented at runtime — pretending otherwise is
         // worse than failing the build (the audit found ciphertexts being
         // silently treated as usable strings).

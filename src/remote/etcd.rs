@@ -120,7 +120,7 @@ impl EtcdSourceBuilder {
         self
     }
 
-    /// Set the circuit breaker failure threshold (T032).
+    /// Set the circuit breaker failure threshold.
     ///
     /// After this many consecutive failed polls, the circuit opens and
     /// subsequent polls fail fast with `CircuitBreakerOpen` without issuing
@@ -240,7 +240,7 @@ pub struct EtcdSource {
     last_revision: AtomicI64,
     cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
     cached_source_id: SourceId,
-    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// Poll circuit breaker repeated failures open the circuit and
     /// polls fail fast without issuing a gRPC call.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
@@ -375,7 +375,7 @@ impl EtcdSource {
 #[async_trait]
 impl crate::remote::PolledSource for EtcdSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        // T032: circuit breaker around the poll — consecutive failures open
+        // circuit breaker around the poll — consecutive failures open
         // the circuit and subsequent polls fail fast without a gRPC call.
         let allowed = {
             let mut cb = self
@@ -684,7 +684,7 @@ mod tests {
         );
     }
 
-    /// T032: after the failure threshold is reached, polls fail fast with
+    /// after the failure threshold is reached, polls fail fast with
     /// `CircuitBreakerOpen` without issuing a gRPC call.
     #[tokio::test]
     async fn test_circuit_breaker_opens_after_failures() {

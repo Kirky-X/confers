@@ -262,7 +262,7 @@ impl FsWatcher {
             DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
         };
 
-        // Watch strategy (T015): a file target is watched through its PARENT
+        // Watch strategy a file target is watched through its PARENT
         // directory with an exact-path filter, mirroring the proven
         // `MultiFsWatcher` rename protection. Watching the file's own inode
         // loses the watch on `rename(tmp, path)` atomic replacement (notify
@@ -301,7 +301,7 @@ impl FsWatcher {
             (parent, Some(absolute))
         };
 
-        // T021 / R-watch-007: for file targets the event outlet passes
+        // / R-watch-007: for file targets the event outlet passes
         // through the library's own `AdaptiveDebouncer` (window =
         // `debounce_ms`), so rapid consecutive writes collapse into a
         // bounded number of forwarded events. The notify-level debounce
@@ -371,7 +371,7 @@ impl FsWatcher {
                 Ok(result) => {
                     if let Ok(events) = result {
                         for event in events {
-                            // R3-M3: the watched PARENT directory itself being
+                            // R3-: the watched PARENT directory itself being
                             // removed/renamed kills the kernel watch (its inode
                             // is gone) — without detection the watcher stays
                             // silently deaf forever (is_running stays true, no
@@ -438,7 +438,7 @@ impl FsWatcher {
                                                         // Channel full — the consumer fell
                                                         // behind. Make the loss observable:
                                                         // warn now, count for later audit
-                                                        // (T016 / R-watch-002).
+                                                        // (R-watch-002).
                                                         let total = dropped
                                                             .fetch_add(1, Ordering::SeqCst)
                                                             + 1;
@@ -821,7 +821,7 @@ impl MultiFsWatcher {
                                                     // Channel full — the consumer fell
                                                     // behind. Make the loss observable:
                                                     // warn now, count for later audit
-                                                    // (T016 / R-watch-002).
+                                                    // (R-watch-002).
                                                     let total =
                                                         dropped.fetch_add(1, Ordering::SeqCst) + 1;
                                                     log::warn!(
@@ -944,7 +944,7 @@ mod tests {
         Ok(events)
     }
 
-    /// Regression test (T015 / R-watch-001): FsWatcher on a file target must
+    /// Regression test (R-watch-001): FsWatcher on a file target must
     /// keep delivering events across consecutive `rename(tmp, path)` atomic
     /// replacements. The old implementation watched the file's own inode;
     /// notify does not re-arm on `MOVE_SELF`, so the first rename silently
@@ -983,7 +983,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// Regression test (T015 / R-watch-001): deleting and recreating the
+    /// Regression test (R-watch-001): deleting and recreating the
     /// watched file must not end the watch — changes to the new file stay
     /// observable (parent-directory watching, not inode watching).
     #[tokio::test]
@@ -1019,7 +1019,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// Regression test (T016 / R-watch-002): events overflowing the event
+    /// Regression test (R-watch-002): events overflowing the event
     /// channel (slow consumer) must be observable through `dropped_events()`
     /// instead of vanishing silently. A warning log is emitted on the same
     /// guarded branch; the global `log` slot is process-wide and owned by the
@@ -1057,7 +1057,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// T021 / R-watch-007: rapid consecutive writes to the watched file must
+    /// / R-watch-007: rapid consecutive writes to the watched file must
     /// be merged through the AdaptiveDebouncer outlet into a bounded number
     /// of forwarded events, and at least one event must be forwarded so the
     /// final written value is observable (a reload reads current content).
@@ -1208,7 +1208,7 @@ mod tests {
 
     #[tokio::test]
     async fn t015r_parent_dir_removal_becomes_observable_failure() {
-        // R3-M3 回归:父目录被删(内核 watch 随 inode 消亡)不得静默失聪
+        // R3- 回归:父目录被删(内核 watch 随 inode 消亡)不得静默失聪
         // ——watcher 必须转为 failed/关闭通道,让调用方可感知重建。
         let dir = tempfile::TempDir::new().unwrap();
         let file = dir.path().join("cfg.toml");
@@ -1233,7 +1233,7 @@ mod tests {
 
     #[tokio::test]
     async fn t015r_relative_path_target_still_delivers_events() {
-        // R3-H1 回归:相对路径(含 "./x.toml" 与裸 "x.toml")在过滤器绝对
+        // R3- 回归:相对路径(含 "./x.toml" 与裸 "x.toml")在过滤器绝对
         // 化之前永远与事件路径不相等,watcher 静默失聪。
         // 在 cwd 内创建临时文件,构造真正的相对路径("t015r-cfg.toml")。
         let cwd = std::env::current_dir().unwrap();

@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Unix file mode for snapshot files (T043): snapshots may contain sensitive
+/// Unix file mode for snapshot files snapshots may contain sensitive
 /// configuration, so they are created owner-only (0600) instead of the
 /// process-default 0644.
 #[cfg(unix)]
@@ -28,14 +28,14 @@ fn sibling_tmp_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// Atomically persist `content` at `path` (T034).
+/// Atomically persist `content` at `path`.
 ///
 /// The data is written to a sibling temp file, fsynced, and then renamed over
 /// the target. A crash mid-write leaves at most a `.tmp` sibling — never a
 /// truncated/half-written target file. The temp file is removed when the
 /// write itself fails.
 ///
-/// On unix the file is created with mode 0600 (T043).
+/// On unix the file is created with mode 0600.
 fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
     let tmp_path = sibling_tmp_path(path);
 
@@ -382,7 +382,7 @@ impl SnapshotManager {
             }
         };
 
-        // T034: atomic tmp+rename write (and T043: unix 0600) — offloaded to
+        // atomic tmp+rename write (and unix 0600) — offloaded to
         // the blocking pool like the prune step below.
         let write_path = path.clone();
         tokio::task::spawn_blocking(move || write_atomic(&write_path, &content))
@@ -468,7 +468,7 @@ impl SnapshotManager {
             }),
         }?;
 
-        // T034: atomic tmp+rename write (and T043: unix 0600).
+        // atomic tmp+rename write (and unix 0600).
         write_atomic(&path, &content).map_err(crate::error::ConfigError::IoError)?;
         prune_blocking(
             &self.config.dir,
@@ -1354,9 +1354,9 @@ version = 0
         assert!(!content.contains("_provenance"));
     }
 
-    // ---- T034: atomic write / T043: 0600 permissions ----
+    // ---- atomic write / 0600 permissions ----
 
-    /// T034 acceptance: an interrupted write (temp file present, rename never
+    /// acceptance: an interrupted write (temp file present, rename never
     /// happened) leaves NO file at the target path; the rename completes the
     /// picture.
     #[test]
@@ -1379,7 +1379,7 @@ version = 0
         assert!(!tmp_path.exists(), "the temp file is gone after rename");
     }
 
-    /// T034: a successful atomic write leaves the target and cleans up the
+    /// a successful atomic write leaves the target and cleans up the
     /// temp sibling; a failing write removes the temp file.
     #[test]
     fn test_write_atomic_cleans_up_temp_file() {
@@ -1395,7 +1395,7 @@ version = 0
         );
     }
 
-    /// T034: the temp file lives in the same directory as the target (rename
+    /// the temp file lives in the same directory as the target (rename
     /// stays within one filesystem) and keeps the extension in its name so
     /// the prune listing (extension filter) cannot pick it up.
     #[test]
@@ -1407,7 +1407,7 @@ version = 0
         assert_ne!(tmp.extension(), target.extension());
     }
 
-    /// T043 acceptance: snapshot files are created with unix mode 0600.
+    /// acceptance: snapshot files are created with unix mode 0600.
     #[cfg(unix)]
     #[test]
     fn test_snapshot_files_are_owner_only_0600() {

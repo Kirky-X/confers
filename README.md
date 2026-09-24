@@ -208,7 +208,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>context-aware</code></td><td align="center">❌</td><td>上下文感知（租户维度）配置</td></tr>
 <tr><td><code>feature-toggle</code></td><td align="center">❌</td><td>运行时特性开关注册表</td></tr>
 <tr><td><code>openfeature</code></td><td align="center">❌</td><td>OpenFeature 风格特性评估（含 <code>feature-toggle</code>、<code>context-aware</code>）</td></tr>
-<tr><td><code>lazy</code></td><td align="center">❌</td><td>超大文档惰性分段解析</td></tr>
+<tr><td><code>lazy-parse</code></td><td align="center">❌</td><td>超大文档惰性分段解析</td></tr>
 </table>
 
 ---
@@ -235,7 +235,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ## 💻 示例
 
-全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（HTTP / etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
+全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
 
 ```bash
 # 运行单个示例（在 examples/ 目录下）
@@ -270,7 +270,7 @@ Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块�
 
 ### 🎯 测试策略
 
-测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、24 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
+测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、26 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
 
 ### ▶️ 运行命令（与 CI 一致）
 
@@ -296,7 +296,7 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.3：单元测试约 2100+（`src/` 内联）、集成与 E2E 共 600 个（`tests/`，53 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.5：单元测试约 2200+（`src/` 内联）、集成与 E2E 共 615 个（`tests/`，55 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 

@@ -84,7 +84,7 @@ impl FileKeyProvider {
             });
         }
 
-        // T037: constant-byte key material (all-zero, repeated ASCII) is
+        // constant-byte key material (all-zero, repeated ASCII) is
         // rejected rather than silently accepted.
         let key_bytes = &key_str.as_bytes()[..32];
         if crate::secret::crypto::is_weak_key(key_bytes) {
@@ -94,7 +94,7 @@ impl FileKeyProvider {
             });
         }
 
-        // T037: warn when the key file is readable by group/others.
+        // warn when the key file is readable by group/others.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -245,7 +245,7 @@ impl VaultAuth {
 
     /// Exchange credentials for a client token (no-op for `Token`).
     ///
-    /// R2-M7: login responses also carry `auth.lease_duration` (seconds);
+    /// R2-: login responses also carry `auth.lease_duration` (seconds);
     /// returning it lets the provider refresh proactively instead of only
     /// reacting to 403s. `None` lease = no expiry information (static token).
     async fn resolve_with_lease(
@@ -400,7 +400,7 @@ impl VaultKeyProvider {
 
     async fn get_token(&self) -> ConfigResult<String> {
         // Fast path: token already resolved (and cached) by a previous fetch.
-        // T044: the KeyCachePolicy is now actually consumed — NoCache skips
+        // the KeyCachePolicy is now actually consumed — NoCache skips
         // the cache entirely, CacheWithTtl expires after its TTL.
         if self.cache_policy != KeyCachePolicy::NoCache
             && let Ok(Some((token, expires_at))) = self.token_cache.lock().map(|c| c.clone())
@@ -413,7 +413,7 @@ impl VaultKeyProvider {
             }
         }
         let client = shared_http_client();
-        // R2-M7: login lease_duration 驱动主动刷新 —— 到期前 10% 即视为
+        // R2-: login lease_duration 驱动主动刷新 —— 到期前 10% 即视为
         // 过期,重新登录(403 反应式重登仍保留为兜底)。
         let (token, lease) = self
             .auth
@@ -486,7 +486,7 @@ impl AsyncKeyProvider for VaultKeyProvider {
 
         let mut response = fetch(&client, &url, &token).await?;
 
-        // T039: a cached AppRole/K8s token expires (TTL). 401/403 mean the
+        // a cached AppRole/K8s token expires (TTL). 401/403 mean the
         // cached token is no longer valid — drop it, force a fresh login,
         // and retry exactly once so the provider recovers instead of failing
         // forever until process restart.
@@ -1046,7 +1046,7 @@ mod tests {
     #[cfg(feature = "remote")]
     #[tokio::test]
     async fn t039_expired_token_triggers_relogin_once() {
-        // T039: 缓存 token 过期(403)后必须清缓存重登一次并成功取 key,
+        // 缓存 token 过期(403)后必须清缓存重登一次并成功取 key,
         // 而不是永久失败直到进程重启。响应序列:
         // 1. AppRole 登录 200 → token A
         // 2. 用 token A 取 key → 403(过期)

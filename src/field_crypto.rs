@@ -19,7 +19,7 @@
 //!   ciphertext as if it were the secret), and a telemetry event records the
 //!   failure.
 //! - Without the `encryption` feature the transform only emits a warning
-//!   telemetry event and leaves envelope values untouched (T036: the build
+//!   telemetry event and leaves envelope values untouched (the build
 //!   must not silently pretend encryption happened).
 
 /// Environment variable carrying the master key: hex-encoded 32 bytes, or a
@@ -138,7 +138,7 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: O
                 let _ = (&envelope, master_override);
                 crate::telemetry::warn("confers.encryption.feature_missing", &[("field", path)]);
                 // Leave the envelope in place: without the feature the caller
-                // opted out of encryption support entirely (T036).
+                // opted out of encryption support entirely.
             }
         }
         _ => {
@@ -161,7 +161,7 @@ fn decrypt_failure_marker(reason: &str) -> serde_json::Value {
 fn resolve_master_key() -> Option<Vec<u8>> {
     let raw = std::env::var(MASTER_KEY_ENV).ok()?;
     let key = decode_master_key_bytes(raw.trim())?;
-    // M5: 与 EnvKeyProvider 同源的弱密钥防护 —— 常量字节主密钥不因走了
+    // 与 EnvKeyProvider 同源的弱密钥防护 —— 常量字节主密钥不因走了
     // 加载管线而被绕过。
     if crate::secret::crypto::is_weak_key(&key) {
         return None;

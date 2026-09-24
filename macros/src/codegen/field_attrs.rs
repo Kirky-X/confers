@@ -70,7 +70,7 @@ pub fn generate_field_attr_impls(
                 /// Runtime handle for this `#[config(dynamic)]` field.
                 ///
                 /// Returns the SHARED singleton handle for this field
-                /// (T018 / R-watch-004): repeated calls return clones of the
+                /// (R-watch-004): repeated calls return clones of the
                 /// same `Arc`, so an update pushed through one call site is
                 /// observed by every reader of any other call site. The
                 /// handle is seeded once with the loaded value of the first

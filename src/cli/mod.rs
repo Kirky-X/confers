@@ -360,7 +360,7 @@ enum SnapshotCommands {
         #[arg(long, default_value = "./snapshots")]
         directory: PathBuf,
     },
-    /// Restore (load and validate) a snapshot file (T028 disaster recovery)
+    /// Restore (load and validate) a snapshot file (disaster recovery)
     #[cfg(feature = "snapshot")]
     Restore {
         /// Snapshot file to restore; defaults to the newest snapshot in the
@@ -1174,7 +1174,7 @@ fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
     Ok(())
 }
 
-/// Restore a snapshot (T028 disaster recovery): load the snapshot file,
+/// Restore a snapshot (disaster recovery): load the snapshot file,
 /// validate that it parses as the configured format, and print a summary.
 /// Without `--file`, the newest snapshot in the directory is restored.
 #[cfg(feature = "snapshot")]
@@ -1983,7 +1983,7 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
     #[cfg(not(feature = "encryption"))]
     {
         let _ = annotated;
-        // R2-M6: 编译时未带 encryption 特性属于降级配置 —— 有加密值的
+        // R2-: 编译时未带 encryption 特性属于降级配置 —— 有加密值的
         // 部署必须被告知,而不是静默 Ok 跳过。
         DoctorCheck {
             name: "encryption",
@@ -3329,7 +3329,7 @@ mod tests {
 
     #[test]
     fn test_redact_sensitive_json_masks_by_key_name() {
-        // T046: CLI 默认按字段名掩码敏感值,--reveal(false→掩码) 路径。
+        // CLI 默认按字段名掩码敏感值,--reveal(false→掩码) 路径。
         let mut v = serde_json::json!({ // pragma: allowlist secret
             "host": "db.internal",
             "password": "hunter2", // pragma: allowlist secret

@@ -208,7 +208,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>context-aware</code></td><td align="center">❌</td><td>Context-aware (tenant-dimension) configuration</td></tr>
 <tr><td><code>feature-toggle</code></td><td align="center">❌</td><td>Runtime feature toggle registry</td></tr>
 <tr><td><code>openfeature</code></td><td align="center">❌</td><td>OpenFeature-style flag evaluation (includes <code>feature-toggle</code> and <code>context-aware</code>)</td></tr>
-<tr><td><code>lazy</code></td><td align="center">❌</td><td>Lazy segmented parsing of oversized documents</td></tr>
+<tr><td><code>lazy-parse</code></td><td align="center">❌</td><td>Lazy segmented parsing of oversized documents</td></tr>
 </table>
 
 ---
@@ -235,7 +235,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 
 ## 💻 Examples
 
-All 21 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (HTTP / etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
+All 21 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
 
 ```bash
 # Run a single example (from the examples/ directory)
@@ -270,7 +270,7 @@ For the architecture diagram, the public core and feature-gated module tables, t
 
 ### 🎯 Test Strategy
 
-The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 24 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 9 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
+The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 26 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 9 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
 
 ### ▶️ Commands (matching CI)
 
@@ -296,7 +296,7 @@ Bus-related integration tests require a local NATS service; CI uses a `nats:2.10
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.3: about 2100+ unit tests (inline in `src/`), 600 integration and E2E tests (`tests/`, 53 files), 3 fuzz targets, and 9 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.5: about 2200+ unit tests (inline in `src/`), 615 integration and E2E tests (`tests/`, 55 files), 3 fuzz targets, and 9 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 

@@ -16,7 +16,7 @@
 //!   strictly increasing order *per `(publisher_id, epoch)` track*: stale
 //!   replays and duplicates are **dropped** (and counted), never delivered
 //!   twice, while a restarting publisher (fresh epoch, sequence restarting
-//!   at 1) opens a new track and is accepted (T030).
+//!   at 1) opens a new track and is accepted.
 
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hasher};
@@ -30,7 +30,7 @@ use futures_util::{Stream, StreamExt};
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::ConfigResult;
 
-/// Generate a process-level random publisher epoch (T030).
+/// Generate a process-level random publisher epoch.
 ///
 /// Without pulling in an RNG dependency, the per-process randomized keys of
 /// `RandomState` (seeded by the OS once per process) provide the entropy;
@@ -67,7 +67,7 @@ impl MonotonicSequencer {
 }
 
 /// Per-subscriber ordering state: the highest delivered version per
-/// `(publisher_id, epoch)` track (T030).
+/// `(publisher_id, epoch)` track.
 #[derive(Default)]
 pub struct OrderedEventFilter {
     last_seen: HashMap<(String, u64), u64>,
@@ -116,7 +116,7 @@ impl OrderedEventFilter {
 pub struct VersionArbitratedBus<B> {
     inner: B,
     sequencer: MonotonicSequencer,
-    /// Process-level epoch stamped on every published event (T030).
+    /// Process-level epoch stamped on every published event.
     publisher_epoch: u64,
     dropped_total: Arc<AtomicU64>,
 }
@@ -170,7 +170,7 @@ where
 {
     async fn publish(&self, mut event: ConfigChangeEvent) -> ConfigResult<()> {
         // Stamp the monotonic version into the checksum field (decimal) and
-        // this process's epoch alongside it (T030).
+        // this process's epoch alongside it.
         let version = self.sequencer.next(&event.instance_id);
         event.checksum = version.to_string();
         event.publisher_epoch = self.publisher_epoch;
@@ -300,7 +300,7 @@ mod tests {
         assert_eq!(bus.dropped_total(), 3, "stale replays must be counted");
     }
 
-    /// T030 acceptance: a restarting publisher (fresh epoch, sequence
+    /// acceptance: a restarting publisher (fresh epoch, sequence
     /// restarting at 1) is accepted even though the old track already
     /// delivered higher versions.
     #[tokio::test]
@@ -381,7 +381,7 @@ mod tests {
         assert!(!filter.admit("src", 7, 4), "stale dropped");
         assert!(filter.admit("src", 7, 6));
         assert!(filter.admit("other", 7, 1), "publishers are independent");
-        // T030: a fresh epoch of the same publisher is a new track.
+        // a fresh epoch of the same publisher is a new track.
         assert!(
             filter.admit("src", 9, 1),
             "new epoch seq=1 must be accepted after high versions on the old epoch"
@@ -390,7 +390,7 @@ mod tests {
         assert_eq!(filter.dropped(), 2);
     }
 
-    /// T030: epochs are process-random — distinct calls produce distinct
+    /// epochs are process-random — distinct calls produce distinct
     /// values (equality has ~2^-64 probability per pair) and never 0.
     #[test]
     fn generated_epochs_are_random_and_nonzero() {

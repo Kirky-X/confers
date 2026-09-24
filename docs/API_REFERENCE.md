@@ -492,11 +492,16 @@ pub trait KeyProvider: Send + Sync {
 
 ```rust
 pub enum KeyCachePolicy {
-    Ttl,      // 带存活时间的缓存（默认）
-    Forever,  // 永久缓存
-    Never,    // 永不缓存
+    /// Never cache keys — re-fetch on every access.
+    NoCache,
+    /// Cache with a time-to-live (defaults to 1 hour when constructed via [`Default`]).
+    CacheWithTtl(Duration),
+    /// Cache indefinitely until explicitly invalidated.
+    CacheIndefinitely,
 }
 ```
+
+默认值为 `CacheWithTtl`（TTL 1 小时）。该策略控制 Vault 等 key provider 的 token 缓存行为。
 
 ---
 
@@ -946,16 +951,16 @@ assert_eq!(decrypted, b"my-secret-api-key");
 
 #### 密钥派生
 
-##### `derive_field_key(master_key: &[u8], field_path: &str, key_version: &str) -> Result<[u8; 32], CryptoError>`
+##### `derive_field_key(master_key: &[u8], field_path: &str, key_version: &str) -> Result<Zeroizing<[u8; 32]>, CryptoError>`
 
-使用 HKDF-SHA256 从主密钥派生字段级加密密钥。
+使用 HKDF-SHA256 从主密钥派生字段级加密密钥。返回值包在 `Zeroizing` 中，密钥材料在丢弃时自动清零。
 
 ```rust
 pub fn derive_field_key(
     master_key: &[u8],
     field_path: &str,
     key_version: &str,
-) -> Result<[u8; 32], CryptoError>
+) -> Result<Zeroizing<[u8; 32]>, CryptoError>
 ```
 
 **示例：**
@@ -965,6 +970,7 @@ use confers::derive_field_key;
 
 let master_key = [0u8; 32];
 let field_key = derive_field_key(&master_key, "database.password", "v1")?;
+// field_key: Zeroizing<[u8; 32]>，可经 Deref 当 [u8; 32] 使用
 ```
 
 ---

@@ -72,7 +72,7 @@ _暂无变更。_
 - **总线版本仲裁**：`VersionArbitratedBus` 包装任意 `ConfigBus`，发布端按实例打单调版本，订阅端丢弃乱序/过期/重复版本并计数；未版本化事件 fail-open。
 - **零拷贝热路径**：`InMemoryConfig` 内部存储改 `Arc<AnnotatedValue>`，新增 `SharedValueReader::get_shared()` 共享句柄读取；10 KiB value 读取 ~2.1x 提升（bench 对比记录 PERFORMANCE.md）。
 - **金丝雀联动**（`change-stream` feature）：ProgressiveReloader 阶段迁移（trial_started/committed/rolled_back）发布 `ChangeSource::Canary` 事件到 ChangeStream，供上层编排。
-- **惰性分段解析**（`lazy` feature）：`LazySegmentedConfig` 按顶层 TOML 表头切分（纯行扫描），段首次访问才解析并缓存；单测断言未访问段零解析。
+- **惰性分段解析**（`lazy-parse` feature）：`LazySegmentedConfig` 按顶层 TOML 表头切分（纯行扫描），段首次访问才解析并缓存；单测断言未访问段零解析。
 
 ### 变更（workspace-rc4-completion）
 

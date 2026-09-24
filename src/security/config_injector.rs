@@ -592,7 +592,7 @@ impl ConfigInjector {
 
     /// 掩码敏感值
     ///
-    /// T050: 定长 `********`(8 星号)。旧实现按原文长度生成星号并保留
+    /// 定长 `********`(8 星号)。旧实现按原文长度生成星号并保留
     /// 前 1-2 个字符,泄露精确长度与前缀;定长掩码两者都不泄露。
     fn mask_value(value: &str) -> String {
         let _ = value;
@@ -1084,7 +1084,7 @@ mod tests {
 
     #[test]
     fn test_mask_value_short_and_long() {
-        // T050: 定长掩码 —— 不泄露原文长度与前缀。
+        // 定长掩码 —— 不泄露原文长度与前缀。
         assert_eq!(ConfigInjector::mask_value("ab"), "********");
         assert_eq!(ConfigInjector::mask_value("hunter2"), "********");
         assert_eq!(

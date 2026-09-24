@@ -13,7 +13,7 @@
   - [Config 派生宏](#config-派生宏)
   - [分层加载](#分层加载)
   - [灵活的数据来源](#灵活的数据来源)
-  - [配置文件搜索路径](#配置文件搜索路径)
+  - [配置文件加载方式](#配置文件加载方式)
 - [配置](#️-配置)
   - [定义配置结构体](#-定义配置结构体)
   - [加载配置](#-加载配置)
@@ -87,10 +87,10 @@ cargo --version
 
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.6.0-rc.3"` | 包含 toml、json、env |
-| **最小化** | `confers = { version = "0.6.0-rc.3", default-features = false, features = ["minimal"] }` | 仅环境变量 |
-| **推荐** | `confers = { version = "0.6.0-rc.3", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
-| **全量** | `confers = { version = "0.6.0-rc.3", features = ["full"] }` | 全部特性 |
+| **默认** | `confers = "0.6.0-rc.5"` | 包含 toml、json、env |
+| **最小化** | `confers = { version = "0.6.0-rc.5", default-features = false, features = ["minimal"] }` | Env + JSON（对应 Cargo.toml 的 `minimal = ["env", "json"]`） |
+| **推荐** | `confers = { version = "0.6.0-rc.5", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
+| **全量** | `confers = { version = "0.6.0-rc.5", features = ["full"] }` | 全部特性 |
 
 **可用的特性预设：**
 
@@ -195,136 +195,83 @@ graph TB
 - **环境变量**：通过 `env_prefix` 自动映射环境变量。
 - **远程**：支持 HTTP 轮询、Etcd 与 Consul。
 
-### 配置文件搜索路径
+### 配置文件加载方式
 
-`confers` 支持灵活的文件搜索策略，可按需在不同位置查找配置文件。
+`confers` **不会自动搜索任何配置文件路径**。派生宏生成的 `Config::load_sync()` 只读取字段默认值与声明的环境变量；配置文件必须显式指定路径加载。
 
-#### 默认搜索路径
+#### `load_sync()` 只读环境变量与默认值
 
-使用 `Config::load_sync()`（`#[derive(Config)]` 生成）时，`confers` 按以下优先级搜索配置文件：
-
-| 优先级 | 搜索路径 | 条件 | 文件格式 |
-|--------|----------|------|----------|
-| 1 | `./` | 总是 | `config.{toml,json,yaml,yml}` |
-| 2 | `~/.config/<app_name>/` | 设置了 `app_name` | `config.{toml,json,yaml,yml}` |
-| 3 | `~/.config/` | 总是 | `config.{toml,json,yaml,yml}` |
-| 4 | `~/` | 总是 | `config.{toml,json,yaml,yml}` |
-| 5 | `/etc/<app_name>/` | Unix 且设置了 `app_name` | `config.{toml,json,yaml,yml}` |
-
-#### app_name 的作用
-
-`app_name` 是可选的应用标识符，用于在系统标准目录中组织配置文件：
+`#[derive(Config)]` 生成的 `load()` / `load_sync()` 不读取任何配置文件（包括当前目录的 `config.toml`）。它只按「默认值最低、环境变量最高」的优先级装配字段：
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, Config)]
-#[config(app_name = "myapp")]  // ✅ 显式设置 app_name
+#[config(env_prefix = "APP")]
+pub struct ConfersConfig {
+    #[config(default = "\"127.0.0.1\".to_string()")]
+    pub host: String,
+    #[config(default = "8080")]
+    pub port: u16,
+}
+
+// 只消费 APP_HOST / APP_PORT 等环境变量与字段默认值，
+// 当前目录即使存在 config.toml 也不会被读取。
+let config = ConfersConfig::load_sync()?;
+```
+
+#### 显式指定配置文件路径
+
+需要配置文件时，通过 `ConfigBuilder::file()` 或 `Config::load_file()` 给出确切路径：
+
+```rust
+use confers::ConfigBuilder;
+
+let config = ConfigBuilder::<ConfersConfig>::new()
+    .file("/etc/myapp/production.toml")
+    .env()                      // 可选：叠加环境变量
+    .build()?;
+```
+
+> ⚠️ **注意**：`file()` 指定的文件不存在时返回 `ConfigFileNotFound` 错误，不会静默回退到默认值。路径必须确切，`confers` 不做多目录搜索。
+
+#### 环境专属叠加文件（profile overlay）
+
+启用 `#[config(profile)]` 后，当 `RUN_ENV`（或 `profile_env` 指定的变量）设置为非空值时，`confers` 会在**基础文件同目录**下查找 `<文件名>.<env>.<扩展名>` 叠加文件并按声明顺序合并；叠加文件缺失时静默跳过：
+
+```rust
+#[derive(Debug, Serialize, Deserialize, Config)]
+#[config(profile)]  // profile_env 默认为 RUN_ENV
+pub struct AppConfig {
+    pub log_level: String,
+}
+
+// RUN_ENV=production 时，file("config.toml") 会在同目录追加加载
+// config.production.toml（后者覆盖前者的同名键）。
+```
+
+#### `app_name` 的实际作用
+
+`app_name` 是可选的应用标识符，宏只对它做长度与非空校验；在生成的 CLI 辅助代码中它被用作应用的显示名。它**不参与**任何配置文件目录搜索或路径推导：
+
+```rust
+#[derive(Debug, Serialize, Deserialize, Config)]
+#[config(app_name = "myapp")]  // 仅作校验与 CLI 显示名
 pub struct ConfersConfig {
     pub host: String,
     pub port: u16,
 }
 ```
 
-**设置了 app_name 时的搜索路径**：
-
-```text
-./myapp/config.toml              ✅
-~/.config/myapp/config.toml      ✅
-~/.config/config.toml            ✅
-~/config.toml                    ✅
-/etc/myapp/config.toml           ✅（Unix）
-./config.toml                    ❌（不再搜索）
-```
-
-**未设置 app_name 时的搜索路径**：
-
-```text
-./config.toml                    ✅
-~/.config/config.toml            ✅
-~/config.toml                    ✅
-```
-
-#### 配置文件命名规则
-
-`confers` 支持以下配置文件命名模式：
-
-```bash
-# 标准配置文件
-config.toml
-config.json
-config.yaml
-config.yml
-
-# 环境专属配置文件（设置了 RUN_ENV 环境变量时）
-<app_name>.<env>.toml
-# 示例：myapp.production.toml、myapp.development.json
-```
-
-#### 使用场景示例
-
-**场景 1：使用系统标准目录的应用**
-
-```rust
-#[derive(Config)]
-#[config(app_name = "my-awesome-app")]
-pub struct ProductionConfig {
-    pub database_url: String,
-    pub max_connections: u32,
-}
-// 配置文件位于：~/.config/my-awesome-app/config.toml
-```
-
-**场景 2：使用当前目录的简单应用**
-
-```rust
-#[derive(Config)]
-pub struct SimpleConfig {
-    pub debug: bool,
-    pub workers: usize,
-}
-// 配置文件位于：./config.toml（简单应用推荐）
-```
-
-**场景 3：指定确切路径**
-
-```rust
-#[derive(Config)]
-pub struct ConfersConfig {
-    pub name: String,
-}
-
-// 使用 ConfigBuilder 指定确切路径
-let config = ConfigBuilder::<ConfersConfig>::new()
-    .file("/etc/myapp/production.toml")
-    .build()?;
-```
-
-**场景 4：环境专属配置**
-
-```bash
-# 设置运行环境
-export RUN_ENV=production
-
-# confers 会自动搜索：
-# ./myapp.production.toml
-# ~/.config/myapp.production.toml
-# /etc/myapp.production.toml（Unix）
-```
-
 #### 最佳实践建议
 
-1. **应用程序**：建议设置 `app_name` 以使用系统标准目录
+1. **应用程序**：用 `ConfigBuilder::file()` 指定配置文件的确切路径（可用 `std::env::var("HOME")` 等自行拼装系统标准目录）
 
-   ```rust
-   #[config(app_name = "your-app-name")]
-   ```
-
-2. **库/工具**：使用默认行为，在当前目录查找 `config.toml`
+2. **库/工具**：优先依赖环境变量与字段默认值（`load_sync()`），保持零文件依赖
 
 3. **测试/特殊需求**：使用 `load_file()` 指定确切路径
 
-4. **跨平台应用**：设置 `app_name` 以获得最佳的跨平台兼容性
+4. **多环境部署**：启用 `#[config(profile)]`，用 `RUN_ENV` 切换 `<stem>.<env>.<ext>` 叠加文件
 
-> 💡 **提示**：如果找不到配置文件，`confers` 会使用默认值继续加载（除非启用了严格模式）。如需精确控制配置文件路径，请使用 `Config::load_file()`。
+> 💡 **提示**：`load_sync()` 找不到环境变量时使用字段默认值；`file()`/`load_file()` 指定的文件缺失则直接报错。如需多文件叠加，可在 `ConfigBuilder` 上按声明顺序链式调用多次 `file()`（后声明者覆盖先声明者）。
 
 ---
 
@@ -349,7 +296,7 @@ struct DatabaseConfig {
 }
 
 #[derive(Config, Deserialize)]
-#[config(env_prefix = "MYAPP", strict = true)]
+#[config(env_prefix = "MYAPP")]
 struct MyConfig {
     #[config(default = "100")]
     timeout_ms: u64,
@@ -357,8 +304,10 @@ struct MyConfig {
     // 嵌套结构体
     db: DatabaseConfig,
 
-    #[config(sensitive = true)] // 审计日志中会被脱敏
-    api_key: String,
+    // 敏感字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性），
+    // 审计日志与 debug 输出中自动脱敏
+    #[config(sensitive = true)]
+    api_key: SecretString,
 }
 ```
 
@@ -575,10 +524,13 @@ etcd 与 Consul 后端分别由 `etcd`、`consul` 特性提供，使用 `EtcdSou
 启用 `audit` 特性后，`confers` 可以记录配置加载历史并自动脱敏敏感字段：
 
 ```rust
+use confers::secret::SecretString;
+
 #[derive(Config, Deserialize)]
 struct SecureConfig {
+    // sensitive 字段必须为 SecretString / SecretBytes 类型（需 encryption 特性）
     #[config(sensitive = true)]
-    db_password: String,
+    db_password: SecretString,
 }
 
 // 敏感字段在日志与 debug 输出中自动脱敏
@@ -680,17 +632,19 @@ struct SecureConfig {
 
 ```rust
 use confers::Config;
+use confers::secret::SecretString;
 use serde::Deserialize;
 
 #[derive(Config, Deserialize)]
 #[config(env_prefix = "APP")]
 struct SecureConfig {
-    // 标记敏感字段，审计日志会自动脱敏
+    // 标记敏感字段，审计日志会自动脱敏；
+    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性）
     #[config(sensitive = true)]
-    database_password: String,
+    database_password: SecretString,
 
     #[config(sensitive = true)]
-    api_key: String,
+    api_key: SecretString,
 
     // 非敏感字段
     server_name: String,
@@ -833,7 +787,7 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["security-rules"] }
+confers = { version = "0.6.0-rc.5", features = ["security-rules"] }
 ```
 
 ```rust
@@ -875,7 +829,7 @@ if !report.is_ok(false) {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.3", features = ["feature-toggle"] }
+confers = { version = "0.6.0-rc.5", features = ["feature-toggle"] }
 ```
 
 ```rust

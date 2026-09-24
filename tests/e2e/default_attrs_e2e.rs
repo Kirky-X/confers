@@ -3,7 +3,7 @@
 
 //! E2E: `#[config(default)]` 边界写法(tests/e2e/default_attrs_e2e.rs)
 //!
-//! T011 回归:裸字形式 `#[config(default)]`(取字段类型 Default)与
+//! 回归:裸字形式 `#[config(default)]`(取字段类型 Default)与
 //! `#[config(default = None)]`(Option 字段显式 None)此前产生难懂的
 //! 编译错误,现在必须生成合法代码并真实生效。
 

@@ -95,7 +95,7 @@ impl SecretKeyProvider for EnvKeyProvider {
         if key.len() != 32 {
             return Err(CryptoError::InvalidKeyLength(key.len()));
         }
-        // T037: constant-byte key material (all-zero, repeated ASCII) is
+        // constant-byte key material (all-zero, repeated ASCII) is
         // rejected instead of silently accepted.
         if crate::secret::crypto::is_weak_key(key.as_bytes()) {
             return Err(CryptoError::WeakKey);

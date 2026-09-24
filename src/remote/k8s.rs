@@ -33,7 +33,7 @@ const SOURCE_NAME: &str = "k8s";
 pub const DEFAULT_SERVICE_ACCOUNT_TOKEN: &str =
     "/var/run/secrets/kubernetes.io/serviceaccount/token";
 
-/// Default service-account CA bundle path inside a pod (T026).
+/// Default service-account CA bundle path inside a pod.
 ///
 /// The in-cluster API server serves a cluster-specific TLS certificate that
 /// is only trusted via this CA bundle; without loading it every in-cluster
@@ -398,7 +398,7 @@ impl K8sApiSourceBuilder {
         self
     }
 
-    /// Set the circuit breaker failure threshold (T032).
+    /// Set the circuit breaker failure threshold.
     ///
     /// After this many consecutive failed polls, the circuit opens and
     /// subsequent polls fail fast with `CircuitBreakerOpen`. Default: 5.
@@ -467,7 +467,7 @@ impl K8sApiSourceBuilder {
     }
 }
 
-/// Build the reqwest client used by [`K8sApiSource`] (T026).
+/// Build the reqwest client used by [`K8sApiSource`].
 ///
 /// - `ca_path` (explicit or the in-cluster service-account `ca.crt` when it
 ///   exists) is loaded and installed via `add_root_certificate`; unreadable
@@ -557,7 +557,7 @@ pub struct K8sApiSource {
     client: reqwest::Client,
     cached: ArcSwap<Option<Arc<AnnotatedValue>>>,
     source_id: SourceId,
-    /// Poll circuit breaker (T032): repeated failures open the circuit and
+    /// Poll circuit breaker repeated failures open the circuit and
     /// polls fail fast without touching the network.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
@@ -654,7 +654,7 @@ fn decode_base64(input: &str) -> Option<String> {
 #[async_trait::async_trait]
 impl crate::remote::PolledSource for K8sApiSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        // T032: circuit breaker around the fetch — consecutive failures open
+        // circuit breaker around the fetch — consecutive failures open
         // the circuit and subsequent polls fail fast without a request.
         let allowed = {
             let mut cb = self
@@ -912,14 +912,14 @@ mod tests {
         assert_eq!(decode_base64("!!!"), None);
     }
 
-    // ==================== T026: in-cluster client hardening ====================
+    // ==================== in-cluster client hardening ====================
 
     /// A valid self-signed PEM used as a stand-in service-account CA bundle
     /// (fixture file: base64 trips spell-checkers/secret scanners; excluded
     /// via typos.toml and covered by .secrets.baseline).
     const TEST_CA_PEM: &str = include_str!("testdata/test-ca.pem");
 
-    /// T026: the client is built with the SA CA bundle installed and the
+    /// the client is built with the SA CA bundle installed and the
     /// default timeouts applied (connect 10s / total 30s). A readable,
     /// parsable PEM must be accepted by the client builder — proving the
     /// `add_root_certificate` path executes.
@@ -951,7 +951,7 @@ mod tests {
         assert!(source.is_ok(), "build without CA must succeed off-cluster");
     }
 
-    /// T026: an unreadable or unparsable CA file fails loudly instead of
+    /// an unreadable or unparsable CA file fails loudly instead of
     /// silently building a client that cannot verify the API server.
     #[test]
     fn api_client_fails_loud_on_bad_ca_file() {
@@ -985,7 +985,7 @@ mod tests {
         );
     }
 
-    /// T026: the default timeouts are connect 10s / total 30s and the
+    /// the default timeouts are connect 10s / total 30s and the
     /// builder applies them unless overridden.
     #[test]
     fn api_client_default_timeout_constants() {
@@ -1006,7 +1006,7 @@ mod tests {
         assert_eq!(builder.request_timeout, DEFAULT_K8S_REQUEST_TIMEOUT);
     }
 
-    /// T032: after the failure threshold is reached, polls fail fast with
+    /// after the failure threshold is reached, polls fail fast with
     /// `CircuitBreakerOpen` without issuing an API request.
     #[tokio::test]
     async fn api_source_circuit_breaker_opens_after_failures() {

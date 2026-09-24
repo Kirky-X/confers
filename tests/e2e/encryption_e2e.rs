@@ -3,7 +3,7 @@
 
 //! E2E: `encrypt` 字段属性真实解密(tests/e2e/encryption_e2e.rs)
 //!
-//! T035 回归:`encrypt = "xchacha20"` 此前只把字段标为敏感、不产生任何
+//! 回归:`encrypt = "xchacha20"` 此前只把字段标为敏感、不产生任何
 //! 加解密 —— 密文字符串被原样反序列化后「可用」。现在加载管线必须:
 //! 统一 envelope 密文经字段派生密钥解密注入(主密钥来自
 //! `CONFERS_MASTER_KEY`),明文值原样直通;解密失败该字段反序列化失败。

@@ -138,14 +138,17 @@ Confers 通过多层安全机制保护您的配置数据。
 
 ```rust,ignore
 use confers::{Config, XChaCha20Crypto};
+use confers::secret::SecretString;
 
 // 在 Cargo.toml 中启用 encryption 特性
 // features = ["encryption"]
 
 #[derive(Config)]
 pub struct SecureConfig {
+    // sensitive 字段必须为 SecretString / SecretBytes 类型，
+    // 否则宏展开期报错
     #[config(sensitive = true)]
-    pub database_url: String,
+    pub database_url: SecretString,
     #[config(sensitive = true, encrypt = "xchacha20")]
     pub api_key: String,
 }
@@ -315,16 +318,20 @@ retention_days = 90
 
 ### 环境变量
 
-```bash
-# 生产环境必填
-CONFERS_MASTER_KEY=your-256-bit-key
-CONFERS_AUDIT_ENABLED=true
+`confers` 代码实际读取的内置环境变量（对 `src/` 全量核对）：
 
-# 可选的安全加固
-CONFERS_MAX_MEMORY_MB=512
-CONFERS_TIMEOUT_SECONDS=30
-CONFERS_SSRF_BLOCKLIST=/etc/confers/blocklist.txt
+```bash
+# 生产环境必填（加密主密钥：32 字节 hex 编码，或 32 字节 ASCII 密钥；
+# 也可经 ConfigBuilder::master_key 显式注入覆盖）
+CONFERS_MASTER_KEY=your-256-bit-key
+
+# 其余内置变量
+CONFERS_LANG=zh                       # 消息语言（覆盖系统 locale 检测）
+CONFERS_RATE_LIMIT_MAX_REQUESTS=100   # 配置注入限流：窗口内最大请求数
+CONFERS_RATE_LIMIT_WINDOW_SECONDS=60  # 配置注入限流：窗口时长（秒）
 ```
+
+> ⚠️ **注意**：审计开关、内存上限、超时、SSRF 黑名单等安全选项没有对应的内置环境变量，需在代码中通过 `AuditConfig`、`ConfigLimits`、`SecurityValidatorRegistry` 等配置项显式设置。
 
 ### 安全加固清单
 

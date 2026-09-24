@@ -932,7 +932,7 @@ mod tests {
 
     #[test]
     fn test_conflict_report_redacts_sensitive_paths() {
-        // T048 regression: conflict reports embedded `format!("{:?}")` of the
+        // regression: conflict reports embedded `format!("{:?}")` of the
         // raw values, leaking sensitive config into diagnostics.
         let e = MergeEngine::new().with_sensitive_paths(vec!["db.password".to_string()]);
         let l = AnnotatedValue::new(
@@ -971,7 +971,7 @@ mod tests {
 
     #[test]
     fn test_merge_respects_priority_regardless_of_argument_order() {
-        // T010 regression: merge() used to let the `high` position win
+        // regression: merge() used to let the `high` position win
         // structurally even when it carried the LOWER priority, while
         // report_conflict claimed the priority winner — the two could
         // disagree. Now the entry normalizes to priority order.
@@ -997,7 +997,7 @@ mod tests {
 
     #[test]
     fn test_field_strategy_runs_even_when_values_equal() {
-        // R1-H1 regression: the COW fast-path scan used the parent strategy,
+        // R1- regression: the COW fast-path scan used the parent strategy,
         // so a registered child Join strategy was silently skipped whenever
         // low and high were already equal.
         let e = MergeEngine::new()
@@ -1031,7 +1031,7 @@ mod tests {
 
     #[test]
     fn test_field_strategy_applies_on_nested_path() {
-        // T008 regression: field strategies were only consulted at the root
+        // regression: field strategies were only consulted at the root
         // path (""), so per-field strategies registered on the engine never
         // applied to nested leaves.
         let e = MergeEngine::new()
@@ -1091,7 +1091,7 @@ mod tests {
 
     #[test]
     fn test_null_semantics_consistent_between_root_and_map_leaf() {
-        // T005 regression: map-internal leaf merges used to let a high
+        // regression: map-internal leaf merges used to let a high
         // (explicit) null overwrite a low value via the Replace fallback,
         // while root-level merges kept the low value. Both levels must agree:
         // null never erases an existing value.

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use zeroize::Zeroizing;
 
-/// Open `path` for writing, creating it with unix mode 0600 (T043).
+/// Open `path` for writing, creating it with unix mode 0600.
 ///
 /// Key material exports/backups and the encrypted key store hold secrets:
 /// new files are created owner-only instead of the process-default 0644.
@@ -468,7 +468,7 @@ impl KeyStorage {
 
         // 原子写入：先写到临时文件 → fsync → rename 到目标路径
         // 避免进程崩溃或断电导致 keys.json 被截断/损坏
-        // T043: 临时文件以 unix 0600 创建,rename 后 keys.json 继承该权限。
+        // 临时文件以 unix 0600 创建,rename 后 keys.json 继承该权限。
         {
             let mut file = open_sensitive_file(&tmp_path).map_err(|e| {
                 std::io::Error::new(e.kind(), format!("Failed to open temp key store: {}", e))
@@ -677,7 +677,7 @@ impl KeyStorage {
         Ok(backups)
     }
 
-    /// Verify possession of the old master key (T040): the stored keystore
+    /// Verify possession of the old master key the stored keystore
     /// blob must decrypt AND pass its checksum under the claimed key. When no
     /// keystore file exists yet there is nothing to verify against, so the
     /// check passes trivially (first-time rotation before any save).
@@ -706,7 +706,7 @@ impl KeyStorage {
         // decrypt plaintext, which always failed because decrypt_data expects
         // "nonce:ciphertext" format).
         //
-        // T040: the caller must PROVE possession of the old key before the
+        // the caller must PROVE possession of the old key before the
         // rotation runs. We verify with a deterministic challenge: derive a
         // field key from the claimed old key and check it against a
         // self-consistent AEAD round trip seeded from the stored key id — an
@@ -1133,7 +1133,7 @@ mod tests {
         assert!(contents.contains("\"exported_at\""));
     }
 
-    /// T043 acceptance: keys.json, key exports and key backups are created
+    /// acceptance: keys.json, key exports and key backups are created
     /// with unix mode 0600 (owner-only) — new files are permissioned at
     /// creation time, not chmodded afterwards.
     #[cfg(unix)]
@@ -1282,7 +1282,7 @@ mod tests {
 
     #[test]
     fn t040_rotate_rejects_wrong_old_key() {
-        // T040: 旧密钥持有证明 —— 错误的旧密钥必须被拒绝且存储不被改动。
+        // 旧密钥持有证明 —— 错误的旧密钥必须被拒绝且存储不被改动。
         let temp_dir = tempfile::tempdir().unwrap();
         let real_old = [0x80; 32];
         let wrong = [0x44; 32];

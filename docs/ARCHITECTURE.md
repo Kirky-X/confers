@@ -129,7 +129,7 @@ confers/
 | `toggle` | `feature-toggle` | 运行时特性开关：`FeatureToggleRegistry`（基于 `dashmap`） |
 | `context` | `context-aware` | 上下文感知配置 |
 | `schema` | `schema` / `typescript-schema` | `TypeScriptGenerator`，从 Rust 类型生成 TS 定义 |
-| `cli` | `cli` | `confers` 命令行工具（clap）：diff、generate、validate、encrypt、wizard、key；入口在 `src/cli/main.rs` |
+| `cli` | `cli` | `confers` 命令行工具（clap）：inspect、validate、export、diff、snapshot（含 list/restore）、schema、get、docs、doctor；入口在 `src/cli/main.rs` |
 
 ### workspace 成员
 
@@ -186,7 +186,7 @@ graph TD
 
 1. **加密算法**：`secret::XChaCha20Crypto` 提供 XChaCha20-Poly1305 认证加密（AEAD），每次加密生成随机 nonce，密文附带 Poly1305 认证标签防篡改。
 2. **字段级密钥派生**：`derive_field_key` 使用 HKDF-SHA256 从主密钥为每个字段路径 + 密钥版本派生独立子密钥，避免主密钥直接参与加密；`key::KeyStorage` 中的密钥材料本身也以 XChaCha20 加密持久化。
-3. **内存安全**：`SecretBytes` / `ZeroizingBytes`（zeroize）确保敏感字节在丢弃时清零；`secrecy` crate 防止敏感值意外进入日志；`SecureString` 禁止 `Clone`（v0.4.0 起），防止敏感材料被无意复制。
+3. **内存安全**：`SecretBytes` / `ZeroizingBytes`（zeroize）确保敏感字节在丢弃时清零；`SecretString`（`confers::secret`）实现脱敏 `Debug`/`Display`，防止敏感值意外进入日志；`SecureString` 禁止 `Clone`（v0.4.0 起），防止敏感材料被无意复制。
 4. **密钥治理**：`KeyManager` + `KeyRegistry` 提供密钥版本（`KeyVersion`）、状态（Active/Deprecated/Compromised）、轮换（`KeyRotationService` 按策略定时轮换）与熵值校验。
 5. **输入防护**：`EnvSecurityValidator` 以 allow/block 模式校验环境变量名，防注入；`security::rules` 内置 JWT/CORS/SSRF/TLS 四类校验器（SSRF 覆盖 18 个封锁 CIDR 网段并做 URL 边界匹配防绕过），可在启动时经 `SecurityValidatorRegistry` 统一执行。
 6. **输出脱敏**：`ErrorSanitizer` 对错误信息脱敏，防止敏感配置值经错误路径泄露；`#[config(sensitive = true)]` 字段在审计日志与 debug 输出中自动遮蔽。

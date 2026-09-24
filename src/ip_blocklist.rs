@@ -12,7 +12,7 @@
 //!   blocked ranges the runtime enforcement uses.
 //!
 //! Keeping one list (instead of two hand-maintained copies) is the fix for
-//! the audit finding T024: the poll-side list previously lacked
+//! the audit finding the poll-side list previously lacked
 //! `0.0.0.0/8`, so `https://0.0.0.0` slipped past the pinned resolver.
 //!
 //! Requires the `ipnet` dependency, which both the `remote` and the
@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_unspecified_v4_blocked() {
-        // The T024 defect: 0.0.0.0 previously slipped through.
+        // The defect: 0.0.0.0 previously slipped through.
         assert!(is_ip_blocked(IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
         assert!(is_ip_blocked(IpAddr::V4("0.255.0.1".parse().unwrap())));
     }

@@ -34,12 +34,12 @@ const CONSUMER_INACTIVE_THRESHOLD: std::time::Duration = std::time::Duration::fr
 const STREAM_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
 /// Maximum deliveries for a single message before the server terminates it
-/// (T033). Without this cap a poison message (undeserializable payload) is
+/// Without this cap a poison message (undeserializable payload) is
 /// redelivered forever.
 pub const NATS_MAX_DELIVER: i64 = 5;
 
 /// Delay applied when a message is NAKed because it cannot be deserialized
-/// (T033): the redelivery is deferred instead of hammering the consumer in a
+/// the redelivery is deferred instead of hammering the consumer in a
 /// tight loop.
 pub const NATS_NAK_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -113,7 +113,7 @@ impl NatsConfigBus {
         Ok(stream)
     }
 
-    /// Build the consumer configuration for one `subscribe()` call (T033:
+    /// Build the consumer configuration for one `subscribe()` call (
     /// `max_deliver` bounds poison-message redelivery).
     ///
     /// A JetStream consumer delivers each message to exactly one consumer, so
@@ -147,7 +147,7 @@ impl NatsConfigBus {
     /// Build the pull-consumer config used by every `subscribe()` call.
     ///
     /// Ephemeral (no durable name), broadcast-friendly, and with
-    /// [`NATS_MAX_DELIVER`] bounding redelivery of poison messages (T033).
+    /// [`NATS_MAX_DELIVER`] bounding redelivery of poison messages.
     fn subscriber_consumer_config(subject: &str) -> jetstream::consumer::pull::Config {
         jetstream::consumer::pull::Config {
             deliver_policy: DeliverPolicy::New,
@@ -284,7 +284,7 @@ impl ConfigBus for NatsConfigBus {
                             Some(event)
                         }
                         Err(_) => {
-                            // T033: deserialization failed — NAK with a delay
+                            // deserialization failed — NAK with a delay
                             // so the poison message is redelivered later
                             // instead of in a tight loop, and only up to
                             // `NATS_MAX_DELIVER` times (the server terminates
@@ -539,9 +539,9 @@ mod tests {
         );
     }
 
-    // ==================== T033: poison-message delivery cap ====================
+    // ==================== poison-message delivery cap ====================
 
-    /// T033: the consumer configuration caps redelivery at 5 and keeps the
+    /// the consumer configuration caps redelivery at 5 and keeps the
     /// broadcast/ephemeral semantics.
     #[test]
     fn test_consumer_config_caps_max_deliver() {
@@ -570,7 +570,7 @@ mod tests {
         );
     }
 
-    /// T033: a NAK for an undeserializable payload defers redelivery by 5s
+    /// a NAK for an undeserializable payload defers redelivery by 5s
     /// instead of looping.
     #[test]
     fn test_nak_delay_is_five_seconds() {

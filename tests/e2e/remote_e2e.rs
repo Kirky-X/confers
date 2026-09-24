@@ -274,7 +274,7 @@ async fn csl07_consul_kv_write_poll_delete() {
     assert_eq!(value.to_json()["app/port"], "8500");
 
     // 删除 KV → 后续 poll 按 Consul 删除语义推进 index 并返回空配置
-    // (T025: 不得返回旧缓存"续命",也不得因空数组报错)。
+    // (不得返回旧缓存"续命",也不得因空数组报错)。
     for key in [format!("{prefix}/app/host"), format!("{prefix}/app/port")] {
         let resp = client
             .delete(format!("http://127.0.0.1:8500/v1/kv/{key}"))

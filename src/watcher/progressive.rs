@@ -65,7 +65,7 @@ pub trait ReloadHealthCheck: Send + Sync {
     async fn check(&self, provider: Arc<dyn ConfigProvider>) -> HealthStatus;
 }
 
-/// Pre-commit validation for reload candidates (T023 / R-watch-009).
+/// Pre-commit validation for reload candidates (R-watch-009).
 ///
 /// Runs once per reload, immediately before the candidate would be
 /// committed. A failed validation rolls the reload back — keeping the
@@ -96,15 +96,15 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     /// [`ProgressiveReloader::with_health_check`] can replace it in place
     /// for all clones of the reloader instead of forking the state.
     health_check: ArcSwap<Option<Arc<dyn ReloadHealthCheck>>>,
-    /// Pre-commit validator (T023 / R-watch-009).
+    /// Pre-commit validator (R-watch-009).
     ///
     /// Shared swappable slot, same pattern as `health_check`.
     validator: ArcSwap<Option<Arc<dyn ReloadValidator<T>>>>,
     /// Whether a pre-commit validation failure rolls the reload back
     /// (true) or is recorded while the commit proceeds (false). Consumed
-    /// from `WatcherConfig::rollback_on_validation_failure` (T023).
+    /// from `WatcherConfig::rollback_on_validation_failure`.
     rollback_on_validation_failure: std::sync::atomic::AtomicBool,
-    /// Post-commit migration wiring (T023): policy + injected registry +
+    /// Post-commit migration wiring policy + injected registry +
     /// version transition, applied after every successful commit.
     #[cfg(feature = "migration")]
     migration: ArcSwap<Option<Arc<MigrationPlan>>>,
@@ -120,7 +120,7 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     change_stream: ArcSwap<Option<Arc<dyn crate::stream::ChangeStream>>>,
 }
 
-/// Post-commit migration plan (T023 / R-watch-009).
+/// Post-commit migration plan (R-watch-009).
 ///
 /// After a successful reload commit the reloader invokes the injected
 /// registry's `migrate(from → to)` according to the
@@ -200,7 +200,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner.current.load_full()
     }
 
-    /// Observe the configuration currently under trial (T023 / R-watch-009).
+    /// Observe the configuration currently under trial (R-watch-009).
     ///
     /// Returns `Some` while a canary/linear reload holds a candidate in its
     /// trial window, and `None` before any reload and after a commit or
@@ -211,7 +211,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         candidate.as_ref().clone()
     }
 
-    /// Attach (or replace) the pre-commit validator (T023 / R-watch-009).
+    /// Attach (or replace) the pre-commit validator (R-watch-009).
     ///
     /// The validator lives in a shared slot (like the health check), so
     /// installing it through any clone affects every clone. It runs once per
@@ -224,7 +224,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     }
 
     /// Set whether a pre-commit validation failure rolls the reload back
-    /// (T023 / R-watch-009).
+    /// (R-watch-009).
     ///
     /// `true`: a validation failure keeps the current configuration and
     /// `begin_reload` returns `ConfigError::ReloadRolledBack`. `false` (the
@@ -246,7 +246,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             .load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Consume the watcher policy (T023 / R-watch-009): takes
+    /// Consume the watcher policy (R-watch-009): takes
     /// `WatcherConfig::rollback_on_validation_failure` into the pre-commit
     /// validation failure path, so the flag defined in
     /// [`super::WatcherConfig`] genuinely controls rollback behavior.
@@ -254,7 +254,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.with_rollback_on_validation_failure(config.rollback_on_validation_failure)
     }
 
-    /// Wire the post-commit migration (T023 / R-watch-009).
+    /// Wire the post-commit migration (R-watch-009).
     ///
     /// After every successful commit the reloader invokes the injected
     /// registry's `migrate(from → to)` according to `policy`:
@@ -339,7 +339,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     #[inline]
     async fn publish_canary_stage(&self, _stage: &'static str, _detail: &str) {}
 
-    /// Pre-commit validation (T023 / R-watch-009).
+    /// Pre-commit validation (R-watch-009).
     ///
     /// Runs the attached validator (if any) right before the commit. A
     /// failure yields `Err(reason)`: with `rollback_on_validation_failure`
@@ -366,7 +366,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         Ok(())
     }
 
-    /// Commit `new_config` after pre-commit validation (T023).
+    /// Commit `new_config` after pre-commit validation.
     ///
     /// A validation failure with the rollback flag set clears the candidate,
     /// publishes the `rolled_back` stage and returns
@@ -381,14 +381,14 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner.current.store(new_config);
         self.inner.candidate.store(Arc::new(None));
         self.publish_canary_stage("committed", stage).await;
-        // T023: apply the post-commit migration per its policy.
+        // apply the post-commit migration per its policy.
         #[cfg(feature = "migration")]
         self.run_post_commit_migration();
         Ok(())
     }
 
     /// Run the post-commit migration per its [`MigrationOnReload`]-policy
-    /// (T023 / R-watch-009). Failures are logged and never un-commit the
+    /// (R-watch-009). Failures are logged and never un-commit the
     /// configuration.
     #[cfg(feature = "migration")]
     fn run_post_commit_migration(&self) {
@@ -584,7 +584,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
         self
     }
 
-    /// Consume the watcher policy (T023): the config's
+    /// Consume the watcher policy the config's
     /// `rollback_on_validation_failure` flag controls the pre-commit
     /// validation failure behavior of the built reloader.
     pub fn watcher_config(mut self, config: super::WatcherConfig) -> Self {
@@ -592,7 +592,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
         self
     }
 
-    /// Attach the pre-commit validator (T023 / R-watch-009).
+    /// Attach the pre-commit validator (R-watch-009).
     pub fn validator(mut self, validator: Arc<dyn ReloadValidator<T>>) -> Self {
         self.validator = Some(validator);
         self
@@ -1025,7 +1025,7 @@ mod tests {
         }
     }
 
-    /// T023 / R-watch-009: `peek_candidate` exposes the trial configuration
+    /// / R-watch-009: `peek_candidate` exposes the trial configuration
     /// during a staged reload and is cleared after the commit.
     #[tokio::test]
     async fn peek_candidate_observes_trial_and_clears_after_commit() {
@@ -1087,7 +1087,7 @@ mod tests {
         }
     }
 
-    /// T023 / R-watch-009: a pre-commit validation failure with
+    /// / R-watch-009: a pre-commit validation failure with
     /// `rollback_on_validation_failure = true` keeps the current
     /// configuration and reports `ReloadRolledBack`; with the flag unset the
     /// commit proceeds. The flag is genuinely consumed from
@@ -1138,7 +1138,7 @@ mod tests {
         assert_eq!(*reloader.current(), 5);
     }
 
-    /// T023 / R-watch-009: after a successful commit the injected migration
+    /// / R-watch-009: after a successful commit the injected migration
     /// registry is invoked according to the `MigrationOnReload` policy.
     #[cfg(feature = "migration")]
     mod migration_wiring {

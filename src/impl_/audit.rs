@@ -358,7 +358,7 @@ impl AuditWriter {
         };
 
         // Fan the accepted event out to every injected sink (best effort:
-        // sink outcomes never affect the local persistence result). T050:
+        // sink outcomes never affect the local persistence result).
         // sinks receive the SANITIZED event — the same redaction the durable
         // file path applies — so external log stacks never see raw key names.
         if !self.sinks.is_empty() {
@@ -523,7 +523,7 @@ impl AuditWriter {
     }
 
     fn sanitize(&self, event: &AuditEvent) -> AuditEvent {
-        // T049: 敏感字段名判定统一走 crate::sensitive_names 单一来源
+        // 敏感字段名判定统一走 crate::sensitive_names 单一来源
         // (此前这里维护着第三套关键词表,与 security::patterns 漂移)。
         let is_sensitive_field = |field: &str| crate::sensitive_names::is_sensitive_name(field);
 
@@ -1178,7 +1178,7 @@ mod tests {
 
     #[test]
     fn t050_sink_receives_sanitized_events() {
-        // T050: AuditSink 收到与落盘一致的脱敏事件 —— 敏感 key 名
+        // AuditSink 收到与落盘一致的脱敏事件 —— 敏感 key 名
         // (含 authorization 这类新增模式)不得原样外流。
         let dir = tempfile::TempDir::new().expect("tempdir");
         let sink = MemorySink::new();
@@ -1207,7 +1207,7 @@ mod tests {
 
     #[test]
     fn t043_audit_log_file_permissions_0600() {
-        // T043: 审计日志新建文件必须是 0600(unix)。
+        // 审计日志新建文件必须是 0600(unix)。
         let dir = tempfile::TempDir::new().expect("tempdir");
         let writer = AuditWriter::builder()
             .enabled(true)
@@ -1236,7 +1236,7 @@ mod tests {
 
     #[test]
     fn t050_external_hmac_key_requires_key_for_verification() {
-        // T050: 外置 HMAC 密钥的链文件 —— 用 salt(默认 verify)必须失败,
+        // 外置 HMAC 密钥的链文件 —— 用 salt(默认 verify)必须失败,
         // 用同一外置密钥必须通过。
         let dir = tempfile::TempDir::new().expect("tempdir");
         let key = b"external-kms-key-material-0123";
