@@ -187,7 +187,8 @@ use confers::security::rules::SecurityValidatorRegistry;
 
 let registry = SecurityValidatorRegistry::with_defaults();
 
-// 对任意 ConfigProvider 执行全部已注册校验器，返回 SecurityReport
+// 对任意 ConfigProvider 实现执行全部已注册校验器，返回 SecurityReport
+// （confers 不提供内置实现，需自行实现 ConfigProvider trait）
 let report = registry.validate_all(&config_provider);
 
 // is_ok(false)：存在任何违规（含警告）即返回 false
@@ -241,18 +242,18 @@ writer.log_decrypt("api_key", true)?;
 ### security 模块 API
 
 ```rust,ignore
-// EnvSecurityValidator - 环境变量安全校验（security-rules 特性）
+// EnvSecurityValidator - 环境变量安全校验（security 特性）
 use confers::security::EnvSecurityValidator;
 let validator = EnvSecurityValidator::strict();
 validator.validate_env_name("APP_NAME", None)?;
 validator.validate_env_value("production")?;
 
-// ErrorSanitizer - 错误信息中的敏感数据脱敏（encryption 特性）
+// ErrorSanitizer - 错误信息中的敏感数据脱敏（security 特性）
 use confers::security::ErrorSanitizer;
 let sanitizer = ErrorSanitizer::default();
 let safe_error = sanitizer.sanitize(&error_message);
 
-// ConfigInjector - 带校验与限速的运行时配置注入（security-rules 特性）
+// ConfigInjector - 带校验与限速的运行时配置注入（security 特性）
 use confers::security::ConfigInjector;
 let injector = ConfigInjector::new()
     .max_entries(1000)

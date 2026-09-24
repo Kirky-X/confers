@@ -20,7 +20,7 @@
 
 ## 🎯 概述
 
-`#[derive(Config)]` 是 Confers 库的核心宏。它为 Rust 结构体自动生成完整的配置管理功能。该宏位于 `macros/src/lib.rs`，通过 `codegen.rs` 与 `parse.rs` 实现代码生成。
+`#[derive(Config)]` 是 Confers 库的核心宏。它为 Rust 结构体自动生成完整的配置管理功能。该宏位于 `macros/src/lib.rs`，通过 `codegen/` 目录（load/schema/clap 等模块）与 `parse.rs` 实现代码生成。
 
 ---
 
@@ -775,7 +775,8 @@ pub id_code: String,
 #[garde(custom(my_validator))]
 pub field: String,
 
-fn my_validator(value: &str, _: &garde::ValidateContext) -> garde::Result {
+// 第二参数是结构体的上下文类型 &Self::Context（未用 #[garde(context)] 时为 &()）
+fn my_validator(value: &str, _: &()) -> garde::Result {
     if value.contains("invalid") {
         return Err(garde::Error::new("value contains invalid content"));
     }

@@ -45,6 +45,29 @@ pub enum CryptoError {
     LegacyDecryptionFailed,
 }
 
+impl crate::i18n::LocalizedMsg for CryptoError {
+    fn message_key(&self) -> &'static str {
+        match self {
+            CryptoError::EncryptionFailed => "error-crypto-encryption-failed",
+            CryptoError::DecryptionFailed => "error-crypto-decryption-failed",
+            CryptoError::InvalidKeyLength(_) => "error-crypto-invalid-key-length",
+            CryptoError::WeakKey => "error-crypto-weak-key",
+            CryptoError::KeyNotFound => "error-crypto-key-not-found",
+            #[allow(deprecated)]
+            CryptoError::LegacyDecryptionFailed => "error-crypto-legacy-decryption-failed",
+        }
+    }
+
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        match self {
+            CryptoError::InvalidKeyLength(actual) => {
+                vec![("actual", actual.to_string())]
+            }
+            _ => Vec::new(),
+        }
+    }
+}
+
 pub const NONCE_SIZE: usize = 24;
 
 pub struct XChaCha20Crypto;

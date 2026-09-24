@@ -273,7 +273,7 @@ fn main() -> anyhow::Result<()> {
 
 | ✅ 来源 | 说明 |
 |:-------:|:-----|
-| 文件 | 自动探测 `config.{toml,json,yaml,ini}` |
+| 文件 | 经 `ConfigBuilder::file()` 显式指定路径（支持 TOML、JSON、YAML、INI），不自动搜索 |
 | 环境变量 | 支持自定义前缀 |
 | CLI 参数 | 与 `clap` 集成 |
 | 远程 | Etcd、Consul、HTTP |
@@ -381,9 +381,9 @@ Error: Configuration file not found: config.toml
 
 **解决方案：**
 
-1. 确认文件位于根目录或 `config/` 目录
-2. 检查文件名（支持：`config.toml`、`config.json`、`config.yaml`、`config.ini`）
-3. 如果使用自定义路径，请确认路径正确
+1. `confers` 不会自动搜索任何目录——确认传给 `ConfigBuilder::file()` / `Config::load_file()` 的就是文件的确切路径
+2. 确认文件存在，且扩展名是支持的格式（TOML、JSON、YAML、INI）
+3. 如果错误来自派生宏的 `load_sync()`：它只读环境变量与字段默认值、不读任何文件，需要文件时改用 `ConfigBuilder::file()` 或 `load_file()` 显式加载
 
 ### ❓ 出现 "ValidationError"
 

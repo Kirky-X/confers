@@ -729,7 +729,7 @@ impl HttpPolledSource {
         self.stale_served.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// Serve the cached value as stale record the degradation in the
+    /// Serve the cached value as stale: record the degradation in the
     /// fetch-error metric, bump the stale-served marker and return the cache.
     /// Returns `None` when no cached value exists (nothing stale to serve).
     async fn serve_stale_if_allowed(&self) -> Option<AnnotatedValue> {

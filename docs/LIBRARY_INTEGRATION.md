@@ -177,7 +177,7 @@ let mut km = KeyManager::new()?;
 
 ### 校验失败
 
-请检查 `ValidationResult`，其中包含未通过的规则列表与出错的字段路径。每个 `ValidationRule` 会报告字段路径、规则名称以及人类可读的错误消息。
+请检查 `ValidationResult`（`Result<(), garde::Report>` 的类型别名）：失败时 `garde::Report` 以字段路径为键记录错误消息。注意 `ValidationRule` 只是规则值的枚举（MinLength/MaxLength/Length/MinValue/Range/Email/Url/Ip/Custom 等），本身不携带字段路径或错误消息。
 
 ---
 

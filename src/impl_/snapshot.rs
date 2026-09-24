@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Unix file mode for snapshot files snapshots may contain sensitive
+/// Unix file mode for snapshot files: snapshots may contain sensitive
 /// configuration, so they are created owner-only (0600) instead of the
 /// process-default 0644.
 #[cfg(unix)]
@@ -388,9 +388,9 @@ impl SnapshotManager {
         tokio::task::spawn_blocking(move || write_atomic(&write_path, &content))
             .await
             .map_err(|e| {
-                crate::error::ConfigError::IoError(std::io::Error::other(format!(
-                    "spawn_blocking: {}",
-                    e
+                crate::error::ConfigError::IoError(std::io::Error::other(crate::i18n::tr_args(
+                    "error-spawn-blocking-failed",
+                    &[("message", e.to_string())],
                 )))
             })??;
 

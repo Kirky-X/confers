@@ -487,7 +487,7 @@ fn cmd_inspect(
 ) -> Result<()> {
     let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
     if reveal {
-        eprintln!("warning: --reveal is set: sensitive values are printed verbatim");
+        eprintln!("{}", tr("cli-reveal-warning"));
     }
 
     match format {
@@ -1168,7 +1168,7 @@ fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
         }
         #[cfg(not(feature = "snapshot"))]
         _ => {
-            anyhow::bail!("snapshot commands require the `snapshot` feature");
+            anyhow::bail!("{}", tr("cli-snapshot-feature-required"));
         }
     }
     Ok(())
@@ -1187,7 +1187,13 @@ fn cmd_snapshot_restore(file: Option<&PathBuf>, directory: &Path) -> Result<()> 
             let manager = SnapshotManager::new(SnapshotConfig::new(directory));
             let snapshots = manager.list_snapshots()?;
             let Some(newest) = snapshots.first() else {
-                println!("No snapshots found in {}", directory.display());
+                println!(
+                    "{}",
+                    tr_args(
+                        "cli-snapshot-none-found",
+                        &[("directory", directory.display().to_string())]
+                    )
+                );
                 std::process::exit(1);
             };
             newest.path.clone()
@@ -1195,7 +1201,13 @@ fn cmd_snapshot_restore(file: Option<&PathBuf>, directory: &Path) -> Result<()> 
     };
 
     if !target.exists() {
-        println!("Snapshot file does not exist: {}", target.display());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-file-missing",
+                &[("file", target.display().to_string())]
+            )
+        );
         std::process::exit(1);
     }
 
@@ -1205,15 +1217,35 @@ fn cmd_snapshot_restore(file: Option<&PathBuf>, directory: &Path) -> Result<()> 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|e| anyhow::anyhow!("runtime build failed: {e}"))?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "{}",
+                tr_args(
+                    "cli-snapshot-runtime-build-failed",
+                    &[("message", e.to_string())]
+                )
+            )
+        })?;
     let merged = rt.block_on(manager.load_snapshot(&target))?;
 
     let key_count = match &merged.inner {
         crate::types::ConfigValue::Map(map) => map.len(),
         _ => 1,
     };
-    println!("restored: {}", target.display());
-    println!("top-level keys: {key_count}");
+    println!(
+        "{}",
+        tr_args(
+            "cli-snapshot-restored",
+            &[("file", target.display().to_string())]
+        )
+    );
+    println!(
+        "{}",
+        tr_args(
+            "cli-snapshot-top-level-keys",
+            &[("count", key_count.to_string())]
+        )
+    );
     Ok(())
 }
 
@@ -1519,7 +1551,7 @@ fn cmd_get(
 ) -> Result<()> {
     let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
     if reveal {
-        eprintln!("warning: --reveal is set: sensitive values are printed verbatim");
+        eprintln!("{}", tr("cli-reveal-warning"));
     }
 
     // "." means the root config object
@@ -1983,14 +2015,12 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
     #[cfg(not(feature = "encryption"))]
     {
         let _ = annotated;
-        // R2-: 编译时未带 encryption 特性属于降级配置 —— 有加密值的
+        // 编译时未带 encryption 特性属于降级配置 —— 有加密值的
         // 部署必须被告知,而不是静默 Ok 跳过。
         DoctorCheck {
             name: "encryption",
             severity: DoctorSeverity::Warning,
-            message: "encryption feature not compiled in; encrypted values \
-                      will not be decrypted at load time"
-                .to_string(),
+            message: tr("cli-doctor-encryption-not-compiled"),
         }
     }
 }

@@ -90,7 +90,9 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: O
                         "confers.encryption.envelope_malformed",
                         &[("field", path)],
                     );
-                    *value = decrypt_failure_marker("malformed envelope");
+                    *value = decrypt_failure_marker(&crate::i18n::tr(
+                        "error-decrypt-malformed-envelope",
+                    ));
                 }
                 return;
             };
@@ -111,7 +113,9 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: O
                         "confers.encryption.master_key_missing",
                         &[("field", path)],
                     );
-                    *value = decrypt_failure_marker("master key missing");
+                    *value = decrypt_failure_marker(&crate::i18n::tr(
+                        "error-decrypt-master-key-missing",
+                    ));
                     return;
                 };
                 match decrypt_field_value(&envelope, &master_key, path) {
@@ -121,14 +125,14 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: O
                     Err(reason) => {
                         crate::telemetry::warn(
                             "confers.encryption.decrypt_failed",
-                            &[("field", path), ("reason", reason)],
+                            &[("field", path), ("reason", reason.as_str())],
                         );
                         // Fail loudly at the field: the marker fails
                         // deserialization for String AND Option<String>
                         // (null would silently wash the failure into None),
                         // and the ciphertext is never handed through as the
                         // secret.
-                        *value = decrypt_failure_marker(reason);
+                        *value = decrypt_failure_marker(&reason);
                     }
                 }
             }
@@ -211,26 +215,27 @@ fn decrypt_field_value(
     envelope: &crate::envelope::EncryptedEnvelope,
     master_key: &[u8],
     field_path: &str,
-) -> Result<String, &'static str> {
+) -> Result<String, String> {
     use base64::Engine as _;
 
     let field_key =
         crate::secret::crypto::derive_field_key(master_key, field_path, &envelope.key_version)
-            .map_err(|_| "key derivation failed")?;
+            .map_err(|_| crate::i18n::tr("error-decrypt-key-derivation-failed"))?;
 
     let blob = base64::engine::general_purpose::STANDARD
         .decode(&envelope.payload)
-        .map_err(|_| "payload is not valid base64")?;
+        .map_err(|_| crate::i18n::tr("error-decrypt-payload-not-base64"))?;
     if blob.len() < 24 {
-        return Err("payload too short for a nonce");
+        return Err(crate::i18n::tr("error-decrypt-payload-too-short"));
     }
     let (nonce, ciphertext) = blob.split_at(24);
     let plaintext = crate::secret::crypto::XChaCha20Crypto::new()
         .decrypt(nonce, ciphertext, field_key.as_slice())
-        .map_err(|_| "decryption failed")?;
+        .map_err(|_| crate::i18n::tr("error-decrypt-open-failed"))?;
     // zeroize 1.9 的 Zeroizing 无 into_inner;此处物化为配置值属有界出口
     // (Zeroizing 缓冲在 drop 时仍被清零)。
-    String::from_utf8(plaintext.to_vec()).map_err(|_| "plaintext is not valid UTF-8")
+    String::from_utf8(plaintext.to_vec())
+        .map_err(|_| crate::i18n::tr("error-decrypt-plaintext-not-utf8"))
 }
 
 #[cfg(all(test, feature = "encryption"))]
@@ -317,6 +322,99 @@ mod tests {
 
     fn hex_encode(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    #[serial]
+    fn arrays_and_nested_maps_are_traversed_and_decrypted() {
+        let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&master)) };
+
+        let nested_pw = make_envelope(&master, "db.creds.pw", "v1", "nested-secret");
+        let list_pw = make_envelope(&master, "servers.0.pw", "v1", "list-secret");
+
+        let mut json = serde_json::json!({
+            "db": { "creds": { "pw": nested_pw } },
+            "servers": [ { "pw": list_pw }, { "pw": "plain" } ],
+        });
+        decrypt_encrypted_tree(&mut json);
+        unsafe { std::env::remove_var(MASTER_KEY_ENV) };
+
+        assert_eq!(
+            json["db"]["creds"]["pw"], "nested-secret",
+            "nested map paths decrypt with the derived field key"
+        );
+        assert_eq!(
+            json["servers"][0]["pw"], "list-secret",
+            "array elements are addressed by index path"
+        );
+        assert_eq!(json["servers"][1]["pw"], "plain");
+    }
+
+    #[test]
+    #[serial]
+    fn malformed_envelopes_fail_loudly_instead_of_passing_through() {
+        unsafe { std::env::remove_var(MASTER_KEY_ENV) };
+
+        // `enc:`-prefixed but unparsable (bad key version / non-base64).
+        let mut json = serde_json::json!({ "api_key": "enc:v9:not-base64!!" }); // pragma: allowlist secret
+        decrypt_encrypted_tree(&mut json);
+        assert!(
+            json["api_key"].get("__confers_decrypt_failed").is_some(),
+            "malformed envelope must become the marker, got {}",
+            json["api_key"]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn undecodable_payload_variants_fail_with_distinct_reasons() {
+        let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&master)) };
+
+        // Payload is not valid base64.
+        let mut bad_b64 = serde_json::json!({ "pw": "enc:v1:v1:!!!not-base64!!!" });
+        decrypt_encrypted_tree(&mut bad_b64);
+        assert!(bad_b64["pw"].get("__confers_decrypt_failed").is_some());
+
+        // Payload decodes but is shorter than the 24-byte nonce.
+        let short = crate::envelope::EncryptedEnvelope::new(
+            "v1",
+            base64::engine::general_purpose::STANDARD.encode(b"short"),
+        )
+        .to_envelope_string();
+        let mut too_short = serde_json::json!({ "pw": short });
+        decrypt_encrypted_tree(&mut too_short);
+        assert!(too_short["pw"].get("__confers_decrypt_failed").is_some());
+
+        unsafe { std::env::remove_var(MASTER_KEY_ENV) };
+    }
+
+    #[test]
+    #[serial]
+    fn injected_master_key_beats_env_and_weak_keys_are_rejected() {
+        let env_master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        let injected = b"fedcba9876543210fedcba9876543210".to_vec(); // pragma: allowlist secret
+        unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&env_master)) };
+
+        // 用注入密钥加密:即便 env 里是另一把钥匙,注入键必须获胜。
+        let envelope = make_envelope(&injected, "pw", "v1", "injected-wins");
+        let mut json = serde_json::json!({ "pw": envelope });
+        apply_field_decryption(&mut json, Some(&injected));
+        unsafe { std::env::remove_var(MASTER_KEY_ENV) };
+        assert_eq!(json["pw"], "injected-wins");
+
+        // 注入弱密钥(全零):回落到 env 解析,env 键解不开 → 失败标记。
+        let envelope2 = make_envelope(&injected, "pw2", "v1", "x");
+        let mut weak = serde_json::json!({ "pw2": envelope2 });
+        apply_field_decryption(&mut weak, Some(&[0u8; 32]));
+        assert!(weak["pw2"].get("__confers_decrypt_failed").is_some());
+
+        // 注入长度错误的密钥:同样回落,env 键解不开 → 失败标记。
+        let envelope3 = make_envelope(&injected, "pw3", "v1", "y");
+        let mut bad_len = serde_json::json!({ "pw3": envelope3 });
+        apply_field_decryption(&mut bad_len, Some(&[1u8; 16]));
+        assert!(bad_len["pw3"].get("__confers_decrypt_failed").is_some());
     }
 }
 

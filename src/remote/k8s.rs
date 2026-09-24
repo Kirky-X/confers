@@ -22,6 +22,7 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::loader::Format;
 use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::remote::common::try_parse_value_with_format;
@@ -497,9 +498,12 @@ fn build_api_client(
         let ca_pem = std::fs::read(&ca_path).map_err(|e| ConfigError::InvalidValue {
             key: "k8s.tls.ca_file".to_string(),
             expected_type: "readable PEM file".to_string(),
-            message: format!(
-                "Failed to read Kubernetes CA file '{}': {e}",
-                ca_path.display()
+            message: tr_args(
+                "error-k8s-ca-read-failed",
+                &[
+                    ("path", ca_path.display().to_string()),
+                    ("message", e.to_string()),
+                ],
             ),
         })?;
         // reqwest/rustls silently accept PEM-less bytes, so the certificate
@@ -513,9 +517,9 @@ fn build_api_client(
             return Err(ConfigError::InvalidValue {
                 key: "k8s.tls.ca_file".to_string(),
                 expected_type: "valid PEM certificate".to_string(),
-                message: format!(
-                    "Invalid Kubernetes CA certificate in '{}': no PEM certificate block found",
-                    ca_path.display()
+                message: tr_args(
+                    "error-k8s-ca-no-pem-block",
+                    &[("path", ca_path.display().to_string())],
                 ),
             });
         }
@@ -523,9 +527,12 @@ fn build_api_client(
             reqwest::Certificate::from_pem(&ca_pem).map_err(|e| ConfigError::InvalidValue {
                 key: "k8s.tls.ca_file".to_string(),
                 expected_type: "valid PEM certificate".to_string(),
-                message: format!(
-                    "Invalid Kubernetes CA certificate in '{}': {e}",
-                    ca_path.display()
+                message: tr_args(
+                    "error-k8s-ca-invalid",
+                    &[
+                        ("path", ca_path.display().to_string()),
+                        ("message", e.to_string()),
+                    ],
                 ),
             })?;
         builder = builder.add_root_certificate(cert);
@@ -534,7 +541,10 @@ fn build_api_client(
     builder.build().map_err(|e| ConfigError::InvalidValue {
         key: SOURCE_NAME.to_string(),
         expected_type: "HTTP client".to_string(),
-        message: format!("failed to build k8s HTTP client: {e}"),
+        message: tr_args(
+            "error-k8s-client-build-failed",
+            &[("message", e.to_string())],
+        ),
     })
 }
 
@@ -557,7 +567,7 @@ pub struct K8sApiSource {
     client: reqwest::Client,
     cached: ArcSwap<Option<Arc<AnnotatedValue>>>,
     source_id: SourceId,
-    /// Poll circuit breaker repeated failures open the circuit and
+    /// Poll circuit breaker: repeated failures open the circuit and
     /// polls fail fast without touching the network.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
@@ -663,7 +673,7 @@ impl crate::remote::PolledSource for K8sApiSource {
                 .map_err(|_| ConfigError::InvalidValue {
                     key: SOURCE_NAME.to_string(),
                     expected_type: "k8s circuit breaker state".to_string(),
-                    message: "k8s circuit breaker lock poisoned".to_string(),
+                    message: tr("error-k8s-circuit-breaker-lock-poisoned"),
                 })?;
             cb.can_execute()
         };
@@ -681,7 +691,7 @@ impl crate::remote::PolledSource for K8sApiSource {
                 .map_err(|_| ConfigError::InvalidValue {
                     key: SOURCE_NAME.to_string(),
                     expected_type: "k8s circuit breaker state".to_string(),
-                    message: "k8s circuit breaker lock poisoned".to_string(),
+                    message: tr("error-k8s-circuit-breaker-lock-poisoned"),
                 })?;
             match &fresh {
                 Ok(_) => cb.record_success(),
@@ -1043,5 +1053,189 @@ mod tests {
             }) if error_type == "CircuitBreakerOpen" => {}
             other => panic!("open circuit must fail fast, got: {other:?}"),
         }
+    }
+
+    // =========================================================================
+    // Mounted-source builder surface, format pinning, degenerate volumes
+    // =========================================================================
+
+    #[test]
+    fn mounted_source_builder_pins_format_interval_and_exposes_mount() {
+        let dir = TempDir::new().expect("tempdir");
+        let source = K8sMountedSource::new(dir.path())
+            .with_format(Format::Json)
+            .with_interval(Duration::from_secs(3));
+
+        assert_eq!(source.mount_path(), dir.path());
+        assert_eq!(source.interval, Duration::from_secs(3));
+        assert_eq!(source.format, Some(Format::Json));
+        // Debug formatting exposes only the mount path.
+        let debug = format!("{source:?}");
+        assert!(
+            debug.contains("mount_path"),
+            "debug must show the mount: {debug}"
+        );
+
+        // A pinned format beats content sniffing: TOML content in a file
+        // parsed with Format::Json surfaces as a raw string, not a map.
+        fs::write(dir.path().join("pinned.toml"), "a = 1\n").expect("write");
+        let value = source.read_volume().expect("read volume");
+        let pinned = get_path(&value, "pinned.toml", "");
+        assert_eq!(pinned.and_then(|p| p.as_str()), Some("a = 1\n"));
+    }
+
+    #[test]
+    fn data_target_reflects_the_generation_symlink() {
+        let dir = TempDir::new().expect("tempdir");
+        let source = K8sMountedSource::new(dir.path());
+        assert_eq!(source.data_target(), None, "no ..data link yet");
+
+        atomic_swap_link(dir.path(), "..2024_01_01_00_00_00.000");
+        #[cfg(unix)]
+        assert_eq!(
+            source.data_target().as_deref(),
+            Some("..2024_01_01_00_00_00.000")
+        );
+    }
+
+    #[test]
+    fn empty_volume_reads_as_null_root() {
+        let dir = TempDir::new().expect("tempdir");
+        let source = K8sMountedSource::new(dir.path());
+        let value = source.read_volume().expect("read empty volume");
+        assert!(
+            matches!(value.inner, ConfigValue::Null),
+            "empty volume must read as Null: {:?}",
+            value.inner
+        );
+    }
+
+    #[test]
+    fn unreadable_mount_fails_loudly() {
+        let missing = TempDir::new().expect("tempdir");
+        let path = missing.path().join("gone");
+        let source = K8sMountedSource::new(&path);
+        let err = source.read_volume().expect_err("missing mount must fail");
+        assert!(
+            err.to_string().contains("cannot read k8s mount volume"),
+            "error must name the mount failure: {err}"
+        );
+    }
+
+    /// A symlink escaping the mount is not a config key: it is skipped while
+    /// legitimate entries still load (containment rule).
+    #[cfg(unix)]
+    #[test]
+    fn escaping_symlinks_are_skipped() {
+        let dir = TempDir::new().expect("tempdir");
+        let outside = TempDir::new().expect("tempdir");
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, b"top secret").expect("write outside file");
+
+        fs::write(dir.path().join("good.toml"), "ok = true\n").expect("write good");
+        std::os::unix::fs::symlink(&outside_file, dir.path().join("escape.toml"))
+            .expect("create escaping symlink");
+
+        let source = K8sMountedSource::new(dir.path());
+        let value = source.read_volume().expect("read volume");
+        assert!(value.inner.as_map().unwrap().contains_key("good.toml"));
+        assert!(
+            !value.inner.as_map().unwrap().contains_key("escape.toml"),
+            "escaping symlink must not become a key"
+        );
+    }
+
+    /// `in_cluster_api_host` reads the service env with HTTPS-port fallbacks.
+    #[test]
+    #[serial_test::serial]
+    fn in_cluster_api_host_reads_service_env() {
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_HOST") };
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_PORT_HTTPS") };
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_PORT") };
+        assert!(in_cluster_api_host().is_none(), "outside a cluster");
+
+        unsafe { std::env::set_var("KUBERNETES_SERVICE_HOST", "10.96.0.1") };
+        // No port vars at all → default 443.
+        assert_eq!(
+            in_cluster_api_host().as_deref(),
+            Some("https://10.96.0.1:443")
+        );
+        // Generic HTTPS port wins next.
+        unsafe { std::env::set_var("KUBERNETES_SERVICE_PORT", "8443") };
+        assert_eq!(
+            in_cluster_api_host().as_deref(),
+            Some("https://10.96.0.1:8443")
+        );
+        // Dedicated HTTPS-port variable has the highest precedence.
+        unsafe { std::env::set_var("KUBERNETES_SERVICE_PORT_HTTPS", "443") };
+        assert_eq!(
+            in_cluster_api_host().as_deref(),
+            Some("https://10.96.0.1:443")
+        );
+
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_HOST") };
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_PORT_HTTPS") };
+        unsafe { std::env::remove_var("KUBERNETES_SERVICE_PORT") };
+    }
+
+    // =========================================================================
+    // API-source builder surface beyond the happy path
+    // =========================================================================
+
+    #[test]
+    fn api_builder_setters_shape_the_built_source() {
+        let dir = TempDir::new().expect("tempdir");
+        let ca_path = dir.path().join("ca.crt");
+        fs::write(&ca_path, TEST_CA_PEM).expect("write CA pem");
+
+        let source = K8sApiSourceBuilder::new("prod", "web-config", K8sObjectKind::Secret)
+            .api_host("https://k8s.example.com/")
+            .token("tok")
+            .ca_file(&ca_path)
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(9))
+            .circuit_breaker_threshold(3)
+            .interval(Duration::from_secs(4))
+            .build()
+            .expect("build with explicit host");
+
+        // Trailing slash on the host is trimmed; kind segment maps to the REST path.
+        assert_eq!(
+            source.url(),
+            "https://k8s.example.com/api/v1/namespaces/prod/secrets/web-config"
+        );
+        assert_eq!(source.interval, Duration::from_secs(4));
+        assert_eq!(source.token, Some("tok".to_string()));
+
+        use crate::remote::PolledSource;
+        assert_eq!(source.poll_interval(), Some(Duration::from_secs(4)));
+        assert_eq!(
+            source.source_id().as_str(),
+            "k8s:api:prod:secrets/web-config"
+        );
+    }
+
+    /// Without a reachable API server the poll fails and the circuit
+    /// breaker records it; `ca_file`-only TLS config still builds the client.
+    #[tokio::test]
+    async fn api_source_poll_records_failures_on_closed_port() {
+        // Port 1 on loopback is never listening in the test env.
+        let source = K8sApiSourceBuilder::new("default", "app", K8sObjectKind::ConfigMap)
+            .api_host("http://127.0.0.1:1")
+            .connect_timeout(Duration::from_millis(250))
+            .timeout(Duration::from_millis(500))
+            .circuit_breaker_threshold(2)
+            .build()
+            .expect("build");
+
+        use crate::remote::PolledSource;
+        let first = source.poll().await;
+        assert!(first.is_err(), "closed port must fail the poll");
+        assert!(
+            !matches!(first, Err(ConfigError::RemoteUnavailable { ref error_type, .. }) if error_type == "CircuitBreakerOpen"),
+            "first failure must be the fetch error: {first:?}"
+        );
+        let second = source.poll().await;
+        assert!(second.is_err(), "second poll still attempts (threshold 2)");
     }
 }

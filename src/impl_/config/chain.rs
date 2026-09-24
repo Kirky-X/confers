@@ -316,7 +316,7 @@ impl SourceChainBuilder {
     }
 
     /// Register sensitive configuration paths on the merge engine: conflict
-    /// reports redact these paths' values (R1-: keep this wired to the
+    /// reports redact these paths' values (keep this wired to the
     /// builder so the first conflict-report caller cannot leak plaintext).
     pub fn with_sensitive_paths(mut self, paths: Vec<String>) -> Self {
         self.chain = self.chain.with_sensitive_paths(paths);

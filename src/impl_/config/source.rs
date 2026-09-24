@@ -9,6 +9,7 @@
 //! MemorySource, DefaultSource.
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::impl_::loader::{self, Format};
 use crate::interface::Source;
 use crate::types::{AnnotatedValue, ConfigValue, SourceId, SourceKind};
@@ -468,7 +469,7 @@ impl EnvSource {
                     return Err(Self::path_conflict_error(
                         env_key,
                         config_path,
-                        "a nested map built from other variables",
+                        &tr("error-conflict-existing-nested-map"),
                         parts[0],
                     ));
                 }
@@ -494,7 +495,7 @@ impl EnvSource {
                     return Err(Self::path_conflict_error(
                         env_key,
                         config_path,
-                        "a scalar value set by another variable",
+                        &tr("error-conflict-existing-scalar"),
                         first,
                     ));
                 }
@@ -551,8 +552,13 @@ impl EnvSource {
         ConfigError::InvalidValue {
             key: env_key.to_string(),
             expected_type: "unambiguous configuration path".to_string(),
-            message: format!(
-                "variable maps to config path '{config_path}', which collides with {existing} at '{at}'; rename one of the conflicting variables"
+            message: tr_args(
+                "error-env-path-conflict",
+                &[
+                    ("path", config_path.to_string()),
+                    ("existing", existing.to_string()),
+                    ("at", at.to_string()),
+                ],
             ),
         }
     }

@@ -173,7 +173,7 @@ let snapshot2 = field.get();  // 并发读取
 
 ```rust
 use std::sync::Arc;
-use confers::{ConfigBuilder, ConfigProviderExt};
+use confers::ConfigBuilder;
 
 let config = Arc::new(
     ConfigBuilder::<ConfersConfig>::new()
@@ -186,8 +186,9 @@ let config = Arc::new(
 tokio::spawn({
     let config = Arc::clone(&config);
     async move {
-        let value = config.get_string("key").unwrap();
-        println!("{}", value);
+        // 构建产物是普通类型化结构体，直接按字段访问
+        let host = config.host.clone();
+        println!("{host}");
     }
 });
 ```

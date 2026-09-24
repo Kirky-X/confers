@@ -240,7 +240,7 @@ pub struct EtcdSource {
     last_revision: AtomicI64,
     cached_value: ArcSwap<Option<Arc<AnnotatedValue>>>,
     cached_source_id: SourceId,
-    /// Poll circuit breaker repeated failures open the circuit and
+    /// Poll circuit breaker: repeated failures open the circuit and
     /// polls fail fast without issuing a gRPC call.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }

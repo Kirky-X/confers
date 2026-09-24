@@ -10,6 +10,7 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::tr_args;
 use crate::interface::ConfigProvider;
 
 /// Reload strategy for hot reload.
@@ -104,7 +105,7 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     /// (true) or is recorded while the commit proceeds (false). Consumed
     /// from `WatcherConfig::rollback_on_validation_failure`.
     rollback_on_validation_failure: std::sync::atomic::AtomicBool,
-    /// Post-commit migration wiring policy + injected registry +
+    /// Post-commit migration wiring: policy + injected registry +
     /// version transition, applied after every successful commit.
     #[cfg(feature = "migration")]
     migration: ArcSwap<Option<Arc<MigrationPlan>>>,
@@ -359,8 +360,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 return Err(reason);
             }
             log::warn!(
-                "reload validation failed but rollback_on_validation_failure \
-                 is disabled; committing anyway: {reason}"
+                "{}",
+                tr_args("log-reload-validation-commit-anyway", &[("reason", reason)])
             );
         }
         Ok(())
@@ -381,7 +382,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self.inner.current.store(new_config);
         self.inner.candidate.store(Arc::new(None));
         self.publish_canary_stage("committed", stage).await;
-        // apply the post-commit migration per its policy.
+        // Apply the post-commit migration per its policy.
         #[cfg(feature = "migration")]
         self.run_post_commit_migration();
         Ok(())
@@ -427,10 +428,15 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             }
             Err(error) => {
                 log::warn!(
-                    "post-commit migration {}→{} failed (configuration stays \
-                     committed): {error}",
-                    plan.from_version,
-                    plan.to_version
+                    "{}",
+                    tr_args(
+                        "log-post-commit-migration-failed",
+                        &[
+                            ("from", plan.from_version.to_string()),
+                            ("to", plan.to_version.to_string()),
+                            ("message", error.to_string()),
+                        ]
+                    )
                 );
             }
         }
@@ -584,7 +590,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
         self
     }
 
-    /// Consume the watcher policy the config's
+    /// Consume the watcher policy: the config's
     /// `rollback_on_validation_failure` flag controls the pre-commit
     /// validation failure behavior of the built reloader.
     pub fn watcher_config(mut self, config: super::WatcherConfig) -> Self {
@@ -1025,7 +1031,7 @@ mod tests {
         }
     }
 
-    /// / R-watch-009: `peek_candidate` exposes the trial configuration
+    /// R-watch-009: `peek_candidate` exposes the trial configuration
     /// during a staged reload and is cleared after the commit.
     #[tokio::test]
     async fn peek_candidate_observes_trial_and_clears_after_commit() {
@@ -1087,7 +1093,7 @@ mod tests {
         }
     }
 
-    /// / R-watch-009: a pre-commit validation failure with
+    /// R-watch-009: a pre-commit validation failure with
     /// `rollback_on_validation_failure = true` keeps the current
     /// configuration and reports `ReloadRolledBack`; with the flag unset the
     /// commit proceeds. The flag is genuinely consumed from
@@ -1138,7 +1144,7 @@ mod tests {
         assert_eq!(*reloader.current(), 5);
     }
 
-    /// / R-watch-009: after a successful commit the injected migration
+    /// R-watch-009: after a successful commit the injected migration
     /// registry is invoked according to the `MigrationOnReload` policy.
     #[cfg(feature = "migration")]
     mod migration_wiring {

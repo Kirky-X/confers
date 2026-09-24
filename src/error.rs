@@ -1032,7 +1032,7 @@ mod tests {
 
     #[test]
     fn test_user_message_sanitizes_compact_json_credentials() {
-        // R3- 回归:紧凑 JSON 形状("password":"x")此前完全不掩。
+        // 回归:紧凑 JSON 形状("password":"x")此前完全不掩。
         let err = ConfigError::InvalidValue {
             key: "db".to_string(),
             expected_type: "response".to_string(),

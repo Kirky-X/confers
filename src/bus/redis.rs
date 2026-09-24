@@ -12,6 +12,7 @@ use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::lifecycle::Lifecycle;
 
 /// Default retry wait time when no message is available (100ms).
@@ -117,11 +118,14 @@ impl RedisConfigBus {
         )
         .await
         .map_err(|_| ConfigError::RemoteUnavailable {
-            error_type: "redis_pubsub: connect timeout (10s)".to_string(),
+            error_type: tr("error-redis-pubsub-connect-timeout"),
             retryable: true,
         })?
         .map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: format!("redis_pubsub: {}", e),
+            error_type: tr_args(
+                "error-redis-pubsub-connect-failed",
+                &[("message", e.to_string())],
+            ),
             retryable: true,
         })?;
 
@@ -129,7 +133,10 @@ impl RedisConfigBus {
             .subscribe(channel)
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("redis_subscribe: {}", e),
+                error_type: tr_args(
+                    "error-redis-subscribe-failed",
+                    &[("message", e.to_string())],
+                ),
                 retryable: true,
             })?;
 
@@ -180,7 +187,7 @@ impl ConfigBus for RedisConfigBus {
     ) -> ConfigResult<Pin<Box<dyn Stream<Item = ConfigChangeEvent> + Send>>> {
         // The first connection is established eagerly so a dead endpoint
         // still surfaces as an immediate `subscribe()` error (the historical
-        // contract, pinned by tests). every subsequent connection is
+        // contract, pinned by tests). Every subsequent connection is
         // managed by the reconnecting loop below — the pubsub stream ends
         // whenever the connection drops (network blip, server restart, idle
         // timeout); previously that terminated the returned stream silently,
@@ -214,10 +221,14 @@ impl ConfigBus for RedisConfigBus {
                     }
                 }
                 log::warn!(
-                    "Redis config-bus pubsub connection lost (channel '{}'); \
-                     reconnecting in {:?}",
-                    channel,
-                    backoff
+                    "{}",
+                    tr_args(
+                        "log-redis-pubsub-connection-lost",
+                        &[
+                            ("channel", channel.clone()),
+                            ("backoff", format!("{backoff:?}")),
+                        ]
+                    )
                 );
                 // Reconnect with exponential backoff until the subscription
                 // is re-established, then reset the backoff.
@@ -232,11 +243,15 @@ impl ConfigBus for RedisConfigBus {
                         }
                         Err(e) => {
                             log::warn!(
-                                "Redis config-bus pubsub reconnect failed (channel '{}'): {}; \
-                                 retrying in {:?}",
-                                channel,
-                                e,
-                                backoff
+                                "{}",
+                                tr_args(
+                                    "log-redis-pubsub-reconnect-failed",
+                                    &[
+                                        ("channel", channel.clone()),
+                                        ("message", e.to_string()),
+                                        ("backoff", format!("{backoff:?}")),
+                                    ]
+                                )
                             );
                         }
                     }

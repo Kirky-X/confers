@@ -561,7 +561,7 @@ mod tests {
         assert!(redelivered.is_err(), "acked event must not be redelivered");
     }
 
-    /// / R-watch-006: versions evicted by the FIFO retention are
+    /// R-watch-006: versions evicted by the FIFO retention are
     /// reported explicitly as `Lagged { from }` — never as a silent miss.
     #[tokio::test]
     async fn get_reports_lagged_for_evicted_versions() {
@@ -595,7 +595,7 @@ mod tests {
         );
     }
 
-    /// / R-watch-006: a subscriber whose events were evicted before it
+    /// R-watch-006: a subscriber whose events were evicted before it
     /// could observe them receives explicit resync events — the filter_map
     /// must not swallow the evicted versions silently.
     #[tokio::test]
@@ -647,5 +647,124 @@ mod tests {
         assert_eq!(normal[1].key, "k3");
         assert_eq!(normal[0].version, 3);
         assert_eq!(normal[1].version, 4);
+    }
+
+    #[test]
+    fn change_source_display_and_as_str_cover_all_variants() {
+        assert_eq!(ChangeSource::File.as_str(), "file");
+        assert_eq!(ChangeSource::Bus.as_str(), "bus");
+        assert_eq!(ChangeSource::Canary.as_str(), "canary");
+        assert_eq!(ChangeSource::Remote("etcd".into()).as_str(), "remote");
+        assert_eq!(ChangeSource::Other("custom".into()).as_str(), "custom");
+
+        assert_eq!(ChangeSource::File.to_string(), "file");
+        assert_eq!(ChangeSource::Bus.to_string(), "bus");
+        assert_eq!(ChangeSource::Canary.to_string(), "canary");
+        assert_eq!(
+            ChangeSource::Remote("nacos".into()).to_string(),
+            "remote:nacos"
+        );
+        assert_eq!(ChangeSource::Other("webhook".into()).to_string(), "webhook");
+    }
+
+    #[test]
+    fn change_stream_error_display_mentions_recovery_hint() {
+        assert_eq!(
+            ChangeStreamError::Lagged { from: 7 }.to_string(),
+            "subscriber lagged: versions below 7 were evicted"
+        );
+        assert_eq!(
+            ChangeStreamError::NotFound { version: 42 }.to_string(),
+            "version 42 was not published on this stream"
+        );
+    }
+
+    /// The `ChangeStream::pending_count` default (0) must surface for
+    /// implementors that do not override it.
+    #[tokio::test]
+    async fn pending_count_defaults_to_zero_for_custom_implementors() {
+        struct NoPendingStream(InMemoryChangeStream);
+
+        #[async_trait]
+        impl ChangeStream for NoPendingStream {
+            async fn publish(&self, event: ChangeEvent) -> ConfigResult<()> {
+                self.0.publish(event).await
+            }
+            async fn subscribe(
+                &self,
+            ) -> ConfigResult<Pin<Box<dyn futures_util::Stream<Item = ChangeEvent> + Send>>>
+            {
+                self.0.subscribe().await
+            }
+            async fn ack(&self, version: u64) -> ConfigResult<()> {
+                self.0.ack(version).await
+            }
+        }
+
+        async fn read_pending(stream: &dyn ChangeStream) -> usize {
+            stream.pending_count()
+        }
+
+        let stream = NoPendingStream(InMemoryChangeStream::new());
+        assert_eq!(read_pending(&stream).await, 0);
+    }
+
+    #[tokio::test]
+    async fn lifecycle_start_stop_are_noop_successes() {
+        use crate::lifecycle::Lifecycle;
+
+        let stream = InMemoryChangeStream::new();
+        stream.start().await.expect("start is a no-op");
+        stream.stop().await.expect("stop is a no-op");
+    }
+
+    /// The fs-watcher bridge publishes mapped events into the stream and
+    /// ends when the watcher closes its channel; `None` mappings are skipped.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn bridge_publishes_mapped_events_and_skips_none() {
+        let stream = InMemoryChangeStream::new();
+        let mut rx = stream.subscribe().await.unwrap();
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut watcher = crate::watcher::FsWatcher::with_recv_timeout(dir.path(), 30, 50)
+            .await
+            .expect("watchable temp dir");
+
+        let bridge_fut = bridge_fs_watcher(&stream, &mut watcher, |path| {
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            // Only `*.publish` files become events; others are skipped.
+            if name.ends_with(".publish") {
+                Some(ChangeEvent::new(
+                    name,
+                    None,
+                    Some(ConfigValue::string("changed")),
+                    ChangeSource::File,
+                ))
+            } else {
+                None
+            }
+        });
+        tokio::pin!(bridge_fut);
+
+        // Let the debouncer establish the watch before writing (same pattern
+        // as the fs_watcher tests).
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        std::fs::write(dir.path().join("ignored.txt"), b"skip me").expect("write");
+        std::fs::write(dir.path().join("app.publish"), b"publish me").expect("write");
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut seen_app = false;
+        while !seen_app && std::time::Instant::now() < deadline {
+            tokio::select! {
+                _ = &mut bridge_fut => break, // bridge ended early
+                maybe = rx.next() => match maybe {
+                    Some(event) if event.key == "app.publish" => seen_app = true,
+                    Some(_) => continue, // unrelated summary event
+                    None => break,
+                },
+            }
+        }
+        assert!(seen_app, "the mapped .publish event must reach the stream");
     }
 }

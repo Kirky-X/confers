@@ -499,4 +499,44 @@ mod tests {
             "capped at max"
         );
     }
+    /// `with_retry` 定制退避 + `last_revision` 追踪 + attempt 归零路径:
+    /// 先失败一次,随后成功交付事件,最高 revision 必须被记录。
+    #[tokio::test]
+    async fn retry_policy_and_revision_tracking_work_together() {
+        // 第一次 watch() 建立失败(失败调用不消费 attempts 队列);
+        // 之后的连接重复交付两个事件。
+        let source = MockWatchSource::new(
+            vec![vec![put("cfg/a", "1", 7), put("cfg/b", "2", 9)]],
+            vec![true],
+        );
+        let watcher = Arc::new(
+            EtcdWatcher::new(Arc::clone(&source) as Arc<dyn WatchEventSource>).with_retry(
+                EtcdWatchRetry {
+                    base: Duration::from_millis(1),
+                    max: Duration::from_millis(2),
+                },
+            ),
+        );
+        assert_eq!(watcher.last_revision(), 0, "no revision before first event");
+
+        let sink: EventSink = Arc::new(Mutex::new(Vec::new()));
+        let cb = sink_callback(&sink);
+        let loop_watcher = Arc::clone(&watcher);
+        let _run = tokio::spawn(async move { loop_watcher.run(cb).await });
+
+        // run() 永不返回:等到事件到齐即可(wait_for 自带上界)。
+        wait_for(&sink, 2).await;
+        assert_eq!(sink.try_lock().unwrap().len(), 2, "both events delivered");
+
+        assert_eq!(
+            watcher.last_revision(),
+            9,
+            "highest mod_revision is tracked"
+        );
+        assert_eq!(
+            source.connections.load(Ordering::SeqCst),
+            2,
+            "establish failure then success"
+        );
+    }
 }

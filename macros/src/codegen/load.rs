@@ -114,9 +114,9 @@ fn generate_env_calls(
                             confers::ConfigError::InvalidValue {
                                 key: #file_env_name.to_string(),
                                 expected_type: "readable file".to_string(),
-                                message: ::std::format!(
-                                    "Cannot read file referenced by {}",
-                                    #file_env_name
+                                message: confers::i18n::tr_args(
+                                    "error-env-file-unreadable",
+                                    &[("var", #file_env_name.to_string())],
                                 ),
                             }
                         })?;

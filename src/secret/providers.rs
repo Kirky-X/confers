@@ -6,6 +6,9 @@
 use std::path::PathBuf;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::tr;
+#[cfg(feature = "remote")]
+use crate::i18n::tr_args;
 use crate::interface::KeyProvider;
 use crate::types::{KeyCachePolicy, ZeroizingBytes};
 
@@ -89,8 +92,7 @@ impl FileKeyProvider {
         let key_bytes = &key_str.as_bytes()[..32];
         if crate::secret::crypto::is_weak_key(key_bytes) {
             return Err(ConfigError::KeyError {
-                message: "Key file contains weak key material (constant-byte); generate a random key instead"
-                    .to_string(),
+                message: tr("error-key-file-weak-material"),
             });
         }
 
@@ -245,7 +247,7 @@ impl VaultAuth {
 
     /// Exchange credentials for a client token (no-op for `Token`).
     ///
-    /// R2-: login responses also carry `auth.lease_duration` (seconds);
+    /// Login responses also carry `auth.lease_duration` (seconds);
     /// returning it lets the provider refresh proactively instead of only
     /// reacting to 403s. `None` lease = no expiry information (static token).
     async fn resolve_with_lease(
@@ -258,7 +260,7 @@ impl VaultAuth {
                 if token.is_empty() {
                     std::env::var("VAULT_TOKEN")
                         .map_err(|_| ConfigError::KeyError {
-                            message: "Vault token not provided".to_string(),
+                            message: tr("error-vault-token-not-provided"),
                         })
                         .map(|t| (t, None))
                 } else {
@@ -413,7 +415,7 @@ impl VaultKeyProvider {
             }
         }
         let client = shared_http_client();
-        // R2-: login lease_duration 驱动主动刷新 —— 到期前 10% 即视为
+        // login lease_duration 驱动主动刷新 —— 到期前 10% 即视为
         // 过期,重新登录(403 反应式重登仍保留为兜底)。
         let (token, lease) = self
             .auth
@@ -479,7 +481,10 @@ impl AsyncKeyProvider for VaultKeyProvider {
                 .send()
                 .await
                 .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: format!("vault_request: {}", e),
+                    error_type: tr_args(
+                        "error-vault-request-failed",
+                        &[("message", e.to_string())],
+                    ),
                     retryable: true,
                 })
         }

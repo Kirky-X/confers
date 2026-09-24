@@ -8,7 +8,7 @@
 //! unchanged content short-circuits into the cached snapshot, so the parse
 //! and merge work only run when the server actually served new content.
 //!
-//! Authentication when `username`/`password` are configured, the
+//! Authentication: when `username`/`password` are configured, the
 //! source logs in against `/nacos/v1/auth/login` and appends the returned
 //! `accessToken` to every config request; an unauthorized (401) response
 //! triggers one re-login and retry.
@@ -23,6 +23,7 @@ use std::time::Duration;
 use arc_swap::ArcSwap;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::loader::Format;
 use crate::remote::circuit_breaker::CircuitBreaker;
 use crate::remote::common::try_parse_value_with_format;
@@ -161,16 +162,14 @@ impl NacosSourceBuilder {
                 return Err(ConfigError::InvalidValue {
                     key: "nacos.username".to_string(),
                     expected_type: "both username and password".to_string(),
-                    message: "nacos auth requires both username and password; password is missing"
-                        .to_string(),
+                    message: tr("error-nacos-auth-password-missing"),
                 });
             }
             (None, Some(_)) => {
                 return Err(ConfigError::InvalidValue {
                     key: "nacos.password".to_string(),
                     expected_type: "both username and password".to_string(),
-                    message: "nacos auth requires both username and password; username is missing"
-                        .to_string(),
+                    message: tr("error-nacos-auth-username-missing"),
                 });
             }
         }
@@ -258,7 +257,7 @@ enum Gate {
     Unrecorded,
 }
 
-/// Internal classification of a failed config fetch a 401 is
+/// Internal classification of a failed config fetch: a 401 is
 /// retried once after re-login, everything else propagates.
 enum FetchFailure {
     Unauthorized(ConfigError),
@@ -299,13 +298,16 @@ impl NacosSource {
             .map_err(|_| ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "nacos auth response".to_string(),
-                message: "nacos login request failed".to_string(),
+                message: tr("error-nacos-login-request-failed"),
             })?;
         if !response.status().is_success() {
             return Err(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "2xx status".to_string(),
-                message: format!("nacos login rejected with status {}", response.status()),
+                message: tr_args(
+                    "error-nacos-login-rejected",
+                    &[("status", response.status().to_string())],
+                ),
             });
         }
         let body: serde_json::Value =
@@ -315,7 +317,7 @@ impl NacosSource {
                 .map_err(|_| ConfigError::InvalidValue {
                     key: SOURCE_NAME.to_string(),
                     expected_type: "nacos login JSON body".to_string(),
-                    message: "nacos login returned an unreadable body".to_string(),
+                    message: tr("error-nacos-login-body-unreadable"),
                 })?;
         let token = body
             .get("accessToken")
@@ -323,7 +325,7 @@ impl NacosSource {
             .ok_or_else(|| ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "accessToken in login response".to_string(),
-                message: "nacos login response has no accessToken".to_string(),
+                message: tr("error-nacos-login-no-token"),
             })?;
         self.access_token
             .store(Arc::new(Some(Arc::from(token.to_string()))));
@@ -363,10 +365,13 @@ impl NacosSource {
             url.push_str(&format!("&accessToken={}", urlencode(token)));
         }
         let response = self.client.get(&url).send().await.map_err(|e| {
-            // R3-: reqwest 的错误 Display 含完整 URL——而 accessToken 就
+            // reqwest 的错误 Display 含完整 URL——而 accessToken 就
             // 挂在查询串上,原样格式化会把凭据泄进错误信息/日志。
             // without_url 原地剥离 URL(含 accessToken 查询串)。
-            let message = format!("nacos request failed: {}", e.without_url());
+            let message = tr_args(
+                "error-nacos-request-failed",
+                &[("message", e.without_url().to_string())],
+            );
             FetchFailure::Other(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "nacos API response".to_string(),
@@ -380,7 +385,7 @@ impl NacosSource {
             return Err(FetchFailure::Unauthorized(ConfigError::InvalidValue {
                 key: SOURCE_NAME.to_string(),
                 expected_type: "2xx status".to_string(),
-                message: "nacos returned 401 Unauthorized (accessToken rejected)".to_string(),
+                message: tr("error-nacos-unauthorized"),
             }));
         }
         if !status.is_success() {
@@ -415,7 +420,7 @@ impl NacosSource {
 impl crate::remote::PolledSource for NacosSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
         // Circuit breaker: a failing server cools the source down instead of
-        // hammering it every interval. a CONTENDED breaker lock
+        // hammering it every interval. A CONTENDED breaker lock
         // (`try_lock` WouldBlock, e.g. another poll in flight) is recorded as
         // `unknown` — the request proceeds but its outcome is not recorded, so
         // concurrency no longer misreports the circuit as open.
@@ -428,7 +433,7 @@ impl crate::remote::PolledSource for NacosSource {
                     return Err(ConfigError::InvalidValue {
                         key: SOURCE_NAME.to_string(),
                         expected_type: "available source".to_string(),
-                        message: "nacos source circuit breaker is open".to_string(),
+                        message: tr("error-nacos-circuit-breaker-open"),
                     });
                 }
             }

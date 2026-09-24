@@ -69,7 +69,7 @@ static AWS_AK_RE: LazyLock<regex::Regex> =
 /// These complement the value-shape rules below and are the single source of
 /// field-name redaction for every error/CLI output path.
 static FIELD_NAME_RES: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
-    // R3-: 分隔符允许成对引号(紧凑 JSON `"password":"x"`);token 类
+    // 分隔符允许成对引号(紧凑 JSON `"password":"x"`);token 类
     // 名称允许下划线(`refresh_token=`);值仍取到首个空白为止(多词值的
     // 后半段是已知局限,见下方文档)。
     [
@@ -722,7 +722,7 @@ mod tests {
         // 16-31 char hex run with a sensitive keyword nearby is a secret
         let msg = "api_key: 0123456789abcdef01234567 (see logs)"; // pragma: allowlist secret
         let sanitized = sanitize_error_message(msg);
-        // R3- 后字段名规则先于 hex 上下文规则命中:整值以 *** 掩码
+        // 修复后,字段名规则先于 hex 上下文规则命中:整值以 *** 掩码
         // (旧输出为 <redacted>,同样不可逆,但会保留 "(see logs)" 尾巴)。
         assert!(
             sanitized.contains("***") && !sanitized.contains("0123456789abcdef01234567"),

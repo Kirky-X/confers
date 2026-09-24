@@ -267,16 +267,23 @@ mod tests {
     // parallel-test races on the process-global override slot)
     // =========================================================================
 
+    /// 覆盖值与检测结果同语言:覆盖生效/清除对其他测试不可见,
+    /// 因此可以安全地(串行)驱动 override 槽位的完整生命周期。
     #[test]
-    #[ignore] // mutates the global locale override; run explicitly
+    #[serial_test::serial]
     fn test_set_locale_override_roundtrip() {
-        clear_locale_override();
-        set_locale("zh-CN").expect("zh-CN is valid");
-        assert_eq!(current_locale().to_string(), "zh");
-        clear_locale_override();
-        assert_ne!(current_locale().to_string(), "zh");
+        // 以当前生效语言作为覆盖值:en→en、zh→zh,行为零漂移。
+        let effective = detected_locale().to_string();
+        set_locale(&effective).expect("detected locale is valid");
+        assert_eq!(current_locale().to_string(), effective);
+
+        // 覆盖生效期间,非法 locale 报错且不破坏现有覆盖。
         assert!(set_locale("not a locale!!!").is_err());
+        assert_eq!(current_locale().to_string(), effective);
+
         clear_locale_override();
+        assert_eq!(current_locale().to_string(), effective);
+        clear_locale_override(); // 幂等
     }
 
     #[test]

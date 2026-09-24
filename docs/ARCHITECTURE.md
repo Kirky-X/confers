@@ -21,7 +21,7 @@ Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审
 
 核心能力一览：
 
-- **派生宏驱动**：`#[derive(Config)]` 自动生成配置加载代码（由 workspace 内的 `confers-macros` 过程宏 crate 提供，实现位于 `macros/src/` 的 `parse.rs` 与 `codegen.rs`）。
+- **派生宏驱动**：`#[derive(Config)]` 自动生成配置加载代码（由 workspace 内的 `confers-macros` 过程宏 crate 提供，实现位于 `macros/src/` 的 `parse.rs` 与 `codegen/` 目录）。
 - **多来源优先级链**：文件、环境变量、内存、远程（HTTP/etcd/Consul）按声明顺序合并，后加入者覆盖先加入者。
 - **热重载**：基于文件监听（`notify-debouncer-full`）与自适应去抖，配合渐进式发布（progressive deployment）与健康检查回滚。
 - **敏感字段加密**：XChaCha20-Poly1305 认证加密 + HKDF-SHA256 字段级密钥派生。
@@ -88,7 +88,7 @@ confers/
 │   ├── interface.rs / error.rs / lifecycle.rs
 │   ├── impl_/      # 上述门面的内部实现
 │   └── <特性模块>/ # validator、watcher、secret、remote、bus、cli……
-├── macros/         # confers-macros 过程宏 crate（parse.rs + codegen.rs）
+├── macros/         # confers-macros 过程宏 crate（parse.rs + codegen/ 目录）
 ├── examples/       # 可运行示例
 ├── fuzz/           # 模糊测试
 └── benches/        # Criterion 基准测试
@@ -135,7 +135,7 @@ confers/
 
 | 成员 | 说明 |
 |------|------|
-| `macros/` | `confers-macros`：`#[derive(Config)]` 过程宏，`parse.rs` 解析 `#[config(...)]` 属性，`codegen.rs` 生成加载/校验/CLI 辅助代码 |
+| `macros/` | `confers-macros`：`#[derive(Config)]` 过程宏，`parse.rs` 解析 `#[config(...)]` 属性，`codegen/` 目录（load/schema/clap 等模块）生成加载/校验/CLI 辅助代码 |
 | `examples/` | 21 个可运行示例 |
 | `fuzz/` | cargo-fuzz 模糊测试目标 |
 
@@ -188,7 +188,7 @@ graph TD
 2. **字段级密钥派生**：`derive_field_key` 使用 HKDF-SHA256 从主密钥为每个字段路径 + 密钥版本派生独立子密钥，避免主密钥直接参与加密；`key::KeyStorage` 中的密钥材料本身也以 XChaCha20 加密持久化。
 3. **内存安全**：`SecretBytes` / `ZeroizingBytes`（zeroize）确保敏感字节在丢弃时清零；`SecretString`（`confers::secret`）实现脱敏 `Debug`/`Display`，防止敏感值意外进入日志；`SecureString` 禁止 `Clone`（v0.4.0 起），防止敏感材料被无意复制。
 4. **密钥治理**：`KeyManager` + `KeyRegistry` 提供密钥版本（`KeyVersion`）、状态（Active/Deprecated/Compromised）、轮换（`KeyRotationService` 按策略定时轮换）与熵值校验。
-5. **输入防护**：`EnvSecurityValidator` 以 allow/block 模式校验环境变量名，防注入；`security::rules` 内置 JWT/CORS/SSRF/TLS 四类校验器（SSRF 覆盖 18 个封锁 CIDR 网段并做 URL 边界匹配防绕过），可在启动时经 `SecurityValidatorRegistry` 统一执行。
+5. **输入防护**：`EnvSecurityValidator` 以 allow/block 模式校验环境变量名，防注入；`security::rules` 内置 JWT/CORS/SSRF/TLS 四类校验器（SSRF 覆盖 19 个封锁 CIDR 网段并做 URL 边界匹配防绕过），可在启动时经 `SecurityValidatorRegistry` 统一执行。
 6. **输出脱敏**：`ErrorSanitizer` 对错误信息脱敏，防止敏感配置值经错误路径泄露；`#[config(sensitive = true)]` 字段在审计日志与 debug 输出中自动遮蔽。
 7. **审计追踪**：`audit` 模块记录配置加载、密钥访问、解密等事件，日志带 HMAC 签名保护完整性，并支持轮转归档与查询。
 8. **远程来源防护**：`remote` 模块内置 SSRF 校验与熔断器（`circuit_breaker`），避免内网地址探测与故障扩散。

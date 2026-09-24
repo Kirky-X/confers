@@ -929,9 +929,9 @@ let key = [0u8; 32]; // 应使用安全的随机密钥
 let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
 ```
 
-##### `decrypt(nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError>`
+##### `decrypt(nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError>`
 
-使用 nonce、密文和 32 字节密钥解密字节序列。
+使用 nonce、密文和 32 字节密钥解密字节序列。返回值包在 `Zeroizing` 中，明文在丢弃时自动清零。
 
 **特性：**
 
@@ -939,14 +939,15 @@ let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
 - 校验 Poly1305 认证标签，检测到篡改会返回错误
 
 ```rust
-pub fn decrypt(&self, nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, CryptoError>
+pub fn decrypt(&self, nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError>
 ```
 
 **示例：**
 
 ```rust
 let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
-assert_eq!(decrypted, b"my-secret-api-key");
+// Zeroizing<Vec<u8>> 经 Deref 可调用 Vec 的 as_slice()
+assert_eq!(decrypted.as_slice(), b"my-secret-api-key");
 ```
 
 #### 密钥派生
@@ -1044,15 +1045,32 @@ let port = injector.get("APP_PORT")?;
 `security-rules` 特性提供一套标准化的安全校验规则库，内置校验器与注册表，可在启动时自动执行。
 
 ```rust
-use confers::security::rules::{SecurityValidatorRegistry, SecurityValidator};
+use confers::interface::ConfigProvider;
+use confers::security::rules::{SecurityValidator, SecurityValidatorRegistry};
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
+use std::collections::HashMap;
+
+// confers 公开面没有内置的 ConfigProvider 实现，
+// 需为承载配置键值的类型自行实现该 trait
+struct ConfigMap(HashMap<String, AnnotatedValue>);
+
+impl ConfigProvider for ConfigMap {
+    fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+        self.0.get(key)
+    }
+    fn keys(&self) -> Vec<String> {
+        self.0.keys().cloned().collect()
+    }
+}
 
 // 使用内置校验器（JWT、CORS、SSRF、TLS）
 let registry = SecurityValidatorRegistry::with_defaults();
+let config = ConfigMap(HashMap::new());
 let report = registry.validate_all(&config);
 
 if !report.is_ok(false) {
     for v in &report.violations {
-        eprintln!("[{}] {}: {}", v.severity, v.validator, v.message);
+        eprintln!("[{:?}] {}: {}", v.severity, v.validator, v.message);
     }
 }
 ```
@@ -1063,7 +1081,7 @@ if !report.is_ok(false) {
 |--------|------|----------|
 | `JwtSecretValidator` | `jwt` | 密钥长度 ≥ 32 字节、弱口令检测 |
 | `CorsValidator` | `cors` | 通配符 `*` 检测、methods 非空、max_age ≤ 86400s |
-| `SsrfValidator` | `ssrf` | 18 个封锁 CIDR 网段（IPv4 + IPv6）、白名单支持 |
+| `SsrfValidator` | `ssrf` | 19 个封锁 CIDR 网段（IPv4 + IPv6）、白名单支持 |
 | `TlsConfigValidator` | `tls` | min_version ≥ 1.2、12 个弱加密套件 |
 
 **自定义校验器：**
@@ -1104,7 +1122,8 @@ registry.register("new_ui", "New UI Design", false);
 registry.enable("new_ui");
 assert!(registry.is_enabled("new_ui"));
 
-// 从配置切换
+// 从配置切换（config 为自行实现的 ConfigProvider，
+// 如上文 SecurityValidatorRegistry 示例中的 ConfigMap 实例）
 registry.load_from_config(&config, "features");
 
 // 列出全部开关

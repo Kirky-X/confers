@@ -47,6 +47,21 @@ _暂无变更。_
 
 ---
 
+## [0.6.0-rc.5] — 2026-09-21
+
+仅版本号发布（`Cargo.toml`/`Cargo.lock` bump）；包含 rc.4 之后的维护性变更：
+
+- **i18n**：接入 `unify-rust-i18n`，为 `ConfigError` 实现 `LocalizedMsg` 并补全变体守卫测试
+- **特性**：`keyring` / `cloud-kms` 隐含 `encryption`，引入 `async-core` 聚合谓词
+- **工程**：接入 pre-commit 门禁与 detect-secrets 基线；typos 词表白名单；为 path-only 依赖补全 `version` 字段
+- **测试**：NATS 集成测试名加纳秒熵防跨进程撞车；示例/文档/测试残留 `AppConfig` 衍生名统一为 `Confers` 前缀
+
+## [0.6.0-rc.4] — 2026-09-13
+
+仅版本号发布（`Cargo.toml`/`Cargo.lock` bump，移除本地开发依赖口径、对齐 crates.io 发布链），无 API 与行为变更；同批收敛 CI 质量门禁（clippy 18 处、rustdoc 私有项链接、rustfmt 对齐）。
+
+---
+
 ## [0.6.0-rc.3] — 2026-09-10
 
 > 本节包含 `workspace-rc3-hardening` 与 `workspace-rc4-completion` 两批内容（rc.3 发布前累计；版本规则：目标 = crates.io 已发布 rc.2 + 1）。

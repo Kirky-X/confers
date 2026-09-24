@@ -2222,4 +2222,40 @@ mod tests {
         map.insert(a.clone(), 1);
         assert_eq!(map.get(&b), Some(&1));
     }
+    #[test]
+    fn from_json_value_covers_numbers_arrays_objects_and_helpers() {
+        use serde_json::json;
+
+        // 无符号分支:超过 i64::MAX 的数字落到 U64。
+        let big = from_json_helper(json!(18_446_744_073_709_551_615u64));
+        assert!(matches!(big, ConfigValue::U64(18_446_744_073_709_551_615)));
+
+        // 数组:元素变成带注释的值。
+        let arr = from_json_helper(json!([1, "a"]));
+        let items = arr.as_array().expect("array");
+        assert_eq!(items.len(), 2);
+        assert!(matches!(items[0].inner, ConfigValue::I64(1)));
+        assert_eq!(items[1].inner.as_str(), Some("a"));
+
+        // 对象:键序保持,值递归转换。
+        let map = from_json_helper(json!({"b": true, "n": null}));
+        let entries = map.as_map().expect("map");
+        assert_eq!(entries.len(), 2);
+        let mut it = entries.iter();
+        let (_k0, v0) = it.next().unwrap();
+        let (_k1, v1) = it.next().unwrap();
+        assert_eq!(v0.inner.as_bool(), Some(true));
+        assert!(matches!(v1.inner, ConfigValue::Null));
+
+        // from_serializable 走同一条转换路径。
+        let value = ConfigValue::from_serializable(&serde_json::json!({"k": [7, 8.5]}));
+        let entries = value.as_map().expect("map");
+        let list = entries.get("k").unwrap().inner.as_array().expect("array");
+        assert!(matches!(list[0].inner, ConfigValue::I64(7)));
+        assert!(matches!(list[1].inner, ConfigValue::F64(_)));
+    }
+
+    fn from_json_helper(json: serde_json::Value) -> ConfigValue {
+        ConfigValue::from_json_value(json)
+    }
 }

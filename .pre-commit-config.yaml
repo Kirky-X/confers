@@ -11,7 +11,10 @@ repos:
       - id: check-toml
       - id: check-added-large-files
         args: ['--maxkb=1000']
+      # src/remote/testdata/ 下的 pem 是合成自签测试夹具(CN=confers-consul-test),
+      # 已人工核实非真实凭证, 与 .secrets.baseline 的「测试夹具」口径一致
       - id: detect-private-key
+        exclude: '^src/remote/testdata/'
       - id: check-merge-conflict
         args: ['--assume-in-merge']
       # 本仓工作流在 main 上提交,故仅保护 master

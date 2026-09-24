@@ -352,7 +352,7 @@ pub struct ConsulSource {
     max_response_bytes: usize,
     max_kv_entries: usize,
     cached_source_id: SourceId,
-    /// Poll circuit breaker repeated failures open the circuit and
+    /// Poll circuit breaker: repeated failures open the circuit and
     /// polls fail fast without touching the network.
     circuit_breaker: std::sync::Mutex<CircuitBreaker>,
 }
@@ -417,7 +417,14 @@ impl ConsulSource {
                 message: format!("Failed to fetch from Consul: {}", e),
             })?;
 
-        if !response.status().is_success() {
+        // (T025) Consul KV read semantics: 404 means "no keys under this
+        // prefix" — the normal empty response once every key was deleted
+        // (verified live: the X-Consul-Index header is still present and
+        // advanced). It must flow through the same delete-semantics path
+        // as an empty array below, not surface as an error.
+        let not_found = response.status() == reqwest::StatusCode::NOT_FOUND;
+
+        if !response.status().is_success() && !not_found {
             return Err(ConfigError::InvalidValue {
                 key: "consul".to_string(),
                 expected_type: "Consul KV response".to_string(),
@@ -458,13 +465,17 @@ impl ConsulSource {
             body.extend_from_slice(&chunk);
         }
 
-        // 3. Deserialize the bounded body.
-        let kv_responses: Vec<KvResponse> =
+        // 3. Deserialize the bounded body. A 404 carries no KV payload —
+        //    it IS the empty response.
+        let kv_responses: Vec<KvResponse> = if not_found {
+            Vec::new()
+        } else {
             serde_json::from_slice(&body).map_err(|e| ConfigError::InvalidValue {
                 key: "consul".to_string(),
                 expected_type: "Consul KV response".to_string(),
                 message: format!("Failed to parse Consul response: {}", e),
-            })?;
+            })?
+        };
 
         // 4. Guard against unbounded array expansion (CWE-502).
         if kv_responses.len() > self.max_kv_entries {
@@ -1254,6 +1265,54 @@ mod tests {
         );
     }
 
+    /// T025: a 404 from the KV read — Consul's normal response once every
+    /// key under the prefix was deleted (empty body, X-Consul-Index still
+    /// present and advanced) — must flow through the delete-semantics path:
+    /// advance the blocking index and return the empty (Null) config, not
+    /// surface as an InvalidValue error nor resurface the stale cache.
+    #[tokio::test]
+    async fn test_poll_internal_404_after_delete_returns_deleted_config() {
+        let non_empty =
+            r#"[{"Key":"config/app/key","Value":"aGVsbG8=","ModifyIndex":10}]"#.to_string();
+        let addr = mock_http_server_with_headers(vec![
+            // First poll: KV present, index 10.
+            (200, "X-Consul-Index: 10\r\n".to_string(), non_empty),
+            // Second poll (blocking on index=10): all KVs deleted — real
+            // Consul answers 404 with the advanced index and an empty body.
+            (404, "X-Consul-Index: 11\r\n".to_string(), String::new()),
+        ]);
+        let source = ConsulSourceBuilder::new()
+            .address(addr)
+            .prefix("config")
+            .build()
+            .unwrap();
+
+        let first = source.poll_internal().await;
+        assert!(
+            first.is_ok(),
+            "first poll should succeed: {:?}",
+            first.err()
+        );
+        assert!(first.as_ref().unwrap().is_map(), "KV tree served as map");
+
+        let second = source.poll_internal().await;
+        assert!(
+            second.is_ok(),
+            "poll after deletion must succeed with an empty config: {:?}",
+            second.err()
+        );
+        assert!(
+            second.unwrap().is_null(),
+            "deleted KV prefix (404) must yield an empty (Null) config"
+        );
+
+        let last_index = *source.last_index.lock().unwrap();
+        assert_eq!(
+            last_index, 11,
+            "last_index must advance to the X-Consul-Index of the 404 response"
+        );
+    }
+
     /// an empty array whose `X-Consul-Index` matches the current index
     /// is "no change" — the cached value keeps being served.
     #[tokio::test]
@@ -1783,5 +1842,64 @@ mod tests {
             probe.err()
         );
         assert_eq!(hits.load(Ordering::SeqCst), 2);
+    }
+    /// Issue #321 的成功路径:CA + 客户端身份(key+cert)齐备时 build()
+    /// 必须完成完整 TLS 配置并构造出 source(覆盖 client_builder 的
+    /// add_root_certificate / identity 分支)。
+    #[test]
+    fn build_tls_with_ca_and_client_identity_succeeds() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/remote/testdata");
+        let tls = ConsulTlsConfig {
+            ca_file: dir.join("test-ca.pem").to_string_lossy().into_owned(),
+            cert_file: dir.join("test-cert.pem").to_string_lossy().into_owned(),
+            key_file: dir.join("test-key.pem").to_string_lossy().into_owned(),
+        };
+        let source = ConsulSourceBuilder::new()
+            .address("http://127.0.0.1:8500")
+            .tls(tls)
+            .build()
+            .map(|source| source.source_id().as_str().to_string())
+            .expect("valid CA + identity must build");
+        assert_eq!(source, "consul:config");
+    }
+
+    /// CA 之后逐个文件缺读失败:cert 与 key 的读取错误必须各自显名。
+    #[test]
+    fn build_tls_reports_cert_and_key_read_failures_separately() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/remote/testdata");
+
+        // CA 可读,cert 缺失。
+        let result = ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: dir.join("test-ca.pem").to_string_lossy().into_owned(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build();
+        let err = match result {
+            Err(e) => e,
+            Ok(_) => panic!("missing cert must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS cert file"),
+            "{err}"
+        );
+
+        // CA/cert 可读,key 缺失。
+        let result = ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: dir.join("test-ca.pem").to_string_lossy().into_owned(),
+                cert_file: dir.join("test-cert.pem").to_string_lossy().into_owned(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build();
+        let err = match result {
+            Err(e) => e,
+            Ok(_) => panic!("missing key must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS key file"),
+            "{err}"
+        );
     }
 }

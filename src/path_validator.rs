@@ -9,6 +9,7 @@
 //! feature configuration.
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use std::path::{Path, PathBuf};
 
 /// Validator for secret file paths referenced through `<VAR>_FILE`
@@ -38,7 +39,7 @@ impl PathValidator {
             return Err(ConfigError::InvalidValue {
                 key: "file_path".to_string(),
                 expected_type: "non-empty file path".to_string(),
-                message: "file path must not be empty".to_string(),
+                message: tr("error-path-empty"),
             });
         }
 
@@ -49,7 +50,7 @@ impl PathValidator {
             filename: path.to_path_buf(),
             source: Some(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "Cannot resolve file path",
+                tr("error-path-cannot-resolve"),
             )),
         })?;
 
@@ -67,7 +68,10 @@ impl PathValidator {
                 return Err(ConfigError::InvalidValue {
                     key: "file_path".to_string(),
                     expected_type: "safe file path".to_string(),
-                    message: format!("Access to {:?} is not allowed", prefix),
+                    message: tr_args(
+                        "error-path-access-denied",
+                        &[("path", format!("{prefix:?}"))],
+                    ),
                 });
             }
         }
@@ -87,9 +91,7 @@ impl PathValidator {
             return Err(ConfigError::InvalidValue {
                 key: "file_path".to_string(),
                 expected_type: "safe file path".to_string(),
-                message: "access to credential directories (.ssh, .aws, .gnupg, .kube, .gcloud, \
-                          .env) is not allowed"
-                    .to_string(),
+                message: tr("error-path-credential-dir-denied"),
             });
         }
 
@@ -98,7 +100,7 @@ impl PathValidator {
             return Err(ConfigError::InvalidValue {
                 key: "file_path".to_string(),
                 expected_type: "regular file".to_string(),
-                message: "Only regular files can be read".to_string(),
+                message: tr("error-path-not-regular-file"),
             });
         }
 
@@ -114,7 +116,10 @@ impl PathValidator {
                 return Err(ConfigError::InvalidValue {
                     key: "file_path".to_string(),
                     expected_type: "allowed extension".to_string(),
-                    message: format!("File extension {:?} is not allowed", ext),
+                    message: tr_args(
+                        "error-path-extension-denied",
+                        &[("ext", format!("{ext:?}"))],
+                    ),
                 });
             }
         }

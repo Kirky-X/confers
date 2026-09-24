@@ -159,7 +159,7 @@ impl<T> ConfigBuilder<T> {
     /// and conflict reports mask the same paths.
     pub fn sensitive_paths(mut self, paths: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         self.sensitive_paths = paths.into_iter().map(|p| p.as_ref().to_string()).collect();
-        // R1-: 同步喂给合并引擎,conflict_report 掩码与快照脱敏共用同一
+        // 同步喂给合并引擎,conflict_report 掩码与快照脱敏共用同一
         // 份敏感路径清单(避免未来第一个 conflict-report 调用点漏接)。
         let for_engine = self.sensitive_paths.clone();
         self.chain_builder = self.chain_builder.with_sensitive_paths(for_engine);
@@ -375,7 +375,7 @@ where
 
         let chain = self.chain_builder.build();
         let merged = chain.collect()?;
-        // (容灾兜底): when the build fails *after* collection (limit
+        // 容灾兜底: when the build fails *after* collection (limit
         // violation, deserialization error) the merged value is still
         // persisted so `snapshot restore` can recover it. A failure *during*
         // collection has no merged value to persist.
@@ -1080,7 +1080,7 @@ mod tests {
         );
     }
 
-    /// (容灾兜底): when the build fails after collection (here: a
+    /// 容灾兜底: when the build fails after collection (here: a
     /// deserialization type error), the merged configuration is still persisted
     /// so `snapshot restore` can recover the collected values.
     #[cfg(feature = "snapshot")]
@@ -1110,7 +1110,7 @@ mod tests {
         );
     }
 
-    /// the same failure-path snapshot guarantee for limit violations.
+    /// The same failure-path snapshot guarantee for limit violations.
     #[cfg(feature = "snapshot")]
     #[test]
     fn test_builder_limit_violation_path_writes_snapshot() {

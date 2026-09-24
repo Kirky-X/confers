@@ -666,6 +666,10 @@ mod tests {
             ),
         );
         let provider = SimpleProvider(map);
+        assert!(
+            !provider.keys().is_empty(),
+            "mock keys() must stay exercised"
+        );
 
         let result: Result<String, crate::error::ConfigError> = provider.get_typed("nonexistent");
         assert!(result.is_err());
@@ -696,6 +700,10 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("2"), SourceId::new("test"), "b"),
         );
         let provider = SimpleProvider(map);
+        assert!(
+            !provider.keys().is_empty(),
+            "mock keys() must stay exercised"
+        );
 
         let result = provider.get_many(&["a", "c"]);
         assert!(result.get("a").unwrap().is_some());
@@ -749,6 +757,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("1"), SourceId::new("t"), "x"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert!(p.has("x"));
         assert!(!p.has("y"));
     }
@@ -772,6 +781,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("8080"), SourceId::new("t"), "port"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         let result: Result<u16, crate::error::ConfigError> = p.get_typed("port");
         assert_eq!(result.unwrap(), 8080);
     }
@@ -795,6 +805,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("localhost"), SourceId::new("t"), "host"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert_eq!(p.get_string("host"), Some("localhost".into()));
         assert_eq!(p.get_string("missing"), None);
     }
@@ -818,6 +829,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::integer(42), SourceId::new("t"), "count"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert_eq!(p.get_int("count"), Some(42));
         assert_eq!(p.get_uint("count"), Some(42));
         assert_eq!(p.get_float("count"), Some(42.0));
@@ -895,6 +907,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::float(2.5), SourceId::new("t"), "ratio"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert_eq!(p.get_float("ratio"), Some(2.5));
         assert_eq!(p.get_float("missing"), None);
     }
@@ -918,6 +931,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::bool(true), SourceId::new("t"), "enabled"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert_eq!(p.get_bool("enabled"), Some(true));
         assert_eq!(p.get_bool("missing"), None);
     }
@@ -942,6 +956,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::integer(-5), SourceId::new("t"), "neg"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert_eq!(p.get_uint("neg"), None);
     }
 
@@ -964,6 +979,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::integer(42), SourceId::new("t"), "num"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         // Non-string value returns None for get_string
         assert_eq!(p.get_string("num"), None);
     }
@@ -987,6 +1003,7 @@ mod tests {
         }
         let map: HashMap<String, AnnotatedValue> = HashMap::new();
         let p = P(map);
+        assert!(p.keys().is_empty());
         // Empty path should return None
         assert!(p.get_by_path(&[]).is_none());
     }
@@ -1010,6 +1027,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("t"), "simple"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         let result = p.get_by_path(&["simple"]);
         assert!(result.is_some());
     }
@@ -1038,6 +1056,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::integer(42), SourceId::new("t"), "num"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         let result: Result<u16, _> = p.get_typed("num");
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -1073,6 +1092,7 @@ mod tests {
             ),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         let result: Result<u16, _> = p.get_typed("port");
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -1156,6 +1176,8 @@ mod tests {
         let s = FileSource;
         assert!(s.is_optional());
         assert_eq!(s.file_path(), Some(Path::new("/etc/config.toml")));
+        let collected = s.collect().expect("overridden collect must run");
+        assert_eq!(collected.as_str(), Some("file"));
     }
 
     // =============================================================================
@@ -1207,6 +1229,7 @@ mod tests {
 
         let p = NoCacheProvider;
         assert_eq!(p.cache_policy(), KeyCachePolicy::NoCache);
+        assert_eq!(p.get_key().expect("get_key must run").len(), 3);
     }
 
     // =============================================================================
@@ -1354,6 +1377,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("2"), SourceId::new("t"), "b"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         // keys_all defaults to keys() when not overridden
         let all = p.keys_all();
         assert_eq!(all.len(), 2);
@@ -1382,6 +1406,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("t"), "exists"),
         );
         let p = P(map);
+        assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         // Default has() delegates to get_raw().is_some()
         assert!(p.has("exists"));
         assert!(!p.has("missing"));
@@ -1439,5 +1464,227 @@ mod tests {
         // Default priority is 50
         assert_eq!(s.priority(), 50);
         assert_eq!(s.name(), "dummy_async");
+    }
+
+    // =============================================================================
+    // Async ConfigReader default-method coverage (has/get_string/typed getters)
+    // =============================================================================
+
+    #[cfg(feature = "async-core")]
+    #[tokio::test]
+    async fn async_config_reader_defaults_derive_from_get_raw() {
+        use crate::types::SourceKind;
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+
+        struct Mini(IndexMap<Arc<str>, AnnotatedValue>);
+        impl sealed::Sealed for Mini {}
+
+        #[async_trait::async_trait]
+        impl ConfigReader for Mini {
+            async fn get_raw(&self, key: &str) -> ConfersResult<Option<AnnotatedValue>> {
+                Ok(self.0.get(key).cloned())
+            }
+            async fn keys(&self) -> ConfersResult<Vec<String>> {
+                Ok(self.0.keys().map(|k| k.to_string()).collect())
+            }
+        }
+
+        let mut map = IndexMap::new();
+        map.insert(
+            Arc::from("s"),
+            AnnotatedValue::new(
+                crate::ConfigValue::string("text"),
+                crate::types::SourceId::new("t"),
+                "s",
+            ),
+        );
+        map.insert(
+            Arc::from("i"),
+            AnnotatedValue::new(
+                crate::ConfigValue::integer(7),
+                crate::types::SourceId::new("t"),
+                "i",
+            ),
+        );
+        map.insert(
+            Arc::from("u"),
+            AnnotatedValue::new(
+                crate::ConfigValue::uint(9),
+                crate::types::SourceId::new("t"),
+                "u",
+            ),
+        );
+        map.insert(
+            Arc::from("f"),
+            AnnotatedValue::new(
+                crate::ConfigValue::float(1.5),
+                crate::types::SourceId::new("t"),
+                "f",
+            ),
+        );
+        map.insert(
+            Arc::from("b"),
+            AnnotatedValue::new(
+                crate::ConfigValue::bool(true),
+                crate::types::SourceId::new("t"),
+                "b",
+            ),
+        );
+        let reader = Mini(map);
+
+        assert!(reader.has("s").await.unwrap());
+        assert!(!reader.has("missing").await.unwrap());
+        assert_eq!(reader.get_string("s").await.unwrap(), Some("text".into()));
+        assert_eq!(reader.get_string("i").await.unwrap(), None);
+        assert_eq!(reader.get_i64("i").await.unwrap(), Some(7));
+        assert_eq!(reader.get_i64("s").await.unwrap(), None);
+        assert_eq!(reader.get_u64("u").await.unwrap(), Some(9));
+        assert_eq!(reader.get_u64("f").await.unwrap(), None);
+        assert_eq!(reader.get_f64("f").await.unwrap(), Some(1.5));
+        assert_eq!(reader.get_f64("b").await.unwrap(), None);
+        assert_eq!(reader.get_bool("b").await.unwrap(), Some(true));
+        assert_eq!(reader.get_bool("s").await.unwrap(), None);
+        assert_eq!(reader.keys().await.unwrap().len(), 5);
+        let _ = SourceKind::Memory;
+    }
+
+    // =============================================================================
+    // AsyncKeyProvider default ttl()/cache_policy()
+    // =============================================================================
+
+    #[cfg(feature = "async-core")]
+    #[tokio::test]
+    async fn async_key_provider_defaults_for_ttl_and_cache_policy() {
+        struct DummyAsyncKeyProvider;
+
+        #[async_trait::async_trait]
+        impl AsyncKeyProvider for DummyAsyncKeyProvider {
+            async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
+                Ok(ZeroizingBytes::new(vec![0u8; 32]))
+            }
+            fn provider_type(&self) -> &'static str {
+                "dummy-async"
+            }
+        }
+
+        let provider = DummyAsyncKeyProvider;
+        assert_eq!(provider.provider_type(), "dummy-async");
+        assert!(provider.ttl().is_none());
+        assert_eq!(provider.cache_policy(), KeyCachePolicy::default());
+        assert_eq!(provider.get_key().await.unwrap().len(), 32);
+    }
+
+    // =============================================================================
+    // TypedConfigKey::with_description
+    // =============================================================================
+
+    #[test]
+    fn typed_config_key_with_description_is_reported() {
+        // 运行时构造(const fn 在 static 初始化里会被编译期求值,不产生覆盖)。
+        let key: TypedConfigKey<u16> =
+            TypedConfigKey::new("server.port").with_description("TCP listen port");
+        assert_eq!(key.path(), "server.port");
+        assert_eq!(key.description(), Some("TCP listen port"));
+    }
+
+    // =============================================================================
+    // One instrumented ConfigProvider mock whose every method is exercised
+    // (keys/keys_all/has/get_typed/get_many/get_by_path/typed getters)
+    // =============================================================================
+
+    #[test]
+    fn config_provider_ext_full_surface_on_instrumented_mock() {
+        use indexmap::IndexMap;
+        use std::sync::Arc;
+
+        struct Full(IndexMap<Arc<str>, AnnotatedValue>);
+        impl ConfigProvider for Full {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().map(|k| k.to_string()).collect()
+            }
+        }
+
+        let av_str = |v: &str, path: &str| {
+            AnnotatedValue::new(
+                crate::ConfigValue::string(v),
+                crate::types::SourceId::new("t"),
+                path,
+            )
+        };
+
+        let mut map = IndexMap::new();
+        map.insert(Arc::from("host"), av_str("localhost", "host"));
+        map.insert(
+            Arc::from("port"),
+            AnnotatedValue::new(
+                crate::ConfigValue::string("8080"),
+                crate::types::SourceId::new("t"),
+                "port",
+            ),
+        );
+        map.insert(
+            Arc::from("retries"),
+            AnnotatedValue::new(
+                crate::ConfigValue::integer(3),
+                crate::types::SourceId::new("t"),
+                "retries",
+            ),
+        );
+        map.insert(
+            Arc::from("ratio"),
+            AnnotatedValue::new(
+                crate::ConfigValue::float(0.5),
+                crate::types::SourceId::new("t"),
+                "ratio",
+            ),
+        );
+        map.insert(
+            Arc::from("enabled"),
+            AnnotatedValue::new(
+                crate::ConfigValue::bool(true),
+                crate::types::SourceId::new("t"),
+                "enabled",
+            ),
+        );
+        let provider = Full(map);
+
+        // keys()/keys_all(): the list path.
+        assert_eq!(provider.keys().len(), 5);
+        assert_eq!(provider.keys_all().len(), 5);
+
+        // has(): present and absent.
+        assert!(provider.has("host"));
+        assert!(!provider.has("absent"));
+
+        // get_typed(): parseable, missing, and non-parseable strings.
+        let port: u16 = provider.get_typed("port").unwrap();
+        assert_eq!(port, 8080);
+        assert!(provider.get_typed::<u16>("absent").is_err());
+        assert!(provider.get_typed::<u16>("host").is_err());
+
+        // get_many(): hit and miss in one call.
+        let many = provider.get_many(&["host", "absent"]);
+        assert!(many.get("host").unwrap().is_some());
+        assert!(many.get("absent").unwrap().is_none());
+
+        // get_by_path(): single- and multi-segment lookups.
+        assert!(provider.get_by_path(&["host"]).is_some());
+        assert!(provider.get_by_path(&["host", "nested"]).is_none());
+
+        // Typed getters across value kinds, plus misses.
+        assert_eq!(provider.get_string("host"), Some("localhost".into()));
+        assert_eq!(provider.get_int("retries"), Some(3));
+        assert_eq!(provider.get_uint("retries"), Some(3));
+        assert_eq!(provider.get_float("ratio"), Some(0.5));
+        assert_eq!(provider.get_bool("enabled"), Some(true));
+        assert_eq!(provider.get_int("ratio"), None);
+        assert_eq!(provider.get_uint("ratio"), None);
+        assert_eq!(provider.get_float("host"), None);
+        assert_eq!(provider.get_bool("retries"), None);
+        assert_eq!(provider.get_string("absent"), None);
     }
 }

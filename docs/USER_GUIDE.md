@@ -791,18 +791,35 @@ confers = { version = "0.6.0-rc.5", features = ["security-rules"] }
 ```
 
 ```rust
+use confers::interface::ConfigProvider;
 use confers::security::rules::SecurityValidatorRegistry;
+use confers::types::{AnnotatedValue, ConfigValue, SourceId};
+use std::collections::HashMap;
+
+// confers 公开面没有内置的 ConfigProvider 实现，
+// 需为承载配置键值的类型自行实现该 trait
+struct ConfigMap(HashMap<String, AnnotatedValue>);
+
+impl ConfigProvider for ConfigMap {
+    fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+        self.0.get(key)
+    }
+    fn keys(&self) -> Vec<String> {
+        self.0.keys().cloned().collect()
+    }
+}
 
 // 创建包含全部内置校验器的注册表
 let registry = SecurityValidatorRegistry::with_defaults();
 
-// 对配置执行全部校验器
+// 对任意 ConfigProvider 实现执行全部校验器
+let config = ConfigMap(HashMap::new());
 let report = registry.validate_all(&config);
 
 // 检查结果
 if !report.is_ok(false) {
     for v in &report.violations {
-        eprintln!("[{}] {}: {}", v.severity, v.validator, v.message);
+        eprintln!("[{:?}] {}: {}", v.severity, v.validator, v.message);
     }
     // 出现严重问题时快速失败
     if report.critical_count() > 0 {
@@ -817,7 +834,7 @@ if !report.is_ok(false) {
 |--------|----------|----------|
 | JWT Secret | 长度 ≥ 32 字节、弱口令检测 | Critical |
 | CORS | 通配符 `*`、空 methods、max_age > 86400s | Critical/Warning |
-| SSRF | 18 个封锁 CIDR 网段、白名单支持 | Critical |
+| SSRF | 19 个封锁 CIDR 网段、白名单支持 | Critical |
 | TLS | min_version ≥ 1.2、弱加密套件 | Critical/Warning |
 
 **自定义校验器**：实现 `SecurityValidator` trait 并通过 `SecurityValidatorRegistry::register()` 注册。
@@ -841,7 +858,8 @@ let registry = FeatureToggleRegistry::new();
 registry.register("new_dashboard", "New Dashboard UI", false);
 registry.register("beta_api", "Beta API Endpoint", false);
 
-// 从配置加载覆盖值
+// 从配置加载覆盖值（config 为任何自行实现 ConfigProvider 的类型，
+// 例如上文的 ConfigMap）
 registry.load_from_config(&config, "features");
 
 // 在应用代码中检查
@@ -852,7 +870,7 @@ if registry.is_enabled("new_dashboard") {
 }
 ```
 
-配置文件（`config.toml`）：
+配置来源（例如 `config.toml` 的 `[features]` 表，键值经你的 `ConfigProvider` 实现暴露）：
 
 ```toml
 [features]

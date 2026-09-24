@@ -288,7 +288,7 @@ mod async_impl {
             AnnotatedValue::new(value, SourceId::new("test"), key)
         }
 
-        /// / R-watch-008: overrides must be permanent cache entries —
+        /// R-watch-008: overrides must be permanent cache entries —
         /// no TTL/TTI may silently revert a dynamic `set` back to the merged
         /// value, and a set value must survive maintenance after reads.
         #[tokio::test]
@@ -595,7 +595,7 @@ mod sync_impl {
             AnnotatedValue::new(value, SourceId::new("test"), key)
         }
 
-        /// / R-watch-008 (sync build): overrides must be permanent
+        /// R-watch-008 (sync build): overrides must be permanent
         /// cache entries — no TTL/TTI may silently revert a dynamic `set`.
         #[test]
         fn overrides_are_permanent_entries() {

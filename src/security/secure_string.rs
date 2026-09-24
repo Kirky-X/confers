@@ -868,4 +868,23 @@ mod tests {
             "释放 SecureString 必须推高释放计数"
         );
     }
+    #[test]
+    fn from_impls_and_sensitive_data_surface() {
+        // 三种 From 实现产生等价实例(&str / String / &String)。
+        let a = SecureString::from("abc");
+        let b = SecureString::from(String::from("from-string"));
+        let s = String::from("abc");
+        let c = SecureString::from(&s);
+        assert_eq!(a, c);
+        assert_ne!(a, b);
+
+        // SensitiveData trait 面:display_name 与高敏感标记。
+        let named = SecureStringBuilder::new()
+            .with_display_name("db-password")
+            .with_sensitivity(SensitivityLevel::High)
+            .push_str("abc")
+            .build();
+        assert_eq!(named.display_name(), "db-password");
+        assert!(a.is_highly_sensitive());
+    }
 }

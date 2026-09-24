@@ -350,6 +350,11 @@ path = "tests/e2e/cli_e2e.rs"
 required-features = ["cli"]
 
 [[test]]
+name = "cli_coverage_extra"
+path = "tests/e2e/cli_coverage_extra.rs"
+required-features = ["cli", "snapshot", "encryption", "yaml"]
+
+[[test]]
 name = "toggle_e2e"
 path = "tests/e2e/toggle_e2e.rs"
 required-features = ["feature-toggle"]

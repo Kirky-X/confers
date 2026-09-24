@@ -371,6 +371,14 @@ mod tests {
             }
         }
 
+        let dummy = DummyValidator;
+        assert_eq!(dummy.name(), "dummy");
+        assert_eq!(dummy.category(), "test");
+        assert_eq!(dummy.description(), "Dummy validator");
+        dummy
+            .validate(&TestProvider::new())
+            .expect("dummy validator always passes");
+
         let mut registry = SecurityValidatorRegistry::new();
         registry.register(Box::new(DummyValidator));
         assert_eq!(registry.validator_count(), 1);

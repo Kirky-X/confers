@@ -997,7 +997,7 @@ mod tests {
 
     #[test]
     fn test_field_strategy_runs_even_when_values_equal() {
-        // R1- regression: the COW fast-path scan used the parent strategy,
+        // regression: the COW fast-path scan used the parent strategy,
         // so a registered child Join strategy was silently skipped whenever
         // low and high were already equal.
         let e = MergeEngine::new()

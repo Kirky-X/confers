@@ -1045,4 +1045,139 @@ mod tests {
         ctx.record("public_field", &plain);
         assert_eq!(ctx.sensitive_ref_fields("API_KEY").len(), 2);
     }
+
+    #[test]
+    fn tracked_result_reports_referenced_and_sensitive_vars() {
+        let r = |var: &str| {
+            if var == "API_KEY" {
+                Some("s3cret".to_string())
+            } else {
+                None
+            }
+        };
+
+        let result = interpolate_tracked("x-${API_KEY}-y", &r, true).unwrap();
+        assert_eq!(result.value, "x-s3cret-y");
+        assert!(result.has_sensitive_refs());
+        assert!(result.referenced("API_KEY"));
+        assert!(!result.referenced("OTHER"));
+        assert_eq!(
+            result.referenced_vars().cloned().collect::<Vec<_>>(),
+            ["API_KEY".to_string()]
+        );
+
+        // Non-sensitive field: the reference is tracked, but not sensitive.
+        let plain = interpolate_tracked("${API_KEY}", &r, false).unwrap();
+        assert!(!plain.has_sensitive_refs());
+        assert!(plain.referenced("API_KEY"));
+    }
+
+    #[test]
+    fn multibyte_characters_survive_in_templates_and_defaults() {
+        // Multi-byte regular characters in the template body (slow path).
+        let r = resolver(&[("HOST", "db")]);
+        let out = interpolate("配置=${HOST}✓", &r).unwrap();
+        assert_eq!(out, "配置=db✓");
+
+        // Multi-byte characters inside a default value (var-content slow path).
+        let out = interpolate("${MISSING:-默认值}", &resolver(&[])).unwrap();
+        assert_eq!(out, "默认值");
+
+        // Multi-byte characters inside a resolved variable's content.
+        let r2 = resolver(&[("NAME", "значение")]);
+        assert_eq!(interpolate("${NAME}", &r2).unwrap(), "значение");
+    }
+
+    #[test]
+    fn invalid_variable_names_fail_loudly() {
+        // First character must be a letter or underscore.
+        let err = interpolate("${1BAD}", &resolver(&[])).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("variable name must start with letter or underscore"),
+            "{err}"
+        );
+
+        // Empty variable name.
+        let err = interpolate("${}", &resolver(&[])).unwrap_err();
+        assert!(err.to_string().contains("empty variable name"), "{err}");
+    }
+
+    #[test]
+    fn config_policy_marks_sensitive_vars_and_toggles_warnings() {
+        let config = InterpolationConfig::new()
+            .with_sensitive_var("API_KEY")
+            .with_warn_sensitive(false);
+
+        assert!(config.is_sensitive("API_KEY"));
+        assert!(!config.is_sensitive("OTHER"));
+        assert!(!config.warn_sensitive_interpolation);
+        assert_eq!(config.max_depth, 10);
+    }
+
+    #[test]
+    fn context_warnings_accessor_and_display() {
+        let mut ctx = InterpolationContext::new();
+        assert!(!ctx.has_warnings());
+        assert!(ctx.warnings().is_empty());
+        assert!(!ctx.is_sensitive_ref("DB_PASS"));
+        assert_eq!(ctx.sensitive_ref_field("DB_PASS"), None);
+        assert!(ctx.sensitive_ref_fields("DB_PASS").is_empty());
+
+        ctx.add_warning(InterpolationWarning::SensitiveFieldInterpolation {
+            field: "db.pass".into(),
+            vars: vec!["DB_PASS".into()],
+        });
+        ctx.add_warning(InterpolationWarning::SensitiveVarReferenced {
+            var: "DB_PASS".into(),
+            field: "api.key".into(),
+        });
+        ctx.add_warning(InterpolationWarning::CircularReferenceResolved { var: "A".into() });
+
+        assert!(ctx.has_warnings());
+        assert_eq!(ctx.warnings().len(), 3);
+        let texts: Vec<String> = ctx.warnings().iter().map(|w| w.to_string()).collect();
+        assert!(
+            texts[0]
+                .contains("Sensitive field 'db.pass' uses interpolation with variables: DB_PASS"),
+            "{}",
+            texts[0]
+        );
+        assert_eq!(
+            texts[1],
+            "Sensitive variable 'DB_PASS' was referenced from field 'api.key'"
+        );
+        assert_eq!(texts[2], "Circular reference resolved for variable 'A'");
+    }
+
+    /// Direct coverage of the thin cycle-detection wrappers.
+    #[test]
+    fn inner_wrappers_behave_like_the_public_entry_points() {
+        let r = resolver(&[("HOST", "db"), ("A", "${B}"), ("B", "leaf")]);
+
+        let mut visited = HashSet::new();
+        let out = interpolate_inner("${A}", &r, &mut visited).unwrap();
+        assert_eq!(out, "leaf", "A -> ${{B}} -> leaf chains, not cycles");
+
+        // Cycle detection still applies through the wrapper.
+        let cyclic = resolver(&[("SELF", "${SELF}")]);
+        let mut visited = HashSet::new();
+        assert!(interpolate_inner("${SELF}", &cyclic, &mut visited).is_err());
+
+        let mut visited = HashSet::new();
+        let mut referenced = HashSet::new();
+        let mut sensitive = HashSet::new();
+        let out = interpolate_inner_tracked(
+            "${HOST}",
+            &r,
+            &mut visited,
+            &mut referenced,
+            &mut sensitive,
+            false,
+        )
+        .unwrap();
+        assert_eq!(out, "db");
+        assert!(referenced.contains("HOST"));
+        assert!(sensitive.is_empty());
+    }
 }

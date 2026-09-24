@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::error::ConfigError;
+use crate::i18n::{tr, tr_args};
 use crate::key::{KeyManager, now_timestamp};
 use crate::secret::{SecretBytes, XChaCha20Crypto};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -471,7 +472,13 @@ impl KeyStorage {
         // 临时文件以 unix 0600 创建,rename 后 keys.json 继承该权限。
         {
             let mut file = open_sensitive_file(&tmp_path).map_err(|e| {
-                std::io::Error::new(e.kind(), format!("Failed to open temp key store: {}", e))
+                std::io::Error::new(
+                    e.kind(),
+                    tr_args(
+                        "error-key-store-temp-open-failed",
+                        &[("message", e.to_string())],
+                    ),
+                )
             })?;
 
             file.write_all(json.as_bytes()).map_err(|e| {
@@ -714,8 +721,7 @@ impl KeyStorage {
         // and the store is left untouched.
         if !self.verify_old_master_key(old_master_key)? {
             return Err(ConfigError::KeyError {
-                message: "master key rotation rejected: old master key verification failed"
-                    .to_string(),
+                message: tr("error-key-rotation-verification-failed"),
             });
         }
         let plaintext = self.serialize_key_manager()?;

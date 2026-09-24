@@ -15,6 +15,8 @@ pub use version::KeyFormatVersion;
 
 use crate::error::ConfigError;
 #[cfg(feature = "encryption")]
+use crate::i18n::tr_args;
+#[cfg(feature = "encryption")]
 use crate::secret::XChaCha20Crypto;
 #[cfg(feature = "encryption")]
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -269,7 +271,10 @@ impl KeyBundle {
         let plaintext =
             String::from_utf8(plaintext.to_vec()).map_err(|e| ConfigError::ParseError {
                 format: "key".to_string(),
-                message: format!("Invalid plaintext UTF-8: {}", e),
+                message: tr_args(
+                    "error-key-plaintext-not-utf8",
+                    &[("message", e.to_string())],
+                ),
                 location: None,
                 source: None,
             })?;
@@ -1004,5 +1009,88 @@ mod tests {
         // Missing version: deactivate is a no-op (no panic, no change)
         ring.deactivate_version(99);
         assert_eq!(ring.primary_key.metadata.status(), KeyStatus::Active);
+    }
+    /// get_plaintext_key 的全部错误分支:畸形格式、坏 nonce/ciphertext base64、
+    /// 解密失败、明文非 UTF-8、明文非 base64、明文长度不是 32 字节。
+    #[test]
+    fn get_plaintext_key_reports_every_corruption_class() {
+        use base64::Engine as _;
+        let master: [u8; 32] = core::array::from_fn(|i| i as u8);
+
+        // 正常 roundtrip 作为对照。
+        let bundle = KeyBundle::generate(
+            &master,
+            1,
+            "test".to_string(),
+            Some("roundtrip".to_string()),
+        )
+        .expect("generate");
+        let plaintext = bundle.get_plaintext_key(&master).expect("roundtrip");
+        assert_eq!(plaintext.len(), 32);
+
+        let corrupted = |encrypted_key: &str| {
+            let mut bundle = bundle.clone();
+            bundle.encrypted_key = encrypted_key.to_string();
+            bundle.get_plaintext_key(&master).err()
+        };
+
+        // 分段数不是 2。
+        let err = corrupted("only-one-part").unwrap();
+        assert!(
+            err.to_string().contains("Invalid encrypted key format"),
+            "{err}"
+        );
+
+        // nonce 不是合法 base64。
+        let err = corrupted("!!!:AAAA").unwrap();
+        assert!(err.to_string().contains("Failed to decode nonce"), "{err}");
+
+        // ciphertext 不是合法 base64。
+        let good_nonce = bundle.encrypted_key.split(':').next().unwrap().to_string();
+        let err = corrupted(&format!("{good_nonce}:!!!")).unwrap();
+        assert!(
+            err.to_string().contains("Failed to decode ciphertext"),
+            "{err}"
+        );
+
+        // 解密失败(密文被篡改)。
+        let err = corrupted(&format!("{good_nonce}:AAAA")).unwrap();
+        assert!(err.to_string().contains("Decryption failed"), "{err}");
+
+        // 明文不是 UTF-8:用合法密钥加密一段非 UTF-8 字节。
+        let encryptor = XChaCha20Crypto::new();
+        let (nonce, ct) = encryptor
+            .encrypt(&[0xFF, 0xFE, 0xFF, 0xFE], &master)
+            .expect("encrypt raw bytes");
+        let raw = format!("{}:{}", BASE64.encode(&nonce), BASE64.encode(&ct));
+        let err = corrupted(&raw).unwrap();
+        assert!(
+            err.to_string().contains("not valid UTF-8") || err.to_string().contains("UTF-8"),
+            "{err}"
+        );
+
+        // 明文不是合法 base64(UTF-8 但非 base64)。
+        let (nonce, ct) = encryptor
+            .encrypt(b"zzzz!!!not-base64", &master)
+            .expect("encrypt non-base64 text");
+        let raw = format!("{}:{}", BASE64.encode(&nonce), BASE64.encode(&ct));
+        let err = corrupted(&raw).unwrap();
+        assert!(
+            err.to_string().contains("Invalid base64 in plaintext"),
+            "{err}"
+        );
+
+        // 明文 base64 解码后不是 32 字节。
+        let (nonce, ct) = encryptor
+            .encrypt(
+                base64::engine::general_purpose::STANDARD
+                    .encode(b"3bytes")
+                    .as_bytes(),
+                &master,
+            )
+            .expect("encrypt short key");
+        let raw = format!("{}:{}", BASE64.encode(&nonce), BASE64.encode(&ct));
+        let err = corrupted(&raw).unwrap();
+        assert!(err.to_string().contains("Invalid key length"), "{err}");
     }
 }

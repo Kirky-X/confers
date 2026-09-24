@@ -1347,4 +1347,102 @@ mod tests {
             .expect("disabled write is Ok");
         assert!(sink.captured().is_empty(), "sinks only see accepted events");
     }
+
+    // =========================================================================
+    // Chain serialization helpers
+    // =========================================================================
+
+    #[test]
+    fn constant_time_eq_compares_lengths_and_content() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(constant_time_eq(b"", b""));
+        // Same length, differing content: not equal, no early exit.
+        assert!(!constant_time_eq(b"abc", b"and"));
+        // Length mismatch short-circuits.
+        assert!(!constant_time_eq(b"abc", b"ab"));
+        assert!(!constant_time_eq(b"", b"a"));
+    }
+
+    #[test]
+    fn chain_event_line_rejects_non_object_payloads() {
+        let err = chain_event_line(
+            serde_json::Value::Array(vec![serde_json::json!(1)]),
+            "00",
+            "00",
+        )
+        .expect_err("non-object payload must fail");
+        assert!(
+            err.to_string()
+                .contains("unexpected non-object audit event payload"),
+            "{err}"
+        );
+
+        // Object payloads gain the chain metadata fields.
+        let line = chain_event_line(
+            serde_json::json!({ "source": "env", "record": "load_success" }),
+            "prev-hash",
+            "mac",
+        )
+        .expect("object payload augments");
+        assert_eq!(line["prev_hash"], "prev-hash");
+        assert_eq!(line["hmac"], "mac");
+        assert_eq!(line["source"], "env");
+    }
+
+    #[test]
+    fn scan_chain_state_reads_header_and_last_event_hash() {
+        // Missing file: no recognizable chain.
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        assert!(scan_chain_state(&dir.path().join("absent.log")).is_none());
+
+        let salt_hex = "ab".repeat(CHAIN_SALT_LEN);
+        let hash_hex = "cd".repeat(CHAIN_HASH_LEN);
+
+        // Header only: the salt doubles as the first prev_hash.
+        let header_only = dir.path().join("header_only.log");
+        std::fs::write(
+            &header_only,
+            format!("{{\"record\":\"{CHAIN_HEADER_RECORD}\",\"salt\":\"{salt_hex}\"}}\n"),
+        )
+        .expect("write header");
+        let state = scan_chain_state(&header_only).expect("header is a chain");
+        assert_eq!(state.salt, {
+            let mut s = [0u8; CHAIN_SALT_LEN];
+            hex::decode_to_slice(&salt_hex, &mut s).unwrap();
+            s
+        });
+        assert_eq!(state.prev_hash, state.salt, "no events yet: salt is prev");
+
+        // Header + event line: the last event's hmac becomes prev_hash.
+        // (Event lines carry no `record` control field; control lines with a
+        // non-header `record` are skipped without contributing a hash.)
+        let full = dir.path().join("full.log");
+        std::fs::write(
+            &full,
+            format!(
+                "not json\n{{\"record\":\"future_control\"}}\n{{\"record\":\"{CHAIN_HEADER_RECORD}\",\"salt\":\"{salt_hex}\"}}\n{{\"note\":\"event\",\"hmac\":\"{hash_hex}\"}}\n"
+            ),
+        )
+        .expect("write chain file");
+        let state = scan_chain_state(&full).expect("chain present");
+        assert_eq!(state.salt, {
+            let mut s = [0u8; CHAIN_SALT_LEN];
+            hex::decode_to_slice(&salt_hex, &mut s).unwrap();
+            s
+        });
+        assert_eq!(state.prev_hash, {
+            let mut h = [0u8; CHAIN_HASH_LEN];
+            hex::decode_to_slice(&hash_hex, &mut h).unwrap();
+            h
+        });
+
+        // Corrupt salt (bad hex) is not a recognizable chain.
+        let corrupt = dir.path().join("corrupt.log");
+        std::fs::write(
+            &corrupt,
+            format!("{{\"record\":\"{CHAIN_HEADER_RECORD}\",\"salt\":\"zz\"}}\n"),
+        )
+        .expect("write corrupt header");
+        assert!(scan_chain_state(&corrupt).is_none());
+    }
 }

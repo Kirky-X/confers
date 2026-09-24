@@ -600,4 +600,55 @@ mod tests {
         assert_eq!(client.provider_name(), "static");
         assert!(client.bool_value("f", false, &ctx_with("u", &[])));
     }
+    /// AttributeMatch 的标量回退分支:number/bool 属性按渲染形式比对;
+    /// ToggleRegistryProvider 的 string 视角与未知 flag 的 default 回退。
+    #[test]
+    fn attribute_scalar_coercion_and_toggle_string_view() {
+        // 数字属性按 "3" 与 expected 比较;布尔按 "true"。
+        let provider = StaticFlagProvider::new()
+            .with_flag(
+                "num-flag",
+                FlagConfig::on_off(false)
+                    .with_rule(TargetingRule::when_attribute("tier", "3", "on")),
+            )
+            .with_flag(
+                "bool-flag",
+                FlagConfig::on_off(false)
+                    .with_rule(TargetingRule::when_attribute("vip", "true", "on")),
+            );
+        let client = OpenFeatureClient::with_provider(Arc::new(provider));
+
+        let tier_ctx = EvaluationContext::new()
+            .with_key("u1")
+            .attr("tier", ContextValue::Number(3.0));
+        let tier_miss = EvaluationContext::new()
+            .with_key("u1")
+            .attr("tier", ContextValue::Number(9.0));
+        let vip_ctx = EvaluationContext::new()
+            .with_key("u1")
+            .attr("vip", ContextValue::Boolean(true));
+
+        assert!(client.bool_value("num-flag", false, &tier_ctx));
+        assert!(!client.bool_value("num-flag", false, &tier_miss));
+        assert!(client.bool_value("bool-flag", false, &vip_ctx));
+
+        // ToggleRegistryProvider:string 视角渲染 bool,未知 flag 回退 default。
+        let registry = Arc::new(crate::toggle::FeatureToggleRegistry::new());
+        registry.register("beta", "beta feature", false);
+        registry.enable("beta");
+        let toggle_client =
+            OpenFeatureClient::with_provider(Arc::new(ToggleRegistryProvider::new(registry)));
+        assert_eq!(toggle_client.provider_name(), "toggle-registry");
+        assert_eq!(
+            toggle_client.string_value("beta", "d", &ctx_with("u", &[])),
+            "true"
+        );
+        assert_eq!(
+            toggle_client.string_value("never-registered", "d", &ctx_with("u", &[])),
+            "d"
+        );
+        let detail = toggle_client.bool_details("never-registered", true, &ctx_with("u", &[]));
+        assert_eq!(detail.reason, ResolutionReason::Default);
+        assert!(detail.value);
+    }
 }
