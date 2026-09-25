@@ -30,7 +30,7 @@ base64 = { version = "0.23", default-features = false, features = ["std"] }
 chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"], optional = true }
 clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive", "env"], optional = true }
-confers-macros = { version = "0.6.0-rc.5", path = "macros" }
+confers-macros = { version = "0.6.0-rc.6", path = "macros" }
 dashmap = { version = "6.2", default-features = false, optional = true }
 garde = { version = "0.23", default-features = false, features = ["derive", "email", "url", "regex"], optional = true }
 fluent-bundle = { version = "0.16", default-features = false }
@@ -75,7 +75,7 @@ exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.0-rc.5"
+version = "0.6.0-rc.6"
 edition = "2024"
 rust-version = "1.97.1"
 description = "Production-ready Rust configuration library with zero boilerplate"

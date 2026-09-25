@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
-## [Unreleased]
+## [0.6.0-rc.6] — 2026-09-25
 
 ### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
 
