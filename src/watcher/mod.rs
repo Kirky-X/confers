@@ -67,11 +67,7 @@ impl WatcherGuard {
     }
 
     /// Create a new WatcherGuard with an associated task handle.
-    #[allow(dead_code)]
-    pub(crate) fn with_task(
-        running: Arc<AtomicBool>,
-        task_handle: tokio::task::JoinHandle<()>,
-    ) -> Self {
+    pub fn with_task(running: Arc<AtomicBool>, task_handle: tokio::task::JoinHandle<()>) -> Self {
         Self {
             running,
             task_handle: Mutex::new(Some(task_handle)),
@@ -118,6 +114,13 @@ impl WatcherGuard {
     /// Returns `Ok(true)` if the task completed (or no task was registered),
     /// `Ok(false)` if the timeout elapsed before the task finished.
     ///
+    /// `Ok(false)` is not an error: the stop signal has already been delivered
+    /// via the running flag, but the task handle is dropped detached, so the
+    /// task itself is *not* cancelled and keeps running until it observes the
+    /// flag (or finishes naturally). Callers should treat `Ok(false)` as a
+    /// degraded shutdown — e.g. log a warning or escalate — rather than
+    /// propagate it as an error.
+    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -157,9 +160,13 @@ impl WatcherGuard {
         }
     }
 
-    /// Set the task handle for this guard (internal use).
-    #[allow(dead_code)]
-    pub(crate) fn set_task_handle(&self, handle: tokio::task::JoinHandle<()>) {
+    /// Set the task handle for this guard.
+    ///
+    /// Use this when the guard is built via [`new()`](Self::new) or
+    /// [`from_running()`](Self::from_running) and the worker task is spawned
+    /// afterwards; [`shutdown()`](Self::shutdown) awaits whichever handle was
+    /// registered last.
+    pub fn set_task_handle(&self, handle: tokio::task::JoinHandle<()>) {
         *self.task_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
     }
 }
@@ -244,7 +251,6 @@ mod tests {
     }
 
     /// Verify set_task_handle registers a task that shutdown can await.
-    /// Also ensures the pub(crate) setter is exercised (no dead code).
     #[tokio::test]
     async fn test_set_task_handle_then_shutdown() {
         let guard = WatcherGuard::new();

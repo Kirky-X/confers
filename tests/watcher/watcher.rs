@@ -223,6 +223,57 @@ fn test_watcher_guard_drop_stops_watcher() {
     assert!(flag.load(Ordering::SeqCst));
 }
 
+/// WatcherGuard::with_task must be callable from outside the crate so
+/// downstream embedders can hand the guard a pre-spawned worker task.
+#[tokio::test]
+async fn test_watcher_guard_with_task_public_and_shutdown_awaits() {
+    let running = Arc::new(AtomicBool::new(true));
+    let handle = tokio::spawn(async {});
+
+    let guard = WatcherGuard::with_task(running, handle);
+    guard.start();
+    assert!(guard.is_running());
+
+    let completed = guard.shutdown(Duration::from_secs(2)).await;
+    assert!(
+        completed.is_ok() && completed.unwrap(),
+        "shutdown should await the constructor-registered task to completion"
+    );
+    assert!(!guard.is_running());
+}
+
+/// WatcherGuard::set_task_handle must be callable from outside the crate so
+/// downstream embedders can attach a task after building the guard.
+#[tokio::test]
+async fn test_watcher_guard_set_task_handle_public_and_shutdown_awaits() {
+    let guard = WatcherGuard::new();
+    guard.start();
+    guard.set_task_handle(tokio::spawn(async {}));
+
+    let completed = guard.shutdown(Duration::from_secs(2)).await;
+    assert!(
+        completed.is_ok() && completed.unwrap(),
+        "shutdown should await the setter-registered task to completion"
+    );
+}
+
+/// A task that outlives the shutdown timeout must surface as Ok(false):
+/// the caller is expected to treat this as a degradation signal, not an error.
+#[tokio::test]
+async fn test_watcher_guard_shutdown_timeout_reports_false() {
+    let running = Arc::new(AtomicBool::new(true));
+    let handle = tokio::spawn(async {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    });
+
+    let guard = WatcherGuard::with_task(running, handle);
+    let completed = guard.shutdown(Duration::from_millis(50)).await;
+    assert!(
+        completed.is_ok() && !completed.unwrap(),
+        "shutdown must return Ok(false) when the task exceeds the timeout"
+    );
+}
+
 /// Test WatcherConfig Clone trait.
 #[test]
 fn test_watcher_config_clone() {
