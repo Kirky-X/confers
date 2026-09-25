@@ -416,7 +416,10 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             }
             log::warn!(
                 "{}",
-                tr_args("log-reload-validation-commit-anyway", &[("reason", reason)])
+                tr_args(
+                    "log-reload-validation-commit-anyway",
+                    &[("reason", flatten_reason(&reason))]
+                )
             );
         }
         Ok(())
@@ -581,6 +584,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
+                        let reason = flatten_reason(&reason);
                         self.publish_canary_stage("rolled_back", &reason).await;
                         return Err(ConfigError::ReloadRolledBack { reason });
                     }

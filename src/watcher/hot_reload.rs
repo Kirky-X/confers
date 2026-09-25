@@ -206,7 +206,10 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                     }
                     Err(join_err) => {
                         failures.fetch_add(1, Ordering::SeqCst);
-                        log::error!("hot reload loader panicked: {join_err}");
+                        log::error!(
+                            "hot reload loader panicked: {}",
+                            flatten_reason(&join_err.to_string())
+                        );
                     }
                 }
             }

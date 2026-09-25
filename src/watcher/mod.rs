@@ -166,7 +166,8 @@ impl WatcherGuard {
                     // shutdown instead of silently claiming success.
                     Ok(Err(join_err)) => {
                         log::error!(
-                            "watcher task terminated abnormally during shutdown: {join_err}"
+                            "watcher task terminated abnormally during shutdown: {}",
+                            progressive::flatten_reason(&join_err.to_string())
                         );
                         Ok(false)
                     }
