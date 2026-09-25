@@ -442,7 +442,7 @@ impl ConfigError {
     /// Get a sanitized message for user display.
     ///
     /// The formatted message always passes through
-    /// [`sanitize::sanitize_error_message`], so field-name credentials
+    /// `sanitize::sanitize_error_message`, so field-name credentials
     /// (`password = ...`) and value-shaped secrets (URLs with embedded
     /// credentials, JWTs, key material) never reach end users — including the
     /// `InvalidValue` path that remote sources populate with raw URLs.

@@ -223,7 +223,7 @@ pub struct AuditConfig {
     /// can re-forge a valid chain. Supplying `hmac_key` moves the MAC key out
     /// of band (env, secret manager, KMS): the file alone is then useless for
     /// forgery, and verification must pass the same key via
-    /// [`verify_audit_chain_with_key`].
+    /// `verify_audit_chain_with_key`.
     pub hmac_key: Option<Vec<u8>>,
 }
 

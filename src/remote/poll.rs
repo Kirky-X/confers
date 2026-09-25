@@ -507,7 +507,7 @@ impl HttpPolledSourceBuilder {
 
     /// Set the request timeout.
     ///
-    /// When not set, the client applies [`DEFAULT_HTTP_REQUEST_TIMEOUT`]
+    /// When not set, the client applies `DEFAULT_HTTP_REQUEST_TIMEOUT`
     /// (30 seconds) so a hung endpoint cannot stall the poll forever.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
@@ -516,7 +516,7 @@ impl HttpPolledSourceBuilder {
 
     /// Set the connect timeout.
     ///
-    /// When not set, the client applies [`DEFAULT_HTTP_CONNECT_TIMEOUT`]
+    /// When not set, the client applies `DEFAULT_HTTP_CONNECT_TIMEOUT`
     /// (10 seconds).
     pub fn connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);

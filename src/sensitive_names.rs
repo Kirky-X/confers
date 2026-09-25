@@ -44,7 +44,7 @@ const SENSITIVE_FRAGMENTS: &[&str] = &[
 /// should be treated as sensitive for masking/redaction decisions.
 ///
 /// The name is normalized (`-`/`.`/space → `_`, lowercased) and matched
-/// against [`SENSITIVE_FRAGMENTS`] with token boundaries: a fragment hit must
+/// against `SENSITIVE_FRAGMENTS` with token boundaries: a fragment hit must
 /// not be glued to other letters (`monkey` stays clean, `my_api_key` hits).
 pub fn is_sensitive_name(name: &str) -> bool {
     let normalized: String = name
