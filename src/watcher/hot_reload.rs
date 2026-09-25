@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
+use super::progressive::flatten_reason;
 use super::{FsWatcher, ProgressiveReloader, ReloadOutcome};
 use crate::error::{ConfersResult, ConfigResult};
 use crate::interface::ConfigProvider;
@@ -22,6 +23,11 @@ use crate::interface::ConfigProvider;
 /// Loader closure the facade calls when a file event arrives: rebuilds the
 /// configuration from disk and hands back the new config together with its
 /// provider (the provider feeds canary/linear health checks).
+///
+/// The closure runs on tokio's blocking thread pool, so a blocking disk read
+/// never stalls the async reactor — but a long-running loader still delays
+/// subsequent reloads, and a panic inside it is caught, counted as a reload
+/// failure, and logged.
 pub type HotReloadLoader<T> =
     Arc<dyn Fn() -> ConfigResult<(Arc<T>, Arc<dyn ConfigProvider>)> + Send + Sync>;
 
@@ -39,6 +45,16 @@ pub type HotReloadLoader<T> =
 /// Loader failures and rejected reloads are never silent: they increment
 /// [`reload_failures()`](Self::reload_failures) (queryable) and are logged.
 /// The current configuration stays untouched in both cases.
+///
+/// # Event queueing semantics
+///
+/// Events are processed strictly one at a time. A
+/// [`ReloadStrategy::Canary`](super::ReloadStrategy) / `Linear` reload holds
+/// the loop for its whole trial window, so file changes arriving during a
+/// trial queue up in the watcher's bounded channel and trigger back-to-back
+/// full reloads afterwards; once that channel fills, `FsWatcher` drops the
+/// excess events (visible via its `dropped_events()`). Under high-frequency
+/// writers prefer `Immediate` or debounce upstream.
 ///
 /// # Manual entry point
 ///
@@ -158,8 +174,13 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
         match tokio::time::timeout(STOP_POLL_TICK, watcher.recv()).await {
             Ok(None) => break,
             Ok(Some(_path)) => {
-                match load() {
-                    Ok((candidate, provider)) => {
+                // The loader does blocking disk I/O: run it on the blocking
+                // thread pool so the reactor (and the stop-poll tick) keeps
+                // breathing. A loader panic surfaces here as a JoinError and
+                // is counted/logged like any other failure — never silent.
+                let loader = Arc::clone(&load);
+                match tokio::task::spawn_blocking(move || loader()).await {
+                    Ok(Ok((candidate, provider))) => {
                         match reloader.begin_reload(candidate.clone(), provider).await {
                             Ok(_) => {
                                 // No subscriber → send fails; watch
@@ -169,13 +190,23 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                             }
                             Err(e) => {
                                 failures.fetch_add(1, Ordering::SeqCst);
-                                log::error!("hot reload rejected a candidate: {e}");
+                                log::error!(
+                                    "hot reload rejected a candidate: {}",
+                                    flatten_reason(&e.to_string())
+                                );
                             }
                         }
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         failures.fetch_add(1, Ordering::SeqCst);
-                        log::error!("hot reload loader failed: {e}");
+                        log::error!(
+                            "hot reload loader failed: {}",
+                            flatten_reason(&e.to_string())
+                        );
+                    }
+                    Err(join_err) => {
+                        failures.fetch_add(1, Ordering::SeqCst);
+                        log::error!("hot reload loader panicked: {join_err}");
                     }
                 }
             }

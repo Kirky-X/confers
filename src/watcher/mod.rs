@@ -120,7 +120,8 @@ impl WatcherGuard {
     /// # Returns
     ///
     /// Returns `Ok(true)` if the task completed (or no task was registered),
-    /// `Ok(false)` if the timeout elapsed before the task finished.
+    /// `Ok(false)` if the timeout elapsed before the task finished or the
+    /// task terminated abnormally (its join reported a panic).
     ///
     /// `Ok(false)` is not an error: the stop signal has already been delivered
     /// via the running flag, but the task handle is dropped detached, so the
@@ -160,7 +161,15 @@ impl WatcherGuard {
             Some(handle) => {
                 match tokio::time::timeout(timeout, handle).await {
                     // Task completed within timeout
-                    Ok(_) => Ok(true),
+                    Ok(Ok(())) => Ok(true),
+                    // Task finished abnormally (panic): report the degraded
+                    // shutdown instead of silently claiming success.
+                    Ok(Err(join_err)) => {
+                        log::error!(
+                            "watcher task terminated abnormally during shutdown: {join_err}"
+                        );
+                        Ok(false)
+                    }
                     // Timeout elapsed — task did not finish in time
                     Err(_) => Ok(false),
                 }
@@ -273,6 +282,23 @@ mod tests {
             "shutdown should return true for a task that completes via set_task_handle"
         );
         assert!(!guard.is_running());
+    }
+
+    /// A task that dies of a panic must surface as Ok(false) — the shutdown
+    /// did not complete cleanly, and that must not be reported as success.
+    #[tokio::test]
+    async fn test_shutdown_reports_false_when_task_panicked() {
+        let guard = WatcherGuard::with_task(
+            Arc::new(AtomicBool::new(true)),
+            tokio::spawn(async { panic!("task boom") }),
+        );
+
+        let result = guard.shutdown(Duration::from_secs(2)).await;
+        assert!(result.is_ok(), "shutdown itself must not error");
+        assert!(
+            !result.unwrap(),
+            "a panicked task must not report a clean shutdown"
+        );
     }
 }
 
