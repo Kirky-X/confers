@@ -155,6 +155,25 @@ impl std::fmt::Display for ChangeStreamError {
 
 impl std::error::Error for ChangeStreamError {}
 
+// Dual-track i18n contract (see `src/i18n/error_ext.rs`): Display stays the
+// English canonical form; localization flows through `LocalizedMsg` and the
+// `error-stream-*` keys in `locales/{en,zh}/errors.ftl`.
+impl crate::i18n::LocalizedMsg for ChangeStreamError {
+    fn message_key(&self) -> &'static str {
+        match self {
+            Self::Lagged { .. } => "error-stream-lagged",
+            Self::NotFound { .. } => "error-stream-version-not-found",
+        }
+    }
+
+    fn message_args(&self) -> Vec<(&str, String)> {
+        match self {
+            Self::Lagged { from } => vec![("from", from.to_string())],
+            Self::NotFound { version } => vec![("version", version.to_string())],
+        }
+    }
+}
+
 /// Unified configuration change stream port.
 ///
 /// Producers (file watcher bridges, remote sources, progressive reloaders)
@@ -676,6 +695,46 @@ mod tests {
         assert_eq!(
             ChangeStreamError::NotFound { version: 42 }.to_string(),
             "version 42 was not published on this stream"
+        );
+    }
+
+    /// Dual-track i18n guard (same style as `src/i18n/error_ext.rs`): the en
+    /// FTL template mirrors the canonical Display string verbatim and the
+    /// localized output always comes from the catalog.
+    #[test]
+    fn change_stream_error_localization_is_catalog_backed() {
+        use crate::i18n::{I18nExt, LocalizedMsg};
+
+        let lagged = ChangeStreamError::Lagged { from: 7 };
+        assert_eq!(lagged.message_key(), "error-stream-lagged");
+        assert_eq!(
+            lagged.message_args(),
+            vec![("from", "7".to_string())],
+            "en/zh templates interpolate the oldest retained version"
+        );
+        assert_eq!(lagged.to_string(), lagged.message_en());
+        assert!(
+            matches!(
+                lagged.to_localized_string().as_str(),
+                "subscriber lagged: versions below 7 were evicted"
+                    | "订阅者已落后: 7 之前的版本已被逐出"
+            ),
+            "localized output must come from the catalog"
+        );
+
+        let not_found = ChangeStreamError::NotFound { version: 42 };
+        assert_eq!(not_found.message_key(), "error-stream-version-not-found");
+        assert_eq!(
+            not_found.message_args(),
+            vec![("version", "42".to_string())]
+        );
+        assert_eq!(not_found.to_string(), not_found.message_en());
+        assert!(
+            matches!(
+                not_found.to_localized_string().as_str(),
+                "version 42 was not published on this stream" | "版本 42 未在此流上发布过"
+            ),
+            "localized output must come from the catalog"
         );
     }
 

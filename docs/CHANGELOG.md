@@ -55,6 +55,7 @@ _暂无变更。_
 - **特性**：`keyring` / `cloud-kms` 隐含 `encryption`，引入 `async-core` 聚合谓词
 - **工程**：接入 pre-commit 门禁与 detect-secrets 基线；typos 词表白名单；为 path-only 依赖补全 `version` 字段
 - **测试**：NATS 集成测试名加纳秒熵防跨进程撞车；示例/文档/测试残留 `AppConfig` 衍生名统一为 `Confers` 前缀
+- **依赖**：移除主 crate 直接依赖 `compact_str`（短字符串驻留从未实际接线；仅 `[workspace.dependencies]` 余留未继承的版本声明）
 
 ## [0.6.0-rc.4] — 2026-09-13
 

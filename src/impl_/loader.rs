@@ -303,8 +303,10 @@ pub fn normalize_and_validate_path(
             return Err(PathTraversalError::AbsolutePath);
         }
         // For absolute paths with allow_absolute=true, canonicalize and skip directory check
-        let canonical =
-            std::fs::canonicalize(path).map_err(|e| PathTraversalError::IoError(e.to_string()))?;
+        let canonical = std::fs::canonicalize(path).map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => PathTraversalError::NotFound,
+            _ => PathTraversalError::IoError(e.to_string()),
+        })?;
         return Ok(canonical);
     }
 
@@ -576,14 +578,6 @@ pub fn detect_format_from_content(content: &str) -> Option<Format> {
 /// - File size exceeds the configured limit
 /// - File cannot be read or parsed
 pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedValue> {
-    // Path traversal protection: validate the path before opening it.
-    let validated_path =
-        validate_path_with_config(path, config).map_err(|e| ConfigError::InvalidValue {
-            key: "path".to_string(),
-            expected_type: "safe relative path".to_string(),
-            message: format!("Path validation failed: {}", e),
-        })?;
-
     // Error payload redaction: report only the file name (not the resolved
     // server path) when the embedder opts in.
     let reported_path = |p: &Path| -> PathBuf {
@@ -595,6 +589,25 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
             p.to_path_buf()
         }
     };
+
+    // Path traversal protection: validate the path before opening it.
+    // A missing file is not a security violation: it surfaces as
+    // FileNotFound (carrying the underlying io error as source), while
+    // actual traversal/permission findings stay InvalidValue.
+    let validated_path = validate_path_with_config(path, config).map_err(|e| match e {
+        PathTraversalError::NotFound => ConfigError::FileNotFound {
+            filename: reported_path(path),
+            source: Some(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "configuration file does not exist",
+            )),
+        },
+        other => ConfigError::InvalidValue {
+            key: "path".to_string(),
+            expected_type: "safe relative path".to_string(),
+            message: format!("Path validation failed: {}", other),
+        },
+    })?;
 
     // Open the file once, then enforce the size limit against the opened
     // handle's own metadata and read through the handle. Re-resolving the

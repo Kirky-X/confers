@@ -351,12 +351,36 @@ where
         result
     }
 
+    /// Enforce `ConfigLimits::max_file_size_bytes` against every file source
+    /// in the chain before any of them is read.
+    ///
+    /// Missing files are not reported here — the source itself surfaces them
+    /// as `FileNotFound` during collection.
+    fn enforce_file_size_limits(&self) -> ConfigResult<()> {
+        for path in self.chain_builder.get_watch_paths() {
+            let Ok(meta) = std::fs::metadata(&path) else {
+                continue;
+            };
+            let size = meta.len();
+            if size > self.limits.max_file_size_bytes {
+                return Err(ConfigError::SizeLimitExceeded {
+                    actual: usize::try_from(size).unwrap_or(usize::MAX),
+                    limit: usize::try_from(self.limits.max_file_size_bytes).unwrap_or(usize::MAX),
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn do_build_inner(mut self) -> ConfigResult<T> {
         // Critical-path span: the whole chain build (load).
         #[cfg(feature = "tracing")]
         let load_span = tracing::info_span!("confers.load");
         #[cfg(feature = "tracing")]
         let _load_guard = load_span.enter();
+
+        // Check file sizes before the chain consumes accumulated sources.
+        self.enforce_file_size_limits()?;
 
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -417,6 +441,9 @@ where
     }
 
     fn do_build_annotated(mut self) -> ConfigResult<AnnotatedValue> {
+        // Check file sizes before the chain consumes accumulated sources.
+        self.enforce_file_size_limits()?;
+
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
@@ -493,6 +520,11 @@ where
 
     /// Build resiliently, collecting warnings instead of failing.
     pub fn build_resilient(mut self) -> ConfigResult<BuildResult<T>> {
+        // Size limit is a safety limit (like validate_value below): violated
+        // even in resilient mode, before any source is read. Checked before
+        // the chain consumes accumulated sources.
+        self.enforce_file_size_limits()?;
+
         // Add accumulated defaults if any
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -510,6 +542,9 @@ where
         #[cfg(not(feature = "snapshot"))]
         let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
 
+        // Enforce the configured limits and persist the snapshot exactly like
+        // `build()` does. Resilient mode tolerates *source* errors, not
+        // violated safety limits.
         let chain = self.chain_builder.fail_fast(false).build();
         let mut warnings = Vec::new();
         let outcome = chain.collect_report();

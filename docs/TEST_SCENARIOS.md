@@ -125,7 +125,7 @@
 | FMT-09 | YAML 语法错误（tab 缩进等）→ 解析错误 | 异常 | yaml | 本地文件 | `tests/core/error.rs::test_invalid_yaml_format_error` | tests/e2e/format_e2e.rs |
 | FMT-10 | 空文件（0 字节）→ 成功返回空 Map，不报错 | 边界 | toml | 本地文件 | `tests/core/load.rs::test_load_empty_file` | tests/e2e/format_e2e.rs |
 | FMT-11 | 文件超过 `LoaderConfig::max_size` → 大小超限错误（2400 族），不读入内存 | 异常 | toml | 本地文件 | `tests/core/error.rs::test_size_limit_exceeded_error`（单测层面）；无 loader 级集成→需新增 | tests/e2e/format_e2e.rs |
-| FMT-12 | `load_file` 不存在的路径 → `ConfigFileNotFound(2200)`，错误含 source 信息 | 异常 | default | 本地文件 | `tests/core/load.rs::test_load_file_not_found`；`tests/core/error.rs::test_file_not_found_with_source` | tests/e2e/format_e2e.rs |
+| FMT-12 | `load_file` 不存在的路径 → `ConfigFileNotFound(2200)`，错误含 source 信息 | 异常 | default | 本地文件 | `tests/core/load.rs::test_load_file_not_found`；`tests/core/error.rs::test_file_not_found_with_source`；E2E：`tests/e2e/error_scenarios_e2e.rs::s12_missing_file_reports_not_found`（实测码 `ErrorCode::FileNotFound(1)`，2200 属 `ConfigErrorCode` 族，两族常量均在测试中固定） | tests/e2e/format_e2e.rs |
 | FMT-13 | 路径穿越：`config/../../etc/passwd.toml` 被 `normalize_and_validate_path` 拒绝 | 异常 | default | 本地文件 | src 内联 `src/impl_/loader.rs`（`check_path_traversal_attempt` tests） | tests/e2e/format_e2e.rs |
 | FMT-14 | 符号链接指向 allowed_dir 之外 → 默认拒绝；`no_symlink_check()` 放行 | 异常 | default | 本地文件 | src 内联 `src/impl_/loader.rs` | tests/e2e/format_e2e.rs |
 | FMT-15 | 绝对路径默认拒绝；`allow_absolute()` / `ConfigBuilder::allow_absolute_paths()` 放行 | 异常 | default | 本地文件 | `tests/cli/commands.rs::test_diff_command`（绝对路径 bail 分支）；src 内联 loader tests | tests/e2e/format_e2e.rs |
@@ -154,7 +154,7 @@
 | BLD-11 | 完整优先级链 default < file < env < memory：同一键四处定义，最终取 memory | 正常 | env | 无 | `tests/core/merge.rs::test_precedence_default_file_env_memory` | tests/e2e/builder_e2e.rs |
 | BLD-12 | 全局 `MergeStrategy` 五种：Replace/Join/Append/Prepend/JoinAppend 各验证合并结果（Map 之间无条件深合并，已无 DeepMerge 变体） | 正常 | default | 无 | `tests/core/merge.rs::test_merge_replace_strategy` 等 5 例 | tests/e2e/builder_e2e.rs |
 | BLD-13 | `.field_strategy("tags", Append)` 字段级策略覆盖全局策略 | 边界 | default | 无 | `tests/core/merge.rs::test_field_specific_strategy` | tests/e2e/builder_e2e.rs |
-| BLD-14 | `ConfigLimits::max_file_size_bytes` 超限 → `ConfigSizeLimitExceeded(2400)` | 异常 | default | 本地文件 | `tests/core/error.rs::test_size_limit_exceeded_error`；集成级→需新增 | tests/e2e/builder_e2e.rs |
+| BLD-14 | `ConfigLimits::max_file_size_bytes` 超限 → `ConfigSizeLimitExceeded(2400)` | 异常 | default | 本地文件 | `tests/core/error.rs::test_size_limit_exceeded_error`；E2E：`tests/e2e/error_scenarios_e2e.rs::s36_limits_max_file_size_bytes_rejected_at_build`（build 在读取源之前强制执行；实测码 `ErrorCode::SizeLimitExceeded(500)`，2400 属 `ConfigErrorCode` 族） | tests/e2e/builder_e2e.rs |
 | BLD-15 | 嵌套深度超 `max_nesting_depth` → 明确错误 | 异常 | default | 本地文件 | src 内联 limits tests（`src/impl_/config/limits.rs`）→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-16 | 键总数超 `max_total_fields` → 超限错误 | 异常 | default | 本地文件 | src 内联 limits tests→需集成新增 | tests/e2e/builder_e2e.rs |
 | BLD-17 | 数组长度超 `max_array_length` → 超限错误 | 异常 | default | 本地文件 | src 内联 limits tests→需集成新增 | tests/e2e/builder_e2e.rs |
@@ -221,9 +221,9 @@
 | ENC-18 | `KeyRegistry`：rotate 后 `try_all_keys` 可用旧密钥解密旧数据、新密钥加密新数据 | 正常 | encryption | 无 | `tests/security/security.rs::test_key_registry_rotation/test_key_registry_try_all_keys` | tests/e2e/encryption_e2e.rs |
 | ENC-19 | 完整工作流：provider→derive_field_key→encrypt→decrypt（`test_full_encryption_workflow` 同构端到端） | 正常 | encryption | 无 | `tests/security/encryption.rs::test_full_encryption_workflow/test_secret_string_with_encryption` | tests/e2e/encryption_e2e.rs |
 | ENC-20 | 派生宏 `#[config(encrypt = "xchacha20")]` 字段：配置加载时密文解密注入，错误密钥 → 加载失败 | 正常/异常 | encryption,macros | 本地文件 | src 内联 `macros/src/codegen/security.rs` 相关；集成→需新增 | tests/e2e/encryption_e2e.rs |
-| ENC-21 | `encrypt = "aes256-gcm"` 算法路径 roundtrip | 正常 | encryption | 无 | src 内联 crypto tests（aes-gcm 依赖）→需集成新增 | tests/e2e/encryption_e2e.rs |
+| ENC-21 | `encrypt = "aes256-gcm"`：语法接受但运行时未实现 → 宏展开期编译错误并提示 `use "xchacha20"` | 异常 | macros,encryption | 无 | 已固化：`macros/tests/compile_fail/t035_aes256_gcm_not_implemented.rs`（trybuild） | tests/e2e/macro_e2e.rs（trybuild） |
 | ENC-22 | 环境变量注入密文（`enc:<base64>` 形态）经 config_injector 解密为 SecretString | 正常 | security,encryption | 无 | src 内联 `src/security/config_injector.rs` tests | tests/e2e/encryption_e2e.rs |
-| ENC-23 | 非法算法名 `encrypt = "rot13"` → 宏展开期编译错误（trybuild 级验收，提示支持列表） | 异常 | macros,encryption | 无 | macros crate 无 trybuild 用例→需新增 | tests/e2e/macro_e2e.rs（trybuild） |
+| ENC-23 | 非法算法名 `encrypt = "rot13"` → 宏展开期编译错误（trybuild 级验收，提示支持列表） | 异常 | macros,encryption | 无 | 已固化：`macros/tests/compile_fail/`（encrypt_rot13 等 5 组用例，由 `compile_fail.rs` 驱动） | tests/e2e/macro_e2e.rs（trybuild） |
 
 ### 2.6 密钥管理（KEY，13 条）
 
@@ -297,7 +297,7 @@
 | WAT-09 | `WatcherGuard` drop 后 watcher 停止（后台线程退出） | 正常 | watch | 本地文件 | `tests/watcher/watcher.rs::test_watcher_guard_drop_stops_watcher/test_watcher_guard_start_stop/test_watcher_guard_shutdown` | tests/e2e/watch_e2e.rs |
 | WAT-10 | `AdaptiveDebouncer`：窗口内重复变更只处理一次，窗口过后放行 | 边界 | watch | 本地文件 | `tests/watcher/watcher.rs::test_adaptive_debouncer_*`（6 例） | tests/e2e/watch_e2e.rs |
 | WAT-11 | `min_reload_interval`：两次变更间隔小于阈值时第二次不触发重载 | 边界 | watch | 本地文件 | `tests/watcher/watcher.rs::test_watcher_config_with_min_reload_interval`（配置面）；行为级→需新增 | tests/e2e/watch_e2e.rs |
-| WAT-12 | 连续失败达 `max_consecutive_failures` → 进入 `failure_pause` 暂停期 | 异常 | watch | 本地文件 | `tests/watcher/watcher.rs::test_watcher_config_with_max_failures/test_watcher_config_with_failure_pause`（配置面）；行为级→需新增 | tests/e2e/watch_e2e.rs |
+| WAT-12 | 连续失败达 `max_consecutive_failures` → 进入 `failure_pause` 暂停期 | 异常 | watch | 本地文件 | 配置面：`tests/watcher/watcher.rs`；行为级：`tests/e2e/watch_e2e.rs::wat12_consecutive_failures_trigger_failure_pause`（经库内 `ReloadFailurePolicy` 执行：计数→暂停→到期恢复） | tests/e2e/watch_e2e.rs |
 | WAT-13 | `rollback_on_validation_failure=true`：重载解析失败回滚到上一份好配置 | 异常 | watch,validation | 本地文件 | `tests/watcher/watcher.rs::test_watcher_config_with_rollback`（配置面）；行为级→需新增 | tests/e2e/watch_e2e.rs |
 | WAT-14 | 无读权限文件 → 权限错误被报告且 watcher 不崩溃 | 异常 | watch | 本地文件 | `tests/watcher/watcher.rs::test_fs_watcher_permission_handling` | tests/e2e/watch_e2e.rs |
 | WAT-15 | `WatcherConfig` 默认值 + builder 全链（debounce/min_interval/max_failures/pause/rollback） | 正常 | watch | 无 | `tests/watcher/watcher.rs::test_watcher_config_default/new/builder/builder_partial/builder_chaining/validation/clone/debug` | tests/e2e/watch_e2e.rs |
@@ -548,7 +548,7 @@
 | MAC-06 | `flatten = true` 字段并入父命名空间 | 边界 | macros | 本地文件 | src 内联 parse/codegen tests→需集成新增 | tests/e2e/macro_e2e.rs |
 | MAC-07 | `skip = true` 字段不参与加载 | 边界 | macros | 本地文件 | src 内联 codegen tests→需集成新增 | tests/e2e/macro_e2e.rs |
 | MAC-08 | `dynamic = true` 字段生成 DynamicField handle | 正常 | macros,dynamic | 无 | src 内联 codegen tests + examples/dynamic_fields；集成级→需新增 | tests/e2e/macro_e2e.rs |
-| MAC-09 | `merge_strategy` 六种合法值 + 非法值（`"bogus"`）宏报错 | 正常/异常 | macros | 无 | src 内联 `macros/src/parse.rs` strategy 校验 tests；trybuild→需新增 | tests/e2e/macro_e2e.rs |
+| MAC-09 | `merge_strategy` 六种合法值 + 非法值（`"bogus"`）宏报错 | 正常/异常 | macros | 无 | src 内联 `macros/src/parse.rs` strategy 校验 tests；trybuild 已固化（merge_strategy_bogus.rs） | tests/e2e/macro_e2e.rs |
 | MAC-10 | `env_prefix` 结构属性：前缀剥除 + 大写下划线映射 | 正常 | macros,env | 无 | `tests/core/derive.rs::test_prefixed_config_env_mapping/test_prefixed_config_with_env_var` | tests/e2e/macro_e2e.rs |
 | MAC-11 | `profile`/`profile_env` 结构属性：APP_ENV 驱动 profile overlay | 边界 | macros | 本地文件 | src 内联 parse tests（effective_profile_env）；集成级→需新增 | tests/e2e/macro_e2e.rs |
 | MAC-12 | `watch = true` 结构属性：生成 watcher 挂接（与 watch feature 联动编译） | 边界 | macros,watch | 本地文件 | src 内联 codegen watch tests；集成级→需新增 | tests/e2e/macro_e2e.rs |
@@ -556,7 +556,7 @@
 | MAC-14 | `ConfigClap` 派生：CLI 参数解析与 clap App 构建（long/short 自定义 `name_clap_long/short`） | 正常 | macros,cli | 无 | `tests/core/derive.rs::test_config_clap_derive_parses_args/test_config_clap_derive_clap_app`；examples/cli_integration | tests/e2e/macro_e2e.rs |
 | MAC-15 | env 类型推断边界：bool 大小写、整数边界、浮点记数、网络值(1.2.3.4)保持字符串、JSON 数组串保持字符串 | 边界 | macros,env | 无 | `tests/core/env_types.rs`（11 例全组） | tests/e2e/macro_e2e.rs |
 | MAC-16 | env 键解析不 panic：空段 `A__B`、unicode、大小写混合 | 边界 | macros,env | 无 | `tests/core/env_types.rs::test_env_parse_key_empty_segments_do_not_panic/test_env_parse_key_unicode_and_case` | tests/e2e/macro_e2e.rs |
-| MAC-17 | `encrypt` 非法算法 / `env_prefix` 非法字符 → 宏展开期错误（ darling span 报错，trybuild 验收） | 异常 | macros | 无 | src 内联 parse validate tests（逻辑）；trybuild 编译级→需新增 | tests/e2e/macro_e2e.rs（trybuild） |
+| MAC-17 | `encrypt` 非法算法 / `env_prefix` 非法字符 → 宏展开期错误（ darling span 报错，trybuild 验收） | 异常 | macros | 无 | src 内联 parse validate tests（逻辑）；trybuild 已固化（encrypt_rot13.rs、env_prefix_illegal_chars.rs） | tests/e2e/macro_e2e.rs（trybuild） |
 | MAC-18 | `interpolate = true` 字段属性 + interpolation feature：字段值模板插值后注入 | 边界 | macros,interpolation | 本地文件 | src 内联 codegen interpolate tests；集成级→需新增 | tests/e2e/macro_e2e.rs |
 
 ### 2.26 feature 组合交互（CMP，17 条）
@@ -602,10 +602,10 @@
 | PRS-02 | `--features minimal`（env+json）编译通过 | 边界 | minimal | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-03 | `--features recommended`（toml,env,validation,json,security-rules）编译通过 | 边界 | recommended | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-04 | `--features dev`（12 项）编译 + tests/core 通过 | 边界 | dev | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
-| PRS-05 | `--features production`（15 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
+| PRS-05 | `--features production`（14 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
-| PRS-07 | `--features full`（30 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
-| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/env/validation/watch/encryption/…25 项）每项 `cargo check` 通过（依赖链自动生效：security→encryption、nats-bus→config-bus 等） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
+| PRS-07 | `--features full`（39 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
+| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/env/validation/watch/encryption/…39 项）每项 `cargo check` 通过（依赖链自动生效：security→encryption、nats-bus→config-bus 等） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
 
 ---
 
@@ -665,7 +665,7 @@ default           → toml, json, env
 | dev | toml, json, yaml, env, cli, validation, schema, audit, watch, migration, snapshot, dynamic | snapshot 隐式带 json/toml/yaml/dynamic |
 | production | toml, env, watch, encryption, validation, audit, schema, cli, migration, dynamic, progressive-reload, snapshot, security-rules, feature-toggle | progressive-reload 隐式带 watch |
 | distributed | toml, json, env, watch, validation, config-bus, progressive-reload, audit | 总线仅进程内 |
-| full | 30 项全量（含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key/interpolation…） | 需 docker 服务做行为测试 |
+| full | 39 项全量（= 全部非预设单 feature；含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key/interpolation…） | 需 docker 服务做行为测试 |
 
 ---
 
@@ -697,10 +697,10 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 91 个 `#[cfg(test)]` 模块（~2268 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 91 个 `#[cfg(test)]` 模块（~2315 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 21 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
-| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 26 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
+| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 27 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
 | 宏测试 | `macros/tests`（trybuild 编译失败用例与属性校验） | `cargo test -p confers-macros` | 允许 |
 | 模糊测试 | `fuzz/`（cargo-fuzz 目标：`parser`、`merger`、`interpolation`） | `cargo fuzz run parser`（在 `fuzz/` 目录下） | 禁 mock |
 | 基准测试 | `benches/`（9 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev --benches` | — |
@@ -708,7 +708,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 前置修复项（落地 E2E 前完成）：
 1. ✅ 已完成：`tests/core/mod.rs` 已注册 `mod error;`（42 个测试复活）；重复的 `tests/core/encryption.rs` 已删除。
-2. `Cargo.toml` 增补 `[[test]]` 段：每个 `tests/e2e/*.rs` 一条，按需 `required-features`。
+2. ✅ 已完成：`Cargo.toml` 已为全部 27 个 `tests/e2e/*.rs` 注册 `[[test]]` 段（`cli_coverage_extra` 等按需声明 `required-features`）。
 
 ### 5.2 examples 运行清单（21 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）
 
@@ -746,7 +746,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | builder_e2e.rs | BLD-01…28 | 否 |
 | validation_e2e.rs | VAL-01…08 | 否 |
 | interpolation_e2e.rs | IPL-01…08 | 否 |
-| encryption_e2e.rs | ENC-01…22 | 否 |
+| encryption_e2e.rs | ENC-01…20、ENC-22 | 否 |
 | key_e2e.rs | KEY-01…13 | 否 |
 | security_rules_e2e.rs | SEC-01…18 | 否 |
 | audit_e2e.rs | AUD-01…11 | 否 |
@@ -762,7 +762,8 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | bus_e2e.rs | BUS-01…10、NAT-01…06、RDS-01…07 | NATS/Redis（NAT/RDS 组） |
 | schema_e2e.rs | SCH-01…04 | 否 |
 | cli_e2e.rs | CLI-01…24、SCH-05 | 否 |
-| macro_e2e.rs | MAC-01…18（含 trybuild：ENC-23、MAC-17） | 否 |
+| cli_coverage_extra.rs | 矩阵外回归：CLI 覆盖率补测（snapshot restore/prune/diff、doctor 健康度分支、docs 知识包、schema --from-instance、get 脱敏/`--env-file`、export 全格式与目录输出；required-features = cli,snapshot,encryption,yaml） | 否 |
+| macro_e2e.rs | MAC-01…18（含 trybuild：ENC-21、ENC-23、MAC-17） | 否 |
 | combo_e2e.rs | CMP-01…17、TGL-06、CTX-09、IPL-09 | CMP-07/08/16 需 Consul/etcd/NATS |
 | concurrency_e2e.rs | CCY-01…08 | 否 |
 | presets_e2e.rs | PRS-01…08、SCH-03 | 否 |
@@ -805,9 +806,9 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，91 个） | 2268 |
-| 集成与 E2E（`tests/`，55 个文件） | 615 |
-| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 26 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，91 个） | 2315 |
+| 集成与 E2E（`tests/`，56 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 638 |
+| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 27 |
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 9 |
 

@@ -38,6 +38,9 @@ error-conflict-existing-nested-map = 由其他变量构建的嵌套映射
 error-conflict-existing-scalar = 由其他变量设置的标量值
 error-env-file-unreadable = 无法读取 { $var } 引用的文件
 error-spawn-blocking-failed = spawn_blocking: { $message }
+error-reload-precommit-validation-failed = 提交前校验失败: { $reason }
+error-reload-linear-step-rolled-back = 线性步骤 { $step }: { $reason }
+error-reload-linear-step-failed = 线性步骤 { $step } 失败: { $reason }
 
 error-path-empty = 文件路径不能为空
 error-path-cannot-resolve = 无法解析文件路径
@@ -87,6 +90,11 @@ error-nacos-login-no-token = nacos 登录响应中没有 accessToken
 error-nacos-request-failed = nacos 请求失败: { $message }
 error-nacos-unauthorized = nacos 返回 401 Unauthorized (accessToken 被拒绝)
 error-nacos-circuit-breaker-open = nacos 配置源熔断器已打开
+
+# --- 变更流错误 (ChangeStreamError) ---
+
+error-stream-lagged = 订阅者已落后: { $from } 之前的版本已被逐出
+error-stream-version-not-found = 版本 { $version } 未在此流上发布过
 
 # --- 运维日志行 ---
 

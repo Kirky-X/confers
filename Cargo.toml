@@ -22,52 +22,51 @@ rustdoc-args = ["--generate-link-to-definition"]
 workspace = true
 
 [dependencies]
-arc-swap = { version = "1.9", optional = true }
-async-nats = { version = "0.50", optional = true }
-async-stream = { version = "0.3", optional = true }
-async-trait = { version = "0.1", optional = true }
-base64 = "0.23"
-chacha20poly1305 = { version = "0.11", optional = true }
-chrono = { version = "0.4", optional = true, features = ["serde"] }
-clap = { version = "4.6", features = ["derive", "env"], optional = true }
+arc-swap = { version = "1.9", default-features = false, optional = true }
+async-nats = { version = "0.50", default-features = false, features = ["jetstream", "server_2_10", "server_2_11", "server_2_12", "server_2_14"], optional = true }
+async-stream = { version = "0.3", default-features = false, optional = true }
+async-trait = { version = "0.1", default-features = false, optional = true }
+base64 = { version = "0.23", default-features = false, features = ["std"] }
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"], optional = true }
+clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive", "env"], optional = true }
 confers-macros = { version = "0.6.0-rc.5", path = "macros" }
-dashmap = { version = "6.2", optional = true }
-garde = { version = "0.23", optional = true, features = ["derive", "email", "url", "regex"] }
-fluent-bundle = "0.16"
-futures-util = { version = "0.3", optional = true }
-hkdf = { version = "0.13", optional = true }
-hmac = { version = "0.13", optional = true }
-indexmap = { version = "2.14", features = ["serde"] }
-notify-debouncer-full = { version = "0.7", optional = true }
+dashmap = { version = "6.2", default-features = false, optional = true }
+garde = { version = "0.23", default-features = false, features = ["derive", "email", "url", "regex"], optional = true }
+fluent-bundle = { version = "0.16", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["std", "async-await", "async-await-macro"], optional = true }
+hkdf = { version = "0.13", default-features = false, optional = true }
+hmac = { version = "0.13", default-features = false, optional = true }
+indexmap = { version = "2.14", default-features = false, features = ["std", "serde"] }
+notify-debouncer-full = { version = "0.7", default-features = false, features = ["macos_fsevent"], optional = true }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
-schemars = { version = "1.2", optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_path_to_error = "0.1"
-serde_yaml_ng = { version = "0.10", optional = true }
-sha2 = { version = "0.11", optional = true }
-getrandom = { version = "0.4", optional = true }
-sys-locale = "0.3"
-thiserror = "2.0"
-dotenvy = { version = "0.15", optional = true }
-serde_ini = { version = "0.2", optional = true }
-tracing = { version = "0.1", optional = true }
-regex = "1.13"
-anyhow = "1.0"
-tokio = { version = "1.53", features = ["rt", "sync", "time", "fs"], optional = true }
-toml = { version = "1.1", features = ["preserve_order"], optional = true }
-zeroize = { version = "1.9", features = ["derive"], optional = true }
-tokio-stream = { version = "0.1", features = ["sync"], optional = true }
-unic-langid = "0.9"
-etcd-client = { version = "0.20", features = ["tls"], optional = true }
-ipnet = { version = "2.12", optional = true }
-redis = { version = "1.7", features = ["tokio-comp"], optional = true }
-url = "2.5"
-hex = { version = "0.4", optional = true }
-rand = { version = "0.10", optional = true }
-similar = { version = "3.2", optional = true }
-moka = { version = "0.12", features = ["future", "sync"] }
-itoa = "1.0"
+schemars = { version = "1.2", default-features = false, features = ["derive", "std"], optional = true }
+serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+serde_path_to_error = { version = "0.1", default-features = false }
+serde_yaml_ng = { version = "0.10", default-features = false, optional = true }
+sha2 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
+getrandom = { version = "0.4", default-features = false, optional = true }
+sys-locale = { version = "0.3", default-features = false }
+thiserror = { version = "2.0", default-features = false, features = ["std"] }
+dotenvy = { version = "0.15", default-features = false, optional = true }
+tracing = { version = "0.1", default-features = false, features = ["std", "attributes"], optional = true }
+regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode"] }
+anyhow = { version = "1.0", default-features = false, features = ["std"] }
+tokio = { version = "1.53", default-features = false, features = ["rt", "sync", "time", "fs"], optional = true }
+toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display", "preserve_order"], optional = true }
+zeroize = { version = "1.9", default-features = false, features = ["alloc", "derive"], optional = true }
+tokio-stream = { version = "0.1", default-features = false, features = ["sync"], optional = true }
+unic-langid = { version = "0.9", default-features = false }
+etcd-client = { version = "0.20", default-features = false, features = ["tls"], optional = true }
+ipnet = { version = "2.12", default-features = false, features = ["std"], optional = true }
+redis = { version = "1.7", default-features = false, features = ["aio", "tokio-comp"], optional = true }
+url = { version = "2.5", default-features = false, features = ["std"] }
+hex = { version = "0.4", default-features = false, features = ["std"], optional = true }
+rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng", "thread_rng"], optional = true }
+similar = { version = "3.2", default-features = false, features = ["std", "text"], optional = true }
+moka = { version = "0.12", default-features = false, features = ["future", "sync"] }
+itoa = { version = "1.0", default-features = false }
 log = { workspace = true, optional = true }
 
 [workspace]
@@ -89,35 +88,33 @@ keywords = ["config", "configuration", "settings", "env"]
 categories = ["config", "development-tools"]
 
 [workspace.dependencies]
-anyhow = "1.0"
-async-nats = "0.50"
-base64 = "0.23"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "4.6", features = ["derive", "env"] }
-compact_str = { version = "0.10", features = ["serde"] }
-darling = "0.24"
-futures = "0.3"
-garde = { version = "0.23", features = ["derive", "email", "url", "regex"] }
+anyhow = { version = "1.0", default-features = false, features = ["std"] }
+async-nats = { version = "0.50", default-features = false, features = ["jetstream", "server_2_10", "server_2_11", "server_2_12", "server_2_14"] }
+base64 = { version = "0.23", default-features = false, features = ["std"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive", "env"] }
+darling = { version = "0.24", default-features = false, features = ["suggestions"] }
+futures = { version = "0.3", default-features = false, features = ["std", "async-await"] }
+garde = { version = "0.23", default-features = false, features = ["derive", "email", "url", "regex"] }
 
-indexmap = { version = "2.14", features = ["serde"] }
-log = "0.4"
-proc-macro2 = "1.0"
-proptest = "1.11"
-quote = "1.0"
-regex = "1.13"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_spanned = "1.1"
-serde_yaml_ng = "0.10"
-similar = "3.2"
-syn = { version = "3.0", features = ["full", "parsing", "extra-traits"] }
-tempfile = "3.27"
-thiserror = "2.0"
-tokio = { version = "1.53", features = ["rt", "sync", "time", "fs"] }
-tokio-stream = "0.1"
-toml = { version = "1.1", features = ["preserve_order"] }
-trybuild = "1.0"
-serial_test = "4.0" # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
+indexmap = { version = "2.14", default-features = false, features = ["std", "serde"] }
+log = { version = "0.4", default-features = false }
+proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
+proptest = { version = "1.11", default-features = false, features = ["std"] }
+quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
+regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode"] }
+serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "1.0", default-features = false, features = ["std"] }
+serde_yaml_ng = { version = "0.10", default-features = false }
+similar = { version = "3.2", default-features = false, features = ["std", "text"] }
+syn = { version = "3.0", default-features = false, features = ["derive", "parsing", "printing", "clone-impls", "proc-macro", "full", "extra-traits"] }
+tempfile = { version = "3.27", default-features = false, features = ["getrandom"] }
+thiserror = { version = "2.0", default-features = false, features = ["std"] }
+tokio = { version = "1.53", default-features = false, features = ["rt", "sync", "time", "fs"] }
+tokio-stream = { version = "0.1", default-features = false }
+toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display", "preserve_order"] }
+trybuild = { version = "1.0", default-features = false }
+serial_test = { version = "4.0", default-features = false } # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
 
 [workspace.lints.rust]
 
@@ -133,7 +130,7 @@ default = ["toml", "json", "env"]
 toml = ["dep:toml"]
 json = []
 yaml = ["dep:serde_yaml_ng"]
-ini = ["dep:serde_ini"]
+ini = []
 env = ["dep:dotenvy"]
 dotenv = ["env"]
 
@@ -198,12 +195,12 @@ minimal = ["env", "json"]
 distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
 [dev-dependencies]
-criterion = { version = "0.8", features = ["async_tokio"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }
-async-nats = "0.50"  # for test_nats_bus_options
+async-nats = { workspace = true }  # for test_nats_bus_options
 
 [profile.release]
 opt-level = 3
@@ -419,3 +416,13 @@ required-features = ["toml"]
 name = "sensitive_file_e2e"
 path = "tests/e2e/probe_sensitive.rs"
 required-features = ["toml", "encryption"]
+
+[[test]]
+name = "error_scenarios_e2e"
+path = "tests/e2e/error_scenarios_e2e.rs"
+required-features = ["toml", "json", "yaml", "validation", "interpolation"]
+
+[[test]]
+name = "feature_stub_e2e"
+path = "tests/e2e/feature_stub_e2e.rs"
+# 无 required-features:FMT-22 需在 --no-default-features 下验证 cfg stub 分支。

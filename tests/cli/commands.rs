@@ -8,9 +8,11 @@ use std::fs;
 use std::io::Write;
 use tempfile::TempDir;
 
+/// 直接执行 cargo test 注入的 confers bin(与 tests/e2e/cli_e2e.rs 惯例一致)。
+/// 严禁在测试中 `cargo run/build`：那会以局部特性集重建 target/debug/confers，
+/// 覆盖掉 `--all-features` 门禁构建的全特性 bin，令并行的 CLI 测试拿到缺特性的产物。
 fn run_confers(args: &[&str]) -> std::process::Command {
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.args(["run", "--features", "cli", "--"]);
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_confers"));
     cmd.args(args);
     cmd
 }
@@ -26,14 +28,17 @@ fn create_test_config(dir: &TempDir, filename: &str, content: &str) -> std::path
 #[test]
 #[serial]
 fn test_cli_compiles() {
-    let output = std::process::Command::new("cargo")
-        .args(["build", "--features", "cli"])
+    // bin 由 cargo test 按当前门禁特性集构建(CARGO_BIN_EXE 编译期注入)；
+    // 此处只验证它可执行并响应 --version，不再触发 cargo build 覆盖产物。
+    let bin = env!("CARGO_BIN_EXE_confers");
+    let output = std::process::Command::new(bin)
+        .arg("--version")
         .output()
-        .expect("Failed to execute cargo build");
+        .expect("Failed to execute confers binary");
 
     assert!(
         output.status.success(),
-        "CLI failed to compile: {}",
+        "CLI binary not runnable: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

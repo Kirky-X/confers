@@ -100,8 +100,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { version = "0.1", default-features = false, features = ["std", "attributes"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "ansi", "env-filter"] }
 toml = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
@@ -110,7 +110,7 @@ futures = { workspace = true }
 garde = { workspace = true }
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
-notify = "8.2"
+notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
 
 [features]
 default = []

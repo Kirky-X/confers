@@ -417,7 +417,7 @@ impl ConsulSource {
                 message: format!("Failed to fetch from Consul: {}", e),
             })?;
 
-        // (T025) Consul KV read semantics: 404 means "no keys under this
+        // Consul KV read semantics: 404 means "no keys under this
         // prefix" — the normal empty response once every key was deleted
         // (verified live: the X-Consul-Index header is still present and
         // advanced). It must flow through the same delete-semantics path
@@ -1265,7 +1265,7 @@ mod tests {
         );
     }
 
-    /// T025: a 404 from the KV read — Consul's normal response once every
+    /// a 404 from the KV read — Consul's normal response once every
     /// key under the prefix was deleted (empty body, X-Consul-Index still
     /// present and advanced) — must flow through the delete-semantics path:
     /// advance the blocking index and return the empty (Null) config, not

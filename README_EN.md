@@ -270,7 +270,7 @@ For the architecture diagram, the public core and feature-gated module tables, t
 
 ### 🎯 Test Strategy
 
-The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 26 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 9 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
+The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 27 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 9 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
 
 ### ▶️ Commands (matching CI)
 
@@ -296,13 +296,13 @@ Bus-related integration tests require a local NATS service; CI uses a `nats:2.10
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.5: about 2200+ unit tests (inline in `src/`), 615 integration and E2E tests (`tests/`, 55 files), 3 fuzz targets, and 9 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.5: about 2200+ unit tests (inline in `src/`), 638 integration and E2E tests (`tests/`, 56 files), 3 fuzz targets, and 9 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 
 ## 📊 Performance
 
-Baselines were collected locally on a development machine (criterion median): loading 50 fields takes about 691 ns and 200 fields about 713 ns, shallow merging 1000 entries about 20.9 µs, a change-stream roundtrip with one subscriber about 1.98 µs, and zero-copy reads (`get_shared`) are about 2.1x faster than deep copies (`get_raw`) for large values. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce. For the full benchmark tables and measurement methodology, see the [Performance Guide · baselines](docs/PERFORMANCE.md#-性能基线); for the design highlights (lock-free dynamic reads, `IndexMap` key order, `compact_str` interning, adaptive debouncing, feature-gate trimming), see the [Architecture doc · performance design](docs/ARCHITECTURE.md#-性能设计).
+Baselines were collected locally on a development machine (criterion median): loading 50 fields takes about 691 ns and 200 fields about 713 ns, shallow merging 1000 entries about 20.9 µs, a change-stream roundtrip with one subscriber about 1.98 µs, and zero-copy reads (`get_shared`) are about 2.1x faster than deep copies (`get_raw`) for large values. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce. For the full benchmark tables and measurement methodology, see the [Performance Guide · baselines](docs/PERFORMANCE.md#-性能基线); for the design highlights (lock-free dynamic reads, `IndexMap` key order, adaptive debouncing, feature-gate trimming), see the [Architecture doc · performance design](docs/ARCHITECTURE.md#-性能设计).
 
 ---
 

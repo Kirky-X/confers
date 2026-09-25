@@ -211,7 +211,8 @@ pub use interpolation::{
 
 #[cfg(feature = "watch")]
 pub use watcher::{
-    AdaptiveDebouncer, FsWatcher, MultiFsWatcher, WatcherConfig, WatcherConfigBuilder, WatcherGuard,
+    AdaptiveDebouncer, FsWatcher, MultiFsWatcher, ReloadFailurePolicy, WatcherConfig,
+    WatcherConfigBuilder, WatcherGuard,
 };
 
 #[cfg(feature = "progressive-reload")]

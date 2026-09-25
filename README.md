@@ -270,7 +270,7 @@ Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块�
 
 ### 🎯 测试策略
 
-测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、26 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
+测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、27 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
 
 ### ▶️ 运行命令（与 CI 一致）
 
@@ -296,13 +296,13 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.5：单元测试约 2200+（`src/` 内联）、集成与 E2E 共 615 个（`tests/`，55 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.5：单元测试约 2200+（`src/` 内联）、集成与 E2E 共 638 个（`tests/`，56 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 
 ## 📊 性能
 
-基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、`compact_str` 驻留、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
+基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
 
 ---
 

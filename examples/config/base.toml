@@ -1,0 +1,31 @@
+# 基础配置（最低优先级）：所有环境共享的默认值。
+# 优先级：base.toml < {env}.toml < APP_ 前缀环境变量。
+
+[app]
+name = "confers-demo"
+version = "0.1.0"
+environment = "development"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+workers = 4
+
+[database]
+url = "postgres://localhost:5432/confers_demo"
+max_connections = 10
+connection_timeout = 30
+
+[logging]
+enable = true
+level = "info"
+format = "pretty"
+
+[cache]
+enable = true
+ttl = 300
+
+[security]
+https = false
+cors = true
+allowed_origins = ["http://localhost:3000"]

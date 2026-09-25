@@ -1,0 +1,25 @@
+# 开发环境覆盖（中等优先级）：只写与 base.toml 不同的项，
+# 其余项（如 version、security.cors）沿用 base.toml。
+
+[app]
+environment = "development"
+
+[server]
+host = "localhost"
+port = 3000
+workers = 2
+
+[database]
+url = "postgres://localhost:5432/confers_demo_dev"
+connection_timeout = 60
+
+[logging]
+level = "debug"
+
+[cache]
+enable = false
+
+[development]
+hot_reload = true
+debug_endpoints = true
+verbose_errors = true

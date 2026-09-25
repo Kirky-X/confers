@@ -610,6 +610,7 @@ pub enum KeyStatus {
     Active,       // 活跃，可用于加解密
     Deprecated,   // 已弃用，仅用于解密历史数据
     Compromised,  // 已泄露，应立即轮换
+    Expired,      // 已过期，超过有效期
 }
 ```
 
@@ -1529,7 +1530,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 热重载配置
 
-使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性），防抖等参数经 `WatcherConfig::builder()` 调整；监听循环的完整写法见 [用户指南 · 文件监听与热重载](USER_GUIDE.md#-文件监听与热重载)。`build_with_watcher()` 的弃用说明见 [ConfigBuilder · build_with_watcher()](#build_with_watcher异步已弃用)。
+使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性），防抖等参数经 `WatcherConfig::builder()` 调整；连续重载失败的暂停策略经 `ReloadFailurePolicy::new(WatcherConfig)` 执行（失败计数达 `max_consecutive_failures` 即开启 `failure_pause_ms` 暂停窗口，`pause_remaining()` 返回 `Some` 期间跳过重载，暂停到期自动关闭）；监听循环的完整写法见 [用户指南 · 文件监听与热重载](USER_GUIDE.md#-文件监听与热重载)。`build_with_watcher()` 的弃用说明见 [ConfigBuilder · build_with_watcher()](#build_with_watcher异步已弃用)。
 
 ### 敏感数据加密
 

@@ -10,11 +10,13 @@
 //! - 配置优先级：base < 环境 < 环境变量
 //! - 配置覆盖机制
 //!
-//! 运行方式：
-//!   cargo run --example config_groups          # 默认使用 dev 环境
-//!   cargo run --example config_groups -- dev  # 显式指定 dev 环境
-//!   cargo run --example config_groups -- prod # 生产环境
-//!   APP_ENV=prod cargo run --example config_groups # 通过环境变量指定
+//! 运行方式（环境参数可省略，默认 dev）：
+//!   cargo run -p confers-examples --bin config_groups             # 默认 dev 环境
+//!   cargo run -p confers-examples --bin config_groups -- dev      # 显式指定 dev 环境
+//!   cargo run -p confers-examples --bin config_groups -- prod     # 生产环境
+//!   APP_ENV=prod cargo run -p confers-examples --bin config_groups # 环境变量指定
+//!
+//! 本示例依赖 examples/config/ 下的 base.toml 与 {env}.toml。
 //! =============================================================================
 
 use confers::{ConfigValue, SourceChainBuilder, config};
@@ -196,7 +198,7 @@ fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::err
     println!("环境: {}", env);
 
     // 获取配置目录路径
-    let config_dir = PathBuf::from("config");
+    let config_dir = config_dir();
 
     // 使用 ConfigBuilder 构建配置
     // 优先级从低到高：base.toml < {env}.toml < 环境变量
@@ -218,7 +220,7 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
     println!("环境: {}", env);
 
     // 获取配置目录路径
-    let config_dir = PathBuf::from("config");
+    let config_dir = config_dir();
 
     // 构建 SourceChain
     // 优先级从低到高：base.toml < {env}.toml < 环境变量
@@ -239,7 +241,14 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
     }
 
     // 收集并合并所有配置源
-    let _merged = chain.collect()?;
+    let merged = chain.collect()?;
+    let all_paths = merged.all_paths();
+    let top_sections: Vec<&str> = all_paths
+        .iter()
+        .map(|p| p.as_ref())
+        .filter(|p| !p.is_empty() && !p.contains('.'))
+        .collect();
+    println!("\n合并后的顶层配置段: {:?}", top_sections);
 
     // 转换为目标配置结构
     let app_config: ConfersConfig = config::<ConfersConfig>()
@@ -293,6 +302,20 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
 // =============================================================================
 // 辅助函数
 // =============================================================================
+
+/// 定位示例配置目录。
+///
+/// 文件源路径按惯例相对当前工作目录解析（真实应用通常在其运行目录下放 config/）。
+/// 本示例有两种运行入口：仓库根（`cargo run -p confers-examples --bin ...`，此时
+/// 工作目录是仓库根）或 examples/ 目录（`cargo run --bin ...`），因此按顺序探测两者。
+/// 都找不到时返回默认的 "config"，让文件源报出含路径的 FileNotFound 错误。
+fn config_dir() -> PathBuf {
+    ["config", "examples/config"]
+        .into_iter()
+        .map(PathBuf::from)
+        .find(|dir| dir.join("base.toml").is_file())
+        .unwrap_or_else(|| PathBuf::from("config"))
+}
 
 /// 打印完整配置信息
 fn print_config(config: &ConfersConfig) {
@@ -367,8 +390,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 确定运行环境
     // 优先级：命令行参数 > 环境变量 > 默认值
+    // cargo 会把 `--` 之后的参数原样传给二进制进程（不包含 cargo 自己的参数），
+    // 因此 args[0] 是二进制名，args[1] 即第一个位置参数。
+    // 例如 `cargo run -p confers-examples --bin config_groups -- prod`
+    // 的进程参数为 ["config_groups", "prod"]。
     let env = std::env::args()
-        .nth(2) // 跳过 "run" 和 "--example"
+        .nth(1)
         .or_else(|| std::env::var("APP_ENV").ok())
         .unwrap_or_else(|| "dev".to_string());
 
@@ -413,7 +440,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  APP_SERVER_PORT=9000      - 覆盖服务器端口");
     println!("  APP_DATABASE_URL=...       - 覆盖数据库 URL");
     println!("  APP_LOGGING_LEVEL=debug   - 覆盖日志级别");
-    println!("\n示例: APP_SERVER_PORT=9000 cargo run --example config_groups -- dev");
+    println!(
+        "\n示例: APP_SERVER_PORT=9000 cargo run -p confers-examples --bin config_groups -- dev"
+    );
 
     tracing::info!("示例运行完成!");
     Ok(())

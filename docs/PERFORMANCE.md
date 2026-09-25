@@ -120,7 +120,7 @@ pub struct Config {
 
 ### 降低内存占用
 
-Confers 内部已对短字符串做驻留优化（`compact_str`），并使用 `IndexMap` 保持键序，通常无需额外处理。对不可信来源的配置，建议显式设置资源上限：
+Confers 内部使用 `IndexMap` 保持键序，通常无需额外处理。对不可信来源的配置，建议显式设置资源上限：
 
 ```rust
 use confers::{ConfigBuilder, ConfigLimits};
@@ -144,7 +144,7 @@ use confers::{new_in_memory, SharedValueReader};
 
 let config = new_in_memory();
 let shared = config.get_shared("large_key").await?;
-// shared: Arc<AnnotatedValue>，克隆只增加引用计数
+// shared: Option<Arc<AnnotatedValue>>（`?` 已解包 ConfersResult 外层），克隆只增加引用计数
 ```
 
 ### 大文件的处理

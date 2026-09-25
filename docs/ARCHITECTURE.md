@@ -199,7 +199,7 @@ graph TD
 
 1. **无锁动态读取**：`dynamic` 模块基于 `arc-swap` 实现快照发布，读者无锁、写者原子换入，`DynamicField::get()` 无争用。
 2. **并发安全容器**：`feature-toggle` 使用 `dashmap` 分片锁；加载器缓存策略由 `LoaderConfig` 暴露（依赖 `moka` 提供 future/sync 双模式缓存）。
-3. **高效数据结构**：`ConfigValue` 树使用 `IndexMap` 保持键序（保证合并与输出的确定性）；短字符串经 `compact_str` 驻留以降低内存占用。
+3. **高效数据结构**：`ConfigValue` 树使用 `IndexMap` 保持键序（保证合并与输出的确定性）。
 4. **解析性能**：TOML 解析启用 `preserve_order`；格式探测支持从内容直接判断，避免重复读盘（大文件建议一次读入后交给 `parse_content`）。
 5. **热路径去抖**：`watcher::AdaptiveDebouncer` 自适应调节去抖窗口，避免编辑器连续写入触发的重载风暴。
 6. **编译期裁剪**：全部可选能力特性门控，配合 `minimal`/`recommended`/`dev`/`production`/`full` 预设，按需控制编译时间与二进制体积。

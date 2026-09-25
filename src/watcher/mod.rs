@@ -5,6 +5,8 @@
 
 pub(crate) mod debounce;
 
+mod failure_pause;
+
 #[cfg(feature = "progressive-reload")]
 pub(crate) mod progressive;
 
@@ -15,6 +17,8 @@ pub(crate) mod fs_watcher;
 pub(crate) mod field_watch;
 
 pub use debounce::AdaptiveDebouncer;
+
+pub use failure_pause::ReloadFailurePolicy;
 
 #[cfg(feature = "progressive-reload")]
 pub use progressive::{

@@ -42,6 +42,9 @@ error-conflict-existing-nested-map = a nested map built from other variables
 error-conflict-existing-scalar = a scalar value set by another variable
 error-env-file-unreadable = Cannot read file referenced by { $var }
 error-spawn-blocking-failed = spawn_blocking: { $message }
+error-reload-precommit-validation-failed = pre-commit validation: { $reason }
+error-reload-linear-step-rolled-back = linear step { $step }: { $reason }
+error-reload-linear-step-failed = Linear step { $step } failed: { $reason }
 
 error-path-empty = file path must not be empty
 error-path-cannot-resolve = Cannot resolve file path
@@ -91,6 +94,11 @@ error-nacos-login-no-token = nacos login response has no accessToken
 error-nacos-request-failed = nacos request failed: { $message }
 error-nacos-unauthorized = nacos returned 401 Unauthorized (accessToken rejected)
 error-nacos-circuit-breaker-open = nacos source circuit breaker is open
+
+# --- change stream errors (ChangeStreamError) ---
+
+error-stream-lagged = subscriber lagged: versions below { $from } were evicted
+error-stream-version-not-found = version { $version } was not published on this stream
 
 # --- operational log lines ---
 

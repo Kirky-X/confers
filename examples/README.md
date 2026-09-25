@@ -56,7 +56,7 @@ cargo run --bin <示例名>
 | 示例 | 说明 | 运行命令 |
 |------|------|----------|
 | `dynamic_fields` | `DynamicField` 动态字段：运行时更新、变更回调与无锁读取 | `cargo run -p confers-examples --bin dynamic_fields` |
-| `config_groups` | 配置组：分组定义、优先级与按需加载合并 | `cargo run -p confers-examples --bin config_groups` |
+| `config_groups` | 多环境配置：`SourceChain` 源链组合与 base < 环境 < 环境变量优先级覆盖（可加 `-- dev` 或 `-- prod` 指定环境） | `cargo run -p confers-examples --bin config_groups` |
 | `context_aware` | 上下文感知配置：按 plan/environment/region 解析不同配置值 | `cargo run -p confers-examples --bin context_aware` |
 
 ### 迁移、快照与审计

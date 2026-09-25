@@ -9,21 +9,22 @@
 //! - WAT-18 快速连续写 10 次(10ms 间隔)→ debounce 合并,事件数远小于写入数
 //! - WAT-11 应用层最小重载间隔模式:依据 `WatcherConfig::min_reload_interval_ms`
 //!   节流事件流,窗口内第二次变更不触发重载
-//! - WAT-12 应用层失败暂停模式:重载连续失败达 `max_consecutive_failures`
-//!   后按 `failure_pause_ms` 暂停
+//! - WAT-12 失败暂停(库内行为):重载循环以 `ReloadFailurePolicy` 执行
+//!   「连续失败达 `max_consecutive_failures` → 按 `failure_pause_ms` 暂停 →
+//!   到期恢复」
 //! - WAT-13 应用层回滚模式:重载解析失败时保留上一份好配置(`rollback_on_validation_failure` 语义)
 //!
-//! WAT-11…13 说明:FsWatcher 仅提供事件流(debounce 在库内);
-//! min_reload_interval / max_consecutive_failures / failure_pause /
-//! rollback_on_validation_failure 为 `WatcherConfig` 上的策略参数,
-//! 由使用方在事件循环中执行(官方示例 examples/hot_reload.rs 即此模式)。
-//! 本文件按该真实契约固化应用级行为;库内未内建这些策略见报告。
+//! WAT-11/13 说明:FsWatcher 仅提供事件流(debounce 在库内);
+//! min_reload_interval / rollback_on_validation_failure 为 `WatcherConfig`
+//! 上的策略参数,由使用方在事件循环中执行(官方示例 examples/hot_reload.rs
+//! 即此模式)。WAT-12 的失败暂停已内建为 `ReloadFailurePolicy`(失败计数、
+//! 暂停窗口与到期恢复是确定性逻辑,由库统一执行)。
 //!
 //! WAT-01…10/14/15 已有覆盖(tests/watcher/watcher.rs)。
 
 use confers::ConfigBuilder;
 use confers::dynamic::DynamicField;
-use confers::watcher::{FsWatcher, WatcherConfig};
+use confers::watcher::{FsWatcher, ReloadFailurePolicy, WatcherConfig};
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -201,7 +202,8 @@ async fn wat11_min_reload_interval_throttles_reload_execution() {
     watcher.stop();
 }
 
-/// 连续失败计数 + `failure_pause_ms` 暂停的应用模式。
+/// WAT-12(行为级):重载循环以库内 `ReloadFailurePolicy` 执行
+/// 「连续失败达 `max_consecutive_failures` → 按 `failure_pause_ms` 暂停」。
 #[tokio::test]
 async fn wat12_consecutive_failures_trigger_failure_pause() {
     let dir = tempfile::tempdir().unwrap();
@@ -219,10 +221,10 @@ async fn wat12_consecutive_failures_trigger_failure_pause() {
         .expect("watcher starts");
     settle().await;
 
-    let mut consecutive_failures = 0u32;
-    let mut paused_ms_total = 0u64;
+    let mut policy = ReloadFailurePolicy::new(watcher_config.clone());
+    let mut pause_opened = false;
 
-    // 两次写入损坏内容 → 重载各失败一次 → 达到上限后进入暂停。
+    // 两次写入损坏内容 → 重载各失败一次 → 第二次失败达上限,策略开启暂停。
     for content in ["invalid toml {{{", "still bad {{{"] {
         std::fs::write(&path, content).unwrap();
         tokio::time::timeout(Duration::from_secs(5), watcher.recv())
@@ -234,25 +236,56 @@ async fn wat12_consecutive_failures_trigger_failure_pause() {
             .file(&path)
             .build();
         assert!(result.is_err(), "corrupt content must fail to reload");
-        consecutive_failures += 1;
-        if consecutive_failures >= watcher_config.max_consecutive_failures {
-            tokio::time::sleep(Duration::from_millis(watcher_config.failure_pause_ms)).await;
-            paused_ms_total += watcher_config.failure_pause_ms;
-            consecutive_failures = 0;
+        if policy.record_failure() {
+            pause_opened = true;
         }
     }
-
-    assert_eq!(
-        paused_ms_total, 300,
-        "pause applied once at the failure cap"
+    assert!(
+        pause_opened,
+        "reaching the failure cap must open the pause window"
     );
-    // 暂停后 watcher 仍然健康,可继续接收后续事件。
+    assert_eq!(
+        policy.consecutive_failures(),
+        0,
+        "counter resets as the pause opens"
+    );
+
+    // 暂停开启后窗口内剩余时间 ∈ (0, failure_pause_ms]。
+    let remaining = policy
+        .pause_remaining()
+        .expect("pause window must be open right after the cap");
+    assert!(remaining > Duration::ZERO && remaining <= Duration::from_millis(300));
+
+    // 暂停期内事件照常送达,但重载被策略抑制(仅观察剩余时间递减)。
+    write_config(&path, 6);
+    let event = tokio::time::timeout(Duration::from_secs(5), watcher.recv())
+        .await
+        .expect("event must arrive during the pause")
+        .expect("channel open");
+    assert_eq!(event, path.clone());
+    let later = policy
+        .pause_remaining()
+        .expect("reload must still be suppressed within the window");
+    assert!(
+        later < remaining,
+        "pause must count down: {later:?} vs {remaining:?}"
+    );
+
+    // 暂停结束后窗口自动关闭,恢复正常重载;成功重置失败计数。
+    tokio::time::sleep(later + Duration::from_millis(20)).await;
+    assert!(
+        policy.pause_remaining().is_none(),
+        "pause must expire after failure_pause_ms"
+    );
     write_config(&path, 7);
     let event = tokio::time::timeout(Duration::from_secs(5), watcher.recv())
         .await
-        .expect("watcher must stay alive after pause");
-    assert_eq!(event, Some(path.clone()));
+        .expect("watcher must deliver after pause expiry")
+        .expect("channel open");
+    assert_eq!(event, path.clone());
     assert_eq!(load_config(&path).port, 7);
+    policy.record_success();
+    assert_eq!(policy.consecutive_failures(), 0);
     watcher.stop();
 }
 

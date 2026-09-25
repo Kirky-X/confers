@@ -375,7 +375,10 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     async fn commit(&self, new_config: Arc<T>, stage: &'static str) -> ConfigResult<()> {
         if let Err(reason) = self.validate_before_commit(&new_config).await {
             self.inner.candidate.store(Arc::new(None));
-            let detail = format!("pre-commit validation: {reason}");
+            let detail = tr_args(
+                "error-reload-precommit-validation-failed",
+                &[("reason", reason)],
+            );
             self.publish_canary_stage("rolled_back", &detail).await;
             return Err(ConfigError::ReloadRolledBack { reason: detail });
         }
@@ -536,10 +539,17 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 match hc.check(provider.clone()).await {
                     HealthStatus::Critical { reason } => {
                         self.inner.candidate.store(Arc::new(None));
-                        let detail = format!("linear step {}: {}", step + 1, reason);
+                        let step_no = (step + 1).to_string();
+                        let detail = tr_args(
+                            "error-reload-linear-step-rolled-back",
+                            &[("step", step_no.clone()), ("reason", reason.clone())],
+                        );
                         self.publish_canary_stage("rolled_back", &detail).await;
                         return Err(ConfigError::ReloadRolledBack {
-                            reason: format!("Linear step {} failed: {}", step + 1, reason),
+                            reason: tr_args(
+                                "error-reload-linear-step-failed",
+                                &[("step", step_no), ("reason", reason)],
+                            ),
                         });
                     }
                     HealthStatus::Degraded { reason } => {
