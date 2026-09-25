@@ -217,7 +217,8 @@ pub use watcher::{
 
 #[cfg(feature = "progressive-reload")]
 pub use watcher::{
-    HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck, ReloadOutcome,
+    HealthStatus, PreCommitCheck, ProgressiveReloader, ProgressiveReloaderBuilder,
+    ReloadHealthCheck, ReloadOutcome,
 };
 
 #[cfg(feature = "hot-reload-kit")]

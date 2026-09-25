@@ -27,8 +27,8 @@ pub use failure_pause::ReloadFailurePolicy;
 
 #[cfg(feature = "progressive-reload")]
 pub use progressive::{
-    HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck,
-    ReloadOutcome, ReloadStrategy, ReloadValidator,
+    HealthStatus, PreCommitCheck, ProgressiveReloader, ProgressiveReloaderBuilder,
+    ReloadHealthCheck, ReloadOutcome, ReloadStrategy, ReloadValidator,
 };
 
 #[cfg(feature = "watch")]

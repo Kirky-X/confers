@@ -81,6 +81,23 @@ pub trait ReloadValidator<T: Clone + Send + Sync + 'static>: Send + Sync {
     async fn validate(&self, candidate: &T) -> Result<(), String>;
 }
 
+/// Hard pre-commit gate for reload candidates.
+///
+/// Distinct from [`ReloadValidator`] (value-level validation whose failure
+/// can be downgraded to a logged warning via
+/// [`rollback_on_validation_failure`](ProgressiveReloader::with_rollback_on_validation_failure))
+/// and from [`ReloadHealthCheck`] (which polls the candidate during the
+/// canary/linear *trial window*, before any commit decision): a
+/// `PreCommitCheck` runs immediately before the swap-to-current and its
+/// `Err` is final — the commit never happens and `begin_reload` reports
+/// `ConfigError::ReloadRejected`. Use it for release gates that must not be
+/// negotiable (downstream dry-run, invariant checks).
+#[async_trait]
+pub trait PreCommitCheck<T: Clone + Send + Sync + 'static>: Send + Sync {
+    /// Gate `candidate`. `Err(reason)` rejects the reload outright.
+    async fn check(&self, candidate: &T) -> Result<(), String>;
+}
+
 struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     current: ArcSwap<T>,
     /// Configuration under trial during a canary/linear reload.
@@ -105,6 +122,10 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     /// (true) or is recorded while the commit proceeds (false). Consumed
     /// from `WatcherConfig::rollback_on_validation_failure`.
     rollback_on_validation_failure: std::sync::atomic::AtomicBool,
+    /// Hard pre-commit gate: an `Err` here rejects the reload outright
+    /// (`ReloadRejected`), with no downgrade path. Shared swappable slot,
+    /// same pattern as `health_check`/`validator`.
+    pre_commit_check: ArcSwap<Option<Arc<dyn PreCommitCheck<T>>>>,
     /// Post-commit migration wiring: policy + injected registry +
     /// version transition, applied after every successful commit.
     #[cfg(feature = "migration")]
@@ -161,6 +182,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 health_check: ArcSwap::new(Arc::new(None)),
                 validator: ArcSwap::new(Arc::new(None)),
                 rollback_on_validation_failure: std::sync::atomic::AtomicBool::new(false),
+                pre_commit_check: ArcSwap::new(Arc::new(None)),
                 #[cfg(feature = "migration")]
                 migration: ArcSwap::new(Arc::new(None)),
                 reload_lock: tokio::sync::Mutex::new(()),
@@ -183,6 +205,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 health_check: ArcSwap::new(Arc::new(health_check)),
                 validator: ArcSwap::new(Arc::new(None)),
                 rollback_on_validation_failure: std::sync::atomic::AtomicBool::new(false),
+                pre_commit_check: ArcSwap::new(Arc::new(None)),
                 #[cfg(feature = "migration")]
                 migration: ArcSwap::new(Arc::new(None)),
                 reload_lock: tokio::sync::Mutex::new(()),
@@ -221,6 +244,18 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
     /// validation does.
     pub fn with_validator(self, validator: Arc<dyn ReloadValidator<T>>) -> Self {
         self.inner.validator.store(Arc::new(Some(validator)));
+        self
+    }
+
+    /// Attach (or replace) the hard pre-commit gate.
+    ///
+    /// Same shared-slot semantics as [`Self::with_health_check`]: installing
+    /// through any clone affects every clone and never forks reloader state.
+    /// Unlike the validator path there is no downgrade flag — a check `Err`
+    /// rejects the reload with [`ConfigError::ReloadRejected`] and the
+    /// current configuration stays untouched.
+    pub fn with_pre_commit_check(self, check: Arc<dyn PreCommitCheck<T>>) -> Self {
+        self.inner.pre_commit_check.store(Arc::new(Some(check)));
         self
     }
 
@@ -367,6 +402,23 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         Ok(())
     }
 
+    /// Hard pre-commit gate: runs the attached check (if any) immediately
+    /// before the swap-to-current. An `Err` is final — the candidate is
+    /// dropped and the reload reports `ConfigError::ReloadRejected`.
+    async fn enforce_pre_commit_check(&self, candidate: &Arc<T>) -> ConfigResult<()> {
+        let check = self.inner.pre_commit_check.load_full();
+        let Some(check) = check.as_ref() else {
+            return Ok(());
+        };
+        if let Err(reason) = check.check(candidate).await {
+            self.inner.candidate.store(Arc::new(None));
+            let detail = format!("pre-commit check: {reason}");
+            self.publish_canary_stage("rejected", &detail).await;
+            return Err(ConfigError::ReloadRejected { reason: detail });
+        }
+        Ok(())
+    }
+
     /// Commit `new_config` after pre-commit validation.
     ///
     /// A validation failure with the rollback flag set clears the candidate,
@@ -382,6 +434,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
             self.publish_canary_stage("rolled_back", &detail).await;
             return Err(ConfigError::ReloadRolledBack { reason: detail });
         }
+        self.enforce_pre_commit_check(&new_config).await?;
         self.inner.current.store(new_config);
         self.inner.candidate.store(Arc::new(None));
         self.publish_canary_stage("committed", stage).await;
@@ -572,6 +625,7 @@ pub struct ProgressiveReloaderBuilder<T: Clone + Send + Sync + 'static> {
     health_check: Option<Arc<dyn ReloadHealthCheck>>,
     watcher_config: Option<super::WatcherConfig>,
     validator: Option<Arc<dyn ReloadValidator<T>>>,
+    pre_commit_check: Option<Arc<dyn PreCommitCheck<T>>>,
 }
 
 impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
@@ -582,6 +636,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
             health_check: None,
             watcher_config: None,
             validator: None,
+            pre_commit_check: None,
         }
     }
 
@@ -614,6 +669,11 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
         self
     }
 
+    pub fn pre_commit_check(mut self, check: Arc<dyn PreCommitCheck<T>>) -> Self {
+        self.pre_commit_check = Some(check);
+        self
+    }
+
     pub fn build(self) -> ProgressiveReloader<T> {
         let initial = self.initial.expect("initial configuration is required");
         let strategy = self.strategy.unwrap_or_default();
@@ -626,6 +686,9 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloaderBuilder<T> {
         }
         if let Some(validator) = self.validator {
             reloader.inner.validator.store(Arc::new(Some(validator)));
+        }
+        if let Some(check) = self.pre_commit_check {
+            reloader.inner.pre_commit_check.store(Arc::new(Some(check)));
         }
         reloader
     }
@@ -1152,6 +1215,96 @@ mod tests {
             .await;
         assert!(matches!(outcome, Err(ConfigError::ReloadRolledBack { .. })));
         assert_eq!(*reloader.current(), 5);
+    }
+
+    /// Always-accepting pre-commit check.
+    struct AcceptingCheck;
+
+    #[async_trait]
+    impl PreCommitCheck<i32> for AcceptingCheck {
+        async fn check(&self, _candidate: &i32) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    /// Always-rejecting pre-commit check.
+    struct RejectingCheck;
+
+    #[async_trait]
+    impl PreCommitCheck<i32> for RejectingCheck {
+        async fn check(&self, _candidate: &i32) -> Result<(), String> {
+            Err("invariant violated".to_string())
+        }
+    }
+
+    /// A pre-commit check rejection is a hard stop: no commit, candidate
+    /// cleared, `ReloadRejected` reported — unlike the validator path, no
+    /// flag can turn this failure into a degraded commit.
+    #[tokio::test]
+    async fn pre_commit_check_rejection_blocks_the_commit_hard() {
+        let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate)
+            .with_pre_commit_check(Arc::new(RejectingCheck));
+
+        let outcome = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await;
+        match outcome {
+            Err(ConfigError::ReloadRejected { reason }) => assert!(
+                reason.contains("invariant violated"),
+                "reason must carry the check message, got: {reason}"
+            ),
+            other => panic!("expected ReloadRejected, got {other:?}"),
+        }
+        assert_eq!(
+            *reloader.current(),
+            1,
+            "current configuration kept on rejection"
+        );
+        assert!(reloader.peek_candidate().is_none());
+    }
+
+    /// A passing pre-commit check lets the reload commit as usual.
+    #[tokio::test]
+    async fn pre_commit_check_pass_allows_the_commit() {
+        let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate)
+            .with_pre_commit_check(Arc::new(AcceptingCheck));
+
+        let outcome = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await;
+        assert!(matches!(outcome, Ok(ReloadOutcome::Committed)));
+        assert_eq!(*reloader.current(), 2);
+    }
+
+    /// Without an attached pre-commit check the commit path is unchanged.
+    #[tokio::test]
+    async fn no_pre_commit_check_keeps_the_commit_path_unchanged() {
+        let reloader = ProgressiveReloader::new(Arc::new(1i32), ReloadStrategy::Immediate);
+
+        let outcome = reloader
+            .begin_reload(Arc::new(2i32), Arc::new(MockProvider))
+            .await;
+        assert!(matches!(outcome, Ok(ReloadOutcome::Committed)));
+        assert_eq!(*reloader.current(), 2);
+    }
+
+    /// `ReloadRejected` metadata: code mapping (the frozen `ErrorCode` has no
+    /// free code for it, so it shares the reload-failure family), localized
+    /// key, and the en-template-mirrors-Display guard discipline.
+    #[test]
+    fn reload_rejected_error_metadata() {
+        use crate::i18n::{I18nExt, LocalizedMsg};
+
+        let err = ConfigError::ReloadRejected {
+            reason: "bad".into(),
+        };
+        assert_eq!(err.code(), crate::error::ErrorCode::ReloadRolledBack);
+        assert!(
+            err.user_message().contains("bad"),
+            "reason must reach the user message"
+        );
+        assert_eq!(LocalizedMsg::message_key(&err), "error-reload-rejected");
+        assert_eq!(err.to_string(), err.message_en());
     }
 
     /// R-watch-009: after a successful commit the injected migration

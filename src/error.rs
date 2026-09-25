@@ -219,6 +219,14 @@ pub enum ConfigError {
         reason: String,
     },
 
+    /// Reload was rejected by a pre-commit gate: the candidate never became
+    /// current, so the running configuration is untouched.
+    #[error("Configuration reload rejected: {reason}")]
+    ReloadRejected {
+        /// Reason for the rejection
+        reason: String,
+    },
+
     /// IO error.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
@@ -359,6 +367,9 @@ impl ConfigError {
             ConfigError::MigrationFailed { .. } => ErrorCode::MigrationFailed,
             ConfigError::ModuleNotFound { .. } => ErrorCode::ModuleNotFound,
             ConfigError::ReloadRolledBack { .. } => ErrorCode::ReloadRolledBack,
+            // The wire-code enum is frozen (no free code for a rejection), so
+            // a rejection shares the reload-failure family code.
+            ConfigError::ReloadRejected { .. } => ErrorCode::ReloadRolledBack,
             ConfigError::IoError(_) => ErrorCode::IoError,
             ConfigError::InvalidValue { .. } => ErrorCode::InvalidValue,
             ConfigError::SourceChainError { .. } => ErrorCode::MultipleSources,
@@ -512,6 +523,9 @@ impl ConfigError {
             }
             ConfigError::ReloadRolledBack { reason } => {
                 format!("Configuration reload was rolled back: {}", reason)
+            }
+            ConfigError::ReloadRejected { reason } => {
+                format!("Configuration reload was rejected: {}", reason)
             }
             ConfigError::IoError(e) => format!("IO error: {}", e),
             ConfigError::InvalidValue { key, message, .. } => {
@@ -838,6 +852,7 @@ impl crate::i18n::LocalizedMsg for ConfigError {
             ConfigError::MigrationFailed { .. } => "error-migration-failed",
             ConfigError::ModuleNotFound { .. } => "error-module-not-found",
             ConfigError::ReloadRolledBack { .. } => "error-reload-rolled-back",
+            ConfigError::ReloadRejected { .. } => "error-reload-rejected",
             ConfigError::IoError(_) => "error-io",
             ConfigError::InvalidValue { .. } => "error-invalid-value",
             ConfigError::SourceChainError { .. } => "error-source-chain",
@@ -906,6 +921,7 @@ impl crate::i18n::LocalizedMsg for ConfigError {
                 vec![("module", module.clone()), ("group", group.clone())]
             }
             ConfigError::ReloadRolledBack { reason } => vec![("reason", reason.clone())],
+            ConfigError::ReloadRejected { reason } => vec![("reason", reason.clone())],
             ConfigError::IoError(source) => vec![("message", source.to_string())],
             ConfigError::InvalidValue { key, message, .. } => {
                 vec![("key", key.clone()), ("message", message.clone())]
@@ -2252,6 +2268,11 @@ mod tests {
 
         let err = ConfigError::ReloadRolledBack {
             reason: "invalid new config".into(),
+        };
+        assert_eq!(err.to_string(), err.message_en());
+
+        let err = ConfigError::ReloadRejected {
+            reason: "gate says no".into(),
         };
         assert_eq!(err.to_string(), err.message_en());
 

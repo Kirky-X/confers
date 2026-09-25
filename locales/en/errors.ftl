@@ -18,6 +18,7 @@ error-version-mismatch = Configuration version mismatch: found { $found }, expec
 error-migration-failed = Migration failed from v{ $from } to v{ $to }: { $reason }
 error-module-not-found = Module '{ $module }' not found in group '{ $group }'
 error-reload-rolled-back = Configuration reload rolled back: { $reason }
+error-reload-rejected = Configuration reload rejected: { $reason }
 error-io = IO error: { $message }
 error-invalid-value = Invalid configuration value for '{ $key }': { $message }
 error-source-chain = Source chain error: { $message }
