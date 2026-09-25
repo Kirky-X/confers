@@ -21,8 +21,8 @@
 
 use confers::interface::ConfigProvider;
 use confers::security::rules::{
-    CorsValidator, JwtSecretValidator, SecurityValidator, SecurityViolation, SsrfValidator,
-    TlsConfigValidator, ViolationSeverity,
+    CorsValidator, JwtSecretValidator, RemappedConfigProvider, SecurityValidator,
+    SecurityViolation, SsrfValidator, TlsConfigValidator, ViolationSeverity,
 };
 use confers::security::{EncryptionPrefix, EnvSecurityValidator, EnvironmentValidationConfig};
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
@@ -267,4 +267,155 @@ fn sec18_encryption_prefix_recognition_and_strip() {
     assert!(!prefix.is_prefixed("plain-value"));
     assert_eq!(prefix.strip(encrypted), Some("Q2lwaGVydGV4dA=="));
     assert_eq!(prefix.strip("plain-value"), None);
+}
+
+// ===== 键重映射（RemappedConfigProvider + with_*_key 构造器） =====
+//
+// 对照基线：默认键名下各验证器的违规结论与违规 field 名（field 恒报规范键，
+// 不随实际键名漂移，保证下游告警规则的稳定性）。
+
+use std::sync::Arc;
+
+#[test]
+fn jwt_custom_key_and_remapped_provider_match_default_behavior() {
+    // 基线：默认键名 jwt.secret 携带弱密钥 → Critical ×1
+    let baseline_provider = Arc::new(TestProvider::new().with_value("jwt.secret", "secret"));
+    let baseline = JwtSecretValidator::new()
+        .validate(baseline_provider.as_ref())
+        .expect_err("weak secret must be flagged");
+    assert!(matches!(baseline[0].severity, ViolationSeverity::Critical));
+    assert_eq!(baseline[0].field.as_deref(), Some("jwt.secret"));
+
+    // 路径 A：validator 侧自定义键（with_secret_key），结论与基线一致
+    let custom_provider = TestProvider::new().with_value("auth.token", "secret");
+    let via_custom_key = JwtSecretValidator::new()
+        .with_secret_key("auth.token")
+        .validate(&custom_provider)
+        .expect_err("weak secret under a renamed key must still be flagged");
+    assert_eq!(
+        via_custom_key[0].message, baseline[0].message,
+        "with_secret_key must produce the same verdict as the default key"
+    );
+    assert_eq!(
+        via_custom_key[0].field.as_deref(),
+        Some("jwt.secret"),
+        "violation field stays the canonical key name"
+    );
+
+    // 路径 B：provider 侧重映射（RemappedConfigProvider），validator 保持默认
+    let remapped = RemappedConfigProvider::new(Arc::new(
+        TestProvider::new().with_value("auth.token", "secret"),
+    ))
+    .with_key_mapping("jwt.secret", "auth.token");
+    let via_remapped = JwtSecretValidator::new()
+        .validate(&remapped)
+        .expect_err("weak secret behind a remapped key must still be flagged");
+    assert_eq!(via_remapped[0].message, baseline[0].message);
+    assert_eq!(via_remapped[0].field.as_deref(), Some("jwt.secret"));
+}
+
+#[test]
+fn cors_partial_key_remapping_still_misreports_by_design() {
+    // 基线：三键齐全（默认名）→ 无违规
+    let full = TestProvider::new()
+        .with_value("cors.allowed_origins", "https://a.example")
+        .with_value("cors.allowed_methods", "GET,POST")
+        .with_value("cors.max_age", "600");
+    assert!(
+        CorsValidator::new().validate(&full).is_ok(),
+        "complete CORS config passes with the default keys"
+    );
+
+    // 文档化的稳定误报：只重映射部分 cors 键。三键全部缺失才整体跳过，
+    // 部分映射会落在「部分存在」区间——缺失键按既有规则报 Critical。
+    let partial = RemappedConfigProvider::new(Arc::new(
+        TestProvider::new().with_value("web.origins", "https://a.example"),
+    ))
+    .with_key_mapping("cors.allowed_origins", "web.origins");
+    let misreported = CorsValidator::new()
+        .validate(&partial)
+        .expect_err("partial remapping must hit the partial-presence misreport");
+    assert!(
+        misreported
+            .iter()
+            .any(|v| v.message.contains("allowed_methods is missing")),
+        "partial remapping must surface the documented allowed_methods misreport"
+    );
+
+    // 全量映射（三键都映射）→ 结论恢复正确
+    let all = RemappedConfigProvider::new(Arc::new(
+        TestProvider::new()
+            .with_value("web.origins", "https://a.example")
+            .with_value("web.methods", "GET,POST")
+            .with_value("web.max_age", "600"),
+    ))
+    .with_key_mapping("cors.allowed_origins", "web.origins")
+    .with_key_mapping("cors.allowed_methods", "web.methods")
+    .with_key_mapping("cors.max_age", "web.max_age");
+    assert!(
+        CorsValidator::new().validate(&all).is_ok(),
+        "full remapping restores the clean verdict"
+    );
+
+    // validator 侧 with_*_key 路径等价：wildcard 照常检出，field 报规范键
+    let wildcard = TestProvider::new()
+        .with_value("web.origins", "*")
+        .with_value("web.methods", "GET,POST")
+        .with_value("web.max_age", "600");
+    let violations = CorsValidator::new()
+        .with_origins_key("web.origins")
+        .with_methods_key("web.methods")
+        .with_max_age_key("web.max_age")
+        .validate(&wildcard)
+        .expect_err("wildcard origin must be flagged through custom keys");
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.field.as_deref() == Some("cors.allowed_origins")),
+        "violation field must stay the canonical key name"
+    );
+}
+
+#[test]
+fn remapped_provider_without_mappings_is_byte_identical_passthrough() {
+    // 底层以业务键名存值：规范键 jwt.secret 本身不存在，映射后才可解析。
+    let tp = TestProvider::new()
+        .with_value("auth.token", "a-real-secret-value")
+        .with_value("other.key", "v");
+
+    // 无映射时 get_raw 查找逐字节不变：每个键的读取结果与直连底层一致
+    let plain = RemappedConfigProvider::new(Arc::new(
+        TestProvider::new()
+            .with_value("auth.token", "a-real-secret-value")
+            .with_value("other.key", "v"),
+    ));
+    for key in ["jwt.secret", "auth.token", "other.key", "missing.key"] {
+        let direct = tp.get_raw(key).map(|v| v.as_str().map(str::to_owned));
+        let wrapped = plain.get_raw(key).map(|v| v.as_str().map(str::to_owned));
+        assert_eq!(
+            direct, wrapped,
+            "get_raw({key}) must be unchanged without a mapping"
+        );
+    }
+    let mut inner_keys = tp.keys();
+    inner_keys.sort();
+    let mut wrapped_keys = plain.keys();
+    wrapped_keys.sort();
+    assert_eq!(
+        wrapped_keys, inner_keys,
+        "keys() passes the inner set through"
+    );
+
+    // 映射后：规范键取到底层业务键的值，未命中映射的键回退原名查找
+    let mapped = plain.with_key_mapping("jwt.secret", "auth.token");
+    assert_eq!(
+        mapped.get_raw("jwt.secret").and_then(|v| v.as_str()),
+        Some("a-real-secret-value"),
+        "canonical key resolves through the mapping"
+    );
+    assert_eq!(
+        mapped.get_raw("other.key").and_then(|v| v.as_str()),
+        Some("v"),
+        "unmapped keys fall back to their own name"
+    );
 }

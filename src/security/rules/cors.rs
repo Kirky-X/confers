@@ -15,12 +15,56 @@ const MAX_AGE_LIMIT: u64 = 86400;
 /// - `cors.allowed_origins` does not contain wildcard `*`
 /// - `cors.allowed_methods` is non-empty
 /// - `cors.max_age` does not exceed 86400 seconds
-pub struct CorsValidator;
+///
+/// # Key remapping caveat
+///
+/// The validator only skips entirely when **all three** `cors.*` keys are
+/// absent. If you remap just *some* of the keys (via
+/// [`RemappedConfigProvider`](super::RemappedConfigProvider) or the
+/// `with_*_key` constructors), the lookup lands in the partial-presence
+/// range: the still-missing keys keep producing their standing findings
+/// (e.g. "allowed_methods is missing" is Critical). Map either none or all
+/// three keys — or, per the adoption guidance, start with
+/// [`JwtSecretValidator`](super::JwtSecretValidator) alone, whose
+/// single-key lookup has no such coupling.
+pub struct CorsValidator {
+    /// Key allowed_origins is read from; defaults to `cors.allowed_origins`.
+    origins_key: String,
+    /// Key allowed_methods is read from; defaults to `cors.allowed_methods`.
+    methods_key: String,
+    /// Key max_age is read from; defaults to `cors.max_age`.
+    max_age_key: String,
+}
 
 impl CorsValidator {
     /// Create a new CORS validator.
     pub fn new() -> Self {
-        Self
+        Self {
+            origins_key: "cors.allowed_origins".to_string(),
+            methods_key: "cors.allowed_methods".to_string(),
+            max_age_key: "cors.max_age".to_string(),
+        }
+    }
+
+    /// Read allowed_origins from a different configuration key. Violation
+    /// reports keep the canonical `cors.allowed_origins` field name.
+    pub fn with_origins_key(mut self, key: impl Into<String>) -> Self {
+        self.origins_key = key.into();
+        self
+    }
+
+    /// Read allowed_methods from a different configuration key. Violation
+    /// reports keep the canonical `cors.allowed_methods` field name.
+    pub fn with_methods_key(mut self, key: impl Into<String>) -> Self {
+        self.methods_key = key.into();
+        self
+    }
+
+    /// Read max_age from a different configuration key. Violation reports
+    /// keep the canonical `cors.max_age` field name.
+    pub fn with_max_age_key(mut self, key: impl Into<String>) -> Self {
+        self.max_age_key = key.into();
+        self
     }
 }
 
@@ -35,16 +79,16 @@ impl SecurityValidator for CorsValidator {
         let mut violations = Vec::new();
 
         // If no CORS config at all, skip validation
-        let has_origins = config.get_raw("cors.allowed_origins").is_some();
-        let has_methods = config.get_raw("cors.allowed_methods").is_some();
-        let has_max_age = config.get_raw("cors.max_age").is_some();
+        let has_origins = config.get_raw(&self.origins_key).is_some();
+        let has_methods = config.get_raw(&self.methods_key).is_some();
+        let has_max_age = config.get_raw(&self.max_age_key).is_some();
 
         if !has_origins && !has_methods && !has_max_age {
             return Ok(());
         }
 
         // Check allowed_origins for wildcard
-        if let Some(value) = config.get_raw("cors.allowed_origins")
+        if let Some(value) = config.get_raw(&self.origins_key)
             && let Some(origins_str) = value.as_str()
             && origins_str.contains('*')
         {
@@ -59,7 +103,7 @@ impl SecurityValidator for CorsValidator {
         }
 
         // Check allowed_methods is non-empty
-        if let Some(value) = config.get_raw("cors.allowed_methods") {
+        if let Some(value) = config.get_raw(&self.methods_key) {
             if let Some(methods_str) = value.as_str() {
                 let trimmed = methods_str.trim();
                 if trimmed.is_empty() || trimmed == "[]" {
@@ -84,7 +128,7 @@ impl SecurityValidator for CorsValidator {
         }
 
         // Check max_age
-        if let Some(value) = config.get_raw("cors.max_age") {
+        if let Some(value) = config.get_raw(&self.max_age_key) {
             // Try string representation first (e.g. "172800")
             if let Some(age_str) = value.as_str() {
                 if let Ok(age) = age_str.parse::<u64>()

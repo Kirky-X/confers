@@ -263,7 +263,7 @@ pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 
 #[cfg(feature = "security-rules")]
 pub use security::rules::{
-    CorsValidator, JwtSecretValidator, SecurityReport, SecurityValidator,
+    CorsValidator, JwtSecretValidator, RemappedConfigProvider, SecurityReport, SecurityValidator,
     SecurityValidatorRegistry, SecurityViolation, SsrfValidator, TlsConfigValidator,
     ViolationSeverity,
 };

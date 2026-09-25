@@ -11,6 +11,7 @@
 
 mod cors;
 mod jwt;
+mod remap;
 mod ssrf;
 mod tls;
 
@@ -18,6 +19,7 @@ use crate::interface::ConfigProvider;
 
 pub use cors::CorsValidator;
 pub use jwt::JwtSecretValidator;
+pub use remap::RemappedConfigProvider;
 pub use ssrf::SsrfValidator;
 pub use tls::TlsConfigValidator;
 

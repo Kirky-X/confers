@@ -40,6 +40,8 @@ const MIN_SECRET_LENGTH: usize = 32;
 /// - Not being a commonly used weak secret
 pub struct JwtSecretValidator {
     min_length: usize,
+    /// Key the secret is read from; defaults to the canonical `jwt.secret`.
+    secret_key: String,
 }
 
 impl JwtSecretValidator {
@@ -47,12 +49,25 @@ impl JwtSecretValidator {
     pub fn new() -> Self {
         Self {
             min_length: MIN_SECRET_LENGTH,
+            secret_key: "jwt.secret".to_string(),
         }
     }
 
     /// Create a validator with a custom minimum length.
     pub fn with_min_length(min_length: usize) -> Self {
-        Self { min_length }
+        Self {
+            min_length,
+            secret_key: "jwt.secret".to_string(),
+        }
+    }
+
+    /// Read the secret from a different configuration key (e.g. your
+    /// embedder names it `auth.token`). Violations keep reporting the
+    /// canonical `jwt.secret` field name, so downstream alerting rules stay
+    /// stable regardless of the configured key.
+    pub fn with_secret_key(mut self, key: impl Into<String>) -> Self {
+        self.secret_key = key.into();
+        self
     }
 }
 
@@ -66,7 +81,7 @@ impl SecurityValidator for JwtSecretValidator {
     fn validate(&self, config: &dyn ConfigProvider) -> Result<(), Vec<SecurityViolation>> {
         let mut violations = Vec::new();
 
-        match config.get_raw("jwt.secret") {
+        match config.get_raw(&self.secret_key) {
             Some(value) => {
                 if let Some(secret) = value.as_str() {
                     // Check length
