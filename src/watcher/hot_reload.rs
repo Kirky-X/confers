@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use super::progressive::flatten_reason;
+use super::sanitize::flatten_reason;
 use super::{FsWatcher, ProgressiveReloader, ReloadOutcome};
 use crate::error::{ConfersResult, ConfigResult};
 use crate::interface::ConfigProvider;

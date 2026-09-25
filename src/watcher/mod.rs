@@ -7,6 +7,10 @@ pub(crate) mod debounce;
 
 mod failure_pause;
 
+// 日志/事件流 reason 清洗：WatcherGuard::shutdown（仅 watch）也使用，故不随
+// progressive-reload 门控。
+pub(crate) mod sanitize;
+
 #[cfg(feature = "progressive-reload")]
 pub(crate) mod progressive;
 
@@ -167,7 +171,7 @@ impl WatcherGuard {
                     Ok(Err(join_err)) => {
                         log::error!(
                             "watcher task terminated abnormally during shutdown: {}",
-                            progressive::flatten_reason(&join_err.to_string())
+                            sanitize::flatten_reason(&join_err.to_string())
                         );
                         Ok(false)
                     }

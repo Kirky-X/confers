@@ -142,25 +142,8 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     change_stream: ArcSwap<Option<Arc<dyn crate::stream::ChangeStream>>>,
 }
 
-/// Flatten a validator/check reason onto a single bounded line.
-///
-/// Reasons flow verbatim into logs and the canary change stream, so control
-/// characters (log-injection vector) are replaced by spaces and the length is
-/// capped. Implementations of [`ReloadValidator`] and [`PreCommitCheck`]
-/// should avoid embedding raw configuration values in reasons regardless —
-/// this guard only bounds the message, it cannot redact secrets.
-pub(crate) fn flatten_reason(reason: &str) -> String {
-    const MAX_REASON_CHARS: usize = 200;
-    let flat: String = reason
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    let mut bounded: String = flat.chars().take(MAX_REASON_CHARS).collect();
-    if flat.chars().count() > MAX_REASON_CHARS {
-        bounded.push('…');
-    }
-    bounded
-}
+// reason 清洗实现在 super::sanitize（不随 progressive-reload 门控，shutdown 也用）。
+use super::sanitize::flatten_reason;
 
 /// Post-commit migration plan (R-watch-009).
 ///
@@ -744,17 +727,6 @@ mod tests {
         fn keys(&self) -> Vec<String> {
             vec![]
         }
-    }
-
-    #[test]
-    fn flatten_reason_bounds_and_single_lines() {
-        assert_eq!(flatten_reason("plain"), "plain");
-        // Control characters (log-injection vector) become spaces.
-        assert_eq!(flatten_reason("a\nb\rc\td"), "a b c d");
-        // Length is capped, with the truncation made visible.
-        let flat = flatten_reason(&"x".repeat(500));
-        assert_eq!(flat.chars().count(), 201);
-        assert!(flat.ends_with('…'));
     }
 
     #[test]
