@@ -26,6 +26,12 @@ pub struct StructAttrs {
     #[darling(default)]
     pub validate: bool,
 
+    /// Generate the manual `confers_validate()` helper (opt-in: the plain
+    /// `validate` flag stays a no-op so existing code keeps compiling).
+    /// Requires the `validation` feature and a derived garde `Validate` impl.
+    #[darling(default)]
+    pub validate_helper: bool,
+
     /// Environment variable prefix
     pub env_prefix: Option<String>,
 

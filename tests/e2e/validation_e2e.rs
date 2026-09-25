@@ -4,12 +4,12 @@
 //! E2E: 校验(tests/e2e/validation_e2e.rs)
 //!
 //! 场景固化(docs/TEST_SCENARIOS.md §2.3):
-//! - VAL-01 `#[derive(Config)] #[config(validate)]` + garde 派生:合法配置加载并通过校验
+//! - VAL-01 `#[derive(Config)] #[config(validate_helper)]` + garde 派生:合法配置加载并通过校验
 //! - VAL-02 非法值(范围越界)→ garde Report;经 `ConfigError::validation_error` 转换后
 //!   保留字段路径,`user_message` 输出可读文案
 //! - VAL-07 多字段同时违规 → 全部字段聚合在一份 Report 中
 //!
-//! 行为固化说明:`#[config(validate)]` 当前不把校验自动挂进加载管线
+//! 行为固化说明:`#[config(validate_helper)]` 当前不把校验自动挂进加载管线
 //! (见 macros/src/codegen/validate.rs,codegen 为显式 no-op),
 //! 校验由使用方以 `garde::Validate::validate` 显式触发 —— 本文件按该真实行为固化。
 
@@ -29,7 +29,7 @@ fn write_temp_file(dir: &Path, name: &str, content: &str) -> PathBuf {
 }
 
 #[derive(Debug, Config, Deserialize, GardeValidate)]
-#[config(validate)]
+#[config(validate_helper)]
 struct ServerSettings {
     #[garde(length(min = 1, max = 253))]
     host: String,
