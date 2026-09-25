@@ -10,8 +10,9 @@
 //! - VAL-07 多字段同时违规 → 全部字段聚合在一份 Report 中
 //!
 //! 行为固化说明:`#[config(validate_helper)]` 当前不把校验自动挂进加载管线
-//! (见 macros/src/codegen/validate.rs,codegen 为显式 no-op),
-//! 校验由使用方以 `garde::Validate::validate` 显式触发 —— 本文件按该真实行为固化。
+//! (见 macros/src/codegen/validate.rs,codegen 仅显式生成 confers_validate
+//! 辅助方法),校验由使用方以 `confers_validate()` 或
+//! `garde::Validate::validate` 显式触发 —— 本文件按该真实行为固化。
 
 use confers::validator::Validate;
 use confers::{Config, ConfigBuilder, ConfigError};
