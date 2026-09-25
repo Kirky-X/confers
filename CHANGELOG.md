@@ -18,6 +18,10 @@
 - **`WatcherGuard::shutdown` 异常路径行为变更**：被等待的任务 panic 时（join 返回
   `Err`）现在记录错误并返回 `Ok(false)`；旧版把 panic 误报为 `Ok(true)`。
   超时与干净完成的语义不变。
+- **重载失败 reason 的日志注入防护**：`ReloadRolledBack` /
+  `ReloadRejected` 及重载日志、canary 事件流中的 reason 在含控制字符或超过
+  200 字符时经 `flatten_reason` 清洗截断（控制符替换为空格、超限追加省略号）；
+  正常输入逐字节不变。
 
 ### 新增
 

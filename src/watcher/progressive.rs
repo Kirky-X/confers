@@ -499,7 +499,7 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                         &[
                             ("from", plan.from_version.to_string()),
                             ("to", plan.to_version.to_string()),
-                            ("message", error.to_string()),
+                            ("message", flatten_reason(&error.to_string())),
                         ]
                     )
                 );
