@@ -15,7 +15,6 @@ error-migration-failed = 从 v{ $from } 迁移到 v{ $to } 失败: { $reason }
 error-module-not-found = 组 '{ $group }' 中未找到模块 '{ $module }'
 error-reload-rolled-back = 配置重载已回滚: { $reason }
 error-reload-rejected = 配置重载被拒绝: { $reason }
-
 error-io = IO 错误: { $message }
 error-invalid-value = 配置项 '{ $key }' 的值无效: { $message }
 error-source-chain = 配置源链错误: { $message }
