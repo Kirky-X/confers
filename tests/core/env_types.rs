@@ -455,3 +455,149 @@ fn test_env_parse_key_unicode_and_case() {
         Err(panic) => std::panic::resume_unwind(panic),
     }
 }
+
+// ===== ConfigBuilder::env_source =====
+//
+// The builder-level env_source() constructor must behave identically to
+// env_prefix() for the same EnvSource configuration, keep the EnvSource's
+// own separator authoritative (a builder-level env_separator() applies to
+// env sources the builder creates later, never retroactively to an
+// already-built EnvSource handed to env_source()), and participate in
+// priority-ordered merging when combined with env_prefix().
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+struct SingleKeyConfig {
+    #[serde(default)]
+    key: String,
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+struct DbHost {
+    #[serde(default)]
+    host: String,
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize)]
+struct NestedDbConfig {
+    #[serde(default)]
+    db: DbHost,
+}
+
+#[test]
+#[serial]
+fn test_builder_env_source_matches_env_prefix_behavior() {
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("CFASRC_A_KEY", "from-env") };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let via_env_prefix: SingleKeyConfig = ConfigBuilder::new()
+            .env_prefix("CFASRC_A_")
+            .build()
+            .expect("env_prefix path should build");
+        let via_env_source: SingleKeyConfig = ConfigBuilder::new()
+            .env_source(confers::config::EnvSource::with_prefix("CFASRC_A_"))
+            .build()
+            .expect("env_source path should build");
+        assert_eq!(via_env_prefix.key, "from-env");
+        assert_eq!(
+            via_env_source, via_env_prefix,
+            "env_source(with_prefix) must load the same value as env_prefix"
+        );
+    }));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CFASRC_A_KEY") };
+    match result {
+        Ok(()) => {}
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+#[test]
+#[serial]
+fn test_builder_env_separator_does_not_retrofit_env_source() {
+    // A pending env_separator("__") on the builder only affects env sources
+    // the builder creates afterwards (env()/env_prefix()); an EnvSource
+    // handed to env_source() keeps its own separator, so the single-underscore
+    // default still splits CFG separator keys into nested paths.
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("CFASRC_B_DB_HOST", "flat-sep") };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let config: NestedDbConfig = ConfigBuilder::new()
+            .env_separator("__")
+            .env_source(confers::config::EnvSource::with_prefix("CFASRC_B_"))
+            .build()
+            .expect("build with default-separator EnvSource");
+        assert_eq!(
+            config.db.host, "flat-sep",
+            "EnvSource's own '_' separator must stay authoritative for env_source()"
+        );
+    }));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CFASRC_B_DB_HOST") };
+    match result {
+        Ok(()) => {}
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+#[test]
+#[serial]
+fn test_builder_env_source_explicit_separator_applies() {
+    // The caller sets the nesting separator on the EnvSource itself when a
+    // non-default one is needed alongside env_source().
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("CFASRC_C_DB__HOST", "double-sep") };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let config: NestedDbConfig = ConfigBuilder::new()
+            .env_source(confers::config::EnvSource::with_prefix("CFASRC_C_").separator("__"))
+            .build()
+            .expect("build with explicit separator");
+        assert_eq!(config.db.host, "double-sep");
+    }));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CFASRC_C_DB__HOST") };
+    match result {
+        Ok(()) => {}
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+#[test]
+#[serial]
+fn test_builder_env_source_priority_ordering_with_env_prefix() {
+    // Two env sources merge in priority order (stable sort: equal priorities
+    // keep declaration order, later declaration wins; higher priority wins
+    // regardless of declaration order).
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("CFASRC_D_KEY", "from-custom") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("CFASRC_E_KEY", "from-prefix") };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let low_custom: SingleKeyConfig = ConfigBuilder::new()
+            .env_source(confers::config::EnvSource::with_prefix("CFASRC_D_").with_priority(10))
+            .env_prefix("CFASRC_E_")
+            .build()
+            .expect("build with low-priority custom env source");
+        assert_eq!(
+            low_custom.key, "from-prefix",
+            "env_prefix (priority 50) must override the priority-10 env_source"
+        );
+
+        let high_custom: SingleKeyConfig = ConfigBuilder::new()
+            .env_source(confers::config::EnvSource::with_prefix("CFASRC_D_").with_priority(200))
+            .env_prefix("CFASRC_E_")
+            .build()
+            .expect("build with high-priority custom env source");
+        assert_eq!(
+            high_custom.key, "from-custom",
+            "priority-200 env_source must override env_prefix (priority 50)"
+        );
+    }));
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CFASRC_D_KEY") };
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::remove_var("CFASRC_E_KEY") };
+    match result {
+        Ok(()) => {}
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}

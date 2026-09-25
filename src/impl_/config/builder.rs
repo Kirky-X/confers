@@ -180,6 +180,34 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
+    /// Add a pre-built [`EnvSource`](crate::config::EnvSource).
+    ///
+    /// Equivalent to [`Self::env`](Self::env) /
+    /// [`Self::env_prefix`](Self::env_prefix) for the same source
+    /// configuration, but lets the caller apply the full `EnvSource`
+    /// constructor surface (custom nesting separator, `_FILE` suffix
+    /// handling, excluded keys, priority) without the builder having to
+    /// mirror every option.
+    ///
+    /// # Composition semantics
+    ///
+    /// * The nesting separator of the handed-in source is whatever the
+    ///   caller set on the `EnvSource` itself (default `"_"`).
+    ///   [`Self::env_separator`](Self::env_separator) does **not** apply
+    ///   retroactively here — it only configures env sources the builder
+    ///   creates afterwards via `env`/`env_prefix`. Set
+    ///   `EnvSource::separator` explicitly when a non-default separator is
+    ///   needed with this method.
+    /// * Calling this alongside `env`/`env_prefix` registers multiple env
+    ///   sources. They merge in priority order (stable sort); sources of
+    ///   equal priority keep declaration order, so the later registration
+    ///   wins for the same key. Use `EnvSource::with_priority` to control
+    ///   which source takes precedence.
+    pub fn env_source(mut self, source: crate::config::EnvSource) -> Self {
+        self.chain_builder = self.chain_builder.source(Box::new(source));
+        self
+    }
+
     /// Add default values.
     pub fn defaults(mut self, defaults: HashMap<String, ConfigValue>) -> Self {
         self.accumulated_defaults.extend(defaults);
