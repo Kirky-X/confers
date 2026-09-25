@@ -151,3 +151,41 @@ fn val07_multiple_field_violations_aggregate_into_one_report() {
         "both violations aggregate, got {bad_fields}"
     );
 }
+
+#[test]
+fn val08_confers_validate_helper_mirrors_garde_rules() {
+    // confers_validate() 是 derive 生成的手动辅助：校验时机仍由调用方掌握，
+    // 结果与直接调用 garde::Validate::validate 一致。
+    let dir = tempfile::tempdir().unwrap();
+    let file = write_temp_file(
+        dir.path(),
+        "helper-valid.toml",
+        "host = \"h1\"\nport = 22\n",
+    );
+    let settings: ServerSettings = ConfigBuilder::new()
+        .allow_absolute_paths()
+        .file(&file)
+        .build()
+        .expect("valid config must build");
+    settings
+        .confers_validate()
+        .expect("helper must pass for a garde-valid config");
+
+    let file_bad = write_temp_file(
+        dir.path(),
+        "helper-invalid.toml",
+        "host = \"\"\nport = 65535\n",
+    );
+    let bad: ServerSettings = ConfigBuilder::new()
+        .allow_absolute_paths()
+        .file(&file_bad)
+        .build()
+        .expect("out-of-range values still build (validation is a separate manual step)");
+    let err = bad
+        .confers_validate()
+        .expect_err("helper must reject a garde-invalid config");
+    assert!(
+        err.contains("port") && err.contains("host"),
+        "rejection reason must name the offending fields, got: {err}"
+    );
+}

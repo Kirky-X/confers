@@ -146,7 +146,9 @@ use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 ///
 /// - `env_prefix = "APP_"` - Prefix for environment variables
 /// - `app_name = "myapp"` - Application name for config search
-/// - `validate` - Enable validation with garde
+/// - `validate` - Generate the manual `confers_validate()` helper; validation
+///   rules still come from `#[derive(garde::Validate)]` and nothing validates
+///   automatically during loading (requires the `validation` feature)
 /// - `watch` - Enable file watching for hot reload
 /// - `version = 1` - Configuration version for migrations
 /// - `profile` - Enable APP_ENV profile overlay
