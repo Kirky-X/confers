@@ -16,6 +16,11 @@ pub(crate) mod fs_watcher;
 #[cfg(feature = "watch")]
 pub(crate) mod field_watch;
 
+// 门面组件：固化 FsWatcher + begin_reload + watch 广播 + 优雅停机的装配形态，
+// 蕴含 watch 与 progressive-reload 两个底层特性。
+#[cfg(feature = "hot-reload-kit")]
+pub(crate) mod hot_reload;
+
 pub use debounce::AdaptiveDebouncer;
 
 pub use failure_pause::ReloadFailurePolicy;
@@ -31,6 +36,9 @@ pub use fs_watcher::{FsWatcher, MultiFsWatcher};
 
 #[cfg(feature = "watch")]
 pub use field_watch::{FieldExtractor, StructFieldWatcher, WatchReceiver};
+
+#[cfg(feature = "hot-reload-kit")]
+pub use hot_reload::{HotReloadLoader, HotReloader};
 
 use std::sync::Arc;
 use std::sync::Mutex;

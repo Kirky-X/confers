@@ -220,6 +220,9 @@ pub use watcher::{
     HealthStatus, ProgressiveReloader, ProgressiveReloaderBuilder, ReloadHealthCheck, ReloadOutcome,
 };
 
+#[cfg(feature = "hot-reload-kit")]
+pub use watcher::{HotReloadLoader, HotReloader};
+
 #[cfg(feature = "encryption")]
 pub use secret::{
     SecretBytes, SecretString, XChaCha20Crypto, crypto::CryptoError, derive_field_key,

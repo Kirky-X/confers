@@ -3,4 +3,5 @@
 
 //! Watcher integration tests — file system watching, hot reload, and debounce.
 
+mod hot_reload_kit;
 mod watcher;
