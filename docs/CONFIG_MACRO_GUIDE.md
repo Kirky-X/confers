@@ -810,7 +810,7 @@ fn my_validator(value: &str, _: &()) -> garde::Result {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["recommended"] }
+confers = { version = "0.6.0-rc.6", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -821,7 +821,7 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["dev"] }
+confers = { version = "0.6.0-rc.6", features = ["dev"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -832,7 +832,7 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["production"] }
+confers = { version = "0.6.0-rc.6", features = ["production"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
@@ -868,4 +868,4 @@ garde = { version = "0.23", features = ["derive"] }
 
 ---
 
-*本文档基于 Confers v0.6.0-rc.5 编写。*
+*本文档基于 Confers v0.6.0-rc.6 编写。*

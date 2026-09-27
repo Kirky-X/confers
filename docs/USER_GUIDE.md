@@ -87,10 +87,10 @@ cargo --version
 
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.6.0-rc.5"` | 包含 toml、json、env |
-| **最小化** | `confers = { version = "0.6.0-rc.5", default-features = false, features = ["minimal"] }` | Env + JSON（对应 Cargo.toml 的 `minimal = ["env", "json"]`） |
-| **推荐** | `confers = { version = "0.6.0-rc.5", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
-| **全量** | `confers = { version = "0.6.0-rc.5", features = ["full"] }` | 全部特性 |
+| **默认** | `confers = "0.6.0-rc.6"` | 包含 toml、json、env |
+| **最小化** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["minimal"] }` | Env + JSON（对应 Cargo.toml 的 `minimal = ["env", "json"]`） |
+| **推荐** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
+| **全量** | `confers = { version = "0.6.0-rc.6", features = ["full"] }` | 全部特性 |
 
 **可用的特性预设：**
 
@@ -787,7 +787,7 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["security-rules"] }
+confers = { version = "0.6.0-rc.6", features = ["security-rules"] }
 ```
 
 ```rust
@@ -846,7 +846,7 @@ if !report.is_ok(false) {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["feature-toggle"] }
+confers = { version = "0.6.0-rc.6", features = ["feature-toggle"] }
 ```
 
 ```rust

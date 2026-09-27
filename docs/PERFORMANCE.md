@@ -90,7 +90,7 @@ println!("已解析 {}/{} 段", config.parsed_count(), config.segment_keys().len
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.5", features = ["validation"] }
+confers = { version = "0.6.0-rc.6", features = ["validation"] }
 ```
 
 ### 校验缓存

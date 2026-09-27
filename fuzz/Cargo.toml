@@ -2,17 +2,14 @@
 name = "confers-fuzz"
 version = "0.0.0"
 publish = false
-edition.workspace = true
-rust-version.workspace = true
+edition = "2024"
+rust-version = "1.97.1"
 
 [package.metadata]
 cargo-fuzz = true
 
-[lints]
-workspace = true
-
 [dependencies]
-confers = { version = "0.6.0-rc.4", path = "..", features = ["full"] }
+confers = { version = "0.6.0-rc.6", path = "..", features = ["full"] }
 libfuzzer-sys = "0.4"
 
 [[bin]]
@@ -27,3 +24,7 @@ path = "fuzz_targets/parser.rs"
 name = "interpolation"
 path = "fuzz_targets/interpolation.rs"
 doc = false
+
+# 独立于主 workspace（根 Cargo.toml exclude = ["fuzz"]）；自带空 workspace 按
+# cargo-fuzz 惯例脱离继承，避免引用不存在的 workspace.package 字段
+[workspace]

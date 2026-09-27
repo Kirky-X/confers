@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
-## [0.6.0-rc.6] — 2026-09-25
+## [0.6.0-rc.6] — 2026-09-28
 
 ### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
 
@@ -42,8 +42,20 @@
 
 - 死依赖 `secrecy`、`aes-gcm`；`KeyCachePolicy` 由死类型改为真实接线（Vault token 缓存按 NoCache/CacheWithTtl/CacheIndefinitely 生效）
 
+### 变更（破坏面声明）
+
+- **`#[config(validate)]` 保持兼容 no-op**：校验辅助方法 `confers_validate()` 改由新增的 opt-in 属性 `#[config(validate_helper)]` 生成（要求 `validation` feature 与 `#[derive(garde::Validate)]`）；两种属性都不会把校验自动挂进加载管线，旧代码（仅设置 `validate`）升级后行为与编译结果不变
+- **`CorsValidator` 不再支持 unit-struct 裸名构造**（`let v: CorsValidator = CorsValidator;` 编译失败）：为支持 `with_origins_key` / `with_methods_key` / `with_max_age_key` 自定义键构造器而字段化；`CorsValidator::new()` 与 `Default` 行为不变（默认键名与旧版逐字节一致），经检索 confers / mnemis / sdforge 生态均仅以 `::new()` 构造，无实际消费者受影响
+- **`WatcherGuard::shutdown` 异常路径行为变更**：被等待的任务 panic 时（join 返回 `Err`）现在记录错误并返回 `Ok(false)`；旧版把 panic 误报为 `Ok(true)`；超时与干净完成的语义不变
+- **重载失败 reason 的日志注入防护**：`ReloadRolledBack` / `ReloadRejected` 及重载日志、canary 事件流中的 reason 在含控制字符或超过 200 字符时经 `flatten_reason` 清洗截断（控制符替换为空格、超限追加省略号）；正常输入逐字节不变
+
 ### 新增
-_暂无变更。_
+
+- `WatcherGuard::with_task` / `set_task_handle` 由 `pub(crate)` 放宽为 `pub`；`shutdown` 文档注明超时返回 `Ok(false)` 的降级语义（任务不会被取消，仍在后台运行）
+- `ConfigBuilder::env_source(EnvSource)`：接收预构建的 `EnvSource`（与 `env_prefix` / `env_separator` 的组合语义见 rustdoc）
+- `hot-reload-kit` feature（默认关，不入 recommended/production/full 预置）+ `HotReloader` 门面：FsWatcher + 渐进重载 + watch 广播 + 优雅停机的装配形态；loader 经 spawn_blocking 卸载，panic 计入失败计数
+- `ProgressiveReloader::with_pre_commit_check` + `PreCommitCheck` trait（`Err` 即拒）与新错误变体 `ConfigError::ReloadRejected`（受 `#[non_exhaustive]` 保护）
+- `RemappedConfigProvider` 键重映射视图 + `JwtSecretValidator::with_secret_key` / `CorsValidator::with_{origins,methods,max_age}_key`（默认键名不变；CORS 三键仅部分重映射会触发既有规则的稳定误报，详见 `CorsValidator` rustdoc，建议仅 `JwtSecretValidator` 起步）
 
 ---
 
@@ -51,7 +63,7 @@ _暂无变更。_
 
 仅版本号发布（`Cargo.toml`/`Cargo.lock` bump）；包含 rc.4 之后的维护性变更：
 
-- **i18n**：接入 `unify-rust-i18n`，为 `ConfigError` 实现 `LocalizedMsg` 并补全变体守卫测试
+- **i18n**：自研 i18n 门面（`src/i18n` catalog/locale，零外部依赖），为 `ConfigError` 实现 `LocalizedMsg` 并补全变体守卫测试
 - **特性**：`keyring` / `cloud-kms` 隐含 `encryption`，引入 `async-core` 聚合谓词
 - **工程**：接入 pre-commit 门禁与 detect-secrets 基线；typos 词表白名单；为 path-only 依赖补全 `version` 字段
 - **测试**：NATS 集成测试名加纳秒熵防跨进程撞车；示例/文档/测试残留 `AppConfig` 衍生名统一为 `Confers` 前缀
@@ -66,6 +78,7 @@ _暂无变更。_
 ## [0.6.0-rc.3] — 2026-09-10
 
 > 本节包含 `workspace-rc3-hardening` 与 `workspace-rc4-completion` 两批内容（rc.3 发布前累计；版本规则：目标 = crates.io 已发布 rc.2 + 1）。
+> 版本号 0.6.0-rc.3 已跳过、未发布（无 tag、未上 crates.io），本节内容随 0.6.0-rc.4 一并发布。
 
 ### 新增（workspace-rc4-completion）
 
