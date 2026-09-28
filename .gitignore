@@ -49,6 +49,7 @@ logs/
 # Temporary files
 tmp/
 temp/
+*.bundle
 
 # Development files
 docs/dev-v2.md
@@ -63,6 +64,7 @@ docker-compose.yml
 
 # Security audit
 .security-audit/
+security-results/
 
 # Specmark
 # specmark:活动变更工作区可丢弃,归档与主 specs 入库可追溯
