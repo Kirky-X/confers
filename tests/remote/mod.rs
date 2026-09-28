@@ -10,4 +10,5 @@ pub mod common;
 mod bus;
 mod consul;
 mod etcd;
+mod etcd_watch;
 mod remote;

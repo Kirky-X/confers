@@ -331,7 +331,7 @@ Please do not report security vulnerabilities through public issues. Use the pri
 <tr><td align="center">✅</td><td>Hot updates</td><td>File watching hot reload, progressive rollout, dynamic fields, snapshot rollback, config migration, variable interpolation</td></tr>
 <tr><td align="center">✅</td><td>Security and audit</td><td>XChaCha20-Poly1305 encryption, key management and rotation, audit logging, security rule validators</td></tr>
 <tr><td align="center">✅</td><td>Remote and bus</td><td>HTTP polling, etcd, Consul, Nacos, Kubernetes ConfigMap / Secret, NATS and Redis buses</td></tr>
-<tr><td align="center">🚧</td><td>Remote source maturity</td><td><code>remote</code>, <code>etcd</code>, and <code>consul</code> are in beta; interfaces may change</td></tr>
+<tr><td align="center">✅</td><td>Remote sources stable</td><td><code>remote</code>, <code>etcd</code>, <code>consul</code>, and <code>etcd-watch</code> promoted: interfaces frozen, no breaking changes before 1.0 (guarded by watch compatibility regression tests)</td></tr>
 <tr><td align="center">📋</td><td>Performance</td><td>Benchmark suite refinement (criterion baselines), memory footprint optimization for large configs, zero-copy hot path for high-frequency reads</td></tr>
 <tr><td align="center">📋</td><td>Cloud-native integration</td><td>Service mesh support, distributed tracing integration</td></tr>
 </table>

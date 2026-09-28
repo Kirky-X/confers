@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 远程来源转正（Beta → 稳定）
+
+- **接口冻结承诺**：`remote` / `etcd` / `consul` / `etcd-watch` 的公开 API 自此冻结——1.0 前仅增量演进（只新增、不破坏），破坏性变更仅随 1.0 major 发布。冻结清单含 rc.6 全部新接口：
+  - HTTP 轮询：`HttpPolledSourceBuilder::stale_on_error`（默认关闭，保持 fail-loud）、认证头注入 API、默认超时
+  - etcd：`EtcdSourceBuilder` 全部 builder 方法（`endpoints` / `endpoint` / `username` / `password` / `prefix` / `format` / `interval` / `tls` / `operation_timeout` / `circuit_breaker_threshold` / `build`）、`EtcdTlsConfig`、`EtcdSource::watch_transport`
+  - Consul：`ConsulSourceBuilder` 及其 builder 方法、`ConsulTlsConfig`
+  - etcd watch：`WatchEventSource`、`EtcdWatcher`（`new` / `with_retry` / `last_revision` / `run`）、`EtcdWatchEvent`（`key` / `value` / `mod_revision`）、`EtcdWatchRetry`（`base` / `max`；默认 500ms 基础、30s 封顶的指数退避）、`EtcdWatchCallback`、`EtcdGrpcWatchSource`
+- **新增**：`confers::async_trait` re-export（`remote` 特性门控）——`WatchEventSource` 以 async-trait 宏展开，外部实现该 trait 必须使用同一宏，re-export 即官方实现路径
+- **兼容性守护**：新增 `tests/remote/etcd_watch.rs` watch 兼容性回归测试——外部 mock 实现驱动完整 watch 生命周期（事件按序交付、断流重连、`last_revision` 跨连接单调）、删除事件 `value: None` 穿透、冻结类型形状与默认退避语义
+- **验证方式**：以现有测试矩阵替代长时 soak——六源 feature 门控（HTTP 轮询 / etcd / etcd-watch / consul / k8s / nacos）编译验证 + HTTP、etcd、Consul、watch 的 mock 联测 + watch 兼容性回归。真实集群集成测试（`tests/remote/etcd.rs` / `consul.rs`，依赖 `docker-compose.test.yml`）与长 soak 在无容器镜像仓库访问的沙箱环境无法执行，属环境限制而非代码缺陷
+
 ## [0.6.0-rc.6] — 2026-09-28
 
 ### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）

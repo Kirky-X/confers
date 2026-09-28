@@ -49,6 +49,9 @@ pub type WatchItem = Result<EtcdWatchEvent, String>;
 /// [`WatchItem`]s. Returning `Err` from [`watch`](WatchEventSource::watch)
 /// or yielding `Err` items signals connection trouble; the watcher
 /// reconnects with backoff either way.
+///
+/// 外部实现请使用 crate 根 re-export 的宏（`use confers::async_trait;`），
+/// 以保证展开后的方法签名与本 trait 一致。
 #[async_trait::async_trait]
 pub trait WatchEventSource: Send + Sync {
     /// Open a prefix watch stream. Resolves once the watch is established.

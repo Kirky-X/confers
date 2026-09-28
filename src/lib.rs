@@ -150,6 +150,11 @@ pub mod toggle;
 #[cfg(feature = "remote")]
 pub mod remote;
 
+// 远程源公开 trait（如 WatchEventSource）以 async-trait 展开，消费者实现
+// 这些 trait 必须使用同一宏；此处 re-export 即官方实现路径。
+#[cfg(feature = "remote")]
+pub use async_trait::async_trait;
+
 // ============== Core Re-exports ==============
 
 pub use lifecycle::Lifecycle;

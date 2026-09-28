@@ -515,7 +515,7 @@ let config = ConfigBuilder::<MyConfig>::new()
     .build()?;
 ```
 
-etcd 与 Consul 后端分别由 `etcd`、`consul` 特性提供，使用 `EtcdSourceBuilder`（`build()` 为异步方法）与 `ConsulSourceBuilder`。
+etcd 与 Consul 后端分别由 `etcd`、`consul` 特性提供，使用 `EtcdSourceBuilder`（`build()` 为异步方法）与 `ConsulSourceBuilder`。远程来源（`remote`/`etcd`/`consul`/`etcd-watch`）公开接口已冻结：1.0 前仅增量演进、不做破坏性变更，可放心投入生产使用。
 
 ### 📝 审计日志与安全
 

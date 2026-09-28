@@ -331,7 +331,7 @@ cargo fuzz run parser
 <tr><td align="center">✅</td><td>热更新</td><td>文件监听热重载、渐进式发布、动态字段、快照回滚、配置迁移、变量插值</td></tr>
 <tr><td align="center">✅</td><td>安全与审计</td><td>XChaCha20-Poly1305 加密、密钥管理与轮换、审计日志、安全规则校验器</td></tr>
 <tr><td align="center">✅</td><td>远程与总线</td><td>HTTP 轮询、etcd、Consul、Nacos、Kubernetes ConfigMap / Secret、NATS 与 Redis 总线</td></tr>
-<tr><td align="center">🚧</td><td>远程来源成熟度</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code> 处于测试期（Beta），接口可能调整</td></tr>
+<tr><td align="center">✅</td><td>远程来源稳定</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code>、<code>etcd-watch</code> 转正：接口已冻结，1.0 前不再破坏性变更（watch 兼容性回归测试守护）</td></tr>
 <tr><td align="center">📋</td><td>性能优化</td><td>基准套件完善（criterion 基线）、大型配置内存占用优化、高频读取零拷贝热路径</td></tr>
 <tr><td align="center">📋</td><td>云原生集成</td><td>服务网格支持、分布式追踪集成</td></tr>
 </table>
