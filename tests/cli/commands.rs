@@ -568,3 +568,112 @@ fn test_version_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("confers"), "Output: {}", stdout);
 }
+
+#[test]
+#[serial]
+fn test_schema_from_schema_generates_rust_scaffolding() {
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let schema_path = create_test_config(
+        &dir,
+        "schema.json",
+        r#"{
+            "title": "AppConfig",
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "port": {"type": "integer", "default": 8080},
+                "status": {"type": "string", "enum": ["active", "paused"]},
+                "nickname": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["name", "status", "tags"]
+        }"#,
+    );
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "schema",
+        "--from-schema",
+        schema_path.to_str().expect("utf-8 path"),
+    ])
+    .output()
+    .expect("Failed to run confers");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("pub struct AppConfig"), "{stdout}");
+    assert!(stdout.contains("pub name: String"), "{stdout}");
+    assert!(
+        stdout.contains("#[serde(default = \"_default_port\")]"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("pub enum AppConfigStatus"), "{stdout}");
+    assert!(stdout.contains("pub nickname: Option<String>"), "{stdout}");
+    assert!(stdout.contains("pub tags: Vec<String>"), "{stdout}");
+}
+
+#[test]
+#[serial]
+fn test_schema_from_schema_fails_loud_on_unsupported_construct() {
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let schema_path = create_test_config(
+        &dir,
+        "bad_schema.json",
+        r#"{
+            "type": "object",
+            "properties": {
+                "weird": {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+            },
+            "required": ["weird"]
+        }"#,
+    );
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "schema",
+        "--from-schema",
+        schema_path.to_str().expect("utf-8 path"),
+    ])
+    .output()
+    .expect("Failed to run confers");
+
+    assert!(!output.status.success(), "oneOf must fail loudly");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("oneOf"), "{stderr}");
+}
+
+#[test]
+#[serial]
+fn test_schema_from_schema_rejects_missing_file() {
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let missing = dir.path().join("nope.json");
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "schema",
+        "--from-schema",
+        missing.to_str().expect("utf-8 path"),
+    ])
+    .output()
+    .expect("Failed to run confers");
+
+    assert!(!output.status.success(), "missing schema file must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Failed to read schema"), "{stderr}");
+}
+
+#[test]
+#[serial]
+fn test_schema_from_schema_conflicts_with_from_instance() {
+    let output = run_confers(&["schema", "--from-instance", "--from-schema", "s.json"])
+        .output()
+        .expect("Failed to run confers");
+
+    assert!(
+        !output.status.success(),
+        "clap must reject mutually exclusive flags"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("cannot be used with"), "{stderr}");
+}

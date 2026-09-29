@@ -190,7 +190,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>Built-in JWT, CORS, SSRF, TLS validators with a registry</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
 <tr><td><code>keyring</code></td><td align="center">❌</td><td>Key storage backends (file, MasterKey, secret-tool; includes <code>encryption</code>)</td></tr>
-<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers including Vault Transit (includes <code>encryption</code>, requires <code>remote</code>)</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers: Vault Transit / AWS KMS (SigV4) / GCP KMS (metadata token) (includes <code>encryption</code>, requires <code>remote</code>)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Remote Sources</b></td></tr>
 <tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP polling source with SSRF protection and circuit breaker</td></tr>
 <tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 integration (includes <code>remote</code>)</td></tr>
@@ -203,6 +203,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>nats-bus</code></td><td align="center">❌</td><td>NATS bus backend (includes <code>config-bus</code>)</td></tr>
 <tr><td><code>redis-bus</code></td><td align="center">❌</td><td>Redis Pub/Sub bus backend (includes <code>config-bus</code>)</td></tr>
 <tr><td><code>change-stream</code></td><td align="center">❌</td><td>Unified change stream port reusing the config-bus transport (includes <code>watch</code>)</td></tr>
+<tr><td><code>canary</code></td><td align="center">❌</td><td>Multi-instance canary rollout orchestration: batched advance/rollback over the change stream + service-mesh weight adapter (includes <code>change-stream</code>, <code>progressive-reload</code>)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Organization & Extensions</b></td></tr>
 <tr><td><code>modules</code></td><td align="center">❌</td><td>Modular config groups with a registry</td></tr>
 <tr><td><code>context-aware</code></td><td align="center">❌</td><td>Context-aware (tenant-dimension) configuration</td></tr>
@@ -254,7 +255,7 @@ Beyond the runnable examples, the bundled CLI diagnostics tool (`cli` feature, e
 cargo install confers --features cli
 ```
 
-It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema`, `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of every command, see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
+It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (forward generation / `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of every command, see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
 
 ---
 

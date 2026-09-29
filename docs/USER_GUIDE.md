@@ -372,7 +372,7 @@ Commands:
   export    Export merged configuration (sanitized)
   diff      Diff two configurations
   snapshot  Manage configuration snapshots
-  schema    Output JSON Schema for the configuration type
+  schema    Output JSON Schema, or generate Rust scaffolding from a schema draft (--from-schema)
   get       Get a specific configuration value by key path (dot-separated)
   docs      Documentation output（--agent 输出机器可读知识包）
   doctor    Diagnose configuration health and print a single-line JSON report
@@ -451,6 +451,42 @@ confers snapshot diff --latest 2
 # 清理过期快照（如 7 天前）
 confers snapshot prune --older-than 7d
 ```
+
+#### schema - Schema 生成与反向脚手架
+
+```bash
+# 正向：为派生配置类型输出 JSON Schema（2020-12）
+confers schema
+
+# 反向（实例 → Schema 草稿）：从配置实例反推 schema-first 起点
+confers -c app.toml schema --from-instance
+
+# 反向（Schema 草稿 → Rust 脚手架）：schema-first 落地的起点代码
+confers schema --from-schema config-schema.json
+```
+
+`--from-schema` 的映射规则（完整规则见 `RustScaffoldGenerator` rustdoc）：
+
+| Schema 形态 | 生成的 Rust |
+|:------------|:------------|
+| `object` + `properties` | `struct`（标题缺省为 `Config`） |
+| `required` 之外的字段 | `Option<T>` + `#[serde(default)]` |
+| 标量 `default` | 具体类型 + `#[serde(default = "_default_*")]` 与生成的默认值函数 |
+| `type: string` + `enum` | Rust 枚举（变体 `#[serde(rename)]` 保原值） |
+| 内联嵌套 `object` | 提升为具名 `struct`（`<父><字段>` 命名） |
+| `$defs` / 内部 `$ref` | 独立类型 + 类型引用 |
+| 无 `properties` 的 `object` | `serde_json::Value`（自由形态） |
+| `additionalProperties` 子模式 | `HashMap<String, T>` |
+| `format` 提示 | 保持 `String`，以注释标注 |
+
+不支持的结构（`oneOf`/`anyOf`/`allOf`/`not`（属性层与 `$defs` 命名层一致）、外部 `$ref`、解析不到 `$defs` 条目的内部 `$ref`、`patternProperties`、元组数组）显性报错并指明字段路径，绝不静默生成错误代码；复合 `default` 以 `TODO` 注释标注并保持 fail-loud。
+
+生成安全与标识符契约：
+
+- 进入生成代码的全部 schema 字符串（rename 值、枚举原值、字符串 `default`）均做字面量转义——对下载的第三方 schema 运行本命令不会被注入可编译代码；文档注释与错误消息中的控制字符可见化为 `\u{...}` 文本
+- 规范化后非法的属性名（空、数字开头、归一化为全下划线——含单 CJK 字符等仅落入分隔符分支的名称→`_`，Rust 保留标识符无法逃逸）与不可 raw 化的关键字（`self`/`super`/`crate`）显性报错；归一化碰撞（如 `userName` 与 `user-name`、枚举变体 `a-b` 与 `a_b`）自动加数字后缀并保留原值 `#[serde(rename)]`
+- 字符串枚举 + 标量 `default` 生成匹配变体路径（`Enum::Variant`）；default 不在枚举变体内则报错
+- 复合 `default` 的非 required 字段保持 `Option<T>` + `#[serde(default)]`（与 schema 可选语义一致）；nullable 类型数组的非 required 字段为单层 `Option`
 
 #### doctor - 健康诊断
 
@@ -570,6 +606,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 > **注意**：旧版 `ConfigBuilder::build_with_watcher()` 方法自 v0.3.0 起已弃用。它只构建初始配置，并会静默丢弃文件变更事件。如需真正的热重载支持，请如上所示直接使用 `FsWatcher` / `MultiFsWatcher`。
+
+#### 🐦 金丝雀发布编排（canary 特性）
+
+跨多实例的分批 rollout 编排（`canary` = `change-stream` + `progressive-reload`）：每实例的 `ProgressiveReloader` 把 canary 阶段转换发布到 `ChangeStream`，`CanaryOrchestrator` 在消费侧按 `RolloutPlan` 分批收集 `committed` 事件、批次健康检查（复用 `HealthStatus` 三态，仅 Critical 触发回滚），以 `canary.orchestrator` 指令事件（advance/rollback/completed）发布决策，并经 `MeshWeightPublisher` 把流量切分比例下发给服务网格（Envoy/Istio 配置样例见 docs/CANARY_ORCHESTRATION.md）。
+
+> **必配项**：每个实例构造 `ProgressiveReloader` 后必须 `.with_instance_id(...)`，且 id 须与 `CanaryOrchestrator::new` 的实例列表一致——实例事件以 `canary.<instance_id>` 为 key 发布，编排器按该 id 归组批次；缺省为 `unknown`（无法归组，rollout 将超时回滚）。已推进批次的实例发生 `rolled_back` 同样会立即中止整个 rollout。
+
+```rust
+use confers::canary::{CanaryOrchestrator, RolloutPlan, RolloutHealthCheck};
+use std::time::Duration;
+
+# async fn demo(
+#     stream: std::sync::Arc<dyn confers::ChangeStream>,
+#     health: std::sync::Arc<dyn RolloutHealthCheck>,
+# ) -> confers::error::ConfigResult<()> {
+let orchestrator = CanaryOrchestrator::new(
+    stream,
+    vec!["instance-a".into(), "instance-b".into(), "instance-c".into()],
+    RolloutPlan {
+        batch_size: 1,
+        batch_interval: Duration::from_secs(30),
+        poll_interval: Duration::from_secs(5),
+        failure_threshold: 0.0, // 任一批实例 Critical 即全局回滚
+    },
+    health,
+);
+let outcome = orchestrator.run().await?;
+// RolloutOutcome::Completed { batches, instances } 或 Aborted { batch, reason, directive }
+# Ok(())
+# }
+```
 
 ### 🔐 敏感数据加密
 

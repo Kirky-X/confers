@@ -3,14 +3,22 @@
 
 //! Cloud KMS key providers (`cloud-kms` feature).
 //!
-//! MVP backend: HashiCorp Vault **transit** — the wrapped data key is stored
-//! next to the configuration, and the provider unwraps it through
-//! `POST /v1/transit/decrypt/{key}` on every (cache-policy mediated) fetch.
-//! This keeps the plaintext master key out of environment variables and
-//! files while delegating all key material handling to Vault.
+//! Implemented backends behind the [`CloudKmsBackend`] port:
 //!
-//! AWS KMS / GCP KMS / Azure KeyVault plug into the same [`CloudKmsBackend`]
-//! port; they are documented extension points, not implementations yet.
+//! - HashiCorp Vault **transit** ([`VaultTransitKeyProvider`]): the wrapped
+//!   data key is stored next to the configuration and unwrapped through
+//!   `POST /v1/transit/decrypt/{key}` on every (cache-policy mediated)
+//!   fetch.
+//! - AWS KMS ([`crate::secret::providers_aws_kms::AwsKmsKeyProvider`]):
+//!   SigV4-signed `kms:Decrypt` over the JSON 1.1 API, credentials from the
+//!   builder or `AWS_*` environment variables.
+//! - GCP KMS ([`crate::secret::providers_gcp_kms::GcpKmsKeyProvider`]):
+//!   `cryptoKeys.decrypt` with an access token from the instance metadata
+//!   server (or injected directly for tests).
+//!
+//! This keeps the plaintext master key out of environment variables and
+//! files while delegating all key material handling to the vendor. Azure
+//! KeyVault remains a documented extension point.
 
 use std::time::Duration;
 
@@ -20,15 +28,16 @@ use crate::types::ZeroizingBytes;
 /// Vendor marker for cloud KMS backends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloudKmsVendor {
-    /// HashiCorp Vault transit engine (implemented: [`VaultTransitKeyProvider`]).
+    /// HashiCorp Vault transit engine ([`VaultTransitKeyProvider`]).
     Vault,
-    /// AWS KMS (extension point, not implemented yet).
+    /// AWS KMS ([`crate::secret::providers_aws_kms::AwsKmsKeyProvider`]).
     Aws,
-    /// GCP KMS (extension point, not implemented yet).
+    /// GCP KMS ([`crate::secret::providers_gcp_kms::GcpKmsKeyProvider`]).
     Gcp,
 }
 
-/// Cloud KMS backend port (extension point for AWS/GCP/Azure backends).
+/// Cloud KMS backend port (implemented for Vault/AWS/GCP; Azure remains an
+/// extension point).
 ///
 /// A backend unwraps a ciphertext blob into raw key bytes. The async surface
 /// mirrors [`crate::interface::AsyncKeyProvider`]; implement this trait to
@@ -39,11 +48,39 @@ pub trait CloudKmsBackend: Send + Sync {
     fn vendor(&self) -> CloudKmsVendor;
 
     /// Unwrap `ciphertext` into raw key bytes.
-    async fn decrypt(&self, ciphertext: &str) -> ConfigResult<Vec<u8>>;
+    async fn decrypt(&self, ciphertext: &str) -> ConfigResult<ZeroizingBytes>;
+}
+
+/// True when the endpoint URL targets a loopback host (`localhost`,
+/// `::1`, or an exact `127.0.0.0/8` dotted quad) — the only hosts plain
+/// HTTP is permitted on when `allow_http` is set. Shared by the AWS/GCP
+/// providers.
+///
+/// The IPv4 check requires exactly four octets all parsing as `u8` with
+/// the first octet `127`: a lookalike host such as `127.0.0.1.evil.com`
+/// (whose second label happens to parse as a number) must not pass.
+pub(crate) fn endpoint_is_loopback(endpoint: &str) -> bool {
+    let host_port = endpoint
+        .strip_prefix("https://")
+        .or_else(|| endpoint.strip_prefix("http://"))
+        .unwrap_or(endpoint);
+    let host_port = host_port.split('/').next().unwrap_or(host_port);
+    let host = host_port
+        .rsplit_once(':')
+        .map(|(host, _)| host)
+        .unwrap_or(host_port);
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if host == "localhost" || host == "::1" {
+        return true;
+    }
+    let octets: Vec<&str> = host.split('.').collect();
+    octets.len() == 4
+        && octets[0] == "127"
+        && octets[1..].iter().all(|octet| octet.parse::<u8>().is_ok())
 }
 
 /// Returns `true` for HTTP statuses worth retrying (429/502/503/504).
-fn is_retryable_status(status: u16) -> bool {
+pub(crate) fn is_retryable_status(status: u16) -> bool {
     status == 429 || status == 502 || status == 503 || status == 504
 }
 
@@ -169,7 +206,7 @@ impl CloudKmsBackend for VaultTransitKeyProvider {
         CloudKmsVendor::Vault
     }
 
-    async fn decrypt(&self, ciphertext: &str) -> ConfigResult<Vec<u8>> {
+    async fn decrypt(&self, ciphertext: &str) -> ConfigResult<ZeroizingBytes> {
         self.validate_addr()?;
         let token = self.get_token()?;
 
@@ -222,6 +259,7 @@ impl CloudKmsBackend for VaultTransitKeyProvider {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD
             .decode(plaintext_b64)
+            .map(ZeroizingBytes::new)
             .map_err(|e| ConfigError::KeyError {
                 message: format!("Vault transit plaintext is not valid base64: {e}"),
             })
@@ -240,7 +278,7 @@ impl crate::interface::AsyncKeyProvider for VaultTransitKeyProvider {
                 ),
             });
         }
-        Ok(ZeroizingBytes::new(bytes[..32].to_vec()))
+        Ok(ZeroizingBytes::new(bytes.as_slice()[..32].to_vec()))
     }
 
     fn provider_type(&self) -> &'static str {
@@ -479,9 +517,38 @@ mod tests {
         );
     }
 
+    /// The loopback gate must resist lookalike hosts: a name whose second
+    /// label parses as a number (`127.0.0.1.evil.com`) is a domain, not a
+    /// loopback address.
     #[test]
-    fn aws_and_gcp_are_documented_extension_points() {
-        // Marker port check: vendors enumerate; only Vault is implemented.
+    fn endpoint_loopback_gate_resists_lookalike_hosts() {
+        for loopback in [
+            "http://127.0.0.1:9",
+            "http://127.255.1.2:9",
+            "http://localhost:9",
+            "http://[::1]:9",
+        ] {
+            assert!(
+                endpoint_is_loopback(loopback),
+                "{loopback} must pass the loopback gate"
+            );
+        }
+        for remote in [
+            "http://127.0.0.1.evil.com:9",
+            "http://127.1:9",
+            "http://1271.2.3.4:9",
+            "http://10.0.0.1:9",
+            "https://kms.us-east-1.amazonaws.com",
+        ] {
+            assert!(
+                !endpoint_is_loopback(remote),
+                "{remote} must fail the loopback gate"
+            );
+        }
+    }
+
+    #[test]
+    fn all_three_vendors_enumerate() {
         let vendors = [
             CloudKmsVendor::Vault,
             CloudKmsVendor::Aws,
@@ -489,5 +556,6 @@ mod tests {
         ];
         assert_eq!(vendors.len(), 3);
         assert_ne!(vendors[0], CloudKmsVendor::Aws);
+        assert_ne!(vendors[1], CloudKmsVendor::Gcp);
     }
 }

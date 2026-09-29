@@ -188,12 +188,12 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Run benchmarks
         run: |
-          cargo bench --features dev --benches -- --save-baseline current
+          cargo bench --features dev,etcd-watch,change-stream --benches -- --save-baseline current
       - name: Compare with main branch baseline
         run: |
           git fetch origin main --quiet 2>/dev/null || true
           if git rev-parse --verify origin/main &>/dev/null; then
-            cargo bench --features dev --benches -- --baseline main 2>&1 | tee bench_compare.txt || true
+            cargo bench --features dev,etcd-watch,change-stream --benches -- --baseline main 2>&1 | tee bench_compare.txt || true
             if grep -q "Regression" bench_compare.txt; then
               echo "WARNING: Performance regression detected!"
               grep -A 2 "Regression" bench_compare.txt || true

@@ -40,9 +40,21 @@ pub mod keyring;
 pub mod providers_cloud;
 
 #[cfg(feature = "cloud-kms")]
+pub mod providers_aws_kms;
+
+#[cfg(feature = "cloud-kms")]
+pub mod providers_gcp_kms;
+
+#[cfg(feature = "cloud-kms")]
 pub use providers_cloud::{
     CloudKmsBackend, CloudKmsVendor, VaultTransitKeyProvider, VaultTransitKeyProviderBuilder,
 };
+
+#[cfg(feature = "cloud-kms")]
+pub use providers_aws_kms::{AwsKmsKeyProvider, AwsKmsKeyProviderBuilder};
+
+#[cfg(feature = "cloud-kms")]
+pub use providers_gcp_kms::{GcpKmsKeyProvider, GcpKmsKeyProviderBuilder};
 
 #[cfg(feature = "keyring")]
 pub use keyring::{

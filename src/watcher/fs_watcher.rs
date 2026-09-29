@@ -1285,10 +1285,11 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(600));
         std::fs::write(&file, "a = 2\n").unwrap();
-        let event = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv())
-            .await
-            .expect("relative-path watch must deliver the change event (R3-H1)");
+        let event = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv()).await;
+        // Clean up before asserting: a failed expectation must not leak the
+        // cwd-relative temp file into the repository root.
         let _ = std::fs::remove_file(&file);
+        let event = event.expect("relative-path watch must deliver the change event (R3-H1)");
         // 事件以绝对化路径上报(过滤器亦为绝对路径),与 MultiFsWatcher 一致。
         assert_eq!(event, Some(std::path::absolute(&file).unwrap()));
     }

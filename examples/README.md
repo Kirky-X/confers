@@ -35,6 +35,7 @@ cargo run --bin <示例名>
 | `validation` | 基于 garde 的字段级配置校验：内置规则、自定义逻辑与错误处理 | `cargo run -p confers-examples --bin validation` |
 | `cli_integration` | `#[derive(ConfigClap)]` 生成 CLI 参数并与配置文件合并（试试追加 `-- --help`） | `cargo run -p confers-examples --bin cli_integration` |
 | `json_schema` | `#[derive(ConfigSchema)]` 生成 JSON Schema 与 TypeScript 类型定义 | `cargo run -p confers-examples --bin json_schema` |
+| `schema_to_rust` | 反向脚手架：JSON Schema 草稿生成 Rust struct 起点（`schema --from-schema` 的库形态） | `cargo run -p confers-examples --bin schema_to_rust` |
 
 ### 热重载与渐进发布
 

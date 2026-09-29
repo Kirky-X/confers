@@ -263,6 +263,7 @@ Criterion 会在 `target/criterion/` 下生成含分布图与回归检测的 HTM
 | `dynamic_field_bench` | `benches/dynamic_field_bench.rs` | 动态字段读写 |
 | `hot_path_bench` | `benches/hot_path_bench.rs` | 热路径（零拷贝读取） |
 | `watch_callback_bench` | `benches/watch_callback_bench.rs` | 变更流（ChangeStream）往返与扇出 |
+| `etcd_watch_bench` | `benches/etcd_watch_bench.rs` | etcd watch 事件分发（revision 追踪 + 回调分发） |
 | `concurrent_rw_bench` | `benches/concurrent_rw_bench.rs` | 并发读写模式 |
 | `concurrent_access_bench` | `benches/concurrent_access_bench.rs` | 并发访问模式 |
 
@@ -288,8 +289,9 @@ perf report
 > `--warm-up-time 1 --measurement-time 2 --sample-size 20`。
 > 数值为 `[lower bound, estimate, upper bound]` 区间的 estimate（中位数口径）。
 >
-> **CI 门禁说明**：阈值（如 P99 +15% 阻断）待基线在 CI 环境稳定后启用；当前以
-> `cargo bench --save-baseline rc.4` 归档，供后续版本对比。
+> **CI 门禁说明**：CI benchmarks job 随每次运行重测并对比 main 基线，但当前为
+> **信息级门禁**——回归只输出 WARNING 不阻断合并（阈值如 P99 +15% 阻断待基线
+> 在 CI 环境稳定后启用）；首次基线以 `cargo bench --save-baseline rc.4` 归档。
 
 ### 加载路径（load_bench，default features）
 
@@ -324,6 +326,24 @@ perf report
 
 结论：单订阅者一次变更通告约 2 µs，8 订阅者扇出 < 4 µs，通知路径不构成
 热重载瓶颈（对比一次典型 load 的 ~0.7 µs 量级一致）。
+
+### etcd watch 分发路径（etcd_watch_bench，etcd-watch feature）
+
+`EtcdWatcher::run` 的每事件热路径：mock 传输满速交付一批事件，空回调 +
+`fetch_max` revision 追踪（不含真实 gRPC 传输与用户回调；真实路径另有
+protobuf 解码与每事件一次的 key/value 借用→lossy 转换分配，mock 直接构造
+`EtcdWatchEvent`，该部分不在基线口径内）。事件批次经 `Arc<Vec<_>>` 跨迭代
+共享，计时区间不含批次构建成本；每事件交付时的 String clone 与
+watcher/spawn 固定开销计入其中（整批 1000 事件分摊）：
+
+| 用例 | 耗时（estimate） |
+| --- | --- |
+| dispatch_1000_events_empty_callback（整批） | [83.8 µs, 84.8 µs, 86.0 µs] |
+
+结论：单位事件分发成本约 0.085 µs（首批口径 0.47 µs 系 setup clone 主导，
+已改 Arc 共享分离），对 watch 轮询间隔（秒级）可忽略；该路径为转正冻结
+契约的一部分，基线供后续版本回归对比。CI benchmarks job 以
+`--features dev,etcd-watch,change-stream` 运行，该基线随 CI 重测。
 
 ### 零拷贝热路径（hot_path_bench）
 

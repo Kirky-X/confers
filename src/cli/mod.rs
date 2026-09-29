@@ -301,6 +301,12 @@ enum Commands {
         /// instead of the derived type (schema-first reverse engineering).
         #[arg(long)]
         from_instance: bool,
+        /// Generate Rust struct scaffolding from a JSON Schema draft file
+        /// (2020-12 flavored; non-required fields become Option, scalar
+        /// defaults become generated default fns, string enums become Rust
+        /// enums; unsupported constructs fail loudly).
+        #[arg(long, value_name = "FILE", conflicts_with = "from_instance")]
+        from_schema: Option<PathBuf>,
     },
 
     /// Get a specific configuration value by key path (dot-separated)
@@ -445,8 +451,13 @@ where
         Commands::Snapshot { action } => {
             cmd_snapshot(action)?;
         }
-        Commands::Schema { from_instance } => {
-            if from_instance {
+        Commands::Schema {
+            from_instance,
+            from_schema,
+        } => {
+            if let Some(schema_path) = from_schema {
+                cmd_schema_to_rust(&schema_path, allow_absolute_paths)?;
+            } else if from_instance {
                 cmd_schema_from_instance(&config_paths, allow_absolute_paths)?;
             } else {
                 cmd_schema::<T>()?;
@@ -1459,6 +1470,26 @@ fn cmd_schema<T: JsonSchema>() -> Result<()> {
     Ok(())
 }
 
+/// `schema --from-schema <FILE>`: generate Rust struct scaffolding from a
+/// JSON Schema draft file. Mapping rules live on
+/// [`crate::schema::RustScaffoldGenerator`].
+fn cmd_schema_to_rust(schema_path: &std::path::Path, allow_absolute_paths: bool) -> Result<()> {
+    if !allow_absolute_paths && schema_path.is_absolute() {
+        anyhow::bail!(
+            "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
+            schema_path.display()
+        );
+    }
+    let content = std::fs::read_to_string(schema_path)
+        .with_context(|| format!("Failed to read schema: {}", schema_path.display()))?;
+    let schema: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("Failed to parse schema: {}", schema_path.display()))?;
+    let code = crate::schema::RustScaffoldGenerator::generate(&schema)?;
+    // The generated artifact already ends with exactly one newline.
+    print!("{code}");
+    Ok(())
+}
+
 /// `schema --from-instance`: reverse-engineer a JSON Schema draft from the
 /// loaded configuration instance.
 ///
@@ -2224,7 +2255,7 @@ fn collect_paths(
 }
 
 /// Stable knowledge-pack schema marker (bump on contract changes).
-const AGENT_KNOWLEDGE_VERSION: u32 = 1;
+const AGENT_KNOWLEDGE_VERSION: u32 = 2;
 
 /// Build the agent knowledge pack as a JSON value.
 ///
@@ -2241,7 +2272,7 @@ pub fn agent_knowledge_json() -> serde_json::Value {
             {"name": "export", "purpose": "print merged config (sanitized by default)", "key_args": ["--format json|toml|yaml", "--output <file>", "--with-provenance", "--raw"]},
             {"name": "diff", "purpose": "diff two config files", "key_args": ["--base <file>", "--overlay <file>", "--format text|json", "--sanitize=true|false"]},
             {"name": "snapshot", "purpose": "manage snapshots", "key_args": ["list|diff|prune"]},
-            {"name": "schema", "purpose": "JSON Schema for the config type", "key_args": ["--from-instance (reverse-engineer a draft from the loaded instance)"]},
+            {"name": "schema", "purpose": "JSON Schema for the config type, or Rust scaffolding from a draft", "key_args": ["--from-instance (reverse-engineer a draft from the loaded instance)", "--from-schema <file> (generate Rust struct scaffolding from a JSON Schema draft)"]},
             {"name": "get", "purpose": "single key lookup, single-line JSON", "key_args": ["<dot.path>", "--fields a.b,c"]},
             {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
             {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
@@ -2255,7 +2286,7 @@ pub fn agent_knowledge_json() -> serde_json::Value {
         "machine_readable_contract": {
             "doctor": "single-line JSON: {status, exit_code, checks:[{name, severity, message}]}; severity ok|warning|error",
             "get": "single-line JSON",
-            "schema": "pretty-printed JSON Schema (draft 2020-12 flavor for --from-instance)",
+            "schema": "pretty-printed JSON Schema (draft 2020-12 flavor for --from-instance); --from-schema prints Rust source scaffolding",
         },
         "recipes": [
             {"task": "load config with env overlay", "command": "confers --config app.toml --env-file .env inspect --format json"},
@@ -2263,6 +2294,7 @@ pub fn agent_knowledge_json() -> serde_json::Value {
             {"task": "find where a value comes from", "command": "confers --config app.toml inspect --key database.host"},
             {"task": "get one value", "command": "confers --config app.toml get database.pool.size"},
             {"task": "schema-first reverse engineering", "command": "confers --config app.toml schema --from-instance > schema.draft.json"},
+            {"task": "schema-first adoption", "command": "confers schema --from-schema schema.draft.json > config.rs"},
             {"task": "export sanitized config", "command": "confers --config app.toml export --format json"},
         ],
     })
@@ -4772,7 +4804,7 @@ mod docs_agent_tests {
     #[test]
     fn knowledge_pack_json_contains_contract_and_recipes() {
         let pack = agent_knowledge_json();
-        assert_eq!(pack["knowledge_version"], 1);
+        assert_eq!(pack["knowledge_version"], 2);
         let subs = pack["subcommands"].as_array().expect("subcommands");
         let names: Vec<&str> = subs.iter().filter_map(|s| s["name"].as_str()).collect();
         for expected in [

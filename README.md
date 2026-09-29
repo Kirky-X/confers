@@ -190,7 +190,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>内置 JWT、CORS、SSRF、TLS 校验器与注册表</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
 <tr><td><code>keyring</code></td><td align="center">❌</td><td>密钥存储后端（文件、MasterKey、secret-tool，含 <code>encryption</code>）</td></tr>
-<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方，含 Vault Transit（含 <code>encryption</code>，依赖 <code>remote</code>）</td></tr>
+<tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方：Vault Transit / AWS KMS（SigV4）/ GCP KMS（metadata token）（含 <code>encryption</code>，依赖 <code>remote</code>）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>远程来源</b></td></tr>
 <tr><td><code>remote</code></td><td align="center">❌</td><td>HTTP 轮询来源，含 SSRF 防护与熔断器</td></tr>
 <tr><td><code>etcd</code></td><td align="center">❌</td><td>etcd v3 集成（含 <code>remote</code>）</td></tr>
@@ -203,6 +203,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>nats-bus</code></td><td align="center">❌</td><td>NATS 总线后端（含 <code>config-bus</code>）</td></tr>
 <tr><td><code>redis-bus</code></td><td align="center">❌</td><td>Redis Pub/Sub 总线后端（含 <code>config-bus</code>）</td></tr>
 <tr><td><code>change-stream</code></td><td align="center">❌</td><td>统一变更流端口，复用 config-bus 传输（含 <code>watch</code>）</td></tr>
+<tr><td><code>canary</code></td><td align="center">❌</td><td>多实例金丝雀发布编排：消费变更流分批推进/回滚 + 服务网格权重适配（含 <code>change-stream</code>、<code>progressive-reload</code>）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>组织与扩展</b></td></tr>
 <tr><td><code>modules</code></td><td align="center">❌</td><td>模块化配置分组与注册表</td></tr>
 <tr><td><code>context-aware</code></td><td align="center">❌</td><td>上下文感知（租户维度）配置</td></tr>
@@ -254,7 +255,7 @@ cd examples && ./verify_examples.sh
 cargo install confers --features cli
 ```
 
-提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。全部命令的参数、输出与用法示例见 [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
+提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（正向生成 / `--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。全部命令的参数、输出与用法示例见 [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
 
 ---
 

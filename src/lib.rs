@@ -132,6 +132,9 @@ pub mod bus;
 #[cfg(feature = "change-stream")]
 pub mod stream;
 
+#[cfg(feature = "canary")]
+pub mod canary;
+
 #[cfg(feature = "cli")]
 pub mod cli;
 
@@ -262,6 +265,12 @@ pub use bus::{BusBuilder, BusEventLimiter, ConfigBus, ConfigChangeEvent, InMemor
 
 #[cfg(feature = "change-stream")]
 pub use stream::{ChangeEvent, ChangeSource, ChangeStream, InMemoryChangeStream};
+
+#[cfg(feature = "canary")]
+pub use canary::{
+    BASELINE_GROUP, CANARY_GROUP, CanaryOrchestrator, MeshWeightPublisher, ORCHESTRATOR_KEY,
+    RolloutHealthCheck, RolloutOutcome, RolloutPlan,
+};
 
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};

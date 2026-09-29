@@ -45,6 +45,7 @@ ALL_EXAMPLES=(
     "validation"
     "cli_integration"
     "json_schema"
+    "schema_to_rust"
     "interpolation"
     "audit"
     "context_aware"

@@ -17,12 +17,24 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
+use etcd_client::EventType;
+
 /// Upper bound for establishing one watch stream (lock + gRPC creation).
 ///
 /// Matches the KV-operation timeout default in the polling etcd source:
 /// transport-level hangs must degrade into the reconnect loop, not wedge
 /// the watch future.
 const WATCH_ESTABLISH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Log a stream-level watch failure. Reconnects are routine; staying silent
+/// about them would hide a stalled watch behind a healthy-looking metrics
+/// counter (failures must be observable).
+fn warn_stream_error(reason: &str) {
+    #[cfg(feature = "tracing")]
+    tracing::warn!(target: "confers::remote::etcd_watch", "{reason}");
+    #[cfg(not(feature = "tracing"))]
+    let _ = reason;
+}
 
 /// One normalized etcd watch event.
 ///
@@ -92,6 +104,12 @@ impl EtcdWatchRetry {
 }
 
 /// Type-erased watch callback invoked for every committed change.
+///
+/// The callback runs **synchronously and inline** inside the watch loop: a
+/// blocking or long-running callback stalls event polling and reconnect
+/// backoff for as long as it runs (the whole loop is one future), and there
+/// is no error signal when it falls behind. Offload slow work yourself
+/// (`tokio::spawn`, `spawn_blocking`) and keep the callback itself cheap.
 pub type EtcdWatchCallback = Arc<dyn Fn(&EtcdWatchEvent) + Send + Sync>;
 
 /// Watch loop consuming a [`WatchEventSource`].
@@ -130,8 +148,22 @@ impl EtcdWatcher {
     /// Run the watch loop forever, invoking `on_event` for each change.
     ///
     /// Transport failures reconnect with bounded exponential backoff; the
-    /// callback never observes transport internals. This future only ends if
-    /// the runtime shuts it down.
+    /// callback never observes transport internals. `on_event` is called
+    /// synchronously and inline — see [`EtcdWatchCallback`] for the
+    /// non-blocking obligation this places on consumers. This future only
+    /// ends if the runtime shuts it down.
+    ///
+    /// Failure and resync semantics a consumer can rely on:
+    ///
+    /// - a transport/stream error breaks the current connection and the loop
+    ///   reconnects after backoff (reason is counted in metrics and logged);
+    ///   events between the error and the reconnect resume point are
+    ///   at-most-once — a reconnect can skip past the undelivered tail of a
+    ///   batch (see [`EtcdGrpcWatchSource`]), so consumers that need gap
+    ///   detection must reconcile against `last_revision` themselves
+    /// - undecodable values are delivered lossily (invalid UTF-8 becomes
+    ///   `U+FFFD`) instead of erroring, so one poison event cannot wedge the
+    ///   loop into a reconnect storm; the revision still advances
     pub async fn run(&self, on_event: EtcdWatchCallback) {
         let mut attempt: u32 = 0;
         loop {
@@ -147,21 +179,23 @@ impl EtcdWatcher {
                                 }
                                 on_event(&event);
                             }
-                            Err(_err) => {
+                            Err(reason) => {
                                 crate::metrics::record_counter(
                                     "confers_etcd_watch_errors_total",
                                     &[("reason", "stream")],
                                 );
+                                warn_stream_error(&reason);
                                 break;
                             }
                         }
                     }
                 }
-                Err(_) => {
+                Err(err) => {
                     crate::metrics::record_counter(
                         "confers_etcd_watch_errors_total",
                         &[("reason", "establish")],
                     );
+                    warn_stream_error(&err.to_string());
                 }
             }
             attempt = attempt.saturating_add(1);
@@ -206,7 +240,7 @@ impl WatchEventSource for EtcdGrpcWatchSource {
     ) -> crate::error::ConfigResult<
         std::pin::Pin<Box<dyn futures_util::Stream<Item = WatchItem> + Send>>,
     > {
-        use etcd_client::{EventType, WatchOptions};
+        use etcd_client::WatchOptions;
         use futures_util::StreamExt;
 
         let start = self.last_revision.load(Ordering::Acquire);
@@ -243,49 +277,43 @@ impl WatchEventSource for EtcdGrpcWatchSource {
         let last_revision = Arc::clone(&self.last_revision);
         // Each gRPC response becomes a burst of normalized items; a
         // transport error becomes a single Err item (reconnect trigger).
+        //
+        // Resume-point semantics: `fetch_max` runs while the response batch
+        // is mapped, before its items are yielded downstream, so a batch is
+        // considered consumed once mapped. If the stream dies after mapping
+        // but before delivery completes, the reconnect resumes past the
+        // undelivered tail of that batch (at-most-once gap, not replay).
+        // In-order gRPC delivery makes the window hard to hit; it is
+        // documented here so the frozen contract states it explicitly.
+        //
+        // Poison-event semantics: keys and values are decoded lossily
+        // (invalid UTF-8 → `U+FFFD`) via [`normalize_kv_event`]. Erroring on
+        // one undecodable event instead would leave its revision unconsumed,
+        // the reconnect would resume from `last + 1` and re-deliver the same
+        // event — an endless reconnect storm with the watch effectively
+        // stalled. Lossy delivery keeps the revision advancing and surfaces
+        // the corruption in the delivered key/value itself.
         let mapped = watch_stream
             .then(move |resp| {
                 let last_revision = Arc::clone(&last_revision);
                 async move {
                     match resp {
                         Ok(response) => {
-                            let mut items: Vec<WatchItem> = Vec::new();
-                            for event in response.events() {
-                                let Some(kv) = event.kv() else {
-                                    continue;
-                                };
-                                let (Ok(key), rev) = (kv.key_str(), kv.mod_revision()) else {
-                                    continue;
-                                };
-                                let item = match event.event_type() {
-                                    EventType::Put => kv
-                                        .value_str()
-                                        .ok()
-                                        .map(|value| {
-                                            last_revision.fetch_max(rev, Ordering::AcqRel);
-                                            Ok(EtcdWatchEvent {
-                                                key: key.to_string(),
-                                                value: Some(value.to_string()),
-                                                mod_revision: rev,
-                                            })
-                                        })
-                                        .unwrap_or_else(|| {
-                                            Err(format!(
-                                                "etcd watch value for '{key}' is not UTF-8"
-                                            ))
-                                        }),
-                                    EventType::Delete => {
-                                        last_revision.fetch_max(rev, Ordering::AcqRel);
-                                        Ok(EtcdWatchEvent {
-                                            key: key.to_string(),
-                                            value: None,
-                                            mod_revision: rev,
-                                        })
-                                    }
-                                };
-                                items.push(item);
-                            }
-                            items
+                            // Flatten the response into borrowed tuples first
+                            // so the revision/delivery contract lives in
+                            // `map_response_batch`, testable without
+                            // `etcd-client` response types — and without
+                            // paying a per-event copy for the testability.
+                            let batch = response.events().iter().filter_map(|event| {
+                                let kv = event.kv()?;
+                                Some((
+                                    event.event_type(),
+                                    kv.key(),
+                                    Some(kv.value()),
+                                    kv.mod_revision(),
+                                ))
+                            });
+                            map_response_batch(batch, &last_revision)
                         }
                         Err(e) => vec![Err(format!("etcd watch transport error: {e}"))],
                     }
@@ -293,6 +321,46 @@ impl WatchEventSource for EtcdGrpcWatchSource {
             })
             .flat_map(futures_util::stream::iter);
         Ok(Box::pin(mapped))
+    }
+}
+
+/// Flatten the batching logic of a watch response: map every KV pair to a
+/// deliverable event and consume its revision.
+///
+/// Revision consumption is **unconditional** — mapping counts as consumed —
+/// so a poison (undecodable) event can never survive as an unconsumed
+/// revision and get re-delivered on every reconnect. This is the
+/// at-most-once contract's executable form; [`normalize_kv_event`] holds the
+/// lossy-decoding half.
+fn map_response_batch<'a>(
+    batch: impl IntoIterator<Item = (EventType, &'a [u8], Option<&'a [u8]>, i64)>,
+    last_revision: &AtomicI64,
+) -> Vec<WatchItem> {
+    batch
+        .into_iter()
+        .map(|(event_type, key, value, rev)| {
+            let event = match event_type {
+                EventType::Put => normalize_kv_event(key, value, rev),
+                EventType::Delete => normalize_kv_event(key, None, rev),
+            };
+            last_revision.fetch_max(rev, Ordering::AcqRel);
+            Ok(event)
+        })
+        .collect()
+}
+
+/// Normalize one etcd KV pair into a deliverable watch event.
+///
+/// Keys and values are decoded lossily (invalid UTF-8 → `U+FFFD`): etcd
+/// stores arbitrary bytes, and erroring on an undecodable event would leave
+/// its revision unconsumed — the reconnect resumes from `last + 1` and
+/// re-delivers the same poison event forever. Lossy delivery keeps the
+/// revision advancing and surfaces the corruption in the event itself.
+fn normalize_kv_event(key: &[u8], value: Option<&[u8]>, mod_revision: i64) -> EtcdWatchEvent {
+    EtcdWatchEvent {
+        key: String::from_utf8_lossy(key).into_owned(),
+        value: value.map(|v| String::from_utf8_lossy(v).into_owned()),
+        mod_revision,
     }
 }
 
@@ -540,6 +608,98 @@ mod tests {
             source.connections.load(Ordering::SeqCst),
             2,
             "establish failure then success"
+        );
+    }
+
+    /// Frozen poison-event contract: undecodable UTF-8 in keys and values is
+    /// delivered lossily (`U+FFFD`) instead of erroring, so the revision is
+    /// consumed and a poison event cannot wedge the loop into an endless
+    /// reconnect storm. Pinned here because the gRPC mapper cannot be driven
+    /// without a real `etcd-client` stream (its response types are not
+    /// publicly constructible at 0.20); the mock layer covers reconnects,
+    /// this test pins the byte-level decoding contract.
+    #[test]
+    fn poison_bytes_are_delivered_lossily() {
+        let bad_key: Vec<u8> = b"cfg/\xff\xfekey".to_vec();
+        let bad_value: Vec<u8> = vec![0x68, 0x69, 0xff, 0x0a];
+
+        let put_event = normalize_kv_event(&bad_key, Some(&bad_value), 42);
+        assert_eq!(put_event.mod_revision, 42);
+        assert!(
+            put_event.key.contains('\u{FFFD}'),
+            "poison key bytes must surface as U+FFFD, got {:?}",
+            put_event.key
+        );
+        assert!(
+            put_event.key.starts_with("cfg/"),
+            "readable key prefix must survive lossy decoding: {:?}",
+            put_event.key
+        );
+        assert!(
+            put_event
+                .value
+                .as_deref()
+                .is_some_and(|v| v.contains('\u{FFFD}')),
+            "poison value bytes must surface as U+FFFD, got {:?}",
+            put_event.value
+        );
+        assert!(
+            put_event
+                .value
+                .as_deref()
+                .is_some_and(|v| v.starts_with("hi")),
+            "readable value prefix must survive lossy decoding: {:?}",
+            put_event.value
+        );
+
+        let delete_event = normalize_kv_event(&bad_key, None, 43);
+        assert_eq!(
+            delete_event.value, None,
+            "delete stays a delete (value=None)"
+        );
+        assert_eq!(delete_event.mod_revision, 43);
+
+        let good = normalize_kv_event(b"cfg/plain", Some(b"v"), 1);
+        assert_eq!(good.key, "cfg/plain");
+        assert_eq!(
+            good.value.as_deref(),
+            Some("v"),
+            "valid UTF-8 passes through"
+        );
+
+        // Batch-level contract: revision consumption is unconditional and
+        // rides on the same code path as lossy delivery — a refactor moving
+        // `fetch_max` back into a success-only branch fails here, which a
+        // byte-decoding test alone cannot catch (the mock/compat layer never
+        // reaches the gRPC mapper).
+        let tracker = AtomicI64::new(0);
+        let items = map_response_batch(
+            [
+                (
+                    EventType::Put,
+                    bad_key.as_slice(),
+                    Some(bad_value.as_slice()),
+                    5,
+                ),
+                (EventType::Delete, bad_key.as_slice(), None, 6),
+                (
+                    EventType::Put,
+                    b"cfg/plain".as_slice(),
+                    Some(b"v".as_slice()),
+                    3,
+                ),
+            ],
+            &tracker,
+        );
+        assert_eq!(items.len(), 3, "poison events deliver, they do not error");
+        assert!(
+            items.iter().all(|item| item.is_ok()),
+            "lossy contract: no Err items, got {items:?}"
+        );
+        assert_eq!(
+            tracker.load(Ordering::SeqCst),
+            6,
+            "revision advances for every mapped event — poison included, out-of-order included"
         );
     }
 }

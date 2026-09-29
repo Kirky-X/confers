@@ -730,6 +730,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 14 | `validation` | 无 | 退出码 0；合法通过+非法被拒两分支输出 |
 | 15 | `cli_integration` | 本地文件 | 退出码 0；ConfigClap 参数解析演示输出 |
 | 16 | `json_schema` | 无 | 退出码 0；JSON Schema 与 TS 类型生成输出 |
+| 16b | `schema_to_rust` | 无 | 退出码 0；JSON Schema 草稿 → Rust struct 脚手架（基础映射/$defs/$ref/fail-loud 三段）输出 |
 | 17 | `interpolation` | 本地文件/无 | 退出码 0；`${VAR}` 与 `${VAR:default}` 插值输出 |
 | 18 | `audit` | 本地文件 | 退出码 0；审计事件写入临时目录输出 |
 | 19 | `context_aware` | 无 | 退出码 0；上下文切换取值输出 |

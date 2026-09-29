@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
-//! TypeScript schema generation — public facade.
+//! Schema generation — public facade.
 //!
-//! Implementation lives in `crate::impl_::schema`.
+//! TypeScript types and Rust struct scaffolding both live in
+//! `crate::impl_::schema`.
 
-pub use crate::impl_::schema::TypeScriptGenerator;
+pub use crate::impl_::schema::{RustScaffoldGenerator, TypeScriptGenerator};

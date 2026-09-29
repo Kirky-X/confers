@@ -1037,3 +1037,1754 @@ mod tests {
         assert!(ts.contains("counts: number[]"));
     }
 }
+
+#[cfg(test)]
+mod rust_scaffold_tests {
+    use super::RustScaffoldGenerator;
+    use serde_json::json;
+
+    #[test]
+    fn scalar_types_map_to_rust_primitives() {
+        let schema = json!({
+            "title": "Scalar",
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "port": {"type": "integer"},
+                "ratio": {"type": "number"},
+                "debug": {"type": "boolean"}
+            },
+            "required": ["name", "port", "ratio", "debug"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("pub struct Scalar"),
+            "struct decl missing: {code}"
+        );
+        assert!(code.contains("pub name: String"));
+        assert!(code.contains("pub port: i64"));
+        assert!(code.contains("pub ratio: f64"));
+        assert!(code.contains("pub debug: bool"));
+    }
+
+    #[test]
+    fn non_required_fields_become_option_with_serde_default() {
+        let schema = json!({
+            "title": "Opt",
+            "type": "object",
+            "properties": {
+                "nickname": {"type": "string"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub nickname: Option<String>"), "{code}");
+        assert!(code.contains("#[serde(default)]"));
+    }
+
+    #[test]
+    fn scalar_defaults_generate_default_fns() {
+        let schema = json!({
+            "title": "Defaults",
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "localhost"},
+                "retries": {"type": "integer", "default": 3},
+                "ratio": {"type": "number", "default": 0.5},
+                "verbose": {"type": "boolean", "default": true}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("#[serde(default = \"_default_host\")]"),
+            "{code}"
+        );
+        assert!(
+            code.contains("pub host: String"),
+            "defaulted field must not be Option"
+        );
+        assert!(
+            code.contains("fn _default_host() -> String { \"localhost\".to_string() }"),
+            "{code}"
+        );
+        assert!(
+            code.contains("fn _default_retries() -> i64 { 3 }"),
+            "{code}"
+        );
+        assert!(
+            code.contains("fn _default_ratio() -> f64 { 0.5 }"),
+            "{code}"
+        );
+        assert!(
+            code.contains("fn _default_verbose() -> bool { true }"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn complex_defaults_surface_as_todo_comments() {
+        let schema = json!({
+            "title": "Complex",
+            "type": "object",
+            "properties": {
+                "tags": {"type": "array", "items": {"type": "string"}, "default": ["a", "b"]}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("TODO"),
+            "complex default must surface a visible marker: {code}"
+        );
+        assert!(
+            code.contains("pub tags: Option<Vec<String>>"),
+            "composite default keeps the schema's optional semantics: {code}"
+        );
+    }
+
+    #[test]
+    fn string_enums_become_rust_enums_with_rename() {
+        let schema = json!({
+            "title": "Service",
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["active", "pending-review"]}
+            },
+            "required": ["status"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub enum ServiceStatus"), "{code}");
+        assert!(
+            code.contains("#[serde(rename = \"pending-review\")]"),
+            "{code}"
+        );
+        assert!(code.contains("PendingReview"), "{code}");
+        assert!(code.contains("pub status: ServiceStatus"), "{code}");
+    }
+
+    #[test]
+    fn non_string_enums_fall_back_to_scalar_with_allowed_values_comment() {
+        let schema = json!({
+            "title": "Levels",
+            "type": "object",
+            "properties": {
+                "level": {"type": "integer", "enum": [1, 2, 3]}
+            },
+            "required": ["level"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub level: i64"), "{code}");
+        assert!(code.contains("Allowed values"), "{code}");
+    }
+
+    #[test]
+    fn arrays_map_to_vec() {
+        let schema = json!({
+            "title": "Lists",
+            "type": "object",
+            "properties": {
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "matrix": {"type": "array"}
+            },
+            "required": ["tags", "matrix"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub tags: Vec<String>"), "{code}");
+        assert!(
+            code.contains("pub matrix: Vec<serde_json::Value>"),
+            "items-less arrays widen to Value: {code}"
+        );
+    }
+
+    #[test]
+    fn inline_nested_objects_are_promoted_to_named_structs() {
+        let schema = json!({
+            "title": "App",
+            "type": "object",
+            "properties": {
+                "database": {
+                    "type": "object",
+                    "properties": {"host": {"type": "string"}},
+                    "required": ["host"]
+                }
+            },
+            "required": ["database"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub struct AppDatabase"), "{code}");
+        assert!(code.contains("pub database: AppDatabase"), "{code}");
+        assert!(code.contains("pub host: String"), "{code}");
+    }
+
+    #[test]
+    fn defs_and_internal_refs_resolve_to_named_types() {
+        let schema = json!({
+            "title": "WithDefs",
+            "type": "object",
+            "properties": {"db": {"$ref": "#/$defs/Database"}},
+            "required": ["db"],
+            "$defs": {
+                "Database": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}},
+                    "required": ["url"]
+                }
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub struct Database"), "{code}");
+        assert!(code.contains("pub db: Database"), "{code}");
+    }
+
+    #[test]
+    fn additional_properties_schema_maps_to_hashmap() {
+        let schema = json!({
+            "title": "Labels",
+            "type": "object",
+            "additionalProperties": {"type": "integer"}
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("HashMap<String, i64>"), "{code}");
+    }
+
+    #[test]
+    fn free_form_objects_map_to_serde_json_value() {
+        let schema = json!({
+            "title": "Free",
+            "type": "object",
+            "properties": {
+                "meta": {"type": "object"}
+            },
+            "required": ["meta"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub meta: serde_json::Value"), "{code}");
+    }
+
+    #[test]
+    fn nullable_type_arrays_become_option() {
+        let schema = json!({
+            "title": "Nullable",
+            "type": "object",
+            "properties": {
+                "alias": {"type": ["string", "null"]}
+            },
+            "required": ["alias"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub alias: Option<String>"), "{code}");
+    }
+
+    #[test]
+    fn non_snake_case_properties_get_rename_and_snake_fields() {
+        let schema = json!({
+            "title": "Naming",
+            "type": "object",
+            "properties": {
+                "userName": {"type": "string"},
+                "type": {"type": "string"},
+                "user-name": {"type": "string"}
+            },
+            "required": ["userName", "type", "user-name"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("#[serde(rename = \"user-name\")]\n    pub user_name: String"),
+            "{code}"
+        );
+        assert!(code.contains("pub r#type: String"), "{code}");
+        assert!(
+            code.contains("#[serde(rename = \"userName\")]\n    pub user_name_2: String"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn descriptions_become_doc_comments() {
+        let schema = json!({
+            "title": "Documented",
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "The service name."}
+            },
+            "required": ["name"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("/// The service name."), "{code}");
+    }
+
+    #[test]
+    fn format_hints_become_doc_comments_but_keep_string() {
+        let schema = json!({
+            "title": "Timed",
+            "type": "object",
+            "properties": {
+                "started_at": {"type": "string", "format": "date-time"}
+            },
+            "required": ["started_at"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("pub started_at: String"),
+            "format hints must not change the type: {code}"
+        );
+        assert!(code.contains("date-time"), "{code}");
+    }
+
+    #[test]
+    fn missing_title_defaults_to_config() {
+        let schema = json!({
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub struct Config"), "{code}");
+    }
+
+    #[test]
+    fn unsupported_combinators_fail_loud() {
+        for combinator in ["oneOf", "anyOf", "allOf"] {
+            let schema = json!({
+                "title": "Bad",
+                "type": "object",
+                "properties": { "weird": { combinator: [{"type": "string"}, {"type": "integer"}] } }
+            });
+            let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+            assert!(
+                err.to_string().contains(combinator),
+                "{combinator} must be named in the error: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn external_refs_fail_loud() {
+        let schema = json!({
+            "title": "Ext",
+            "type": "object",
+            "properties": {"other": {"$ref": "https://example.com/other.json"}},
+            "required": ["other"]
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        assert!(err.to_string().contains("$ref"), "{err}");
+    }
+
+    #[test]
+    fn pattern_properties_fail_loud() {
+        let schema = json!({
+            "title": "Patterned",
+            "type": "object",
+            "properties": {
+                "dyn": {"type": "object", "patternProperties": {"^x-": {"type": "string"}}}
+            },
+            "required": ["dyn"]
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        assert!(err.to_string().contains("patternProperties"), "{err}");
+    }
+
+    #[test]
+    fn boolean_schema_true_maps_to_value() {
+        let schema = json!({
+            "title": "Loose",
+            "type": "object",
+            "properties": {
+                "anything": true
+            },
+            "required": ["anything"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub anything: serde_json::Value"), "{code}");
+    }
+
+    /// Property names are untrusted input: quotes or backslashes inside them
+    /// must stay inside the generated string literal, never leak into the
+    /// token stream as code.
+    #[test]
+    fn rename_literals_are_escaped_against_injection() {
+        let hostile = "x\")] pub q: u8 } fn injected_marker() -> u32 { 42 } struct Zzz { _q: u8, #[serde(rename = \"";
+        let schema = json!({
+            "title": "Hostile",
+            "type": "object",
+            "properties": { hostile: {"type": "string"} },
+            "required": [hostile]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        // The `"` in the hostile name must appear escaped inside the literal.
+        assert!(
+            code.contains("#[serde(rename = \"x\\\")]"),
+            "opening quote must be escaped: {code}"
+        );
+        assert!(
+            code.contains("#[serde(rename = \\\"\")]"),
+            "closing quote must be escaped: {code}"
+        );
+        // The definitive check: the artifact still compiles, so the hostile
+        // text stayed inside the literal instead of entering the token
+        // stream as code.
+        compile_with_rustc(&code);
+    }
+
+    #[test]
+    fn enum_variants_with_quotes_and_backslashes_are_escaped() {
+        let schema = json!({
+            "title": "Quoted",
+            "type": "object",
+            "properties": {
+                "phrase": {"type": "string", "enum": ["say \"hi\"", "back\\slash", "line\nbreak"]}
+            },
+            "required": ["phrase"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("#[serde(rename = \"say \\\"hi\\\"\")]"),
+            "{code}"
+        );
+        assert!(
+            code.contains("#[serde(rename = \"back\\\\slash\")]"),
+            "{code}"
+        );
+        assert!(
+            code.contains("#[serde(rename = \"line\\nbreak\")]"),
+            "newline must become an escape sequence, not a raw line break: {code}"
+        );
+    }
+
+    #[test]
+    fn string_default_with_newline_is_escaped() {
+        let schema = json!({
+            "title": "Multiline",
+            "type": "object",
+            "properties": {
+                "banner": {"type": "string", "default": "a\nb\\c\"d"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        let default_line = code
+            .lines()
+            .find(|l| l.contains("_default_banner"))
+            .expect("default fn");
+        assert_eq!(
+            default_line, "fn _default_banner() -> String { \"a\\nb\\\\c\\\"d\".to_string() }",
+            "literal must stay on one line with escapes: {code}"
+        );
+    }
+
+    #[test]
+    fn normalized_enum_variant_collisions_get_unique_suffixes() {
+        let schema = json!({
+            "title": "Collide",
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["a-b", "a_b", "plain"]}
+            },
+            "required": ["mode"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("    AB,\n"), "{code}");
+        assert!(
+            code.contains("#[serde(rename = \"a-b\")]\n    AB,\n"),
+            "{code}"
+        );
+        assert!(
+            code.contains("#[serde(rename = \"a_b\")]\n    AB2,\n"),
+            "{code}"
+        );
+        assert!(code.contains("    Plain,\n"), "{code}");
+    }
+
+    #[test]
+    fn internal_ref_must_resolve_to_a_defs_entry() {
+        let schema = json!({
+            "title": "Dangling",
+            "type": "object",
+            "properties": {"db": {"$ref": "#/$defs/DoesNotExist"}},
+            "required": ["db"]
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        assert!(
+            err.to_string().contains("DoesNotExist"),
+            "error must name the unresolved target: {err}"
+        );
+    }
+
+    /// Two `$defs` keys can normalize to the same Pascal name; a `$ref` must
+    /// bind to the type actually emitted for that def name (suffix
+    /// included), not to whichever type claimed the un-suffixed name first.
+    #[test]
+    fn defs_name_collision_refs_resolve_to_emitted_names() {
+        let schema = json!({
+            "title": "Routed",
+            "type": "object",
+            "properties": {
+                "primary": {"$ref": "#/$defs/data_base"},
+                "secondary": {"$ref": "#/$defs/DataBase"}
+            },
+            "required": ["primary", "secondary"],
+            "$defs": {
+                "DataBase": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
+                "data_base": {"type": "object", "properties": {"port": {"type": "integer"}}, "required": ["port"]}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        // Reservation order: `DataBase` first, `data_base` gets the suffix.
+        assert!(code.contains("pub primary: DataBase2"), "{code}");
+        assert!(code.contains("pub secondary: DataBase"), "{code}");
+        compile_with_rustc(&code);
+    }
+
+    /// Symbol-only `$defs` keys and root titles cannot become Rust type
+    /// identifiers; they must fail loudly instead of emitting broken code.
+    #[test]
+    fn named_level_symbol_only_names_fail_loud() {
+        let defs_schema = json!({
+            "title": "Ok",
+            "type": "object",
+            "properties": {"db": {"$ref": "#/$defs/###"}},
+            "required": ["db"],
+            "$defs": {"###": {"type": "string"}}
+        });
+        let err = RustScaffoldGenerator::generate(&defs_schema).unwrap_err();
+        let message = err.to_string();
+        assert!(
+            message.contains("$defs."),
+            "error must carry the defs path: {message}"
+        );
+
+        let title_schema = json!({
+            "title": "!!!",
+            "type": "object",
+            "properties": {"a": {"type": "string"}},
+            "required": ["a"]
+        });
+        let err = RustScaffoldGenerator::generate(&title_schema).unwrap_err();
+        assert!(
+            err.to_string().contains("!!!"),
+            "root title must be named in the error: {err}"
+        );
+    }
+
+    /// Error paths interpolate raw schema strings; control characters in
+    /// them must never reach stderr raw (terminal escape injection).
+    #[test]
+    fn error_paths_are_sanitized() {
+        let schema = json!({
+            "title": "Esc",
+            "type": "object",
+            "properties": {
+                "v": {"$ref": "#/$defs/escPwned"}
+            },
+            "required": ["v"],
+            "$defs": {
+                "esc\u{1b}]0;pwned\u{7}Pwned": {"oneOf": [{"type": "string"}]}
+            }
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        let message = err.to_string();
+        assert!(
+            !message.chars().any(|c| c.is_control()),
+            "error message must be free of control characters: {message:?}"
+        );
+        assert!(message.contains("oneOf"), "{message}");
+        assert!(
+            message.contains("\\u{1b}]0;pwned\\u{7}"),
+            "def name must surface as visible escape text: {message}"
+        );
+    }
+
+    /// Non-string enum values surface in a generated "Allowed values"
+    /// comment. JSON serialization already escapes control characters;
+    /// sanitizer + escape must guarantee none survive raw.
+    #[test]
+    fn allowed_values_note_is_sanitized() {
+        let mixed = json!({
+            "title": "Note",
+            "type": "object",
+            "properties": {
+                "level": {"enum": [1, "a\u{1b}b"]}
+            },
+            "required": ["level"]
+        });
+        let code = RustScaffoldGenerator::generate(&mixed).unwrap();
+        let note_line = code
+            .lines()
+            .find(|l| l.contains("Allowed values"))
+            .expect("note");
+        assert!(
+            !note_line.chars().any(|c| c.is_control()),
+            "note must not carry raw control characters: {note_line:?}"
+        );
+        assert!(
+            note_line.contains("a\\u001bb") || note_line.contains("a\\u{1b}b"),
+            "ESC must appear as visible escape text: {note_line}"
+        );
+    }
+
+    #[test]
+    fn named_level_combinators_fail_loud() {
+        let schema = json!({
+            "title": "UnionRoot",
+            "type": "object",
+            "properties": {"v": {"$ref": "#/$defs/Union"}},
+            "required": ["v"],
+            "$defs": {
+                "Union": {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+            }
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("oneOf"), "{message}");
+        assert!(
+            message.contains("$defs.Union"),
+            "error must carry the named path: {message}"
+        );
+    }
+
+    #[test]
+    fn hashmap_import_survives_named_freeform_types() {
+        let schema = json!({
+            "title": "Root",
+            "type": "object",
+            "$defs": {
+                "Labels": {"type": "object", "additionalProperties": {"type": "string"}}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("use std::collections::HashMap;\n"),
+            "HashMap import must survive named-level processing: {code}"
+        );
+        assert!(code.contains("pub struct Labels"), "{code}");
+    }
+
+    #[test]
+    fn string_enum_with_scalar_default_uses_matching_variant() {
+        let schema = json!({
+            "title": "Svc",
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["active", "idle"], "default": "active"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("fn _default_status() -> SvcStatus { SvcStatus::Active }"),
+            "{code}"
+        );
+        assert!(code.contains("pub status: SvcStatus"), "{code}");
+    }
+
+    #[test]
+    fn string_enum_with_unknown_scalar_default_fails_loud() {
+        let schema = json!({
+            "title": "Svc2",
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["active", "idle"], "default": "bogus"}
+            }
+        });
+        let err = RustScaffoldGenerator::generate(&schema).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("bogus"), "{message}");
+        assert!(message.contains("status"), "{message}");
+    }
+
+    #[test]
+    fn composite_default_optional_field_stays_option() {
+        let schema = json!({
+            "title": "Tagged",
+            "type": "object",
+            "properties": {
+                "tags": {"type": "array", "items": {"type": "string"}, "default": []}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("pub tags: Option<Vec<String>>"),
+            "schema-optional composite-default field must deserialize when absent: {code}"
+        );
+        assert!(
+            code.contains("    // TODO: schema declares a composite default"),
+            "manual wiring hint must stay: {code}"
+        );
+        assert!(
+            code.contains("    #[serde(default)]\n    pub tags"),
+            "Option-wrapped field needs #[serde(default)]: {code}"
+        );
+    }
+
+    #[test]
+    fn non_required_nullable_field_is_single_option() {
+        let schema = json!({
+            "title": "NullableOpt",
+            "type": "object",
+            "properties": {
+                "alias": {"type": ["string", "null"]}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("pub alias: Option<String>"),
+            "nullable arrays must not double-wrap Option: {code}"
+        );
+        assert!(!code.contains("Option<Option<"), "{code}");
+    }
+
+    /// Nullable array + scalar default: the field is `Option<T>`, so the
+    /// generated default function must return `Some(...)` — not the inner
+    /// value, which would be a type error in the emitted code.
+    #[test]
+    fn nullable_field_with_scalar_default_wraps_some() {
+        let schema = json!({
+            "title": "NullableDefault",
+            "type": "object",
+            "properties": {
+                "alias": {"type": ["string", "null"], "default": "fallback"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub alias: Option<String>"), "{code}");
+        assert!(
+            code.contains(
+                "fn _default_alias() -> Option<String> { Some(\"fallback\".to_string()) }"
+            ),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn illegal_property_names_fail_loud() {
+        // `_` (and any name normalizing to it — e.g. a single CJK character,
+        // which is a realistic non-ASCII config key) is Rust-reserved: neither
+        // `pub _` nor `pub r##_` compiles, so it must fail loudly. `-` covers
+        // the all-separator branch of the normalizer.
+        for hostile in [
+            "2fa", "", "123abc", "self", "super", "crate", "_", "-", "日",
+        ] {
+            let schema = json!({
+                "title": "Illegal",
+                "type": "object",
+                "properties": { hostile: {"type": "string"} },
+                "required": [hostile]
+            });
+            let err = RustScaffoldGenerator::generate(&schema)
+                .err()
+                .unwrap_or_else(|| panic!("property {hostile:?} must fail loudly, not generate"));
+            assert!(
+                err.to_string().contains(hostile.trim()) || hostile.is_empty(),
+                "error must name the offending property: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn description_control_characters_are_sanitized() {
+        let schema = json!({
+            "title": "Escapy",
+            "type": "object",
+            "properties": {
+                "a": {"type": "string", "description": "clears \u{1b}[2J screen"}
+            },
+            "required": ["a"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        let doc_line = code
+            .lines()
+            .find(|l| l.contains("screen"))
+            .expect("doc line");
+        assert!(
+            !doc_line.chars().any(|c| c.is_control()),
+            "ESC must not reach the output raw: {doc_line:?}"
+        );
+        assert!(
+            doc_line.contains("\\u{1b}"),
+            "control char must surface as visible escape text: {doc_line}"
+        );
+    }
+
+    /// Contract test: whatever the mapping rules emit must be valid Rust.
+    /// Covers the historically broken combinations (enum × scalar default,
+    /// rename escaping, identifier collisions, keyword properties, HashMap
+    /// imports) in one compilable artifact.
+    #[test]
+    fn generated_output_passes_rustc() {
+        let schema = json!({
+            "title": "Smoked",
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "userName": {"type": "string"},
+                "user-name": {"type": "string"},
+                "mode": {"type": "string", "enum": ["active", "idle"], "default": "active"},
+                "banner": {"type": "string", "default": "multi\nline \"quoted\""},
+                "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+                "labels": {"$ref": "#/$defs/Labels"},
+                "status": {"type": "string", "enum": ["up", "down"]}
+            },
+            "required": ["type", "userName", "user-name", "status"],
+            "$defs": {
+                "Labels": {"type": "object", "additionalProperties": {"type": "string"}}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        compile_with_rustc(&code);
+    }
+
+    /// Round trip through the documented forward direction: `schema_for!`
+    /// (schemars, draft 2020-12, `$defs` + `$ref` style) is exactly the kind
+    /// of schema draft `RustScaffoldGenerator` consumes — a consumer can
+    /// generate a schema from an existing type with the `schema` feature and
+    /// scaffold a Rust starting point for another codebase from it.
+    #[test]
+    fn schemars_draft_output_round_trips_to_rust_scaffold() {
+        use schemars::JsonSchema;
+
+        #[derive(JsonSchema)]
+        #[allow(dead_code)]
+        enum DeployMode {
+            Active,
+            Paused,
+        }
+
+        #[derive(JsonSchema)]
+        #[allow(dead_code)]
+        struct DeployScaffold {
+            region: String,
+            replicas: u32,
+            nickname: Option<String>,
+            mode: DeployMode,
+        }
+
+        let schema =
+            serde_json::to_value(schemars::schema_for!(DeployScaffold)).expect("schemars schema");
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+
+        assert!(code.contains("pub struct DeployScaffold"), "{code}");
+        // schemars widens u32 to `integer`; format hints surface as comments.
+        assert!(code.contains("pub replicas: i64"), "{code}");
+        assert!(code.contains("pub region: String"), "{code}");
+        // schemars leaves non-required fields un-required → Option mapping.
+        assert!(code.contains("pub nickname: Option<String>"), "{code}");
+        // Unit-only enums become string enums behind an internal $ref.
+        assert!(code.contains("pub enum DeployMode"), "{code}");
+        assert!(code.contains("pub mode: DeployMode"), "{code}");
+        // The artifact must compile end to end.
+        compile_with_rustc(&code);
+    }
+
+    /// Compile `code` as a standalone lib crate with the same serde build the
+    /// test itself links against. Skips with a notice when no cached serde
+    /// artifacts can be located (e.g. a from-scratch target directory or a
+    /// non-default `CARGO_TARGET_DIR`), so the check only runs where it can.
+    fn compile_with_rustc(code: &str) {
+        use std::path::{Path, PathBuf};
+
+        // The test binary lives in the same `deps/` directory cargo compiled
+        // this crate's dependencies into, whatever the profile or
+        // `CARGO_TARGET_DIR` — derive the search path from it instead of
+        // hardcoding `target/debug` so the check also runs under
+        // `--release` / custom target dirs.
+        let deps_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/debug/deps"));
+        // Regular crates ship as `.rlib`; proc-macro crates (serde_derive)
+        // ship as shared objects.
+        let find_artifact = |prefix: &str| -> Option<PathBuf> {
+            std::fs::read_dir(&deps_dir)
+                .ok()?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .find(|path| {
+                    path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                        n.starts_with(prefix) && (n.ends_with(".rlib") || n.ends_with(".so"))
+                    })
+                })
+        };
+        let (Some(serde_rlib), Some(serde_derive_rlib)) = (
+            find_artifact("libserde-"),
+            find_artifact("libserde_derive-"),
+        ) else {
+            eprintln!(
+                "skipping rustc smoke check: serde artifacts not found under {}",
+                deps_dir.display()
+            );
+            return;
+        };
+
+        let out_dir = std::env::temp_dir();
+        let src = out_dir.join("confers_scaffold_smoke.rs");
+        let meta = out_dir.join("confers_scaffold_smoke.rmeta");
+        std::fs::write(&src, code).expect("write generated artifact");
+
+        let status = std::process::Command::new("rustc")
+            .args([
+                "--edition",
+                "2024",
+                "--crate-type",
+                "lib",
+                "--emit",
+                "metadata",
+            ])
+            .arg("-L")
+            .arg(&deps_dir)
+            .arg("--extern")
+            .arg(format!("serde={}", serde_rlib.display()))
+            .arg("--extern")
+            .arg(format!("serde_derive={}", serde_derive_rlib.display()))
+            .arg("-o")
+            .arg(&meta)
+            .arg(&src)
+            .output()
+            .expect("spawn rustc");
+        assert!(
+            status.status.success(),
+            "generated scaffolding must compile:\n{}\nstderr:\n{}",
+            code,
+            String::from_utf8_lossy(&status.stderr)
+        );
+    }
+}
+
+/// JSON Schema → Rust struct scaffolding.
+///
+/// The inverse direction of [`TypeScriptGenerator`]: consumes a JSON Schema
+/// draft (2020-12 flavored) and emits compilable Rust type definitions as a
+/// starting point for schema-first adoption. The generated code is meant to
+/// be edited by hand afterwards; regeneration overwrites it.
+///
+/// # Mapping rules
+///
+/// - `type: object` + `properties` → `struct`; `$defs` / `definitions` entries
+///   become their own named types; internal `$ref`s (`#/$defs/X`,
+///   `#/definitions/X`) become type references
+/// - scalars: `string` → `String`, `integer` → `i64`, `number` → `f64`,
+///   `boolean` → `bool`; `format` hints stay `String` and surface as doc
+///   comments (no extra dependencies are introduced)
+/// - fields absent from `required` → `Option<T>` + `#[serde(default)]`
+///   (a nullable type array already produced the `Option`, so it is not
+///   double-wrapped); fields with a scalar `default` keep their concrete
+///   type plus `#[serde(default = "_default_*")]` and a generated default
+///   function (the first field named `X` owns `_default_X`; later collisions
+///   get numeric suffixes). Composite defaults surface as `TODO` comments —
+///   the field still gets the schema's optional semantics when it is not
+///   required
+/// - `type: string` + `enum` → Rust enum with `#[serde(rename)]` per variant;
+///   enums of other scalar types fall back to the scalar type plus an
+///   "Allowed values" comment
+/// - `type: array` → `Vec<T>` (missing `items` widens to
+///   `Vec<serde_json::Value>`); inline nested objects are promoted to named
+///   structs; free-form objects (`object` without `properties`) map to
+///   `serde_json::Value`; `additionalProperties` with a subschema maps to
+///   `HashMap<String, T>` (flattened when explicit `properties` also exist)
+/// - property names are normalized to snake_case with `#[serde(rename)]`
+///   keeping the original value; Rust keywords become raw identifiers
+///   (`r#type`); names that cannot normalize to a legal identifier (empty,
+///   digit-leading) and the non-raw-able keywords (`self` / `super` /
+///   `crate`) fail loudly; normalized collisions (`userName` vs
+///   `user-name`) get numeric suffixes
+/// - all schema strings entering generated code (rename values, enum
+///   variants, scalar defaults, doc comments) are escaped: quotes and
+///   backslashes cannot break out of the string literal, control characters
+///   (including newlines) become escape sequences
+/// - internal `$ref`s must resolve to a `$defs` / `definitions` entry;
+///   dangling references fail loudly
+/// - a scalar `default` on an enum-typed field must name one of the enum's
+///   variants (the generated default function returns that variant);
+///   anything else fails loudly
+/// - unsupported constructs fail loudly with the offending path:
+///   `oneOf` / `anyOf` / `allOf` / `not`, external `$ref`s,
+///   `patternProperties`, tuple-style array validation — at property level
+///   and at named (`$defs` entry) level alike
+pub struct RustScaffoldGenerator;
+
+impl RustScaffoldGenerator {
+    pub fn generate(schema: &Value) -> ConfigResult<String> {
+        let mut ctx = ScaffoldCtx::default();
+        let root_name = schema
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("Config");
+
+        // Reserve named-level type names up front: `$ref`s must resolve to
+        // the name actually emitted (collisions get suffixes), not to a name
+        // re-derived at lookup time — re-deriving silently binds a reference
+        // to whatever type happened to claim the un-suffixed name first.
+        // Reservation order matches emission order (defs, then root).
+        for defs_key in ["$defs", "definitions"] {
+            if let Some(defs) = schema.get(defs_key).and_then(Value::as_object) {
+                for def_name in defs.keys() {
+                    let path = format!("$defs.{}", sanitize_comment_text(def_name));
+                    let pascal = named_type_name(def_name, &path)?;
+                    let emitted = ctx.unique(pascal);
+                    ctx.def_targets.insert(def_name.clone(), emitted);
+                }
+            }
+        }
+        let root_type = ctx.unique(named_type_name(root_name, "root")?);
+
+        for defs_key in ["$defs", "definitions"] {
+            if let Some(defs) = schema.get(defs_key).and_then(Value::as_object) {
+                for (def_name, def_schema) in defs {
+                    let emitted = ctx
+                        .def_targets
+                        .get(def_name)
+                        .expect("def name reserved above")
+                        .clone();
+                    let path = format!("$defs.{}", sanitize_comment_text(def_name));
+                    ctx.emit_named(&emitted, def_schema, &path)?;
+                }
+            }
+        }
+        ctx.emit_named(&root_type, schema, "root")?;
+
+        let mut out = String::from(
+            "// Generated by `confers schema --from-schema`. Scaffolding: edit freely.\n\
+             // Mapping rules: see `RustScaffoldGenerator` docs or the user guide.\n",
+        );
+        out.push_str("use serde::{Deserialize, Serialize};\n");
+        if ctx.needs_hashmap {
+            out.push_str("use std::collections::HashMap;\n");
+        }
+        if !ctx.default_fns.is_empty() {
+            out.push('\n');
+            for func in &ctx.default_fns {
+                out.push_str(func);
+                out.push('\n');
+            }
+        }
+        for item in &ctx.types {
+            out.push('\n');
+            out.push_str(item);
+            out.push('\n');
+        }
+        // End the artifact with exactly one newline.
+        let trimmed = out.trim_end_matches('\n').len();
+        out.truncate(trimmed);
+        out.push('\n');
+        Ok(out)
+    }
+}
+
+#[derive(Default)]
+struct ScaffoldCtx {
+    types: Vec<String>,
+    default_fns: Vec<String>,
+    taken_names: std::collections::HashSet<String>,
+    used_default_fn_names: std::collections::HashSet<String>,
+    needs_hashmap: bool,
+    /// String enums promoted by this generator: enum type name →
+    /// `(original value, Rust variant identifier)` pairs. Scalar defaults on
+    /// enum-typed fields must resolve against these or fail loudly.
+    promoted_enums: std::collections::HashMap<String, Vec<(String, String)>>,
+    /// `$defs` / `definitions` name → the type name actually emitted for it
+    /// (collision suffixes included); internal `$ref`s must resolve through
+    /// this map.
+    def_targets: std::collections::HashMap<String, String>,
+}
+
+/// Pascal-case a named-level declaration (`$defs` key / root title) and
+/// reject names that cannot become a Rust type identifier.
+fn named_type_name(name: &str, at: &str) -> ConfigResult<String> {
+    let pascal = to_pascal_case(name);
+    if pascal.is_empty() || !pascal.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        return Err(ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "name `{}` at `{at}` does not normalize to a legal Rust type identifier (`{pascal}`): rename it in the schema",
+                sanitize_comment_text(name)
+            ),
+            location: None,
+            source: None,
+        });
+    }
+    Ok(pascal)
+}
+
+impl ScaffoldCtx {
+    fn emit_named(&mut self, type_name: &str, schema: &Value, path: &str) -> ConfigResult<()> {
+        reject_unsupported_combinators(schema, path)?;
+
+        // String enums at the named level become real enums; other enums
+        // degrade to a type alias over the scalar with allowed values noted.
+        if let Some(variants) = schema.get("enum").and_then(Value::as_array) {
+            if variants.iter().all(Value::is_string) {
+                let (enum_code, variant_map) = render_string_enum(type_name, variants)?;
+                self.promoted_enums
+                    .insert(type_name.to_string(), variant_map);
+                self.types.push(enum_code);
+                return Ok(());
+            }
+            let (scalar, note) = scalar_type_for(schema)?;
+            self.types.push(alias_line(type_name, &scalar, &note));
+            return Ok(());
+        }
+
+        // A named $ref forwards to its target type.
+        if let Some(target) = schema.get("$ref").and_then(Value::as_str) {
+            let target_name = self.resolve_internal_ref(target, path)?;
+            self.types
+                .push(format!("pub type {type_name} = {target_name};\n"));
+            return Ok(());
+        }
+
+        if object_p(schema) {
+            let code = self.emit_struct(type_name, schema)?;
+            self.types.push(code);
+            return Ok(());
+        }
+
+        // Anything else at the named level is kept as an alias so the
+        // scaffolding still compiles.
+        let (scalar, note) = scalar_type_for(schema)?;
+        self.types.push(alias_line(type_name, &scalar, &note));
+        Ok(())
+    }
+
+    /// Internal `$ref`s must name an existing `$defs` / `definitions` entry
+    /// and resolve to the name emitted for it; dangling references or
+    /// re-derived names would compile into (or bind to) the wrong type.
+    fn resolve_internal_ref(&self, reference: &str, at: &str) -> ConfigResult<String> {
+        let shown_ref = sanitize_comment_text(reference);
+        let target = internal_ref_target(reference).ok_or_else(|| ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "unsupported external $ref `{shown_ref}` at `{at}`: only internal `#/$defs/...` references are supported"
+            ),
+            location: None,
+            source: None,
+        })?;
+        self.def_targets.get(target).cloned().ok_or_else(|| {
+            ConfigError::ParseError {
+                format: "schema".into(),
+                message: format!(
+                    "unresolvable $ref `{shown_ref}` at `{at}`: no `$defs`/`definitions` entry named `{}`",
+                    sanitize_comment_text(target)
+                ),
+                location: None,
+                source: None,
+            }
+        })
+    }
+
+    fn emit_struct(&mut self, type_name: &str, schema: &Value) -> ConfigResult<String> {
+        let properties = schema.get("properties").and_then(Value::as_object);
+        let additional = schema.get("additionalProperties");
+
+        if properties.is_none() && additional.is_none() {
+            // Free-form object: any map is accepted. This type alias needs no
+            // HashMap import, but must not reset the flag earlier types set.
+            return Ok(format!(
+                "/// Free-form object (schema declares `object` with no field constraints).\npub type {type_name} = serde_json::Value;\n"
+            ));
+        }
+
+        let mut body = String::new();
+        let mut taken_fields = std::collections::HashSet::new();
+        // One lookup per property against a set, instead of a linear scan of
+        // `required` per property (O(P×R) → O(P+R)).
+        let required_names: std::collections::HashSet<&str> = schema
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|r| r.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        if let Some(props) = properties {
+            for (prop_name, prop_schema) in props {
+                let required = required_names.contains(prop_name.as_str());
+                self.render_field(
+                    type_name,
+                    prop_name,
+                    prop_schema,
+                    required,
+                    &mut taken_fields,
+                    &mut body,
+                )?;
+            }
+        }
+
+        if let Some(additional_schema) = additional.filter(|a| !a.is_boolean()) {
+            let extra_type = self.resolve_type(type_name, "extra", additional_schema)?;
+            self.needs_hashmap = true;
+            body.push_str("    /// Catch-all for keys beyond the declared properties.\n");
+            body.push_str("    #[serde(flatten)]\n");
+            body.push_str("    pub extra: HashMap<String, ");
+            body.push_str(&extra_type);
+            body.push_str(">,\n");
+        }
+
+        Ok(format!(
+            "#[derive(Debug, Clone, Serialize, Deserialize)]\npub struct {type_name} {{\n{body}}}\n"
+        ))
+    }
+
+    fn render_field(
+        &mut self,
+        parent: &str,
+        prop_name: &str,
+        prop_schema: &Value,
+        required: bool,
+        taken_fields: &mut std::collections::HashSet<String>,
+        body: &mut String,
+    ) -> ConfigResult<()> {
+        if let Some(desc) = prop_schema.get("description").and_then(Value::as_str) {
+            for line in desc.lines() {
+                body.push_str(&format!("    /// {}\n", sanitize_comment_text(line)));
+            }
+        }
+
+        // Comment-bearing fallbacks (non-string enums, format hints).
+        let (field_type, mut notes) =
+            self.resolve_type_with_notes(parent, prop_name, prop_schema)?;
+        if let Some(format_hint) = prop_schema.get("format").and_then(Value::as_str) {
+            notes.push(format!("format: {}", sanitize_comment_text(format_hint)));
+        }
+        for note in &notes {
+            body.push_str(&format!("    // {note}\n"));
+        }
+
+        let scalar_default = scalar_default(prop_schema);
+        if scalar_default.is_none() && prop_schema.get("default").is_some() {
+            // The schema still promises an optional field here (the property
+            // may be absent), so the field stays `Option` + `#[serde(default)]`
+            // and the concrete fallback value is wired by hand.
+            body.push_str(&format!(
+                "    // TODO: schema declares a composite default, implement `Default` or a custom default fn manually: {}\n",
+                prop_schema.get("default").map(Value::to_string).unwrap_or_default()
+            ));
+        }
+
+        let (mut field_ident, mut rename_attr) = field_identifier(prop_name, parent)?;
+        if !taken_fields.insert(field_ident.clone()) {
+            // Two property names can normalize to the same identifier (e.g.
+            // `userName` / `user-name`); suffix the later one and keep the
+            // original name via `rename`.
+            let base = field_ident.clone();
+            let mut suffix = 2;
+            loop {
+                let candidate = format!("{base}_{suffix}");
+                if taken_fields.insert(candidate.clone()) {
+                    field_ident = candidate;
+                    break;
+                }
+                suffix += 1;
+            }
+            if rename_attr.is_none() {
+                rename_attr = Some(rename_attribute(prop_name));
+            }
+        }
+        if let Some(mut attr) = rename_attr {
+            if !attr.starts_with(' ') && !attr.starts_with('\n') {
+                attr = format!("    {attr}");
+            }
+            body.push_str(&attr);
+        }
+
+        // A declared composite default also pins the concrete type: the
+        // TODO comment above tells the reader to wire the fallback by hand.
+        // A nullable type array already produced `Option<...>`, so the
+        // optionality wrapper must not double-wrap.
+        let already_option = field_type.starts_with("Option<");
+        let is_optional = !required && scalar_default.is_none();
+        let effective_type = if is_optional && !already_option {
+            format!("Option<{field_type}>")
+        } else {
+            field_type.clone()
+        };
+
+        if let Some(default_literal) = scalar_default {
+            let fn_name = self.default_fn_name(parent, prop_name);
+            let expr = match self.promoted_enums.get(&field_type) {
+                Some(variant_map) => {
+                    let raw_default = prop_schema
+                        .get("default")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let (_, variant) = variant_map
+                        .iter()
+                        .find(|(raw, _)| raw == raw_default)
+                        .ok_or_else(|| ConfigError::ParseError {
+                            format: "schema".into(),
+                            message: format!(
+                                "default `{}` on property `{}` (type `{parent}`) is not a variant of enum `{field_type}` (variants: {})",
+                                sanitize_comment_text(raw_default),
+                                sanitize_comment_text(prop_name),
+                                variant_map
+                                    .iter()
+                                    .map(|(raw, _)| sanitize_comment_text(raw))
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ),
+                            location: None,
+                            source: None,
+                        })?;
+                    format!("{field_type}::{variant}")
+                }
+                None => default_literal,
+            };
+            // A nullable type array (`type: ["string", "null"]`) makes the
+            // field itself `Option<...>`; the generated default must then
+            // produce the `Some(...)` variant, not the inner value.
+            let expr = if already_option {
+                format!("Some({expr})")
+            } else {
+                expr
+            };
+            self.default_fns
+                .push(format!("fn {fn_name}() -> {field_type} {{ {expr} }}\n"));
+            body.push_str(&format!("    #[serde(default = \"{fn_name}\")]\n"));
+        } else if is_optional {
+            body.push_str("    #[serde(default)]\n");
+        }
+
+        body.push_str(&format!("    pub {field_ident}: {effective_type},\n"));
+        Ok(())
+    }
+
+    fn resolve_type(&mut self, parent: &str, field: &str, schema: &Value) -> ConfigResult<String> {
+        self.resolve_type_with_notes(parent, field, schema)
+            .map(|(t, _)| t)
+    }
+
+    fn resolve_type_with_notes(
+        &mut self,
+        parent: &str,
+        field: &str,
+        schema: &Value,
+    ) -> ConfigResult<(String, Vec<String>)> {
+        // Error paths interpolate the raw property name; schema strings are
+        // untrusted and must not carry control characters into stderr.
+        let shown_field = sanitize_comment_text(field);
+        reject_unsupported_combinators(
+            schema,
+            &format!("property `{shown_field}` (type `{parent}`)"),
+        )?;
+
+        if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
+            let target =
+                self.resolve_internal_ref(reference, &format!("property `{shown_field}`"))?;
+            return Ok((target, Vec::new()));
+        }
+
+        // String enums promote to real enums; other enums stay scalar.
+        if let Some(variants) = schema.get("enum").and_then(Value::as_array) {
+            if variants.iter().all(Value::is_string) {
+                let enum_name = self.unique(to_pascal_case(&format!("{parent}_{field}")));
+                let (code, variant_map) = render_string_enum(&enum_name, variants)?;
+                self.promoted_enums.insert(enum_name.clone(), variant_map);
+                self.types.push(code);
+                return Ok((enum_name, Vec::new()));
+            }
+            let (scalar, note) = scalar_type_for(schema)?;
+            return Ok((scalar, vec![note]));
+        }
+
+        let type_decl = schema.get("type");
+        if let Some(types) = type_decl.and_then(Value::as_array) {
+            let nullable = types.iter().any(|t| t.as_str() == Some("null"));
+            let non_null: Vec<&str> = types
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|t| *t != "null")
+                .collect();
+            if non_null.len() > 1 {
+                return Err(ConfigError::ParseError {
+                    format: "schema".into(),
+                    message: format!(
+                        "mixed non-null types {non_null:?} on property `{shown_field}`: narrow the schema to one type"
+                    ),
+                    location: None,
+                    source: None,
+                });
+            }
+            let inner = match non_null.first() {
+                Some(t) => {
+                    let single = serde_json::json!({ "type": t });
+                    self.resolve_type_with_notes(parent, field, &single)?
+                }
+                None => ("serde_json::Value".to_string(), Vec::new()),
+            };
+            let ty = if nullable {
+                format!("Option<{}>", inner.0)
+            } else {
+                inner.0
+            };
+            return Ok((ty, inner.1));
+        }
+
+        if let Some(single) = type_decl.and_then(Value::as_str) {
+            return match single {
+                "string" => Ok(("String".to_string(), Vec::new())),
+                "integer" => Ok(("i64".to_string(), Vec::new())),
+                "number" => Ok(("f64".to_string(), Vec::new())),
+                "boolean" => Ok(("bool".to_string(), Vec::new())),
+                "array" => {
+                    // Missing `items` accepts any element: widen to Value.
+                    let items = match schema.get("items") {
+                        Some(items) if !items.is_array() => items,
+                        Some(_) => {
+                            return Err(ConfigError::ParseError {
+                                format: "schema".into(),
+                                message: format!(
+                                    "unsupported tuple-style `items` on property `{shown_field}`"
+                                ),
+                                location: None,
+                                source: None,
+                            });
+                        }
+                        None => &Value::Bool(true),
+                    };
+                    if items.is_array() {
+                        return Err(ConfigError::ParseError {
+                            format: "schema".into(),
+                            message: format!(
+                                "unsupported tuple-style `items` on property `{shown_field}`"
+                            ),
+                            location: None,
+                            source: None,
+                        });
+                    }
+                    let item_type = self.resolve_type(parent, field, items)?;
+                    Ok((format!("Vec<{item_type}>"), Vec::new()))
+                }
+                "object" => {
+                    let has_props = schema
+                        .get("properties")
+                        .and_then(Value::as_object)
+                        .is_some();
+                    let additional = schema.get("additionalProperties");
+                    if !has_props {
+                        if let Some(additional_schema) = additional.filter(|a| !a.is_boolean()) {
+                            let value_type = self.resolve_type(parent, field, additional_schema)?;
+                            self.needs_hashmap = true;
+                            return Ok((format!("HashMap<String, {value_type}>"), Vec::new()));
+                        }
+                        return Ok(("serde_json::Value".to_string(), Vec::new()));
+                    }
+                    let nested_name = self.unique(to_pascal_case(&format!("{parent}_{field}")));
+                    let code = self.emit_struct(&nested_name, schema)?;
+                    self.types.push(code);
+                    Ok((nested_name, Vec::new()))
+                }
+                other => Err(ConfigError::ParseError {
+                    format: "schema".into(),
+                    message: format!(
+                        "unsupported JSON Schema type `{}` on property `{shown_field}`",
+                        sanitize_comment_text(other)
+                    ),
+                    location: None,
+                    source: None,
+                }),
+            };
+        }
+
+        // `true`, `{}` and schemas without a type accept anything.
+        Ok(("serde_json::Value".to_string(), Vec::new()))
+    }
+
+    fn default_fn_name(&mut self, _parent: &str, field: &str) -> String {
+        let base = format!("_default_{}", to_snake_case(field));
+        let mut candidate = base.clone();
+        let mut suffix = 2;
+        while !self.used_default_fn_names.insert(candidate.clone()) {
+            candidate = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        candidate
+    }
+
+    fn unique(&mut self, base: String) -> String {
+        let mut candidate = base.clone();
+        let mut suffix = 2;
+        while !self.taken_names.insert(candidate.clone()) {
+            candidate = format!("{base}{suffix}");
+            suffix += 1;
+        }
+        candidate
+    }
+}
+
+fn object_p(schema: &Value) -> bool {
+    schema.get("type").and_then(Value::as_str) == Some("object")
+}
+
+/// Reject the combinators documented as unsupported. Used at both the
+/// property and the named (`$defs` entry / root) level so no construct
+/// silently degrades.
+fn reject_unsupported_combinators(schema: &Value, at: &str) -> ConfigResult<()> {
+    for unsupported in ["oneOf", "anyOf", "allOf", "not"] {
+        if schema.get(unsupported).is_some() {
+            return Err(ConfigError::ParseError {
+                format: "schema".into(),
+                message: format!(
+                    "unsupported `{unsupported}` at `{at}`: hand-write this part of the scaffolding"
+                ),
+                location: None,
+                source: None,
+            });
+        }
+    }
+    if schema.get("patternProperties").is_some() {
+        return Err(ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "unsupported `patternProperties` at `{at}`: hand-write this part of the scaffolding"
+            ),
+            location: None,
+            source: None,
+        });
+    }
+    Ok(())
+}
+
+fn internal_ref_target(reference: &str) -> Option<&str> {
+    reference
+        .strip_prefix("#/$defs/")
+        .or_else(|| reference.strip_prefix("#/definitions/"))
+}
+
+/// `pub type X = T;` line, carrying the allowed-values note only when there
+/// is one (a missing note must not leave a dangling `// `).
+fn alias_line(type_name: &str, scalar: &str, note: &str) -> String {
+    if note.is_empty() {
+        format!("pub type {type_name} = {scalar};\n")
+    } else {
+        format!("pub type {type_name} = {scalar}; // {note}\n")
+    }
+}
+
+/// Escape an arbitrary schema string for inclusion inside a generated Rust
+/// string literal. Quotes and backslashes are the code-injection vector;
+/// control characters (including newlines) become escape sequences so the
+/// literal never breaks across lines or smuggles terminal/OSC bytes.
+fn escape_rust_string(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 2);
+    for ch in raw.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Make an arbitrary schema string safe for a generated comment (doc or
+/// regular): control characters surface as visible escape text and a
+/// trailing backslash is neutralized (it would act as a rustdoc line
+/// continuation).
+fn sanitize_comment_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if ch.is_control() {
+            out.push_str(&format!("\\u{{{:x}}}", ch as u32));
+        } else {
+            out.push(ch);
+        }
+    }
+    if out.ends_with('\\') {
+        out.push(' ');
+    }
+    out
+}
+
+/// `(scalar type, allowed-values note)` for enum schemas of non-string values.
+fn scalar_type_for(schema: &Value) -> ConfigResult<(String, String)> {
+    let allowed = schema
+        .get("enum")
+        .map(|e| format!("{e}"))
+        .unwrap_or_default();
+    let ty = match schema.get("type").and_then(Value::as_str) {
+        Some("integer") => "i64",
+        Some("number") => "f64",
+        Some("boolean") => "bool",
+        // Untyped enums (e.g. mixed scalars) widen to Value, fail-loudly
+        // documented via the allowed-values comment.
+        _ => "serde_json::Value",
+    };
+    let note = if allowed.is_empty() {
+        String::new()
+    } else {
+        // The note lands inside a generated comment; enum values are
+        // untrusted and must not carry control characters into the artifact.
+        format!("Allowed values: {}", sanitize_comment_text(&allowed))
+    };
+    Ok((ty.to_string(), note))
+}
+
+/// Scalar default literal (`Some(literal)`), if the schema default is a
+/// scalar the scaffolding can turn into a generated default function.
+fn scalar_default(schema: &Value) -> Option<String> {
+    match schema.get("default") {
+        Some(Value::String(s)) => Some(format!("\"{}\".to_string()", escape_rust_string(s))),
+        Some(Value::Bool(b)) => Some(b.to_string()),
+        Some(Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+/// Render a string enum and return `(code, (original value, variant ident)
+/// pairs)` so scalar defaults can resolve to variant paths. Variant names
+/// that collide after normalization (e.g. `"a-b"` / `"a_b"`) get numeric
+/// suffixes; the original value stays reachable via `#[serde(rename)]`.
+fn render_string_enum(
+    type_name: &str,
+    variants: &[Value],
+) -> ConfigResult<(String, Vec<(String, String)>)> {
+    let mut out = String::from("#[derive(Debug, Clone, Serialize, Deserialize)]\n");
+    out.push_str(&format!("pub enum {type_name} {{\n"));
+    let mut taken_variants = std::collections::HashSet::new();
+    let mut variant_map = Vec::with_capacity(variants.len());
+    for variant in variants {
+        let raw = variant.as_str().ok_or_else(|| ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "non-string variant `{}` in enum `{type_name}`: string enums require string values",
+                sanitize_comment_text(&variant.to_string())
+            ),
+            location: None,
+            source: None,
+        })?;
+        if raw.is_empty() {
+            return Err(ConfigError::ParseError {
+                format: "schema".into(),
+                message: format!(
+                    "empty string variant in enum `{type_name}`: Rust variant names cannot be empty"
+                ),
+                location: None,
+                source: None,
+            });
+        }
+        let base = to_pascal_case(raw);
+        if base.is_empty() {
+            return Err(ConfigError::ParseError {
+                format: "schema".into(),
+                message: format!(
+                    "enum variant `{}` in `{type_name}` contains no alphanumeric characters: cannot derive a Rust variant name",
+                    sanitize_comment_text(raw)
+                ),
+                location: None,
+                source: None,
+            });
+        }
+        let mut ident = base.clone();
+        let mut suffix = 2;
+        while !taken_variants.insert(ident.clone()) {
+            ident = format!("{base}{suffix}");
+            suffix += 1;
+        }
+        if ident != raw {
+            out.push_str(&format!(
+                "    #[serde(rename = \"{}\")]\n",
+                escape_rust_string(raw)
+            ));
+        }
+        out.push_str(&format!("    {ident},\n"));
+        variant_map.push((raw.to_string(), ident));
+    }
+    out.push_str("}\n");
+    Ok((out, variant_map))
+}
+
+/// `#[serde(rename = "...")]` attribute line carrying the original property
+/// name, escaped against literal breakout.
+fn rename_attribute(prop_name: &str) -> String {
+    format!("#[serde(rename = \"{}\")]\n", escape_rust_string(prop_name))
+}
+
+/// `(identifier, optional #[serde(rename)] attribute)` for a property name.
+/// Names that do not normalize to a legal Rust identifier (empty, digit
+/// leading) and the keywords that cannot be raw identifiers (`self`,
+/// `super`, `crate`) fail loudly instead of generating broken code.
+fn field_identifier(prop_name: &str, parent: &str) -> ConfigResult<(String, Option<String>)> {
+    let snake = to_snake_case(prop_name);
+    // A name made entirely of underscores (`_`, `__`, or any input that only
+    // feeds the separator branch — e.g. a single CJK character) normalizes
+    // to `_`, which Rust reserves outright: neither `pub _` nor `pub r##_`
+    // compiles, and no escape path exists, so it must fail loudly.
+    let legal_start = !snake.is_empty()
+        && snake != "_"
+        && snake.starts_with(|c: char| c.is_ascii_lowercase() || c == '_');
+    if !legal_start {
+        return Err(ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "property name `{}` (type `{parent}`) normalizes to `{snake}`, which is not a legal Rust identifier: rename the property in the schema",
+                sanitize_comment_text(prop_name)
+            ),
+            location: None,
+            source: None,
+        });
+    }
+    if matches!(snake.as_str(), "self" | "super" | "crate") {
+        return Err(ConfigError::ParseError {
+            format: "schema".into(),
+            message: format!(
+                "property name `{}` (type `{parent}`) normalizes to `{snake}`, which cannot be a raw identifier in Rust: rename the property in the schema",
+                sanitize_comment_text(prop_name)
+            ),
+            location: None,
+            source: None,
+        });
+    }
+    if RUST_KEYWORDS.contains(&snake.as_str()) {
+        // serde derives the serialized name from the raw identifier minus `r#`.
+        Ok((format!("r#{snake}"), None))
+    } else if snake == prop_name {
+        Ok((snake, None))
+    } else {
+        Ok((snake, Some(rename_attribute(prop_name))))
+    }
+}
+
+const RUST_KEYWORDS: &[&str] = &[
+    "as", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn",
+    "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
+    "return", "self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use",
+    "where", "while", "abstract", "become", "box", "do", "final", "macro", "override", "priv",
+    "typeof", "unsized", "virtual", "yield", "await", "try",
+];
+
+fn to_snake_case(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() + 4);
+    let chars: Vec<char> = input.chars().collect();
+    for (index, ch) in chars.iter().enumerate() {
+        if ch.is_ascii_uppercase() {
+            let prev_lower_or_digit =
+                index > 0 && (chars[index - 1].is_lowercase() || chars[index - 1].is_ascii_digit());
+            let next_lower = chars.get(index + 1).is_some_and(char::is_ascii_lowercase);
+            if index > 0 && (prev_lower_or_digit || next_lower) {
+                out.push('_');
+            }
+            out.push(ch.to_ascii_lowercase());
+        } else if ch.is_ascii_alphanumeric() {
+            out.push(*ch);
+        } else {
+            out.push('_');
+        }
+    }
+    out
+}
+
+fn to_pascal_case(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut capitalize_next = true;
+    if input.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        out.insert(0, 'V');
+    }
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if capitalize_next {
+                out.extend(ch.to_uppercase());
+                capitalize_next = false;
+            } else {
+                out.push(ch);
+            }
+        } else {
+            capitalize_next = true;
+        }
+    }
+    out
+}

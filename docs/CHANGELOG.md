@@ -7,6 +7,34 @@
 
 ## [Unreleased]
 
+### 云 KMS 后端（cloud-kms 特性：Vault + AWS + GCP）
+
+- AWS KMS（`AwsKmsKeyProvider`）：`kms:Decrypt` 经 SigV4 签名的 JSON 1.1 API 直调（rustls HTTP，无 AWS SDK）——SigV4 纯函数实现（hmac/sha2/hex）并通过 AWS 文档公开测试向量（AKIDEXAMPLE 向量，非真实凭据）钉住签名正确性；凭据来自 builder 或 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`，支持临时凭据 `x-amz-security-token`；endpoint 可覆盖（plain HTTP 仅允许回环地址——127.0.0.0/8/::1/localhost 精确匹配，名称形如 127.0.0.1.evil.com 的域名拒绝），非回环地址强制 HTTPS
+- GCP KMS（`GcpKmsKeyProvider`）：`cryptoKeys.decrypt` + 实例 metadata server token（`Metadata-Flavor: Google` 握手必需——该头正是区分真实 metadata 流量与 SSRF 探测的机制）；key resource 路径组件白名单校验（拒绝遍历/转义/空段），metadata 与 KMS endpoint 均可覆盖，token 亦可直接注入（测试/预取凭据）
+- 两者均实现 `CloudKmsBackend` 与 `AsyncKeyProvider`（复用 KeyCachePolicy），`CloudKmsBackend::decrypt` 返回 `ZeroizingBytes`——明文密钥自诞生即处于零化容器（drop 自动擦除，无明文副本驻留）；错误映射保留 429/502/503/504 retryable 语义；mock-server 契约测试验证请求形状（签名服务端重算、Metadata-Flavor 握手、Bearer 来源）与解密字节；真实云集成测试以 `#[ignore]` + `CONFERS_AWS_KMS_LIVE` / `CONFERS_GCP_KMS_LIVE` 环境变量双重门控，沙箱默认跳过
+- `cloud-kms` 特性追加 `dep:hmac` / `dep:hex`（SigV4 所需）；密钥零硬编码——测试仅使用 AWS 文档公开示例常量
+
+### 金丝雀发布编排器（canary 特性 = change-stream + progressive-reload）
+
+- 新增 `CanaryOrchestrator`（`src/canary.rs`）：ChangeStream 消费侧的跨实例分批 rollout 编排——按 `RolloutPlan`（batch_size / batch_interval / poll_interval / failure_threshold 全可配）收集各批实例的 `committed` 事件、批次健康检查（复用 `HealthStatus` 三态语义：仅 Critical 计入回滚判定，Degraded 随指令 detail 可观测），推进/回滚决策以 `canary.orchestrator` 指令事件（advance / rollback / completed）发布回流
+- **实例身份协议**：实例事件 key 为 `canary.<instance_id>`——`ProgressiveReloader` 新增 `with_instance_id`（默认 `unknown`，未设置的事件无法被编排器归属），编排器按 key 中的实例 id 与当前批实例集合做集合匹配：重复 `committed` 折叠、未知实例与跨批事件永不计数；已推进批次的实例 `rolled_back` 同样立即中止 rollout（候选版本在已推广批次上的回归信号）
+- **失败显性化**：回滚路径的 mesh 权重下发或 rollback 指令发布失败 → `RolloutOutcome::Aborted.mesh_rolled_back_failed = true` 且 reason 追加失败说明；推进/完成路径 mesh 切流失败 → 尽力回切 baseline 后 `run()` 返回 `Err`（rollout 不会在未生效的切流上继续）；失败计入 `confers_canary_errors_total{reason=...}` 并在 `tracing` 特性下输出 warn
+- 回滚路径三触发：当前批或已推进批实例 `rolled_back` 事件、健康 Critical 比例超 `failure_threshold`（逐轮评估，超阈立即中止，不等窗口耗尽）、committed 收齐超时——均发布 rollback 指令并将流量切回 baseline；空实例列表（服务发现失败）直接报错，绝不向零个已验证实例推送 100% 切流
+- 健康检查单次调用受 `poll_interval` 与窗口剩余的较小值约束（挂起的实现转 Degraded，不阻塞 rollout）
+- 新增 `MeshWeightPublisher` 服务网格适配层：rollout 进度 → baseline↔canary 流量权重线性下发（`with_mesh`），Envoy weighted clusters 与 Istio VirtualService merge-patch 配置样例及 Rust 适配骨架见 `docs/CANARY_ORCHESTRATION.md`
+- 本地多实例模拟：进程内多 `ProgressiveReloader` attach 同一 `InMemoryChangeStream` 的端到端测试（`orchestrates_in_process_reloaders_end_to_end`），19 个契约测试覆盖分批推进/回滚三路径（含已推进批次回归）/Degraded/重复与跨批事件去重/空列表 fail-loud/健康检查挂起/mesh 失败两路径/mesh 权重序列
+
+### JSON Schema → Rust 反向生成
+
+- CLI `schema --from-schema <FILE>`：从 JSON Schema 草稿（2020-12）生成可编译的 Rust struct 脚手架（schema-first 落地起点），与 `--from-instance` 互斥
+- 新增 `RustScaffoldGenerator`（`schema` 特性，`confers::schema` 门面导出）：完整映射规则见其 rustdoc——非 required 字段 → `Option<T>` + `#[serde(default)]`；标量 `default` → 具体类型 + 生成的 `_default_*` 默认值函数；字符串枚举 → Rust 枚举（`#[serde(rename)]` 保原值）；内联嵌套对象提升为具名 struct；`$defs`/内部 `$ref` → 独立类型引用；自由形态对象 → `serde_json::Value`；`additionalProperties` 子模式 → `HashMap<String, T>`；属性名规范化 snake_case（`#[serde(rename)]` 保留原键、Rust 关键字用 raw identifier）
+- fail-loud 契约：`oneOf`/`anyOf`/`allOf`/`not`（属性层与 `$defs` 命名层一致）、外部 `$ref`、解析不到 `$defs` 条目的内部 `$ref`、`patternProperties`、元组数组、混合非空类型显性报错并指明字段路径，绝不静默生成错误代码；复合 `default` 以 `TODO` 注释标注
+- 生成安全与健壮性：进入生成代码的全部 schema 字符串（rename 值、枚举原值、字符串 `default`）做字面量转义（引号/反斜杠/控制字符），不可信 schema 无法注入可编译代码；文档注释与 `format` 提示中的控制字符可见化为 `\u{...}` 文本；错误消息同样过滤控制字符
+- 标识符契约：规范化后非法的属性名（空、数字开头、归一化为全下划线——含单 CJK 字符等仅落入分隔符分支的名称→`_`，Rust 保留标识符无法逃逸）与不可 raw 化的关键字（`self`/`super`/`crate`）显性报错；归一化碰撞（`userName`/`user-name`、枚举变体 `a-b`/`a_b`）加数字后缀并保留原值 `#[serde(rename)]`
+- 类型语义修正：字符串枚举 + 标量 `default` 生成匹配变体路径（`Enum::Variant`），default 不在变体内则报错；复合 `default` 的非 required 字段保持 `Option<T>` + `#[serde(default)]`（schema 可选语义）；nullable 类型数组的非 required 字段单层 `Option`（不再双重包装）；`$defs` 自由形态类型不再丢失 `HashMap` 导入；产物以单个换行结尾
+- 契约测试：新增「生成产物必须通过 rustc 编译」冒烟测试（覆盖枚举×default、碰撞、转义、关键字属性、HashMap 导入组合）与注入回归测试
+- 新增示例 `schema_to_rust`；新增 20 个生成器映射契约单测与 4 个 CLI 端到端测试；USER_GUIDE 补 `schema` 命令小节
+
 ### 远程来源转正（Beta → 稳定）
 
 - **接口冻结承诺**：`remote` / `etcd` / `consul` / `etcd-watch` 的公开 API 自此冻结——1.0 前仅增量演进（只新增、不破坏），破坏性变更仅随 1.0 major 发布。冻结清单含 rc.6 全部新接口：
@@ -15,8 +43,10 @@
   - Consul：`ConsulSourceBuilder` 及其 builder 方法、`ConsulTlsConfig`
   - etcd watch：`WatchEventSource`、`EtcdWatcher`（`new` / `with_retry` / `last_revision` / `run`）、`EtcdWatchEvent`（`key` / `value` / `mod_revision`）、`EtcdWatchRetry`（`base` / `max`；默认 500ms 基础、30s 封顶的指数退避）、`EtcdWatchCallback`、`EtcdGrpcWatchSource`
 - **新增**：`confers::async_trait` re-export（`remote` 特性门控）——`WatchEventSource` 以 async-trait 宏展开，外部实现该 trait 必须使用同一宏，re-export 即官方实现路径
+- **运行时契约显性化**：回调同步内联调用、必须非阻塞（长任务请自行 spawn）写入 `EtcdWatchCallback`/`EtcdWatcher::run` rustdoc；重连后恢复点为映射即消费（批尾 at-most-once 间隙，需对账的消费者可对照 `last_revision`）；不可解码 UTF-8 的 etcd 值以 lossy（`U+FFFD`）交付而非报错重投——消除单一毒事件引发的无限重连风暴；流错误与建连失败增加 tracing::warn（`tracing` 特性门控）与 metrics 计数
 - **兼容性守护**：新增 `tests/remote/etcd_watch.rs` watch 兼容性回归测试——外部 mock 实现驱动完整 watch 生命周期（事件按序交付、断流重连、`last_revision` 跨连接单调）、删除事件 `value: None` 穿透、冻结类型形状与默认退避语义
 - **验证方式**：以现有测试矩阵替代长时 soak——六源 feature 门控（HTTP 轮询 / etcd / etcd-watch / consul / k8s / nacos）编译验证 + HTTP、etcd、Consul、watch 的 mock 联测 + watch 兼容性回归。真实集群集成测试（`tests/remote/etcd.rs` / `consul.rs`，依赖 `docker-compose.test.yml`）与长 soak 在无容器镜像仓库访问的沙箱环境无法执行，属环境限制而非代码缺陷
+- **基线与门禁**：新增 `etcd_watch_bench`（整批 1000 事件分发 [83.8 µs, 84.8 µs, 86.0 µs]，约 0.085 µs/事件）；CI benchmarks job 特性扩为 `dev,etcd-watch,change-stream`，watch 相关基准（含既有 `watch_callback_bench`）自此随 CI 重测
 
 ## [0.6.0-rc.6] — 2026-09-28
 

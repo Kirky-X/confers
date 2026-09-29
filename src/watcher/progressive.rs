@@ -140,6 +140,11 @@ struct ProgressiveReloaderInner<T: Clone + Send + Sync + 'static> {
     /// (upstream orchestration), when attached.
     #[cfg(feature = "change-stream")]
     change_stream: ArcSwap<Option<Arc<dyn crate::stream::ChangeStream>>>,
+    /// Instance identity carried in canary stream events
+    /// (key `canary.<instance_id>`) so a cross-instance orchestrator can
+    /// attribute stage transitions. Defaults to `unknown`.
+    #[cfg(feature = "change-stream")]
+    instance_id: std::sync::Mutex<String>,
 }
 
 // reason 清洗实现在 super::sanitize（不随 progressive-reload 门控，shutdown 也用）。
@@ -191,6 +196,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 reload_lock: tokio::sync::Mutex::new(()),
                 #[cfg(feature = "change-stream")]
                 change_stream: ArcSwap::new(Arc::new(None)),
+                #[cfg(feature = "change-stream")]
+                instance_id: std::sync::Mutex::new("unknown".to_string()),
             }),
         }
     }
@@ -214,6 +221,8 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
                 reload_lock: tokio::sync::Mutex::new(()),
                 #[cfg(feature = "change-stream")]
                 change_stream: ArcSwap::new(Arc::new(None)),
+                #[cfg(feature = "change-stream")]
+                instance_id: std::sync::Mutex::new("unknown".to_string()),
             }),
         }
     }
@@ -354,6 +363,20 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         self
     }
 
+    /// Set the instance identity carried in canary stream events: stage
+    /// transitions are published under key `canary.<instance_id>` so a
+    /// cross-instance orchestrator can attribute them to this reloader.
+    /// Defaults to `unknown`.
+    #[cfg(feature = "change-stream")]
+    pub fn with_instance_id(self, instance_id: impl Into<String>) -> Self {
+        *self
+            .inner
+            .instance_id
+            .lock()
+            .expect("instance_id mutex poisoned") = instance_id.into();
+        self
+    }
+
     /// Publish a canary stage transition to the attached change stream
     /// (no-op without one). Publish failures never affect the reload.
     #[cfg(feature = "change-stream")]
@@ -361,9 +384,15 @@ impl<T: Clone + Send + Sync + 'static> ProgressiveReloader<T> {
         use crate::stream::{ChangeEvent, ChangeSource};
         let loaded = self.inner.change_stream.load_full();
         if let Some(stream) = loaded.as_ref() {
+            let instance_id = self
+                .inner
+                .instance_id
+                .lock()
+                .expect("instance_id mutex poisoned")
+                .clone();
             let _ = stream
                 .publish(ChangeEvent::new(
-                    "canary",
+                    format!("canary.{instance_id}"),
                     Some(crate::types::ConfigValue::string(stage)),
                     Some(crate::types::ConfigValue::string(detail)),
                     ChangeSource::Canary,

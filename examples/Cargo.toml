@@ -75,6 +75,10 @@ name = "json_schema"
 path = "src/examples/json_schema.rs"
 
 [[bin]]
+name = "schema_to_rust"
+path = "src/examples/schema_to_rust.rs"
+
+[[bin]]
 name = "interpolation"
 path = "src/examples/interpolation.rs"
 

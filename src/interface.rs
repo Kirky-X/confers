@@ -1594,6 +1594,10 @@ mod tests {
     // =============================================================================
 
     #[test]
+    // `keys_all` 存在性与 `keys()` 一致的行为仅在 debug 构建可断言：
+    // 该 trait 方法为 `#[cfg(debug_assertions)]` 门控，release 下以 `keys()`
+    // 替代（见其 rustdoc），本测试不复刻替代路径。
+    #[cfg(debug_assertions)]
     fn config_provider_ext_full_surface_on_instrumented_mock() {
         use indexmap::IndexMap;
         use std::sync::Arc;
