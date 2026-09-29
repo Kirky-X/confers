@@ -217,11 +217,13 @@ fn prs07_full_preset_covers_all_domain_features() {
         // rc.4 改名:lazy → lazy-parse(lazy 解析语义,避免与惰性求值混淆)。
         "lazy-parse",
         "tracing",
+        // 金丝雀编排(消费 change-stream,复用 progressive-reload 健康语义)。
+        "canary",
     ];
     assert_contains(&features, "full", &domains);
     assert_eq!(
         features["full"].len(),
-        39,
+        40,
         "full preset must stay the full capability surface"
     );
 

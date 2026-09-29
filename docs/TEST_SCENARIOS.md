@@ -604,8 +604,8 @@
 | PRS-04 | `--features dev`（12 项）编译 + tests/core 通过 | 边界 | dev | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-05 | `--features production`（14 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
-| PRS-07 | `--features full`（39 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
-| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/env/validation/watch/encryption/…39 项）每项 `cargo check` 通过（依赖链自动生效：security→encryption、nats-bus→config-bus 等） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
+| PRS-07 | `--features full`（40 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
+| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/env/validation/watch/encryption/…40 项）每项 `cargo check` 通过（依赖链自动生效：security→encryption、nats-bus→config-bus 等） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
 
 ---
 
@@ -665,7 +665,7 @@ default           → toml, json, env
 | dev | toml, json, yaml, env, cli, validation, schema, audit, watch, migration, snapshot, dynamic | snapshot 隐式带 json/toml/yaml/dynamic |
 | production | toml, env, watch, encryption, validation, audit, schema, cli, migration, dynamic, progressive-reload, snapshot, security-rules, feature-toggle | progressive-reload 隐式带 watch |
 | distributed | toml, json, env, watch, validation, config-bus, progressive-reload, audit | 总线仅进程内 |
-| full | 39 项全量（= 全部非预设单 feature；含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key/interpolation…） | 需 docker 服务做行为测试 |
+| full | 40 项全量（= 全部非预设单 feature；含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key/interpolation/canary…） | 需 docker 服务做行为测试 |
 
 ---
 

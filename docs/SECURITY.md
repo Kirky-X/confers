@@ -213,6 +213,11 @@ let source = HttpPolledSourceBuilder::new()
     .build()?;
 ```
 
+远程来源（`remote`/`etcd`/`consul`/`etcd-watch`）公开接口已冻结，上述 SSRF 默认行为与以下安全相关默认值均属冻结契约，1.0 前不会放宽或破坏：
+
+- `HttpPolledSourceBuilder::stale_on_error` 默认关闭——获取失败即报错（fail-loud），不会静默回退到可能过期的陈旧配置；
+- etcd / Consul 的 TLS 通过 `EtcdTlsConfig` / `ConsulTlsConfig` 显式配置，不启用时为明文连接，生产环境应按[安全加固清单](#安全加固清单)为所有远程来源配置 TLS。
+
 ### 审计日志
 
 配置加载、密钥访问与解密事件都会被记录（需启用 `audit` 特性）：

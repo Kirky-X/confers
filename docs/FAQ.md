@@ -54,10 +54,7 @@
 - ✅ 支持主流格式（TOML、JSON、YAML）
 - ✅ 环境变量覆盖
 - ✅ 校验框架
-
-**测试期（Beta）的特性：**
-
-- 🚧 远程来源（`remote`、`etcd`、`consul`）：接口可能调整（与 [README 路线图](../README.md#️-开发路线图)一致）
+- ✅ 远程来源（`remote`、`etcd`、`consul`、`etcd-watch`）：公开接口已冻结，1.0 前不做破坏性变更（与 [README 路线图](../README.md#️-开发路线图)一致）
 
 **成熟度指标：**
 

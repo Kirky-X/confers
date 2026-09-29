@@ -3,21 +3,43 @@
 
 //! Shared utilities for remote configuration sources.
 
-// AnnotatedValue 仅被下方 toml/json/yaml 门控的解析函数与 etcd/consul 门控的
-// 合并函数使用；confers/remote 被单独启用时（如 trait-kit presets-remote）两者皆关。
-#[cfg(any(
-    feature = "toml",
-    feature = "json",
-    feature = "yaml",
-    feature = "etcd",
-    feature = "consul"
+// 解析函数仅服务 KV 源（etcd/consul/k8s/nacos，均隐含 toml/json/yaml），合并函数
+// 仅服务 etcd/consul；confers/remote 被单独启用时（如 trait-kit presets-remote）
+// 两者皆关。test 入选使函数自身的单元测试在仅 remote 构建下仍可编译。
+#[cfg(all(
+    any(feature = "toml", feature = "json", feature = "yaml"),
+    any(
+        feature = "etcd",
+        feature = "consul",
+        feature = "k8s",
+        feature = "nacos",
+        test
+    )
 ))]
 use crate::types::AnnotatedValue;
 
-#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
+#[cfg(all(
+    any(feature = "toml", feature = "json", feature = "yaml"),
+    any(
+        feature = "etcd",
+        feature = "consul",
+        feature = "k8s",
+        feature = "nacos",
+        test
+    )
+))]
 use crate::loader::{Format, detect_format_from_content};
 
-#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
+#[cfg(all(
+    any(feature = "toml", feature = "json", feature = "yaml"),
+    any(
+        feature = "etcd",
+        feature = "consul",
+        feature = "k8s",
+        feature = "nacos",
+        test
+    )
+))]
 use crate::types::SourceId;
 
 #[cfg(any(feature = "etcd", feature = "consul"))]
@@ -30,7 +52,16 @@ use std::sync::Arc;
 /// an explicit format always wins over sniffing. Returns `None` when the
 /// content cannot be parsed as the chosen format (callers then treat the
 /// value as a plain string).
-#[cfg(any(feature = "toml", feature = "json", feature = "yaml"))]
+#[cfg(all(
+    any(feature = "toml", feature = "json", feature = "yaml"),
+    any(
+        feature = "etcd",
+        feature = "consul",
+        feature = "k8s",
+        feature = "nacos",
+        test
+    )
+))]
 pub(crate) fn try_parse_value_with_format(
     content: &str,
     format: Option<Format>,
