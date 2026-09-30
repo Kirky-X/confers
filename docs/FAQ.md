@@ -195,7 +195,7 @@ confers = { version = "0.6.0-rc.6", default-features = false, features = ["distr
 confers = { version = "0.6.0-rc.6", features = ["full"] }
 ```
 
-> 💡 **提示**：默认特性为 `toml`、`json`、`env`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
+> 💡 **提示**：默认特性为 `toml`、`json`、`dotenv`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
 
 ### ❓ 不同特性组合的依赖数量差别有多大？
 

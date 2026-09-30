@@ -11,7 +11,7 @@ use confers::ConfigClap;
 use confers::ConfigMigration;
 #[cfg(feature = "modules")]
 use confers::ConfigModules;
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 use confers::ConfigSchema;
 use serde::Deserialize;
 use serial_test::serial;
@@ -220,7 +220,7 @@ fn test_numeric_env_override_negative_f64() {
 
 #[derive(Debug, ConfigSchema)]
 #[allow(dead_code)] // Fields are exercised only through the derive-generated schema.
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 struct SchemaConfig {
     #[config(name = "host")]
     pub host: String,
@@ -236,7 +236,7 @@ struct SchemaConfig {
 }
 
 #[test]
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 fn test_config_schema_derive_generates_json_schema() {
     let schema = SchemaConfig::json_schema();
     let obj = schema.as_object().expect("schema is an object");
@@ -283,7 +283,7 @@ fn test_config_schema_derive_generates_json_schema() {
 }
 
 #[test]
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 fn test_config_schema_derive_generates_typescript_type() {
     let ts = SchemaConfig::typescript_type();
     assert!(

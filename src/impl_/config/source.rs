@@ -158,7 +158,7 @@ impl Source for EnvSource {
         let mut map = indexmap::IndexMap::new();
 
         // Load .env file entries first (lower priority) if env feature is enabled
-        #[cfg(feature = "env")]
+        #[cfg(feature = "dotenv")]
         {
             if let Ok(iter) = dotenvy::dotenv_iter() {
                 // Sorted so the built tree is deterministic regardless of the

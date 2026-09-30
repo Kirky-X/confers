@@ -1,0 +1,28 @@
+# gitleaks 误报登记：以下指纹逐条核实为测试占位符/夹具，非真实凭据。
+# - tests/remote/etcd.rs、tests/remote/remote.rs：base64("test-config…") 的 etcd/HTTP 测试键，
+#   源码行内注释已标明明文；无任何真实云端凭据。
+# - src/remote/testdata/test-key.pem：本地 TLS 夹具测试私钥，仅供离线单测。
+# - src/key/storage.rs:822：脱敏器单测中的固定十六进制占位串。
+# - .secrets.baseline：detect-secrets 基线文件自身（内含历史指纹字符串）。
+# 云 KMS provider（src/secret/providers_{aws,gcp}_kms.rs）凭据仅走标准凭据链/env，
+# 测试一律 test- 前缀占位 + loopback mock，从未出现在扫描命中中。
+.secrets.baseline:generic-api-key:142
+.secrets.baseline:generic-api-key:149
+.secrets.baseline:generic-api-key:156
+.secrets.baseline:generic-api-key:165
+.secrets.baseline:generic-api-key:174
+.secrets.baseline:generic-api-key:181
+.secrets.baseline:generic-api-key:190
+.secrets.baseline:generic-api-key:199
+.secrets.baseline:generic-api-key:206
+.secrets.baseline:generic-api-key:215
+.secrets.baseline:generic-api-key:224
+.secrets.baseline:generic-api-key:233
+src/key/storage.rs:generic-api-key:822
+src/remote/testdata/test-key.pem:private-key:1
+tests/remote/etcd.rs:generic-api-key:92
+tests/remote/etcd.rs:generic-api-key:107
+tests/remote/etcd.rs:generic-api-key:144
+tests/remote/etcd.rs:generic-api-key:163
+tests/remote/remote.rs:generic-api-key:564
+tests/remote/remote.rs:generic-api-key:599

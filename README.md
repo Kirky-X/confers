@@ -160,7 +160,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ### 📋 功能矩阵
 
-下表逐项对应 `Cargo.toml` 的 `[features]` 定义，`default = ["toml", "json", "env"]`。
+下表逐项对应 `Cargo.toml` 的 `[features]` 定义，`default = ["toml", "json", "dotenv"]`。
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">特性</th><th style="text-align:center">默认</th><th style="text-align:left">说明</th></tr>
@@ -169,26 +169,28 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>json</code></td><td align="center">✅</td><td>JSON 配置文件</td></tr>
 <tr><td><code>yaml</code></td><td align="center">❌</td><td>YAML 配置文件</td></tr>
 <tr><td><code>ini</code></td><td align="center">❌</td><td>INI 配置文件</td></tr>
-<tr><td><code>env</code></td><td align="center">✅</td><td>环境变量加载与 <code>.env</code> 文件</td></tr>
-<tr><td><code>dotenv</code></td><td align="center">❌</td><td><code>env</code> 的别名</td></tr>
+<tr><td><code>dotenv</code></td><td align="center">✅</td><td>环境变量加载与 <code>.env</code> 文件</td></tr>
+<tr><td><code>env</code></td><td align="center">❌</td><td><code>dotenv</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>核心能力</b></td></tr>
 <tr><td><code>validation</code></td><td align="center">❌</td><td>基于 garde 的配置校验</td></tr>
 <tr><td><code>watch</code></td><td align="center">❌</td><td>文件监听与热重载，自适应去抖</td></tr>
 <tr><td><code>encryption</code></td><td align="center">❌</td><td>XChaCha20-Poly1305 加密与 HKDF 字段密钥派生</td></tr>
 <tr><td><code>cli</code></td><td align="center">❌</td><td>confers 命令行诊断工具</td></tr>
-<tr><td><code>schema</code></td><td align="center">❌</td><td>JSON Schema 生成</td></tr>
-<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript 类型生成（<code>schema</code> 的别名）</td></tr>
+<tr><td><code>json-schema</code></td><td align="center">❌</td><td>JSON Schema 生成</td></tr>
+<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript 类型生成（含 <code>json-schema</code>）</td></tr>
+<tr><td><code>schema</code></td><td align="center">❌</td><td><code>json-schema</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>动态字段，arc-swap 无锁读取</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>渐进式重载，金丝雀发布与健康检查回滚（含 <code>watch</code>）</td></tr>
 <tr><td><code>audit</code></td><td align="center">❌</td><td>审计日志，HMAC 完整性与敏感字段脱敏</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>配置版本迁移</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>快照与回滚</td></tr>
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> 变量插值，支持嵌套默认值</td></tr>
-<tr><td><code>tracing</code></td><td align="center">❌</td><td>启用内部 tracing 门面（未启用时为 no-op）</td></tr>
+<tr><td><code>tracing</code></td><td align="center">❌</td><td>内部 tracing 门面：load/reload/decrypt/remote_fetch 关键路径 span 与结构化事件（未启用时为 no-op）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>安全</b></td></tr>
 <tr><td><code>security</code></td><td align="center">❌</td><td>安全模块：加密集成、错误脱敏、环境变量校验（含 <code>encryption</code>）</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>内置 JWT、CORS、SSRF、TLS 校验器与注册表</td></tr>
-<tr><td><code>key</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
+<tr><td><code>key-management</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
+<tr><td><code>key</code></td><td align="center">❌</td><td><code>key-management</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
 <tr><td><code>keyring</code></td><td align="center">❌</td><td>密钥存储后端（文件、MasterKey、secret-tool，含 <code>encryption</code>）</td></tr>
 <tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>云 KMS 密钥提供方：Vault Transit / AWS KMS（SigV4）/ GCP KMS（metadata token）（含 <code>encryption</code>，依赖 <code>remote</code>）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>远程来源</b></td></tr>
@@ -333,8 +335,8 @@ cargo fuzz run parser
 <tr><td align="center">✅</td><td>安全与审计</td><td>XChaCha20-Poly1305 加密、密钥管理与轮换、审计日志、安全规则校验器</td></tr>
 <tr><td align="center">✅</td><td>远程与总线</td><td>HTTP 轮询、etcd、Consul、Nacos、Kubernetes ConfigMap / Secret、NATS 与 Redis 总线</td></tr>
 <tr><td align="center">✅</td><td>远程来源稳定</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code>、<code>etcd-watch</code> 转正：接口已冻结，1.0 前不再破坏性变更（watch 兼容性回归测试守护）</td></tr>
-<tr><td align="center">📋</td><td>性能优化</td><td>基准套件完善（criterion 基线）、大型配置内存占用优化、高频读取零拷贝热路径</td></tr>
-<tr><td align="center">📋</td><td>云原生集成</td><td>服务网格支持、分布式追踪集成</td></tr>
+<tr><td align="center">✅</td><td>性能优化</td><td>criterion 基线（<a href="docs/PERFORMANCE.md#-性能基线">性能基线</a>：加载 / 合并 / watch 分发）、内存上限与惰性分段解析、高频读取零拷贝热路径（<code>get_shared</code> 约 2.1x）</td></tr>
+<tr><td align="center">✅</td><td>云原生集成</td><td>服务网格流量切分（<code>canary</code> 编排器 + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio 样例</a>）、分布式追踪集成（<code>tracing</code> 门面：load/reload/decrypt/remote_fetch span）</td></tr>
 </table>
 
 ---

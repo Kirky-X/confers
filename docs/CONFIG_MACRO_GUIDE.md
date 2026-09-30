@@ -792,7 +792,7 @@ fn my_validator(value: &str, _: &()) -> garde::Result {
 |-----------|----------|
 | `#[config(validate)]` | `validation` |
 | `#[config(watch = true)]`（结构体级，当前无实际效果） | `watch` |
-| `json_schema()` | `schema` |
+| `json_schema()` | `json-schema` |
 | `TypeScriptGenerator::generate::<T>()` | `typescript-schema` |
 | CLI 参数支持 | `cli` |
 | 加密支持 | `encryption` |

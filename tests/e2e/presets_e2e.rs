@@ -84,10 +84,10 @@ fn prs01_core_api_compiles_without_any_feature() {
 fn prs0203040506_preset_expansions_match_doc() {
     let features = parse_features();
 
-    // default(§3.3 最小可用)。
-    assert_contains(&features, "default", &["toml", "json", "env"]);
-    // minimal(PRS-02):env+json,无 toml。
-    assert_contains(&features, "minimal", &["env", "json"]);
+    // default(§3.3 最小可用)。env→dotenv 正名迁移后 default 以 dotenv 记名。
+    assert_contains(&features, "default", &["toml", "json", "dotenv"]);
+    // minimal(PRS-02):dotenv+json,无 toml。
+    assert_contains(&features, "minimal", &["dotenv", "json"]);
     assert!(
         !features["minimal"].iter().any(|m| m == "toml"),
         "minimal must not include toml"
@@ -96,7 +96,7 @@ fn prs0203040506_preset_expansions_match_doc() {
     assert_contains(
         &features,
         "recommended",
-        &["toml", "env", "validation", "json", "security-rules"],
+        &["toml", "dotenv", "validation", "json", "security-rules"],
     );
     // dev(PRS-04):12 项。
     assert_contains(
@@ -106,10 +106,10 @@ fn prs0203040506_preset_expansions_match_doc() {
             "toml",
             "json",
             "yaml",
-            "env",
+            "dotenv",
             "cli",
             "validation",
-            "schema",
+            "json-schema",
             "audit",
             "watch",
             "migration",
@@ -124,12 +124,12 @@ fn prs0203040506_preset_expansions_match_doc() {
         "production",
         &[
             "toml",
-            "env",
+            "dotenv",
             "watch",
             "encryption",
             "validation",
             "audit",
-            "schema",
+            "json-schema",
             "cli",
             "migration",
             "dynamic",
@@ -151,7 +151,7 @@ fn prs0203040506_preset_expansions_match_doc() {
         &[
             "toml",
             "json",
-            "env",
+            "dotenv",
             "watch",
             "validation",
             "config-bus",
@@ -180,7 +180,7 @@ fn prs07_full_preset_covers_all_domain_features() {
         "json",
         "yaml",
         "ini",
-        "env",
+        // env/dotenv 正名迁移:full 记名 dotenv,env 仅作兼容别名,不再单列。
         "dotenv",
         "cli",
         "validation",
@@ -188,8 +188,9 @@ fn prs07_full_preset_covers_all_domain_features() {
         "encryption",
         "security",
         "security-rules",
-        "key",
-        "schema",
+        // key→key-management、schema→json-schema 正名迁移。
+        "key-management",
+        "json-schema",
         "typescript-schema",
         "dynamic",
         "progressive-reload",
@@ -223,7 +224,7 @@ fn prs07_full_preset_covers_all_domain_features() {
     assert_contains(&features, "full", &domains);
     assert_eq!(
         features["full"].len(),
-        40,
+        39,
         "full preset must stay the full capability surface"
     );
 
@@ -244,7 +245,7 @@ fn prs08_dependency_chains_from_doc_section_3_1() {
     let chains: &[(&str, &[&str])] = &[
         ("security", &["encryption"]),
         ("security-rules", &["security"]),
-        ("key", &["encryption"]),
+        ("key-management", &["encryption"]),
         ("cli", &["toml", "json", "yaml"]),
         ("progressive-reload", &["watch"]),
         ("snapshot", &["json", "toml", "yaml", "dynamic"]),
@@ -252,10 +253,13 @@ fn prs08_dependency_chains_from_doc_section_3_1() {
         ("consul", &["remote"]),
         ("nats-bus", &["config-bus"]),
         ("redis-bus", &["config-bus"]),
-        ("typescript-schema", &["schema"]),
-        ("dotenv", &["env"]),
-        ("default", &["toml", "json", "env"]),
+        ("typescript-schema", &["json-schema"]),
+        ("default", &["toml", "json", "dotenv"]),
         ("modules", &["toml"]),
+        // 近义 feature 正名迁移的兼容别名链(旧名 → 新名,下一版移除)。
+        ("env", &["dotenv"]),
+        ("key", &["key-management"]),
+        ("schema", &["json-schema"]),
     ];
     for (feature, deps) in chains {
         assert_contains(&features, feature, deps);

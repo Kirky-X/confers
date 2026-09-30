@@ -138,13 +138,13 @@ pub mod canary;
 #[cfg(feature = "cli")]
 pub mod cli;
 
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 pub mod schema;
 
 #[cfg(feature = "security")]
 pub mod security;
 
-#[cfg(feature = "key")]
+#[cfg(feature = "key-management")]
 pub mod key;
 
 #[cfg(feature = "feature-toggle")]
@@ -203,7 +203,7 @@ pub use confers_macros::ConfigClap;
 pub use confers_macros::ConfigMigration;
 #[cfg(feature = "modules")]
 pub use confers_macros::ConfigModules;
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 pub use confers_macros::ConfigSchema;
 
 // ============== Feature-gated Re-exports ==============

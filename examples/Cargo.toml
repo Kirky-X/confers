@@ -120,7 +120,7 @@ notify = { version = "8.2", default-features = false, features = ["macos_fsevent
 default = []
 toml = ["confers/toml"]
 json = ["confers/json"]
-env = ["confers/env"]
+dotenv = ["confers/dotenv"]
 watch = ["confers/watch"]
 encryption = ["confers/encryption"]
 dynamic = ["confers/dynamic"]

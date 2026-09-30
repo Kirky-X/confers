@@ -130,7 +130,7 @@
 | FMT-14 | 符号链接指向 allowed_dir 之外 → 默认拒绝；`no_symlink_check()` 放行 | 异常 | default | 本地文件 | src 内联 `src/impl_/loader.rs` | tests/e2e/format_e2e.rs |
 | FMT-15 | 绝对路径默认拒绝；`allow_absolute()` / `ConfigBuilder::allow_absolute_paths()` 放行 | 异常 | default | 本地文件 | `tests/cli/commands.rs::test_diff_command`（绝对路径 bail 分支）；src 内联 loader tests | tests/e2e/format_e2e.rs |
 | FMT-16 | 未知扩展名且内容无法嗅探 → `Format::try_parse`/detect 返回 None，调用方报"未知格式" | 异常 | default | 本地文件 | `tests/core/coverage.rs::test_format_try_parse_all`（反向断言） | tests/e2e/format_e2e.rs |
-| FMT-17 | `.env` 文件经 dotenvy 加载为 env 源；`dotenv` 为 `env` 的 alias | 正常 | env,dotenv | 本地文件 | `tests/cli/commands.rs::test_env_file_loading`、`tests/core/derive.rs::test_env_file_loading` 所在族 | tests/e2e/format_e2e.rs |
+| FMT-17 | `.env` 文件经 dotenvy 加载为 env 源；`dotenv` 为正名，`env` 为兼容 alias | 正常 | env,dotenv | 本地文件 | `tests/cli/commands.rs::test_env_file_loading`、`tests/core/derive.rs::test_env_file_loading` 所在族 | tests/e2e/format_e2e.rs |
 | FMT-18 | INI 只支持一层 section：深层嵌套输入不丢失也不 panic（降级为字符串） | 边界 | ini | 本地文件 | src 内联 loader tests（parse_ini 分支）→部分，需新增断言 | tests/e2e/format_e2e.rs |
 | FMT-19 | 带 UTF-8 BOM 的 TOML/JSON 文件可解析（或按实现明确报错，二选一固化） | 边界 | toml,json | 本地文件 | 无→需新增 | tests/e2e/format_e2e.rs |
 | FMT-20 | 同一内容 `load_file(path)` 与 `parse_content(content, detect(path))` 结果等价（值+source） | 正常 | toml,json | 本地文件 | `tests/core/load.rs::test_load_with_format_detection`（部分）→需新增等价断言 | tests/e2e/format_e2e.rs |
@@ -503,7 +503,7 @@
 |----|---------|------|-------------|---------|---------|---------|
 | SCH-01 | `ConfigSchema` 派生生成 JSON Schema：类型/必填/默认值正确 | 正常 | schema,macros | 无 | `tests/core/derive.rs::test_config_schema_derive_generates_json_schema` | tests/e2e/schema_e2e.rs |
 | SCH-02 | `TypeScriptGenerator::generate::<T>()` 生成 TS 类型声明，嵌套结构映射 interface | 正常 | typescript-schema,macros | 无 | `tests/core/derive.rs::test_config_schema_derive_generates_typescript_type`、src 内联 `src/impl_/schema.rs` tests | tests/e2e/schema_e2e.rs |
-| SCH-03 | `typescript-schema` 是 `schema` 的 alias：开 alias 即得全部 schema 能力 | 边界 | typescript-schema | 无 | Cargo.toml 声明核对 + PRS 编译矩阵 | tests/e2e/presets_e2e.rs |
+| SCH-03 | `typescript-schema` 含 `json-schema`：开前者即得全部 schema 能力（`schema` 为旧名兼容 alias） | 边界 | typescript-schema | 无 | Cargo.toml 声明核对 + PRS 编译矩阵 | tests/e2e/presets_e2e.rs |
 | SCH-04 | 嵌套 struct/Option/Vec 字段的 schema 输出正确性 | 边界 | schema | 无 | src 内联 schema tests→需新增断言 | tests/e2e/schema_e2e.rs |
 | SCH-05 | schema 与 CLI validate 联动：按 schema 语义校验一份坏配置报 issue | 异常 | schema,cli | 本地文件 | `tests/cli/commands.rs::test_validate_command`（启发式校验） | tests/e2e/cli_e2e.rs |
 

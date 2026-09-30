@@ -4551,8 +4551,23 @@ mod tests {
         ]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
         let report = super::run_doctor_checks(&ok_result, &[]);
-        assert_eq!(report.exit_code, 0, "healthy: {:?}", report.checks);
-        assert_eq!(report.status, "healthy");
+        // 无 encryption 特性的构建属于降级配置，doctor 有意报 warning
+        // （exit 1）而非静默 Ok；只有完整构建才承诺 healthy → 0。
+        #[cfg(not(feature = "encryption"))]
+        {
+            assert_eq!(report.exit_code, 1, "degraded build: {:?}", report.checks);
+            assert_eq!(report.status, "warning");
+            assert!(
+                severity_of(&report, "encryption") == DoctorSeverity::Warning,
+                "encryption check must warn on degraded builds: {:?}",
+                report.checks
+            );
+        }
+        #[cfg(feature = "encryption")]
+        {
+            assert_eq!(report.exit_code, 0, "healthy: {:?}", report.checks);
+            assert_eq!(report.status, "healthy");
+        }
         assert!(severity_of(&report, "sources") == DoctorSeverity::Ok);
     }
 
@@ -4690,6 +4705,11 @@ mod tests {
         let report = super::run_doctor_checks(&ok_result, &[]);
         let line = serde_json::to_string(&report.to_json_line()).expect("json");
         assert!(!line.contains('\n'), "single line: {line}");
+        // 降级构建（无 encryption）的 healthy 配置整体为 warning（见
+        // doctor_healthy_config_exits_zero），两种合法状态都须单行可序列化。
+        #[cfg(not(feature = "encryption"))]
+        assert!(line.contains("\"status\":\"warning\""), "{line}");
+        #[cfg(feature = "encryption")]
         assert!(line.contains("\"status\":\"healthy\""), "{line}");
     }
 

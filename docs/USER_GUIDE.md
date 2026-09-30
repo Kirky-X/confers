@@ -25,6 +25,7 @@
   - [审计日志与安全](#-审计日志与安全)
   - [文件监听与热重载](#-文件监听与热重载)
   - [敏感数据加密](#-敏感数据加密)
+  - [分布式追踪（tracing）](#-分布式追踪tracing)
 - [最佳实践](#-最佳实践)
   - [推荐的设计模式](#-推荐的设计模式)
   - [安全配置实践](#-安全配置实践)
@@ -88,7 +89,7 @@ cargo --version
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
 | **默认** | `confers = "0.6.0-rc.6"` | 包含 toml、json、env |
-| **最小化** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["minimal"] }` | Env + JSON（对应 Cargo.toml 的 `minimal = ["env", "json"]`） |
+| **最小化** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["minimal"] }` | dotenv + JSON（对应 Cargo.toml 的 `minimal = ["dotenv", "json"]`） |
 | **推荐** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Env + 校验 + 安全规则 |
 | **全量** | `confers = { version = "0.6.0-rc.6", features = ["full"] }` | 全部特性 |
 
@@ -667,6 +668,44 @@ struct SecureConfig {
     db_password: String,
 }
 ```
+
+---
+
+### 🔭 分布式追踪（tracing）
+
+`tracing` 特性启用内部追踪门面：关键路径（加载 / 热重载 / 解密 / 远程拉取）以
+span 与结构化事件接入应用程序安装的任意 `tracing` subscriber。未启用该特性时
+门面编译为 no-op，默认特性集零开销、零依赖。
+
+启用的 span 一览：
+
+| Span | 关键路径 |
+| --- | --- |
+| `confers.load` | 配置加载（builder 主流程） |
+| `confers.reload` | 文件监听触发的热重载 |
+| `confers.decrypt` | 敏感字段解密 |
+| `confers.remote_fetch` | 远程来源拉取（`source` 字段标注来源名） |
+
+事件统一以 `confers.` 前缀命名（如 `confers.load.completed`、
+`confers.reload.triggered`、`confers.encryption.feature_missing`），字段为
+`key=value` 对。门面与 metrics 观测面并行工作而非互斥。
+
+接入方式：在应用侧安装 subscriber 即可，confers 不引入任何 subscriber 依赖。
+
+```toml
+[dependencies]
+confers = { version = "0.6", features = ["watch", "tracing"] }
+tracing-subscriber = "0.3"
+```
+
+```rust
+tracing_subscriber::fmt()
+    .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    .init();
+```
+
+完整可运行示例见 examples 的 `hot_reload` / `full_stack`（`tracing-subscriber`
++ `RUST_LOG` 控制级别）。
 
 ---
 

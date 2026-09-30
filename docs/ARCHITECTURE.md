@@ -17,7 +17,7 @@ Confers 是一个生产就绪的 Rust 配置管理库，采用"零样板"设计�
 
 ## 🎯 概述
 
-Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审计、可热更新的方式管理来自多处的配置。它的能力边界由 Cargo 特性（feature）精确控制：从最小的 `env` + `json`，到覆盖远程来源、消息总线与加密的 `full` 预设，编译产物只包含您启用的功能。
+Confers 解决的核心问题是：如何让 Rust 应用以类型安全、可审计、可热更新的方式管理来自多处的配置。它的能力边界由 Cargo 特性（feature）精确控制：从最小的 `dotenv` + `json`，到覆盖远程来源、消息总线与加密的 `full` 预设，编译产物只包含您启用的功能。
 
 核心能力一览：
 
@@ -117,7 +117,7 @@ confers/
 | `interpolation` | `interpolation` | `${VAR}` / `${VAR:-default}` 变量插值（深度感知嵌套，支持自引用默认值） |
 | `watcher` | `watch` | 文件监听热重载：`FsWatcher`、`MultiFsWatcher`、`AdaptiveDebouncer`；`progressive` 子模块实现渐进式发布 |
 | `secret` | `encryption` | 加密原语：`XChaCha20Crypto`、`derive_field_key`、`SecretBytes`、`KeyRegistry`、`EnvKeyProvider`/`FileKeyProvider` 等、`EncryptionPrefix`（`enc:` 前缀识别） |
-| `key` | `key` | 密钥生命周期：`KeyManager`、`KeyStorage`（加密持久化）、`KeyRotationService`/`KeyRotationPolicy`、`KeyVersion`/`KeyInfo` |
+| `key` | `key-management` | 密钥生命周期：`KeyManager`、`KeyStorage`（加密持久化）、`KeyRotationService`/`KeyRotationPolicy`、`KeyVersion`/`KeyInfo` |
 | `security` | `security` / `security-rules` | `EnvSecurityValidator`（环境变量注入防护）、`ErrorSanitizer`（错误脱敏）、`rules` 子模块内置 JWT/CORS/SSRF/TLS 校验器与 `SecurityValidatorRegistry` |
 | `audit` | `audit` | 审计日志（写入器、HMAC 完整性、敏感字段脱敏） |
 | `dynamic` | `dynamic` | 运行时动态字段：`DynamicField`/`DynamicFieldBuilder`、`CallbackGuard`、`FieldWatcher`，基于 `arc-swap` 快照 |
@@ -128,7 +128,7 @@ confers/
 | `bus` | `config-bus` / `nats-bus` / `redis-bus` | 多实例配置变更广播：`ConfigBus`、`BusEventLimiter`，基于 tokio broadcast，支持 NATS / Redis 后端 |
 | `toggle` | `feature-toggle` | 运行时特性开关：`FeatureToggleRegistry`（基于 `dashmap`） |
 | `context` | `context-aware` | 上下文感知配置 |
-| `schema` | `schema` / `typescript-schema` | `TypeScriptGenerator`，从 Rust 类型生成 TS 定义 |
+| `schema` | `json-schema` / `typescript-schema` | `TypeScriptGenerator`，从 Rust 类型生成 TS 定义 |
 | `cli` | `cli` | `confers` 命令行工具（clap）：inspect、validate、export、diff、snapshot（含 list/restore）、schema、get、docs、doctor；入口在 `src/cli/main.rs` |
 
 ### workspace 成员

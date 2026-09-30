@@ -646,9 +646,9 @@ pub struct RotationResult {
 
 以下 API 由 Cargo 特性门控，启用对应特性后才可用。
 
-### 密钥管理（`key` 特性）
+### 密钥管理（`key-management` 特性）
 
-`KeyManager` 提供加密密钥的全面管理，包括轮换、版本控制与密钥存储。需要启用 `key` 特性（隐式启用 `encryption`）。
+`KeyManager` 提供加密密钥的全面管理，包括轮换、版本控制与密钥存储。需要启用 `key-management` 特性（隐式启用 `encryption`；旧名 `key` 为兼容别名）。
 
 ```mermaid
 graph TB
@@ -789,7 +789,7 @@ pub fn list_keys(&self) -> Vec<KeyInfo>
 
 #### 密钥生命周期管理
 
-`key` 特性提供完整的密钥生命周期管理，包括密钥创建、存储、轮换与吊销。
+`key-management` 特性提供完整的密钥生命周期管理，包括密钥创建、存储、轮换与吊销。
 
 ```rust
 use confers::key::KeyManager;
@@ -1306,9 +1306,9 @@ export interface ConfersConfig {
 
 ---
 
-### Schema 生成（`schema` 特性）
+### JSON Schema 生成（`json-schema` 特性）
 
-配置结构可通过 `schemars` crate 生成 JSON Schema。需要启用 `schema` 特性。
+配置结构可通过 `schemars` crate 生成 JSON Schema。需要启用 `json-schema` 特性（旧名 `schema` 为兼容别名）。
 
 要生成 Schema，配置结构体需要派生 `JsonSchema` trait：
 

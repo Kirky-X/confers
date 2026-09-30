@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 近义 feature 正名迁移（env→dotenv、key→key-management、schema→json-schema）
+
+- 三个近义 feature 对正名迁移：`dotenv`（语义即 .env 文件加载，`env` 曾与 `SourceKind::Environment` 环境变量源术语冲突）、`key-management`（密钥轮换/版本管理语义，`key` 过泛）、`json-schema`（产出即 JSON Schema，`schema` 过泛）；预设（default/minimal/recommended/dev/production/full/distributed）与内部 cfg 门控全部记名正名
+- 旧名保留一个版本作兼容别名（`env = ["dotenv"]`、`key = ["key-management"]`、`schema = ["json-schema"]`），启用任一别名经 `build.rs` 输出编译期 `cargo:warning` 弃用提示，下一版本移除
+- 迁移映射文档化：README/README_EN 功能矩阵标注正名与别名关系；ARCHITECTURE 特性-模块映射表、API_REFERENCE/FAQ/USER_GUIDE/LIBRARY_INTEGRATION/TEST_SCENARIOS 同步；presets_e2e 固化别名链（`env→dotenv`、`key→key-management`、`schema→json-schema`）与正名预设展开
+- 存量测试修复：doctor 的 healthy 断言改为特性组合感知——无 `encryption` 的降级构建下 doctor 有意报 warning（exit 1），测试按构建态分别钉住 healthy/warning 契约，修复 `dev` 预设组合下 cli 套件的误报失败
+
 ### 云 KMS 后端（cloud-kms 特性：Vault + AWS + GCP）
 
 - AWS KMS（`AwsKmsKeyProvider`）：`kms:Decrypt` 经 SigV4 签名的 JSON 1.1 API 直调（rustls HTTP，无 AWS SDK）——SigV4 纯函数实现（hmac/sha2/hex）并通过 AWS 文档公开测试向量（AKIDEXAMPLE 向量，非真实凭据）钉住签名正确性；凭据来自 builder 或 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN`，支持临时凭据 `x-amz-security-token`；endpoint 可覆盖（plain HTTP 仅允许回环地址——127.0.0.0/8/::1/localhost 精确匹配，名称形如 127.0.0.1.evil.com 的域名拒绝），非回环地址强制 HTTPS

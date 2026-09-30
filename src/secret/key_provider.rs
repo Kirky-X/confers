@@ -109,8 +109,8 @@ impl SecretKeyProvider for EnvKeyProvider {
     }
 }
 
-#[cfg(all(test, feature = "env"))]
-mod t037_provider_tests {
+#[cfg(all(test, feature = "dotenv"))]
+mod dotenv_provider_tests {
     use super::*;
     use serial_test::serial;
 

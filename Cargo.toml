@@ -124,15 +124,17 @@ serial_test = { version = "4.0", default-features = false } # >=3.5 drops the `s
 bench = false
 
 [features]
-default = ["toml", "json", "env"]
+default = ["toml", "json", "dotenv"]
 
 # Format support
 toml = ["dep:toml"]
 json = []
 yaml = ["dep:serde_yaml_ng"]
 ini = []
-env = ["dep:dotenvy"]
-dotenv = ["env"]
+# dotenv 正名（该特性实际语义是 .env 文件加载，env 曾与 SourceKind::Environment
+# 术语冲突）；env 降级为兼容别名，下一版本移除。
+dotenv = ["dep:dotenvy"]
+env = ["dotenv"]
 
 # Core features
 # Internal aggregate predicate: true whenever any async background capability
@@ -140,14 +142,18 @@ dotenv = ["env"]
 # gate on this instead of repeating the four-feature disjunction.
 async-core = []
 validation = ["dep:garde"]
-typescript-schema = ["schema"]
+typescript-schema = ["json-schema"]
 security = ["encryption", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
-key = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
+# key-management 正名（密钥轮换/版本管理语义；key 过泛，为兼容别名，下一版移除）。
+key-management = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
+key = ["key-management"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log", "async-core"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:getrandom", "async-core"]
-cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono", "schema"]
-schema = ["dep:schemars"]
+cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono", "json-schema"]
+# json-schema 正名（产出即 JSON Schema；schema 为兼容别名，下一版移除）。
+json-schema = ["dep:schemars"]
+schema = ["json-schema"]
 dynamic = ["dep:arc-swap", "dep:tokio", "dep:dashmap"]
 feature-toggle = ["dep:dashmap"]
 progressive-reload = ["watch", "dep:arc-swap", "dep:async-trait"]
@@ -192,12 +198,12 @@ context-aware = []
 modules = ["toml"]
 
 # Feature presets
-recommended = ["toml", "env", "validation", "json", "security-rules"]
-dev = ["toml", "json", "yaml", "env", "cli", "validation", "schema", "audit", "watch", "migration", "snapshot", "dynamic"]
-production = ["toml", "env", "watch", "encryption", "validation", "audit", "schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "env", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key", "schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy-parse", "tracing", "canary"]
-minimal = ["env", "json"]
-distributed = ["toml", "json", "env", "watch", "validation", "config-bus", "progressive-reload", "audit"]
+recommended = ["toml", "dotenv", "validation", "json", "security-rules"]
+dev = ["toml", "json", "yaml", "dotenv", "cli", "validation", "json-schema", "audit", "watch", "migration", "snapshot", "dynamic"]
+production = ["toml", "dotenv", "watch", "encryption", "validation", "audit", "json-schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
+full = ["toml", "json", "yaml", "ini", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key-management", "json-schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy-parse", "tracing", "canary"]
+minimal = ["dotenv", "json"]
+distributed = ["toml", "json", "dotenv", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
@@ -374,7 +380,7 @@ required-features = ["modules", "toml"]
 [[test]]
 name = "key_e2e"
 path = "tests/e2e/key_e2e.rs"
-required-features = ["key", "encryption"]
+required-features = ["key-management", "encryption"]
 
 [[test]]
 name = "security_rules_e2e"

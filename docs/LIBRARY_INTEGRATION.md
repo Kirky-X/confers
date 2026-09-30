@@ -24,7 +24,7 @@
 
 ```toml
 [dependencies]
-confers = { version = "0.6.0-rc.6", features = ["toml", "json", "env"] }
+confers = { version = "0.6.0-rc.6", features = ["toml", "json", "dotenv"] }
 ```
 
 ### 2. 基本用法
@@ -167,7 +167,7 @@ confers = { version = "0.6.0-rc.6", features = ["validation", "encryption"] }
 
 ### 加密密钥问题
 
-`derive_field_key` 要求 32 字节主密钥。请使用 `KeyManager`（位于 `key` 特性下）安全管理密钥材料：
+`derive_field_key` 要求 32 字节主密钥。请使用 `KeyManager`（位于 `key-management` 特性下）安全管理密钥材料：
 
 ```rust
 use confers::key::KeyManager;

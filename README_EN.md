@@ -160,7 +160,7 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 
 ### 📋 Feature Matrix
 
-The table below mirrors the `[features]` section of `Cargo.toml`, where `default = ["toml", "json", "env"]`.
+The table below mirrors the `[features]` section of `Cargo.toml`, where `default = ["toml", "json", "dotenv"]`.
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">Feature</th><th style="text-align:center">Default</th><th style="text-align:left">Description</th></tr>
@@ -169,26 +169,28 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>json</code></td><td align="center">✅</td><td>JSON configuration files</td></tr>
 <tr><td><code>yaml</code></td><td align="center">❌</td><td>YAML configuration files</td></tr>
 <tr><td><code>ini</code></td><td align="center">❌</td><td>INI configuration files</td></tr>
-<tr><td><code>env</code></td><td align="center">✅</td><td>Environment variable loading and <code>.env</code> files</td></tr>
-<tr><td><code>dotenv</code></td><td align="center">❌</td><td>Alias of <code>env</code></td></tr>
+<tr><td><code>dotenv</code></td><td align="center">✅</td><td>Environment variable loading and <code>.env</code> files</td></tr>
+<tr><td><code>env</code></td><td align="center">❌</td><td>Compatibility alias of <code>dotenv</code> (emits a compile-time warning; removed in the next release)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Core Capabilities</b></td></tr>
 <tr><td><code>validation</code></td><td align="center">❌</td><td>Configuration validation built on garde</td></tr>
 <tr><td><code>watch</code></td><td align="center">❌</td><td>File watching and hot reload with adaptive debouncing</td></tr>
 <tr><td><code>encryption</code></td><td align="center">❌</td><td>XChaCha20-Poly1305 encryption with HKDF per-field key derivation</td></tr>
 <tr><td><code>cli</code></td><td align="center">❌</td><td>The confers command-line diagnostics tool</td></tr>
-<tr><td><code>schema</code></td><td align="center">❌</td><td>JSON Schema generation</td></tr>
-<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript type generation (alias of <code>schema</code>)</td></tr>
+<tr><td><code>json-schema</code></td><td align="center">❌</td><td>JSON Schema generation</td></tr>
+<tr><td><code>typescript-schema</code></td><td align="center">❌</td><td>TypeScript type generation (includes <code>json-schema</code>)</td></tr>
+<tr><td><code>schema</code></td><td align="center">❌</td><td>Compatibility alias of <code>json-schema</code> (emits a compile-time warning; removed in the next release)</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>Dynamic fields with lock-free arc-swap reads</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>Progressive reload with canary rollout and health-check rollback (includes <code>watch</code>)</td></tr>
 <tr><td><code>audit</code></td><td align="center">❌</td><td>Audit logging with HMAC integrity and sensitive-field masking</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>Configuration version migration</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>Snapshots and rollback</td></tr>
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> interpolation with nested defaults</td></tr>
-<tr><td><code>tracing</code></td><td align="center">❌</td><td>Enable the internal tracing facade (no-op when disabled)</td></tr>
+<tr><td><code>tracing</code></td><td align="center">❌</td><td>Internal tracing facade: spans and structured events on the load/reload/decrypt/remote_fetch critical paths (no-op when disabled)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Security</b></td></tr>
 <tr><td><code>security</code></td><td align="center">❌</td><td>Security module: encryption integration, error sanitization, env validation (includes <code>encryption</code>)</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>Built-in JWT, CORS, SSRF, TLS validators with a registry</td></tr>
-<tr><td><code>key</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
+<tr><td><code>key-management</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
+<tr><td><code>key</code></td><td align="center">❌</td><td>Compatibility alias of <code>key-management</code> (emits a compile-time warning; removed in the next release)</td></tr>
 <tr><td><code>keyring</code></td><td align="center">❌</td><td>Key storage backends (file, MasterKey, secret-tool; includes <code>encryption</code>)</td></tr>
 <tr><td><code>cloud-kms</code></td><td align="center">❌</td><td>Cloud KMS key providers: Vault Transit / AWS KMS (SigV4) / GCP KMS (metadata token) (includes <code>encryption</code>, requires <code>remote</code>)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Remote Sources</b></td></tr>
@@ -333,8 +335,8 @@ Please do not report security vulnerabilities through public issues. Use the pri
 <tr><td align="center">✅</td><td>Security and audit</td><td>XChaCha20-Poly1305 encryption, key management and rotation, audit logging, security rule validators</td></tr>
 <tr><td align="center">✅</td><td>Remote and bus</td><td>HTTP polling, etcd, Consul, Nacos, Kubernetes ConfigMap / Secret, NATS and Redis buses</td></tr>
 <tr><td align="center">✅</td><td>Remote sources stable</td><td><code>remote</code>, <code>etcd</code>, <code>consul</code>, and <code>etcd-watch</code> promoted: interfaces frozen, no breaking changes before 1.0 (guarded by watch compatibility regression tests)</td></tr>
-<tr><td align="center">📋</td><td>Performance</td><td>Benchmark suite refinement (criterion baselines), memory footprint optimization for large configs, zero-copy hot path for high-frequency reads</td></tr>
-<tr><td align="center">📋</td><td>Cloud-native integration</td><td>Service mesh support, distributed tracing integration</td></tr>
+<tr><td align="center">✅</td><td>Performance</td><td>Criterion baselines (<a href="docs/PERFORMANCE.md#-性能基线">performance baselines</a>: load / merge / watch dispatch), memory limits and lazy segmented parsing, zero-copy hot path for high-frequency reads (<code>get_shared</code>, ~2.1x)</td></tr>
+<tr><td align="center">✅</td><td>Cloud-native integration</td><td>Service mesh traffic splitting (<code>canary</code> orchestrator + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio samples</a>), distributed tracing (<code>tracing</code> facade: load/reload/decrypt/remote_fetch spans)</td></tr>
 </table>
 
 ---

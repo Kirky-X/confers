@@ -54,7 +54,7 @@ pub(crate) mod migration;
 #[cfg(feature = "modules")]
 #[allow(dead_code)]
 pub(crate) mod modules;
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 #[allow(dead_code)]
 pub(crate) mod schema;
 #[cfg(feature = "snapshot")]
