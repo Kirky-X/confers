@@ -181,7 +181,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>schema</code></td><td align="center">❌</td><td><code>json-schema</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>动态字段，arc-swap 无锁读取</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>渐进式重载，金丝雀发布与健康检查回滚（含 <code>watch</code>）</td></tr>
-<tr><td><code>audit</code></td><td align="center">❌</td><td>审计日志，HMAC 完整性与敏感字段脱敏</td></tr>
+<tr><td><code>audit</code></td><td align="center">❌</td><td>审计日志，HMAC 完整性与敏感字段脱敏；<code>AuditSink</code> 端口由同工作区 inklog 的 <code>confers-audit</code> 特性实现（可编译实跑示例见 inklog 仓库 <code>examples/src/bin/config/confers_audit.rs</code>）</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>配置版本迁移</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>快照与回滚</td></tr>
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> 变量插值，支持嵌套默认值</td></tr>

@@ -812,6 +812,8 @@ println!("Key rotated from version {} to {}",
 
 配置审计日志以追踪所有配置的加载与修改操作。`AuditWriter` 的构建与事件记录示例见 [🔒 安全文档 · 审计日志](SECURITY.md#审计日志)，完整 API 签名见 [API 参考 · 审计日志配置](API_REFERENCE.md#审计日志配置)。
 
+除默认的本地 HMAC 链文件外，`AuditWriter` 还支持经 `AuditSink` 端口注入外部落盘管道；该端口的 inklog 实现由同工作区 inklog 的 `integrations` 模块提供（`ConfersAuditSink`，`confers-audit` 特性）：审计事件在本地 HMAC 链文件照旧的同时同步转发 inklog 结构化 sink。可编译实跑的集成示例见 inklog 仓库 `examples/src/bin/config/confers_audit.rs`（`cargo run --package inklog-examples --features confers-audit --bin confers_audit`）。
+
 **审计日志最佳实践：**
 
 - ✅ 将审计日志存储在安全位置（如 `/var/log/confers/`）

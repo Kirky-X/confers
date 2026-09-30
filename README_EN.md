@@ -181,7 +181,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>schema</code></td><td align="center">❌</td><td>Compatibility alias of <code>json-schema</code> (emits a compile-time warning; removed in the next release)</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>Dynamic fields with lock-free arc-swap reads</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>Progressive reload with canary rollout and health-check rollback (includes <code>watch</code>)</td></tr>
-<tr><td><code>audit</code></td><td align="center">❌</td><td>Audit logging with HMAC integrity and sensitive-field masking</td></tr>
+<tr><td><code>audit</code></td><td align="center">❌</td><td>Audit logging with HMAC integrity and sensitive-field masking; the <code>AuditSink</code> port is implemented by the sibling inklog crate's <code>confers-audit</code> feature (runnable example: <code>examples/src/bin/config/confers_audit.rs</code> in the inklog repository)</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>Configuration version migration</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>Snapshots and rollback</td></tr>
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> interpolation with nested defaults</td></tr>

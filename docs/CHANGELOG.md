@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### inklog 审计双向集成（纯文档配套）
+
+- **双向关系**：inklog 侧既有 `config-confers` 特性经 confers 加载配置并 watch 热更新（inklog 消费 confers）；本次 confers `audit` 特性的既有 `AuditSink` 对象安全多 sink 端口（`add_sink`/`with_sink`/builder 注入，见 [0.6.0-rc.3] 节）由 inklog `integrations::ConfersAuditSink`（`confers-audit` 特性，自 confers 0.6.0-rc.5 钉版消费）实现——审计事件（KeyAccess/KeyRotation/Decrypt/LoadSuccess/ReloadTrigger）在本地 HMAC 链文件照旧的同时同步转发 inklog 结构化 sink（confers 事件流入 inklog）。端口在 confers、实现在 inklog，confers 本侧零代码变更、零新增依赖（不反向依赖 inklog）
+- **集成示例**：可编译实跑示例位于 inklog 仓库 `examples/src/bin/config/confers_audit.rs`（`cargo run --package inklog-examples --features confers-audit --bin confers_audit`）
+- **文档同步**：README/README_EN 功能矩阵 `audit` 行与 USER_GUIDE「审计日志配置」节标注该集成
+
 ### 近义 feature 正名迁移（env→dotenv、key→key-management、schema→json-schema）
 
 - 三个近义 feature 对正名迁移：`dotenv`（语义即 .env 文件加载，`env` 曾与 `SourceKind::Environment` 环境变量源术语冲突）、`key-management`（密钥轮换/版本管理语义，`key` 过泛）、`json-schema`（产出即 JSON Schema，`schema` 过泛）；预设（default/minimal/recommended/dev/production/full/distributed）与内部 cfg 门控全部记名正名
