@@ -1015,7 +1015,7 @@ validator.validate_env_mapping(&mapping)?;
 
 #### ErrorSanitizer
 
-错误信息中的敏感数据脱敏（`security` 模块内的该项导出由 `encryption` 特性门控）。
+错误信息中的敏感数据脱敏（`security` 模块内的该项导出由 `security` 特性门控）。
 
 ```rust
 use confers::security::ErrorSanitizer;

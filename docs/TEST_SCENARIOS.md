@@ -605,7 +605,7 @@
 | PRS-05 | `--features production`（14 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-07 | `--features full`（40 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
-| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/env/validation/watch/encryption/…40 项）每项 `cargo check` 通过（依赖链自动生效：security→encryption、nats-bus→config-bus 等） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
+| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/dotenv/validation/watch/encryption/…40 项）每项 `cargo check` 通过（依赖链自动生效：security-rules→security、nats-bus→config-bus 等；security 与 encryption 已解耦，security 单开不拉入加密栈） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
 
 ---
 
@@ -614,9 +614,9 @@
 ### 3.1 依赖链（由 Cargo.toml `[features]` 固化，组合测试无需单独验证的部分）
 
 ```text
-security          → encryption, hex
-security-rules    → security (→encryption), ipnet
-key               → encryption, chrono, rand, hex
+security          → zeroize, sha2, hex（§9.2-5 解耦：不隐含 encryption/加密栈）
+security-rules    → security, ipnet
+key-management    → encryption, chrono, rand, hex（key 为兼容别名 → key-management）
 cli               → clap, similar, toml, json, yaml, chrono
 progressive-reload→ watch, arc-swap, async-trait
 snapshot          → chrono, tokio, json, toml, yaml, dynamic
@@ -624,9 +624,9 @@ etcd              → remote, etcd-client, toml, json, yaml
 consul            → remote, toml, json, yaml
 nats-bus          → config-bus, async-nats
 redis-bus         → config-bus, redis, async-stream
-typescript-schema → schema
-dotenv            → env
-default           → toml, json, env
+typescript-schema → json-schema（schema 为兼容别名 → json-schema）
+dotenv            → dotenvy（env 为兼容别名 → dotenv）
+default           → toml, json, dotenv
 ```
 
 结论：**不存在互斥 feature**，所有 feature 均可自由叠加；约束只体现为"开子项自动带上父项"。E2E 组合矩阵按 3.2 的显式组合清单验证交互行为（编译兼容由 PRS 矩阵保证）。

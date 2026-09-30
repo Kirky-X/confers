@@ -892,16 +892,16 @@ mod tests {
 
 // Security primitives wired to the public API via feature gates.
 // `config_injector` and `input_validation` are gated behind `security-rules`;
-// `secure_string` is gated behind `encryption`.
+// `error_sanitization` and `secure_string` compile whenever this module exists
+// — the `security` feature owns their zeroize/sha2/hex primitives directly
+// (no encryption implication since the §9.2-5 decoupling).
 #[cfg(feature = "security-rules")]
 pub(crate) mod config_injector;
 pub(crate) mod error_sanitization;
 #[cfg(feature = "security-rules")]
 pub(crate) mod input_validation;
-#[cfg(feature = "encryption")]
 pub(crate) mod secure_string;
 
-#[cfg(feature = "encryption")]
 pub use error_sanitization::{
     Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
     SensitiveDataFilter,
@@ -915,7 +915,6 @@ pub use input_validation::{
     ConfigValidationError, ConfigValidationResult, ConfigValidator, ConfigValidatorBuilder,
     InputValidationError, InputValidator, SensitiveDataDetector, SensitivityResult,
 };
-#[cfg(feature = "encryption")]
 pub use secure_string::{
     SecureString, SecureStringBuilder, SensitiveData, SensitivityLevel, allocated_secure_strings,
     deallocated_secure_strings,

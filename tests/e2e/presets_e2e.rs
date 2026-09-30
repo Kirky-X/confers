@@ -11,7 +11,8 @@
 //!   §3.3 展开清单一致(从本仓 Cargo.toml [features] 现场解析)。
 //! - PRS-07 full 预设覆盖全部功能域 feature;`cfg(feature = "full")` 分支在
 //!   full 构建态做正向断言。
-//! - PRS-08 §3.1 依赖链逐条核对(security→encryption、nats-bus→config-bus 等)。
+//! - PRS-08 §3.1 依赖链逐条核对(nats-bus→config-bus 等)与 security/encryption
+//!   解耦负面断言(security 不得隐含 encryption)。
 //!
 //! PRS 编译矩阵的**执行记录**(37 组特性组合逐组 cargo test 全绿)见
 //! reviews/acceptance-report.md 特性组合台账;本文件固化其输入依据的结构完整性。
@@ -242,8 +243,19 @@ fn prs07_full_preset_covers_all_domain_features() {
 fn prs08_dependency_chains_from_doc_section_3_1() {
     let features = parse_features();
 
+    // 解耦负面断言:security 不得隐含 encryption(FEATURE_AUDIT_REPORT §9.2-5)。
+    // 规则引擎为纯计算校验,启用 security/security-rules 不应拉入加密栈
+    // (chacha20poly1305/hkdf/tokio 等);security 自身原语依赖全部走 dep: 声明,
+    // 经 parse_features 剔除后 feature 级成员应为空。
+    let security_members = features
+        .get("security")
+        .unwrap_or_else(|| panic!("feature 'security' must be defined"));
+    assert!(
+        !security_members.contains(&"encryption".to_string()),
+        "security must not imply encryption after the §9.2-5 decoupling, got {security_members:?}"
+    );
+
     let chains: &[(&str, &[&str])] = &[
-        ("security", &["encryption"]),
         ("security-rules", &["security"]),
         ("key-management", &["encryption"]),
         ("cli", &["toml", "json", "yaml"]),

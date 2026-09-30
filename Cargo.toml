@@ -143,7 +143,11 @@ env = ["dotenv"]
 async-core = []
 validation = ["dep:garde"]
 typescript-schema = ["json-schema"]
-security = ["encryption", "dep:hex"]
+# security 与 encryption 解耦（FEATURE_AUDIT_REPORT §9.2-5）：本模块仅需
+# zeroize（SecureString 零化）与 sha2+hex（fingerprint 指纹）三个轻量原语，
+# 不再经 encryption 整链拉入加密栈（chacha20poly1305/hkdf/tokio 等）；
+# security-rules 为纯计算校验，经本条同享解耦。
+security = ["dep:zeroize", "dep:sha2", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 # key-management 正名（密钥轮换/版本管理语义；key 过泛，为兼容别名，下一版移除）。
 key-management = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]

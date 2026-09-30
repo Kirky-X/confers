@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### security 与 encryption 特性解耦（FEATURE_AUDIT_REPORT §9.2-5）
+
+- `security` 不再隐含 `encryption`：security 模块（`SecureString`、错误脱敏 `ErrorSanitizer`）实际仅需 zeroize（零化）与 sha2+hex（`fingerprint` 指纹）三个轻量原语，现由 `security` 直接声明；启用 `security-rules`（规则引擎为纯计算校验）与 `recommended` 预设不再经链式传递拉入 chacha20poly1305/hkdf/tokio/getrandom 等加密栈依赖（recommended 直接依赖 27→22、传递去重 131→119，实测口径同 FAQ 依赖数量表）
+- **有效公开面不变**：`ErrorSanitizer`/`SecureString` 等导出的生效门控由 `encryption` 收敛为 `security`——原链式语义（security⇒encryption）下两者恒同开，消费者无感知；`--features encryption` 单开组合行为不变（security 模块本就不编译）。需要加密能力的组合显式启用 `encryption`（`production`/`full` 预设已含）
+- 门禁与文档同步：presets_e2e prs08 固化解耦负面断言（`security` 成员不得含 `encryption`）；README/README_EN 功能矩阵 `security` 行改写；TEST_SCENARIOS §3.1 依赖链表与 PRS-08 行更新；API_REFERENCE `ErrorSanitizer` 门控说明、FAQ `recommended` 依赖数量行、CONTRIBUTING 默认特性名同步；README/README_EN 预设表残留旧名（`env`/`schema`）一并修正为正名
+
 ### inklog 审计双向集成（纯文档配套）
 
 - **双向关系**：inklog 侧既有 `config-confers` 特性经 confers 加载配置并 watch 热更新（inklog 消费 confers）；本次 confers `audit` 特性的既有 `AuditSink` 对象安全多 sink 端口（`add_sink`/`with_sink`/builder 注入，见 [0.6.0-rc.3] 节）由 inklog `integrations::ConfersAuditSink`（`confers-audit` 特性，自 confers 0.6.0-rc.5 钉版消费）实现——审计事件（KeyAccess/KeyRotation/Decrypt/LoadSuccess/ReloadTrigger）在本地 HMAC 链文件照旧的同时同步转发 inklog 结构化 sink（confers 事件流入 inklog）。端口在 confers、实现在 inklog，confers 本侧零代码变更、零新增依赖（不反向依赖 inklog）

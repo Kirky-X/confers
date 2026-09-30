@@ -95,7 +95,7 @@ Beyond the core capabilities above, config migration, snapshots and rollback, va
 cargo add confers
 ```
 
-Requires Rust 1.97.1 or later (MSRV, matching the repository `rust-toolchain.toml`). Default features include `toml`, `json`, and `env`; the installation commands and feature lists for every preset (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) live in the [🎨 Feature Flags](#-feature-flags) section below.
+Requires Rust 1.97.1 or later (MSRV, matching the repository `rust-toolchain.toml`). Default features include `toml`, `json`, and `dotenv`; the installation commands and feature lists for every preset (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) live in the [🎨 Feature Flags](#-feature-flags) section below.
 
 ### 💡 Minimal Example
 
@@ -140,7 +140,7 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 - **Source chain**: declare `FileSource`, `EnvSource`, `MemorySource`, and remote sources via `ConfigBuilder` / `SourceChainBuilder`; declaration order is priority, later sources override earlier ones.
 - **Annotated values**: every config value is wrapped in an `AnnotatedValue` carrying `SourceId` and `SourceLocation` (down to row and column), so conflicts are traceable.
 - **Two-phase errors**: initialization failures return `ConfigConfigError`; runtime failures return `ConfersError`, keeping the two classes of problems separate.
-- **Feature gating**: every optional capability is an independent feature; compiled artifacts only include what you enable, down to a minimal `env` + `json`.
+- **Feature gating**: every optional capability is an independent feature; compiled artifacts only include what you enable, down to a minimal `dotenv` + `json`.
 
 ---
 
@@ -150,12 +150,12 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 
 | Preset | Installation | Features | Use Case |
 |------|----------|----------|----------|
-| Default | `cargo add confers` | `toml`, `json`, `env` | Works out of the box |
-| `minimal` | `cargo add confers --no-default-features --features minimal` | `env`, `json` | Minimal loading |
-| `recommended` | `cargo add confers --no-default-features --features recommended` | `toml`, `env`, `validation`, `json`, `security-rules` | Most applications |
-| `dev` | `cargo add confers --features dev` | `toml`, `json`, `yaml`, `env`, `cli`, `validation`, `schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Full development toolset |
-| `production` | `cargo add confers --features production` | `toml`, `env`, `watch`, `encryption`, `validation`, `audit`, `schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`, `security-rules`, `feature-toggle` | Production environments |
-| `distributed` | `cargo add confers --features distributed` | `toml`, `json`, `env`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
+| Default | `cargo add confers` | `toml`, `json`, `dotenv` | Works out of the box |
+| `minimal` | `cargo add confers --no-default-features --features minimal` | `dotenv`, `json` | Minimal loading |
+| `recommended` | `cargo add confers --no-default-features --features recommended` | `toml`, `dotenv`, `validation`, `json`, `security-rules` | Most applications |
+| `dev` | `cargo add confers --features dev` | `toml`, `json`, `yaml`, `dotenv`, `cli`, `validation`, `json-schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Full development toolset |
+| `production` | `cargo add confers --features production` | `toml`, `dotenv`, `watch`, `encryption`, `validation`, `audit`, `json-schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`, `security-rules`, `feature-toggle` | Production environments |
+| `distributed` | `cargo add confers --features distributed` | `toml`, `json`, `dotenv`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
 | `full` | `cargo add confers --features full` | All features | Complete capability set |
 
 ### 📋 Feature Matrix
@@ -187,7 +187,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> interpolation with nested defaults</td></tr>
 <tr><td><code>tracing</code></td><td align="center">❌</td><td>Internal tracing facade: spans and structured events on the load/reload/decrypt/remote_fetch critical paths (no-op when disabled)</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>Security</b></td></tr>
-<tr><td><code>security</code></td><td align="center">❌</td><td>Security module: encryption integration, error sanitization, env validation (includes <code>encryption</code>)</td></tr>
+<tr><td><code>security</code></td><td align="center">❌</td><td>Security module: <code>SecureString</code>, error sanitization via <code>ErrorSanitizer</code> (decoupled from <code>encryption</code>; depends only on the lightweight zeroize/sha2/hex primitives)</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>Built-in JWT, CORS, SSRF, TLS validators with a registry</td></tr>
 <tr><td><code>key-management</code></td><td align="center">❌</td><td>Key lifecycle management and rotation (includes <code>encryption</code>)</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td>Compatibility alias of <code>key-management</code> (emits a compile-time warning; removed in the next release)</td></tr>

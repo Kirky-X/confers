@@ -95,7 +95,7 @@
 cargo add confers
 ```
 
-要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`env`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#-特性标志) 一节。
+要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`dotenv`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#-特性标志) 一节。
 
 ### 💡 最小示例
 
@@ -140,7 +140,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 - **来源链**：通过 `ConfigBuilder` / `SourceChainBuilder` 声明 `FileSource`、`EnvSource`、`MemorySource` 与远程来源，声明顺序即优先级，后加入者覆盖先加入者。
 - **注解值**：每个配置值包装为 `AnnotatedValue`，携带 `SourceId` 与 `SourceLocation`（精确到行列），冲突可溯源。
 - **双阶段错误**：初始化期失败返回 `ConfigConfigError`，运行期失败返回 `ConfersError`，两类问题分开处理。
-- **特性门控**：全部可选能力均为独立 feature，编译产物只包含启用的部分，最小可只用 `env` + `json`。
+- **特性门控**：全部可选能力均为独立 feature，编译产物只包含启用的部分，最小可只用 `dotenv` + `json`。
 
 ---
 
@@ -150,12 +150,12 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 | 预设 | 安装方式 | 包含特性 | 适用场景 |
 |------|----------|----------|----------|
-| 默认 | `cargo add confers` | `toml`、`json`、`env` | 开箱即用 |
-| `minimal` | `cargo add confers --no-default-features --features minimal` | `env`、`json` | 最小化加载 |
-| `recommended` | `cargo add confers --no-default-features --features recommended` | `toml`、`env`、`validation`、`json`、`security-rules` | 大多数应用 |
-| `dev` | `cargo add confers --features dev` | `toml`、`json`、`yaml`、`env`、`cli`、`validation`、`schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
-| `production` | `cargo add confers --features production` | `toml`、`env`、`watch`、`encryption`、`validation`、`audit`、`schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
-| `distributed` | `cargo add confers --features distributed` | `toml`、`json`、`env`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
+| 默认 | `cargo add confers` | `toml`、`json`、`dotenv` | 开箱即用 |
+| `minimal` | `cargo add confers --no-default-features --features minimal` | `dotenv`、`json` | 最小化加载 |
+| `recommended` | `cargo add confers --no-default-features --features recommended` | `toml`、`dotenv`、`validation`、`json`、`security-rules` | 大多数应用 |
+| `dev` | `cargo add confers --features dev` | `toml`、`json`、`yaml`、`dotenv`、`cli`、`validation`、`json-schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
+| `production` | `cargo add confers --features production` | `toml`、`dotenv`、`watch`、`encryption`、`validation`、`audit`、`json-schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
+| `distributed` | `cargo add confers --features distributed` | `toml`、`json`、`dotenv`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
 | `full` | `cargo add confers --features full` | 全部特性 | 完整能力集 |
 
 ### 📋 功能矩阵
@@ -187,7 +187,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>interpolation</code></td><td align="center">❌</td><td><code>${VAR}</code> 变量插值，支持嵌套默认值</td></tr>
 <tr><td><code>tracing</code></td><td align="center">❌</td><td>内部 tracing 门面：load/reload/decrypt/remote_fetch 关键路径 span 与结构化事件（未启用时为 no-op）</td></tr>
 <tr><td colspan="3" style="background:#F8FAFC"><b>安全</b></td></tr>
-<tr><td><code>security</code></td><td align="center">❌</td><td>安全模块：加密集成、错误脱敏、环境变量校验（含 <code>encryption</code>）</td></tr>
+<tr><td><code>security</code></td><td align="center">❌</td><td>安全模块：<code>SecureString</code> 安全字符串、错误脱敏 <code>ErrorSanitizer</code>（与 <code>encryption</code> 解耦，仅依赖 zeroize/sha2/hex 轻量原语）</td></tr>
 <tr><td><code>security-rules</code></td><td align="center">❌</td><td>内置 JWT、CORS、SSRF、TLS 校验器与注册表</td></tr>
 <tr><td><code>key-management</code></td><td align="center">❌</td><td>密钥生命周期管理与轮换（含 <code>encryption</code>）</td></tr>
 <tr><td><code>key</code></td><td align="center">❌</td><td><code>key-management</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
