@@ -120,6 +120,9 @@ pub(crate) fn merge_into_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The merge tests below are compiled out without the etcd/consul
+    // sources, leaving these imports unused.
+    #[cfg(any(feature = "etcd", feature = "consul"))]
     use crate::types::{ConfigValue, SourceId};
 
     #[cfg(feature = "toml")]

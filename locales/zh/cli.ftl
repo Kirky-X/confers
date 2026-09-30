@@ -13,7 +13,6 @@ cli-col-location = 位置
 cli-location-line-col = 行 { $line },列 { $col }
 cli-not-found = [未找到]
 cli-reveal-warning = 警告: 已启用 --reveal: 敏感值将原样打印
-cli-snapshot-feature-required = snapshot 子命令需要启用 `snapshot` 特性
 cli-snapshot-none-found = { $directory } 中未找到快照
 cli-snapshot-file-missing = 快照文件不存在: { $file }
 cli-snapshot-runtime-build-failed = 运行时构建失败: { $message }

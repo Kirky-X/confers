@@ -617,6 +617,58 @@ fn test_schema_from_schema_generates_rust_scaffolding() {
 
 #[test]
 #[serial]
+fn test_schema_from_instance_feeds_from_schema_round_trip() {
+    let dir = TempDir::new().expect("Failed to create temp dir");
+    let config_path = create_test_config(
+        &dir,
+        "config.toml",
+        "name = \"svc\"\nport = 8080\ntags = [\"a\", \"b\"]\n",
+    );
+
+    // 第一跳：配置实例 → JSON Schema 草稿。清空子进程环境：env 源按设计
+    // 参与实例组装，继承宿主环境会让草稿混入不可预测的变量键。
+    let infer_output = run_confers(&[
+        "--allow-absolute-paths",
+        "-c",
+        config_path.to_str().expect("utf-8 path"),
+        "schema",
+        "--from-instance",
+    ])
+    .env_clear()
+    .output()
+    .expect("Failed to run confers");
+    assert!(
+        infer_output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&infer_output.stderr)
+    );
+    let schema_json = String::from_utf8_lossy(&infer_output.stdout).to_string();
+
+    // 第二跳：草稿 → 可编译 Rust 脚手架（端到端闭环）。
+    let schema_path = create_test_config(&dir, "draft-schema.json", &schema_json);
+    let output = run_confers(&[
+        "--allow-absolute-paths",
+        "schema",
+        "--from-schema",
+        schema_path.to_str().expect("utf-8 path"),
+    ])
+    .env_clear()
+    .output()
+    .expect("Failed to run confers");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("pub struct Config"), "{stdout}");
+    assert!(stdout.contains("pub name: String"), "{stdout}");
+    assert!(stdout.contains("pub port: i64"), "{stdout}");
+    assert!(stdout.contains("pub tags: Vec<String>"), "{stdout}");
+}
+
+#[test]
+#[serial]
 fn test_schema_from_schema_fails_loud_on_unsupported_construct() {
     let dir = TempDir::new().expect("Failed to create temp dir");
     let schema_path = create_test_config(

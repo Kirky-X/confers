@@ -18,6 +18,9 @@ const DEPRECATED_ALIASES: &[(&str, &str)] = &[
 ];
 
 fn main() {
+    // Default is "rerun on any workspace change"; narrowing to this script
+    // keeps alias deprecation notices from triggering spurious rebuilds.
+    println!("cargo:rerun-if-changed=build.rs");
     for (alias, canonical) in DEPRECATED_ALIASES {
         let var = format!("CARGO_FEATURE_{}", alias.to_uppercase().replace('-', "_"));
         if std::env::var_os(&var).is_some() {

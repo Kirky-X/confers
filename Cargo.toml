@@ -350,7 +350,7 @@ required-features = ["encryption", "toml"]
 [[test]]
 name = "snapshot_e2e"
 path = "tests/e2e/snapshot_e2e.rs"
-required-features = ["snapshot"]
+required-features = ["snapshot", "encryption"]
 
 [[test]]
 name = "watch_e2e"

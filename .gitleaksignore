@@ -6,6 +6,16 @@
 # - .secrets.baseline：detect-secrets 基线文件自身（内含历史指纹字符串）。
 # 云 KMS provider（src/secret/providers_{aws,gcp}_kms.rs）凭据仅走标准凭据链/env，
 # 测试一律 test- 前缀占位 + loopback mock，从未出现在扫描命中中。
+#
+# 【豁免粒度风险，登记不改】以下条目均为 gitleaks 的 file:rule:line 指纹，
+# 与行号强耦合：上方任何增删行都会让豁免失效（旧命中换行号重新浮出），
+# 更糟的是旧行号上出现的新增内容会被静默豁免。改动这些文件后必须逐条
+# 复核行号并重新核实内容，禁止"扫不过就补行号"。
+# 【版本锁定建议，登记不改】gitleaks 各版本的规则集与 generic-api-key 判定
+# 有漂移，指纹跨版本不可复现；建议在 CI/lefthook 中固定 gitleaks 版本
+# （如 install 脚本锁 tag），升级时全量重跑并重新核对本清单。
+# 【后续项，登记不改】src/remote/testdata/test-key.pem 应改为测试运行时
+# 用 rcgen 现场生成（消除入库私钥文件，豁免条目随之删除），现暂以夹具豁免。
 .secrets.baseline:generic-api-key:142
 .secrets.baseline:generic-api-key:149
 .secrets.baseline:generic-api-key:156

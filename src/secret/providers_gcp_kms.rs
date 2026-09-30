@@ -169,14 +169,17 @@ impl GcpKmsKeyProvider {
             }
         }
         let (token, expires_in) = self.fetch_metadata_token().await?;
-        let expires_at = std::time::SystemTime::now()
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs() + expires_in)
-            // Broken clock: cache nothing (refetch next time).
+            .map(|d| d.as_secs())
+            // A broken clock simply misses the cache and refetches.
             .unwrap_or(0);
-        if expires_at > 0 {
+        // Cache only leases that outlive the 60s refresh margin: a shorter
+        // (or non-positive) `expires_in` could never produce a cache hit,
+        // so writing it would just pin a dead token in place.
+        if now > 0 && expires_in > 60 {
             *self.token_cache.lock().unwrap_or_else(|p| p.into_inner()) =
-                Some((token.clone(), expires_at));
+                Some((token.clone(), now + expires_in));
         }
         Ok(token)
     }
@@ -416,6 +419,18 @@ impl GcpKmsKeyProviderBuilder {
         })?;
         let mut provider = GcpKmsKeyProvider::new(project, location, key_ring, key, ciphertext)?;
         if let Some(endpoint) = self.metadata_endpoint {
+            // The override replaces the in-cluster metadata service: plain
+            // HTTP is only acceptable on loopback with allow_http (mock
+            // tests) — the same double gate as the KMS endpoint.
+            if !endpoint.starts_with("https://")
+                && !(self.allow_http && endpoint_is_loopback(&endpoint))
+            {
+                return Err(ConfigError::KeyError {
+                    message: format!(
+                        "metadata endpoint override must use HTTPS (allow_http permits plain HTTP on loopback hosts only), got '{endpoint}'"
+                    ),
+                });
+            }
             provider.metadata_endpoint = endpoint;
         }
         if let Some(endpoint) = self.kms_endpoint {
@@ -461,6 +476,124 @@ mod tests {
             .is_ok(),
             "plain resource ids remain accepted"
         );
+    }
+
+    /// The metadata endpoint override replaces the in-cluster metadata
+    /// service, so it must be HTTPS — or loopback plain HTTP under
+    /// allow_http (mock tests), the same double gate as the KMS endpoint.
+    #[test]
+    fn metadata_endpoint_override_requires_https_or_loopback() {
+        let base = || {
+            GcpKmsKeyProvider::builder()
+                .project("my-proj")
+                .location("global")
+                .key_ring("confers")
+                .key("master-key_1")
+                .ciphertext("AAECAw==")
+                .access_token("t")
+        };
+        let err = match base()
+            .metadata_endpoint("http://metadata.attacker.example")
+            .allow_http(true)
+            .build()
+        {
+            Ok(_) => panic!("remote metadata override must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            matches!(&err, ConfigError::KeyError { message } if message.contains("loopback")),
+            "{err:?}"
+        );
+        assert!(
+            base()
+                .metadata_endpoint("http://127.0.0.1:9")
+                .build()
+                .is_err(),
+            "plain-HTTP loopback override without allow_http must be rejected"
+        );
+        assert!(
+            base()
+                .metadata_endpoint("https://metadata.google.internal")
+                .build()
+                .is_ok(),
+            "HTTPS override remains accepted"
+        );
+        assert!(
+            base()
+                .metadata_endpoint("http://127.0.0.1:9")
+                .allow_http(true)
+                .build()
+                .is_ok(),
+            "loopback mock override with allow_http remains accepted"
+        );
+    }
+
+    /// A lease that cannot outlive the 60s refresh margin (`expires_in`
+    /// <= 60) must not be written into the token cache: the entry could
+    /// never hit, so writing it would only pin a dead token in place.
+    /// Healthy leases are fetched once and reused.
+    #[tokio::test]
+    async fn short_leases_skip_the_cache_and_healthy_ones_fill_it() {
+        async fn decrypt_twice_with_lease(expires_body: &'static str) -> (usize, bool) {
+            use std::sync::{Arc, Mutex};
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind metadata");
+            let addr = listener.local_addr().unwrap();
+            let hits = Arc::new(Mutex::new(0usize));
+            let hits_capture = Arc::clone(&hits);
+            let server = tokio::spawn(async move {
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                for _ in 0..2 {
+                    let (mut stream, _) = listener.accept().await.expect("accept");
+                    let mut buf = [0u8; 2048];
+                    let _ = stream.read(&mut buf).await;
+                    *hits_capture.lock().unwrap() += 1;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        expires_body.len(),
+                        expires_body
+                    );
+                    stream.write_all(response.as_bytes()).await.expect("write");
+                }
+            });
+
+            let provider = GcpKmsKeyProvider::builder()
+                .project("my-proj")
+                .location("global")
+                .key_ring("confers")
+                .key("master-key_1")
+                .ciphertext("AAECAw==")
+                .metadata_endpoint(format!("http://{addr}"))
+                // Refused port: decrypt stops right after the token fetch.
+                .kms_endpoint("http://127.0.0.1:1")
+                .allow_http(true)
+                .build()
+                .expect("build provider");
+            let _ = provider.decrypt("AAECAw==").await;
+            let _ = provider.decrypt("AAECAw==").await;
+            server.abort();
+            let cached = provider
+                .token_cache
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_some();
+            (*hits.lock().unwrap(), cached)
+        }
+
+        let (hits, cached) =
+            decrypt_twice_with_lease(r#"{"access_token":"t","expires_in":30}"#).await;
+        assert_eq!(hits, 2, "lease under the refresh margin must refetch");
+        assert!(
+            !cached,
+            "a never-hitting entry must not be pinned in the cache"
+        );
+
+        let (hits, cached) =
+            decrypt_twice_with_lease(r#"{"access_token":"t","expires_in":3599}"#).await;
+        assert_eq!(hits, 1, "healthy lease is fetched once and reused");
+        assert!(cached, "healthy lease must fill the cache");
     }
 
     /// Full decrypt flow against loopback mocks: the metadata server must

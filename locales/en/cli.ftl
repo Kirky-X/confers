@@ -13,7 +13,6 @@ cli-col-location = LOCATION
 cli-location-line-col = line { $line }, col { $col }
 cli-not-found = [NOT FOUND]
 cli-reveal-warning = warning: --reveal is set: sensitive values are printed verbatim
-cli-snapshot-feature-required = snapshot commands require the `snapshot` feature
 cli-snapshot-none-found = No snapshots found in { $directory }
 cli-snapshot-file-missing = Snapshot file does not exist: { $file }
 cli-snapshot-runtime-build-failed = runtime build failed: { $message }

@@ -191,9 +191,23 @@ impl VaultTransitKeyProvider {
     }
 
     fn validate_addr(&self) -> ConfigResult<()> {
-        if !self.allow_http && !self.vault_addr.starts_with("https://") {
+        if self.vault_addr.starts_with("https://") {
+            return Ok(());
+        }
+        if !self.allow_http {
             return Err(ConfigError::KeyError {
                 message: "Vault address must use HTTPS for security (allow_http overrides this for loopback tests)".to_string(),
+            });
+        }
+        // allow_http is documented as loopback-mock-only: enforce it, so a
+        // plaintext request carrying X-Vault-Token cannot leave the machine
+        // by accident (same exact dotted-quad gate as the AWS/GCP providers).
+        if !endpoint_is_loopback(&self.vault_addr) {
+            return Err(ConfigError::KeyError {
+                message: format!(
+                    "allow_http permits plain HTTP on loopback hosts only, got '{}'",
+                    self.vault_addr
+                ),
             });
         }
         Ok(())
@@ -504,6 +518,52 @@ mod tests {
             .await
             .expect_err("http must be rejected without allow_http");
         assert!(matches!(err, ConfigError::KeyError { .. }));
+    }
+
+    /// allow_http must not open the door to remote plain-HTTP hosts: the
+    /// X-Vault-Token would travel in cleartext, so only loopback targets
+    /// pass validation (same exact dotted-quad gate as the AWS/GCP
+    /// providers).
+    #[tokio::test]
+    async fn allow_http_rejects_remote_plain_http_hosts() {
+        for remote in [
+            "http://vault.internal:8200",
+            "http://127.0.0.1.evil.com:8200",
+        ] {
+            let provider = VaultTransitKeyProvider::builder()
+                .vault_addr(remote)
+                .transit_key("confers-master")
+                .ciphertext(wrapped_key())
+                .token("test-token")
+                .allow_http(true)
+                .build()
+                .expect("construct");
+            let err = provider
+                .decrypt("vault:v1:abc")
+                .await
+                .expect_err("remote plain HTTP must be rejected");
+            assert!(
+                matches!(&err, ConfigError::KeyError { message } if message.contains("loopback")),
+                "{remote} must fail the loopback gate: {err:?}"
+            );
+        }
+        // Loopback hosts still pass validation (the request then goes out).
+        let provider = VaultTransitKeyProvider::builder()
+            .vault_addr("http://127.0.0.1:1")
+            .transit_key("confers-master")
+            .ciphertext(wrapped_key())
+            .token("test-token")
+            .allow_http(true)
+            .build()
+            .expect("construct");
+        let err = provider
+            .decrypt("vault:v1:abc")
+            .await
+            .expect_err("connect must be refused on port 1");
+        assert!(
+            matches!(err, ConfigError::RemoteUnavailable { .. }),
+            "loopback must pass validation: {err:?}"
+        );
     }
 
     #[test]

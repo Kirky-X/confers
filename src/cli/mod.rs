@@ -8,7 +8,10 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use schemars::JsonSchema;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+// `Path` (bare) is only used by the snapshot-restore handler.
+#[cfg(feature = "snapshot")]
+use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::AnnotatedValue;
@@ -1173,13 +1176,12 @@ fn cmd_snapshot(action: SnapshotCommands) -> Result<()> {
         } => {
             cmd_snapshot_prune(&older_than, &directory)?;
         }
+        // The Restore variant only exists with the `snapshot` feature; the
+        // List/Diff/Prune arms above already exhaust every remaining variant,
+        // so no catch-all arm is needed (one would be unreachable).
         #[cfg(feature = "snapshot")]
         SnapshotCommands::Restore { file, directory } => {
             cmd_snapshot_restore(file.as_ref(), &directory)?;
-        }
-        #[cfg(not(feature = "snapshot"))]
-        _ => {
-            anyhow::bail!("{}", tr("cli-snapshot-feature-required"));
         }
     }
     Ok(())
@@ -4514,7 +4516,11 @@ mod tests {
 
     // ============== doctor ==============
 
-    use super::{DOCTOR_ENVELOPE_PREFIX, DOCTOR_MASTER_KEY_ENV, DoctorSeverity};
+    use super::DoctorSeverity;
+    // The two encryption-only tests below are compiled out without the
+    // `encryption` feature, leaving these imports unused.
+    #[cfg(feature = "encryption")]
+    use super::{DOCTOR_ENVELOPE_PREFIX, DOCTOR_MASTER_KEY_ENV};
 
     fn annotated_from_value(value: crate::types::ConfigValue) -> AnnotatedValue {
         AnnotatedValue::new(value, crate::types::SourceId::new("doctor-test"), "")

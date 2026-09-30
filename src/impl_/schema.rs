@@ -1297,6 +1297,25 @@ mod rust_scaffold_tests {
         );
     }
 
+    /// Later-edition keywords (`async` since 2018, `gen` reserved in 2024)
+    /// must get the same raw-identifier treatment as classic ones — a bare
+    /// `pub async` field would not compile.
+    #[test]
+    fn later_edition_keywords_become_raw_identifiers() {
+        let schema = json!({
+            "title": "Keywords",
+            "type": "object",
+            "properties": {
+                "async": {"type": "string"},
+                "gen": {"type": "string"}
+            },
+            "required": ["async", "gen"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub r#async: String"), "{code}");
+        assert!(code.contains("pub r#gen: String"), "{code}");
+    }
+
     #[test]
     fn descriptions_become_doc_comments() {
         let schema = json!({
@@ -2744,7 +2763,7 @@ const RUST_KEYWORDS: &[&str] = &[
     "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
     "return", "self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use",
     "where", "while", "abstract", "become", "box", "do", "final", "macro", "override", "priv",
-    "typeof", "unsized", "virtual", "yield", "await", "try",
+    "typeof", "unsized", "virtual", "yield", "await", "try", "async", "gen",
 ];
 
 fn to_snake_case(input: &str) -> String {
