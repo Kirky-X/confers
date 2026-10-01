@@ -924,6 +924,51 @@ impl AnnotatedValue {
         }
     }
 
+    /// Deserialize this value into any [`serde::de::DeserializeOwned`] type.
+    ///
+    /// The projection goes through [`Self::to_json`], which carries three
+    /// consequences for the produced `T`:
+    /// - metadata (`source`, `priority`, `version`, `location`) is dropped —
+    ///   only the underlying [`ConfigValue`] is projected;
+    /// - `Bytes` arrive as a base64-encoded string (same encoding as
+    ///   [`Self::to_json`]);
+    /// - non-finite `F64` values (`NaN`/`±inf`) follow `to_json` and become
+    ///   JSON `null`, so targets like `Option<f64>` deserialize to `None`.
+    ///   This differs from [`crate::ConfigBuilder::build`], whose projection
+    ///   serializes non-finite floats as the strings `"NaN"`/`"inf"` and
+    ///   therefore always fails deserialization of such a configuration.
+    ///
+    /// Deserialization failures map to [`crate::error::ConfigError::InvalidValue`]
+    /// with this value's `path` as `key` and the target type name as
+    /// `expected_type`. The message carries only a fixed error category and
+    /// the offending field path — never the value content, which may be
+    /// sensitive.
+    #[cfg(feature = "json")]
+    pub fn to_typed<T: serde::de::DeserializeOwned>(&self) -> Result<T, crate::error::ConfigError> {
+        let json = self.to_json();
+        serde_path_to_error::deserialize(json).map_err(|e| {
+            // No `e.inner().to_string()` here: serde_json error text embeds
+            // the offending value (`invalid type: string "secret", ...`),
+            // which would leak configuration content through the error
+            // channel. Report a fixed category plus the field path instead.
+            let category = match e.inner().classify() {
+                serde_json::error::Category::Io => "io error",
+                serde_json::error::Category::Syntax => "syntax error",
+                serde_json::error::Category::Data => "data error",
+                serde_json::error::Category::Eof => "unexpected end of input",
+            };
+            let message = match e.path().iter().next() {
+                Some(_) => format!("{category} at '{}'", e.path()),
+                None => category.to_string(),
+            };
+            crate::error::ConfigError::InvalidValue {
+                key: self.path.to_string(),
+                expected_type: std::any::type_name::<T>().to_string(),
+                message,
+            }
+        })
+    }
+
     /// Compare two values and produce a conflict report.
     ///
     /// The conflict report shows the lower and higher priority values
@@ -1164,6 +1209,8 @@ pub enum SourceKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "json")]
+    use crate::error::ConfigError;
     use crate::merger::MergeStrategy;
 
     #[test]
@@ -2142,6 +2189,173 @@ mod tests {
     fn test_to_json_f64_nan_to_null() {
         let av = AnnotatedValue::new(ConfigValue::F64(f64::NAN), SourceId::new("t"), "k");
         assert_eq!(av.to_json(), serde_json::Value::Null);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_scalar_roundtrip() {
+        let s = AnnotatedValue::new(
+            ConfigValue::string("localhost"),
+            SourceId::new("file"),
+            "server.host",
+        );
+        assert_eq!(s.to_typed::<String>().unwrap(), "localhost");
+
+        let i = AnnotatedValue::new(
+            ConfigValue::integer(8080),
+            SourceId::new("env"),
+            "server.port",
+        );
+        assert_eq!(i.to_typed::<i64>().unwrap(), 8080);
+
+        let b = AnnotatedValue::new(ConfigValue::bool(true), SourceId::new("env"), "server.tls");
+        assert!(b.to_typed::<bool>().unwrap());
+
+        let f = AnnotatedValue::new(
+            ConfigValue::float(2.5),
+            SourceId::new("env"),
+            "server.weight",
+        );
+        assert!((f.to_typed::<f64>().unwrap() - 2.5).abs() < 0.001);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_struct_and_array_roundtrip() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct DbConfig {
+            host: String,
+            port: u16,
+            replicas: Vec<String>,
+        }
+
+        let inner = ConfigValue::map(vec![
+            (
+                "host",
+                AnnotatedValue::from(ConfigValue::string("localhost")),
+            ),
+            ("port", AnnotatedValue::from(ConfigValue::uint(5432))),
+            (
+                "replicas",
+                AnnotatedValue::from(ConfigValue::array(vec![
+                    AnnotatedValue::from(ConfigValue::string("r1")),
+                    AnnotatedValue::from(ConfigValue::string("r2")),
+                ])),
+            ),
+        ]);
+        let av = AnnotatedValue::new(inner, SourceId::new("file"), "database");
+        assert_eq!(
+            av.to_typed::<DbConfig>().unwrap(),
+            DbConfig {
+                host: "localhost".to_string(),
+                port: 5432,
+                replicas: vec!["r1".to_string(), "r2".to_string()],
+            }
+        );
+
+        let items = AnnotatedValue::new(
+            ConfigValue::array(vec![
+                AnnotatedValue::from(ConfigValue::integer(1)),
+                AnnotatedValue::from(ConfigValue::integer(2)),
+            ]),
+            SourceId::new("t"),
+            "items",
+        );
+        assert_eq!(items.to_typed::<Vec<u64>>().unwrap(), vec![1, 2]);
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_bytes_base64() {
+        let av = AnnotatedValue::new(
+            ConfigValue::Bytes(vec![0xde, 0xad, 0xbe, 0xef]),
+            SourceId::new("file"),
+            "cert",
+        );
+        assert_eq!(av.to_typed::<String>().unwrap(), "3q2+7w==");
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_type_mismatch_error() {
+        let av = AnnotatedValue::new(
+            ConfigValue::string("not-a-number"),
+            SourceId::new("file"),
+            "server.port",
+        );
+        let err = av.to_typed::<u64>().unwrap_err();
+        match err {
+            ConfigError::InvalidValue {
+                key,
+                expected_type,
+                message,
+            } => {
+                assert_eq!(key, "server.port");
+                assert_eq!(expected_type, std::any::type_name::<u64>());
+                // The message must carry a fixed category phrase only — the
+                // value itself ("not-a-number") could be sensitive material
+                // that would leak through logs or API responses.
+                assert_eq!(message, "data error");
+            }
+            other => panic!("expected InvalidValue, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_error_message_reports_field_path_without_value() {
+        #[derive(Debug, Deserialize)]
+        struct ServerConfig {
+            // The field is only exercised on the deserialize-failure path.
+            #[allow(dead_code)]
+            port: u16,
+        }
+
+        let av = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "port",
+                AnnotatedValue::from(ConfigValue::string("open sesame")),
+            )]),
+            SourceId::new("file"),
+            "server",
+        );
+        let err = av.to_typed::<ServerConfig>().unwrap_err();
+        match err {
+            ConfigError::InvalidValue { key, message, .. } => {
+                assert_eq!(key, "server");
+                assert_eq!(message, "data error at 'port'");
+                assert!(!message.contains("open sesame"));
+            }
+            other => panic!("expected InvalidValue, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_drops_metadata() {
+        let av = AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("file"), "k")
+            .with_priority(9)
+            .with_version(3)
+            .with_location(SourceLocation::new("config.toml", 1, 1));
+        assert_eq!(
+            av.to_typed::<serde_json::Value>().unwrap(),
+            serde_json::Value::String("v".to_string())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_typed_non_finite_f64_follows_to_json() {
+        let nan = AnnotatedValue::new(ConfigValue::F64(f64::NAN), SourceId::new("t"), "k");
+        assert_eq!(nan.to_typed::<serde_json::Value>().unwrap(), nan.to_json());
+        assert_eq!(nan.to_typed::<Option<f64>>().unwrap(), None);
+
+        let inf = AnnotatedValue::new(ConfigValue::F64(f64::INFINITY), SourceId::new("t"), "k");
+        assert_eq!(inf.to_typed::<serde_json::Value>().unwrap(), inf.to_json());
+        assert_eq!(inf.to_typed::<Option<f64>>().unwrap(), None);
+
+        let finite = AnnotatedValue::new(ConfigValue::F64(1.5), SourceId::new("t"), "k");
+        assert_eq!(finite.to_typed::<f64>().unwrap(), 1.5);
     }
 
     #[test]
