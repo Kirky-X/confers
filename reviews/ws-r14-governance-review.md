@@ -35,7 +35,9 @@
 | 组合 | 改动前 | 改动后 |
 |---|---|---|
 | `recommended` | 27 直接 / 131 传递（docs/FAQ.md 原记载，同 Cargo.lock 实测） | **22 直接 / 119 传递**（FAQ 表已同步更新） |
-| `security-rules` 单开 | 含 chacha20poly1305/hkdf/tokio/async-trait/getrandom | 上述加密/异步栈 0 命中，104 传递去重 |
+| `security-rules` 单开 | 含 chacha20poly1305/hkdf/tokio/async-trait/getrandom | chacha20poly1305/hkdf/tokio/async-trait 四项 0 命中，104 传递去重（getrandom 除外，见下） |
+
+**getrandom 留证（不计入 0 命中）**：getrandom v0.4.3 经基线链 `getrandom ← uuid v1.26.1 ← moka v0.12.16 ← confers`（moka 为非 optional 基线依赖）在**所有特性组合恒在**——红态经 encryption 栈 + moka→uuid 双路径在图，绿态仅剩 moka→uuid 基线单路径，非本次解耦可移除，0 命中声明仅覆盖 chacha20poly1305/hkdf/tokio/async-trait 四项。
 
 ## 2. 三个近义 feature 对别名迁移 — 已由 T050 关闭，文档残留本次修正
 
@@ -68,11 +70,11 @@
 - `cargo test --workspace --quiet`：exit=0，62 个 test target 全 ok（default / recommended / full 三组合同结果，CI 矩阵同口径）
 - 新合法组合回归：`--no-default-features --features security` / `--features security-rules` / `--features encryption` 单开，各 62 target 全 ok（encryption 单开验证收敛后行为不变）
 - prs08：红（改断言后 `1 failed`）→ 绿（落地后 `4 passed; 0 failed`）
-- `cargo tree` 断言：`--no-default-features --features security-rules` 图中 chacha20poly1305/hkdf/tokio/async-trait/getrandom 由红态全部在图 → 绿态 0 命中
+- `cargo tree` 断言：`--no-default-features --features security-rules` 图中 chacha20poly1305/hkdf/tokio/async-trait 四项由红态全部在图 → 绿态 0 命中；getrandom 经 moka→uuid 基线链红态双路径（encryption 栈 + 基线）、绿态恒在（剩基线单路径），不计入 0 命中（详见 §1 getrandom 留证）
 
 ## 4. 附带核对与附带发现
 
 - **ARCHITECTURE.md:120/131 无需改**：特性门控模块表首列是模块名（`key`=src/key/、`schema`=src/schema/）而非 feature 名，门控列已是正名——核对结论留档，防后续误报。
 - **FAQ 依赖数量表其余行不受解耦影响**：minimal/dev/cli 不含 security-rules；production/full 显式含 encryption——仅 `recommended` 行需且已更新。
-- **examples crate 恒以 `features = ["full"]` 依赖 confers**（examples/Cargo.toml:115），无法在示例层覆盖瘦身组合回归——低优先级观察项，记录不修（瘦身组合由 presets_e2e + 本节三单开组合覆盖）。
+- **examples crate 恒以 `features = ["full"]` 依赖 confers**（examples/Cargo.toml:102），无法在示例层覆盖瘦身组合回归——低优先级观察项，记录不修（瘦身组合由 presets_e2e + 本节三单开组合覆盖）。
 - **`.gitignore:79` 整目录忽略 `reviews/` 与跨仓惯例相悖（治理分歧留档）**：inklog 同位置采用白名单模式（`reviews/*` + `!reviews/**/*.md`，报告类 md 全部入库），且本仓 `tests/e2e/presets_e2e.rs:16-17` 引用的 `reviews/acceptance-report.md` 实为未跟踪本地文件（引用悬空）。本记录按任务授权以 `git add -f` 强制入库成忽略例外；是否对齐 inklog 白名单模式并补 tracking acceptance-report.md 属独立治理项，待立项。

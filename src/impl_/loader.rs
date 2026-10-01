@@ -910,7 +910,9 @@ mod tests {
     // Explicitly imported for tests below: the crate-level import of
     // `ConfigValue` is gated behind the `ini` feature, but these tests only
     // need the `toml` feature. An explicit import shadows the (possibly
-    // empty) glob import without conflict.
+    // empty) glob import without conflict. Gated on `toml` because its only
+    // consumers below are `toml`-gated tests.
+    #[cfg(feature = "toml")]
     use crate::types::ConfigValue;
 
     #[test]

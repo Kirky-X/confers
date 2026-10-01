@@ -208,7 +208,7 @@ confers = { version = "0.6.0-rc.6", features = ["full"] }
 | `cli` | 21 | 123 | 中 | 小 |
 | `full` | 46 | 240 | 长 | 大 |
 
-> 📏 依赖数量为 v0.6.0-rc.6 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；随依赖版本刷新会小幅浮动。
+> 📏 依赖数量为 v0.6.0-rc.6 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 118、`security-rules` 单开为 103；随依赖版本刷新会小幅浮动。
 
 选择合适的特性组合可以显著降低编译时间与二进制体积。
 

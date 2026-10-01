@@ -8,9 +8,15 @@ use std::sync::Arc;
 
 mod tests {
     use super::*;
+    // 仅被下方 `#[cfg(feature = "toml")] mod precedence` 消费；
+    // toml 未启用时随该模块一并失效，避免 security 等单开组合 unused import。
+    #[cfg(feature = "toml")]
     use serde::Deserialize;
+    #[cfg(feature = "toml")]
     use serial_test::serial;
+    #[cfg(feature = "toml")]
     use std::collections::HashMap;
+    #[cfg(feature = "toml")]
     use std::io::Write;
 
     fn make_value(inner: ConfigValue, priority: u8) -> AnnotatedValue {

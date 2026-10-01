@@ -6,6 +6,9 @@
 //! Canonical source for sensitive data detection patterns and keywords,
 //! used across the security module to avoid duplication.
 
+// Regex 仅被 security-rules 门控的符号与其测试使用；security 单开（无 rules）
+// 时本模块非测试代码只余 SENSITIVE_KEYWORDS / contains_as_token，不需 Regex。
+#[cfg(feature = "security-rules")]
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -14,6 +17,7 @@ use std::sync::LazyLock;
 ///
 /// Merged from `config_injector::DEFAULT_SENSITIVE_PATTERNS` and
 /// `input_validation::DEFAULT_SENSITIVE_PATTERNS`, deduplicated.
+#[cfg(feature = "security-rules")]
 pub(crate) static SENSITIVE_DETECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     vec![
         Regex::new(r"(?i)password").unwrap(),
@@ -80,6 +84,7 @@ pub(crate) static SENSITIVE_KEYWORDS: LazyLock<HashSet<&'static str>> = LazyLock
 ///
 /// Returns `true` if at least one occurrence is token-bounded (any bounded
 /// occurrence counts, so real threats are never missed).
+#[cfg(feature = "security-rules")]
 pub(crate) fn is_match_with_token_boundary(pattern: &Regex, text: &str) -> bool {
     pattern.find_iter(text).any(|m| {
         let before_ok = text[..m.start()]
@@ -137,6 +142,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "security-rules")]
     fn test_token_boundary_regex_matches() {
         // secret_key / my_secret must hit; secretary must not.
         let secret = Regex::new(r"(?i)secret").unwrap();
@@ -175,7 +181,9 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+// 两个用例均消费 security-rules 门控的 is_match_with_token_boundary，
+// 整块随该符号门控，避免 security 单开组合 dead_code。
+#[cfg(all(test, feature = "security-rules"))]
 mod t049_tests {
     use super::*;
 
