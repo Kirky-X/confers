@@ -49,6 +49,8 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::i18n::tr_args;
+
 /// Guard for managing watcher lifecycle.
 ///
 /// When dropped, the watcher will be stopped automatically.
@@ -170,8 +172,11 @@ impl WatcherGuard {
                     // shutdown instead of silently claiming success.
                     Ok(Err(join_err)) => {
                         log::error!(
-                            "watcher task terminated abnormally during shutdown: {}",
-                            sanitize::flatten_reason(&join_err.to_string())
+                            "{}",
+                            tr_args(
+                                "log-watcher-task-abnormal-shutdown",
+                                &[("reason", sanitize::flatten_reason(&join_err.to_string()))]
+                            )
                         );
                         Ok(false)
                     }

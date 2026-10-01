@@ -23,6 +23,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{t_simple, tr_args};
 use crate::stream::{ChangeEvent, ChangeSource, ChangeStream};
 use crate::watcher::progressive::HealthStatus;
 
@@ -163,7 +164,7 @@ impl CanaryOrchestrator {
             return Err(ConfigError::InvalidValue {
                 key: "canary".into(),
                 expected_type: "non-empty instance list".into(),
-                message: "canary rollout requires at least one instance".into(),
+                message: t_simple("error-canary-empty-instances"),
             });
         }
         let mut rx = self.stream.subscribe().await?;
@@ -187,10 +188,12 @@ impl CanaryOrchestrator {
                     return self.abort(batch_index, &reason).await;
                 }
                 BatchWait::Timeout => {
-                    let reason = format!(
-                        "timed out waiting for committed event(s) from batch {} instances: {}",
-                        batch_index + 1,
-                        batch.join(", ")
+                    let reason = tr_args(
+                        "error-canary-commit-wait-timeout",
+                        &[
+                            ("batch", (batch_index + 1).to_string()),
+                            ("instances", batch.join(", ")),
+                        ],
                     );
                     return self.abort(batch_index, &reason).await;
                 }
@@ -262,8 +265,12 @@ impl CanaryOrchestrator {
         Err(ConfigError::InvalidValue {
             key: "canary".into(),
             expected_type: "mesh weight update".into(),
-            message: format!(
-                "traffic split failed after batch {passed} ({context}); snapped back to baseline"
+            message: tr_args(
+                "error-canary-traffic-split-failed",
+                &[
+                    ("passed", passed.to_string()),
+                    ("context", context.to_string()),
+                ],
             ),
         })
     }
@@ -320,9 +327,15 @@ impl CanaryOrchestrator {
                         .new_value
                         .as_ref()
                         .and_then(|v| v.as_str())
-                        .unwrap_or("instance rolled back");
-                    return BatchWait::InstanceRolledBack(format!(
-                        "{scope} instance `{instance}` rolled back: {detail}"
+                        .map(str::to_string)
+                        .unwrap_or_else(|| t_simple("error-canary-instance-rolled-back"));
+                    return BatchWait::InstanceRolledBack(tr_args(
+                        "error-canary-instance-rollback-abort",
+                        &[
+                            ("scope", scope.to_string()),
+                            ("instance", instance.clone()),
+                            ("detail", detail),
+                        ],
                     ));
                 }
                 _ => {}
@@ -346,7 +359,7 @@ impl CanaryOrchestrator {
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 let status = if remaining.is_zero() {
                     HealthStatus::Degraded {
-                        reason: "health window exhausted before check".into(),
+                        reason: t_simple("error-canary-health-window-exhausted"),
                     }
                 } else {
                     match tokio::time::timeout(
@@ -357,7 +370,7 @@ impl CanaryOrchestrator {
                     {
                         Ok(status) => status,
                         Err(_hung) => HealthStatus::Degraded {
-                            reason: "health check timed out".into(),
+                            reason: t_simple("error-canary-health-check-timed-out"),
                         },
                     }
                 };
@@ -406,7 +419,10 @@ impl CanaryOrchestrator {
             record_canary_failure("rollback_side_effect");
         }
         let reason = if mesh_rolled_back_failed {
-            format!("{reason} (rollback side effects FAILED: traffic may not have reverted)")
+            tr_args(
+                "error-canary-rollback-side-effects-failed",
+                &[("reason", reason.to_string())],
+            )
         } else {
             reason.to_string()
         };
@@ -436,8 +452,13 @@ impl CanaryOrchestrator {
             Ok(()) => true,
             Err(err) => {
                 record_canary_failure("mesh_publish");
-                warn_canary(&format!(
-                    "mesh weight update failed ({canary_pct}/{baseline_pct}): {err}"
+                warn_canary(&tr_args(
+                    "log-canary-mesh-update-failed",
+                    &[
+                        ("canary_pct", canary_pct.to_string()),
+                        ("baseline_pct", baseline_pct.to_string()),
+                        ("message", err.to_string()),
+                    ],
                 ));
                 false
             }
@@ -460,7 +481,10 @@ impl CanaryOrchestrator {
             Ok(()) => true,
             Err(err) => {
                 record_canary_failure("directive_publish");
-                warn_canary(&format!("directive `{stage}` publish failed: {err}"));
+                warn_canary(&tr_args(
+                    "log-canary-directive-publish-failed",
+                    &[("stage", stage.to_string()), ("message", err.to_string())],
+                ));
                 false
             }
         }

@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::i18n::{t_simple, tr_args};
+
 // MergeStrategy is now imported directly from crate::merger.
 // This re-export was removed to fix a reverse dependency (value -> merger violates layering).
 // Users should import MergeStrategy from crate::merger::MergeStrategy.
@@ -952,14 +954,20 @@ impl AnnotatedValue {
             // which would leak configuration content through the error
             // channel. Report a fixed category plus the field path instead.
             let category = match e.inner().classify() {
-                serde_json::error::Category::Io => "io error",
-                serde_json::error::Category::Syntax => "syntax error",
-                serde_json::error::Category::Data => "data error",
-                serde_json::error::Category::Eof => "unexpected end of input",
+                serde_json::error::Category::Io => "error-json-category-io",
+                serde_json::error::Category::Syntax => "error-json-category-syntax",
+                serde_json::error::Category::Data => "error-json-category-data",
+                serde_json::error::Category::Eof => "error-json-category-eof",
             };
             let message = match e.path().iter().next() {
-                Some(_) => format!("{category} at '{}'", e.path()),
-                None => category.to_string(),
+                Some(_) => tr_args(
+                    "error-json-category-at-path",
+                    &[
+                        ("category", t_simple(category)),
+                        ("path", e.path().to_string()),
+                    ],
+                ),
+                None => t_simple(category),
             };
             crate::error::ConfigError::InvalidValue {
                 key: self.path.to_string(),

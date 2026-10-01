@@ -101,6 +101,25 @@ error-nacos-circuit-breaker-open = nacos source circuit breaker is open
 error-stream-lagged = subscriber lagged: versions below { $from } were evicted
 error-stream-version-not-found = version { $version } was not published on this stream
 
+# --- canary rollout orchestrator fragments ---
+
+error-canary-empty-instances = canary rollout requires at least one instance
+error-canary-commit-wait-timeout = timed out waiting for committed event(s) from batch { $batch } instances: { $instances }
+error-canary-traffic-split-failed = traffic split failed after batch { $passed } ({ $context }); snapped back to baseline
+error-canary-instance-rolled-back = instance rolled back
+error-canary-instance-rollback-abort = { $scope } instance `{ $instance }` rolled back: { $detail }
+error-canary-health-window-exhausted = health window exhausted before check
+error-canary-health-check-timed-out = health check timed out
+error-canary-rollback-side-effects-failed = { $reason } (rollback side effects FAILED: traffic may not have reverted)
+
+# --- typed-deserialize error categories (AnnotatedValue::to_typed) ---
+
+error-json-category-io = io error
+error-json-category-syntax = syntax error
+error-json-category-data = data error
+error-json-category-eof = unexpected end of input
+error-json-category-at-path = { $category } at '{ $path }'
+
 # --- operational log lines ---
 
 log-redis-pubsub-connection-lost = Redis config-bus pubsub connection lost (channel '{ $channel }'); reconnecting in { $backoff }
@@ -110,3 +129,10 @@ log-fs-watcher-parent-removed = file watcher: watched parent directory { $path }
 log-fs-watcher-channel-full = file watcher event channel full; dropped change event for { $path } (total dropped: { $total })
 log-reload-validation-commit-anyway = reload validation failed but rollback_on_validation_failure is disabled; committing anyway: { $reason }
 log-post-commit-migration-failed = post-commit migration { $from }→{ $to } failed (configuration stays committed): { $message }
+log-canary-mesh-update-failed = mesh weight update failed ({ $canary_pct }/{ $baseline_pct }): { $message }
+log-canary-directive-publish-failed = directive `{ $stage }` publish failed: { $message }
+log-etcd-watch-stream-failed = etcd watch stream failed: { $message }
+log-hot-reload-rejected = hot reload rejected a candidate: { $reason }
+log-hot-reload-loader-failed = hot reload loader failed: { $reason }
+log-hot-reload-loader-panicked = hot reload loader panicked: { $reason }
+log-watcher-task-abnormal-shutdown = watcher task terminated abnormally during shutdown: { $reason }

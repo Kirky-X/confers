@@ -18,6 +18,7 @@ use std::time::Duration;
 use super::sanitize::flatten_reason;
 use super::{FsWatcher, ProgressiveReloader, ReloadOutcome};
 use crate::error::{ConfersResult, ConfigResult};
+use crate::i18n::tr_args;
 use crate::interface::ConfigProvider;
 
 /// Loader closure the facade calls when a file event arrives: rebuilds the
@@ -191,8 +192,11 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                             Err(e) => {
                                 failures.fetch_add(1, Ordering::SeqCst);
                                 log::error!(
-                                    "hot reload rejected a candidate: {}",
-                                    flatten_reason(&e.to_string())
+                                    "{}",
+                                    tr_args(
+                                        "log-hot-reload-rejected",
+                                        &[("reason", flatten_reason(&e.to_string()))]
+                                    )
                                 );
                             }
                         }
@@ -200,15 +204,21 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                     Ok(Err(e)) => {
                         failures.fetch_add(1, Ordering::SeqCst);
                         log::error!(
-                            "hot reload loader failed: {}",
-                            flatten_reason(&e.to_string())
+                            "{}",
+                            tr_args(
+                                "log-hot-reload-loader-failed",
+                                &[("reason", flatten_reason(&e.to_string()))]
+                            )
                         );
                     }
                     Err(join_err) => {
                         failures.fetch_add(1, Ordering::SeqCst);
                         log::error!(
-                            "hot reload loader panicked: {}",
-                            flatten_reason(&join_err.to_string())
+                            "{}",
+                            tr_args(
+                                "log-hot-reload-loader-panicked",
+                                &[("reason", flatten_reason(&join_err.to_string()))]
+                            )
                         );
                     }
                 }

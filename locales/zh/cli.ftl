@@ -19,3 +19,6 @@ cli-snapshot-runtime-build-failed = 运行时构建失败: { $message }
 cli-snapshot-restored = 已恢复: { $file }
 cli-snapshot-top-level-keys = 顶层配置键数: { $count }
 cli-doctor-encryption-not-compiled = 编译时未启用 encryption 特性; 加载时加密值将无法解密
+cli-schema-absolute-path-not-allowed = 不允许使用绝对路径: { $path }; 可通过 --allow-absolute-paths 覆盖此限制
+cli-schema-read-failed = 读取 schema 失败: { $path }
+cli-schema-parse-failed = 解析 schema 失败: { $path }

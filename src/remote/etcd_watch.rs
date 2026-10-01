@@ -19,6 +19,8 @@ use std::time::Duration;
 
 use etcd_client::EventType;
 
+use crate::i18n::{I18nExt, tr_args};
+
 /// Upper bound for establishing one watch stream (lock + gRPC creation).
 ///
 /// Matches the KV-operation timeout default in the polling etcd source:
@@ -184,7 +186,10 @@ impl EtcdWatcher {
                                     "confers_etcd_watch_errors_total",
                                     &[("reason", "stream")],
                                 );
-                                warn_stream_error(&reason);
+                                warn_stream_error(&tr_args(
+                                    "log-etcd-watch-stream-failed",
+                                    &[("message", reason)],
+                                ));
                                 break;
                             }
                         }
@@ -195,7 +200,10 @@ impl EtcdWatcher {
                         "confers_etcd_watch_errors_total",
                         &[("reason", "establish")],
                     );
-                    warn_stream_error(&err.to_string());
+                    // The ConfigError itself is catalog-backed (LocalizedMsg);
+                    // surface its localized form instead of the English
+                    // canonical Display, per the dual-track i18n contract.
+                    warn_stream_error(&err.to_localized_string());
                 }
             }
             attempt = attempt.saturating_add(1);

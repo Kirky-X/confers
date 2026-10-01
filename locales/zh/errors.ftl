@@ -97,6 +97,25 @@ error-nacos-circuit-breaker-open = nacos 配置源熔断器已打开
 error-stream-lagged = 订阅者已落后: { $from } 之前的版本已被逐出
 error-stream-version-not-found = 版本 { $version } 未在此流上发布过
 
+# --- canary 灰度发布编排器消息片段 ---
+
+error-canary-empty-instances = 灰度发布至少需要一个实例
+error-canary-commit-wait-timeout = 等待第 { $batch } 批实例提交 committed 事件超时: { $instances }
+error-canary-traffic-split-failed = 第 { $passed } 批之后流量切分失败({ $context }); 已回切到基线
+error-canary-instance-rolled-back = 实例已回滚
+error-canary-instance-rollback-abort = { $scope } 实例 '{ $instance }' 已回滚: { $detail }
+error-canary-health-window-exhausted = 健康观测窗口在检查前已耗尽
+error-canary-health-check-timed-out = 健康检查超时
+error-canary-rollback-side-effects-failed = { $reason }(回滚副作用失败: 流量可能未回切)
+
+# --- 强类型反序列化错误分类 (AnnotatedValue::to_typed) ---
+
+error-json-category-io = IO 错误
+error-json-category-syntax = 语法错误
+error-json-category-data = 数据错误
+error-json-category-eof = 输入意外结束
+error-json-category-at-path = { $category }(位置 '{ $path }')
+
 # --- 运维日志行 ---
 
 log-redis-pubsub-connection-lost = Redis 配置总线 pubsub 连接丢失(通道 '{ $channel }'); 将在 { $backoff } 后重连
@@ -106,3 +125,10 @@ log-fs-watcher-parent-removed = 文件监视器: 被监视的父目录 { $path }
 log-fs-watcher-channel-full = 文件监视器事件通道已满; 已丢弃 { $path } 的变更事件(累计丢弃: { $total })
 log-reload-validation-commit-anyway = 重载校验失败但 rollback_on_validation_failure 已禁用; 仍将提交: { $reason }
 log-post-commit-migration-failed = 提交后迁移 { $from }→{ $to } 失败(配置保持已提交状态): { $message }
+log-canary-mesh-update-failed = mesh 权重更新失败({ $canary_pct }/{ $baseline_pct }): { $message }
+log-canary-directive-publish-failed = 指令 '{ $stage }' 发布失败: { $message }
+log-etcd-watch-stream-failed = etcd watch 流失败: { $message }
+log-hot-reload-rejected = 热重载已拒绝候选配置: { $reason }
+log-hot-reload-loader-failed = 热重载加载器失败: { $reason }
+log-hot-reload-loader-panicked = 热重载加载器发生 panic: { $reason }
+log-watcher-task-abnormal-shutdown = watcher 任务在关闭期间异常终止: { $reason }

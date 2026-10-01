@@ -1478,14 +1478,25 @@ fn cmd_schema<T: JsonSchema>() -> Result<()> {
 fn cmd_schema_to_rust(schema_path: &std::path::Path, allow_absolute_paths: bool) -> Result<()> {
     if !allow_absolute_paths && schema_path.is_absolute() {
         anyhow::bail!(
-            "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
-            schema_path.display()
+            "{}",
+            tr_args(
+                "cli-schema-absolute-path-not-allowed",
+                &[("path", schema_path.display().to_string())]
+            )
         );
     }
-    let content = std::fs::read_to_string(schema_path)
-        .with_context(|| format!("Failed to read schema: {}", schema_path.display()))?;
-    let schema: serde_json::Value = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse schema: {}", schema_path.display()))?;
+    let content = std::fs::read_to_string(schema_path).with_context(|| {
+        tr_args(
+            "cli-schema-read-failed",
+            &[("path", schema_path.display().to_string())],
+        )
+    })?;
+    let schema: serde_json::Value = serde_json::from_str(&content).with_context(|| {
+        tr_args(
+            "cli-schema-parse-failed",
+            &[("path", schema_path.display().to_string())],
+        )
+    })?;
     let code = crate::schema::RustScaffoldGenerator::generate(&schema)?;
     // The generated artifact already ends with exactly one newline.
     print!("{code}");
