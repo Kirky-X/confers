@@ -338,6 +338,24 @@ pub struct VaultKeyProvider {
     cache_policy: KeyCachePolicy,
 }
 
+/// 明文 HTTP 仅放行回环地址：allow_http 的显式豁免只对 loopback mock 生效，
+/// 非回环地址一律拒绝，避免 Vault 令牌与密钥经明文发往生产端点。
+#[cfg(feature = "remote")]
+fn is_loopback_http_addr(addr: &str) -> bool {
+    let Some(rest) = addr.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or("");
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => authority
+            .rsplit_once(':')
+            .map(|(h, _)| h)
+            .unwrap_or(authority),
+    };
+    host == "localhost" || host == "::1" || host.starts_with("127.")
+}
+
 #[cfg(feature = "remote")]
 impl VaultKeyProvider {
     pub fn new(
@@ -456,9 +474,11 @@ fn is_retryable_status(status: u16) -> bool {
 #[async_trait::async_trait]
 impl AsyncKeyProvider for VaultKeyProvider {
     async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
-        if !self.allow_http && !self.vault_addr.starts_with("https://") {
+        if !self.vault_addr.starts_with("https://")
+            && !(self.allow_http && is_loopback_http_addr(&self.vault_addr))
+        {
             return Err(ConfigError::KeyError {
-                message: "Vault address must use HTTPS for security (allow_http overrides this for loopback tests)".to_string(),
+                message: "Vault address must use HTTPS for security (allow_http only permits loopback addresses)".to_string(),
             });
         }
         let token = self.get_token().await?;
@@ -630,6 +650,13 @@ impl VaultKeyProviderBuilder {
             expected_type: "string".to_string(),
             message: "Secret key is required".to_string(),
         })?;
+
+        if self.allow_http && !is_loopback_http_addr(&vault_addr) {
+            return Err(ConfigError::KeyError {
+                message: "allow_http only permits loopback addresses (localhost/127.0.0.1/[::1])"
+                    .to_string(),
+            });
+        }
 
         Ok(VaultKeyProvider {
             vault_addr,
@@ -892,6 +919,38 @@ mod tests {
     fn test_vault_key_provider_builder_default_impl() {
         let builder = VaultKeyProviderBuilder::default();
         assert!(builder.build().is_err());
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn allow_http_permits_loopback_addresses() {
+        for addr in [
+            "http://127.0.0.1:8200",
+            "http://localhost:8200",
+            "http://[::1]:8200",
+        ] {
+            let provider = VaultKeyProviderBuilder::new()
+                .vault_addr(addr)
+                .secret_path("secret/data/path")
+                .secret_key("key")
+                .allow_http(true)
+                .build();
+            assert!(provider.is_ok(), "回环地址应放行：{addr}");
+        }
+    }
+
+    #[cfg(feature = "remote")]
+    #[test]
+    fn allow_http_rejects_non_loopback_addresses() {
+        for addr in ["http://vault.example.com:8200", "http://10.0.0.5:8200"] {
+            let result = VaultKeyProviderBuilder::new()
+                .vault_addr(addr)
+                .secret_path("secret/data/path")
+                .secret_key("key")
+                .allow_http(true)
+                .build();
+            assert!(result.is_err(), "非回环地址必须拒绝明文：{addr}");
+        }
     }
 
     #[cfg(feature = "remote")]
