@@ -1122,7 +1122,9 @@ mod tests {
         let deadline = std::time::Instant::now() + Duration::from_millis(3000);
         let mut count = 0usize;
         while std::time::Instant::now() < deadline {
-            match tokio::time::timeout(Duration::from_millis(250), watcher.recv()).await {
+            // 单次等待须大于防抖窗：合并事件在静默 debounce_ms 后才发出，
+            // 迭代超时短于防抖窗会在首个事件到达前误判静默而提前退出。
+            match tokio::time::timeout(Duration::from_millis(1000), watcher.recv()).await {
                 Ok(Some(_)) => count += 1,
                 _ => break,
             }
