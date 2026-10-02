@@ -7,6 +7,61 @@
 
 ## [Unreleased]
 
+## [0.6.0-rc.6] — 2026-10-02
+
+### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
+
+#### 新增
+
+- `#[config(profile)]` 落地：`RUN_ENV`（或 `profile_env` 指定变量）设置时自动加载 `<stem>.<env>.<ext>` 环境专属文件叠加
+- `encrypt` 字段属性真实化：加载管线对统一 envelope 密文自动解密注入；支持 `ConfigBuilder::master_key` 显式注入主密钥（覆盖 `CONFERS_MASTER_KEY`）；Vault 登录按 `lease_duration` 提前 10% 主动刷新（403 反应式重登保留为兜底）
+- `enc:v1:<keyver>:<payload>` 统一 envelope（旧格式兼容读）；审计链支持外置 HMAC 密钥（`AuditConfig::hmac_key`）
+- `HttpPolledSource::stale_on_error` 选项（默认关闭，保持 fail-loud）、认证头注入 API、默认超时
+- CLI `inspect`/`get` 默认脱敏 + `--reveal` 显式明文（stderr 警告）
+- 公开 `PathValidator`（crate 根，无特性门控）与 `sensitive_names` 敏感名判定单一来源
+- CLI 新增 `snapshot restore` 子命令（恢复最近或指定快照）；构建失败路径也会写快照供恢复
+- `ConfigBuilder::env_separator`/`sensitive_paths` 方法；env 类型错误经 serde-path-to-error 携带字段路径
+- 观测性：事件通道丢弃计数、`confers.env.path_conflict_dropped` / `confers.interpolation.sensitive_reference` telemetry 事件、`ProgressiveReloader::peek_candidate`
+
+#### 变更（破坏性）
+
+- 同优先级配置源按**声明顺序**合并（此前按 source_id 字母序）；默认值来源恒定最低优先级
+- 带前缀的 env 变量路径冲突（标量 vs 嵌套）返回错误而非静默丢值；无前缀源确定性「嵌套形状胜出」+ 事件
+- `load_file`/`load_file_with_env` 为全部 `#[config(default)]` 字段注册默认值；`load_file_with_env` 不再注入无前缀全进程环境
+- `derive_field_key`/`decrypt`/`fetch_and_register` 等返回受管类型（`Zeroizing`/`SecretBytes`）；`SecureString::masked()` 与 `mask_value` 改定长掩码
+- 宏 `#[config(dynamic)]` 的 `*_handle()` 单例化；`#[config(merge_strategy)]` 字段策略真实生效；null 不再覆盖已有值（全层级一致）
+- `user_message()` 全路径过脱敏；CLI `get`/`inspect` 默认掩码
+- 敏感文件（keys.json/快照/审计日志）落盘 0600
+
+#### 修复
+
+- 单文件 FsWatcher 原子替换后热重载静默失效；事件通道满静默丢事件；回调 panic 杀死重载循环
+- Consul 空数组（KV 删除）永久续命旧配置；K8s in-cluster 缺 CA/超时；Nacos 无认证与熔断误报；Redis 总线断线无重连；总线版本号重启重置
+- SSRF 黑名单补 `0.0.0.0/8` 等；弱密钥（全零等）拒绝；Vault token 过期自动重登；`rotate_master_key` 验证旧密钥
+- `verify_audit_chain` 常量时间比较；冲突报告值脱敏；审计 sink 收到脱敏事件
+
+#### 移除
+
+- 死依赖 `secrecy`、`aes-gcm`；`KeyCachePolicy` 由死类型改为真实接线（Vault token 缓存按 NoCache/CacheWithTtl/CacheIndefinitely 生效）
+
+### 变更（破坏面声明）
+
+- **`#[config(validate)]` 保持兼容 no-op**：校验辅助方法 `confers_validate()` 改由新增的 opt-in 属性 `#[config(validate_helper)]` 生成（要求 `validation` feature 与 `#[derive(garde::Validate)]`）；两种属性都不会把校验自动挂进加载管线，旧代码（仅设置 `validate`）升级后行为与编译结果不变
+- **`CorsValidator` 不再支持 unit-struct 裸名构造**（`let v: CorsValidator = CorsValidator;` 编译失败）：为支持 `with_origins_key` / `with_methods_key` / `with_max_age_key` 自定义键构造器而字段化；`CorsValidator::new()` 与 `Default` 行为不变（默认键名与旧版逐字节一致），经检索 confers / mnemis / sdforge 生态均仅以 `::new()` 构造，无实际消费者受影响
+- **`WatcherGuard::shutdown` 异常路径行为变更**：被等待的任务 panic 时（join 返回 `Err`）现在记录错误并返回 `Ok(false)`；旧版把 panic 误报为 `Ok(true)`；超时与干净完成的语义不变
+- **重载失败 reason 的日志注入防护**：`ReloadRolledBack` / `ReloadRejected` 及重载日志、canary 事件流中的 reason 在含控制字符或超过 200 字符时经 `flatten_reason` 清洗截断（控制符替换为空格、超限追加省略号）；正常输入逐字节不变
+
+### 新增
+
+- `WatcherGuard::with_task` / `set_task_handle` 由 `pub(crate)` 放宽为 `pub`；`shutdown` 文档注明超时返回 `Ok(false)` 的降级语义（任务不会被取消，仍在后台运行）
+- `ConfigBuilder::env_source(EnvSource)`：接收预构建的 `EnvSource`（与 `env_prefix` / `env_separator` 的组合语义见 rustdoc）
+- `hot-reload-kit` feature（默认关，不入 recommended/production/full 预置）+ `HotReloader` 门面：FsWatcher + 渐进重载 + watch 广播 + 优雅停机的装配形态；loader 经 spawn_blocking 卸载，panic 计入失败计数
+- `ProgressiveReloader::with_pre_commit_check` + `PreCommitCheck` trait（`Err` 即拒）与新错误变体 `ConfigError::ReloadRejected`（受 `#[non_exhaustive]` 保护）
+- `RemappedConfigProvider` 键重映射视图 + `JwtSecretValidator::with_secret_key` / `CorsValidator::with_{origins,methods,max_age}_key`（默认键名不变；CORS 三键仅部分重映射会触发既有规则的稳定误报，详见 `CorsValidator` rustdoc，建议仅 `JwtSecretValidator` 起步）
+
+---
+
+
 ### 依赖升级与特性裁剪
 
 - 传递依赖 patch 升级（`cargo update`，Cargo.lock）：lazy_static 1.5.0→1.5.1、pulldown-cmark-to-cmark 22.0.1→22.0.3、quinn-proto 0.11.18→0.11.19、quinn-udp 0.5.15→0.5.16、tokio-rustls 0.26.5→0.26.6、xxhash-rust 0.8.18→0.8.19、yoke-derive 0.8.3→0.8.4；直接依赖 x.x 基线经 crates.io 核对均已在最新稳定 major.minor，无版本号变更
@@ -73,59 +128,6 @@
 - **验证方式**：以现有测试矩阵替代长时 soak——六源 feature 门控（HTTP 轮询 / etcd / etcd-watch / consul / k8s / nacos）编译验证 + HTTP、etcd、Consul、watch 的 mock 联测 + watch 兼容性回归。真实集群集成测试（`tests/remote/etcd.rs` / `consul.rs`，依赖 `docker-compose.test.yml`）与长 soak 在无容器镜像仓库访问的沙箱环境无法执行，属环境限制而非代码缺陷
 - **基线与门禁**：新增 `etcd_watch_bench`（整批 1000 事件分发 [83.8 µs, 84.8 µs, 86.0 µs]，约 0.085 µs/事件）；CI benchmarks job 特性扩为 `dev,etcd-watch,change-stream`，watch 相关基准（含既有 `watch_callback_bench`）自此随 CI 重测
 
-## [0.6.0-rc.6] — 2026-09-28
-
-### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
-
-#### 新增
-
-- `#[config(profile)]` 落地：`RUN_ENV`（或 `profile_env` 指定变量）设置时自动加载 `<stem>.<env>.<ext>` 环境专属文件叠加
-- `encrypt` 字段属性真实化：加载管线对统一 envelope 密文自动解密注入；支持 `ConfigBuilder::master_key` 显式注入主密钥（覆盖 `CONFERS_MASTER_KEY`）；Vault 登录按 `lease_duration` 提前 10% 主动刷新（403 反应式重登保留为兜底）
-- `enc:v1:<keyver>:<payload>` 统一 envelope（旧格式兼容读）；审计链支持外置 HMAC 密钥（`AuditConfig::hmac_key`）
-- `HttpPolledSource::stale_on_error` 选项（默认关闭，保持 fail-loud）、认证头注入 API、默认超时
-- CLI `inspect`/`get` 默认脱敏 + `--reveal` 显式明文（stderr 警告）
-- 公开 `PathValidator`（crate 根，无特性门控）与 `sensitive_names` 敏感名判定单一来源
-- CLI 新增 `snapshot restore` 子命令（恢复最近或指定快照）；构建失败路径也会写快照供恢复
-- `ConfigBuilder::env_separator`/`sensitive_paths` 方法；env 类型错误经 serde-path-to-error 携带字段路径
-- 观测性：事件通道丢弃计数、`confers.env.path_conflict_dropped` / `confers.interpolation.sensitive_reference` telemetry 事件、`ProgressiveReloader::peek_candidate`
-
-#### 变更（破坏性）
-
-- 同优先级配置源按**声明顺序**合并（此前按 source_id 字母序）；默认值来源恒定最低优先级
-- 带前缀的 env 变量路径冲突（标量 vs 嵌套）返回错误而非静默丢值；无前缀源确定性「嵌套形状胜出」+ 事件
-- `load_file`/`load_file_with_env` 为全部 `#[config(default)]` 字段注册默认值；`load_file_with_env` 不再注入无前缀全进程环境
-- `derive_field_key`/`decrypt`/`fetch_and_register` 等返回受管类型（`Zeroizing`/`SecretBytes`）；`SecureString::masked()` 与 `mask_value` 改定长掩码
-- 宏 `#[config(dynamic)]` 的 `*_handle()` 单例化；`#[config(merge_strategy)]` 字段策略真实生效；null 不再覆盖已有值（全层级一致）
-- `user_message()` 全路径过脱敏；CLI `get`/`inspect` 默认掩码
-- 敏感文件（keys.json/快照/审计日志）落盘 0600
-
-#### 修复
-
-- 单文件 FsWatcher 原子替换后热重载静默失效；事件通道满静默丢事件；回调 panic 杀死重载循环
-- Consul 空数组（KV 删除）永久续命旧配置；K8s in-cluster 缺 CA/超时；Nacos 无认证与熔断误报；Redis 总线断线无重连；总线版本号重启重置
-- SSRF 黑名单补 `0.0.0.0/8` 等；弱密钥（全零等）拒绝；Vault token 过期自动重登；`rotate_master_key` 验证旧密钥
-- `verify_audit_chain` 常量时间比较；冲突报告值脱敏；审计 sink 收到脱敏事件
-
-#### 移除
-
-- 死依赖 `secrecy`、`aes-gcm`；`KeyCachePolicy` 由死类型改为真实接线（Vault token 缓存按 NoCache/CacheWithTtl/CacheIndefinitely 生效）
-
-### 变更（破坏面声明）
-
-- **`#[config(validate)]` 保持兼容 no-op**：校验辅助方法 `confers_validate()` 改由新增的 opt-in 属性 `#[config(validate_helper)]` 生成（要求 `validation` feature 与 `#[derive(garde::Validate)]`）；两种属性都不会把校验自动挂进加载管线，旧代码（仅设置 `validate`）升级后行为与编译结果不变
-- **`CorsValidator` 不再支持 unit-struct 裸名构造**（`let v: CorsValidator = CorsValidator;` 编译失败）：为支持 `with_origins_key` / `with_methods_key` / `with_max_age_key` 自定义键构造器而字段化；`CorsValidator::new()` 与 `Default` 行为不变（默认键名与旧版逐字节一致），经检索 confers / mnemis / sdforge 生态均仅以 `::new()` 构造，无实际消费者受影响
-- **`WatcherGuard::shutdown` 异常路径行为变更**：被等待的任务 panic 时（join 返回 `Err`）现在记录错误并返回 `Ok(false)`；旧版把 panic 误报为 `Ok(true)`；超时与干净完成的语义不变
-- **重载失败 reason 的日志注入防护**：`ReloadRolledBack` / `ReloadRejected` 及重载日志、canary 事件流中的 reason 在含控制字符或超过 200 字符时经 `flatten_reason` 清洗截断（控制符替换为空格、超限追加省略号）；正常输入逐字节不变
-
-### 新增
-
-- `WatcherGuard::with_task` / `set_task_handle` 由 `pub(crate)` 放宽为 `pub`；`shutdown` 文档注明超时返回 `Ok(false)` 的降级语义（任务不会被取消，仍在后台运行）
-- `ConfigBuilder::env_source(EnvSource)`：接收预构建的 `EnvSource`（与 `env_prefix` / `env_separator` 的组合语义见 rustdoc）
-- `hot-reload-kit` feature（默认关，不入 recommended/production/full 预置）+ `HotReloader` 门面：FsWatcher + 渐进重载 + watch 广播 + 优雅停机的装配形态；loader 经 spawn_blocking 卸载，panic 计入失败计数
-- `ProgressiveReloader::with_pre_commit_check` + `PreCommitCheck` trait（`Err` 即拒）与新错误变体 `ConfigError::ReloadRejected`（受 `#[non_exhaustive]` 保护）
-- `RemappedConfigProvider` 键重映射视图 + `JwtSecretValidator::with_secret_key` / `CorsValidator::with_{origins,methods,max_age}_key`（默认键名不变；CORS 三键仅部分重映射会触发既有规则的稳定误报，详见 `CorsValidator` rustdoc，建议仅 `JwtSecretValidator` 起步）
-
----
 
 ## [0.6.0-rc.5] — 2026-09-21
 
