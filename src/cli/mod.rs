@@ -960,11 +960,16 @@ fn cmd_export(
         let annotated_config = build_annotated_from_cli(config_paths, allow_absolute_paths)?;
 
         // Sanitized by default; `--raw` opts out (see the warning above).
+        // Key-name redaction (password/token → ********) runs on top of the
+        // string-content sanitization: a sensitive key whose value matches no
+        // content pattern (e.g. "hunter2") must still be masked.
         let annotated_json = serde_json::to_value(&annotated_config)?;
         let annotated_json = if raw {
             annotated_json
         } else {
-            sanitize_json_strings(&annotated_json, 0)
+            let mut value = sanitize_json_strings(&annotated_json, 0);
+            redact_sensitive_json(&mut value, None);
+            value
         };
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
@@ -996,10 +1001,14 @@ fn cmd_export(
         let config = build_config_from_cli(config_paths, allow_absolute_paths)?;
 
         // Sanitized by default; `--raw` opts out (see the warning above).
+        // Key-name redaction runs on top of string-content sanitization
+        // (mirrors the annotated branch above and `inspect`).
         let config = if raw {
             config
         } else {
-            sanitize_json_strings(&config, 0)
+            let mut value = sanitize_json_strings(&config, 0);
+            redact_sensitive_json(&mut value, None);
+            value
         };
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
@@ -4831,6 +4840,75 @@ mod tests {
         let mut bad = instance.clone();
         bad["a"] = serde_json::json!("now-a-string");
         assert!(!validate(&bad, &schema));
+    }
+}
+
+#[cfg(test)]
+#[cfg(test)]
+mod doctor_sources_unit_tests {
+    use super::*;
+    use crate::types::{ConfigValue, SourceId};
+
+    fn leaf_map(entries: Vec<(&str, &str, u8)>) -> AnnotatedValue {
+        let map: indexmap::IndexMap<Arc<str>, AnnotatedValue> = entries
+            .into_iter()
+            .map(|(k, source, priority)| {
+                let leaf = AnnotatedValue::new(ConfigValue::string("v"), SourceId::new(source), k)
+                    .with_priority(priority);
+                (Arc::from(k), leaf)
+            })
+            .collect();
+        AnnotatedValue::new(ConfigValue::Map(Arc::new(map)), SourceId::new("root"), "")
+    }
+
+    #[test]
+    fn doctor_sources_empty_tree_is_error() {
+        let check = check_source_chain(&leaf_map(vec![]));
+        assert_eq!(check.severity, DoctorSeverity::Error);
+        assert!(
+            check.message.contains("no configuration values"),
+            "{}",
+            check.message
+        );
+    }
+
+    #[test]
+    fn doctor_sources_inconsistent_priorities_warn() {
+        let annotated = leaf_map(vec![("a", "file:app.toml", 10), ("b", "file:app.toml", 20)]);
+        let check = check_source_chain(&annotated);
+        assert_eq!(check.severity, DoctorSeverity::Warning);
+        assert!(
+            check.message.contains("inconsistent priorities"),
+            "{}",
+            check.message
+        );
+    }
+
+    #[test]
+    fn doctor_sources_env_priority_must_outrank_files() {
+        let annotated = leaf_map(vec![("host", "env", 5), ("name", "file:app.toml", 10)]);
+        let check = check_source_chain(&annotated);
+        assert_eq!(check.severity, DoctorSeverity::Warning);
+        assert!(check.message.contains("env priority"), "{}", check.message);
+
+        let annotated = leaf_map(vec![("host", "env", 30), ("name", "file:app.toml", 10)]);
+        let check = check_source_chain(&annotated);
+        assert_eq!(check.severity, DoctorSeverity::Ok, "{}", check.message);
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn doctor_master_key_decoding() {
+        assert_eq!(
+            decode_master_key(&"ab".repeat(32)).map(|k| k.len()),
+            Some(32)
+        );
+        assert_eq!(
+            decode_master_key("0123456789abcdef0123456789abcdef").map(|k| k.len()),
+            Some(32)
+        );
+        assert_eq!(decode_master_key("zz"), None);
+        assert_eq!(decode_master_key("short"), None);
     }
 }
 

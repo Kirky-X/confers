@@ -156,7 +156,7 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 | `dev` | `cargo add confers --features dev` | `toml`, `json`, `yaml`, `dotenv`, `cli`, `validation`, `json-schema`, `audit`, `watch`, `migration`, `snapshot`, `dynamic` | Full development toolset |
 | `production` | `cargo add confers --features production` | `toml`, `dotenv`, `watch`, `encryption`, `validation`, `audit`, `json-schema`, `cli`, `migration`, `dynamic`, `progressive-reload`, `snapshot`, `security-rules`, `feature-toggle` | Production environments |
 | `distributed` | `cargo add confers --features distributed` | `toml`, `json`, `dotenv`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
-| `full` | `cargo add confers --features full` | All features | Complete capability set |
+| `full` | `cargo add confers --features full` | All 39 formal features (excludes `hot-reload-kit` and the to-be-removed compatibility aliases `env`/`schema`/`key`) | Complete capability set |
 
 ### 📋 Feature Matrix
 
@@ -238,7 +238,7 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 
 ## 💻 Examples
 
-All 21 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
+All 22 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
 
 ```bash
 # Run a single example (from the examples/ directory)
@@ -273,7 +273,7 @@ For the architecture diagram, the public core and feature-gated module tables, t
 
 ### 🎯 Test Strategy
 
-The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 27 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 9 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
+The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 33 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 10 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
 
 ### ▶️ Commands (matching CI)
 
@@ -288,18 +288,23 @@ cargo fmt --all -- --check
 # Coverage gate: at least 80% line coverage
 cargo llvm-cov --workspace --all-features --fail-under-lines 80
 
-# Benchmarks
-cargo bench --features dev --benches
+# Benchmarks (matching CI; CI adds -- --save-baseline current)
+cargo bench --features dev,etcd-watch,change-stream --benches
+
+# interpolation benchmarks (merge_bench / interpolation_bench / value_path_bench
+# declare required-features = ["interpolation"]; the command above skips those
+# three, so run them separately)
+cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
 
 # Fuzz testing (from the fuzz/ directory)
 cargo fuzz run parser
 ```
 
-Bus-related integration tests require a local NATS service; CI uses a `nats:2.10 -js` container (see `docker-compose.test.yml`).
+Some integration tests require local external services: the bus group needs NATS (CI uses a `nats:2.10 -js` container), and the Redis (16379) / etcd (2379) / Consul (8500) integration groups likewise need their services; `docker-compose.test.yml` provides all four (tests skip via port guards when a service is absent).
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.6: about 2300+ unit tests (inline in `src/`, measured 2325 via `grep -rE -c '#\[(tokio::)?test\b' src`), 679 integration and E2E tests (`tests/`, 59 files), 3 fuzz targets, and 9 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.6: 2458 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 770 integration and E2E tests (`tests/`, 64 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 

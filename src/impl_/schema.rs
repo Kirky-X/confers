@@ -1962,6 +1962,288 @@ mod rust_scaffold_tests {
             String::from_utf8_lossy(&status.stderr)
         );
     }
+
+    fn generate_err(schema: serde_json::Value) -> String {
+        RustScaffoldGenerator::generate(&schema)
+            .expect_err("schema must be rejected")
+            .to_string()
+    }
+
+    #[test]
+    fn named_level_string_enum_def_promotes_to_enum() {
+        let schema = json!({
+            "title": "WithEnum",
+            "type": "object",
+            "properties": {"status": {"$ref": "#/$defs/Status"}},
+            "required": ["status"],
+            "$defs": {
+                "Status": {"enum": ["active", "paused"]}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub enum Status"), "{code}");
+        assert!(code.contains("Active"), "{code}");
+    }
+
+    #[test]
+    fn named_level_ref_def_becomes_type_alias() {
+        let schema = json!({
+            "title": "WithAlias",
+            "type": "object",
+            "properties": {"inner": {"$ref": "#/$defs/Base"}},
+            "required": ["inner"],
+            "$defs": {
+                "Base": {"type": "string"},
+                "Alias": {"$ref": "#/$defs/Base"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub type Alias = Base;"), "{code}");
+    }
+
+    #[test]
+    fn named_level_integer_enum_becomes_alias_with_note() {
+        let schema = json!({
+            "title": "WithIntEnum",
+            "type": "object",
+            "properties": {"level": {"$ref": "#/$defs/Level"}},
+            "required": ["level"],
+            "$defs": {
+                "Level": {"type": "integer", "enum": [1, 2, 3]}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub type Level = i64;"), "{code}");
+        assert!(code.contains("Allowed values:"), "{code}");
+    }
+
+    #[test]
+    fn external_ref_fails_loud() {
+        let schema = json!({
+            "title": "External",
+            "type": "object",
+            "properties": {"remote": {"$ref": "https://example.com/schema.json"}},
+            "required": ["remote"]
+        });
+        let err = generate_err(schema);
+        assert!(err.contains("unsupported external $ref"), "{err}");
+    }
+
+    #[test]
+    fn dangling_internal_ref_fails_loud() {
+        let schema = json!({
+            "title": "Dangling",
+            "type": "object",
+            "properties": {"ghost": {"$ref": "#/$defs/Missing"}},
+            "required": ["ghost"]
+        });
+        let err = generate_err(schema);
+        assert!(err.contains("unresolvable $ref"), "{err}");
+    }
+
+    #[test]
+    fn mixed_non_null_type_array_fails_loud() {
+        let schema = json!({
+            "title": "Mixed",
+            "type": "object",
+            "properties": {"union": {"type": ["string", "integer"]}},
+            "required": ["union"]
+        });
+        let err = generate_err(schema);
+        assert!(err.contains("mixed non-null types"), "{err}");
+    }
+
+    #[test]
+    fn null_only_type_array_widens_to_value() {
+        let schema = json!({
+            "title": "NullOnly",
+            "type": "object",
+            "properties": {"anything": {"type": ["null"]}},
+            "required": ["anything"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("pub anything: Option<serde_json::Value>"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn tuple_style_items_fails_loud() {
+        let schema = json!({
+            "title": "Tuple",
+            "type": "object",
+            "properties": {"pair": {"type": "array", "items": [{"type": "string"}]}},
+            "required": ["pair"]
+        });
+        let err = generate_err(schema);
+        assert!(err.contains("unsupported tuple-style `items`"), "{err}");
+
+        let nested_array = json!({
+            "title": "NestedArray",
+            "type": "object",
+            "properties": {"grid": {"type": "array", "items": [[{"type": "string"}]]}},
+            "required": ["grid"]
+        });
+        let err = generate_err(nested_array);
+        assert!(err.contains("unsupported tuple-style `items`"), "{err}");
+    }
+
+    #[test]
+    fn array_without_items_widens_element_to_value() {
+        let schema = json!({
+            "title": "OpenArray",
+            "type": "object",
+            "properties": {"bag": {"type": "array"}},
+            "required": ["bag"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub bag: Vec<serde_json::Value>"), "{code}");
+    }
+
+    #[test]
+    fn free_form_object_with_typed_additional_properties_maps_to_hashmap() {
+        let schema = json!({
+            "title": "Labels",
+            "type": "object",
+            "properties": {
+                "tags": {"type": "object", "additionalProperties": {"type": "integer"}}
+            },
+            "required": ["tags"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub tags: HashMap<String, i64>"), "{code}");
+        assert!(code.contains("use std::collections::HashMap;"), "{code}");
+    }
+
+    #[test]
+    fn unsupported_type_fails_loud() {
+        let schema = json!({
+            "title": "Weird",
+            "type": "object",
+            "properties": {"blob": {"type": "char"}},
+            "required": ["blob"]
+        });
+        let err = generate_err(schema);
+        assert!(err.contains("unsupported JSON Schema type `char`"), "{err}");
+    }
+
+    #[test]
+    fn typeless_property_widens_to_value() {
+        let schema = json!({
+            "title": "Typeless",
+            "type": "object",
+            "properties": {"mystery": {}},
+            "required": ["mystery"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("pub mystery: serde_json::Value"), "{code}");
+    }
+
+    #[test]
+    fn colliding_default_fn_names_get_suffixes() {
+        let schema = json!({
+            "title": "Defaults",
+            "type": "object",
+            "properties": {
+                "maxSize": {"type": "integer", "default": 1},
+                "max_size": {"type": "integer", "default": 2}
+            },
+            "required": ["maxSize", "max_size"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("fn _default_max_size() -> i64 { 1 }"),
+            "{code}"
+        );
+        assert!(
+            code.contains("fn _default_max_size_2() -> i64 { 2 }"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn scalar_default_on_promoted_enum_resolves_variant() {
+        let schema = json!({
+            "title": "EnumDefault",
+            "type": "object",
+            "properties": {
+                "state": {"enum": ["on", "off"], "default": "off"}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("fn _default_state() -> EnumDefaultState { EnumDefaultState::Off }"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn enum_default_not_a_variant_fails_loud() {
+        let schema = json!({
+            "title": "BadEnumDefault",
+            "type": "object",
+            "properties": {
+                "state": {"enum": ["on", "off"], "default": "paused"}
+            }
+        });
+        let err = generate_err(schema);
+        assert!(
+            err.contains("is not a variant of enum `BadEnumDefaultState`"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn nullable_scalar_default_wraps_some() {
+        let schema = json!({
+            "title": "NullableScalar",
+            "type": "object",
+            "properties": {
+                "retries": {"type": ["integer", "null"], "default": 3}
+            }
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(
+            code.contains("fn _default_retries() -> Option<i64> { Some(3) }"),
+            "{code}"
+        );
+    }
+
+    #[test]
+    fn enum_variants_reject_empty_and_symbol_only() {
+        let empty = json!({
+            "title": "EmptyVariant",
+            "type": "object",
+            "properties": {"v": {"enum": [""]}},
+            "required": ["v"]
+        });
+        let err = generate_err(empty);
+        assert!(err.contains("Rust variant names cannot be empty"), "{err}");
+
+        let symbol_only = json!({
+            "title": "SymbolOnly",
+            "type": "object",
+            "properties": {"v": {"enum": ["—"]}},
+            "required": ["v"]
+        });
+        let err = generate_err(symbol_only);
+        assert!(err.contains("contains no alphanumeric characters"), "{err}");
+    }
+
+    #[test]
+    fn variant_name_collisions_get_suffixes_and_renames() {
+        let schema = json!({
+            "title": "Collide",
+            "type": "object",
+            "properties": {"v": {"enum": ["a-b", "a_b"]}},
+            "required": ["v"]
+        });
+        let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        assert!(code.contains("#[serde(rename = \"a-b\")]"), "{code}");
+        assert!(code.contains("AB,"), "{code}");
+        assert!(code.contains("AB2,"), "{code}");
+    }
 }
 
 /// JSON Schema → Rust struct scaffolding.

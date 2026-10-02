@@ -655,6 +655,7 @@ impl Default for VaultKeyProviderBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
@@ -1172,5 +1173,189 @@ mod tests {
             secret_id: "s".to_string(),
         };
         assert_eq!(approle.login_path(), Some("/v1/auth/approle/login"));
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn vault_https_is_enforced_without_allow_http() {
+        let provider = VaultKeyProvider::builder()
+            .vault_addr("http://127.0.0.1:8200")
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: "t".to_string(),
+            })
+            .build()
+            .expect("build");
+        let err = provider
+            .get_key()
+            .await
+            .expect_err("plain http must be refused");
+        assert!(err.to_string().contains("HTTPS"), "{err}");
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn vault_kubernetes_auth_reads_service_account_token() {
+        // The in-pod token file does not exist in test environments: the
+        // constructor must surface the failure instead of inventing a token.
+        let result = VaultAuth::kubernetes_from_service_account("confers-role");
+        let err = match result {
+            Ok(_) => panic!("no service account token should exist in tests"),
+            Err(e) => e,
+        };
+        assert!(err.to_string().contains("service-account token"), "{err}");
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    #[serial]
+    async fn vault_empty_token_falls_back_to_env_var() {
+        // SAFETY: single-threaded env access (see FIXME audit in env_types).
+        unsafe { std::env::remove_var("VAULT_TOKEN") };
+        let provider = VaultKeyProvider::builder()
+            .vault_addr("http://127.0.0.1:1")
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: String::new(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider
+            .get_key()
+            .await
+            .expect_err("empty token without VAULT_TOKEN must fail");
+        assert!(err.to_string().contains("token"), "{err}");
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn vault_login_failure_is_retryable() {
+        // The mock answers every request with 403: the AppRole login itself
+        // fails, which is a retryable remote error.
+        let addr = spawn_mock_vault(vec![(403, "{}".to_string())]).await;
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::AppRole {
+                role_id: "role".to_string(),
+                secret_id: "secret".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider.get_key().await.expect_err("login must fail");
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("vault_login_response") || msg.contains("vault_response"),
+            "{msg}"
+        );
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn vault_secret_errors_are_loud() {
+        // Key absent from the secret.
+        let addr = spawn_mock_vault(vec![(
+            200,
+            serde_json::json!({"data": {"other": "0123456789012345678901234567890123456789"}})
+                .to_string(),
+        )])
+        .await;
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: "t".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider.get_key().await.expect_err("missing key");
+        assert!(
+            err.to_string().contains("not found in Vault secret"),
+            "{err}"
+        );
+
+        // Key present but too short.
+        let addr = spawn_mock_vault(vec![(
+            200,
+            serde_json::json!({"data": {"key": "too-short"}}).to_string(),
+        )])
+        .await;
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: "t".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider.get_key().await.expect_err("short key");
+        assert!(err.to_string().contains("at least 32 characters"), "{err}");
+
+        // Non-JSON payload.
+        let addr = spawn_mock_vault(vec![(200, "<html>not json</html>".to_string())]).await;
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: "t".to_string(),
+            })
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider.get_key().await.expect_err("garbage payload");
+        assert!(err.to_string().contains("parse Vault response"), "{err}");
+    }
+
+    #[cfg(feature = "remote")]
+    #[tokio::test]
+    async fn vault_unauthorized_secret_triggers_one_token_refresh() {
+        // 403 on the secret read drops the cached token and retries once;
+        // the mock keeps answering 403, so the final error is the
+        // non-success vault_response mapping.
+        let addr = spawn_mock_vault(vec![(403, "{}".to_string())]).await;
+        let provider = VaultKeyProvider::builder()
+            .vault_addr(format!("http://{addr}"))
+            .secret_path("secret/data/confers")
+            .secret_key("key")
+            .auth(VaultAuth::Token {
+                token: "stale-token".to_string(),
+            })
+            .cache_policy(KeyCachePolicy::CacheWithTtl(
+                std::time::Duration::from_secs(60),
+            ))
+            .allow_http(true)
+            .build()
+            .expect("build");
+        let err = provider.get_key().await.expect_err("403 must surface");
+        assert!(format!("{err:?}").contains("vault_response"), "{err:?}");
+    }
+
+    #[test]
+    fn file_key_provider_group_readable_file_warns_via_telemetry() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file
+            .write_all(b"this-is-a-test-key-with-32-chars-minimum")
+            .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            temp_file
+                .as_file()
+                .set_permissions(std::fs::Permissions::from_mode(0o644))
+                .unwrap();
+        }
+        let provider = FileKeyProvider::new(temp_file.path());
+        let key = provider.get_key().expect("group-readable key still loads");
+        assert_eq!(key.len(), 32);
     }
 }

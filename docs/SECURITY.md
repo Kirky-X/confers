@@ -169,7 +169,7 @@ let plaintext = crypto.decrypt(&nonce, &ciphertext, key)?;
 
 ### 内存安全
 
-敏感数据在被丢弃时自动清零（zeroize，需启用 `encryption` 特性）：
+敏感数据在被丢弃时自动清零（zeroize，需启用 `security` 特性——与 `encryption` 解耦，仅依赖 zeroize/sha2/hex 轻量原语，不拉入加密栈）：
 
 ```rust,ignore
 use confers::security::{SecureString, SensitivityLevel};
@@ -258,7 +258,7 @@ use confers::security::ErrorSanitizer;
 let sanitizer = ErrorSanitizer::default();
 let safe_error = sanitizer.sanitize(&error_message);
 
-// ConfigInjector - 带校验与限速的运行时配置注入（security 特性）
+// ConfigInjector - 带校验与限速的运行时配置注入（security-rules 特性）
 use confers::security::ConfigInjector;
 let injector = ConfigInjector::new()
     .max_entries(1000)

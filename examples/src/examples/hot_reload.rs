@@ -4,17 +4,41 @@
 //! 热重载示例 - 配置文件变更监听
 //!
 //! 本示例展示如何使用 confers 的热重载功能：
-//! - 文件系统监听
-//! - 配置变更检测
-//! - 自动重载机制
-//! - 防抖处理
+//! - 文件系统监听（`FsWatcher` + `WatcherConfig` 防抖与失败暂停）
+//! - 配置变更检测与自动重载
+//! - 重载失败的重试计数
+//!
+//! 运行方式（对当前工作目录无要求，无需手工准备配置文件）：
+//!   cargo run -p confers-examples --bin hot_reload
+//!
+//! 流程：把 examples/config/hot_reload.toml 模板在编译期嵌入二进制（`include_str!`），
+//! 启动时拷贝到系统临时目录并对该副本建立监听；约 2 秒后示例自身向同一文件
+//! 写入端口已变更的新内容（原地写入，触发 Modify 事件），完整演示
+//! 「修改 → 事件 → 重载 → 新值生效」闭环后自动退出。
+//! 在真实应用中，只需把 `FsWatcher::new` 指向自己的配置文件路径即可。
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use confers::watcher::{FsWatcher, WatcherConfig};
 use serde::Deserialize;
 use tracing::{error, info, warn};
+
+/// 配置模板：编译期嵌入，修改 examples/config/hot_reload.toml 后重新运行即生效。
+const CONFIG_TEMPLATE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/config/hot_reload.toml"
+));
+
+/// 演示修改的字段：模拟运维变更服务端口。
+const PORT_OLD: &str = "port = 8080";
+const PORT_NEW: &str = "port = 9090";
+
+/// 写入演示修改前的延迟：留出监听建立（inotify watch 就绪）的时间。
+const DEMO_MODIFY_DELAY: Duration = Duration::from_secs(2);
+
+/// 等待变更事件的总上限：超时说明当前环境不支持文件系统事件通知
+/// （网络文件系统、部分容器挂载等），显式报错而非无限等待。
+const DEMO_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone, Deserialize)]
 struct ConfersConfig {
@@ -72,8 +96,10 @@ impl ConfersConfig {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
+            // 尊重 RUST_LOG；未设置时才落到 info 基线（直接 add_directive 会
+            // 用无 target 的指令覆盖 RUST_LOG，级别控制失效）。
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .with_target(false)
         .with_thread_ids(false)
@@ -83,12 +109,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("=== 热重载示例程序启动 ===");
 
-    let config_path = PathBuf::from("config/config.toml");
-
-    if !config_path.exists() {
-        error!("配置文件不存在: {:?}", config_path);
-        return Ok(());
-    }
+    // 模板拷贝到以进程号命名的临时目录，监听与修改都发生在副本上，
+    // 多实例并行互不干扰，也不会污染仓库工作区。
+    let demo_dir =
+        std::env::temp_dir().join(format!("confers-hot-reload-demo-{}", std::process::id()));
+    std::fs::create_dir_all(&demo_dir)?;
+    let config_path = demo_dir.join("config.toml");
+    std::fs::write(&config_path, CONFIG_TEMPLATE)?;
+    info!("被监听的配置文件: {:?}", config_path);
 
     let watcher_config = WatcherConfig::builder()
         .debounce_ms(300)
@@ -105,17 +133,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         watcher_config.max_consecutive_failures
     );
 
+    // FsWatcher 内部监听文件的父目录（对编辑器式原子替换健壮），
+    // 事件以绝对路径转发。
     let mut watcher = FsWatcher::new(&config_path, watcher_config.debounce_ms).await?;
 
+    // 初始加载：真实应用启动时读取一次配置文件。
     let config = ConfersConfig::load(&config_path)?;
 
     print_config(&config);
 
+    // 演示写入任务：延迟后把端口改为 9090 写回同一文件（原地写入，
+    // 同一 inode，走 Modify 事件的最快通知路径）。
+    let modify_path = config_path.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(DEMO_MODIFY_DELAY).await;
+        let modified = CONFIG_TEMPLATE.replace(PORT_OLD, PORT_NEW);
+        if modified == CONFIG_TEMPLATE {
+            error!("模板中未找到 \"{PORT_OLD}\", 无法生成演示修改");
+            return;
+        }
+        match std::fs::write(&modify_path, modified) {
+            Ok(()) => info!(
+                "演示写入完成: 已把配置文件中的 {} 修改为 {}",
+                PORT_OLD, PORT_NEW
+            ),
+            Err(e) => error!("演示写入失败: {e}"),
+        }
+    });
+
+    info!(
+        "等待配置文件变化... (示例将在 {:.1}s 后自动修改配置文件)",
+        DEMO_MODIFY_DELAY.as_secs_f32()
+    );
+    info!("按 Ctrl+C 可提前退出程序");
+
     let mut consecutive_failures = 0u32;
     let mut last_reload_time = std::time::Instant::now();
-
-    info!("等待配置文件变化... (修改 config/config.toml 触发热重载)");
-    info!("按 Ctrl+C 退出程序");
+    // 演示目标：至少完成一次「检测变化 → 重载成功 → 新值生效」。
+    let mut reloaded = false;
+    let mut failed = false;
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
@@ -144,6 +200,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         info!("配置重载成功!");
                         print_config(&new_config);
+                        reloaded = true;
+                        break;
                     }
                     Err(e) => {
                         consecutive_failures += 1;
@@ -162,13 +220,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            // 循环结束而未重载成功：watcher 已停止或失败（recv 返回 None），
+            // 例如监听建立失败或监听目录被移除。显式上报而非当作正常退出。
+            if !reloaded {
+                error!("文件监听已停止或失败, 未能完成热重载演示");
+                failed = true;
+            }
         } => {}
+        _ = tokio::time::sleep(DEMO_TIMEOUT) => {
+            error!(
+                "在 {}s 内未收到配置变更事件, 热重载演示未完成。",
+                DEMO_TIMEOUT.as_secs()
+            );
+            error!("当前环境可能不支持文件系统事件通知 (网络文件系统、部分容器挂载等)。");
+            failed = true;
+        }
     }
 
     watcher.stop();
 
-    info!("=== 程序退出 ===");
-    Ok(())
+    // 尽力清理演示目录；失败仅残留临时文件，不影响结果。
+    let _ = std::fs::remove_dir_all(&demo_dir);
+
+    if reloaded {
+        info!("=== 热重载演示完成，程序退出 ===");
+        Ok(())
+    } else if failed {
+        Err("热重载演示未完成".into())
+    } else {
+        info!("=== 程序退出 ===");
+        Ok(())
+    }
 }
 
 fn print_config(config: &ConfersConfig) {

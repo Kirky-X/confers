@@ -166,6 +166,60 @@ fn cli11_export_raw_warns_on_stderr() {
 }
 
 #[test]
+fn cli333_export_json_toml_merged_and_desensitized() {
+    let dir = setup_dir();
+    // Two file sources merge; the later declaration overrides app.port.
+    let base = write_config(
+        &dir,
+        "base.toml",
+        "app.name = \"demo\"\napp.port = 8000\npassword = \"hunter2\"\n",
+    );
+    let overlay = write_config(&dir, "overlay.toml", "app.port = 9090\n");
+
+    // JSON export: merged output, sensitive keys masked by default.
+    let json_out = run_cli(
+        &dir,
+        &["-c", &base, "-c", &overlay, "export", "--format", "json"],
+    );
+    assert_eq!(json_out.status.code(), Some(0), "{}", stderr(&json_out));
+    let jbody = stdout(&json_out);
+    let j: serde_json::Value = serde_json::from_str(&jbody).expect("export json must parse");
+    assert_eq!(
+        j["app"]["name"], "demo",
+        "merged from both sources: {jbody}"
+    );
+    assert_eq!(j["app"]["port"], 9090, "later source overrides: {jbody}");
+    assert_eq!(
+        j["password"], "********",
+        "sensitive key masked by default: {jbody}"
+    );
+    assert!(
+        !jbody.contains("hunter2"),
+        "raw secret must not leak: {jbody}"
+    );
+
+    // TOML export: same merged content and masking in TOML form.
+    let toml_out = run_cli(
+        &dir,
+        &["-c", &base, "-c", &overlay, "export", "--format", "toml"],
+    );
+    assert_eq!(toml_out.status.code(), Some(0), "{}", stderr(&toml_out));
+    let tbody = stdout(&toml_out);
+    let t: toml::Table = toml::from_str(&tbody).expect("export toml must parse");
+    assert_eq!(t["app"]["name"], toml::Value::String("demo".into()));
+    assert_eq!(t["app"]["port"], toml::Value::Integer(9090));
+    assert_eq!(
+        t["password"],
+        toml::Value::String("********".into()),
+        "sensitive key masked by default: {tbody}"
+    );
+    assert!(
+        !tbody.contains("hunter2"),
+        "raw secret must not leak: {tbody}"
+    );
+}
+
+#[test]
 fn cli14_diff_rejects_absolute_paths_then_allows_with_flag() {
     let dir = setup_dir();
     let base = dir.join("base.toml");

@@ -1488,4 +1488,107 @@ version = 0
             remaining.len()
         );
     }
+
+    fn lookup<'a>(root: &'a AnnotatedValue, path: &str) -> Option<&'a AnnotatedValue> {
+        let mut current = root;
+        for segment in path.split('.') {
+            current = current.inner.as_map()?.get(segment)?;
+        }
+        Some(current)
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_round_trip_yaml() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manager = SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 5,
+            format: SnapshotFormat::Yaml,
+            include_provenance: false,
+        });
+        let path = manager.save(&make_value(), &[]).await.unwrap();
+        assert!(path.to_string_lossy().ends_with(".yaml"));
+        let restored = manager.load_snapshot(&path).await.unwrap();
+        assert_eq!(
+            lookup(&restored, "name").and_then(|v| v.as_str()),
+            Some("alice"),
+            "yaml round trip must preserve values"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_blocking_all_formats_round_trip() {
+        for format in [
+            SnapshotFormat::Json,
+            SnapshotFormat::Toml,
+            SnapshotFormat::Yaml,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let manager = SnapshotManager::new(SnapshotConfig {
+                dir: tmp.path().to_path_buf(),
+                max_snapshots: 5,
+                format,
+                include_provenance: true,
+            });
+            let path = manager.save_blocking(&make_value(), &[]).unwrap();
+            assert!(path.exists(), "{format:?} blocking save must write a file");
+            let restored = manager.load_snapshot(&path).await.unwrap();
+            assert_eq!(
+                lookup(&restored, "name").and_then(|v| v.as_str()),
+                Some("alice"),
+                "{format:?} round trip must preserve values"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_plain_json_scalar_kinds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manager = SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 5,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        });
+        let path = tmp.path().join("plain.json");
+        std::fs::write(
+            &path,
+            r#"{
+                "name": "svc",
+                "ratio": 0.5,
+                "big": 18446744073709551615,
+                "negative": -7,
+                "flag": null,
+                "tags": ["a", "b"],
+                "nested": {"host": "h"}
+            }"#,
+        )
+        .unwrap();
+        let restored = manager.load_snapshot(&path).await.unwrap();
+        assert_eq!(
+            lookup(&restored, "name").and_then(|v| v.as_str()),
+            Some("svc")
+        );
+        let ratio = lookup(&restored, "ratio").and_then(|v| v.as_f64());
+        assert!((ratio.unwrap() - 0.5).abs() < f64::EPSILON, "float leaf");
+        assert_eq!(
+            lookup(&restored, "big").and_then(|v| v.as_u64()),
+            Some(u64::MAX),
+            "u64 leaf beyond i64 range"
+        );
+        assert_eq!(
+            lookup(&restored, "negative").and_then(|v| v.as_i64()),
+            Some(-7)
+        );
+        assert_eq!(lookup(&restored, "flag").map(|v| v.is_null()), Some(true));
+        let tags = lookup(&restored, "tags")
+            .and_then(|v| v.inner.as_array())
+            .expect("array branch");
+        assert_eq!(tags.len(), 2);
+        assert_eq!(
+            lookup(&restored, "nested.host").and_then(|v| v.as_str()),
+            Some("h"),
+            "nested object branch"
+        );
+    }
 }

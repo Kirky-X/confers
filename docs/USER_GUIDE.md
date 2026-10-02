@@ -338,7 +338,7 @@ let config = ConfigBuilder::<MyConfig>::new()
     .build()?;
 ```
 
-> 💡 **提示**：校验由 `validation` 特性与 `#[config(validate)]` 属性控制，在构建阶段自动执行（见[校验与清洗](#-校验与清洗)一节）。热重载（异步，需 `watch` 特性）经 `FsWatcher` 实现，见[文件监听与热重载](#-文件监听与热重载)一节。
+> 💡 **提示**：校验规则用 `garde` 声明；`validation` 特性 + `#[config(validate_helper)]` 属性会生成 `confers_validate()` 辅助方法，需在 `build()` 之后由调用方显式执行——构建/加载管线不会自动校验（`#[config(validate)]` 为兼容保留的 no-op，见[校验与清洗](#-校验与清洗)一节）。热重载（异步，需 `watch` 特性）经 `FsWatcher` 实现，见[文件监听与热重载](#-文件监听与热重载)一节。
 
 ### 🔢 默认值与环境变量
 
@@ -517,7 +517,7 @@ confers -c app.toml doctor
 use garde::Validate;
 
 #[derive(Config, Deserialize, Validate)]
-#[config(validate)] // 启用自动校验
+#[config(validate_helper)] // 生成 confers_validate() 校验辅助方法
 struct MyConfig {
     #[garde(range(min = 1, max = 65535))]
     port: u16,
@@ -525,9 +525,16 @@ struct MyConfig {
     #[garde(email)]
     admin_email: String,
 }
+
+let config = ConfigBuilder::<MyConfig>::new()
+    .file("config.toml")
+    .build()?;
+
+// 校验不会自动执行：需在构建后显式调用，失败时返回 Err(String)（扁平化的 garde 报告）
+config.confers_validate()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`；加载/构建管线不会自动调用它，须由调用方显式执行。`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
 
 ### ☁️ 远程配置（Etcd/Consul/HTTP）
 
@@ -718,7 +725,7 @@ tracing_subscriber::fmt()
 - **分层配置**：将配置拆分为多个小结构体（如 `DatabaseConfig`、`ServerConfig`），再组合成 `ConfersConfig`。
 - **环境隔离**：为不同环境使用不同的 `env_prefix`（如 `DEV_`、`PROD_`）。
 - **防御式加载**：可选字段始终使用 `Option<T>`，关键字段提供 `default` 默认值。
-- **校验约束**：始终派生 `garde::Validate` 并启用 `#[config(validate)]`，把非法配置挡在启动阶段。
+- **校验约束**：始终派生 `garde::Validate` 并启用 `#[config(validate_helper)]`，在启动路径显式调用 `confers_validate()`，把非法配置挡在启动阶段。
 - **安全**：用 `sensitive = true` 标记敏感字段，防止审计日志泄露。
 
 **应避免的做法**
@@ -858,7 +865,7 @@ use garde::Validate;
 
 // 使用 garde 派生宏定义校验规则
 #[derive(Config, Deserialize, Validate)]
-#[config(validate)]  // 配置加载时启用自动校验
+#[config(validate_helper)]  // 生成 confers_validate() 校验辅助方法
 struct ValidatedConfig {
     #[garde(range(min = 1, max = 65535))]
     port: u16,
@@ -870,11 +877,13 @@ struct ValidatedConfig {
     admin_email: Option<String>,
 }
 
-// 配置加载过程中会自动执行校验
-// 校验失败时返回 ConfigError::ValidationFailed
 let config = ConfigBuilder::<ValidatedConfig>::new()
     .file("config.toml")
     .build()?;
+
+// 校验不会自动执行，需在构建后显式调用
+// 失败时返回 Err(String)（扁平化的 garde 报告）
+config.confers_validate()?;
 ```
 
 **注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email", "url", "regex"] }`。
@@ -1013,7 +1022,7 @@ beta_api = false
 |------|----------|
 | **❓ 环境变量不生效** | 1. 检查 `#[config(env_prefix = "APP")]` 是否设置正确。<br>2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。<br>3. 嵌套结构体可用双下划线：先调用 `.env_separator("__")`（必须在 `env_prefix`/`env` 之前），随后 `APP_DB__HOST` 映射到 `db.host`；默认分隔符是单下划线。 |
 | **❓ 加载时报 SizeLimitExceeded 错误** | 1. 检查配置文件是否过大或存在循环引用。<br>2. 通过 `.limits(ConfigLimits { .. })` 调整文件大小、嵌套深度、键数量等上限。 |
-| **❓ 校验失败 ValidationFailed** | 1. 检查 `garde` 约束逻辑。`confers` 在构建阶段立即执行校验。<br>2. 查看错误输出，其中会指出哪个字段未通过哪条约束。 |
+| **❓ `confers_validate()` 校验失败** | 1. 检查 `garde` 约束逻辑。校验不会在构建阶段自动执行：需启用 `validation` 特性、使用 `#[config(validate_helper)]`，并在 `build()` 后显式调用 `confers_validate()`。<br>2. 查看错误输出，其中会指出哪个字段未通过哪条约束。 |
 | **❓ 远程配置加载失败 RemoteUnavailable** | 1. 检查网络连接与 URL 正确性。<br>2. 若启用了 TLS，确保证书路径正确且有效。<br>3. 检查认证令牌或用户名/口令是否过期。 |
 
 **💬 还需要帮助？** [提交 Issue](https://github.com/Kirky-X/confers/issues) 或访问 [在线 API 文档](https://docs.rs/confers)。

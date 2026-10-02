@@ -1445,4 +1445,116 @@ mod tests {
         .expect("write corrupt header");
         assert!(scan_chain_state(&corrupt).is_none());
     }
+
+    #[test]
+    fn test_event_timestamp_accessor_covers_all_variants() {
+        let ts = chrono::Utc::now();
+        let events = vec![
+            AuditEvent::KeyAccess {
+                key: "k".into(),
+                timestamp: ts,
+            },
+            AuditEvent::KeyRotation {
+                old_version: "v1".into(),
+                new_version: "v2".into(),
+                timestamp: ts,
+            },
+            AuditEvent::Decrypt {
+                field: "f".into(),
+                success: true,
+                timestamp: ts,
+            },
+            AuditEvent::LoadSuccess {
+                source: "file".into(),
+                timestamp: ts,
+            },
+            AuditEvent::ReloadTrigger {
+                source: "watch".into(),
+                timestamp: ts,
+            },
+        ];
+        for event in &events {
+            assert_eq!(event.event_timestamp(), ts);
+        }
+    }
+
+    #[test]
+    fn test_audit_config_builder_hmac_key_and_default() {
+        let config = AuditConfigBuilder::new()
+            .enabled(true)
+            .hmac_key(b"out-of-band-mac-key".to_vec())
+            .build();
+        assert!(config.enabled);
+        assert_eq!(config.hmac_key, Some(b"out-of-band-mac-key".to_vec()));
+        assert_eq!(
+            AuditConfigBuilder::default().build().enabled,
+            AuditConfig::default().enabled
+        );
+    }
+
+    #[test]
+    fn test_writer_with_sink_receives_sanitized_events_and_reports_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        struct RecordingSink(std::sync::Mutex<usize>);
+        impl AuditSink for RecordingSink {
+            fn write(&self, events: &[AuditEvent]) {
+                *self.0.lock().unwrap() += events.len();
+            }
+        }
+        let sink = std::sync::Arc::new(RecordingSink(std::sync::Mutex::new(0)));
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build()
+            .with_sink(sink.clone());
+        assert!(writer.is_enabled());
+        writer
+            .write(AuditEvent::LoadSuccess {
+                source: "file".into(),
+                timestamp: chrono::Utc::now(),
+            })
+            .expect("durable write");
+        assert_eq!(*sink.0.lock().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_verify_chain_with_external_key_round_trip_and_tamper() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = b"external-mac-key-material".to_vec();
+        let writer = AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .hmac_key(key.clone())
+            .build();
+        for source in ["a", "b"] {
+            writer
+                .write(AuditEvent::LoadSuccess {
+                    source: source.into(),
+                    timestamp: chrono::Utc::now(),
+                })
+                .expect("chained write");
+        }
+        let mut files: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert_eq!(files.len(), 1);
+        let path = files.remove(0);
+
+        // Intact chain verifies under the external key; the keyless variant
+        // must reject a keyed chain.
+        assert!(verify_audit_chain_with_key(&path, Some(&key)).unwrap());
+        assert!(!verify_audit_chain(&path).unwrap());
+
+        // Any tampering breaks the chain.
+        let tampered = std::fs::read_to_string(&path)
+            .unwrap()
+            .replace("\"source\":\"a\"", "\"source\":\"evil\"");
+        std::fs::write(&path, tampered).unwrap();
+        assert!(!verify_audit_chain_with_key(&path, Some(&key)).unwrap());
+
+        // Missing file is a benign false, not an error.
+        assert!(!verify_audit_chain(&dir.path().join("absent.log")).unwrap());
+    }
 }

@@ -201,12 +201,12 @@ confers = { version = "0.6.0-rc.6", features = ["full"] }
 
 | 特性组合 | 直接依赖 | 含传递依赖（去重） | 编译时间 | 二进制体积 |
 |:--------|:--------:|:--------:|:--------:|:----------:|
-| `minimal` | 16 | 93 | 最短 | 最小 |
+| `minimal` | 16 | 94 | 最短 | 最小 |
 | `recommended` | 22 | 119 | 短 | 小 |
-| `dev` | 33 | 157 | 中 | 中 |
-| `production` | 37 | 168 | 中 | 中 |
-| `cli` | 21 | 123 | 中 | 小 |
-| `full` | 46 | 240 | 长 | 大 |
+| `dev` | 33 | 158 | 中 | 中 |
+| `production` | 37 | 169 | 中 | 中 |
+| `cli` | 21 | 124 | 中 | 小 |
+| `full` | 46 | 241 | 长 | 大 |
 
 > 📏 依赖数量为 v0.6.0-rc.6 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 118、`security-rules` 单开为 103；随依赖版本刷新会小幅浮动。
 
@@ -275,7 +275,7 @@ fn main() -> anyhow::Result<()> {
 | 文件 | 经 `ConfigBuilder::file()` 显式指定路径（支持 TOML、JSON、YAML、INI），不自动搜索 |
 | 环境变量 | 支持自定义前缀 |
 | CLI 参数 | 与 `clap` 集成 |
-| 远程 | Etcd、Consul、HTTP |
+| 远程 | Etcd、Consul、HTTP、Kubernetes、Nacos |
 | 默认值 | 在结构体定义中指定 |
 | 内存 | 通过编程方式设置 |
 
@@ -283,22 +283,25 @@ fn main() -> anyhow::Result<()> {
 
 | ✅ 远程来源 | 说明 |
 |:----------------:|:------------|
-| Etcd | 分布式键值存储 |
-| Consul | 服务发现与配置 |
-| HTTP | 通过 HTTP(S) 拉取配置 |
-| Redis | 配置变更广播（`redis-bus` 特性） |
+| Etcd | 分布式键值存储（`etcd` 特性，支持 `etcd-watch` 原生 watch 流） |
+| Consul | 服务发现与配置（`consul` 特性） |
+| HTTP | 通过 HTTP(S) 轮询拉取配置（`remote` 特性） |
+| Kubernetes | ConfigMap/Secret 挂载卷源与 API 源（`k8s` 特性） |
+| Nacos | 配置中心（`nacos` 特性） |
+
+> 💡 Redis 在 confers 中仅作为配置变更广播的消息总线后端（`redis-bus` 特性），不是配置来源。
 
 ### ❓ 可以校验配置吗？
 
 **可以！** Confers 与 `garde` 校验库集成。
 
 ```rust
-use confers::Config;
+use confers::{Config, ConfigBuilder};
 use garde::Validate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Serialize, Deserialize, Validate, Debug)]
-#[config(validate)]
+#[config(validate_helper)]
 struct ConfersConfig {
     #[garde(length(min = 1))]
     host: String,
@@ -306,9 +309,16 @@ struct ConfersConfig {
     #[garde(range(min = 1024, max = 65535))]
     port: u16,
 }
+
+let config = ConfigBuilder::<ConfersConfig>::new()
+    .file("config.toml")
+    .build()?;
+
+// 校验不会自动执行：需在构建后显式调用
+config.confers_validate()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`，须在 `build()` 之后显式调用——加载/构建管线不会自动校验；`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
 
 ### ❓ Confers 安全吗？
 

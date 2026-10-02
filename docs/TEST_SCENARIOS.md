@@ -2,7 +2,7 @@
 
 > 适用版本：confers **0.6.0-rc.6**（workspace，Rust 1.97.1 / edition 2024）
 > 用途：7 仓库统一 E2E 验收工程的第一步：先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
-> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 91 个 `#[cfg(test)]` 模块、`examples/` 21 个示例、`docker-compose.test.yml`。
+> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 100 个 `#[cfg(test)]` 模块、`examples/` 22 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
 
 ## 📋 目录
@@ -47,7 +47,7 @@
 - [4. Docker 服务需求汇总](#4-docker-服务需求汇总)
 - [5. 执行计划](#5-执行计划)
 -   [5.1 层级与命令](#51-层级与命令)
--   [5.2 examples 运行清单（21 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）](#52-examples-运行清单21-个cargo-run--p-confers-examples---bin-name依赖-examples-crate-默认-featuresfull)
+-   [5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）](#52-examples-运行清单22-个cargo-run--p-confers-examples---bin-name依赖-examples-crate-默认-featuresfull)
 -   [5.3 场景 ID → E2E 文件映射汇总](#53-场景-id--e2e-文件映射汇总)
 -   [5.4 建议执行顺序](#54-建议执行顺序)
 - [6. 统计汇总](#6-统计汇总)
@@ -75,13 +75,13 @@
 
 | # | 功能域 | 场景 ID 前缀 | 涉及 feature（Cargo.toml 名） | 主要公共 API |
 |---|--------|-------------|------------------------------|--------------|
-| 1 | 格式解析与 Loader | FMT | toml, json, yaml, ini, env, dotenv（default=toml+json+env） | `loader::{Format, LoaderConfig, load_file, parse_content, detect_format_from_path, detect_format_from_content, parse_toml/json/yaml/ini}` |
+| 1 | 格式解析与 Loader | FMT | toml, json, yaml, ini, dotenv（default=toml+json+dotenv；env 为待移除兼容别名） | `loader::{Format, LoaderConfig, load_file, parse_content, detect_format_from_path, detect_format_from_content, parse_toml/json/yaml/ini}` |
 | 2 | 配置构建 / Source 链 / 合并 | BLD | default + remote(AsyncSource)、snapshot(with_snapshot) | `config::{config, ConfigBuilder, ConfigLimits, SourceChainBuilder, DefaultSource, EnvSource, FileSource, MemorySource, Source, SourceKind}`、`merger::MergeStrategy`、`interface::{ConfigConnector/Reader/Writer/Provider/Ext}`、`new_in_memory()` |
 | 3 | 校验 | VAL | validation | `validator::{Validate, ValidationResult, ValidationRule}` |
 | 4 | 插值 | IPL | interpolation | `interpolation::{interpolate, interpolate_tracked, InterpolationConfig, InterpolationContext, InterpolationResult, InterpolationWarning}` |
-| 5 | 加密与 Secret | ENC | encryption（security→encryption） | `secret::{SecretString, SecretBytes, XChaCha20Crypto, CryptoError, derive_field_key, EnvKeyProvider(+Builder), SecretKeyProvider, FileKeyProvider(+Builder), VaultKeyProvider(+Builder), KeyRegistry(+Builder), ZeroizingBytes}` |
+| 5 | 加密与 Secret | ENC | encryption（security 已解耦：不隐含 encryption） | `secret::{SecretString, SecretBytes, XChaCha20Crypto, CryptoError, derive_field_key, EnvKeyProvider(+Builder), SecretKeyProvider, FileKeyProvider(+Builder), VaultKeyProvider(+Builder), KeyRegistry(+Builder), ZeroizingBytes}` |
 | 6 | 密钥管理 | KEY | key（→encryption） | `key::{KeyManager, KeyRing, KeyBundle, KeyMetadata, KeyRotationSchedule, RotationPlan, KeyStatus}` |
-| 7 | 安全规则与注入 | SEC | security, security-rules（→security→encryption） | `security::{EnvSecurityValidator, EnvironmentValidationConfig, config_injector, error_sanitization}`、`security::rules::{SecurityValidatorRegistry, CorsValidator, SsrfValidator, JwtSecretValidator, TlsConfigValidator, SecurityReport, SecurityViolation, ViolationSeverity}` |
+| 7 | 安全规则与注入 | SEC | security, security-rules（security-rules→security；不隐含 encryption） | `security::{EnvSecurityValidator, EnvironmentValidationConfig, config_injector, error_sanitization}`、`security::rules::{SecurityValidatorRegistry, CorsValidator, SsrfValidator, JwtSecretValidator, TlsConfigValidator, SecurityReport, SecurityViolation, ViolationSeverity}` |
 | 8 | 审计 | AUD | audit | `audit::{AuditEvent, AuditLevel, AuditConfig(+Builder), AuditWriter(+Builder)}` |
 | 9 | 文件热更新 | WAT | watch | `watcher::{FsWatcher, MultiFsWatcher, WatcherConfig(+Builder), WatcherGuard, AdaptiveDebouncer}` |
 | 10 | 渐进重载 | PGR | progressive-reload（→watch） | `watcher::{ProgressiveReloader(+Builder), ReloadHealthCheck, HealthStatus, ReloadOutcome}` |
@@ -174,8 +174,8 @@
 
 | ID | 场景描述 | 类型 | 涉及 feature | 依赖服务 | 既有覆盖 | E2E 落点 |
 |----|---------|------|-------------|---------|---------|---------|
-| VAL-01 | `#[derive(Config)] #[config(validate = true)]` 合法配置通过校验并成功 build | 正常 | validation | 本地文件 | `tests/core/coverage.rs::test_validate_trait_is_accessible`；端到端→需新增 | tests/e2e/validation_e2e.rs |
-| VAL-02 | 非法值（如 email 格式错 / range 越界）→ `ConfigValidationFailed(2500)`，错误含字段路径 | 异常 | validation | 本地文件 | `tests/core/error.rs::test_config_validation_failure`（另在 src 内联 validator tests 有已注册版） | tests/e2e/validation_e2e.rs |
+| VAL-01 | `#[derive(Config)] #[config(validate_helper)]` 合法配置经显式 `confers_validate()` 校验通过 | 正常 | validation | 本地文件 | `tests/core/coverage.rs::test_validate_trait_is_accessible`；端到端→需新增 | tests/e2e/validation_e2e.rs |
+| VAL-02 | 非法值（如 email 格式错 / range 越界）经显式 `confers_validate()` 校验失败，`Err` 消息含字段路径（`#[config(validate)]` 为 no-op，build 不校验） | 异常 | validation | 本地文件 | `tests/core/error.rs::test_config_validation_failure`（另在 src 内联 validator tests 有已注册版） | tests/e2e/validation_e2e.rs |
 | VAL-03 | `ValidationRule::from_str("length(1..)")/"range(0..100)"` 解析为规则 | 正常 | validation | 无 | `tests/core/coverage.rs::test_validation_rule_from_str_length/range/simple` | tests/e2e/validation_e2e.rs |
 | VAL-04 | 非法规则字符串 → 解析错误（而非静默忽略） | 异常 | validation | 无 | `tests/core/coverage.rs::test_validation_rule_from_str_invalid` | tests/e2e/validation_e2e.rs |
 | VAL-05 | 自定义 validator 注册进链路并被调用 | 正常 | validation | 无 | src 内联 `src/impl_/validator.rs` tests | tests/e2e/validation_e2e.rs |
@@ -604,8 +604,8 @@
 | PRS-04 | `--features dev`（12 项）编译 + tests/core 通过 | 边界 | dev | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-05 | `--features production`（14 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
-| PRS-07 | `--features full`（40 项）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
-| PRS-08 | 单 feature 逐一开启（toml/json/yaml/ini/dotenv/validation/watch/encryption/…40 项）每项 `cargo check` 通过（依赖链自动生效：security-rules→security、nats-bus→config-bus 等；security 与 encryption 已解耦，security 单开不拉入加密栈） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
+| PRS-07 | `--features full`（39 项正式特性；不含 `hot-reload-kit` 与待移除兼容别名）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
+| PRS-08 | 单 feature 逐一开启（`[features]` 全部 51 个键，即 40 个正式单 feature + 6 预设 + 3 兼容别名 `env`/`schema`/`key` + 内部聚合 `async-core` + `default`）每项 `cargo check` 通过（依赖链自动生效：security-rules→security、nats-bus→config-bus 等；security 与 encryption 已解耦，security 单开不拉入加密栈） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
 
 ---
 
@@ -617,7 +617,7 @@
 security          → zeroize, sha2, hex（§9.2-5 解耦：不隐含 encryption/加密栈）
 security-rules    → security, ipnet
 key-management    → encryption, chrono, rand, hex（key 为兼容别名 → key-management）
-cli               → clap, similar, toml, json, yaml, chrono
+cli               → clap, similar, toml, json, yaml, chrono, json-schema
 progressive-reload→ watch, arc-swap, async-trait
 snapshot          → chrono, tokio, json, toml, yaml, dynamic
 etcd              → remote, etcd-client, toml, json, yaml
@@ -659,13 +659,13 @@ default           → toml, json, dotenv
 
 | 预设 | 展开内容 | 备注 |
 |------|---------|------|
-| default | toml, json, env | 最小可用 |
-| minimal | env, json | 无 toml |
-| recommended | toml, env, validation, json, security-rules | security-rules 隐式带 security→encryption |
-| dev | toml, json, yaml, env, cli, validation, schema, audit, watch, migration, snapshot, dynamic | snapshot 隐式带 json/toml/yaml/dynamic |
-| production | toml, env, watch, encryption, validation, audit, schema, cli, migration, dynamic, progressive-reload, snapshot, security-rules, feature-toggle | progressive-reload 隐式带 watch |
-| distributed | toml, json, env, watch, validation, config-bus, progressive-reload, audit | 总线仅进程内 |
-| full | 40 项全量（= 全部非预设单 feature；含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key/interpolation/canary…） | 需 docker 服务做行为测试 |
+| default | toml, json, dotenv | 最小可用 |
+| minimal | dotenv, json | 无 toml |
+| recommended | toml, dotenv, validation, json, security-rules | security-rules 隐式带 security（不隐含 encryption） |
+| dev | toml, json, yaml, dotenv, cli, validation, json-schema, audit, watch, migration, snapshot, dynamic | snapshot 隐式带 json/toml/yaml/dynamic |
+| production | toml, dotenv, watch, encryption, validation, audit, json-schema, cli, migration, dynamic, progressive-reload, snapshot, security-rules, feature-toggle | progressive-reload 隐式带 watch |
+| distributed | toml, json, dotenv, watch, validation, config-bus, progressive-reload, audit | 总线仅进程内 |
+| full | 39 项正式特性（含 etcd/consul/nats-bus/redis-bus/context-aware/modules/typescript-schema/key-management/interpolation/canary…；不含 `hot-reload-kit` 与兼容别名 `env`/`schema`/`key`） | 需 docker 服务做行为测试 |
 
 ---
 
@@ -697,20 +697,20 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 91 个 `#[cfg(test)]` 模块（~2315 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 100 个 `#[cfg(test)]` 模块（2458 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
-| L3 examples | 21 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
-| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 27 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
+| L3 examples | 22 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
+| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
 | 宏测试 | `macros/tests`（trybuild 编译失败用例与属性校验） | `cargo test -p confers-macros` | 允许 |
 | 模糊测试 | `fuzz/`（cargo-fuzz 目标：`parser`、`merger`、`interpolation`） | `cargo fuzz run parser`（在 `fuzz/` 目录下） | 禁 mock |
-| 基准测试 | `benches/`（9 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev --benches` | — |
+| 基准测试 | `benches/`（10 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev,etcd-watch,change-stream --benches`（CI 口径；`required-features=["interpolation"]` 的 3 组需补 `--features interpolation`） | — |
 | 文档测试 | 公开 API rustdoc 示例 | 随 `cargo test --workspace` 执行 | — |
 
 前置修复项（落地 E2E 前完成）：
 1. ✅ 已完成：`tests/core/mod.rs` 已注册 `mod error;`（42 个测试复活）；重复的 `tests/core/encryption.rs` 已删除。
-2. ✅ 已完成：`Cargo.toml` 已为全部 27 个 `tests/e2e/*.rs` 注册 `[[test]]` 段（`cli_coverage_extra` 等按需声明 `required-features`）。
+2. ✅ 已完成：`Cargo.toml` 已为全部 33 个 `tests/e2e/*.rs` 注册 `[[test]]` 段（`cli_coverage_extra` 等按需声明 `required-features`）。
 
-### 5.2 examples 运行清单（21 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）
+### 5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）
 
 | # | 示例 bin | 依赖服务 | 预期结果（判验收通过） |
 |---|---------|---------|----------------------|
@@ -807,11 +807,11 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，91 个） | 2315 |
-| 集成与 E2E（`tests/`，56 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 638 |
-| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 27 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，100 个） | 2458 |
+| 集成与 E2E（`tests/`，64 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 770 |
+| E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 33 |
 | 模糊测试目标（`fuzz/`） | 3 |
-| Criterion 基准组（`benches/`） | 9 |
+| Criterion 基准组（`benches/`） | 10 |
 
 覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。
 

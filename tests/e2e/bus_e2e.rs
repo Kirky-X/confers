@@ -150,10 +150,11 @@ async fn nat06_unreachable_nats_errors_then_real_service_recovers() {
         eprintln!("Skipping recovery half: NATS not available");
         return;
     }
+    let stream = unique("NAT06");
     let bus = NatsBusBuilder::new()
         .url("nats://127.0.0.1:4222")
         .subject(unique("nat06.recover.subject"))
-        .stream_name(unique("NAT06"))
+        .stream_name(stream.clone())
         .build()
         .await
         .expect("connect to real NATS");
@@ -166,6 +167,14 @@ async fn nat06_unreachable_nats_errors_then_real_service_recovers() {
         .expect("event must arrive")
         .expect("stream open");
     assert_eq!(ev.instance_id, "nat06-recovered");
+
+    // 自清理:删除本测试创建的 JetStream,不留跨运行测试数据。
+    let client = async_nats::connect("nats://127.0.0.1:4222")
+        .await
+        .expect("cleanup connect");
+    let _ = async_nats::jetstream::new(client)
+        .delete_stream(&stream)
+        .await;
 }
 
 /// 并发发布不丢消息(单条多路复用连接,无连接池)。

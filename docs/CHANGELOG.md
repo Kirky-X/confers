@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### 依赖升级与特性裁剪
+
+- 传递依赖 patch 升级（`cargo update`，Cargo.lock）：lazy_static 1.5.0→1.5.1、pulldown-cmark-to-cmark 22.0.1→22.0.3、quinn-proto 0.11.18→0.11.19、quinn-udp 0.5.15→0.5.16、tokio-rustls 0.26.5→0.26.6、xxhash-rust 0.8.18→0.8.19、yoke-derive 0.8.3→0.8.4；直接依赖 x.x 基线经 crates.io 核对均已在最新稳定 major.minor，无版本号变更
+- 特性收窄（`default-features = false` 不变，显式特性最小化）：`regex` `unicode` 全聚合 → `unicode-case` + `unicode-perl`（src 全部 75 个静态模式仅用 `(?i)`、`\d`/`\s`/`\w`/`\b`/`\S`，双特性集隔离对照验证编译与 ASCII 语义逐字节一致）；`rand` `["std","std_rng","sys_rng","thread_rng"]` → `["thread_rng"]`（前三项为其传递子集，代码仅用 `rng()`/`Rng::fill_bytes`）；examples 的 `notify` 移除 Linux 目标下空操作的 `macos_fsevent`
+- CI actions 升级（SHA pin）：taiki-e/install-action v2.87.20→v2.87.22、github/codeql-action v4.38.2 SHA 修正至官方 tag 当前指向、dtolnay/rust-toolchain master 前进（checkout/rust-cache/setup-protoc/codecov/gh-release 经比对已最新未动）
+
 ### security 与 encryption 特性解耦（FEATURE_AUDIT_REPORT §9.2-5）
 
 - `security` 不再隐含 `encryption`：security 模块（`SecureString`、错误脱敏 `ErrorSanitizer`）实际仅需 zeroize（零化）与 sha2+hex（`fingerprint` 指纹）三个轻量原语，现由 `security` 直接声明；启用 `security-rules`（规则引擎为纯计算校验）与 `recommended` 预设不再经链式传递拉入 chacha20poly1305/hkdf/tokio/async-trait 等加密与异步栈依赖（getrandom 经 moka→uuid 基线链仍在图中、非本次解耦可移除；recommended 直接依赖 27→22、传递去重 131→119，实测口径同 FAQ 依赖数量表）

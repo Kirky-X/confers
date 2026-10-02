@@ -906,4 +906,36 @@ mod tests {
             "no failure may be recorded for a contended round"
         );
     }
+
+    #[test]
+    fn builder_setters_and_credential_pairing_validation() {
+        let err = match NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+            .username("nacos")
+            .build()
+        {
+            Err(e) => e,
+            Ok(_) => panic!("username without password must fail loudly"),
+        };
+        assert!(format!("{err:?}").contains("nacos.username"), "{err:?}");
+
+        let err = match NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+            .password("secret") // pragma: allowlist secret
+            .build()
+        {
+            Err(e) => e,
+            Ok(_) => panic!("password without username must fail loudly"),
+        };
+        assert!(format!("{err:?}").contains("nacos.password"), "{err:?}");
+
+        // The full setter chain builds cleanly.
+        NacosSourceBuilder::new("http://nacos:8848", "app.toml")
+            .format(Format::Json)
+            .interval(Duration::from_secs(5))
+            .timeout(Duration::from_secs(3))
+            .circuit_breaker_threshold(3)
+            .username("nacos")
+            .password("secret") // pragma: allowlist secret
+            .build()
+            .expect("fully configured builder builds");
+    }
 }

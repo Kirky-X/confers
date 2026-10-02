@@ -128,6 +128,10 @@ impl Source for FileSource {
     fn file_path(&self) -> Option<&Path> {
         Some(&self.path)
     }
+
+    fn has_explicit_format(&self) -> bool {
+        self.loader_config.format.is_some()
+    }
 }
 
 /// Environment variable configuration source.
@@ -1586,5 +1590,66 @@ mod tests {
             source.collect().is_err(),
             "memory source path conflict must error, not drop"
         );
+    }
+
+    #[test]
+    #[serial]
+    fn test_file_suffix_secret_resolution_error_paths() {
+        use std::sync::Arc;
+
+        // Missing file: loud InvalidValue, not a silent empty value.
+        // SAFETY: single-threaded env access (see FIXME audit in env_types).
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", "/nonexistent/secret.txt") };
+        let source = EnvSource::with_prefix("SECRTSTG_")
+            .file_suffix("_FILE")
+            .with_file_suffix(true);
+        let err = source
+            .collect()
+            .expect_err("missing _FILE target must fail");
+        unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        assert!(err.to_string().contains("not found"), "{err}");
+
+        // Sensitive system path is refused by the shared PathValidator.
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", "/etc/shadow") };
+        let err = source
+            .collect()
+            .expect_err("sensitive path must be refused");
+        unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        assert!(
+            err.to_string().contains("file_path") || err.to_string().contains("path"),
+            "{err}"
+        );
+
+        // Directory instead of a regular file is refused.
+        let dir = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", dir.path().to_str().unwrap()) };
+        let err = source
+            .collect()
+            .expect_err("directory _FILE target must be refused");
+        unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        assert!(err.to_string().contains("regular file"), "{err}");
+
+        // Happy path: the referenced file's CONTENT becomes the value.
+        let secret = dir.path().join("db_password");
+        std::fs::write(&secret, b"s3cret-content\n").unwrap();
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", secret.to_str().unwrap()) };
+        let collected = source.collect().expect("valid _FILE target collects");
+        unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        let map = match &collected.inner {
+            ConfigValue::Map(m) => m.clone(),
+            other => panic!("expected map, got {other:?}"),
+        };
+        let db = map.get("db").and_then(|v| match &v.inner {
+            ConfigValue::Map(m) => Some(m.clone()),
+            _ => None,
+        });
+        let password = db
+            .and_then(|m| m.get("password").map(|v| v.inner.clone()))
+            .expect("db.password present");
+        assert!(
+            matches!(&password, ConfigValue::String(s) if s.contains("s3cret-content")),
+            "file content must become the value: {password:?}"
+        );
+        let _: Option<Arc<str>> = None;
     }
 }

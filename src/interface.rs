@@ -416,6 +416,16 @@ pub trait Source: Send + Sync {
     fn file_path(&self) -> Option<&Path> {
         None
     }
+
+    /// Whether this source declared an explicit parse-format override
+    /// (e.g. `FileSource::with_format`).
+    ///
+    /// The builder's `ConfigLimits::allowed_extensions` allowlist exempts
+    /// such sources: the override is the documented way to load files whose
+    /// extension is missing or not one of the recognized ones.
+    fn has_explicit_format(&self) -> bool {
+        false
+    }
 }
 
 /// Trait for asynchronous configuration sources.
@@ -733,6 +743,7 @@ mod tests {
             ),
         );
         let provider = FlatProvider(map);
+        assert!(!provider.keys().is_empty(), "keys() exercised");
         let result = provider.get_by_path(&["db", "host"]);
         assert!(result.is_some());
         assert_eq!(result.unwrap().as_str(), Some("localhost"));
@@ -757,6 +768,7 @@ mod tests {
             AnnotatedValue::new(ConfigValue::string("1"), SourceId::new("t"), "x"),
         );
         let p = P(map);
+        let _ = p.keys();
         assert!(!p.keys().is_empty(), "mock keys() must stay exercised");
         assert!(p.has("x"));
         assert!(!p.has("y"));
@@ -874,6 +886,7 @@ mod tests {
             ),
         );
         let provider = MapProvider(map);
+        assert!(!provider.keys().is_empty(), "keys() exercised");
 
         let value = HOST_KEY.get(&provider);
         assert!(value.is_some());
@@ -1176,6 +1189,9 @@ mod tests {
         let s = FileSource;
         assert!(s.is_optional());
         assert_eq!(s.file_path(), Some(Path::new("/etc/config.toml")));
+        assert_eq!(s.priority(), 100);
+        assert_eq!(s.name(), "file_source");
+        assert_eq!(s.source_kind(), SourceKind::File);
         let collected = s.collect().expect("overridden collect must run");
         assert_eq!(collected.as_str(), Some("file"));
     }
@@ -1229,6 +1245,7 @@ mod tests {
 
         let p = NoCacheProvider;
         assert_eq!(p.cache_policy(), KeyCachePolicy::NoCache);
+        assert_eq!(p.provider_type(), "nocache");
         assert_eq!(p.get_key().expect("get_key must run").len(), 3);
     }
 
@@ -1690,5 +1707,43 @@ mod tests {
         assert_eq!(provider.get_float("host"), None);
         assert_eq!(provider.get_bool("retries"), None);
         assert_eq!(provider.get_string("absent"), None);
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    #[tokio::test]
+    async fn async_preload_validator_defaults_are_sensible() {
+        use crate::types::AnnotatedValue;
+        use std::collections::HashMap;
+
+        struct MinimalValidator;
+        #[async_trait::async_trait]
+        impl AsyncPreloadValidator for MinimalValidator {
+            async fn validate(&self, _config: &impl ConfigProvider) -> ConfigResult<()> {
+                Ok(())
+            }
+            fn name(&self) -> &'static str {
+                "minimal"
+            }
+        }
+
+        struct MapProvider(HashMap<String, AnnotatedValue>);
+        impl ConfigProvider for MapProvider {
+            fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+                self.0.get(key)
+            }
+            fn keys(&self) -> Vec<String> {
+                self.0.keys().cloned().collect()
+            }
+        }
+
+        let validator = MinimalValidator;
+        assert_eq!(validator.name(), "minimal");
+        assert_eq!(validator.priority(), 100);
+        assert!(!validator.is_optional());
+        let provider = MapProvider(HashMap::new());
+        validator
+            .validate(&provider)
+            .await
+            .expect("minimal validator accepts anything");
     }
 }

@@ -37,6 +37,12 @@ pub struct ChainOutcome {
     pub merged: ConfigResult<AnnotatedValue>,
     /// Skipped sources: `(source name, error message)`.
     pub failures: Vec<(String, String)>,
+    /// Disaster-recovery state: the merge of every source collected before
+    /// the chain aborted (a `fail_fast` stop or a merge error). `None` when
+    /// the chain produced nothing usable (all sources failed). This never
+    /// replaces the build outcome — `merged` stays `Err` — it only lets
+    /// callers (e.g. the snapshot failure path) persist what was collected.
+    pub partial: Option<AnnotatedValue>,
 }
 
 impl Default for SourceChain {
@@ -160,6 +166,7 @@ impl SourceChain {
                     "",
                 )),
                 failures: Vec::new(),
+                partial: None,
             };
         }
 
@@ -181,9 +188,15 @@ impl SourceChain {
                 Ok(value) => values.push((is_defaults, name, Ok(value))),
                 Err(e) => {
                     if fail_fast && !source.is_optional() {
+                        // The chain aborts, but whatever was collected before
+                        // the abort stays available as the disaster-recovery
+                        // partial (an empty root when the abort hit the very
+                        // first source).
+                        let partial = merge_partial(&merge_engine, values);
                         return ChainOutcome {
                             merged: Err(e),
                             failures: Vec::new(),
+                            partial: Some(partial),
                         };
                     }
                     failures.push((name.clone(), e.to_string()));
@@ -198,6 +211,7 @@ impl SourceChain {
             return ChainOutcome {
                 merged: Err(ConfigError::MultiSource { source: multi_err }),
                 failures,
+                partial: None,
             };
         }
 
@@ -226,6 +240,7 @@ impl SourceChain {
                     return ChainOutcome {
                         merged: Err(e),
                         failures,
+                        partial: Some(merged),
                     };
                 }
             }
@@ -234,6 +249,7 @@ impl SourceChain {
         ChainOutcome {
             merged: Ok(merged),
             failures,
+            partial: None,
         }
     }
 
@@ -246,6 +262,34 @@ impl SourceChain {
     pub fn source_kinds(&self) -> Vec<SourceKind> {
         self.sources.iter().map(|s| s.source_kind()).collect()
     }
+}
+
+/// Merge already-collected source values (defaults first, then ascending
+/// priority — the same ordering the full chain merge uses) into the partial
+/// result kept for disaster recovery. Merge errors keep the state merged so
+/// far instead of discarding it.
+fn merge_partial(
+    merge_engine: &MergeEngine,
+    values: Vec<(bool, String, ConfigResult<AnnotatedValue>)>,
+) -> AnnotatedValue {
+    let mut sorted_values: Vec<(bool, AnnotatedValue)> = values
+        .into_iter()
+        .filter_map(|(is_defaults, _, result)| result.ok().map(|v| (is_defaults, v)))
+        .collect();
+    sorted_values.sort_by_key(|(is_defaults, value)| (value.priority, !*is_defaults));
+
+    let mut merged = AnnotatedValue::new(
+        ConfigValue::Map(Arc::new(IndexMap::new())),
+        crate::types::SourceId::new("merged"),
+        "",
+    );
+    for (_, value) in sorted_values {
+        match merge_engine.merge(&merged, &value) {
+            Ok(m) => merged = m,
+            Err(_) => break,
+        }
+    }
+    merged
 }
 
 /// Builder for creating source chains with a fluent API.
@@ -397,6 +441,21 @@ impl SourceChainBuilder {
             .iter()
             .filter(|s| s.source_kind() == SourceKind::File)
             .filter_map(|s| s.file_path().map(|p| p.to_path_buf()))
+            .collect()
+    }
+
+    /// All file-source paths with whether the source declared an explicit
+    /// format override. Powers the builder's `ConfigLimits` checks
+    /// (extension allowlist, per-file and total size limits).
+    pub fn get_file_paths(&self) -> Vec<(std::path::PathBuf, bool)> {
+        self.chain
+            .sources
+            .iter()
+            .filter(|s| s.source_kind() == SourceKind::File)
+            .filter_map(|s| {
+                s.file_path()
+                    .map(|p| (p.to_path_buf(), s.has_explicit_format()))
+            })
             .collect()
     }
 }

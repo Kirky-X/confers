@@ -1425,6 +1425,14 @@ mod tests {
             .build()
             .unwrap();
         let result = source.poll_internal().await;
+
+        // Cleanup the seeded subtree before asserting so it happens even
+        // when the poll below fails — no test data may outlive the run.
+        let _ = client
+            .delete(format!("{}/config/app?recurse=true", base))
+            .send()
+            .await;
+
         assert!(
             result.is_ok(),
             "real consul poll should succeed: {:?}",
@@ -1896,6 +1904,62 @@ mod tests {
         let err = match result {
             Err(e) => e,
             Ok(_) => panic!("missing key must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS key file"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn tls_files_must_exist_and_parse() {
+        let err = match ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: "/nonexistent/ca.pem".to_string(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing CA file must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS CA file"),
+            "{err}"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let ca = dir.path().join("ca.pem");
+        std::fs::write(&ca, b"not a pem\n").unwrap();
+        let err = match ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: ca.to_string_lossy().to_string(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing cert file must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS cert file"),
+            "{err}"
+        );
+
+        let cert = dir.path().join("cert.pem");
+        std::fs::write(&cert, b"-----BEGIN CERTIFICATE-----\n").unwrap();
+        let err = match ConsulSourceBuilder::new()
+            .tls(ConsulTlsConfig {
+                ca_file: ca.to_string_lossy().to_string(),
+                cert_file: cert.to_string_lossy().to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing key file must fail loudly"),
         };
         assert!(
             err.to_string().contains("Failed to read TLS key file"),

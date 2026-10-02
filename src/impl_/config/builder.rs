@@ -20,9 +20,11 @@ use crate::error::{BuildResult, ConfigError, ConfigResult, SourceWarning, Warnin
 use crate::impl_::merger::MergeStrategy;
 #[cfg(feature = "snapshot")]
 use crate::impl_::snapshot::SnapshotConfig;
+#[cfg(feature = "remote")]
+use crate::types::SourceKind;
 use crate::types::{AnnotatedValue, ConfigValue};
 #[cfg(feature = "progressive-reload")]
-use crate::watcher::ReloadHealthCheck;
+use crate::watcher::{HealthStatus, ReloadHealthCheck};
 
 use super::chain::SourceChainBuilder;
 use super::limits::ConfigLimits;
@@ -379,23 +381,86 @@ where
         result
     }
 
-    /// Enforce `ConfigLimits::max_file_size_bytes` against every file source
-    /// in the chain before any of them is read.
+    /// Enforce the file-level `ConfigLimits` facets before any source is read:
+    /// the `allowed_extensions` allowlist (sources with an explicit format
+    /// override are exempt — that override is the documented way to load files
+    /// whose extension is missing or unrecognized), `max_file_size_bytes` per
+    /// file, and `max_total_size` across all file sources.
     ///
     /// Missing files are not reported here — the source itself surfaces them
     /// as `FileNotFound` during collection.
-    fn enforce_file_size_limits(&self) -> ConfigResult<()> {
-        for path in self.chain_builder.get_watch_paths() {
+    fn enforce_file_limits(&self) -> ConfigResult<()> {
+        let mut total_size: u64 = 0;
+        for (path, has_format_override) in self.chain_builder.get_file_paths() {
+            if !has_format_override && !self.limits.is_extension_allowed(&path) {
+                return Err(ConfigError::InvalidValue {
+                    key: path.display().to_string(),
+                    expected_type: format!(
+                        "file extension within allowed set [{}]",
+                        self.limits.allowed_extensions.join(", ")
+                    ),
+                    message: "file extension is not in the configured allowed_extensions list"
+                        .to_string(),
+                });
+            }
             let Ok(meta) = std::fs::metadata(&path) else {
                 continue;
             };
             let size = meta.len();
+            total_size = total_size.saturating_add(size);
             if size > self.limits.max_file_size_bytes {
                 return Err(ConfigError::SizeLimitExceeded {
                     actual: usize::try_from(size).unwrap_or(usize::MAX),
                     limit: usize::try_from(self.limits.max_file_size_bytes).unwrap_or(usize::MAX),
                 });
             }
+        }
+        if !self.limits.is_total_size_ok(total_size) {
+            return Err(ConfigError::SizeLimitExceeded {
+                actual: usize::try_from(total_size).unwrap_or(usize::MAX),
+                limit: usize::try_from(self.limits.max_total_size).unwrap_or(usize::MAX),
+            });
+        }
+        Ok(())
+    }
+
+    /// Enforce the chain-level `ConfigLimits` facets: `max_sources` and
+    /// (with the `remote` feature) `allow_remote`, which blocks every source
+    /// declaring itself [`SourceKind::Remote`]. Structural value limits run
+    /// later via `validate_value`; file-level limits run in
+    /// [`Self::enforce_file_limits`].
+    ///
+    /// Associated function (no `&self` receiver): the call sites run after
+    /// `accumulated_defaults`/`accumulated_memory` were moved out of the
+    /// builder, so a whole-`self` borrow would not compile.
+    fn enforce_source_limits(
+        limits: &ConfigLimits,
+        chain: &super::chain::SourceChain,
+    ) -> ConfigResult<()> {
+        if chain.len() > limits.max_sources {
+            return Err(ConfigError::InvalidValue {
+                key: "sources".to_string(),
+                expected_type: format!("source count within limit {}", limits.max_sources),
+                message: format!(
+                    "source count {} exceeds configured limit {}",
+                    chain.len(),
+                    limits.max_sources
+                ),
+            });
+        }
+        #[cfg(feature = "remote")]
+        if !limits.allow_remote
+            && chain
+                .source_kinds()
+                .iter()
+                .any(|kind| matches!(kind, SourceKind::Remote))
+        {
+            return Err(ConfigError::InvalidValue {
+                key: "sources".to_string(),
+                expected_type: "no remote sources".to_string(),
+                message: "remote sources are disabled (ConfigLimits::allow_remote = false)"
+                    .to_string(),
+            });
         }
         Ok(())
     }
@@ -407,8 +472,9 @@ where
         #[cfg(feature = "tracing")]
         let _load_guard = load_span.enter();
 
-        // Check file sizes before the chain consumes accumulated sources.
-        self.enforce_file_size_limits()?;
+        // Check file sizes/extensions before the chain consumes accumulated
+        // sources.
+        self.enforce_file_limits()?;
 
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -426,16 +492,36 @@ where
         let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
 
         let chain = self.chain_builder.build();
-        let merged = chain.collect()?;
-        // 容灾兜底: when the build fails *after* collection (limit
-        // violation, deserialization error) the merged value is still
-        // persisted so `snapshot restore` can recover it. A failure *during*
-        // collection has no merged value to persist.
+        Self::enforce_source_limits(&self.limits, &chain)?;
+        let outcome = chain.collect_report();
+        // 容灾兜底: every post-collection failure path (limit violation,
+        // preload rejection, deserialization error) AND a collection failure
+        // itself persist the merged/partial state so `snapshot restore` can
+        // recover it.
+        let merged = match outcome.merged {
+            Ok(merged) => merged,
+            Err(e) => {
+                let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
+                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
+                return Err(e);
+            }
+        };
         if let Err(e) = self.limits.validate_value(&merged) {
             Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
             return Err(e);
         }
         Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+
+        // Preload health checks gate the build on the merged tree: a
+        // Critical verdict blocks the configuration from going live.
+        #[cfg(feature = "progressive-reload")]
+        if !self.preload_validators.is_empty() {
+            let provider: Arc<dyn crate::interface::ConfigProvider> = Arc::new(MergedProvider {
+                root: merged.clone(),
+                sensitive_paths: self.sensitive_paths.clone(),
+            });
+            run_preload_validators(&self.preload_validators, provider)?;
+        }
 
         let mut json = value_to_json(&merged);
         for map in &self.json_maps {
@@ -468,9 +554,20 @@ where
         Ok(config)
     }
 
+    /// Empty merged tree (disaster-recovery snapshot of a build that failed
+    /// before anything was collected).
+    fn empty_root_value() -> AnnotatedValue {
+        AnnotatedValue::new(
+            ConfigValue::Map(Arc::new(indexmap::IndexMap::new())),
+            crate::types::SourceId::new("empty"),
+            "",
+        )
+    }
+
     fn do_build_annotated(mut self) -> ConfigResult<AnnotatedValue> {
-        // Check file sizes before the chain consumes accumulated sources.
-        self.enforce_file_size_limits()?;
+        // Check file sizes/extensions before the chain consumes accumulated
+        // sources.
+        self.enforce_file_limits()?;
 
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -488,13 +585,32 @@ where
         let snapshot_config: Option<&std::marker::PhantomData<u8>> = None;
 
         let chain = self.chain_builder.build();
-        let merged = chain.collect()?;
+        Self::enforce_source_limits(&self.limits, &chain)?;
+        let outcome = chain.collect_report();
+        let merged = match outcome.merged {
+            Ok(merged) => merged,
+            Err(e) => {
+                let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
+                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
+                return Err(e);
+            }
+        };
         if let Err(e) = self.limits.validate_value(&merged) {
             // persist the collected config before failing the build.
             Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
             return Err(e);
         }
         Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+
+        // Preload health checks gate the annotated build too.
+        #[cfg(feature = "progressive-reload")]
+        if !self.preload_validators.is_empty() {
+            let provider: Arc<dyn crate::interface::ConfigProvider> = Arc::new(MergedProvider {
+                root: merged.clone(),
+                sensitive_paths: self.sensitive_paths.clone(),
+            });
+            run_preload_validators(&self.preload_validators, provider)?;
+        }
 
         Ok(merged)
     }
@@ -548,10 +664,10 @@ where
 
     /// Build resiliently, collecting warnings instead of failing.
     pub fn build_resilient(mut self) -> ConfigResult<BuildResult<T>> {
-        // Size limit is a safety limit (like validate_value below): violated
-        // even in resilient mode, before any source is read. Checked before
-        // the chain consumes accumulated sources.
-        self.enforce_file_size_limits()?;
+        // File/extension limits are safety limits (like validate_value
+        // below): violated even in resilient mode, before any source is
+        // read. Checked before the chain consumes accumulated sources.
+        self.enforce_file_limits()?;
 
         // Add accumulated defaults if any
         if !self.accumulated_defaults.is_empty() {
@@ -574,6 +690,7 @@ where
         // `build()` does. Resilient mode tolerates *source* errors, not
         // violated safety limits.
         let chain = self.chain_builder.fail_fast(false).build();
+        Self::enforce_source_limits(&self.limits, &chain)?;
         let mut warnings = Vec::new();
         let outcome = chain.collect_report();
         // Skipped sources are no longer fully silent: each one becomes a
@@ -589,6 +706,10 @@ where
         let merged = match outcome.merged {
             Ok(v) => v,
             Err(e) => {
+                // 容灾兜底: the partial collection state is still persisted
+                // before the degraded result is returned.
+                let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
+                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
                 warnings.push(SourceWarning {
                     code: WarningCode::SourceError,
                     message: format!("source collection failed, using defaults: {e}"),
@@ -612,6 +733,17 @@ where
         // violated safety limits.
         self.limits.validate_value(&merged)?;
         Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+
+        // Preload health checks gate the resilient build too: a Critical
+        // verdict is a safety verdict, not a source error.
+        #[cfg(feature = "progressive-reload")]
+        if !self.preload_validators.is_empty() {
+            let provider: Arc<dyn crate::interface::ConfigProvider> = Arc::new(MergedProvider {
+                root: merged.clone(),
+                sensitive_paths: self.sensitive_paths.clone(),
+            });
+            run_preload_validators(&self.preload_validators, provider)?;
+        }
 
         let mut json = value_to_json(&merged);
         for map in &self.json_maps {
@@ -726,6 +858,101 @@ fn value_to_json(value: &AnnotatedValue) -> serde_json::Value {
 /// Convenient function to create a ConfigBuilder.
 pub fn config<T>() -> ConfigBuilder<T> {
     ConfigBuilder::new()
+}
+
+/// Read-only [`ConfigProvider`](crate::interface::ConfigProvider) view over
+/// the merged configuration tree. Backs the preload health checks:
+/// `get_raw` navigates dotted paths through the tree; `keys()` lists every
+/// node path minus the builder's registered sensitive paths (the
+/// `ConfigProvider` contract forbids disclosing sensitive keys — and the
+/// paths nested below them — from `keys()`).
+struct MergedProvider {
+    root: AnnotatedValue,
+    sensitive_paths: Vec<String>,
+}
+
+impl MergedProvider {
+    fn navigate(&self, key: &str) -> Option<&AnnotatedValue> {
+        let mut current = &self.root;
+        for part in key.split('.') {
+            let ConfigValue::Map(map) = &current.inner else {
+                return None;
+            };
+            current = map.get(part)?;
+        }
+        Some(current)
+    }
+}
+
+impl crate::interface::ConfigProvider for MergedProvider {
+    fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
+        self.navigate(key)
+    }
+
+    fn keys(&self) -> Vec<String> {
+        fn walk(prefix: &str, value: &AnnotatedValue, out: &mut Vec<String>) {
+            let ConfigValue::Map(map) = &value.inner else {
+                return;
+            };
+            for (key, child) in map.iter() {
+                let path = if prefix.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                out.push(path.clone());
+                walk(&path, child, out);
+            }
+        }
+        let mut keys = Vec::new();
+        walk("", &self.root, &mut keys);
+        keys.retain(|key| {
+            !self
+                .sensitive_paths
+                .iter()
+                .any(|s| key == s || key.starts_with(&format!("{s}.")))
+        });
+        keys
+    }
+}
+
+/// Run every registered preload validator against the merged configuration.
+///
+/// `build()` is sync while [`ReloadHealthCheck::check`] is async. The bridge
+/// runs each future on a detached thread with its own current-thread
+/// runtime: that works from plain sync callers *and* from inside any tokio
+/// runtime (calling `block_on` from a foreign runtime context would panic,
+/// and `block_in_place` only exists on multi-thread runtimes).
+#[cfg(feature = "progressive-reload")]
+fn run_preload_validators(
+    validators: &[Arc<dyn ReloadHealthCheck>],
+    provider: Arc<dyn crate::interface::ConfigProvider>,
+) -> ConfigResult<()> {
+    for validator in validators {
+        let check = validator.check(provider.clone());
+        let status = std::thread::scope(|scope| {
+            scope
+                .spawn(move || {
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("preload runtime build cannot fail for current_thread+enable_all")
+                        .block_on(check)
+                })
+                .join()
+        });
+        let status = status.map_err(|_| ConfigError::InvalidValue {
+            key: "preload_validator".to_string(),
+            expected_type: "non-panicking health check".to_string(),
+            message: "preload validator panicked".to_string(),
+        })?;
+        if let HealthStatus::Critical { reason } = status {
+            return Err(ConfigError::ReloadRejected {
+                reason: format!("preload validator rejected the configuration: {reason}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

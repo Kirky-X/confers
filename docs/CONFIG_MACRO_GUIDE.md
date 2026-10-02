@@ -29,8 +29,8 @@
 ### 启用校验
 
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]  // 启用配置校验
+#[derive(Debug, Clone, Serialize, Deserialize, Config, garde::Validate)]
+#[config(validate_helper)]  // 生成 confers_validate() 辅助方法（需 validation 特性）
 pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
@@ -38,8 +38,9 @@ pub struct ConfersConfig {
 ```
 
 **效果**：
-- 自动实现 `validator::Validate` trait
-- 调用 `config.validate()` 时对所有字段进行校验
+- 生成显式辅助方法 `confers_validate(&self)`：内部执行 garde 校验并把报告扁平化为消息字符串
+- 校验不会自动执行：加载/构建管线从不调用它，由调用方在 `build()` 之后显式调用
+- `#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码
 
 ---
 
@@ -249,7 +250,7 @@ pub struct ConfersConfig {
 
 ### 校验规则
 
-Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(...)]` 属性声明规则（范围、长度、邮箱、URL、模式、自定义函数等），并以 `#[config(validate)]` 在构建时启用校验。各类规则的写法统一见 [✅ 使用 Garde 进行校验](#-使用-garde-进行校验) 一节。
+Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(...)]` 属性声明规则（范围、长度、邮箱、URL、模式、自定义函数等），并以 `#[config(validate_helper)]` 生成 `confers_validate()` 辅助方法，在 `build()` 之后由调用方显式执行校验（构建/加载管线不会自动校验）。各类规则的写法统一见 [✅ 使用 Garde 进行校验](#-使用-garde-进行校验) 一节。
 
 ---
 
@@ -364,7 +365,7 @@ pub struct ConfersConfig {
 
 **效果**：
 - 为该字段启用变量插值
-- 支持 `${VAR}` 与 `${VAR:-default}` 语法
+- 支持 `${VAR}` 与 `${VAR:default}` 语法（亦兼容 shell 风格 `${VAR:-default}`）
 - 需要 `interpolation` 特性
 
 ---
@@ -583,7 +584,7 @@ use confers::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(validate)]
+#[config(validate_helper)]
 #[config(env_prefix = "APP_")]
 pub struct ServerConfig {
     pub host: String,
@@ -690,7 +691,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | 属性 | 用途 |
 |------|------|
-| `validate` | 启用配置校验（需要派生 garde::Validate） |
+| `validate` | ⚠️ 历史 no-op，不生成任何代码（兼容保留，使旧代码继续编译）；校验请用 `validate_helper` |
+| `validate_helper` | 生成 `confers_validate()` 手动校验辅助方法（需派生 garde::Validate 与 `validation` 特性；加载/构建管线不会自动调用） |
 | `env_prefix` | 环境变量前缀 |
 | `app_name` | 应用名称（校验 + CLI 显示名，不参与目录搜索） |
 | `strict` | ⚠️ 当前无实际效果（被解析但 codegen 不读取） |
@@ -790,7 +792,8 @@ fn my_validator(value: &str, _: &()) -> garde::Result {
 
 | 属性/方法 | 所需特性 |
 |-----------|----------|
-| `#[config(validate)]` | `validation` |
+| `#[config(validate_helper)]`（生成 `confers_validate()`） | `validation` |
+| `#[config(validate)]`（历史 no-op，不生成代码） | 无 |
 | `#[config(watch = true)]`（结构体级，当前无实际效果） | `watch` |
 | `json_schema()` | `json-schema` |
 | `TypeScriptGenerator::generate::<T>()` | `typescript-schema` |
@@ -848,7 +851,7 @@ garde = { version = "0.23", features = ["derive"] }
 答：检查环境变量前缀是否正确，并确认配置文件格式匹配。
 
 **问：校验失败但不知道原因？**
-答：使用 `#[config(validate)]` 启用校验并检查 garde 报告的字段路径与错误信息。
+答：用 `#[config(validate_helper)]` 生成 `confers_validate()`，在 `build()` 之后显式调用（校验不会自动执行），再检查返回消息中 garde 报告的字段路径与错误信息。
 
 **问：敏感字段在日志中泄露？**
 答：确保使用 `sensitive = true` 属性标记敏感字段，且字段类型为 `SecretString` / `SecretBytes`（需 `encryption` 特性）——普通 `String` 字段标注 `sensitive` 会在宏展开期报错。

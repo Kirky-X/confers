@@ -919,3 +919,97 @@ pub use secure_string::{
     SecureString, SecureStringBuilder, SensitiveData, SensitivityLevel, allocated_secure_strings,
     deallocated_secure_strings,
 };
+
+#[cfg(test)]
+mod security_mod_coverage_tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypted_format_rejections() {
+        assert!(validate_encrypted_format("no-prefix-value").is_err());
+        assert!(validate_encrypted_format("enc:").is_err());
+        assert!(validate_encrypted_format("enc:not!base64$").is_err());
+        assert!(validate_encrypted_format("enc:Q3Jvc3NQYXRoRW52").is_ok());
+    }
+
+    #[test]
+    fn test_compile_pattern_rejects_invalid_regex() {
+        assert!(compile_pattern("([unclosed").is_err());
+        assert!(compile_pattern("^APP_[A-Z]+$").is_ok());
+    }
+
+    #[test]
+    fn test_builder_setters_configure_limits_and_toggles() {
+        let config = EnvironmentValidationConfig::new()
+            .with_max_name_length(16)
+            .with_max_value_length(32)
+            .with_length_validation(false)
+            .with_length_validation_disabled()
+            .with_custom_blocked_patterns(vec!["FORBIDDEN".to_string()])
+            .with_custom_allowed_patterns(vec!["^[A-Z][A-Z0-9_]*$".to_string()])
+            .with_encrypted_values(true);
+        assert_eq!(config.max_name_length(), 16);
+        assert_eq!(config.max_value_length(), 32);
+        let validator = EnvSecurityValidator::with_config(config);
+        // Length validation is off: the over-limit name passes; the custom
+        // blocked pattern is enforced and the enc:-prefixed value is exempt.
+        assert!(
+            validator
+                .validate_env_name("A_VERY_LONG_ENV_VAR_NAME", None)
+                .is_ok()
+        );
+        assert!(validator.validate_env_name("FORBIDDEN", None).is_err());
+        assert!(
+            validator
+                .validate_env_name("FORBIDDEN", Some("enc:Q3Jvc3NQYXRoRW52"))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_disabled_checks_bypass_content_and_length() {
+        let config = EnvironmentValidationConfig::new()
+            .with_blocked_patterns_check(false)
+            .with_blocked_patterns_disabled()
+            .with_length_validation_disabled();
+        let validator = EnvSecurityValidator::with_config(config);
+        assert!(
+            validator.validate_env_name("FORBIDDEN", None).is_ok(),
+            "disabled blocked-patterns check must not reject"
+        );
+        assert!(
+            validator
+                .validate_env_value("x".repeat(5000).as_str())
+                .is_ok(),
+            "disabled length validation must not reject"
+        );
+    }
+
+    #[test]
+    fn test_validate_env_value_paths() {
+        // enc:-prefixed values bypass content checks when allowed.
+        let mut config = EnvironmentValidationConfig::new();
+        config = config.with_encrypted_values(true);
+        let validator = EnvSecurityValidator::with_config(config);
+        assert!(validator.validate_env_value("enc:Q3Jvc3NQYXRoRW52").is_ok());
+
+        // Disabled blocked-patterns check short-circuits content checks.
+        let permissive = EnvSecurityValidator::with_config(
+            EnvironmentValidationConfig::new().with_blocked_patterns_disabled(),
+        );
+        assert!(permissive.validate_env_value("$(rm -rf /)").is_ok());
+
+        // Content checks reject control characters, null bytes, shell
+        // expansion and dangerous patterns.
+        let strict = EnvSecurityValidator::default();
+        assert!(strict.validate_env_value("line\nbreak").is_err());
+        assert!(strict.validate_env_value("with\u{0}null").is_err());
+        assert!(strict.validate_env_value("${HOME}").is_err());
+        assert!(strict.validate_env_value("cmd;rm").is_err());
+        assert!(
+            strict
+                .validate_env_value("x".repeat(5000).as_str())
+                .is_err()
+        );
+    }
+}

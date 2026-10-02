@@ -181,7 +181,7 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 
 ##### `with_snapshot(config: SnapshotConfig)`（需要 `snapshot` 特性）
 
-启用快照配置以支持回滚。
+启用快照配置以支持回滚。构建失败（来源收集失败、上限违规、预载校验拒绝、反序列化错误）时同样会持久化已收集的合并/部分状态，供 `confers snapshot restore` 容灾恢复。
 
 ```rust
 #[cfg(feature = "snapshot")]
@@ -196,11 +196,17 @@ pub fn with_snapshot(mut self, config: SnapshotConfig) -> Self
 pub fn fail_fast(mut self, fail_fast: bool) -> Self
 ```
 
-> **注意**：`watch()`、`validate()` 与 `with_audit*()` 方法已在早期版本移除。文件监听现在通过 `FsWatcher`/`MultiFsWatcher` 直接处理；校验由 `validation` 特性与 `#[config(validate)]` 属性控制；审计日志通过 `AuditWriter` builder 配置。
+> **注意**：`watch()`、`validate()` 与 `with_audit*()` 方法已在早期版本移除。文件监听现在通过 `FsWatcher`/`MultiFsWatcher` 直接处理；校验通过 `validation` 特性与 `#[config(validate_helper)]` 属性生成的 `confers_validate()` 显式执行（构建/加载管线不会自动校验，`#[config(validate)]` 为兼容保留的 no-op）；审计日志通过 `AuditWriter` builder 配置。
 
 ##### `limits(limits: ConfigLimits)`
 
-设置用于资源管理的配置上限。
+设置用于资源管理的配置上限。以下字段在 `build()`/`build_annotated()`/`build_resilient()` 中强制执行：
+
+- `allowed_extensions`：文件扩展名白名单，构建前校验（带显式 `with_format` 覆盖的来源豁免——那是加载无扩展名/未识别扩展名文件的既定途径）；
+- `max_file_size_bytes` / `max_total_size`：单文件与全部文件总大小上限，读取任何来源前校验；
+- `max_sources`：来源总数上限；
+- `allow_remote`：默认 `false`，声明为 `SourceKind::Remote` 的来源会被拒绝，需显式 `with_allow_remote(true)`；
+- `max_nesting_depth` / `max_total_fields` / `max_array_length` / `max_string_length`：合并结果的结构校验。
 
 ```rust
 pub fn limits(mut self, limits: ConfigLimits) -> Self
@@ -573,6 +579,7 @@ static DB_PORT: TypedConfigKey<u16> =
 | `MigrationFailed { from: u32, to: u32, reason: String, source: Option<Box<dyn Error>> }` | 迁移失败 | 检查迁移函数 |
 | `ModuleNotFound { group: String, module: String }` | 模块或 profile 未找到 | 检查模块/profile 名称 |
 | `ReloadRolledBack { reason: String }` | 重载已回滚 | 检查健康检查校验器 |
+| `ReloadRejected { reason: String }` | 渐进重载被预提交检查拒绝（`ProgressiveReloader::with_pre_commit_check` 的 `PreCommitCheck` 返回 `Err`） | 按 reason 修正配置后重试重载 |
 | `IoError(std::io::Error)` | IO 操作错误 | 检查文件权限与磁盘空间 |
 | `InvalidValue { key: String, expected_type: String, message: String }` | 键的值非法 | 检查值的类型与格式 |
 | `SourceChainError { message: String, source_index: usize }` | 来源链错误 | 检查来源配置 |
@@ -1314,11 +1321,11 @@ export interface ConfersConfig {
 
 ```rust
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "schema")]
+#[cfg(feature = "json-schema")]
 use schemars::JsonSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "json-schema", derive(JsonSchema))]
 pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
@@ -1522,7 +1529,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 配置校验
 
-始终在加载时校验配置：启用 `validation` 特性并使用 `#[config(validate)]`，配置构建阶段即执行 garde 校验。完整示例与规则写法见 [用户指南 · 校验与清洗](USER_GUIDE.md#-校验与清洗) 与 [宏指南 · 使用 Garde 进行校验](CONFIG_MACRO_GUIDE.md#-使用-garde-进行校验)。
+始终在加载流程中校验配置：启用 `validation` 特性并使用 `#[config(validate_helper)]` 生成 `confers_validate()`，在 `build()` 之后由调用方显式执行——构建/加载管线不会自动校验。完整示例与规则写法见 [用户指南 · 校验与清洗](USER_GUIDE.md#-校验与清洗) 与 [宏指南 · 使用 Garde 进行校验](CONFIG_MACRO_GUIDE.md#-使用-garde-进行校验)。
 
 ### 密钥管理安全
 
@@ -1673,10 +1680,10 @@ let writer = AuditWriter::builder()
     .enabled(true)
     .build();
 
-// 记录审计事件
-writer.log_load("config.toml");
-writer.log_key_access("database_password");
-writer.log_decrypt("api_key", true);
+// 记录审计事件（各方法返回 ConfigResult<()>，务必处理错误）
+writer.log_load("config.toml")?;
+writer.log_key_access("database_password")?;
+writer.log_decrypt("api_key", true)?;
 ```
 
 **⚠️ 安全提示：**
@@ -1802,7 +1809,7 @@ pub fn log_load(&self, source: &str) -> ConfigResult<()>
 
 **配置校验 API：**
 
-校验通过 `validation` 特性与 `#[config(validate)]` 属性启用，在 `ConfigBuilder::build()` 阶段自动执行；失败时返回 `ConfigError::ValidationFailed`。
+校验通过 `validation` 特性与 `#[config(validate_helper)]` 属性生成的 `confers_validate()` 启用，由调用方在 `ConfigBuilder::build()` 之后显式执行（构建/加载管线不会自动校验，`#[config(validate)]` 为兼容保留的 no-op）；失败时返回 `Err(String)`（扁平化的 garde 报告）。
 
 ```rust
 /// Configuration validation using garde derive macro
@@ -1822,16 +1829,17 @@ pub fn log_load(&self, source: &str) -> ConfigResult<()>
 /// use serde::Deserialize;
 ///
 /// #[derive(Config, Validate, Deserialize)]
-/// #[config(validate)]
+/// #[config(validate_helper)]
 /// struct ServerConfig {
 ///     #[garde(range(min = 1, max = 65535))]
 ///     port: u16,
 /// }
 ///
-/// // 校验在 build() 阶段自动执行
+/// // 校验不会自动执行：build() 之后由调用方显式调用
 /// let config = ConfigBuilder::<ServerConfig>::new()
 ///     .file("config.toml")
 ///     .build()?;
+/// config.confers_validate()?;
 /// ```
 ```
 

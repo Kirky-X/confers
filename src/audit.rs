@@ -7,5 +7,5 @@
 
 pub use crate::impl_::audit::{
     AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditSink, AuditWriter,
-    AuditWriterBuilder, verify_audit_chain,
+    AuditWriterBuilder, verify_audit_chain, verify_audit_chain_with_key,
 };

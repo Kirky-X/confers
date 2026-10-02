@@ -96,6 +96,28 @@ error-nacos-request-failed = nacos request failed: { $message }
 error-nacos-unauthorized = nacos returned 401 Unauthorized (accessToken rejected)
 error-nacos-circuit-breaker-open = nacos source circuit breaker is open
 
+# --- cloud KMS key providers (cloud-kms feature) ---
+
+error-aws-kms-invalid-key-id = KMS key id '{ $key_id }' contains characters outside [A-Za-z0-9:/_-]
+error-aws-kms-access-key-missing = AWS access key not provided (builder or AWS_ACCESS_KEY_ID)
+error-aws-kms-secret-key-missing = AWS secret key not provided (builder or AWS_SECRET_ACCESS_KEY)
+error-aws-kms-clock-before-epoch = system clock is before the Unix epoch; SigV4 signing impossible
+error-aws-kms-response-parse-failed = Failed to parse AWS KMS response: { $message }
+error-aws-kms-response-missing-plaintext = AWS KMS response missing Plaintext
+error-aws-kms-plaintext-not-base64 = AWS KMS plaintext is not valid base64: { $message }
+error-aws-kms-region-required = region is required
+error-aws-kms-ciphertext-required = ciphertext is required
+error-gcp-kms-metadata-token-parse-failed = Failed to parse GCP metadata token response: { $message }
+error-gcp-kms-metadata-missing-access-token = GCP metadata response missing access_token
+error-gcp-kms-response-parse-failed = Failed to parse GCP KMS response: { $message }
+error-gcp-kms-response-missing-plaintext = GCP KMS response missing plaintext
+error-gcp-kms-plaintext-not-base64 = GCP KMS plaintext is not valid base64: { $message }
+error-gcp-kms-project-required = project is required
+error-gcp-kms-location-required = location is required
+error-gcp-kms-key-ring-required = key_ring is required
+error-gcp-kms-key-required = key is required
+error-gcp-kms-ciphertext-required = ciphertext is required
+
 # --- change stream errors (ChangeStreamError) ---
 
 error-stream-lagged = subscriber lagged: versions below { $from } were evicted
@@ -111,6 +133,7 @@ error-canary-instance-rollback-abort = { $scope } instance `{ $instance }` rolle
 error-canary-health-window-exhausted = health window exhausted before check
 error-canary-health-check-timed-out = health check timed out
 error-canary-rollback-side-effects-failed = { $reason } (rollback side effects FAILED: traffic may not have reverted)
+error-canary-final-split-failed = final 100% traffic split failed; snapped back to baseline
 
 # --- typed-deserialize error categories (AnnotatedValue::to_typed) ---
 

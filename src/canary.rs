@@ -244,7 +244,7 @@ impl CanaryOrchestrator {
             return Err(ConfigError::InvalidValue {
                 key: "canary".into(),
                 expected_type: "mesh weight update".into(),
-                message: "final 100% traffic split failed; snapped back to baseline".into(),
+                message: t_simple("error-canary-final-split-failed"),
             });
         }
         Ok(RolloutOutcome::Completed {

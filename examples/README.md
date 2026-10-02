@@ -1,6 +1,6 @@
 # Confers 示例索引
 
-本目录是 confers 的示例子 crate（包名 `confers-examples`，为 workspace 成员）。全部 21 个示例以 `[[bin]]` 二进制目标的形式组织在 `src/examples/` 下，依赖 `confers = { path = "..", features = ["full"] }`，覆盖库的全部主要功能。
+本目录是 confers 的示例子 crate（包名 `confers-examples`，为 workspace 成员）。全部 22 个示例以 `[[bin]]` 二进制目标的形式组织在 `src/examples/` 下，依赖 `confers = { path = "..", features = ["full"] }`，覆盖库的全部主要功能。
 
 ## 环境要求
 
@@ -41,7 +41,7 @@ cargo run --bin <示例名>
 
 | 示例 | 说明 | 运行命令 |
 |------|------|----------|
-| `hot_reload` | 文件监听与热重载：`FsWatcher` 监听变更、防抖与自动重载 | `cargo run -p confers-examples --bin hot_reload` |
+| `hot_reload` | 文件监听与热重载：`FsWatcher` 监听变更、防抖与自动重载；自动演示完整闭环（嵌入 `config/hot_reload.toml` 模板 → 拷贝到临时目录监听 → 自动修改端口 → 新值生效后自退出），无需手工准备配置文件 | `cargo run -p confers-examples --bin hot_reload` |
 | `progressive_reload` | 渐进式重载：`ProgressiveReloader` 健康检查与自动回滚 | `cargo run -p confers-examples --bin progressive_reload` |
 
 ### 安全与加密

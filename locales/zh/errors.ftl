@@ -92,6 +92,28 @@ error-nacos-request-failed = nacos 请求失败: { $message }
 error-nacos-unauthorized = nacos 返回 401 Unauthorized (accessToken 被拒绝)
 error-nacos-circuit-breaker-open = nacos 配置源熔断器已打开
 
+# --- 云 KMS 密钥提供方 (cloud-kms feature) ---
+
+error-aws-kms-invalid-key-id = KMS 密钥 ID '{ $key_id }' 含有 [A-Za-z0-9:/_-] 以外的字符
+error-aws-kms-access-key-missing = 未提供 AWS 访问密钥(builder 或 AWS_ACCESS_KEY_ID)
+error-aws-kms-secret-key-missing = 未提供 AWS 私有访问密钥(builder 或 AWS_SECRET_ACCESS_KEY)
+error-aws-kms-clock-before-epoch = 系统时钟早于 Unix 纪元; 无法进行 SigV4 签名
+error-aws-kms-response-parse-failed = 解析 AWS KMS 响应失败: { $message }
+error-aws-kms-response-missing-plaintext = AWS KMS 响应缺少 Plaintext
+error-aws-kms-plaintext-not-base64 = AWS KMS 明文不是有效的 base64: { $message }
+error-aws-kms-region-required = 必须提供 region
+error-aws-kms-ciphertext-required = 必须提供 ciphertext
+error-gcp-kms-metadata-token-parse-failed = 解析 GCP metadata token 响应失败: { $message }
+error-gcp-kms-metadata-missing-access-token = GCP metadata 响应缺少 access_token
+error-gcp-kms-response-parse-failed = 解析 GCP KMS 响应失败: { $message }
+error-gcp-kms-response-missing-plaintext = GCP KMS 响应缺少 plaintext
+error-gcp-kms-plaintext-not-base64 = GCP KMS 明文不是有效的 base64: { $message }
+error-gcp-kms-project-required = 必须提供 project
+error-gcp-kms-location-required = 必须提供 location
+error-gcp-kms-key-ring-required = 必须提供 key_ring
+error-gcp-kms-key-required = 必须提供 key
+error-gcp-kms-ciphertext-required = 必须提供 ciphertext
+
 # --- 变更流错误 (ChangeStreamError) ---
 
 error-stream-lagged = 订阅者已落后: { $from } 之前的版本已被逐出
@@ -107,6 +129,7 @@ error-canary-instance-rollback-abort = { $scope } 实例 '{ $instance }' 已回�
 error-canary-health-window-exhausted = 健康观测窗口在检查前已耗尽
 error-canary-health-check-timed-out = 健康检查超时
 error-canary-rollback-side-effects-failed = { $reason }(回滚副作用失败: 流量可能未回切)
+error-canary-final-split-failed = 最终 100% 流量切分失败; 已回切到基线
 
 # --- 强类型反序列化错误分类 (AnnotatedValue::to_typed) ---
 

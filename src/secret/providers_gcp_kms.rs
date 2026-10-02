@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::types::ZeroizingBytes;
 
 use super::providers_cloud::{
@@ -209,7 +210,10 @@ impl GcpKmsKeyProvider {
         let json: serde_json::Value =
             response.json().await.map_err(|e| ConfigError::ParseError {
                 format: "json".to_string(),
-                message: format!("Failed to parse GCP metadata token response: {e}"),
+                message: tr_args(
+                    "error-gcp-kms-metadata-token-parse-failed",
+                    &[("message", e.to_string())],
+                ),
                 location: None,
                 source: None,
             })?;
@@ -217,7 +221,7 @@ impl GcpKmsKeyProvider {
             .get("access_token")
             .and_then(|v| v.as_str())
             .ok_or(ConfigError::KeyError {
-                message: "GCP metadata response missing access_token".to_string(),
+                message: tr("error-gcp-kms-metadata-missing-access-token"),
             })?
             .to_string();
         let expires_in = json.get("expires_in").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -262,7 +266,10 @@ impl CloudKmsBackend for GcpKmsKeyProvider {
         let json: serde_json::Value =
             response.json().await.map_err(|e| ConfigError::ParseError {
                 format: "json".to_string(),
-                message: format!("Failed to parse GCP KMS response: {e}"),
+                message: tr_args(
+                    "error-gcp-kms-response-parse-failed",
+                    &[("message", e.to_string())],
+                ),
                 location: None,
                 source: None,
             })?;
@@ -270,7 +277,7 @@ impl CloudKmsBackend for GcpKmsKeyProvider {
             json.get("plaintext")
                 .and_then(|v| v.as_str())
                 .ok_or(ConfigError::KeyError {
-                    message: "GCP KMS response missing plaintext".to_string(),
+                    message: tr("error-gcp-kms-response-missing-plaintext"),
                 })?;
 
         use base64::Engine;
@@ -278,7 +285,10 @@ impl CloudKmsBackend for GcpKmsKeyProvider {
             .decode(plaintext_b64)
             .map(ZeroizingBytes::new)
             .map_err(|e| ConfigError::KeyError {
-                message: format!("GCP KMS plaintext is not valid base64: {e}"),
+                message: tr_args(
+                    "error-gcp-kms-plaintext-not-base64",
+                    &[("message", e.to_string())],
+                ),
             })
     }
 }
@@ -403,19 +413,19 @@ impl GcpKmsKeyProviderBuilder {
 
     pub fn build(self) -> ConfigResult<GcpKmsKeyProvider> {
         let project = self.project.ok_or(ConfigError::KeyError {
-            message: "project is required".to_string(),
+            message: tr("error-gcp-kms-project-required"),
         })?;
         let location = self.location.ok_or(ConfigError::KeyError {
-            message: "location is required".to_string(),
+            message: tr("error-gcp-kms-location-required"),
         })?;
         let key_ring = self.key_ring.ok_or(ConfigError::KeyError {
-            message: "key_ring is required".to_string(),
+            message: tr("error-gcp-kms-key-ring-required"),
         })?;
         let key = self.key.ok_or(ConfigError::KeyError {
-            message: "key is required".to_string(),
+            message: tr("error-gcp-kms-key-required"),
         })?;
         let ciphertext = self.ciphertext.ok_or(ConfigError::KeyError {
-            message: "ciphertext is required".to_string(),
+            message: tr("error-gcp-kms-ciphertext-required"),
         })?;
         let mut provider = GcpKmsKeyProvider::new(project, location, key_ring, key, ciphertext)?;
         if let Some(endpoint) = self.metadata_endpoint {

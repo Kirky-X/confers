@@ -606,4 +606,194 @@ mod tests {
             "the malformed attribute must surface as compile-error tokens"
         );
     }
+
+    #[test]
+    fn test_parse_field_attrs_tuple_struct_yields_nothing() {
+        let input: syn::DeriveInput = parse_quote! {
+            struct Pair(pub u8, pub u32);
+        };
+        let fields = match &input.data {
+            syn::Data::Struct(data) => &data.fields,
+            _ => unreachable!("parsed a struct"),
+        };
+        let (info, errors) = parse_field_attrs(fields);
+        assert!(info.is_empty(), "unnamed fields have no config attrs");
+        assert!(errors.is_empty(), "no diagnostics for unnamed fields");
+    }
+
+    fn struct_attrs(input: &syn::DeriveInput) -> StructAttrs {
+        use darling::FromDeriveInput;
+        StructAttrs::from_derive_input(input).expect("valid struct attributes")
+    }
+
+    fn validate_errors(input: &syn::DeriveInput) -> Vec<String> {
+        struct_attrs(input)
+            .validate(input)
+            .expect_err("expected validation errors")
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_validate_version_zero_rejected() {
+        let input: syn::DeriveInput = parse_quote! {
+            #[config(version = 0)]
+            struct S { pub a: String }
+        };
+        let errors = validate_errors(&input);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("version must be a positive integer")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_validate_env_prefix_length_and_control_chars() {
+        let long = "p".repeat(MAX_PREFIX_LENGTH + 1);
+        let input: syn::DeriveInput = parse_quote! {
+            #[config(env_prefix = #long)]
+            struct S { pub a: String }
+        };
+        let errors = validate_errors(&input);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains(&format!("exceeds maximum length of {MAX_PREFIX_LENGTH}"))),
+            "{errors:?}"
+        );
+
+        let control: syn::DeriveInput = parse_quote! {
+            #[config(env_prefix = "a\nb")]
+            struct T { pub a: String }
+        };
+        let errors = validate_errors(&control);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("cannot contain control characters")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_validate_env_prefix_empty_rejected() {
+        let input: syn::DeriveInput = parse_quote! {
+            #[config(env_prefix = "")]
+            struct S { pub a: String }
+        };
+        let errors = validate_errors(&input);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("env_prefix cannot be empty")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_validate_app_name_length_and_empty() {
+        let long = "n".repeat(MAX_NAME_LENGTH + 1);
+        let input: syn::DeriveInput = parse_quote! {
+            #[config(app_name = #long)]
+            struct S { pub a: String }
+        };
+        let errors = validate_errors(&input);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("app_name exceeds maximum length")),
+            "{errors:?}"
+        );
+
+        let empty: syn::DeriveInput = parse_quote! {
+            #[config(app_name = "")]
+            struct T { pub a: String }
+        };
+        let errors = validate_errors(&empty);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("app_name cannot be empty")),
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_validate_sensitive_requires_secret_type() {
+        let plain: syn::Field = parse_quote! {
+            #[config(sensitive)]
+            pub token: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&plain).unwrap();
+        let err = attrs
+            .validate(&plain)
+            .expect_err("plain String cannot hold a sensitive field");
+        assert!(
+            err.to_string()
+                .contains("should use SecretString or SecretBytes"),
+            "{err}"
+        );
+
+        let secret: syn::Field = parse_quote! {
+            #[config(sensitive)]
+            pub token: SecretString
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&secret).unwrap();
+        attrs
+            .validate(&secret)
+            .expect("SecretString satisfies the sensitive contract");
+    }
+
+    #[test]
+    fn test_type_predicates_reject_non_path_types() {
+        let reference: Type = parse_quote!(&'static str);
+        assert!(!is_secret_type(&reference));
+        assert!(!is_option_type(&reference));
+        assert!(!is_vec_type(&reference));
+
+        let secret: Type = parse_quote!(SecretString);
+        assert!(is_secret_type(&secret));
+        assert!(!is_secret_type(&parse_quote!(Vec<u8>)));
+    }
+
+    #[test]
+    fn test_serde_rename_non_string_and_bare_path_ignored() {
+        // rename = 42: the NameValue arm only accepts string literals.
+        let field: syn::Field = parse_quote! {
+            #[serde(rename = 42)]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "host");
+
+        // bare `rename` path variant carries no name either.
+        let field: syn::Field = parse_quote! {
+            #[serde(rename)]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "host");
+
+        // unparseable rename(...) payload is skipped rather than fatal.
+        let field: syn::Field = parse_quote! {
+            #[serde(rename(=))]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "host");
+    }
+
+    #[test]
+    fn test_serde_rename_skips_non_rename_metas_and_non_serde_attrs() {
+        let field: syn::Field = parse_quote! {
+            #[doc = "not a serde attribute"]
+            #[serde(default, rename_all = "camelCase", rename = "hostName")]
+            pub host: String
+        };
+        let attrs = FieldAttrs::from_field_with_serde(&field).unwrap();
+        assert_eq!(attrs.serde_name(), "hostName");
+    }
 }

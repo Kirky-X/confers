@@ -240,7 +240,7 @@ pub use secret::{
 #[cfg(feature = "audit")]
 pub use audit::{
     AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditSink, AuditWriter,
-    AuditWriterBuilder, verify_audit_chain,
+    AuditWriterBuilder, verify_audit_chain, verify_audit_chain_with_key,
 };
 
 #[cfg(feature = "dynamic")]

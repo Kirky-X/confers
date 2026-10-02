@@ -810,6 +810,14 @@ async fn cmp16_nats_bus_syncs_two_instances() {
         .expect("stream open");
     assert_eq!(received.instance_id, "instance-A");
     assert_eq!(received.checksum, "cmp16-sum");
+
+    // 自清理:删除本测试创建的 JetStream,不留跨运行测试数据。
+    let client = async_nats::connect("nats://127.0.0.1:4222")
+        .await
+        .expect("cleanup connect");
+    let _ = async_nats::jetstream::new(client)
+        .delete_stream(&stream)
+        .await;
 }
 
 /// context + toggle + dynamic 三方联合决定动态值。

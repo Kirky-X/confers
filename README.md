@@ -156,7 +156,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 | `dev` | `cargo add confers --features dev` | `toml`、`json`、`yaml`、`dotenv`、`cli`、`validation`、`json-schema`、`audit`、`watch`、`migration`、`snapshot`、`dynamic` | 开发环境全套工具 |
 | `production` | `cargo add confers --features production` | `toml`、`dotenv`、`watch`、`encryption`、`validation`、`audit`、`json-schema`、`cli`、`migration`、`dynamic`、`progressive-reload`、`snapshot`、`security-rules`、`feature-toggle` | 生产环境 |
 | `distributed` | `cargo add confers --features distributed` | `toml`、`json`、`dotenv`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
-| `full` | `cargo add confers --features full` | 全部特性 | 完整能力集 |
+| `full` | `cargo add confers --features full` | 全部 39 项正式特性（不含 `hot-reload-kit` 与待移除兼容别名 `env`/`schema`/`key`） | 完整能力集 |
 
 ### 📋 功能矩阵
 
@@ -238,7 +238,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ## 💻 示例
 
-全部 21 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
+全部 22 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
 
 ```bash
 # 运行单个示例（在 examples/ 目录下）
@@ -273,7 +273,7 @@ Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块�
 
 ### 🎯 测试策略
 
-测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、27 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，9 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
+测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、33 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，10 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
 
 ### ▶️ 运行命令（与 CI 一致）
 
@@ -288,18 +288,22 @@ cargo fmt --all -- --check
 # 覆盖率门禁：行覆盖率不低于 80%
 cargo llvm-cov --workspace --all-features --fail-under-lines 80
 
-# 基准测试
-cargo bench --features dev --benches
+# 基准测试（与 CI 一致；CI 另加 -- --save-baseline current）
+cargo bench --features dev,etcd-watch,change-stream --benches
+
+# interpolation 基准（merge_bench / interpolation_bench / value_path_bench 的
+# required-features = ["interpolation"]，上面的命令会跳过这三个，需补跑）
+cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
 
 # 模糊测试（在 fuzz/ 目录下）
 cargo fuzz run parser
 ```
 
-总线相关的集成测试需要本地 NATS 服务，CI 使用 `nats:2.10 -js` 容器（见 `docker-compose.test.yml`）。
+部分集成测试需要本地外部服务：总线组需要 NATS（CI 使用 `nats:2.10 -js` 容器），Redis（16379）/ etcd（2379）/ Consul（8500）组的集成测试同样需要对应服务；`docker-compose.test.yml` 一并提供了这四个服务（无服务时按端口守卫跳过）。
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.6：单元测试约 2300+（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测 2325）、集成与 E2E 共 679 个（`tests/`，59 个文件）、模糊测试目标 3 个、Criterion 基准 9 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.6：单元测试 2458 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 770 个（`tests/`，64 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 

@@ -56,7 +56,7 @@ graph TB
     subgraph Merge ["合并与类型化层"]
         MG["merger::MergeEngine<br/>MergeStrategy 深度合并"]
         SC["SourceChain 优先级链"]
-        TY["serde 反序列化为 T<br/>可选 garde 校验"]
+        TY["serde 反序列化为 T<br/>校验由调用方显式执行"]
     end
 
     subgraph Ops ["可观测与运维"]
@@ -114,7 +114,7 @@ confers/
 | 模块 | 门控特性 | 职责与关键类型 |
 |------|----------|----------------|
 | `validator` | `validation` | 基于 `garde` 的配置校验 |
-| `interpolation` | `interpolation` | `${VAR}` / `${VAR:-default}` 变量插值（深度感知嵌套，支持自引用默认值） |
+| `interpolation` | `interpolation` | `${VAR}` / `${VAR:default}` 变量插值（深度感知嵌套，支持自引用默认值） |
 | `watcher` | `watch` | 文件监听热重载：`FsWatcher`、`MultiFsWatcher`、`AdaptiveDebouncer`；`progressive` 子模块实现渐进式发布 |
 | `secret` | `encryption` | 加密原语：`XChaCha20Crypto`、`derive_field_key`、`SecretBytes`、`KeyRegistry`、`EnvKeyProvider`/`FileKeyProvider` 等、`EncryptionPrefix`（`enc:` 前缀识别） |
 | `key` | `key-management` | 密钥生命周期：`KeyManager`、`KeyStorage`（加密持久化）、`KeyRotationService`/`KeyRotationPolicy`、`KeyVersion`/`KeyInfo` |
@@ -136,7 +136,7 @@ confers/
 | 成员 | 说明 |
 |------|------|
 | `macros/` | `confers-macros`：`#[derive(Config)]` 过程宏，`parse.rs` 解析 `#[config(...)]` 属性，`codegen/` 目录（load/schema/clap 等模块）生成加载/校验/CLI 辅助代码 |
-| `examples/` | 21 个可运行示例 |
+| `examples/` | 22 个可运行示例 |
 | `fuzz/` | cargo-fuzz 模糊测试目标 |
 
 ## 🌊 数据流
@@ -147,7 +147,7 @@ confers/
 配置声明                     加载                        合并                        输出
 ─────────                   ─────────                   ─────────                   ─────────
 #[derive(Config)]    →   FileSource / EnvSource  →   SourceChain 优先级链   →   serde 反序列化为 T
-#[config(...)] 属性       Format 探测 + parse          MergeEngine 逐键合并         可选 garde 校验
+#[config(...)] 属性       Format 探测 + parse          MergeEngine 逐键合并         调用方显式校验
                           ConfigValue + SourceLocation MergeStrategy（覆盖/       可选敏感字段解密
                           （精确行列定位）              追加/深度合并/自定义）      输出类型安全配置
 ```
@@ -155,7 +155,7 @@ confers/
 1. **来源注册**：应用通过 `ConfigBuilder`（或 `SourceChainBuilder`）声明来源，顺序即优先级（后加入者优先）。
 2. **解析**：`loader` 对每个来源做格式探测（按内容或扩展名：TOML/JSON/YAML/INI），解析为 `ConfigValue` 树；解析错误携带 `SourceLocation`（精确到行列）。
 3. **合并**：`MergeEngine` 沿来源链逐键合并，值被包装为 `AnnotatedValue`（保留来源与优先级）；冲突可产生 `ConflictReport` / `SourceWarning`；字段可声明 `merge_strategy`（`replace`/`append`/`prepend`/`join`；Map 之间无条件深度合并）。
-4. **类型化**：合并结果反序列化为用户结构体 `T`；启用 `validation` 时按 `garde` 规则校验；启用 `encryption` 时以 `enc:` 前缀识别加密值并解密。
+4. **类型化**：合并结果反序列化为用户结构体 `T`；启用 `encryption` 时以 `enc:` 前缀识别加密值并解密。加载/构建管线不会自动校验——`validation` 特性 + `#[config(validate_helper)]` 生成 `confers_validate()`，由调用方在 `build()` 之后显式执行（见 [用户指南 · 校验与清洗](USER_GUIDE.md#-校验与清洗)）。
 5. **错误出口**：任一环节的初始化期失败以 `ConfigConfigError` 返回；运行期失败以 `ConfersError` 返回。`build_with_fallback` / `build_resilient` 提供降级构建。
 
 ### 热重载数据流（`watch` / `progressive-reload`）
@@ -203,7 +203,7 @@ graph TD
 4. **解析性能**：TOML 解析启用 `preserve_order`；格式探测支持从内容直接判断，避免重复读盘（大文件建议一次读入后交给 `parse_content`）。
 5. **热路径去抖**：`watcher::AdaptiveDebouncer` 自适应调节去抖窗口，避免编辑器连续写入触发的重载风暴。
 6. **编译期裁剪**：全部可选能力特性门控，配合 `minimal`/`recommended`/`dev`/`production`/`full` 预设，按需控制编译时间与二进制体积。
-7. **持续基准**：`benches/` 内置 9 组 Criterion 基准，覆盖从冷加载到并发读写的完整热路径，可通过 `cargo bench` 复现；基准套件清单与基线数据统一见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)。
+7. **持续基准**：`benches/` 内置 10 组 Criterion 基准，覆盖从冷加载到并发读写的完整热路径，可通过 `cargo bench` 复现；基准套件清单与基线数据统一见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)。
 
 ---
 

@@ -1,0 +1,29 @@
+# 热重载示例的配置模板。
+# 编译期通过 include_str! 嵌入示例二进制；运行时被拷贝到系统临时目录作为被监听的文件，
+# 因此示例对当前工作目录无要求，也不会改动本仓库的任何文件。
+# 字段结构与 src/examples/hot_reload.rs 的 ConfersConfig 及其子结构一一对应。
+
+[application]
+name = "demo-app"
+version = "1.0.0"
+environment = "development"
+
+[server]
+host = "127.0.0.1"
+port = 8080
+max_connections = 1024
+
+[logging]
+level = "info"
+format = "pretty"
+output = "stdout"
+
+[database]
+url = "postgres://localhost:5432/demo"
+max_connections = 10
+timeout_seconds = 5
+
+[cache]
+enabled = true
+ttl_seconds = 300
+max_size_mb = 64

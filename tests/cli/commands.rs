@@ -615,6 +615,36 @@ fn test_schema_from_schema_generates_rust_scaffolding() {
     assert!(stdout.contains("pub tags: Vec<String>"), "{stdout}");
 }
 
+/// 递归剥离草稿 schema 中空命名的 properties/required 条目。
+///
+/// 覆盖率插桩构建里 LLVM profile 运行时会在进程内 setenv
+/// `__LLVM_PROFILE_RT_INIT_ONCE`，env 源按既定映射把前导下划线折叠成空的
+/// config path 段（见 tests/core/env_types.rs 的
+/// `test_env_parse_key_unicode_and_case` 对空键行为的断言），因此
+/// `env_clear` 无法阻止这类插桩内部变量混入实例。空键不可能对应任何 Rust
+/// 标识符，剥掉后第二跳只针对实例里真实可用的形状生成脚手架。
+fn strip_empty_named_entries(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for child in map.values_mut() {
+                strip_empty_named_entries(child);
+            }
+            if let Some(props) = map.get_mut("properties").and_then(|v| v.as_object_mut()) {
+                props.retain(|name, _| !name.is_empty());
+            }
+            if let Some(required) = map.get_mut("required").and_then(|v| v.as_array_mut()) {
+                required.retain(|entry| !entry.as_str().is_some_and(str::is_empty));
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items.iter_mut() {
+                strip_empty_named_entries(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[test]
 #[serial]
 fn test_schema_from_instance_feeds_from_schema_round_trip() {
@@ -642,7 +672,11 @@ fn test_schema_from_instance_feeds_from_schema_round_trip() {
         "stderr: {}",
         String::from_utf8_lossy(&infer_output.stderr)
     );
-    let schema_json = String::from_utf8_lossy(&infer_output.stdout).to_string();
+    let mut draft: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&infer_output.stdout))
+            .expect("draft schema must be valid JSON");
+    strip_empty_named_entries(&mut draft);
+    let schema_json = serde_json::to_string(&draft).expect("serialize draft schema");
 
     // 第二跳：草稿 → 可编译 Rust 脚手架（端到端闭环）。
     let schema_path = create_test_config(&dir, "draft-schema.json", &schema_json);

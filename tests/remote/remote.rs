@@ -17,6 +17,19 @@ use std::time::Duration;
 
 use confers::remote::{HttpPolledSourceBuilder, PolledSource};
 
+/// Unique per-run KV prefix: parallel tests recurse-delete only their own
+/// subtree, so a cleanup can never wipe another test's keys mid-poll.
+#[cfg(feature = "consul")]
+fn unique_prefix(base: &str) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() as u64;
+    format!("{base}-{}-{}", nanos, SEQ.fetch_add(1, Ordering::Relaxed))
+}
+
 // ========================================
 // HTTP Polled Source Tests (Existing)
 // ========================================
@@ -685,9 +698,10 @@ async fn test_consul_source_parse_config() {
 
     let http_client = reqwest::Client::new();
 
-    // Write a test key
+    // Write a test key under a per-run prefix
+    let prefix = unique_prefix("test-config-remote");
     let put_result: Result<reqwest::Response, _> = http_client
-        .put("http://127.0.0.1:8500/v1/kv/test-config/app")
+        .put(format!("http://127.0.0.1:8500/v1/kv/{prefix}/app"))
         .body(r#"{"host": "localhost", "port": 8080}"#)
         .send()
         .await;
@@ -700,7 +714,7 @@ async fn test_consul_source_parse_config() {
     // Now read it back
     let source = ConsulSourceBuilder::new()
         .address("127.0.0.1:8500")
-        .prefix("test-config")
+        .prefix(&prefix)
         .build()
         .expect("Failed to build Consul source");
 
@@ -716,9 +730,9 @@ async fn test_consul_source_parse_config() {
         }
     }
 
-    // Cleanup
+    // Cleanup - recurse 删除本测试的 key 子树
     let _ = http_client
-        .delete("http://127.0.0.1:8500/v1/kv/test-config")
+        .delete(format!("http://127.0.0.1:8500/v1/kv/{prefix}?recurse=true"))
         .send()
         .await;
 }

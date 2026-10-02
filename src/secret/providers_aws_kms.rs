@@ -14,6 +14,7 @@
 use std::time::Duration;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::{tr, tr_args};
 use crate::types::ZeroizingBytes;
 
 use super::providers_cloud::{
@@ -138,7 +139,10 @@ fn validate_key_id(key_id: &str) -> ConfigResult<()> {
         Ok(())
     } else {
         Err(ConfigError::KeyError {
-            message: format!("KMS key id '{key_id}' contains characters outside [A-Za-z0-9:/_-]"),
+            message: tr_args(
+                "error-aws-kms-invalid-key-id",
+                &[("key_id", key_id.to_string())],
+            ),
         })
     }
 }
@@ -193,15 +197,14 @@ impl AwsKmsKeyProvider {
             .clone()
             .or_else(|| std::env::var("AWS_ACCESS_KEY_ID").ok())
             .ok_or(ConfigError::KeyError {
-                message: "AWS access key not provided (builder or AWS_ACCESS_KEY_ID)".to_string(),
+                message: tr("error-aws-kms-access-key-missing"),
             })?;
         let secret = self
             .secret_key
             .clone()
             .or_else(|| std::env::var("AWS_SECRET_ACCESS_KEY").ok())
             .ok_or(ConfigError::KeyError {
-                message: "AWS secret key not provided (builder or AWS_SECRET_ACCESS_KEY)"
-                    .to_string(),
+                message: tr("error-aws-kms-secret-key-missing"),
             })?;
         let session = self
             .session_token
@@ -248,8 +251,7 @@ impl AwsKmsKeyProvider {
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| ConfigError::KeyError {
-                message: "system clock is before the Unix epoch; SigV4 signing impossible"
-                    .to_string(),
+                message: tr("error-aws-kms-clock-before-epoch"),
             })?
             .as_secs();
         Ok(format_amz_date(secs))
@@ -336,7 +338,10 @@ impl CloudKmsBackend for AwsKmsKeyProvider {
         let json: serde_json::Value =
             response.json().await.map_err(|e| ConfigError::ParseError {
                 format: "json".to_string(),
-                message: format!("Failed to parse AWS KMS response: {e}"),
+                message: tr_args(
+                    "error-aws-kms-response-parse-failed",
+                    &[("message", e.to_string())],
+                ),
                 location: None,
                 source: None,
             })?;
@@ -344,7 +349,7 @@ impl CloudKmsBackend for AwsKmsKeyProvider {
             json.get("Plaintext")
                 .and_then(|v| v.as_str())
                 .ok_or(ConfigError::KeyError {
-                    message: "AWS KMS response missing Plaintext".to_string(),
+                    message: tr("error-aws-kms-response-missing-plaintext"),
                 })?;
 
         use base64::Engine;
@@ -352,7 +357,10 @@ impl CloudKmsBackend for AwsKmsKeyProvider {
             .decode(plaintext_b64)
             .map(ZeroizingBytes::new)
             .map_err(|e| ConfigError::KeyError {
-                message: format!("AWS KMS plaintext is not valid base64: {e}"),
+                message: tr_args(
+                    "error-aws-kms-plaintext-not-base64",
+                    &[("message", e.to_string())],
+                ),
             })
     }
 }
@@ -467,10 +475,10 @@ impl AwsKmsKeyProviderBuilder {
 
     pub fn build(self) -> ConfigResult<AwsKmsKeyProvider> {
         let region = self.region.ok_or(ConfigError::KeyError {
-            message: "region is required".to_string(),
+            message: tr("error-aws-kms-region-required"),
         })?;
         let ciphertext = self.ciphertext.ok_or(ConfigError::KeyError {
-            message: "ciphertext is required".to_string(),
+            message: tr("error-aws-kms-ciphertext-required"),
         })?;
         validate_key_id(&region)?;
         Ok(AwsKmsKeyProvider {

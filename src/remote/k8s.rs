@@ -1238,4 +1238,43 @@ mod tests {
         let second = source.poll().await;
         assert!(second.is_err(), "second poll still attempts (threshold 2)");
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn read_volume_skips_escaping_links_and_rejects_non_utf8() {
+        let dir = TempDir::new().expect("tempdir");
+        let mount = dir.path();
+
+        let generation_dir = mount.join("..2024_02_02_00_00_00.000");
+        fs::create_dir(&generation_dir).unwrap();
+        fs::write(generation_dir.join("app.toml"), "host = \"k8s\"\n").unwrap();
+        atomic_swap_link(mount, "..2024_02_02_00_00_00.000");
+        std::os::unix::fs::symlink("..data/app.toml", mount.join("app.toml")).expect("key symlink");
+
+        // A symlink escaping the mount must be refused, not followed.
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc/hostname", mount.join("escape")).expect("escape link");
+
+        let source = K8sMountedSource::new(mount);
+        let volume = source.read_volume().expect("readable volume");
+        assert!(
+            get_path(&volume, "app.toml", "").is_some(),
+            "legitimate key present: {volume:?}"
+        );
+        assert!(
+            get_path(&volume, "escape", "").is_none(),
+            "escaping symlink must not become a config key: {volume:?}"
+        );
+
+        // Non-UTF8 key content fails loudly (Rule 12).
+        let bad = mount.join("bad.bin");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("..data/app.toml", &bad).expect("bad link");
+        fs::remove_file(&bad).unwrap();
+        fs::write(mount.join("plain.bin"), [0xff, 0xfe, 0x00]).unwrap();
+        let err = source
+            .read_volume()
+            .expect_err("non-UTF8 mounted key must fail loudly");
+        assert!(err.to_string().contains("cannot read mounted key"), "{err}");
+    }
 }

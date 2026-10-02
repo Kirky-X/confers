@@ -279,14 +279,25 @@ fn validate_url_parts(parsed: &url::Url) -> ConfigResult<()> {
 /// path via `validate_url_full`.
 ///
 /// Returns the parsed URL on success.
+#[cfg(test)]
 fn validate_url(url: &str) -> ConfigResult<url::Url> {
+    validate_url_with_mode(url, true)
+}
+
+/// [`validate_url`] with the enforcement flag made explicit: the builder's
+/// `danger_disable_ssrf_protection` opt-out parses the URL only — every
+/// other check (poll path, pinned resolver, redirect hops) honors the same
+/// flag.
+fn validate_url_with_mode(url: &str, enforce_ssrf: bool) -> ConfigResult<url::Url> {
     let parsed = url::Url::parse(url).map_err(|_| ConfigError::InvalidValue {
         key: "url".to_string(),
         expected_type: "valid URL".to_string(),
         message: "Invalid URL format".to_string(),
     })?;
 
-    validate_url_parts(&parsed)?;
+    if enforce_ssrf {
+        validate_url_parts(&parsed)?;
+    }
 
     Ok(parsed)
 }
@@ -458,6 +469,7 @@ pub struct HttpPolledSourceBuilder {
     cb_base_delay: Option<Duration>,
     cb_max_delay: Option<Duration>,
     stale_on_error: bool,
+    danger_disable_ssrf: bool,
 }
 
 impl HttpPolledSourceBuilder {
@@ -475,6 +487,7 @@ impl HttpPolledSourceBuilder {
             cb_base_delay: None,
             cb_max_delay: None,
             stale_on_error: false,
+            danger_disable_ssrf: false,
         }
     }
 
@@ -618,6 +631,19 @@ impl HttpPolledSourceBuilder {
     /// Domain hosts are resolved on the async poll path (see
     /// `validate_url_full`); `build()` deliberately performs no blocking
     /// DNS resolution.
+    /// Opt out of SSRF protection for this source.
+    ///
+    /// With `allow` set the source accepts plain-HTTP and loopback/private
+    /// targets: the build-time URL checks, the per-poll validation and the
+    /// pinned DNS resolver's blocked-range checks are all skipped. This
+    /// exists for loopback test endpoints (and embedders that reach an
+    /// explicitly trusted private network themselves) — the default stays
+    /// `false`, and enabling it removes every SSRF guarantee of this type.
+    pub fn danger_disable_ssrf_protection(mut self, allow: bool) -> Self {
+        self.danger_disable_ssrf = allow;
+        self
+    }
+
     pub fn build(self) -> ConfigResult<HttpPolledSource> {
         let url = self.url.ok_or_else(|| ConfigError::InvalidValue {
             key: "url".to_string(),
@@ -625,10 +651,13 @@ impl HttpPolledSourceBuilder {
             message: "URL is required".to_string(),
         })?;
 
+        let enforce_ssrf = !self.danger_disable_ssrf;
+
         // Validate URL for security (DNS-free SSRF checks; DNS resolution
         // with blocked-IP validation runs asynchronously on every poll, which
-        // also keeps rebinding protection fresh).
-        validate_url(&url)?;
+        // also keeps rebinding protection fresh). The SSRF opt-out skips
+        // these checks and only parses the URL.
+        validate_url_with_mode(&url, enforce_ssrf)?;
 
         let url_arc: Arc<str> = url.clone().into();
         let source_id = SourceId::new(format!("http:{}", url_arc));
@@ -644,7 +673,7 @@ impl HttpPolledSourceBuilder {
         let client_builder = Client::builder()
             .use_rustls_tls()
             .redirect(reqwest::redirect::Policy::none())
-            .dns_resolver(Arc::new(ValidatingResolver { enforce_ssrf: true }))
+            .dns_resolver(Arc::new(ValidatingResolver { enforce_ssrf }))
             .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_HTTP_CONNECT_TIMEOUT))
             .timeout(self.timeout.unwrap_or(DEFAULT_HTTP_REQUEST_TIMEOUT));
 
@@ -680,7 +709,7 @@ impl HttpPolledSourceBuilder {
             format: self.format,
             allowed_domains: self.allowed_domains.into(),
             headers,
-            enforce_ssrf: true,
+            enforce_ssrf,
             stale_on_error: self.stale_on_error,
             stale_served: std::sync::atomic::AtomicU64::new(0),
             cached: RwLock::new(None),

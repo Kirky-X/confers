@@ -419,6 +419,16 @@ mod tests {
         )
     }
 
+    /// Delete one JetStream stream by name — per-test self-cleanup so no
+    /// stream outlives the run that created it (the `tests/remote` sweeper
+    /// runs in a different test binary and may not run afterwards).
+    async fn delete_nats_stream(name: &str) {
+        let Ok(client) = async_nats::connect("nats://127.0.0.1:4222").await else {
+            return;
+        };
+        let _ = async_nats::jetstream::new(client).delete_stream(name).await;
+    }
+
     // ==================== NatsBusBuilder ====================
 
     #[test]
@@ -650,10 +660,11 @@ mod tests {
             return;
         }
         let subject = unique("roundtrip");
+        let stream = unique("RTSTREAM");
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(subject.clone())
-            .stream_name(unique("RTSTREAM"))
+            .stream_name(stream.clone())
             .build()
             .await
             .expect("build");
@@ -671,6 +682,8 @@ mod tests {
         assert_eq!(received.source, ev.source);
         assert_eq!(received.changed_keys, ev.changed_keys);
         assert_eq!(received.checksum, ev.checksum);
+
+        delete_nats_stream(&stream).await;
     }
 
     #[tokio::test]
@@ -683,10 +696,11 @@ mod tests {
             eprintln!("Skipping test: NATS not available at 127.0.0.1:4222");
             return;
         }
+        let stream = unique("BCAST");
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(unique("bcast"))
-            .stream_name(unique("BCAST"))
+            .stream_name(stream.clone())
             .build()
             .await
             .expect("build");
@@ -704,6 +718,8 @@ mod tests {
                 .expect("stream ended");
             assert_eq!(received.checksum, "bcast-ck");
         }
+
+        delete_nats_stream(&stream).await;
     }
 
     #[tokio::test]
@@ -776,5 +792,7 @@ mod tests {
 
         assert_eq!(received.checksum, "good-ck");
         assert_eq!(received.instance_id, ev.instance_id);
+
+        delete_nats_stream(&stream_name).await;
     }
 }

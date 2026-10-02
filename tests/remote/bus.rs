@@ -165,10 +165,23 @@ mod nats_bus_tests {
                 || name == "UNITSTREAM"
                 || name == "CUSTOMSTREAM"
                 || name == "RTSTREAM"
+                || name.starts_with("NAT06")
+                || name.starts_with("CMP16")
             {
                 let _ = js.delete_stream(&name).await;
             }
         }
+    }
+
+    /// Delete one stream by name — per-test self-cleanup so no stream
+    /// outlives the run that created it (parallel tests may finish after
+    /// the last `cleanup_nats_streams` call).
+    async fn delete_nats_stream(name: &str) {
+        use async_nats::jetstream;
+        let Ok(client) = async_nats::connect("nats://127.0.0.1:4222").await else {
+            return;
+        };
+        let _ = jetstream::new(client).delete_stream(name).await;
     }
 
     #[tokio::test]
@@ -237,10 +250,11 @@ mod nats_bus_tests {
             return;
         }
         let subject = unique("subject");
+        let stream = unique("stream");
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(subject.clone())
-            .stream_name(unique("stream"))
+            .stream_name(stream.clone())
             .build()
             .await
             .expect("build with subject");
@@ -258,6 +272,8 @@ mod nats_bus_tests {
         assert_eq!(received.instance_id, event.instance_id);
         assert_eq!(received.checksum, event.checksum);
         assert_eq!(received.changed_keys, event.changed_keys);
+
+        delete_nats_stream(&stream).await;
     }
 
     #[tokio::test]
@@ -267,10 +283,11 @@ mod nats_bus_tests {
             eprintln!("Skipping test: NATS not available");
             return;
         }
+        let stream = unique("CUSTOMSTREAM");
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(unique("stream.subject"))
-            .stream_name(unique("CUSTOMSTREAM"))
+            .stream_name(stream.clone())
             .build()
             .await
             .expect("build with stream_name");
@@ -286,6 +303,8 @@ mod nats_bus_tests {
             .expect("timeout waiting for event")
             .expect("stream should not end");
         assert_eq!(received.checksum, "stream-ck");
+
+        delete_nats_stream(&stream).await;
     }
 
     #[tokio::test]
@@ -313,10 +332,11 @@ mod nats_bus_tests {
             return;
         }
         cleanup_nats_streams().await;
+        let stream = unique("PUBSUB");
         let bus = NatsBusBuilder::new()
             .url("nats://127.0.0.1:4222")
             .subject(unique("pubsub.subject"))
-            .stream_name(unique("PUBSUB"))
+            .stream_name(stream.clone())
             .build()
             .await
             .expect("NATS bus should build");
@@ -341,6 +361,8 @@ mod nats_bus_tests {
         assert_eq!(received.source, event.source);
         assert_eq!(received.changed_keys, event.changed_keys);
         assert_eq!(received.checksum, event.checksum);
+
+        delete_nats_stream(&stream).await;
     }
 }
 

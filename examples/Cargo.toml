@@ -114,7 +114,7 @@ futures = { workspace = true }
 garde = { workspace = true }
 
 [target.'cfg(not(any(target_os = "windows", target_os = "macos")))'.dependencies]
-notify = { version = "8.2", default-features = false, features = ["macos_fsevent"] }
+notify = { version = "8.2", default-features = false }
 
 [features]
 default = []

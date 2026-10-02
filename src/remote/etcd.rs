@@ -916,4 +916,82 @@ mod tests {
             .and_then(|v| v.as_i64());
         assert_eq!(parsed, Some(1), "JSON payload must parse with JSON pinned");
     }
+
+    #[tokio::test]
+    async fn build_rejects_half_configured_credentials() {
+        let err = match EtcdSourceBuilder::new().username("root").build().await {
+            Err(e) => e,
+            Ok(_) => panic!("password missing must fail loudly"),
+        };
+        assert!(err.to_string().contains("password is missing"), "{err}");
+
+        let err = match EtcdSourceBuilder::new()
+            .password("secret") // pragma: allowlist secret
+            .build()
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("username missing must fail loudly"),
+        };
+        assert!(err.to_string().contains("username is missing"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn build_rejects_unreadable_tls_files() {
+        let err = match EtcdSourceBuilder::new()
+            .tls(EtcdTlsConfig {
+                ca_file: "/nonexistent/ca.pem".to_string(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing CA file must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS CA file"),
+            "{err}"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let ca = dir.path().join("ca.pem");
+        std::fs::write(&ca, b"-----BEGIN CERTIFICATE-----\n").unwrap();
+        let err = match EtcdSourceBuilder::new()
+            .tls(EtcdTlsConfig {
+                ca_file: ca.to_string_lossy().to_string(),
+                cert_file: "/nonexistent/cert.pem".to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing cert file must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS cert file"),
+            "{err}"
+        );
+
+        let cert = dir.path().join("cert.pem");
+        std::fs::write(&cert, b"-----BEGIN CERTIFICATE-----\n").unwrap();
+        let err = match EtcdSourceBuilder::new()
+            .tls(EtcdTlsConfig {
+                ca_file: ca.to_string_lossy().to_string(),
+                cert_file: cert.to_string_lossy().to_string(),
+                key_file: "/nonexistent/key.pem".to_string(),
+            })
+            .build()
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("missing key file must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("Failed to read TLS key file"),
+            "{err}"
+        );
+    }
 }
