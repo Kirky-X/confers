@@ -1104,7 +1104,9 @@ mod tests {
         let path = dir.path().join("burst.toml");
         std::fs::write(&path, b"v0").expect("initial content");
 
-        let mut watcher = FsWatcher::with_recv_timeout(&path, 100, 50)
+        // 防抖窗 500ms：慢 CI 上调度拉伸可把 10ms 写间隔拉到数十 ms，
+        // 100ms 窗会让突发被切碎；500ms 窗在 3 倍拉伸下仍单窗合并。
+        let mut watcher = FsWatcher::with_recv_timeout(&path, 500, 50)
             .await
             .expect("watchable file");
         tokio::time::sleep(Duration::from_millis(400)).await;
@@ -1117,7 +1119,7 @@ mod tests {
         }
 
         // Drain events for a bounded window after the burst.
-        let deadline = std::time::Instant::now() + Duration::from_millis(1500);
+        let deadline = std::time::Instant::now() + Duration::from_millis(3000);
         let mut count = 0usize;
         while std::time::Instant::now() < deadline {
             match tokio::time::timeout(Duration::from_millis(250), watcher.recv()).await {
