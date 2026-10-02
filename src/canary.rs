@@ -3,7 +3,7 @@
 
 //! Canary rollout orchestrator over the unified change stream.
 //!
-//! The single-instance counterpart ([`ProgressiveReloader`]) decides a
+//! The single-instance counterpart (`ProgressiveReloader`) decides a
 //! staged rollout inside one process; this orchestrator is the **consumer
 //! side** across instances: it watches the stream for per-instance canary
 //! stage transitions (`ChangeSource::Canary`, stage on

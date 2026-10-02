@@ -33,7 +33,7 @@ pub type HotReloadLoader<T> =
     Arc<dyn Fn() -> ConfigResult<(Arc<T>, Arc<dyn ConfigProvider>)> + Send + Sync>;
 
 /// Facade binding [`FsWatcher`], [`ProgressiveReloader::begin_reload`], a
-/// `tokio::sync::watch` broadcast channel, and [`WatcherGuard`]-style
+/// `tokio::sync::watch` broadcast channel, and `WatcherGuard`-style
 /// graceful shutdown into a single hot-reload loop.
 ///
 /// # Event flow
