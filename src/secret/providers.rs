@@ -1417,4 +1417,52 @@ mod tests {
         let key = provider.get_key().expect("group-readable key still loads");
         assert_eq!(key.len(), 32);
     }
+
+    #[test]
+    fn vault_auth_login_metadata_covers_all_variants() {
+        // Token 无需登录端点;AppRole/Kubernetes 各有登录路径、凭据体与描述。
+        let token = VaultAuth::Token {
+            token: "root".to_string(),
+        };
+        assert_eq!(token.login_path(), None);
+        assert_eq!(token.login_body(), serde_json::json!({}));
+        assert_eq!(token.describe(), "token");
+
+        let approle = VaultAuth::AppRole {
+            role_id: "role-id".to_string(),
+            secret_id: "secret-id".to_string(),
+        };
+        assert_eq!(approle.login_path(), Some("/v1/auth/approle/login"));
+        assert_eq!(
+            approle.login_body(),
+            serde_json::json!({ "role_id": "role-id", "secret_id": "secret-id" })
+        );
+        assert_eq!(approle.describe(), "approle");
+
+        let k8s = VaultAuth::Kubernetes {
+            jwt: "jwt-value".to_string(),
+            role: "reader".to_string(),
+        };
+        assert_eq!(k8s.login_path(), Some("/v1/auth/kubernetes/login"));
+        assert_eq!(
+            k8s.login_body(),
+            serde_json::json!({ "jwt": "jwt-value", "role": "reader" })
+        );
+        assert_eq!(k8s.describe(), "kubernetes");
+    }
+
+    #[test]
+    fn vault_provider_builder_chain_is_configurable() {
+        let provider = VaultKeyProvider::new("https://vault.example.com", "secret/data/app", "key")
+            .expect("provider constructs")
+            .with_auth(VaultAuth::AppRole {
+                role_id: "r".to_string(),
+                secret_id: "s".to_string(),
+            })
+            .allow_http(true)
+            .with_cache_policy(KeyCachePolicy::NoCache);
+        assert_eq!(provider.auth.describe(), "approle");
+        assert!(provider.allow_http);
+        assert_eq!(provider.cache_policy, KeyCachePolicy::NoCache);
+    }
 }

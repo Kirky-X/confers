@@ -1366,4 +1366,35 @@ mod tests {
         assert!(!injector.is_sensitive_field("TURKEY_MODE"));
         assert!(!injector.is_sensitive_field("AUTHOR_NAME"));
     }
+
+    #[test]
+    fn injection_rate_limiter_default_and_window_expiry() {
+        // Default 构造必须与 new 等价并直接放行首个请求。
+        let limiter = InjectionRateLimiter::default();
+        assert!(limiter.check_rate_limit().is_ok());
+
+        // 配额为 1 时第二个请求被限流,并拿到剩余等待秒数。
+        let tight = InjectionRateLimiter::with_limits(1, 60);
+        assert!(tight.check_rate_limit().is_ok());
+        let retry = tight
+            .check_rate_limit()
+            .expect_err("quota of 1 must be exhausted");
+        assert!(
+            retry <= 60,
+            "retry window must be within the window: {retry}"
+        );
+
+        // 窗口过期后计数重置:把窗口起点拨回 window_seconds 之前,放行恢复。
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        tight
+            .window_start
+            .store(now.saturating_sub(120), Ordering::SeqCst);
+        assert!(
+            tight.check_rate_limit().is_ok(),
+            "an expired window must admit again"
+        );
+    }
 }

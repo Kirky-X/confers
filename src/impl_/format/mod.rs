@@ -1817,4 +1817,62 @@ key = "value""#
             assert_eq!(conv.unwrap().format(), *format);
         }
     }
+
+    #[test]
+    fn converter_defaults_match_new() {
+        // Default 与 new 必须给出等价转换器,两种构造方式都可用。
+        // 转换器为单元结构体:Default 用泛型断言,绕开 clippy 对单元结构体
+        // ::default() 的拒绝,同时保持 Default impl 的可验证性。
+        fn assert_has_default<T: Default>() {}
+
+        #[cfg(feature = "toml")]
+        {
+            let _ = toml_converter::TomlConverter::new();
+            assert_has_default::<toml_converter::TomlConverter>();
+        }
+        #[cfg(feature = "json")]
+        {
+            let _ = json_converter::JsonConverter::new();
+            assert_has_default::<json_converter::JsonConverter>();
+        }
+        #[cfg(feature = "yaml")]
+        {
+            let _ = yaml_converter::YamlConverter::new();
+            assert_has_default::<yaml_converter::YamlConverter>();
+        }
+        let _ = ini_converter::IniConverter::new();
+        assert_has_default::<ini_converter::IniConverter>();
+    }
+
+    #[cfg(feature = "json")]
+    #[test]
+    fn json_converter_serialize_is_pretty() {
+        let conv = json_converter::JsonConverter::new();
+        let value = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "k",
+                AnnotatedValue::new(ConfigValue::string("v"), SourceId::default(), "k"),
+            )]),
+            SourceId::default(),
+            "",
+        );
+        let out = conv.serialize(&value).expect("JSON serialize");
+        assert!(out.contains('\n'), "pretty JSON must be multi-line: {out}");
+    }
+
+    #[cfg(feature = "yaml")]
+    #[test]
+    fn yaml_converter_serialize_produces_yaml() {
+        let conv = yaml_converter::YamlConverter::new();
+        let value = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "k",
+                AnnotatedValue::new(ConfigValue::string("v"), SourceId::default(), "k"),
+            )]),
+            SourceId::default(),
+            "",
+        );
+        let out = conv.serialize(&value).expect("YAML serialize");
+        assert!(out.contains("k:"), "YAML output expected, got: {out}");
+    }
 }

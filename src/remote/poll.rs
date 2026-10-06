@@ -983,6 +983,20 @@ fn is_retryable_error(error: &reqwest::Error) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn validate_url_parts_rejects_insecure_scheme_and_accepts_public_hosts() {
+        // 非 https 的 URL 必须被拒绝。
+        let insecure = url::Url::parse("http://example.invalid/x").expect("parses");
+        let err = validate_url_parts(&insecure).expect_err("plain HTTP must be rejected");
+        assert!(err.to_string().contains("HTTPS"), "{err}");
+
+        // 域名 host 走 Domain 分支,公网 IPv4 走地址分支。
+        let domain = url::Url::parse("https://example.invalid/x").expect("parses");
+        validate_url_parts(&domain).expect("domain URL passes part validation");
+        let ip = url::Url::parse("https://93.184.216.34/x").expect("parses");
+        validate_url_parts(&ip).expect("public IP URL passes part validation");
+    }
+
     // =============================================================================
     // SSRF Protection Tests (9.1.7)
     // =============================================================================

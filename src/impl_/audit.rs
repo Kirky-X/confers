@@ -1557,4 +1557,39 @@ mod tests {
         // Missing file is a benign false, not an error.
         assert!(!verify_audit_chain(&dir.path().join("absent.log")).unwrap());
     }
+
+    #[test]
+    fn scan_chain_state_recovers_salt_and_last_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("chain.jsonl");
+
+        let salt_hex = hex::encode([0xaa; CHAIN_SALT_LEN]);
+        let hash_hex = hex::encode([0xbb; CHAIN_HASH_LEN]);
+        // 夹杂不可解析行与非对象 JSON:扫描必须跳过它们继续找链头与最后哈希。
+        // 事件行不带 record 字段,hmac 行只在无 record 的行上识别。
+        let content = format!(
+            "{{\"record\":\"{CHAIN_HEADER_RECORD}\",\"salt\":\"{salt_hex}\"}}\n\
+             this-line-is-not-json\n\
+             [1, 2, 3]\n\
+             {{\"hmac\":\"{hash_hex}\",\"data\":1}}\n"
+        );
+        std::fs::write(&path, content).unwrap();
+
+        let state = scan_chain_state(&path).expect("chain header present");
+        assert_eq!(state.salt, [0xaa; CHAIN_SALT_LEN]);
+        assert_eq!(state.prev_hash, [0xbb; CHAIN_HASH_LEN]);
+    }
+
+    #[test]
+    fn scan_chain_state_needs_chain_header_and_existing_file() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // 文件不存在 → None。
+        assert!(scan_chain_state(&dir.path().join("absent.jsonl")).is_none());
+
+        // 有事件行但没有链头 salt → 无法续链,返回 None。
+        let path = dir.path().join("headerless.jsonl");
+        std::fs::write(&path, "{\"record\":\"event\",\"hmac\":\"cc\"}\n").unwrap();
+        assert!(scan_chain_state(&path).is_none());
+    }
 }

@@ -290,4 +290,41 @@ mod tests {
         assert_eq!(validator.name(), "cors");
         assert_eq!(validator.category(), "network");
     }
+
+    #[test]
+    fn test_default_matches_new_and_description() {
+        let validator = CorsValidator::default();
+        assert_eq!(validator.name(), "cors");
+        assert_eq!(
+            validator.description(),
+            "Validates CORS configuration does not use wildcard origins or have empty methods"
+        );
+    }
+
+    #[test]
+    fn test_max_age_native_i64_exceeding_limit_warns() {
+        // max_age 以原生 i64 而非字符串存储时走同一条超限告警路径。
+        let mut provider = TestProvider::new()
+            .with_value("cors.allowed_origins", "https://example.com")
+            .with_value("cors.allowed_methods", "GET,POST");
+        provider.0.insert(
+            "cors.max_age".to_string(),
+            AnnotatedValue::new(
+                ConfigValue::integer(999_999),
+                SourceId::new("test"),
+                "cors.max_age",
+            ),
+        );
+        let validator = CorsValidator::new();
+        let result = validator.validate(&provider);
+        assert!(result.is_err());
+        let violations = result.unwrap_err();
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.field.as_deref() == Some("cors.max_age")
+                    && v.severity == ViolationSeverity::Warning),
+            "native i64 max_age beyond the limit must warn: {violations:?}"
+        );
+    }
 }

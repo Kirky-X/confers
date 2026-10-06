@@ -1099,6 +1099,139 @@ mod tests {
         let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().env();
     }
 
+    fn annotated(value: ConfigValue) -> AnnotatedValue {
+        AnnotatedValue::new(value, crate::types::SourceId::default(), "")
+    }
+
+    #[test]
+    fn merged_provider_keys_lists_paths_minus_sensitive() {
+        // keys() 必须展开整棵树,同时把敏感路径及其子树从列表中剔除
+        // (ConfigProvider 契约禁止通过 keys() 泄露敏感键)。
+        let root = annotated(ConfigValue::map(vec![
+            ("host", annotated(ConfigValue::string("db"))),
+            (
+                "nested",
+                annotated(ConfigValue::map(vec![
+                    ("leaf", annotated(ConfigValue::uint(1))),
+                    (
+                        "deeper",
+                        annotated(ConfigValue::map(vec![(
+                            "bottom",
+                            annotated(ConfigValue::bool(true)),
+                        )])),
+                    ),
+                ])),
+            ),
+            (
+                "secret",
+                annotated(ConfigValue::map(vec![(
+                    "token",
+                    annotated(ConfigValue::string("hush")),
+                )])),
+            ),
+        ]));
+
+        let provider = MergedProvider {
+            root,
+            sensitive_paths: vec!["secret".to_string()],
+        };
+
+        use crate::interface::ConfigProvider;
+        let keys = provider.keys();
+        assert!(keys.contains(&"host".to_string()), "keys: {keys:?}");
+        assert!(keys.contains(&"nested".to_string()), "keys: {keys:?}");
+        assert!(keys.contains(&"nested.leaf".to_string()), "keys: {keys:?}");
+        assert!(
+            keys.contains(&"nested.deeper".to_string()),
+            "keys: {keys:?}"
+        );
+        assert!(
+            keys.contains(&"nested.deeper.bottom".to_string()),
+            "keys: {keys:?}"
+        );
+        assert!(
+            !keys
+                .iter()
+                .any(|k| k == "secret" || k.starts_with("secret.")),
+            "sensitive subtree must not leak: {keys:?}"
+        );
+    }
+
+    #[test]
+    fn build_annotated_fails_and_persists_on_value_limit_violation() {
+        let limits = ConfigLimits::default().with_max_string_length(4);
+        let result = ConfigBuilder::<TestConfig>::new()
+            .limits(limits)
+            .memory(HashMap::from([(
+                "name".to_string(),
+                ConfigValue::string("exceeds-limit"),
+            )]))
+            .build_annotated();
+
+        let err = result.expect_err("string beyond max_string_length must fail the build");
+        assert!(
+            err.to_string().contains("name"),
+            "error must name the offending path: {err}"
+        );
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    struct StaticHealthCheck(HealthStatus);
+
+    #[cfg(feature = "progressive-reload")]
+    #[async_trait::async_trait]
+    impl ReloadHealthCheck for StaticHealthCheck {
+        async fn check(
+            &self,
+            _provider: Arc<dyn crate::interface::ConfigProvider>,
+        ) -> HealthStatus {
+            self.0.clone()
+        }
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    #[test]
+    fn build_annotated_runs_preload_validators_on_success() {
+        let merged = ConfigBuilder::<TestConfig>::new()
+            .default("name", ConfigValue::string("preloaded"))
+            .preload_validator(Arc::new(StaticHealthCheck(HealthStatus::Healthy)))
+            .build_annotated()
+            .expect("healthy preload validator must not reject the build");
+        assert_eq!(
+            merged
+                .inner
+                .as_map()
+                .and_then(|m| m.get("name"))
+                .map(|v| v.inner.as_str()),
+            Some(Some("preloaded")),
+        );
+    }
+
+    #[cfg(feature = "progressive-reload")]
+    #[test]
+    fn build_annotated_reports_panicking_preload_validator() {
+        struct PanickingCheck;
+
+        #[async_trait::async_trait]
+        impl ReloadHealthCheck for PanickingCheck {
+            async fn check(
+                &self,
+                _provider: Arc<dyn crate::interface::ConfigProvider>,
+            ) -> HealthStatus {
+                panic!("health check exploded");
+            }
+        }
+
+        let result = ConfigBuilder::<TestConfig>::new()
+            .preload_validator(Arc::new(PanickingCheck))
+            .build_annotated();
+        let err = result.expect_err("a panicking preload validator must fail the build");
+        assert!(
+            err.to_string().contains("preload validator panicked"),
+            "unexpected error: {err}"
+        );
+    }
+
     #[test]
     fn test_builder_defaults_method() {
         use crate::ConfigValue;

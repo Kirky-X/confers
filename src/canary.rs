@@ -1158,4 +1158,100 @@ mod tests {
         let stages: Vec<&str> = directives.iter().map(|(stage, _)| stage.as_str()).collect();
         assert_eq!(stages, vec!["advance", "completed"]);
     }
+
+    #[test]
+    fn rollout_plan_defaults_are_conservative() {
+        let plan = RolloutPlan::default();
+        assert_eq!(plan.batch_size, 1);
+        assert_eq!(plan.batch_interval, Duration::from_secs(30));
+        assert_eq!(plan.poll_interval, Duration::from_secs(5));
+        assert_eq!(plan.failure_threshold, 0.0);
+    }
+
+    /// Mesh publisher that fails the *second* 100/0 switch: the last
+    /// batch's advance succeeds so the rollout reaches the completed
+    /// phase, whose mandatory final push is the one that fails.
+    struct FailsOnSecondFinalSplit(Mutex<u32>);
+
+    #[async_trait]
+    impl MeshWeightPublisher for FailsOnSecondFinalSplit {
+        async fn publish_weights(&self, canary_pct: u8, _baseline_pct: u8) -> ConfigResult<()> {
+            if canary_pct == 100 {
+                let mut count = self.0.lock().unwrap();
+                *count += 1;
+                if *count >= 2 {
+                    return Err(ConfigError::InvalidValue {
+                        key: "envoy".into(),
+                        expected_type: "weight update".into(),
+                        message: "final split rejected".into(),
+                    });
+                }
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn degraded_advance_mesh_failure_fails_traffic_split() {
+        // Degraded 批次继续推进,但 mesh 发布失败时必须显式失败本次推进,
+        // 不能在流量未切换的情况下假装进度存在。
+        struct AlwaysFailsMesh;
+
+        #[async_trait]
+        impl MeshWeightPublisher for AlwaysFailsMesh {
+            async fn publish_weights(
+                &self,
+                _canary_pct: u8,
+                _baseline_pct: u8,
+            ) -> ConfigResult<()> {
+                Err(ConfigError::InvalidValue {
+                    key: "envoy".into(),
+                    expected_type: "weight update".into(),
+                    message: "control plane unreachable".into(),
+                })
+            }
+        }
+
+        let stream = Arc::new(InMemoryChangeStream::new());
+        let orchestrator = CanaryOrchestrator::new(
+            Arc::clone(&stream) as Arc<dyn ChangeStream>,
+            vec!["i1".into()],
+            small_plan(1),
+            MockHealth::new(&[(
+                "i1",
+                HealthStatus::Degraded {
+                    reason: "p99 elevated".into(),
+                },
+            )]),
+        )
+        .with_mesh(Arc::new(AlwaysFailsMesh));
+        let outcome = orchestrator.run().await.unwrap();
+        assert!(
+            matches!(outcome, RolloutOutcome::Aborted { .. }),
+            "degraded advance with a failing mesh must fail the split: {outcome:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn completed_phase_mesh_failure_fails_the_run() {
+        // 批次内 mesh 正常(最后一批 100/0 已推)、完成阶段的例行重推失败:
+        // 整个 run 必须报错,而不是报告一个从未确认应用的最终分流。
+        let stream = Arc::new(InMemoryChangeStream::new());
+        let orchestrator = CanaryOrchestrator::new(
+            Arc::clone(&stream) as Arc<dyn ChangeStream>,
+            vec!["i1".into(), "i2".into()],
+            small_plan(1),
+            MockHealth::new(&[]),
+        )
+        .with_mesh(Arc::new(FailsOnSecondFinalSplit(Mutex::new(0))));
+        let run = tokio::spawn(async move { orchestrator.run().await });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        publish_committed(&stream, "i1").await;
+        publish_committed(&stream, "i2").await;
+        let outcome = run.await.unwrap();
+        assert!(
+            outcome.is_err(),
+            "completed-phase mesh failure must fail the run: {outcome:?}"
+        );
+    }
 }

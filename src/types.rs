@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "json")]
 use crate::i18n::{t_simple, tr_args};
 
 // MergeStrategy is now imported directly from crate::merger.
@@ -2479,5 +2480,70 @@ mod tests {
 
     fn from_json_helper(json: serde_json::Value) -> ConfigValue {
         ConfigValue::from_json_value(json)
+    }
+
+    #[test]
+    fn source_id_and_source_location_serde_roundtrip() {
+        // SourceId 反序列化走 String 路径。
+        let id: SourceId = serde_json::from_str("\"remote\"").expect("source id parses");
+        assert_eq!(id.as_str(), "remote");
+
+        // file_path 是内部诊断数据,序列化只留 3 个安全字段。
+        let loc = SourceLocation::new("config.toml", 10, 5);
+        let value = serde_json::to_value(&loc).expect("location serializes");
+        let obj = value.as_object().expect("object form");
+        assert_eq!(obj.len(), 3);
+        assert_eq!(obj["source_name"], "config.toml");
+        assert_eq!(obj["line"], 10);
+        assert_eq!(obj["column"], 5);
+
+        let back: SourceLocation = serde_json::from_value(value).expect("location parses");
+        assert_eq!(back.source_name.as_ref(), "config.toml");
+        assert_eq!(back.line, 10);
+        assert_eq!(back.column, 5);
+    }
+
+    #[test]
+    fn config_value_bytes_and_map_serde_roundtrip() {
+        // Bytes 走 {"$bytes": [...]} 标签映射,往返后仍是 Bytes。
+        let bytes = ConfigValue::Bytes(vec![1, 2, 3]);
+        let json = serde_json::to_value(&bytes).expect("bytes serialize");
+        assert_eq!(json, serde_json::json!({"$bytes": [1, 2, 3]}));
+        let back: ConfigValue = serde_json::from_value(json).expect("bytes parse");
+        assert!(matches!(back, ConfigValue::Bytes(ref b) if b.as_slice() == [1, 2, 3]));
+
+        // null 反序列化走 visit_none。
+        let null_value: ConfigValue = serde_json::from_str("null").expect("null parse");
+        assert!(null_value.is_null());
+
+        // 普通 map 走逐项收集路径;值是 AnnotatedValue 的结构化形式。
+        let map_value: ConfigValue = serde_json::from_str(
+            r#"{
+                "host": {"inner": "db", "source": "env", "path": "host",
+                         "priority": 0, "version": 0, "location": null},
+                "port": {"inner": 5432, "source": "env", "path": "port",
+                         "priority": 0, "version": 0, "location": null}
+            }"#,
+        )
+        .expect("map parse");
+        let entries = map_value.as_map().expect("map");
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.get("host").unwrap().inner.as_str(), Some("db"));
+        assert_eq!(entries.get("port").unwrap().inner.as_u64(), Some(5432));
+    }
+
+    #[test]
+    fn annotated_value_serializes_all_public_fields() {
+        let annotated =
+            AnnotatedValue::new(ConfigValue::string("v"), SourceId::new("env"), "db.host")
+                .with_location(SourceLocation::new("config.toml", 3, 9));
+        let value = serde_json::to_value(&annotated).expect("annotated serializes");
+        let obj = value.as_object().expect("object form");
+        assert_eq!(obj["inner"], serde_json::json!("v"));
+        assert_eq!(obj["source"], serde_json::json!("env"));
+        assert_eq!(obj["path"], serde_json::json!("db.host"));
+        assert!(obj.contains_key("priority"));
+        assert!(obj.contains_key("version"));
+        assert!(obj["location"].is_object());
     }
 }

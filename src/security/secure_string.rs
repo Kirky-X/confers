@@ -887,4 +887,24 @@ mod tests {
         assert_eq!(named.display_name(), "db-password");
         assert!(a.is_highly_sensitive());
     }
+
+    #[test]
+    fn from_impls_cover_borrowed_owned_and_shared_forms() {
+        let owned = SecureString::from(String::from("owned"));
+        assert!(owned.compare("owned").is_ok());
+        let borrowed = SecureString::from("borrowed");
+        assert!(borrowed.compare("borrowed").is_ok());
+        let shared_source = String::from("shared");
+        let shared = SecureString::from(&shared_source);
+        assert!(shared.compare("shared").is_ok());
+    }
+
+    #[test]
+    fn sensitive_data_trait_reports_sensitivity() {
+        let secret = SecureString::from("secret");
+        let reported: &dyn SensitiveData = &secret;
+        assert!(!reported.display_name().is_empty());
+        // trait 的默认实现委托给实例:High 级别为 true,默认级别为 false。
+        assert_eq!(reported.is_highly_sensitive(), secret.is_highly_sensitive());
+    }
 }

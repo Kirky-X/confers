@@ -91,6 +91,13 @@ mod tests {
 
         fn event(&self, event: &tracing::Event<'_>) {
             self.events.lock().unwrap().push(event.metadata().name());
+            // Fields are only rendered when a visitor walks them; mirror a
+            // real subscriber so the recording path stays exercised.
+            struct FieldWalker;
+            impl tracing::field::Visit for FieldWalker {
+                fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+            }
+            event.record(&mut FieldWalker);
         }
 
         fn enter(&self, _: &tracing::Id) {}
@@ -129,5 +136,27 @@ mod tests {
     #[test]
     fn event_helper_is_callable_without_feature() {
         crate::telemetry::event("confers.load.completed", &[]);
+    }
+
+    /// Warning-level events (degraded conditions) reach the subscriber with
+    /// their rendered fields, parallel to the info-level path above.
+    #[test]
+    #[cfg(feature = "tracing")]
+    fn warn_events_reach_the_subscriber() {
+        let spans = Arc::new(Mutex::new(Vec::new()));
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = RecordingSubscriber {
+            spans: Arc::clone(&spans),
+            events: Arc::clone(&events),
+        };
+        tracing::subscriber::with_default(subscriber, || {
+            crate::telemetry::warn(
+                "confers.encryption.missing",
+                &[("feature", "encryption"), ("fallback", "plaintext")],
+            );
+        });
+
+        let seen_events = events.lock().unwrap().clone();
+        assert_eq!(seen_events.len(), 1, "events recorded: {seen_events:?}");
     }
 }

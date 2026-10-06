@@ -697,7 +697,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 100 个 `#[cfg(test)]` 模块（2458 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 100 个 `#[cfg(test)]` 模块（2487 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 22 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
 | L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
@@ -807,7 +807,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，100 个） | 2458 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，100 个） | 2487 |
 | 集成与 E2E（`tests/`，64 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 770 |
 | E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 33 |
 | 模糊测试目标（`fuzz/`） | 3 |

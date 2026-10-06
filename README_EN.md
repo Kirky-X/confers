@@ -257,7 +257,7 @@ Beyond the runnable examples, the bundled CLI diagnostics tool (`cli` feature, e
 cargo install confers --features cli
 ```
 
-It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (forward generation / `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of every command, see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
+It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (forward generation / `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
 
 ---
 
@@ -304,7 +304,7 @@ Some integration tests require local external services: the bus group needs NATS
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.6: 2458 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 770 integration and E2E tests (`tests/`, 64 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.6: 2487 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 770 integration and E2E tests (`tests/`, 64 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 
@@ -393,7 +393,7 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 | Version | Date | Highlights |
 |------|------|------|
-| 0.6.0-rc.6 | 2026-09-28 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
+| 0.6.0-rc.6 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
 | 0.6.0-rc.5 | 2026-09-21 | in-house i18n facade (`src/i18n` catalog/locale, zero external deps); `keyring` / `cloud-kms` imply `encryption`; pre-commit gate and detect-secrets baseline; removed the `compact_str` direct dependency |
 | 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |
 | 0.6.0-rc.2 | 2026-09-07 | Refreshed 12+ 0.x dependencies (async-nats 0.50, chacha20poly1305 0.11, garde 0.23, and more); solidified the test pyramid by adding and registering 7 E2E suites |

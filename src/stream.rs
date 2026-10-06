@@ -826,4 +826,60 @@ mod tests {
         }
         assert!(seen_app, "the mapped .publish event must reach the stream");
     }
+
+    #[tokio::test]
+    async fn ack_and_pending_count_track_payload_retention() {
+        // default 必须与 new 等价。
+        let stream = InMemoryChangeStream::default();
+        let mut rx = stream.subscribe().await.unwrap();
+
+        stream
+            .publish_watch("k", None, Some(ConfigValue::string("v1")))
+            .await
+            .unwrap();
+        stream
+            .publish_watch(
+                "k",
+                Some(ConfigValue::string("v1")),
+                Some(ConfigValue::string("v2")),
+            )
+            .await
+            .unwrap();
+        for _ in 0..2 {
+            timeout(Duration::from_millis(200), rx.next())
+                .await
+                .expect("event in time")
+                .expect("stream alive");
+        }
+
+        // Payload 在 ack 前一直保留:两条事件 → pending 2,ack 一条 → 1。
+        assert_eq!(stream.pending_count(), 2);
+        stream.ack(1).await.unwrap();
+        assert_eq!(stream.pending_count(), 1, "acked payload must be dropped");
+    }
+
+    #[tokio::test]
+    async fn lagging_subscriber_gets_resync_signal() {
+        // 订阅者落后于保留窗口时必须收到显式 resync 信号,
+        // 而不是被静默吞掉(R-watch-006)。容量 2 的存储:发布 3 条后
+        // version 1 被淘汰,min_retained 前移到 2。
+        let stream = InMemoryChangeStream::with_capacity(2);
+        let mut rx = stream.subscribe().await.unwrap();
+        for v in ["v1", "v2", "v3"] {
+            stream
+                .publish_watch("k", None, Some(ConfigValue::string(v)))
+                .await
+                .unwrap();
+        }
+
+        // 滞留的 version 1 已被容量淘汰,重放必须转成 resync 信号。
+        let first = timeout(Duration::from_millis(200), rx.next())
+            .await
+            .expect("first lagged event")
+            .expect("stream alive");
+        assert!(
+            first.is_resync(),
+            "lagged version inside the evicted window must resync: {first:?}"
+        );
+    }
 }

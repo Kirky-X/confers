@@ -1591,4 +1591,37 @@ version = 0
             "nested object branch"
         );
     }
+
+    #[test]
+    fn prune_blocking_caps_snapshots_and_ignores_other_files() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        for i in 0..5 {
+            std::fs::write(dir.path().join(format!("snap-{i}.json")), "{}").expect("write");
+        }
+        std::fs::write(dir.path().join("keep-me.txt"), "x").expect("write");
+
+        // 目录不存在是 no-op。
+        let absent = dir.path().join("does-not-exist");
+        assert_eq!(prune_blocking(&absent, 3, "json").expect("absent dir"), 0);
+
+        let removed = prune_blocking(dir.path(), 2, "json").expect("prune runs");
+        assert_eq!(removed, 3, "5 snapshots capped at 2 → 3 removed");
+
+        let left: Vec<String> = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(left.iter().filter(|n| n.ends_with(".json")).count(), 2);
+        assert!(
+            left.iter().any(|n| n == "keep-me.txt"),
+            "non-snapshot files must be untouched: {left:?}"
+        );
+
+        // 已在配额内再次 prune 是 no-op。
+        assert_eq!(
+            prune_blocking(dir.path(), 2, "json").expect("second prune"),
+            0
+        );
+    }
 }
