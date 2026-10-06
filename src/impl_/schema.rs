@@ -1931,8 +1931,16 @@ mod rust_scaffold_tests {
         };
 
         let out_dir = std::env::temp_dir();
-        let src = out_dir.join("confers_scaffold_smoke.rs");
-        let meta = out_dir.join("confers_scaffold_smoke.rmeta");
+        // 固定文件名会被并行测试互写：rustc 可能读到别的用例的生成代码，
+        // 以 pid + 序号隔离每次调用。
+        static SMOKE_SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let smoke_name = format!(
+            "confers_scaffold_smoke_{}_{}.rs",
+            std::process::id(),
+            SMOKE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        );
+        let src = out_dir.join(&smoke_name);
+        let meta = out_dir.join(smoke_name.replace(".rs", ".rmeta"));
         std::fs::write(&src, code).expect("write generated artifact");
 
         let status = std::process::Command::new("rustc")
@@ -1961,6 +1969,8 @@ mod rust_scaffold_tests {
             code,
             String::from_utf8_lossy(&status.stderr)
         );
+        let _ = std::fs::remove_file(&src);
+        let _ = std::fs::remove_file(&meta);
     }
 
     fn generate_err(schema: serde_json::Value) -> String {
