@@ -20,4 +20,5 @@ mod migration;
 mod modules;
 mod nested_deserialize;
 mod progressive;
+mod snapshot_extra;
 mod toggle;
