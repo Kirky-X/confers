@@ -285,7 +285,7 @@ cargo test --workspace --features full
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 
-# 覆盖率门禁：行覆盖率不低于 80%
+# 覆盖率门禁：行覆盖率不低于 90%
 cargo llvm-cov --workspace --all-features --fail-under-lines 90
 
 # 基准测试（与 CI 一致；CI 另加 -- --save-baseline current）
@@ -303,7 +303,7 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.6：单元测试 2487 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 770 个（`tests/`，64 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.6：单元测试 2487 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 770 个（`tests/`，64 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 

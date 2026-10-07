@@ -285,7 +285,7 @@ cargo test --workspace --features full
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 
-# Coverage gate: at least 80% line coverage
+# Coverage gate: at least 90% line coverage
 cargo llvm-cov --workspace --all-features --fail-under-lines 90
 
 # Benchmarks (matching CI; CI adds -- --save-baseline current)
@@ -304,7 +304,7 @@ Some integration tests require local external services: the bus group needs NATS
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.6: 2487 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 770 integration and E2E tests (`tests/`, 64 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 80% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.6: 2487 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 770 integration and E2E tests (`tests/`, 64 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 

@@ -813,7 +813,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 10 |
 
-覆盖率门禁为行覆盖率不低于 80%，CI 与 pre-push 钩子双重执行。
+覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。
 
 ---
 
