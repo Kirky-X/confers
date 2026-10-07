@@ -15,12 +15,6 @@ use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
 use crate::i18n::{tr, tr_args};
 use crate::lifecycle::Lifecycle;
 
-/// Default retry wait time when no message is available (100ms).
-const DEFAULT_RETRY_WAIT_MS: u64 = 100;
-
-/// Default error retry wait time (1 second).
-const DEFAULT_ERROR_RETRY_WAIT_SECS: u64 = 1;
-
 /// Redis default port.
 const DEFAULT_REDIS_PORT: u16 = 6379;
 
@@ -33,19 +27,6 @@ pub const REDIS_RECONNECT_MAX_DELAY: Duration = Duration::from_secs(30);
 pub struct RedisConfigBus {
     client: redis::Client,
     channel: String,
-    /// Retry wait time in milliseconds when no message is available.
-    ///
-    /// Historical field retained for builder API compatibility. The new
-    /// `subscribe()` implementation uses a dedicated PubSub connection with
-    /// `on_message()` push delivery, so this value is no longer read.
-    #[allow(dead_code)]
-    retry_wait_ms: u64,
-    /// Error retry wait time in seconds.
-    ///
-    /// Historical field retained for builder API compatibility. See
-    /// `retry_wait_ms` for context.
-    #[allow(dead_code)]
-    error_retry_wait_secs: u64,
     /// Initial reconnect backoff for the subscription loop.
     reconnect_initial: Duration,
     /// Reconnect backoff cap for the subscription loop.
@@ -64,22 +45,11 @@ impl RedisConfigBus {
     }
 
     pub async fn connect(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
-        Self::connect_with_config(
-            url,
-            channel,
-            DEFAULT_RETRY_WAIT_MS,
-            DEFAULT_ERROR_RETRY_WAIT_SECS,
-        )
-        .await
+        Self::connect_with_config(url, channel).await
     }
 
-    /// Connect with custom retry wait times.
-    pub async fn connect_with_config(
-        url: &str,
-        channel: impl Into<String>,
-        retry_wait_ms: u64,
-        error_retry_wait_secs: u64,
-    ) -> ConfigResult<Self> {
+    /// Connect to a Redis server without applying reconnect-backoff overrides.
+    pub async fn connect_with_config(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
         let safe_host = Self::sanitize_url(url);
 
         let client = redis::Client::open(url).map_err(|e| ConfigError::RemoteUnavailable {
@@ -90,8 +60,6 @@ impl RedisConfigBus {
         Ok(Self {
             client,
             channel: channel.into(),
-            retry_wait_ms,
-            error_retry_wait_secs,
             reconnect_initial: REDIS_RECONNECT_INITIAL_DELAY,
             reconnect_max: REDIS_RECONNECT_MAX_DELAY,
         })
@@ -266,10 +234,6 @@ impl ConfigBus for RedisConfigBus {
 pub struct RedisBusBuilder {
     url: Option<String>,
     channel: Option<String>,
-    /// Retry wait time in milliseconds when no message is available.
-    retry_wait_ms: u64,
-    /// Error retry wait time in seconds.
-    error_retry_wait_secs: u64,
     /// Initial reconnect backoff for the subscription loop.
     reconnect_initial: Duration,
     /// Reconnect backoff cap for the subscription loop.
@@ -281,8 +245,6 @@ impl RedisBusBuilder {
         Self {
             url: None,
             channel: None,
-            retry_wait_ms: DEFAULT_RETRY_WAIT_MS,
-            error_retry_wait_secs: DEFAULT_ERROR_RETRY_WAIT_SECS,
             reconnect_initial: REDIS_RECONNECT_INITIAL_DELAY,
             reconnect_max: REDIS_RECONNECT_MAX_DELAY,
         }
@@ -295,22 +257,6 @@ impl RedisBusBuilder {
 
     pub fn channel(mut self, channel: impl Into<String>) -> Self {
         self.channel = Some(channel.into());
-        self
-    }
-
-    /// Set retry wait time in milliseconds when no message is available.
-    ///
-    /// Default: 100ms.
-    pub fn retry_wait_ms(mut self, ms: u64) -> Self {
-        self.retry_wait_ms = ms;
-        self
-    }
-
-    /// Set error retry wait time in seconds.
-    ///
-    /// Default: 1 second.
-    pub fn error_retry_wait_secs(mut self, secs: u64) -> Self {
-        self.error_retry_wait_secs = secs;
         self
     }
 
@@ -341,13 +287,7 @@ impl RedisBusBuilder {
 
         let channel = self.channel.unwrap_or_else(|| "config:events".to_string());
 
-        let mut bus = RedisConfigBus::connect_with_config(
-            &url,
-            channel,
-            self.retry_wait_ms,
-            self.error_retry_wait_secs,
-        )
-        .await?;
+        let mut bus = RedisConfigBus::connect_with_config(&url, channel).await?;
         bus.reconnect_initial = self.reconnect_initial;
         bus.reconnect_max = self.reconnect_max;
         Ok(bus)
@@ -430,8 +370,6 @@ mod tests {
         let b = RedisBusBuilder::new();
         assert!(b.url.is_none());
         assert!(b.channel.is_none());
-        assert_eq!(b.retry_wait_ms, DEFAULT_RETRY_WAIT_MS);
-        assert_eq!(b.error_retry_wait_secs, DEFAULT_ERROR_RETRY_WAIT_SECS);
     }
 
     #[test]
@@ -439,21 +377,15 @@ mod tests {
         let d = RedisBusBuilder::default();
         assert!(d.url.is_none());
         assert!(d.channel.is_none());
-        assert_eq!(d.retry_wait_ms, DEFAULT_RETRY_WAIT_MS);
-        assert_eq!(d.error_retry_wait_secs, DEFAULT_ERROR_RETRY_WAIT_SECS);
     }
 
     #[test]
     fn test_builder_setters_chain_and_store() {
         let b = RedisBusBuilder::new()
             .url("redis://127.0.0.1:16379")
-            .channel("unit-chan")
-            .retry_wait_ms(42)
-            .error_retry_wait_secs(3);
+            .channel("unit-chan");
         assert_eq!(b.url.as_deref(), Some("redis://127.0.0.1:16379"));
         assert_eq!(b.channel.as_deref(), Some("unit-chan"));
-        assert_eq!(b.retry_wait_ms, 42);
-        assert_eq!(b.error_retry_wait_secs, 3);
     }
 
     #[tokio::test]
@@ -510,17 +442,11 @@ mod tests {
         // Client::open succeeds for a syntactically valid URL pointing at a
         // closed port; failure surfaces later at publish/subscribe time.
         let port = closed_port();
-        let bus = RedisConfigBus::connect_with_config(
-            &format!("redis://127.0.0.1:{}", port),
-            "chan",
-            10,
-            1,
-        )
-        .await
-        .expect("client open should succeed for valid URL");
+        let bus =
+            RedisConfigBus::connect_with_config(&format!("redis://127.0.0.1:{}", port), "chan")
+                .await
+                .expect("client open should succeed for valid URL");
         assert_eq!(bus.channel, "chan");
-        assert_eq!(bus.retry_wait_ms, 10);
-        assert_eq!(bus.error_retry_wait_secs, 1);
     }
 
     #[tokio::test]

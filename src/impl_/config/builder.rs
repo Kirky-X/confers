@@ -866,11 +866,13 @@ pub fn config<T>() -> ConfigBuilder<T> {
 /// node path minus the builder's registered sensitive paths (the
 /// `ConfigProvider` contract forbids disclosing sensitive keys — and the
 /// paths nested below them — from `keys()`).
+#[cfg(feature = "progressive-reload")]
 struct MergedProvider {
     root: AnnotatedValue,
     sensitive_paths: Vec<String>,
 }
 
+#[cfg(feature = "progressive-reload")]
 impl MergedProvider {
     fn navigate(&self, key: &str) -> Option<&AnnotatedValue> {
         let mut current = &self.root;
@@ -884,6 +886,7 @@ impl MergedProvider {
     }
 }
 
+#[cfg(feature = "progressive-reload")]
 impl crate::interface::ConfigProvider for MergedProvider {
     fn get_raw(&self, key: &str) -> Option<&AnnotatedValue> {
         self.navigate(key)
@@ -1099,10 +1102,12 @@ mod tests {
         let _builder: ConfigBuilder<TestConfig> = ConfigBuilder::new().env();
     }
 
+    #[cfg(feature = "progressive-reload")]
     fn annotated(value: ConfigValue) -> AnnotatedValue {
         AnnotatedValue::new(value, crate::types::SourceId::default(), "")
     }
 
+    #[cfg(feature = "progressive-reload")]
     #[test]
     fn merged_provider_keys_lists_paths_minus_sensitive() {
         // keys() 必须展开整棵树,同时把敏感路径及其子树从列表中剔除

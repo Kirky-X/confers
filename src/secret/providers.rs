@@ -312,14 +312,6 @@ impl VaultAuth {
             }
         }
     }
-
-    /// Exchange credentials for a client token (no-op for `Token`).
-    #[allow(dead_code)]
-    async fn resolve(&self, client: &reqwest::Client, vault_addr: &str) -> ConfigResult<String> {
-        self.resolve_with_lease(client, vault_addr)
-            .await
-            .map(|(t, _)| t)
-    }
 }
 
 #[cfg(feature = "remote")]

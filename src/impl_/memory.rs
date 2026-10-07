@@ -19,15 +19,13 @@
 //! - Configuration phase errors use `ConfigConfigError`
 //! - Runtime errors use `ConfersError`
 
-#[allow(unused_imports)]
-use crate::error::ConfigErrorCode;
 use crate::error::{ConfersResult, ConfigConfigError};
 use crate::impl_::lifecycle::Lifecycle;
 use crate::interface::sealed::Sealed;
 use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
-use crate::types::{AnnotatedValue, SourceId};
+use crate::types::AnnotatedValue;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // ============== Async Implementation (feature-gated) ==============
 
@@ -58,90 +56,23 @@ mod async_impl {
     pub struct InMemoryConfig {
         /// The underlying moka cache
         cache: Cache<String, Arc<AnnotatedValue>>,
-        /// Source ID for values created by this config
-        source_id: SourceId,
-        /// Default priority for new values
-        default_priority: u8,
-        /// Version counter for optimistic concurrency
-        version: AtomicU64,
         /// Health status
         healthy: AtomicBool,
-        /// Maximum capacity
-        #[allow(dead_code)]
-        max_capacity: u64,
     }
 
     impl InMemoryConfig {
         /// Create a new in-memory config with default settings.
+        ///
+        /// The cache is sized at 10 000 entries with an initial capacity of
+        /// 128 and no TTL.
         pub fn new() -> Self {
-            Self::builder().build()
-        }
-
-        /// Create a validated in-memory config with capacity limit.
-        ///
-        /// # BrickArchitecture
-        ///
-        /// This is the validated constructor that returns Result for
-        /// initialization failures. Use this for production code.
-        ///
-        /// # Errors
-        ///
-        /// Returns `ConfigConfigError::InvalidValue` if:
-        /// - `max_capacity` is 0 (invalid capacity)
-        ///
-        /// # Example
-        ///
-        /// ```rust,ignore
-        /// use confers::impl_::memory::InMemoryConfig;
-        ///
-        /// let config = InMemoryConfig::new_validated(1000)?;
-        /// # Ok::<(), confers::ConfigConfigError>(())
-        /// ```
-        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
-            Self::validate_capacity(max_capacity)?;
-            Ok(Self::builder().max_capacity(max_capacity).build())
-        }
-
-        /// Shared validation used by the sync/async variants.
-        fn validate_capacity(max_capacity: u64) -> Result<(), ConfigConfigError> {
-            if max_capacity == 0 {
-                return Err(ConfigConfigError::InvalidValue {
-                    field: "max_capacity".into(),
-                    expected_type: "u64".into(),
-                    message: "must be greater than 0".into(),
-                });
+            Self {
+                cache: Cache::builder()
+                    .max_capacity(10_000)
+                    .initial_capacity(128)
+                    .build(),
+                healthy: AtomicBool::new(true),
             }
-            Ok(())
-        }
-
-        /// Create a builder for custom configuration.
-        pub fn builder() -> InMemoryConfigBuilder {
-            InMemoryConfigBuilder::default()
-        }
-
-        /// Get the current version.
-        pub fn version(&self) -> u64 {
-            self.version.load(Ordering::Relaxed)
-        }
-
-        /// Check if the config is healthy.
-        pub fn is_healthy(&self) -> bool {
-            self.healthy.load(Ordering::Acquire)
-        }
-
-        /// Get max capacity.
-        pub fn max_capacity(&self) -> u64 {
-            self.max_capacity
-        }
-
-        /// Get default priority.
-        pub fn default_priority(&self) -> u8 {
-            self.default_priority
-        }
-
-        /// Get source ID.
-        pub fn source_id(&self) -> &SourceId {
-            &self.source_id
         }
     }
 
@@ -177,21 +108,15 @@ mod async_impl {
     impl ConfigWriter for InMemoryConfig {
         async fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()> {
             self.cache.insert(key.to_string(), Arc::new(value)).await;
-            self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
 
         async fn delete(&self, key: &str) -> ConfersResult<bool> {
-            let existed = self.cache.remove(&key.to_string()).await.is_some();
-            if existed {
-                self.version.fetch_add(1, Ordering::Relaxed);
-            }
-            Ok(existed)
+            Ok(self.cache.remove(&key.to_string()).await.is_some())
         }
 
         async fn clear(&self) -> ConfersResult<()> {
             self.cache.invalidate_all();
-            self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
     }
@@ -224,90 +149,10 @@ mod async_impl {
             self.healthy.store(false, Ordering::Release);
         }
     }
-
-    /// Builder for InMemoryConfig.
-    #[derive(Debug, Clone)]
-    pub struct InMemoryConfigBuilder {
-        /// Maximum number of entries
-        max_capacity: u64,
-        /// Time-to-live in seconds (0 = no TTL)
-        ttl_seconds: u64,
-        /// Initial capacity
-        initial_capacity: usize,
-        /// Default priority for values
-        default_priority: u8,
-        /// Source ID
-        source_id: Option<SourceId>,
-    }
-
-    impl Default for InMemoryConfigBuilder {
-        fn default() -> Self {
-            Self {
-                max_capacity: 10_000,
-                ttl_seconds: 0,
-                initial_capacity: 128,
-                default_priority: 0,
-                source_id: None,
-            }
-        }
-    }
-
-    impl InMemoryConfigBuilder {
-        /// Set maximum capacity.
-        pub fn max_capacity(mut self, capacity: u64) -> Self {
-            self.max_capacity = capacity;
-            self
-        }
-
-        /// Set time-to-live in seconds.
-        pub fn ttl_seconds(mut self, seconds: u64) -> Self {
-            self.ttl_seconds = seconds;
-            self
-        }
-
-        /// Set initial capacity.
-        pub fn initial_capacity(mut self, capacity: usize) -> Self {
-            self.initial_capacity = capacity;
-            self
-        }
-
-        /// Set default priority.
-        pub fn default_priority(mut self, priority: u8) -> Self {
-            self.default_priority = priority;
-            self
-        }
-
-        /// Set source ID.
-        pub fn source_id(mut self, id: impl Into<SourceId>) -> Self {
-            self.source_id = Some(id.into());
-            self
-        }
-
-        /// Build the InMemoryConfig.
-        pub fn build(self) -> InMemoryConfig {
-            let mut builder = Cache::builder()
-                .max_capacity(self.max_capacity)
-                .initial_capacity(self.initial_capacity);
-
-            if self.ttl_seconds > 0 {
-                builder = builder.time_to_live(std::time::Duration::from_secs(self.ttl_seconds));
-            }
-
-            InMemoryConfig {
-                cache: builder.build(),
-                source_id: self.source_id.unwrap_or_else(|| SourceId::new("memory")),
-                default_priority: self.default_priority,
-                version: AtomicU64::new(0),
-                healthy: AtomicBool::new(true),
-                max_capacity: self.max_capacity,
-            }
-        }
-    }
 }
 
 #[cfg(feature = "async-core")]
-#[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
-pub use async_impl::{InMemoryConfig, InMemoryConfigBuilder};
+pub use async_impl::InMemoryConfig;
 
 // ============== Sync Implementation (for minimal builds) ==============
 
@@ -324,75 +169,23 @@ mod sync_impl {
     pub struct InMemoryConfig {
         /// The underlying moka cache
         cache: Cache<String, Arc<AnnotatedValue>>,
-        /// Source ID for values created by this config
-        source_id: SourceId,
-        /// Default priority for new values
-        default_priority: u8,
-        /// Version counter for optimistic concurrency
-        version: AtomicU64,
         /// Health status
         healthy: AtomicBool,
-        /// Maximum capacity
-        #[allow(dead_code)]
-        max_capacity: u64,
     }
 
     impl InMemoryConfig {
         /// Create a new in-memory config with default settings.
+        ///
+        /// The cache is sized at 10 000 entries with an initial capacity of
+        /// 128 and no TTL.
         pub fn new() -> Self {
-            Self::builder().build()
-        }
-
-        /// Create a validated in-memory config with capacity limit.
-        ///
-        /// # BrickArchitecture
-        ///
-        /// This is the validated constructor that returns Result for
-        /// initialization failures. Use this for production code.
-        ///
-        /// # Errors
-        ///
-        /// Returns `ConfigConfigError::InvalidValue` if:
-        /// - `max_capacity` is 0 (invalid capacity)
-        pub fn new_validated(max_capacity: u64) -> Result<Self, ConfigConfigError> {
-            if max_capacity == 0 {
-                return Err(ConfigConfigError::InvalidValue {
-                    field: "max_capacity".into(),
-                    expected_type: "u64".into(),
-                    message: "must be greater than 0".into(),
-                });
+            Self {
+                cache: Cache::builder()
+                    .max_capacity(10_000)
+                    .initial_capacity(128)
+                    .build(),
+                healthy: AtomicBool::new(true),
             }
-            Ok(Self::builder().max_capacity(max_capacity).build())
-        }
-
-        /// Create a builder for custom configuration.
-        pub fn builder() -> InMemoryConfigBuilder {
-            InMemoryConfigBuilder::default()
-        }
-
-        /// Get the current version.
-        pub fn version(&self) -> u64 {
-            self.version.load(Ordering::Relaxed)
-        }
-
-        /// Check if the config is healthy.
-        pub fn is_healthy(&self) -> bool {
-            self.healthy.load(Ordering::Acquire)
-        }
-
-        /// Get max capacity.
-        pub fn max_capacity(&self) -> u64 {
-            self.max_capacity
-        }
-
-        /// Get default priority.
-        pub fn default_priority(&self) -> u8 {
-            self.default_priority
-        }
-
-        /// Get source ID.
-        pub fn source_id(&self) -> &SourceId {
-            &self.source_id
         }
     }
 
@@ -414,32 +207,18 @@ mod sync_impl {
         }
     }
 
-    impl InMemoryConfig {
-        /// Zero-copy read: returns the shared handle to the stored value
-        /// (an `Arc` clone) instead of deep-cloning the value tree.
-        pub fn get_shared(&self, key: &str) -> Option<Arc<AnnotatedValue>> {
-            self.cache.get(&key.to_string())
-        }
-    }
-
     impl ConfigWriter for InMemoryConfig {
         fn set(&self, key: &str, value: AnnotatedValue) -> ConfersResult<()> {
             self.cache.insert(key.to_string(), Arc::new(value));
-            self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
 
         fn delete(&self, key: &str) -> ConfersResult<bool> {
-            let existed = self.cache.remove(&key.to_string()).is_some();
-            if existed {
-                self.version.fetch_add(1, Ordering::Relaxed);
-            }
-            Ok(existed)
+            Ok(self.cache.remove(&key.to_string()).is_some())
         }
 
         fn clear(&self) -> ConfersResult<()> {
             self.cache.invalidate_all();
-            self.version.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
     }
@@ -470,97 +249,17 @@ mod sync_impl {
             Ok(())
         }
     }
-
-    /// Builder for InMemoryConfig.
-    #[derive(Debug, Clone)]
-    pub struct InMemoryConfigBuilder {
-        /// Maximum number of entries
-        max_capacity: u64,
-        /// Time-to-live in seconds (0 = no TTL)
-        ttl_seconds: u64,
-        /// Initial capacity
-        initial_capacity: usize,
-        /// Default priority for values
-        default_priority: u8,
-        /// Source ID
-        source_id: Option<SourceId>,
-    }
-
-    impl Default for InMemoryConfigBuilder {
-        fn default() -> Self {
-            Self {
-                max_capacity: 10_000,
-                ttl_seconds: 0,
-                initial_capacity: 128,
-                default_priority: 0,
-                source_id: None,
-            }
-        }
-    }
-
-    impl InMemoryConfigBuilder {
-        /// Set maximum capacity.
-        pub fn max_capacity(mut self, capacity: u64) -> Self {
-            self.max_capacity = capacity;
-            self
-        }
-
-        /// Set time-to-live in seconds.
-        pub fn ttl_seconds(mut self, seconds: u64) -> Self {
-            self.ttl_seconds = seconds;
-            self
-        }
-
-        /// Set initial capacity.
-        pub fn initial_capacity(mut self, capacity: usize) -> Self {
-            self.initial_capacity = capacity;
-            self
-        }
-
-        /// Set default priority.
-        pub fn default_priority(mut self, priority: u8) -> Self {
-            self.default_priority = priority;
-            self
-        }
-
-        /// Set source ID.
-        pub fn source_id(mut self, id: impl Into<SourceId>) -> Self {
-            self.source_id = Some(id.into());
-            self
-        }
-
-        /// Build the InMemoryConfig.
-        pub fn build(self) -> InMemoryConfig {
-            let mut builder = Cache::builder()
-                .max_capacity(self.max_capacity)
-                .initial_capacity(self.initial_capacity);
-
-            if self.ttl_seconds > 0 {
-                builder = builder.time_to_live(std::time::Duration::from_secs(self.ttl_seconds));
-            }
-
-            InMemoryConfig {
-                cache: builder.build(),
-                source_id: self.source_id.unwrap_or_else(|| SourceId::new("memory")),
-                default_priority: self.default_priority,
-                version: AtomicU64::new(0),
-                healthy: AtomicBool::new(true),
-                max_capacity: self.max_capacity,
-            }
-        }
-    }
 }
 
 #[cfg(not(feature = "async-core"))]
-#[allow(unused_imports)] // InMemoryConfigBuilder re-exported for API completeness
-pub use sync_impl::{InMemoryConfig, InMemoryConfigBuilder};
+pub use sync_impl::InMemoryConfig;
 
 // ============== Helper Methods (common to both) ==============
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ConfigValue;
+    use crate::types::{ConfigValue, SourceId};
 
     #[cfg(feature = "async-core")]
     mod async_tests {
@@ -614,71 +313,13 @@ mod tests {
                 .unwrap();
 
             config.shutdown().await;
-            assert!(!config.is_healthy());
-        }
-
-        #[tokio::test]
-        async fn test_builder() {
-            let config = InMemoryConfig::builder()
-                .max_capacity(1000)
-                .ttl_seconds(60)
-                .default_priority(10)
-                .source_id("custom")
-                .build();
-
-            assert_eq!(config.max_capacity(), 1000);
-            assert_eq!(config.default_priority(), 10);
-        }
-
-        #[tokio::test]
-        async fn test_version() {
-            let config = InMemoryConfig::new();
-            assert_eq!(config.version(), 0);
-
-            config
-                .set(
-                    "key",
-                    AnnotatedValue::new(ConfigValue::string("value"), SourceId::new("test"), "key"),
-                )
-                .await
-                .unwrap();
-            assert_eq!(config.version(), 1);
-
-            config.delete("key").await.unwrap();
-            assert_eq!(config.version(), 2);
-        }
-
-        #[tokio::test]
-        async fn test_new_validated_success() {
-            let config = InMemoryConfig::new_validated(100).unwrap();
-            assert_eq!(config.max_capacity(), 100);
-            assert!(config.is_healthy());
-        }
-
-        #[tokio::test]
-        async fn test_new_validated_zero_capacity() {
-            let err = InMemoryConfig::new_validated(0).unwrap_err();
-            match err {
-                ConfigConfigError::InvalidValue {
-                    field,
-                    expected_type,
-                    message,
-                } => {
-                    assert_eq!(field, "max_capacity");
-                    assert_eq!(expected_type, "u64");
-                    assert_eq!(message, "must be greater than 0");
-                }
-                other => panic!("expected InvalidValue, got {:?}", other),
-            }
+            assert!(config.health_check().await.is_err());
         }
 
         #[tokio::test]
         async fn test_default_impl() {
             let config = InMemoryConfig::default();
-            assert!(config.is_healthy());
-            assert_eq!(config.version(), 0);
-            assert_eq!(config.max_capacity(), 10_000);
-            assert_eq!(config.default_priority(), 0);
+            assert!(config.health_check().await.is_ok());
         }
 
         #[tokio::test]
@@ -691,20 +332,10 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            assert_eq!(config.version(), 1);
 
             config.clear().await.unwrap();
-            assert_eq!(config.version(), 2);
             let keys = config.keys().await.unwrap();
             assert!(keys.is_empty());
-        }
-
-        #[tokio::test]
-        async fn test_delete_nonexistent_no_version_bump() {
-            let config = InMemoryConfig::new();
-            let deleted = config.delete("missing").await.unwrap();
-            assert!(!deleted);
-            assert_eq!(config.version(), 0);
         }
 
         #[tokio::test]
@@ -715,21 +346,11 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_source_id_accessor() {
-            let config = InMemoryConfig::new();
-            assert_eq!(config.source_id().as_str(), "memory");
-
-            let custom = InMemoryConfig::builder().source_id("custom").build();
-            assert_eq!(custom.source_id().as_str(), "custom");
-        }
-
-        #[tokio::test]
         async fn test_health_check_after_shutdown() {
             let config = InMemoryConfig::new();
             assert!(config.health_check().await.is_ok());
 
             config.shutdown().await;
-            assert!(!config.is_healthy());
 
             let err = config.health_check().await.unwrap_err();
             match err {
@@ -741,37 +362,18 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_initial_capacity_builder() {
-            let config = InMemoryConfig::builder()
-                .initial_capacity(256)
-                .max_capacity(500)
-                .build();
-            assert_eq!(config.max_capacity(), 500);
-            assert!(config.is_healthy());
-        }
-
-        #[tokio::test]
         async fn test_start_lifecycle() {
             let config = InMemoryConfig::new();
             assert!(config.start().await.is_ok());
-            assert!(config.is_healthy());
+            assert!(config.health_check().await.is_ok());
         }
 
         #[tokio::test]
         async fn test_stop_lifecycle() {
             let config = InMemoryConfig::new();
-            assert!(config.is_healthy());
+            assert!(config.health_check().await.is_ok());
             assert!(config.stop().await.is_ok());
-            assert!(!config.is_healthy());
-        }
-
-        #[test]
-        fn test_builder_default_impl() {
-            let builder = InMemoryConfigBuilder::default();
-            let config = builder.build();
-            assert_eq!(config.max_capacity(), 10_000);
-            assert_eq!(config.default_priority(), 0);
-            assert_eq!(config.source_id().as_str(), "memory");
+            assert!(config.health_check().await.is_err());
         }
     }
 
@@ -826,37 +428,7 @@ mod tests {
                 .unwrap();
 
             config.shutdown();
-            assert!(!config.is_healthy());
-        }
-
-        #[test]
-        fn test_builder() {
-            let config = InMemoryConfig::builder()
-                .max_capacity(1000)
-                .ttl_seconds(60)
-                .default_priority(10)
-                .source_id("custom")
-                .build();
-
-            assert_eq!(config.max_capacity(), 1000);
-            assert_eq!(config.default_priority(), 10);
-        }
-
-        #[test]
-        fn test_version() {
-            let config = InMemoryConfig::new();
-            assert_eq!(config.version(), 0);
-
-            config
-                .set(
-                    "key",
-                    AnnotatedValue::new(ConfigValue::string("value"), SourceId::new("test"), "key"),
-                )
-                .unwrap();
-            assert_eq!(config.version(), 1);
-
-            config.delete("key").unwrap();
-            assert_eq!(config.version(), 2);
+            assert!(config.health_check().is_err());
         }
     }
 }

@@ -168,6 +168,45 @@ impl InterpolationResult {
     }
 }
 
+/// Scan the raw content between `${` and its matching `}`.
+///
+/// `start` points just past the `${`. Nested braces are balanced by depth
+/// counting; the collected content includes inner braces but not the final
+/// closing one. Returns the content plus the index of the first byte after
+/// the closing `}`, or the partial content when the template ends before the
+/// braces balance.
+fn scan_var_content(template: &str, bytes: &[u8], mut i: usize) -> Result<(String, usize), String> {
+    let mut var_content = String::new();
+    let mut depth = 1usize;
+
+    while i < bytes.len() && depth > 0 {
+        let cb = bytes[i];
+        if cb == b'{' {
+            depth += 1;
+            var_content.push('{');
+        } else if cb == b'}' {
+            depth -= 1;
+            if depth > 0 {
+                var_content.push('}');
+            }
+        } else if cb < 128 {
+            // Fast path: ASCII characters
+            var_content.push(cb as char);
+        } else {
+            // Slow path: multi-byte UTF-8
+            let c = template[i..].chars().next().unwrap();
+            var_content.push(c);
+            i += c.len_utf8() - 1;
+        }
+        i += 1;
+    }
+
+    if depth > 0 {
+        return Err(var_content);
+    }
+    Ok((var_content, i))
+}
+
 /// Inner interpolation function with cycle detection and optional tracking.
 ///
 /// This unified implementation handles both tracked and untracked interpolation
@@ -207,40 +246,14 @@ where
 
         // Check for '${' start using byte comparison (faster than peekable char iter)
         if b == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-            i += 2; // skip '${'
-
-            // Build variable content into a reusable buffer
-            let mut var_content = String::new();
-            let mut depth = 1usize;
-
-            while i < bytes.len() && depth > 0 {
-                let cb = bytes[i];
-                if cb == b'{' {
-                    depth += 1;
-                    var_content.push('{');
-                } else if cb == b'}' {
-                    depth -= 1;
-                    if depth > 0 {
-                        var_content.push('}');
+            let (var_content, next_i) =
+                scan_var_content(template, bytes, i + 2).map_err(|var_content| {
+                    ConfigError::InterpolationError {
+                        variable: var_content,
+                        message: "unterminated variable reference".to_string(),
                     }
-                } else if cb < 128 {
-                    // Fast path: ASCII characters
-                    var_content.push(cb as char);
-                } else {
-                    // Slow path: multi-byte UTF-8
-                    let c = template[i..].chars().next().unwrap();
-                    var_content.push(c);
-                    i += c.len_utf8() - 1;
-                }
-                i += 1;
-            }
-
-            if depth > 0 {
-                return Err(ConfigError::InterpolationError {
-                    variable: var_content,
-                    message: "unterminated variable reference".to_string(),
-                });
-            }
+                })?;
+            i = next_i;
 
             // Parse variable name and default value
             let (var_name, default_value) = parse_var_content(&var_content)?;
@@ -333,69 +346,6 @@ where
         }
     }
 
-    Ok(result)
-}
-
-/// Inner interpolation function with cycle detection (no tracking).
-fn interpolate_inner<F>(
-    template: &str,
-    resolver: &F,
-    visited: &mut HashSet<String>,
-) -> ConfigResult<String>
-where
-    F: Fn(&str) -> Option<String>,
-{
-    let mut ref_vars = None;
-    let mut sens_refs = None;
-    interpolate_inner_impl(
-        template,
-        resolver,
-        visited,
-        &mut ref_vars,
-        &mut sens_refs,
-        false,
-        10,
-        false,
-    )
-}
-
-/// Inner interpolation function with cycle detection and tracking.
-fn interpolate_inner_tracked<F>(
-    template: &str,
-    resolver: &F,
-    visited: &mut HashSet<String>,
-    referenced_vars: &mut HashSet<String>,
-    sensitive_refs: &mut HashSet<String>,
-    is_sensitive: bool,
-) -> ConfigResult<String>
-where
-    F: Fn(&str) -> Option<String>,
-{
-    // Take the HashSets and wrap them in Options
-    let taken_refs = std::mem::take(referenced_vars);
-    let taken_sens = std::mem::take(sensitive_refs);
-
-    let mut ref_vars_opt = Some(taken_refs);
-    let mut sens_refs_opt = Some(taken_sens);
-
-    let result = interpolate_inner_impl(
-        template,
-        resolver,
-        visited,
-        &mut ref_vars_opt,
-        &mut sens_refs_opt,
-        is_sensitive,
-        10,
-        false,
-    )?;
-
-    // Move the values back to the original HashSets
-    if let Some(rv) = ref_vars_opt {
-        *referenced_vars = rv;
-    }
-    if let Some(sr) = sens_refs_opt {
-        *sensitive_refs = sr;
-    }
     Ok(result)
 }
 
@@ -1148,36 +1098,5 @@ mod tests {
             "Sensitive variable 'DB_PASS' was referenced from field 'api.key'"
         );
         assert_eq!(texts[2], "Circular reference resolved for variable 'A'");
-    }
-
-    /// Direct coverage of the thin cycle-detection wrappers.
-    #[test]
-    fn inner_wrappers_behave_like_the_public_entry_points() {
-        let r = resolver(&[("HOST", "db"), ("A", "${B}"), ("B", "leaf")]);
-
-        let mut visited = HashSet::new();
-        let out = interpolate_inner("${A}", &r, &mut visited).unwrap();
-        assert_eq!(out, "leaf", "A -> ${{B}} -> leaf chains, not cycles");
-
-        // Cycle detection still applies through the wrapper.
-        let cyclic = resolver(&[("SELF", "${SELF}")]);
-        let mut visited = HashSet::new();
-        assert!(interpolate_inner("${SELF}", &cyclic, &mut visited).is_err());
-
-        let mut visited = HashSet::new();
-        let mut referenced = HashSet::new();
-        let mut sensitive = HashSet::new();
-        let out = interpolate_inner_tracked(
-            "${HOST}",
-            &r,
-            &mut visited,
-            &mut referenced,
-            &mut sensitive,
-            false,
-        )
-        .unwrap();
-        assert_eq!(out, "db");
-        assert!(referenced.contains("HOST"));
-        assert!(sensitive.is_empty());
     }
 }

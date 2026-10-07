@@ -25,7 +25,6 @@
 // Feature-combination-dependent usage: every current call site sits behind
 // another feature (e.g. `watch`), so some feature sets leave this helper
 // unused. It is part of the facade contract either way.
-#[allow(dead_code)]
 #[allow(unused_variables)]
 pub(crate) fn event(name: &'static str, fields: &[(&'static str, &str)]) {
     #[cfg(feature = "tracing")]
@@ -45,7 +44,6 @@ pub(crate) fn event(name: &'static str, fields: &[(&'static str, &str)]) {
 /// Warning-level structured event. Unlike [`event`], this maps to
 /// `tracing::warn!` when the `tracing` feature is enabled so operators see
 /// degraded conditions (e.g. encryption feature missing) at the right level.
-#[allow(dead_code)]
 #[allow(unused_variables)]
 pub(crate) fn warn(name: &'static str, fields: &[(&'static str, &str)]) {
     #[cfg(feature = "tracing")]

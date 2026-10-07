@@ -94,8 +94,8 @@ impl InjectionRateLimiter {
         }
     }
 
-    #[allow(dead_code)]
     /// Create a rate limiter that is disabled (for testing)
+    #[cfg(test)]
     pub fn disabled() -> Self {
         Self {
             window_counter: Arc::new(AtomicU64::new(0)),
@@ -106,8 +106,8 @@ impl InjectionRateLimiter {
         }
     }
 
-    #[allow(dead_code)]
     /// Create a rate limiter with custom settings
+    #[cfg(test)]
     pub fn with_limits(max_requests: usize, window_seconds: u64) -> Self {
         Self {
             window_counter: Arc::new(AtomicU64::new(0)),
@@ -179,8 +179,8 @@ impl InjectionRateLimiter {
         Err(self.window_seconds)
     }
 
-    #[allow(dead_code)]
     /// Get current usage statistics
+    #[cfg(test)]
     pub fn usage_stats(&self) -> (usize, u64, f64) {
         let now_secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -245,8 +245,6 @@ pub struct ConfigInjector {
     validator: EnvSecurityValidator,
     /// 敏感字段模式
     sensitive_patterns: Vec<Regex>,
-    /// 注入历史记录
-    injection_history: Arc<RwLock<Vec<InjectionRecord>>>,
     /// 最大存储条目数
     max_entries: usize,
     /// Per-instance rate limiter. When `Some`, `inject` uses this limiter
@@ -273,7 +271,6 @@ impl ConfigInjector {
             values: Arc::new(RwLock::new(HashMap::new())),
             validator,
             sensitive_patterns: Self::default_sensitive_patterns(),
-            injection_history: Arc::new(RwLock::new(Vec::new())),
             max_entries: DEFAULT_MAX_ENTRIES,
             rate_limiter: None,
         }
@@ -303,7 +300,7 @@ impl ConfigInjector {
     /// This is the explicit-limiter variant of
     /// [`Self::with_dedicated_rate_limiter`], useful for custom limit tuning
     /// and deterministic tests.
-    #[allow(dead_code)] // test-only helper (deterministic limit control)
+    #[cfg(test)]
     pub(crate) fn with_rate_limiter(mut self, limiter: InjectionRateLimiter) -> Self {
         self.rate_limiter = Some(Arc::new(limiter));
         self
@@ -352,9 +349,6 @@ impl ConfigInjector {
         // 验证配置名称
         self.validate_injection(name, value)?;
 
-        // 检测敏感数据
-        let is_sensitive = self.is_sensitive_field(name);
-
         // 存储配置值
         {
             let mut values = self
@@ -368,22 +362,6 @@ impl ConfigInjector {
                 });
             }
             values.insert(name.to_string(), value.to_string());
-        }
-
-        // 记录注入历史
-        {
-            let mut history = self
-                .injection_history
-                .write()
-                .map_err(|_| ConfigInjectionError::PoisonedLock)?;
-            history.push(InjectionRecord {
-                name: name.to_string(),
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-                is_sensitive,
-            });
         }
 
         Ok(())
@@ -415,15 +393,12 @@ impl ConfigInjector {
         let mut failures = Vec::new();
 
         // Collect all valid injections first
-        let mut valid_injections: Vec<(String, String, bool)> = Vec::new();
+        let mut valid_injections: Vec<(String, String)> = Vec::new();
 
         for (name, value) in config {
             // Validate first without holding any locks
             match self.validate_injection(name, value) {
-                Ok(()) => {
-                    let is_sensitive = self.is_sensitive_field(name);
-                    valid_injections.push((name.clone(), value.clone(), is_sensitive));
-                }
+                Ok(()) => valid_injections.push((name.clone(), value.clone())),
                 Err(e) => failures.push((name.clone(), e.to_string())),
             }
         }
@@ -435,16 +410,11 @@ impl ConfigInjector {
                 .write()
                 .map_err(|_| ConfigInjectionError::PoisonedLock)?;
 
-            let mut history = self
-                .injection_history
-                .write()
-                .map_err(|_| ConfigInjectionError::PoisonedLock)?;
-
             // Capacity accounting: new keys beyond `max_entries` overflow into
             // `failures` (with the same error as `inject`), while updates of
             // existing keys are always allowed.
             let mut current_len = values.len();
-            for (name, value, is_sensitive) in valid_injections {
+            for (name, value) in valid_injections {
                 let is_new = !values.contains_key(&name);
                 if is_new && current_len >= self.max_entries {
                     failures.push((
@@ -460,14 +430,6 @@ impl ConfigInjector {
                     current_len += 1;
                 }
                 values.insert(name.clone(), value);
-                history.push(InjectionRecord {
-                    name: name.clone(),
-                    timestamp: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    is_sensitive,
-                });
                 success.push(name);
             }
         }
@@ -556,25 +518,7 @@ impl ConfigInjector {
             .map_err(|_| ConfigInjectionError::PoisonedLock)?;
         values.clear();
 
-        let mut history = self
-            .injection_history
-            .write()
-            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
-        history.clear();
-
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    /// 获取注入历史
-    pub(crate) fn get_injection_history(
-        &self,
-    ) -> Result<Vec<InjectionRecord>, ConfigInjectionError> {
-        let history = self
-            .injection_history
-            .read()
-            .map_err(|_| ConfigInjectionError::PoisonedLock)?;
-        Ok(history.clone())
     }
 
     /// 检查是否为敏感字段
@@ -617,18 +561,6 @@ impl ConfigInjector {
     pub fn validator(&self) -> &EnvSecurityValidator {
         &self.validator
     }
-}
-
-/// 注入历史记录
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub(crate) struct InjectionRecord {
-    /// 配置名称
-    pub name: String,
-    /// 注入时间戳
-    pub timestamp: u64,
-    /// 是否为敏感配置
-    pub is_sensitive: bool,
 }
 
 /// 配置注入错误
@@ -924,19 +856,6 @@ mod tests {
     }
 
     #[test]
-    fn test_injection_history() {
-        let validator = EnvSecurityValidator::lenient();
-        let injector = ConfigInjector::with_validator(validator);
-        injector.inject("APP_PORT", "8080").unwrap();
-        injector.inject("APP_SECRET", "secret").unwrap();
-
-        let history = injector.get_injection_history().unwrap();
-        assert_eq!(history.len(), 2);
-        assert!(!history[0].is_sensitive);
-        assert!(history[1].is_sensitive);
-    }
-
-    #[test]
     fn test_environment_config() {
         let injector = ConfigInjector::new();
         injector.inject("APP_PORT", "8080").unwrap();
@@ -1142,21 +1061,6 @@ mod tests {
         for (_, msg) in &failures {
             assert!(!msg.is_empty());
         }
-    }
-
-    #[test]
-    fn test_inject_history_after_operations() {
-        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
-        injector.inject("APP_PORT", "8080").unwrap();
-        injector.inject("APP_SECRET", "secret").unwrap(); // pragma: allowlist secret
-        let history = injector.get_injection_history().unwrap();
-        assert_eq!(history.len(), 2);
-        assert!(!history[0].is_sensitive);
-        assert!(history[1].is_sensitive);
-        // clear 后历史也被清空
-        injector.clear().unwrap();
-        assert!(injector.get_injection_history().unwrap().is_empty());
-        assert!(injector.is_empty().unwrap());
     }
 
     #[test]

@@ -39,7 +39,6 @@ pub fn decrypt_encrypted_tree(json: &mut serde_json::Value) {
 
 /// Builder-integrated entry point (R2-M7): runs the tree walk with the
 /// builder's injected master key when present, else the environment default.
-#[allow(dead_code)]
 pub(crate) fn apply_field_decryption(json: &mut serde_json::Value, master_key: Option<&[u8]>) {
     decrypt_tree_with_key(json, master_key);
 }

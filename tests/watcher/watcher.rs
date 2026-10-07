@@ -793,17 +793,6 @@ mod progressive_tests {
         }
     }
 
-    #[allow(dead_code)]
-    struct AlwaysDegradedCheck;
-    #[async_trait]
-    impl ReloadHealthCheck for AlwaysDegradedCheck {
-        async fn check(&self, _provider: Arc<dyn ConfigProvider>) -> HealthStatus {
-            HealthStatus::Degraded {
-                reason: "degraded for testing".to_string(),
-            }
-        }
-    }
-
     struct AlwaysCriticalCheck;
     #[async_trait]
     impl ReloadHealthCheck for AlwaysCriticalCheck {

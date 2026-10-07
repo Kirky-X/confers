@@ -837,25 +837,6 @@ mod tests {
         }
     }
 
-    fn test_env_source_prefix() {
-        // Set test environment variables
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("TEST_APP_HOST", "localhost") };
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("TEST_APP_PORT", "5432") };
-
-        let source = EnvSource::with_prefix("TEST_APP_");
-        let result = source.collect().unwrap();
-
-        assert!(result.is_map());
-
-        // Cleanup
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var("TEST_APP_HOST") };
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var("TEST_APP_PORT") };
-    }
-
     #[test]
     fn test_source_kind() {
         let mem = MemorySource::new();

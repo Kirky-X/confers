@@ -4,20 +4,22 @@
 //! Component lifecycle management.
 //!
 //! Provides the `Lifecycle` trait for components that manage
-//! background resources and the `LifecycleRegistry` for ordered
-//! startup/shutdown sequencing.
+//! background resources and the `LifecycleRegistry` that collects
+//! components registered through
+//! [`ConfigBuilder::register_lifecycle`](crate::config::ConfigBuilder::register_lifecycle).
 //!
 //! # Feature-gated async/sync
 //!
 //! When any async feature is enabled (remote, config-bus, encryption, watch),
 //! the async version (using `async_trait`) is used. Otherwise, a sync
+//! version compiled with zero async dependencies takes its place.
+//!
 //! # Design (ADR-041)
 //!
 //! - `start()` is idempotent
 //! - `stop()` must flush all pending persistent operations
-//! - FIFO start / LIFO stop order
 
-use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
+use crate::error::{ConfigConfigError, ConfigResult};
 
 #[cfg(feature = "async-core")]
 mod async_impl {
@@ -48,57 +50,6 @@ mod async_impl {
         pub(crate) fn register(&mut self, name: impl Into<String>, component: Arc<dyn Lifecycle>) {
             self.components.push((name.into(), component));
         }
-        #[allow(dead_code)]
-        pub(crate) async fn start_all(&self) -> Result<(), ConfigConfigError> {
-            for (name, c) in &self.components {
-                c.start()
-                    .await
-                    .map_err(|e| ConfigConfigError::InvalidValue {
-                        field: "lifecycle".into(),
-                        expected_type: "operational".into(),
-                        message: format!("{} failed: {}", name, e),
-                    })?;
-            }
-            Ok(())
-        }
-        #[allow(dead_code)]
-        pub(crate) async fn stop_all(&self) -> ConfigResult<()> {
-            // Per ADR-041: stop() must flush all pending persistent operations,
-            // so we MUST call stop() on every component even if some fail.
-            // Collect all errors and aggregate them (Rule 12: Fail Loud).
-            let mut errors: Vec<(String, ConfigError)> = Vec::new();
-            for (name, c) in self.components.iter().rev() {
-                if let Err(e) = c.stop().await {
-                    errors.push((name.clone(), e));
-                }
-            }
-            if errors.is_empty() {
-                Ok(())
-            } else {
-                let detail = errors
-                    .iter()
-                    .map(|(name, e)| format!("  - {}: {}", name, e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                Err(ConfigError::InvalidValue {
-                    key: "lifecycle".into(),
-                    expected_type: "operational".into(),
-                    message: format!(
-                        "stop_all failed for {} component(s):\n{}",
-                        errors.len(),
-                        detail
-                    ),
-                })
-            }
-        }
-        #[allow(dead_code)]
-        pub(crate) fn is_empty(&self) -> bool {
-            self.components.is_empty()
-        }
-        #[allow(dead_code)]
-        pub(crate) fn len(&self) -> usize {
-            self.components.len()
-        }
     }
 }
 
@@ -114,69 +65,6 @@ mod sync_impl {
             Ok(())
         }
     }
-
-    pub(crate) struct LifecycleRegistry {
-        components: Vec<(String, Box<dyn Lifecycle>)>,
-    }
-
-    impl LifecycleRegistry {
-        pub(crate) fn new() -> Self {
-            Self {
-                components: Vec::new(),
-            }
-        }
-        pub(crate) fn register(&mut self, name: impl Into<String>, component: Box<dyn Lifecycle>) {
-            self.components.push((name.into(), component));
-        }
-        #[allow(dead_code)]
-        pub(crate) fn start_all(&self) -> Result<(), ConfigConfigError> {
-            for (name, c) in &self.components {
-                c.start().map_err(|e| ConfigConfigError::InvalidValue {
-                    field: "lifecycle".into(),
-                    expected_type: "operational".into(),
-                    message: format!("{} failed: {}", name, e),
-                })?;
-            }
-            Ok(())
-        }
-        #[allow(dead_code)]
-        pub(crate) fn stop_all(&self) -> ConfigResult<()> {
-            // Per ADR-041: stop() must flush all pending persistent operations,
-            // so we MUST call stop() on every component even if some fail.
-            // Collect all errors and aggregate them (Rule 12: Fail Loud).
-            let mut errors: Vec<(String, ConfigError)> = Vec::new();
-            for (name, c) in self.components.iter().rev() {
-                if let Err(e) = c.stop() {
-                    errors.push((name.clone(), e));
-                }
-            }
-            if errors.is_empty() {
-                Ok(())
-            } else {
-                let detail = errors
-                    .iter()
-                    .map(|(name, e)| format!("  - {}: {}", name, e))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                Err(ConfigError::InvalidValue {
-                    key: "lifecycle".into(),
-                    expected_type: "operational".into(),
-                    message: format!(
-                        "stop_all failed for {} component(s):\n{}",
-                        errors.len(),
-                        detail
-                    ),
-                })
-            }
-        }
-        #[allow(dead_code)]
-        pub(crate) fn is_empty(&self) -> bool {
-            self.components.is_empty()
-        }
-        pub(crate) fn len(&self) -> usize {
-            self.components.len()
-        }
-    }
 }
 
 #[cfg(feature = "async-core")]
@@ -185,9 +73,6 @@ pub use async_impl::Lifecycle;
 pub(crate) use async_impl::LifecycleRegistry;
 #[cfg(not(feature = "async-core"))]
 pub use sync_impl::Lifecycle;
-#[cfg(not(feature = "async-core"))]
-#[allow(unused_imports)] // LifecycleRegistry re-exported for API completeness
-pub(crate) use sync_impl::LifecycleRegistry;
 
 #[cfg(test)]
 mod tests {
@@ -251,175 +136,6 @@ mod tests {
             assert!(comp.start().await.is_ok());
             assert!(comp.stop().await.is_ok());
         }
-
-        #[tokio::test]
-        async fn test_registry_start_all_stop_all() {
-            use super::super::async_impl::LifecycleRegistry;
-            use std::sync::Arc;
-
-            let mut reg = LifecycleRegistry::new();
-            let c1 = Arc::new(AsyncComponent(TestComponent::new()));
-            let c2 = Arc::new(AsyncComponent(TestComponent::new()));
-
-            reg.register("comp1", c1.clone());
-            reg.register("comp2", c2.clone());
-
-            reg.start_all().await.unwrap();
-            assert!(c1.0.started.load(std::sync::atomic::Ordering::Acquire));
-            assert!(c2.0.started.load(std::sync::atomic::Ordering::Acquire));
-
-            reg.stop_all().await.unwrap();
-            assert!(c1.0.stopped.load(std::sync::atomic::Ordering::Acquire));
-            assert!(c2.0.stopped.load(std::sync::atomic::Ordering::Acquire));
-        }
-
-        #[tokio::test]
-        async fn test_registry_stop_reverse_order() {
-            use super::super::async_impl::LifecycleRegistry;
-            use std::sync::Arc;
-
-            let order: Vec<&str> = Vec::new();
-            let order = std::sync::Arc::new(std::sync::Mutex::new(order));
-
-            struct OrderedComp {
-                name: &'static str,
-                order: Arc<std::sync::Mutex<Vec<&'static str>>>,
-            }
-            #[async_trait::async_trait]
-            impl crate::Lifecycle for OrderedComp {
-                async fn stop(&self) -> crate::ConfigResult<()> {
-                    self.order.lock().unwrap().push(self.name);
-                    Ok(())
-                }
-            }
-
-            let mut reg = LifecycleRegistry::new();
-            let c1 = Arc::new(OrderedComp {
-                name: "a",
-                order: order.clone(),
-            });
-            let c2 = Arc::new(OrderedComp {
-                name: "b",
-                order: order.clone(),
-            });
-            let c3 = Arc::new(OrderedComp {
-                name: "c",
-                order: order.clone(),
-            });
-
-            reg.register("c", c3);
-            reg.register("b", c2);
-            reg.register("a", c1);
-
-            reg.start_all().await.unwrap();
-            reg.stop_all().await.unwrap();
-            let stopped_order = order.lock().unwrap().clone();
-            assert_eq!(
-                stopped_order,
-                vec!["a", "b", "c"],
-                "should stop in reverse registration order"
-            );
-        }
-
-        #[tokio::test]
-        async fn test_registry_empty() {
-            use super::super::async_impl::LifecycleRegistry;
-            let reg = LifecycleRegistry::new();
-            assert!(reg.is_empty());
-            reg.start_all().await.unwrap();
-            reg.stop_all().await.unwrap();
-        }
-
-        /// Regression test: stop_all previously swallowed stop() errors
-        /// via `let _ = c.1.stop().await;`. Verifies that:
-        /// 1. stop_all returns Err when any component's stop() fails
-        /// 2. ALL components are still stopped (no short-circuit), per ADR-041
-        /// 3. The aggregated error message lists every failed component (Rule 12)
-        #[tokio::test]
-        async fn test_stop_all_aggregates_errors_and_stops_all() {
-            use super::super::async_impl::LifecycleRegistry;
-            use std::sync::Arc;
-
-            struct FailingStop {
-                name: &'static str,
-                stopped: std::sync::atomic::AtomicBool,
-                fail: bool,
-            }
-            #[async_trait::async_trait]
-            impl crate::Lifecycle for FailingStop {
-                async fn stop(&self) -> crate::ConfigResult<()> {
-                    self.stopped
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    if self.fail {
-                        Err(crate::error::ConfigError::InvalidValue {
-                            key: self.name.into(),
-                            expected_type: "operational".into(),
-                            message: format!("{} failed to flush", self.name),
-                        })
-                    } else {
-                        Ok(())
-                    }
-                }
-            }
-
-            let mut reg = LifecycleRegistry::new();
-            // Register 3 components: ok, fail, fail — reverse stop order will be fail, fail, ok
-            let c_ok = Arc::new(FailingStop {
-                name: "ok",
-                stopped: std::sync::atomic::AtomicBool::new(false),
-                fail: false,
-            });
-            let c_fail1 = Arc::new(FailingStop {
-                name: "fail1",
-                stopped: std::sync::atomic::AtomicBool::new(false),
-                fail: true,
-            });
-            let c_fail2 = Arc::new(FailingStop {
-                name: "fail2",
-                stopped: std::sync::atomic::AtomicBool::new(false),
-                fail: true,
-            });
-            reg.register("ok", c_ok.clone());
-            reg.register("fail1", c_fail1.clone());
-            reg.register("fail2", c_fail2.clone());
-
-            let result = reg.stop_all().await;
-
-            // Must return Err (Rule 12: Fail Loud)
-            let err = result.expect_err("stop_all must return Err when components fail");
-
-            // Error message must surface BOTH failures (not just the first)
-            let msg = err.to_string();
-            assert!(
-                msg.contains("fail1"),
-                "aggregated error must mention fail1; got: {}",
-                msg
-            );
-            assert!(
-                msg.contains("fail2"),
-                "aggregated error must mention fail2; got: {}",
-                msg
-            );
-            assert!(
-                msg.contains("2 component(s)"),
-                "error must report failure count; got: {}",
-                msg
-            );
-
-            // ALL components must have been stopped despite failures (ADR-041)
-            assert!(
-                c_ok.stopped.load(std::sync::atomic::Ordering::Acquire),
-                "ok component must still be stopped"
-            );
-            assert!(
-                c_fail1.stopped.load(std::sync::atomic::Ordering::Acquire),
-                "fail1 component must still be stopped"
-            );
-            assert!(
-                c_fail2.stopped.load(std::sync::atomic::Ordering::Acquire),
-                "fail2 component must still be stopped"
-            );
-        }
     }
 
     #[cfg(not(feature = "async-core"))]
@@ -456,112 +172,6 @@ mod tests {
             assert!(comp.0.started.load(std::sync::atomic::Ordering::Acquire));
             comp.stop().unwrap();
             assert!(comp.0.stopped.load(std::sync::atomic::Ordering::Acquire));
-        }
-
-        #[test]
-        fn test_registry_start_all_stop_all() {
-            use crate::impl_::lifecycle::sync_impl::LifecycleRegistry;
-            let mut reg = LifecycleRegistry::new();
-            let c1 = Box::new(SyncComponent(TestComponent::new()));
-            let c2 = Box::new(SyncComponent(TestComponent::new()));
-
-            reg.register("comp1", c1);
-            reg.register("comp2", c2);
-
-            assert!(!reg.is_empty());
-            reg.start_all().unwrap();
-            reg.stop_all().unwrap();
-        }
-
-        /// Regression test for C-13 (sync variant): stop_all previously swallowed
-        /// stop() errors via `let _ = c.1.stop();`. Verifies that:
-        /// 1. stop_all returns Err when any component's stop() fails
-        /// 2. ALL components are still stopped (no short-circuit), per ADR-041
-        /// 3. The aggregated error message lists every failed component (Rule 12)
-        #[test]
-        fn test_stop_all_aggregates_errors_and_stops_all() {
-            use crate::impl_::lifecycle::sync_impl::LifecycleRegistry;
-
-            struct FailingStop {
-                name: &'static str,
-                stopped: std::sync::Arc<std::sync::atomic::AtomicBool>,
-                fail: bool,
-            }
-            impl crate::Lifecycle for FailingStop {
-                fn stop(&self) -> crate::ConfigResult<()> {
-                    self.stopped
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    if self.fail {
-                        Err(crate::error::ConfigError::InvalidValue {
-                            key: self.name.into(),
-                            expected_type: "operational".into(),
-                            message: format!("{} failed to flush", self.name),
-                        })
-                    } else {
-                        Ok(())
-                    }
-                }
-            }
-
-            // Shared stopped flags so the test can observe each component after
-            // ownership of the Box<dyn Lifecycle> moves into the registry.
-            let ok_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let fail1_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let fail2_stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-
-            let mut reg = LifecycleRegistry::new();
-            let c_ok = Box::new(FailingStop {
-                name: "ok",
-                stopped: ok_stopped.clone(),
-                fail: false,
-            });
-            let c_fail1 = Box::new(FailingStop {
-                name: "fail1",
-                stopped: fail1_stopped.clone(),
-                fail: true,
-            });
-            let c_fail2 = Box::new(FailingStop {
-                name: "fail2",
-                stopped: fail2_stopped.clone(),
-                fail: true,
-            });
-            reg.register("ok", c_ok);
-            reg.register("fail1", c_fail1);
-            reg.register("fail2", c_fail2);
-
-            let result = reg.stop_all();
-
-            let err = result.expect_err("stop_all must return Err when components fail");
-            let msg = err.to_string();
-            assert!(
-                msg.contains("fail1"),
-                "aggregated error must mention fail1; got: {}",
-                msg
-            );
-            assert!(
-                msg.contains("fail2"),
-                "aggregated error must mention fail2; got: {}",
-                msg
-            );
-            assert!(
-                msg.contains("2 component(s)"),
-                "error must report failure count; got: {}",
-                msg
-            );
-
-            // ALL components must have been stopped despite failures (ADR-041)
-            assert!(
-                ok_stopped.load(std::sync::atomic::Ordering::Acquire),
-                "ok component must still be stopped"
-            );
-            assert!(
-                fail1_stopped.load(std::sync::atomic::Ordering::Acquire),
-                "fail1 component must still be stopped"
-            );
-            assert!(
-                fail2_stopped.load(std::sync::atomic::Ordering::Acquire),
-                "fail2 component must still be stopped"
-            );
         }
     }
 }

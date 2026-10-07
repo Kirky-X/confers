@@ -195,13 +195,17 @@ impl CircuitBreaker {
     }
 
     /// Returns the current circuit state.
-    #[allow(dead_code)]
+    ///
+    /// Test-only observation port: production code drives the breaker
+    /// through `allow_request`/`record_failure`/`record_success` and never
+    /// reads the state directly.
+    #[cfg(test)]
     pub fn state(&self) -> CircuitState {
         self.state
     }
 
     /// Returns the current consecutive failure count.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn failure_count(&self) -> u32 {
         self.failure_count
     }

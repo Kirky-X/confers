@@ -93,7 +93,6 @@ impl std::fmt::Display for ConfigErrorCode {
 /// # When to Use
 ///
 /// Use `ConfigConfigError` for errors that occur in:
-/// - Factory functions (`new_in_memory`, `from_chain`)
 /// - Configuration builders (`ConfigBuilder::build`)
 /// - File loading (`load_file`)
 /// - Validation (`validate`)
@@ -101,11 +100,13 @@ impl std::fmt::Display for ConfigErrorCode {
 /// # Example
 ///
 /// ```rust,ignore
-/// // Builder returns ConfigConfigError when validation fails
-/// use confers::impl_::memory::InMemoryConfigBuilder;
+/// // Building from a source chain returns ConfigConfigError when a
+/// // required field is missing or a value fails validation
+/// use confers::config::ConfigBuilder;
 ///
-/// let result = InMemoryConfigBuilder::default().max_capacity(0).build();
-/// // Returns Err(ConfigConfigError::InvalidValue { ... })
+/// let result = ConfigBuilder::<MyConfig>::new().build();
+/// // Returns Err(ConfigConfigError::MissingField { ... }) when `MyConfig`
+/// // has a required field no source provides
 /// ```
 #[derive(Debug, Error)]
 #[non_exhaustive]
