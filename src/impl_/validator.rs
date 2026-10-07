@@ -62,6 +62,32 @@ pub enum ValidationRule {
     Custom(String),
 }
 
+/// Parse `min=<n>, max=<n>` bounds from a parameterized rule body.
+///
+/// Unspecified bounds keep their defaults; a bound that fails to parse or a
+/// `min` exceeding `max` yields `None`.
+fn parse_min_max<T: std::str::FromStr + PartialOrd>(
+    inner: &str,
+    default_min: T,
+    default_max: T,
+) -> Option<(T, T)> {
+    let mut min = default_min;
+    let mut max = default_max;
+
+    for part in inner.split(',').map(|p| p.trim()) {
+        if let Some(v) = part.strip_prefix("min=") {
+            min = v.parse().ok()?;
+        } else if let Some(v) = part.strip_prefix("max=") {
+            max = v.parse().ok()?;
+        }
+    }
+
+    if min > max {
+        return None;
+    }
+    Some((min, max))
+}
+
 #[cfg(feature = "validation")]
 impl ValidationRule {
     /// Parse a validation rule from a string.
@@ -73,23 +99,7 @@ impl ValidationRule {
         if let Some(inner) = s.strip_prefix("length(")
             && let Some(inner) = inner.strip_suffix(')')
         {
-            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-            let mut min = 0;
-            let mut max = usize::MAX;
-
-            for part in parts {
-                if let Some(v) = part.strip_prefix("min=") {
-                    min = v.parse().ok()?;
-                } else if let Some(v) = part.strip_prefix("max=") {
-                    max = v.parse().ok()?;
-                }
-            }
-
-            // Validate min <= max
-            if min > max {
-                return None;
-            }
-
+            let (min, max) = parse_min_max(inner, 0, usize::MAX)?;
             return Some(Self::Length { min, max });
         }
 
@@ -97,23 +107,7 @@ impl ValidationRule {
         if let Some(inner) = s.strip_prefix("range(")
             && let Some(inner) = inner.strip_suffix(')')
         {
-            let parts: Vec<&str> = inner.split(',').map(|p| p.trim()).collect();
-            let mut min = i64::MIN;
-            let mut max = i64::MAX;
-
-            for part in parts {
-                if let Some(v) = part.strip_prefix("min=") {
-                    min = v.parse().ok()?;
-                } else if let Some(v) = part.strip_prefix("max=") {
-                    max = v.parse().ok()?;
-                }
-            }
-
-            // Validate min <= max
-            if min > max {
-                return None;
-            }
-
+            let (min, max) = parse_min_max(inner, i64::MIN, i64::MAX)?;
             return Some(Self::Range { min, max });
         }
 

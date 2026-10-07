@@ -102,6 +102,27 @@ impl TypeScriptGenerator {
         format!("export interface {} {{\n{}\n}}", name, properties_str)
     }
 
+    /// Map a JSON-Schema type name to its TypeScript counterpart.
+    fn ts_primitive(ty: &str) -> String {
+        match ty {
+            "string" => "string".to_string(),
+            "number" | "integer" => "number".to_string(),
+            "boolean" => "boolean".to_string(),
+            "null" => "null".to_string(),
+            _ => "any".to_string(),
+        }
+    }
+
+    /// Join type alternatives with `separator`; an empty list degrades to
+    /// `"any"`, a single type is returned as-is.
+    fn join_types(types: Vec<String>, separator: &str) -> String {
+        match types.len() {
+            0 => "any".to_string(),
+            1 => types[0].clone(),
+            _ => types.join(separator),
+        }
+    }
+
     fn get_typescript_type(schema: &Value) -> String {
         // Handle $ref references first as they are most specific
         if let Some(ref_name) = schema.get("$ref").and_then(|r| r.as_str()) {
@@ -117,13 +138,7 @@ impl TypeScriptGenerator {
             let types: Vec<String> = type_array
                 .iter()
                 .filter_map(|t| t.as_str())
-                .map(|t| match t {
-                    "string" => "string".to_string(),
-                    "number" | "integer" => "number".to_string(),
-                    "boolean" => "boolean".to_string(),
-                    "null" => "null".to_string(),
-                    _ => "any".to_string(),
-                })
+                .map(Self::ts_primitive)
                 .collect();
 
             // Preserve "null" in the union (Option<T> -> "T | null") so the
@@ -143,9 +158,7 @@ impl TypeScriptGenerator {
         // Handle single type string
         if let Some(type_str) = schema.get("type").and_then(|t| t.as_str()) {
             match type_str {
-                "string" => "string".to_string(),
-                "number" | "integer" => "number".to_string(),
-                "boolean" => "boolean".to_string(),
+                "string" | "number" | "integer" | "boolean" => Self::ts_primitive(type_str),
                 "array" => {
                     if let Some(items) = schema.get("items") {
                         let item_type = Self::get_typescript_type(items);
@@ -182,38 +195,21 @@ impl TypeScriptGenerator {
                 .map(Self::get_typescript_type)
                 .filter(|t| t != "null")
                 .collect();
-
-            if union_types.is_empty() {
-                "any".to_string()
-            } else if union_types.len() == 1 {
-                union_types[0].clone()
-            } else {
-                union_types.join(" | ")
-            }
+            Self::join_types(union_types, " | ")
         } else if let Some(one_of) = schema.get("oneOf").and_then(|o| o.as_array()) {
-            let mut union_types = Vec::new();
-            for variant_schema in one_of {
-                let variant_type = Self::get_typescript_type(variant_schema);
-                if variant_type != "any" {
-                    union_types.push(variant_type);
-                }
-            }
-            if union_types.is_empty() {
-                "any".to_string()
-            } else {
-                union_types.join(" | ")
-            }
+            let union_types: Vec<String> = one_of
+                .iter()
+                .map(Self::get_typescript_type)
+                .filter(|t| t != "any")
+                .collect();
+            Self::join_types(union_types, " | ")
         } else if let Some(all_of) = schema.get("allOf").and_then(|a| a.as_array()) {
             let all_types: Vec<String> = all_of
                 .iter()
                 .map(Self::get_typescript_type)
                 .filter(|t| t != "any")
                 .collect();
-            if all_types.is_empty() {
-                "any".to_string()
-            } else {
-                all_types.join(" & ")
-            }
+            Self::join_types(all_types, " & ")
         } else if let Some(enum_values) = schema.get("enum").and_then(|e| e.as_array()) {
             let variants: Vec<String> = enum_values
                 .iter()
@@ -222,11 +218,7 @@ impl TypeScriptGenerator {
                     _ => v.to_string(),
                 })
                 .collect();
-            if !variants.is_empty() {
-                variants.join(" | ")
-            } else {
-                "any".to_string()
-            }
+            Self::join_types(variants, " | ")
         } else {
             "any".to_string()
         }
@@ -1857,15 +1849,16 @@ mod rust_scaffold_tests {
     fn schemars_draft_output_round_trips_to_rust_scaffold() {
         use schemars::JsonSchema;
 
-        #[derive(JsonSchema)]
+        // 字段与变体只进 JsonSchema 生成面，测试读的是生成的 schema 而非字段值。
         #[allow(dead_code)]
+        #[derive(JsonSchema)]
         enum DeployMode {
             Active,
             Paused,
         }
 
-        #[derive(JsonSchema)]
         #[allow(dead_code)]
+        #[derive(JsonSchema)]
         struct DeployScaffold {
             region: String,
             replicas: u32,

@@ -82,6 +82,22 @@ fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
     }
 }
 
+/// Whether a JSON object matches the serialized `AnnotatedValue` shape that
+/// legacy snapshots contain: {"inner": .., "source": .., "path": ..,
+/// "priority": .., "version": ..[, "location": ..]}. `AnnotatedValue` always
+/// serializes all of its fields, so require the full field set *with matching
+/// JSON types* before treating an object as an envelope. A plain config that
+/// merely happens to contain e.g. `inner`, `source`, `priority` and `version`
+/// keys must still be parsed as an ordinary map, not misclassified as an
+/// envelope.
+fn looks_like_legacy_envelope(map: &serde_json::Map<String, serde_json::Value>) -> bool {
+    map.contains_key("inner")
+        && map.get("source").is_some_and(serde_json::Value::is_string)
+        && map.get("path").is_some_and(serde_json::Value::is_string)
+        && map.get("priority").is_some_and(serde_json::Value::is_u64)
+        && map.get("version").is_some_and(serde_json::Value::is_u64)
+}
+
 /// Rebuild an [`AnnotatedValue`] tree from the plain (non-annotated) JSON a
 /// snapshot file contains. Returns `None` when the value looks like the legacy
 /// AnnotatedValue envelope ({"inner": .., "source": .., "path": .., ...}) so the
@@ -113,20 +129,7 @@ fn plain_json_to_annotated(
             ConfigValue::Array(arr.into())
         }
         serde_json::Value::Object(map) => {
-            // Legacy snapshots written by older versions contain a serialized
-            // `AnnotatedValue`: {"inner": .., "source": .., "path": ..,
-            // "priority": .., "version": ..[, "location": ..]}. `AnnotatedValue`
-            // always serializes all of its fields, so require the full field
-            // set *with matching JSON types* before treating an object as an
-            // envelope. A plain config that merely happens to contain e.g.
-            // `inner`, `source`, `priority` and `version` keys must still be
-            // parsed as an ordinary map, not misclassified as an envelope.
-            let looks_like_envelope = map.contains_key("inner")
-                && map.get("source").is_some_and(serde_json::Value::is_string)
-                && map.get("path").is_some_and(serde_json::Value::is_string)
-                && map.get("priority").is_some_and(serde_json::Value::is_u64)
-                && map.get("version").is_some_and(serde_json::Value::is_u64);
-            if looks_like_envelope {
+            if looks_like_legacy_envelope(map) {
                 return None; // legacy annotated envelope
             }
             let mut entries = indexmap::IndexMap::new();
