@@ -188,6 +188,16 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 pub fn with_snapshot(mut self, config: SnapshotConfig) -> Self
 ```
 
+`SnapshotConfig` 字段（`Default` 手写实现）：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `dir` | `PathBuf` | `"config-snapshots"` | 快照落盘目录 |
+| `max_snapshots` | `usize` | 30 | 保留的快照份数上限（超出按最旧淘汰） |
+| `format` | `SnapshotFormat` | `Toml` | 快照序列化格式 |
+| `include_provenance` | `bool` | `true` | 是否随快照写入来源溯源信息（供 `confers snapshot restore` 与审计定位） |
+
+
 ##### `fail_fast(enabled: bool)`
 
 启用或禁用快速失败模式。快速失败模式下，任何配置错误都会立即中止构建过程。
@@ -653,9 +663,84 @@ pub struct RotationResult {
 
 以下 API 由 Cargo 特性门控，启用对应特性后才可用。
 
+### 动态字段（`dynamic` 特性）
+
+字段级动态配置句柄：`DynamicField<T>` 以 `ArcSwap`（RCU 机制）提供 O(1) 无锁读，以 `DashMap` 承载高并发回调注册，回调生命周期由 `CallbackGuard`（RAII，drop 即自动注销）管理。三类型经根与 prelude 再导出（`confers::{DynamicField, DynamicFieldBuilder, CallbackGuard}`），`T` 约束为 `Clone + Send + Sync + 'static`。
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `new` | `fn new(initial: T) -> Self` | 以初值构造句柄 |
+| `get` | `fn get(&self) -> T` | 无锁读并 clone 返回值 |
+| `get_ref` | `fn get_ref(&self) -> Arc<T>` | 无锁读且零拷贝（大值场景优于 `get`） |
+| `update` | `fn update(&self, new_val: T)` | 原子替换并派发回调；回调内再入 `update` 时内联派发（不重入非重入的更新锁），保持既有嵌套派发语义 |
+| `on_change` | `fn on_change(&self, f: impl Fn(&T) + Send + Sync + 'static) -> CallbackGuard` | 注册变更回调并返回 RAII 守卫 |
+| `callback_count` | `fn callback_count(&self) -> usize` | 当前注册回调数 |
+| `callback_panic_count` | `fn callback_panic_count(&self) -> u64` | 回调 panic 计数（被隔离，不上抛） |
+| `builder` | `fn builder() -> DynamicFieldBuilder<T>` | 构建器入口 |
+
+`DynamicFieldBuilder<T>`：`initial(value)` 设初值、`build()` 产出句柄（`Default` 等价空构建器）。未设初值直接 `build()` 会 panic（`expect("DynamicFieldBuilder: call initial() before build()")`）——显式失败而非静默取默认值。
+
+> **⚠️ `subscribe` 已弃用**（since 0.3.0，源码标注 #[deprecated(note = "Use `on_change` instead")]）：`DynamicField::subscribe(f)` 与 `on_change(f)` 行为一致（转发实现），仅为向后兼容保留，新代码统一用 `on_change`。
+
+`FieldWatcher<T: ConfigProvider>`（另需 `watch` 特性，由 `confers::dynamic` 导出）：把底层 watch 通道投影为「哪些字段变了」——`new(rx: watch::Receiver<Arc<T>>, fields: Vec<Arc<str>>)` 由装配方构造、`async changed_for(&mut self) -> (Arc<T>, Vec<Arc<str>>)` 等待并返回快照与变更字段名、`watched_fields() -> &[Arc<str>]` 读取监视清单。
+
+### 变量插值（`interpolation` 特性）
+
+自由函数入口（根重导出 `InterpolationConfig` / `InterpolationContext` / `InterpolationResult` / `InterpolationWarning`，prelude 另导出 `interpolate`）：
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `interpolate` | `fn interpolate<F>(template: &str, resolver: &F) -> ConfigResult<String>`，`F: Fn(&str) -> Option<String>` | 默认配置插值；变量缺失且无默认值、或检测到循环引用时返回 `ConfigError::InterpolationError` |
+| `interpolate_tracked` | `fn interpolate_tracked<F>(...)` | 同上，并产出追踪结果（实际解析的变量与告警清单） |
+| `interpolate_with_config` | `fn interpolate_with_config<F>(template: &str, resolver: &F, config: &InterpolationConfig) -> ConfigResult<String>` | 全量配置控制 |
+
+`InterpolationConfig`（`new()` 等价 `Default`；`with_sensitive_var(name)` 追加敏感变量名）：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `max_depth` | `usize` | 10 | 嵌套插值的最大递归深度 |
+| `allow_unresolved` | `bool` | `false` | `true` 时未解析变量保留原文而不报错 |
+| `sensitive_vars` | `HashSet<String>` | 空集 | 视为敏感的变量名清单 |
+| `warn_sensitive_interpolation` | `bool` | `true` | 敏感字段走插值时发出告警 |
+
+### OpenFeature 风格旗标评估（`openfeature` 特性）
+
+模块 `confers::openfeature`（README 特性表标注其蕴含 `feature-toggle` 与 `context-aware` 的评估面）。
+
+| 类型 / 函数 | 说明 |
+|------------|------|
+| `FeatureProvider`（trait，`Send + Sync`） | 端口：`name() -> &str`、`resolve_bool(flag_key: &str, default: bool, ctx: &EvaluationContext) -> EvaluationDetail<bool>`、`resolve_string(flag_key: &str, default: &str, ctx: &EvaluationContext) -> EvaluationDetail<String>` |
+| `NoOpProvider` | 规范要求的空实现，恒返回调用方默认值 |
+| `StaticFlagProvider` | 声明式旗标：`new()` + `with_flag(key: impl Into<String>, flag: FlagConfig)` 链式注册；先按属性规则命中，其后按 `targeting_key` 做确定性百分比分桶 |
+| `ToggleRegistryProvider` | `new(Arc<FeatureToggleRegistry>)`：把既有运行时开关注册表桥接为 OpenFeature provider |
+| `OpenFeatureClient` | `new()` / `with_provider(Arc<dyn FeatureProvider>)`、`set_provider(...)`、`provider_name() -> String`、`bool_value(flag_key, default, ctx)`、`bool_details(...)`、`string_value(flag_key, default, ctx)` |
+| `EvaluationDetail<T>` | `value: T` / `variant: Option<String>` / `reason: ResolutionReason`；辅助构造 `default_reason(value)`、`with_reason(value, variant, reason)` |
+| `ResolutionReason` | `Static`（旗标静态默认）/ `TargetingMatch`（规则命中）/ `Default`（旗标不存在，回落调用方默认）/ `Error`（评估出错回落） |
+| `bucket_index` | `fn bucket_index(flag_key: &str, targeting_key: &str) -> u32`：按旗标键 + targeting key 稳定分桶，同键多次评估结果一致（可复现灰度） |
+
+`FlagConfig`（声明式旗标）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `default_variant` | `String` | 无规则命中时提供的变体 id |
+| `variants` | `HashMap<String, String>` | 变体 id → 字符串载荷 |
+| `targeting` | `Vec<TargetingRule>` | 按声明序求值，**首个命中生效** |
+| `percentage` | `Option<PercentageRollout>` | 定向规则之后应用的百分比灰度 |
+
+构造与叠加：`FlagConfig::on_off(default_on: bool)`（产出 `on`/`off` 单变体布尔型旗标，载荷为 `"true"`/`"false"`）、`with_rule(TargetingRule)`、`with_rollout(PercentageRollout)`。
+`TargetingRule::when_attribute(...)` 内部由 `AttributeMatch { attribute, expected }` 与 `EvaluationContext` 比对（一条规则的多个约束须全部匹配）；`PercentageRollout { rollout: u8（0..=100）, variant_in: String, variant_off: String }`。
+
 ### 密钥管理（`key-management` 特性）
 
 `KeyManager` 提供加密密钥的全面管理，包括轮换、版本控制与密钥存储。需要启用 `key-management` 特性（隐式启用 `encryption`；旧名 `key` 为兼容别名）。
+
+`KeyRotationConfig`（`key_registry` 模块，随 `KeyRegistry` 构造注入；`Default` 手写实现）：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `max_key_versions` | `usize` | 3 | 单个密钥环保留的历史版本数上限（超限的最旧版本按轮换策略淘汰） |
+| `cache_policy` | `KeyCachePolicy` | `KeyCachePolicy::default()` | 密钥解析缓存策略 |
+
 
 ```mermaid
 graph TB
@@ -886,6 +971,9 @@ storage.load()?;                     // 从存储路径加载密钥
 ### 加密函数（`encryption` 特性）
 
 `XChaCha20Crypto` 实现 XChaCha20-Poly1305 加密以保护敏感配置值，提供带关联数据的认证加密（AEAD）。需要启用 `encryption` 特性。
+
+> **历史算法披露**：AES-256-GCM 已被 XChaCha20-Poly1305 取代，仅作历史密文的解密通道保留。错误变体 `CryptoError::LegacyDecryptionFailed`（「legacy decryption failed (AES-256-GCM)」）在源码中标 `#[deprecated(since = "0.4.2", note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5")]`——**计划于 v0.5 移除**，届时以 AES-256-GCM 加密的历史配置值将无法解密。仍持有旧密文的部署需在 v0.5 之前用新算法重新加密（读旧写新即可迁移），并把 `KeyStatus::Deprecated`（见密钥状态枚举）对应的密钥环排入轮换。
+
 
 ```mermaid
 graph LR
@@ -1273,6 +1361,20 @@ registry.set_active_profile("database", "mysql")?;
 // 从环境变量解析（如 DATABASE_PROFILE=postgresql）
 registry.resolve_from_env(Some(""));
 ```
+
+`LoaderConfig` 字段（`Default` 手写实现，模块加载入口 `load_module` / `load_active` 接收其引用）：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `max_size` | `usize` | 10 MiB（`10 * 1024 * 1024`） | 单文件读取上限，超限拒绝（防大文件 DoS） |
+| `allowed_base_dirs` | `Vec<PathBuf>` | `["."]` | 允许的基础目录；路径必须解析到其中之一 |
+| `allow_absolute` | `bool` | `false` | 是否允许绝对路径（默认关闭属安全取向） |
+| `check_symlinks` | `bool` | `true` | 是否检查符号链接逃逸 |
+| `format` | `Option<Format>` | `None` | 显式格式覆盖：设定后 `load_file` 按此格式解析而非依扩展名推断（用于缺扩展名或扩展名不在识别列表的文件） |
+| `redact_error_paths` | `bool` | `false` | 开启后 `load_file` 的 `FileNotFound` 错误只携带 `file_name()` 而非完整解析路径，供不得外泄服务器文件系统结构的嵌入方（日志/API 响应）使用；默认关闭以保持既有错误消息行为 |
+
+> 另有内部常量 `MAX_PATH_LENGTH = 4096` 限制路径长度（不可配置）。
+
 
 ---
 
