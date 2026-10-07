@@ -20,5 +20,6 @@ mod migration;
 mod modules;
 mod nested_deserialize;
 mod progressive;
+#[cfg(feature = "snapshot")]
 mod snapshot_extra;
 mod toggle;
