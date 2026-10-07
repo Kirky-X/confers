@@ -286,7 +286,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 
 # Coverage gate: at least 80% line coverage
-cargo llvm-cov --workspace --all-features --fail-under-lines 80
+cargo llvm-cov --workspace --all-features --fail-under-lines 90
 
 # Benchmarks (matching CI; CI adds -- --save-baseline current)
 cargo bench --features dev,etcd-watch,change-stream --benches

@@ -117,7 +117,7 @@ cargo test --features remote  # 仅运行远程配置相关测试
 |:-----|:-----|
 | pre-commit | `cargo fmt --all -- --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo deny check`、私钥扫描（`no-private-key`） |
 | commit-msg | Conventional Commits 格式校验（`feat`、`fix`、`docs` 等） |
-| pre-push | `cargo audit`、覆盖率门禁（`cargo llvm-cov --fail-under-lines 80`） |
+| pre-push | `cargo audit`、覆盖率门禁（`cargo llvm-cov --fail-under-lines 90`） |
 
 ### 构建与测试
 
@@ -302,7 +302,7 @@ graph TD
 
 | 测试类型 | 说明 | 要求 |
 |:---------|:-----|:-----|
-| **单元测试** | 快速、独立、验证核心逻辑 | 覆盖率 ≥ 80% |
+| **单元测试** | 快速、独立、验证核心逻辑 | 覆盖率 ≥ 90% |
 | **集成测试** | 验证模块间交互 | 全部通过 |
 | **E2E 测试** | 验证关键业务流程 | 核心路径 100% |
 

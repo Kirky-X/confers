@@ -286,7 +286,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all -- --check
 
 # 覆盖率门禁：行覆盖率不低于 80%
-cargo llvm-cov --workspace --all-features --fail-under-lines 80
+cargo llvm-cov --workspace --all-features --fail-under-lines 90
 
 # 基准测试（与 CI 一致；CI 另加 -- --save-baseline current）
 cargo bench --features dev,etcd-watch,change-stream --benches

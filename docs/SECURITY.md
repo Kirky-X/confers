@@ -62,7 +62,7 @@ cargo audit --fetch-index
 | 依赖漏洞 / 许可证 / 禁用依赖 / 来源校验 | `cargo deny check`（配置见 `deny.toml`） | CI 与 pre-commit | 阻断含已知漏洞、许可证不合规或被禁用的依赖 |
 | RustSec 安全公告扫描 | `cargo audit` | CI 与 pre-push | 扫描 `Cargo.lock` 中的 RustSec 已知漏洞 |
 | 私钥泄露扫描 | lefthook `no-private-key` | pre-commit | 阻止 PEM 私钥与 `sk-` 形式令牌进入提交 |
-| 覆盖率门禁 | `cargo llvm-cov --fail-under-lines 80` | CI 与 pre-push | 行覆盖率不低于 80% |
+| 覆盖率门禁 | `cargo llvm-cov --fail-under-lines 90` | CI 与 pre-push | 行覆盖率不低于 90% |
 
 ---
 
