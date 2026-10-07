@@ -140,7 +140,8 @@ env = ["dotenv"]
 # Internal aggregate predicate: true whenever any async background capability
 # (remote / config-bus / encryption / watch) is enabled. Implementation cfg's
 # gate on this instead of repeating the four-feature disjunction.
-async-core = []
+# 自带 dep:async-trait：单开本聚合（防御态）时代码门下的 async_trait 引用可编译。
+async-core = ["dep:async-trait"]
 validation = ["dep:garde"]
 typescript-schema = ["json-schema"]
 # security 与 encryption 解耦（FEATURE_AUDIT_REPORT §9.2-5）：本模块仅需

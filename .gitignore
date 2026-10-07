@@ -83,3 +83,6 @@ reviews/
 
 # mimosa 安全扫描工具产物
 .mimosa/
+
+# codenexus 工具索引缓存
+.codenexus/
