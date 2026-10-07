@@ -11,6 +11,8 @@
 //! - Type mismatch errors
 
 #![cfg(all(feature = "validation", feature = "interpolation"))]
+// 本文件大量测试 struct 只喂给反序列化失败路径，字段从不被读取——
+// 逐项标注会淹没断言，统一在本模块级放行。
 #![allow(dead_code)]
 
 use super::common;

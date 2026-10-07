@@ -271,9 +271,10 @@ fn mac08_dynamic_field_generates_runtime_handle() {
 }
 
 /// `interpolate` 字段值模板 ${key} 在加载后按合并树解析。
+// host 仅作为对照字段存在，断言只读 url。
+#[allow(dead_code)]
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct InterpolatedStruct {
-    #[allow(dead_code)]
     pub host: String,
 
     #[config(interpolate)]
@@ -582,8 +583,9 @@ fn t009_profile_overlay_applies_when_env_set() {
 }
 
 /// (env 类型错误携带字段路径)/(env_separator)/(快照脱敏接线)。
+// host 仅出现在断言的错误信息中
+#[allow(dead_code)]
 #[derive(Debug, confers::Config, serde::Deserialize)]
-#[allow(dead_code)] // host 仅出现在断言的错误信息中
 struct T006Probe {
     pub host: String,
 }

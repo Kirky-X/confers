@@ -319,8 +319,9 @@ mod t045 {
     use confers::{Config, ConfigBuilder};
     use serde::Deserialize;
 
+    // 字段值经快照内容断言,而非结构体读取
+    #[allow(dead_code)]
     #[derive(Debug, Config, Deserialize)]
-    #[allow(dead_code)] // 字段值经快照内容断言,而非结构体读取
     pub struct RedactProbe {
         pub host: String,
 

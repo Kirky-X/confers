@@ -6,12 +6,15 @@
 //! This module provides shared utility functions used across multiple
 //! benchmark files to reduce code duplication.
 
+// 每个 bench 目标独立编译本模块，未被该目标调用的共享辅助函数
+// 在单个目标内是 dead_code 假阳性，模块级统一放行。
+#![allow(dead_code)]
+
 use confers::SourceId;
 use confers::types::{AnnotatedValue, ConfigValue};
 use std::sync::Arc;
 
 /// Helper to create a simple AnnotatedValue.
-#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench, merge_bench
 pub fn av(value: ConfigValue, path: &str) -> AnnotatedValue {
     AnnotatedValue::new(value, SourceId::new("bench"), path)
 }
@@ -21,7 +24,6 @@ pub fn av(value: ConfigValue, path: &str) -> AnnotatedValue {
 /// - `depth`: How deep the nesting goes (0 = leaf node with String value)
 /// - `width`: Number of children at each level
 /// - `path`: Base path for the root node
-#[allow(dead_code)] // shared bench helper; used by incremental_merge_bench
 pub fn create_nested_config(depth: usize, width: usize, path: &str) -> AnnotatedValue {
     if depth == 0 {
         return AnnotatedValue::new(
@@ -49,7 +51,6 @@ pub fn create_nested_config(depth: usize, width: usize, path: &str) -> Annotated
 ///
 /// - `key_count`: Number of key-value pairs to create
 /// - `prefix`: Prefix for the ConfigValue (e.g., "value" creates "value_0", "value_1", ...)
-#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench
 pub fn create_large_map(key_count: usize, prefix: &str) -> ConfigValue {
     let mut map = indexmap::IndexMap::new();
     for i in 0..key_count {
@@ -65,7 +66,6 @@ pub fn create_large_map(key_count: usize, prefix: &str) -> ConfigValue {
 /// Create a map for override/testing purposes.
 ///
 /// Similar to `create_large_map` but uses "updated" prefix by default.
-#[allow(dead_code)] // shared bench helper; used by cow_efficiency_bench, merge_bench
 pub fn create_override_map(key_count: usize) -> ConfigValue {
     let mut map = indexmap::IndexMap::new();
     for i in 0..key_count {
@@ -79,13 +79,11 @@ pub fn create_override_map(key_count: usize) -> ConfigValue {
 }
 
 /// Wrap a ConfigValue with source and path information.
-#[allow(dead_code)]
 pub fn annotated(value: ConfigValue, path: &str) -> AnnotatedValue {
     AnnotatedValue::new(value, SourceId::new("bench"), path)
 }
 
 /// Build a ConfigValue::Map from (key, ConfigValue) pairs.
-#[allow(dead_code)]
 pub fn make_map(entries: Vec<(String, ConfigValue)>) -> ConfigValue {
     let map: indexmap::IndexMap<Arc<str>, AnnotatedValue> = entries
         .into_iter()
@@ -98,7 +96,6 @@ pub fn make_map(entries: Vec<(String, ConfigValue)>) -> ConfigValue {
 }
 
 /// Create a flat map with sequential key-value pairs.
-#[allow(dead_code)]
 pub fn create_flat_map(key_count: usize) -> ConfigValue {
     let mut map = indexmap::IndexMap::new();
     for i in 0..key_count {

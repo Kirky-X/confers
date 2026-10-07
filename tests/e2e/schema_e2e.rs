@@ -21,8 +21,9 @@ use confers::{ConfigSchema, schema::TypeScriptGenerator};
 use schemars::JsonSchema;
 
 /// 嵌套结构:父 struct 持有嵌套 struct、Option、Vec 字段。
+// 字段仅经 schema 生成面使用，测试不直接读取。
+#[allow(dead_code)]
 #[derive(Debug, ConfigSchema, JsonSchema)]
-#[allow(dead_code)] // 字段仅经 schema 生成面使用。
 struct ConfersSchema {
     #[config(name = "name")]
     name: String,
@@ -40,15 +41,17 @@ struct ConfersSchema {
     retry: Option<RetrySchema>,
 }
 
-#[derive(Debug, JsonSchema)]
+// 字段仅经 schema 生成面使用，测试不直接读取。
 #[allow(dead_code)]
+#[derive(Debug, JsonSchema)]
 struct DatabaseSchema {
     host: String,
     port: u16,
 }
 
-#[derive(Debug, JsonSchema)]
+// 字段仅经 schema 生成面使用，测试不直接读取。
 #[allow(dead_code)]
+#[derive(Debug, JsonSchema)]
 struct RetrySchema {
     attempts: u32,
 }

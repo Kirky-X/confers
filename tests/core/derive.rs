@@ -218,8 +218,9 @@ fn test_numeric_env_override_negative_f64() {
 
 // ===== ConfigSchema / ConfigMigration / ConfigModules / ConfigClap derives =====
 
+// Fields are exercised only through the derive-generated schema.
+#[allow(dead_code)]
 #[derive(Debug, ConfigSchema)]
-#[allow(dead_code)] // Fields are exercised only through the derive-generated schema.
 #[cfg(feature = "json-schema")]
 struct SchemaConfig {
     #[config(name = "host")]
@@ -292,9 +293,10 @@ fn test_config_schema_derive_generates_typescript_type() {
     );
 }
 
+// Fields are exercised only through the derive-generated versioning.
+#[allow(dead_code)]
 #[derive(Debug, ConfigMigration)]
 #[config(version = 3)]
-#[allow(dead_code)] // Fields are exercised only through the derive-generated versioning.
 #[cfg(feature = "migration")]
 struct MigrationConfig {
     pub name: String,
@@ -311,8 +313,9 @@ fn test_config_migration_derive_generates_versioned() {
     assert_eq!(registry.migrations().len(), 0, "empty registry by default");
 }
 
+// Fields are exercised only through the derive-generated registry.
+#[allow(dead_code)]
 #[derive(Debug, ConfigModules)]
-#[allow(dead_code)] // Fields are exercised only through the derive-generated registry.
 #[cfg(feature = "modules")]
 struct ModularConfig {
     #[config(module_group = "core")]
@@ -349,9 +352,10 @@ fn test_config_modules_derive_generates_registry() {
     assert!(module_groups.contains(&"telemetry"));
 }
 
+// Fields are exercised only through the derive-generated clap parser.
+#[allow(dead_code)]
 #[cfg(feature = "cli")]
 #[derive(Debug, ConfigClap)]
-#[allow(dead_code)] // Fields are exercised only through the derive-generated clap parser.
 struct CliConfig {
     #[config(name = "host", default = "localhost".to_string(), name_clap_long = "host", name_clap_short = 'o')]
     pub host: String,

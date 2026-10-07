@@ -603,8 +603,9 @@ fn cmp12_file_template_resolved_by_env_injection() {
 fn cmp13_clap_args_override_file_config() {
     use std::ffi::OsString;
 
-    #[derive(Debug, confers::ConfigClap)]
+    // 字段仅经 ConfigClap 生成的命令行面消费，用例断言解析结果而非读字段。
     #[allow(dead_code)]
+    #[derive(Debug, confers::ConfigClap)]
     struct CliCfg {
         #[config(name = "host", name_clap_long = "host")]
         pub host: String,

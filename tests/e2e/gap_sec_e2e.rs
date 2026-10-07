@@ -315,8 +315,9 @@ fn gs105_weak_all_zero_key_rejected() {
     )
     .to_envelope_string();
 
+    // field exists for the derive; the test asserts on load() failing
+    #[allow(dead_code)]
     #[derive(Debug, Config, serde::Deserialize)]
-    #[allow(dead_code)] // field exists for the derive; the test asserts on load() failing
     struct Probe {
         #[config(encrypt = "xchacha20")]
         api_key: String,
@@ -362,7 +363,6 @@ fn gs100_encrypt_field_wrong_master_key_fails() {
     .to_envelope_string();
 
     #[derive(Debug, Config, serde::Deserialize)]
-    #[allow(dead_code)] // field exists for the derive; the test asserts on load() failing
     struct Probe {
         #[config(encrypt = "xchacha20")]
         api_key: String,

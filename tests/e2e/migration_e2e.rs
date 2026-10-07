@@ -33,9 +33,10 @@ impl Versioned for CurrentConfigV4 {
 }
 
 /// `ConfigMigration` derive:version 属性透传(10)。
+// 字段仅经 derive 生成物使用(同 tests/core/derive.rs 约定)。
+#[allow(dead_code)]
 #[derive(Debug, confers::ConfigMigration)]
 #[config(version = 7)]
-#[allow(dead_code)] // 字段仅经 derive 生成物使用(同 tests/core/derive.rs 约定)。
 struct E2eDerivedConfig {
     pub name: String,
 }

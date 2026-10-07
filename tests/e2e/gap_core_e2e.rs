@@ -489,8 +489,9 @@ fn gs050_empty_config_boundary() {
     let ok: AllOption = config::<AllOption>().build().unwrap();
     assert_eq!(ok.host, None);
 
+    // 字段由反序列化填充，用例只断言构建结果
+    #[allow(dead_code)]
     #[derive(serde::Deserialize, Default)]
-    #[allow(dead_code)] // 字段由反序列化填充，用例只断言构建结果
     struct AllRequired {
         host: String,
     }
@@ -763,8 +764,9 @@ async fn gs489_provider_ext_typed_reads() {
 // --- 490: typed deserialization of wrong value errors instead of panicking ---
 #[test]
 fn gs490_get_typed_wrong_type_errors() {
+    // 字段由反序列化填充，用例只断言构建结果
+    #[allow(dead_code)]
     #[derive(serde::Deserialize, Default)]
-    #[allow(dead_code)] // 字段由反序列化填充，用例只断言构建结果
     struct Cfg {
         port: u16,
     }
@@ -1183,8 +1185,9 @@ fn gs517_nonfinite_float_placeholder_semantics() {
         serde_json::json!("NaN"),
         "NaN must be a string placeholder, not null"
     );
+    // 字段由反序列化填充，用例只断言构建结果
+    #[allow(dead_code)]
     #[derive(serde::Deserialize, Default)]
-    #[allow(dead_code)] // 字段由反序列化填充，用例只断言构建结果
     struct Cfg {
         ratio: f64,
     }
