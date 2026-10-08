@@ -67,9 +67,9 @@ docker-compose.yml
 security-results/
 
 # Specmark
-# specmark:活动变更工作区可丢弃,归档与主 specs 入库可追溯
-specmark/changes/
-specmark/.locks/
+# specmark 全目录为工作流产物，禁止入库（含 archive/ 与主 specs/）
+specmark/
+**/specmark/
 
 # AI agent guidelines (kept local only)
 AGENTS.md
