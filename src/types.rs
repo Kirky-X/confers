@@ -17,9 +17,8 @@ use std::time::Duration;
 #[cfg(feature = "json")]
 use crate::i18n::{t_simple, tr_args};
 
-// MergeStrategy is now imported directly from crate::merger.
-// This re-export was removed to fix a reverse dependency (value -> merger violates layering).
-// Users should import MergeStrategy from crate::merger::MergeStrategy.
+// MergeStrategy 由使用方从 crate::merger::MergeStrategy 直接引入，value 层不 re-export：
+// value -> merger 的反向依赖会破坏分层。
 
 /// Source identifier for tracking where a value came from.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
