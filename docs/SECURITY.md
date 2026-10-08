@@ -76,8 +76,8 @@ cargo audit --fetch-index
 
 | 方式 | 联系渠道 | 响应时间 |
 |:-----|:---------|:---------|
-| **邮件** | Kirky-X@outlook.com | 48 小时内 |
-| **GitHub 安全通告** | [通过 GH Advisory 报告](https://github.com/Kirky-X/confers/security/advisories/new) | 48 小时内 |
+| **GitHub 安全通告（首选）** | [通过 GH Advisory 报告](https://github.com/Kirky-X/confers/security/advisories/new) | 48 小时内 |
+| **邮件（备选）** | Kirky-X@outlook.com | 48 小时内 |
 
 ### 报告内容
 
