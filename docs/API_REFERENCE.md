@@ -1635,7 +1635,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 密钥管理安全
 
-⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key 特性）](#密钥管理key-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 ### 热重载配置
 
@@ -1753,7 +1753,7 @@ let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 
 **如何轮换密钥：**
 
-使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key 特性）](#密钥管理key-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 **⚠️ 安全提示：**
 
