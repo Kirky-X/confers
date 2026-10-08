@@ -199,10 +199,12 @@ tokio::spawn({
 
 ### 内置缓存
 
+已解析配置值的内存缓存是 `InMemoryConfig` 的内部实现（`moka` 提供 future/sync 双模式缓存），不经 `LoaderConfig` 暴露任何缓存配置项；`LoaderConfig` 只控制加载行为本身：
+
 ```rust
 use confers::loader::LoaderConfig;
 
-// LoaderConfig 暴露了 loader 使用的内存缓存策略
+// 仅加载行为配置：大小上限、允许目录、符号链接检查、格式探测、错误脱敏（无缓存字段）
 let loader_config = LoaderConfig::default();
 ```
 

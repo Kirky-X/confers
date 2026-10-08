@@ -310,6 +310,56 @@ mod tests {
             "a panicked task must not report a clean shutdown"
         );
     }
+
+    /// running_flag() hands out the same flag the guard itself toggles, so a
+    /// shareable stop signal stays in sync with the guard's state.
+    #[test]
+    fn running_flag_shares_the_guard_state() {
+        let guard = WatcherGuard::new();
+        let flag = Arc::clone(guard.running_flag());
+        assert!(!flag.load(Ordering::SeqCst));
+
+        guard.start();
+        assert!(flag.load(Ordering::SeqCst));
+
+        flag.store(false, Ordering::SeqCst);
+        assert!(!guard.is_running());
+    }
+
+    /// Default produces a guard in the same stopped state as new().
+    #[test]
+    fn default_guard_is_stopped() {
+        let guard = WatcherGuard::default();
+        assert!(!guard.is_running());
+    }
+
+    /// Dropping a guard aborts the registered task: without shutdown the
+    /// cancellation is best-effort, but a still-sleeping task must not be
+    /// leaked past the guard's lifetime.
+    #[tokio::test]
+    async fn drop_aborts_the_registered_task() {
+        let (mut gone_tx, gone_rx) = tokio::sync::oneshot::channel::<()>();
+        let guard = WatcherGuard::with_task(
+            Arc::new(AtomicBool::new(true)),
+            tokio::spawn(async move {
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(30)) => {
+                        let _ = gone_tx.send(());
+                    }
+                    _ = gone_tx.closed() => {}
+                }
+            }),
+        );
+
+        drop(guard);
+        // A completed sleep would deliver Ok(()); an aborted task drops the
+        // sender without sending, so gone_rx resolves to Err.
+        match tokio::time::timeout(Duration::from_secs(2), gone_rx).await {
+            Ok(Err(_aborted)) => {}
+            Ok(Ok(())) => panic!("task ran to completion; guard drop did not abort it"),
+            Err(_elapsed) => panic!("task still running 2s after the guard was dropped"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

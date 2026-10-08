@@ -216,6 +216,7 @@ proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }
+log = { workspace = true, features = ["std"] }
 async-nats = { workspace = true }  # for test_nats_bus_options
 
 [profile.release]

@@ -16,7 +16,8 @@ use async_trait::async_trait;
 use confers::error::ConfigError;
 use confers::interface::ConfigProvider;
 use confers::watcher::{
-    HealthStatus, ProgressiveReloader, ReloadHealthCheck, ReloadOutcome, ReloadStrategy,
+    HealthStatus, PreCommitCheck, ProgressiveReloader, ProgressiveReloaderBuilder,
+    ReloadHealthCheck, ReloadOutcome, ReloadStrategy,
 };
 
 // Real health check that validates configuration values
@@ -124,6 +125,16 @@ impl ReloadHealthCheck for AlwaysDegradedCheck {
         HealthStatus::Degraded {
             reason: self.reason.clone(),
         }
+    }
+}
+
+// Pre-commit gate that rejects every candidate (for testing hard rejection)
+struct RejectAllCheck;
+
+#[async_trait]
+impl PreCommitCheck<common::TestConfig> for RejectAllCheck {
+    async fn check(&self, _candidate: &common::TestConfig) -> Result<(), String> {
+        Err("rejected by pre-commit check".to_string())
     }
 }
 
@@ -373,6 +384,16 @@ fn test_with_dependencies() {
     assert_eq!(reloader.current().timeout_ms, 100);
 }
 
+// Test: the builder's Default impl produces a working builder
+#[test]
+fn test_progressive_reloader_builder_default() {
+    let reloader = ProgressiveReloaderBuilder::default()
+        .initial(Arc::new(common::TestConfig::new(100, 10)))
+        .build();
+
+    assert_eq!(reloader.current().timeout_ms, 100);
+}
+
 // Test: Linear strategy commits after all steps
 #[tokio::test]
 async fn test_linear_reload_commits_after_steps() {
@@ -391,6 +412,79 @@ async fn test_linear_reload_commits_after_steps() {
 
     assert!(matches!(result, Ok(ReloadOutcome::Committed)));
     assert_eq!(reloader.current().timeout_ms, 200);
+}
+
+// Test: Linear strategy rolls back when a health check reports critical
+#[tokio::test]
+async fn test_linear_reload_rollback_on_critical() {
+    let health_check = Arc::new(AlwaysCriticalCheck::new("config validation failed"));
+    let reloader = ProgressiveReloader::builder()
+        .initial(Arc::new(common::TestConfig::new(100, 10)))
+        .strategy(ReloadStrategy::Linear {
+            steps: 2,
+            interval: Duration::from_millis(20),
+        })
+        .health_check(health_check)
+        .build();
+
+    let new_config = Arc::new(common::TestConfig::new(200, 20));
+    let provider = Arc::new(common::TestConfig::new(100, 10));
+
+    let result = reloader.begin_reload(new_config.clone(), provider).await;
+
+    assert!(matches!(result, Err(ConfigError::ReloadRolledBack { .. })));
+    assert_eq!(
+        reloader.current().timeout_ms,
+        100,
+        "current config must stay untouched after a linear rollback"
+    );
+}
+
+// Test: Linear strategy warns but continues on degraded health
+#[tokio::test]
+async fn test_linear_reload_continues_on_degraded() {
+    let health_check = Arc::new(AlwaysDegradedCheck::new("high latency"));
+    let reloader = ProgressiveReloader::builder()
+        .initial(Arc::new(common::TestConfig::new(100, 10)))
+        .strategy(ReloadStrategy::Linear {
+            steps: 2,
+            interval: Duration::from_millis(20),
+        })
+        .health_check(health_check)
+        .build();
+
+    let new_config = Arc::new(common::TestConfig::new(200, 20));
+    let provider = Arc::new(common::TestConfig::new(100, 10));
+
+    let result = reloader.begin_reload(new_config.clone(), provider).await;
+
+    assert!(matches!(result, Ok(ReloadOutcome::Committed)));
+    assert_eq!(reloader.current().timeout_ms, 200);
+}
+
+// Test: Pre-commit check gates the reload — a hard rejection keeps the
+// current configuration and reports ReloadRejected
+#[tokio::test]
+async fn test_pre_commit_check_rejects_reload() {
+    let reloader = ProgressiveReloader::builder()
+        .initial(Arc::new(common::TestConfig::new(100, 10)))
+        .pre_commit_check(Arc::new(RejectAllCheck))
+        .build();
+
+    let new_config = Arc::new(common::TestConfig::new(200, 20));
+    let provider = Arc::new(common::TestConfig::new(100, 10));
+
+    let result = reloader.begin_reload(new_config.clone(), provider).await;
+
+    assert!(
+        matches!(result, Err(ConfigError::ReloadRejected { .. })),
+        "a failed pre-commit check must reject the reload outright, got {result:?}"
+    );
+    assert_eq!(
+        reloader.current().timeout_ms,
+        100,
+        "current config must stay untouched after rejection"
+    );
 }
 
 // Test: ConfigProvider implementation works correctly

@@ -81,14 +81,14 @@ let chain = SourceChainBuilder::new()
 
 ## ✅ 校验
 
-启用 `validation` 特性，并在配置结构体上派生 `Validate`（来自 `garde`）：
+启用 `validation` 特性，并在配置结构体上派生 `Validate`（来自 `garde`），以 `#[config(validate_helper)]` 生成 `confers_validate()` 辅助方法：
 
 ```rust
 use confers::Config;
 use garde::Validate;
 
 #[derive(Config, Validate)]
-#[config(validate)]
+#[config(validate_helper)]
 struct ServerConfig {
     #[garde(email)]
     pub admin_email: String,
@@ -96,6 +96,8 @@ struct ServerConfig {
     pub port: u16,
 }
 ```
+
+校验不会自动执行：须在 `build()` 之后显式调用 `config.confers_validate()?`；`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
 
 ## 🔐 加密
 

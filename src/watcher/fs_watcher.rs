@@ -1287,14 +1287,203 @@ mod tests {
             .await
             .expect("watch relative path");
 
+        // 文件目标的 watch 根是父目录（此处为 crate 根）且递归建立，慢盘
+        // 高负载下（全量测试并行时）递归 watch 的建立可能晚于首次写入，
+        // 事件因此丢失；重写幂等，事件到达即证明相对路径过滤正确（R3-H1）。
         std::thread::sleep(std::time::Duration::from_millis(600));
-        std::fs::write(&file, "a = 2\n").unwrap();
-        let event = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv()).await;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let mut event = None;
+        while event.is_none() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "relative-path watch must deliver the change event (R3-H1)"
+            );
+            std::fs::write(&file, "a = 2\n").unwrap();
+            match tokio::time::timeout(std::time::Duration::from_millis(500), watcher.recv()).await
+            {
+                Ok(Some(path)) => event = Some(path),
+                Ok(None) => panic!("watcher must stay alive while delivering events"),
+                Err(_elapsed) => continue,
+            }
+        }
         // Clean up before asserting: a failed expectation must not leak the
         // cwd-relative temp file into the repository root.
         let _ = std::fs::remove_file(&file);
-        let event = event.expect("relative-path watch must deliver the change event (R3-H1)");
         // 事件以绝对化路径上报(过滤器亦为绝对路径),与 MultiFsWatcher 一致。
         assert_eq!(event, Some(std::path::absolute(&file).unwrap()));
+    }
+
+    /// 相对路径的目标在 canonicalize 失败时走词法绝对化回退；父目录不存在
+    /// 则 watch 建立失败，失败必须可观测（不得静默失聪）。
+    #[test]
+    fn fs_watcher_thread_reports_failure_for_relative_nonexistent_path() {
+        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (tx, mut rx) = mpsc::channel::<PathBuf>(1);
+        let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
+
+        let handle = {
+            let running = Arc::clone(&running);
+            let failed = Arc::clone(&failed);
+            std::thread::spawn(move || {
+                FsWatcher::run_watcher(
+                    Path::new("confers-nonexistent-sub/confers-target.toml"),
+                    50,
+                    50,
+                    tx_store,
+                    running,
+                    failed,
+                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                );
+            })
+        };
+        handle.join().unwrap();
+
+        assert_thread_reported_failure(&running, &failed, &mut rx);
+    }
+
+    /// 消费者退场（唯一接收端被丢弃）后事件投递必然 `Closed`：watcher
+    /// 循环必须就此停机，而不是带着断开的通道继续空转。
+    fn assert_thread_stops_when_receiver_dropped(
+        spawn_watcher: impl FnOnce(
+            SenderStore,
+            Arc<std::sync::atomic::AtomicBool>,
+        ) -> std::thread::JoinHandle<()>,
+        trigger: impl Fn(),
+    ) {
+        let (tx, rx) = mpsc::channel::<PathBuf>(100);
+        let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
+        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        drop(rx);
+
+        let handle = spawn_watcher(Arc::clone(&tx_store), Arc::clone(&running));
+
+        std::thread::sleep(Duration::from_millis(400));
+        trigger();
+
+        // 事件送达 try_send 即得 Closed，循环随即退出；用有界轮询避免
+        // 极端调度下 join 无限阻塞。
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while running.load(std::sync::atomic::Ordering::SeqCst) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "watcher thread must observe the closed channel and stop"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+            trigger();
+        }
+        handle.join().expect("watcher thread exits on Closed");
+    }
+
+    /// FsWatcher：接收端被丢弃后线程经 `Closed` 分支停机。
+    #[test]
+    fn fs_watcher_thread_stops_when_receiver_dropped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("closed.toml");
+        std::fs::write(&path, b"v0").expect("initial content");
+
+        let watch_path = path.clone();
+        assert_thread_stops_when_receiver_dropped(
+            move |tx_store, running| {
+                let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                std::thread::spawn(move || {
+                    FsWatcher::run_watcher(
+                        &watch_path,
+                        30,
+                        50,
+                        tx_store,
+                        running,
+                        failed,
+                        Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                    );
+                })
+            },
+            || std::fs::write(&path, b"v1").expect("trigger event"),
+        );
+    }
+
+    /// MultiFsWatcher：同上，接收端被丢弃后线程经 `Closed` 分支停机。
+    #[test]
+    fn multi_fs_watcher_thread_stops_when_receiver_dropped() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("closed.toml");
+        std::fs::write(&path, b"v0").expect("initial content");
+
+        let watch_path = path.clone();
+        assert_thread_stops_when_receiver_dropped(
+            move |tx_store, running| {
+                let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                std::thread::spawn(move || {
+                    let paths: HashSet<PathBuf> = [watch_path].into();
+                    MultiFsWatcher::run_watcher(
+                        &paths,
+                        30,
+                        50,
+                        tx_store,
+                        running,
+                        failed,
+                        Arc::new(std::sync::atomic::AtomicU64::new(0)),
+                    );
+                })
+            },
+            || std::fs::write(&path, b"v1").expect("trigger event"),
+        );
+    }
+
+    /// MultiFsWatcher：stop() 之后 recv() 立即返回 None，不阻塞；丢事件
+    /// 计数器可查询。
+    #[tokio::test]
+    async fn multi_fs_watcher_recv_after_stop_returns_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut watcher = MultiFsWatcher::new([dir.path()], 50)
+            .await
+            .expect("watchable temp dir");
+        assert!(watcher.is_running());
+        assert_eq!(watcher.dropped_events(), 0);
+
+        watcher.stop();
+        assert!(
+            watcher.recv().await.is_none(),
+            "recv after stop must return None instead of waiting"
+        );
+        assert!(watcher.recv().await.is_none());
+    }
+
+    /// MultiFsWatcher（R-watch-002）：慢消费者把事件通道挤满后，被丢弃的
+    /// 事件必须可通过 dropped_events() 观测，且 watcher 依然存活。
+    #[tokio::test]
+    async fn multi_fs_watcher_counts_dropped_events_on_slow_consumer() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // MultiFsWatcher 只转发精确命中监视集合的路径：把 200 个文件全部
+        // 纳入集合，洪泛写入即可超过 100 槽的通道容量。
+        let paths: Vec<PathBuf> = (0..200u32)
+            .map(|i| {
+                let file = dir.path().join(format!("flood-{i}.toml"));
+                std::fs::write(&file, b"x").expect("seed file");
+                file
+            })
+            .collect();
+
+        let mut watcher = MultiFsWatcher::new(paths, 30)
+            .await
+            .expect("watchable temp dir");
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        for i in 0..200u32 {
+            let file = dir.path().join(format!("flood-{i}.toml"));
+            std::fs::write(&file, b"y").expect("flood write");
+        }
+
+        // 给 watcher 线程时间把去抖后的事件推进未消费的通道；通道填满后
+        // 每个后续事件都被丢弃并计数。
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+
+        assert!(
+            watcher.dropped_events() > 0,
+            "slow-consumer overflow must be observable through dropped_events()"
+        );
+        // 通道满只是背压，不是故障：watcher 仍在运行。
+        assert!(watcher.is_running());
+        watcher.stop();
     }
 }

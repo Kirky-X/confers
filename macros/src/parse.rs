@@ -17,12 +17,14 @@ const MAX_NAME_LENGTH: usize = 256;
 /// Parsed attributes from the struct level.
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(config), supports(struct_named))]
-#[allow(dead_code)]
 pub struct StructAttrs {
     /// The struct identifier
     pub ident: Ident,
 
     /// Whether to enable validation
+    // Parse-surface only: accepted so `#[config(validate)]` keeps compiling;
+    // behavior moved to `validate_helper` (documented no-op).
+    #[allow(dead_code)]
     #[darling(default)]
     pub validate: bool,
 
@@ -39,10 +41,16 @@ pub struct StructAttrs {
     pub app_name: Option<String>,
 
     /// Whether to error on unknown CLI arguments
+    // Parse-surface only: parsed and stored, codegen deliberately does not
+    // read it (documented no-op; docs/CONFIG_MACRO_GUIDE.md).
+    #[allow(dead_code)]
     #[darling(default)]
     pub strict: bool,
 
     /// Whether to enable file watching
+    // Parse-surface only: parsed and stored, codegen deliberately does not
+    // read it (documented no-op; docs/CONFIG_MACRO_GUIDE.md).
+    #[allow(dead_code)]
     #[darling(default)]
     pub watch: bool,
 

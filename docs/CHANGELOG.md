@@ -102,7 +102,7 @@
 - 回滚路径三触发：当前批或已推进批实例 `rolled_back` 事件、健康 Critical 比例超 `failure_threshold`（逐轮评估，超阈立即中止，不等窗口耗尽）、committed 收齐超时——均发布 rollback 指令并将流量切回 baseline；空实例列表（服务发现失败）直接报错，绝不向零个已验证实例推送 100% 切流
 - 健康检查单次调用受 `poll_interval` 与窗口剩余的较小值约束（挂起的实现转 Degraded，不阻塞 rollout）
 - 新增 `MeshWeightPublisher` 服务网格适配层：rollout 进度 → baseline↔canary 流量权重线性下发（`with_mesh`），Envoy weighted clusters 与 Istio VirtualService merge-patch 配置样例及 Rust 适配骨架见 `docs/CANARY_ORCHESTRATION.md`
-- 本地多实例模拟：进程内多 `ProgressiveReloader` attach 同一 `InMemoryChangeStream` 的端到端测试（`orchestrates_in_process_reloaders_end_to_end`），19 个契约测试覆盖分批推进/回滚三路径（含已推进批次回归）/Degraded/重复与跨批事件去重/空列表 fail-loud/健康检查挂起/mesh 失败两路径/mesh 权重序列
+- 本地多实例模拟：进程内多 `ProgressiveReloader` attach 同一 `InMemoryChangeStream` 的端到端测试（`orchestrates_in_process_reloaders_end_to_end`），17 个契约测试覆盖分批推进/回滚三路径（含已推进批次回归）/Degraded/重复与跨批事件去重/空列表 fail-loud/健康检查挂起/mesh 失败两路径/mesh 权重序列
 
 ### JSON Schema → Rust 反向生成
 
@@ -133,7 +133,7 @@
 
 仅版本号发布（`Cargo.toml`/`Cargo.lock` bump）；包含 rc.4 之后的维护性变更：
 
-- **i18n**：自研 i18n 门面（`src/i18n` catalog/locale，零外部依赖），为 `ConfigError` 实现 `LocalizedMsg` 并补全变体守卫测试
+- **i18n**：自研 i18n 门面（`src/i18n` catalog/locale，基于 `fluent-bundle`/`unic-langid`），为 `ConfigError` 实现 `LocalizedMsg` 并补全变体守卫测试
 - **特性**：`keyring` / `cloud-kms` 隐含 `encryption`，引入 `async-core` 聚合谓词
 - **工程**：接入 pre-commit 门禁与 detect-secrets 基线；typos 词表白名单；为 path-only 依赖补全 `version` 字段
 - **测试**：NATS 集成测试名加纳秒熵防跨进程撞车；示例/文档/测试残留 `AppConfig` 衍生名统一为 `Confers` 前缀

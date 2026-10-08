@@ -86,3 +86,4 @@ reviews/
 
 # codenexus 工具索引缓存
 .codenexus/
+fuzz/corpus/

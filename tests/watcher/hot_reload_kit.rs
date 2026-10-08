@@ -20,9 +20,38 @@ use serial_test::serial;
 use tempfile::TempDir;
 
 use confers::watcher::{
-    FsWatcher, HotReloader, ProgressiveReloader, ReloadOutcome, ReloadStrategy,
+    FsWatcher, HotReloader, ProgressiveReloader, ReloadOutcome, ReloadStrategy, ReloadValidator,
 };
 use confers::{AnnotatedValue, ConfigError, ConfigProvider};
+
+/// 打开 error! 级日志的参数求值：`log` 宏在 `max_level` 低于该级别时直接
+/// 跳过参数构造，导致日志路径（含 reason 清洗）在测试中永远不被执行。
+/// 该安装是进程级全局槽，Once 幂等；空实现保持测试输出干净。
+fn ensure_error_logger() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        struct NullLogger;
+        impl log::Log for NullLogger {
+            fn enabled(&self, metadata: &log::Metadata) -> bool {
+                metadata.level() <= log::Level::Error
+            }
+            fn log(&self, _record: &log::Record) {}
+            fn flush(&self) {}
+        }
+        let _ = log::set_boxed_logger(Box::new(NullLogger));
+        log::set_max_level(log::LevelFilter::Error);
+    });
+}
+
+/// 始终拒绝候选配置的校验器：验证被拒 reload 的可观测性。
+struct RejectAllValidator;
+
+#[async_trait::async_trait]
+impl ReloadValidator<AppConfig> for RejectAllValidator {
+    async fn validate(&self, _candidate: &AppConfig) -> Result<(), String> {
+        Err("candidate rejected by validator".to_string())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 struct AppConfig {
@@ -148,6 +177,7 @@ async fn test_hot_reloader_file_change_triggers_reload_and_broadcast() {
 #[tokio::test]
 #[serial]
 async fn test_hot_reloader_counts_failed_reloads_and_keeps_current() {
+    ensure_error_logger();
     let tmp = TempDir::new().expect("tempdir");
     let cfg_path = tmp.path().join("app.conf");
     std::fs::write(&cfg_path, "value=1").expect("write initial config");
@@ -197,6 +227,7 @@ async fn test_hot_reloader_loader_panic_is_counted_and_loop_survives() {
     // A panicking loader must not kill the event loop silently: the failure
     // counter increments (the panic surfaces as a JoinError from the
     // blocking pool), and the loop keeps serving later events.
+    ensure_error_logger();
     let tmp = TempDir::new().expect("tempdir");
     let cfg_path = tmp.path().join("app.conf");
     std::fs::write(&cfg_path, "value=1").expect("write initial config");
@@ -242,4 +273,54 @@ async fn test_hot_reloader_loader_panic_is_counted_and_loop_survives() {
         .await
         .expect("shutdown returns Ok");
     assert!(completed, "loop exits cleanly on shutdown");
+}
+
+/// A reload rejected by the reloader's validator must not be silent: the
+/// failure counter increments, the log path (reason flattening) runs, and
+/// the current configuration stays untouched.
+#[tokio::test]
+#[serial]
+async fn test_hot_reloader_rejected_reload_is_counted_and_keeps_current() {
+    ensure_error_logger();
+    let tmp = TempDir::new().expect("tempdir");
+    let cfg_path = tmp.path().join("app.conf");
+    std::fs::write(&cfg_path, "value=1").expect("write initial config");
+
+    let watcher = FsWatcher::new(&cfg_path, 50).await.expect("watcher starts");
+    // 与既有 watch e2e 的 settle() 惯例一致：等待 inotify watch 建立。
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let reloader =
+        ProgressiveReloader::new(Arc::new(AppConfig { value: 1 }), ReloadStrategy::Immediate)
+            .with_validator(Arc::new(RejectAllValidator))
+            // 校验失败默认只记日志并照常提交（兼容行为）；打开回滚才能让
+            // 被拒的 reload 真正计入失败并保持当前配置不变。
+            .with_rollback_on_validation_failure(true);
+    let loader: confers::watcher::HotReloadLoader<AppConfig> =
+        Arc::new(|| Ok((Arc::new(AppConfig { value: 2 }), Arc::new(EmptyProvider))));
+    let kit = HotReloader::spawn(reloader, watcher, loader);
+
+    std::fs::write(&cfg_path, "value=2").expect("trigger a file event");
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if kit.reload_failures() >= 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("a rejected reload must surface in the failure counter");
+
+    assert_eq!(
+        kit.current().value,
+        1,
+        "current config stays untouched when the reloader rejects the candidate"
+    );
+
+    let completed = kit
+        .shutdown(Duration::from_secs(2))
+        .await
+        .expect("shutdown returns Ok");
+    assert!(completed);
 }

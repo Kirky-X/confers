@@ -84,7 +84,7 @@ graph TB
 confers/
 ├── src/            # 库本体（门面模块 + impl_ 内部实现）
 │   ├── lib.rs      # 模块声明与重导出（含特性门控）
-│   ├── config.rs / loader.rs / merger.rs / format.rs / types.rs
+│   ├── config.rs / loader.rs / types.rs（merger 与 format 为目录模块：merger/、format/）
 │   ├── interface.rs / error.rs / lifecycle.rs
 │   ├── impl_/      # 上述门面的内部实现
 │   └── <特性模块>/ # validator、watcher、secret、remote、bus、cli……
@@ -198,7 +198,7 @@ graph TD
 性能设计目标：配置读取路径接近零开销，重载路径可控且可观测。
 
 1. **无锁动态读取**：`dynamic` 模块基于 `arc-swap` 实现快照发布，读者无锁、写者原子换入，`DynamicField::get()` 无争用。
-2. **并发安全容器**：`feature-toggle` 使用 `dashmap` 分片锁；加载器缓存策略由 `LoaderConfig` 暴露（依赖 `moka` 提供 future/sync 双模式缓存）。
+2. **并发安全容器**：`feature-toggle` 使用 `dashmap` 分片锁；配置内存缓存是 `InMemoryConfig` 的内部实现（依赖 `moka` 提供 future/sync 双模式缓存），不经 `LoaderConfig` 暴露。
 3. **高效数据结构**：`ConfigValue` 树使用 `IndexMap` 保持键序（保证合并与输出的确定性）。
 4. **解析性能**：TOML 解析启用 `preserve_order`；格式探测支持从内容直接判断，避免重复读盘（大文件建议一次读入后交给 `parse_content`）。
 5. **热路径去抖**：`watcher::AdaptiveDebouncer` 自适应调节去抖窗口，避免编辑器连续写入触发的重载风暴。

@@ -439,7 +439,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(
-    validate,                                    // 启用校验
+    validate_helper,                             // 生成 confers_validate() 手动校验辅助方法
     env_prefix = "APP_",                         // 环境变量前缀
     app_name = "myapp",                         // 应用名称
     version = 1,                                 // 配置版本

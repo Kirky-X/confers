@@ -19,7 +19,7 @@ use confers::remote::{HttpPolledSourceBuilder, PolledSource};
 
 /// Unique per-run KV prefix: parallel tests recurse-delete only their own
 /// subtree, so a cleanup can never wipe another test's keys mid-poll.
-#[cfg(feature = "consul")]
+#[cfg(any(feature = "consul", feature = "etcd"))]
 fn unique_prefix(base: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -568,13 +568,16 @@ async fn test_etcd_source_parse_config() {
     use confers::remote::EtcdSourceBuilder;
 
     // Write test config to Etcd using HTTP API directly
+    use base64::Engine;
     let client = reqwest::Client::new();
 
-    // Write host key
+    // Write host key under a unique per-run prefix
+    let prefix = unique_prefix("test-config");
+    let host_key = format!("{prefix}/app/host");
     let host_resp = client
         .post("http://127.0.0.1:2379/v3/kv/put")
         .json(&serde_json::json!({
-            "key": "dGVzdC1jb25maWcvYXBwL2hvc3Q=",  // "test-config/app/host"
+            "key": base64::engine::general_purpose::STANDARD.encode(host_key.as_bytes()),
             "value": "bG9jYWxob3N0"  // "localhost"
         }))
         .send()
@@ -588,7 +591,7 @@ async fn test_etcd_source_parse_config() {
     // Now read it back using our source
     let source = EtcdSourceBuilder::new()
         .endpoint("127.0.0.1:2379")
-        .prefix("test-config")
+        .prefix(&prefix)
         .build()
         .await
         .expect("Failed to build Etcd source");
@@ -605,14 +608,20 @@ async fn test_etcd_source_parse_config() {
         }
     }
 
-    // Cleanup
-    let _ = client
-        .post("http://127.0.0.1:2379/v3/kv/del")
+    // Cleanup - delete this test's key; failures must surface because a
+    // silently leftover key pollutes later assertions on the shared instance.
+    let cleanup_resp = client
+        .post("http://127.0.0.1:2379/v3/kv/deleterange")
         .json(&serde_json::json!({
-            "key": "dGVzdC1jb25maWc="
+            "key": base64::engine::general_purpose::STANDARD.encode(host_key.as_bytes()),
         }))
         .send()
-        .await;
+        .await
+        .expect("etcd cleanup request must reach the server");
+    assert!(
+        cleanup_resp.status().is_success(),
+        "etcd cleanup must succeed"
+    );
 }
 
 // ========================================

@@ -384,6 +384,9 @@ Options:
       --env-file <ENV_FILE>  Additional environment file
       --allow-absolute-paths Allow absolute paths for config files
       --fields <FIELDS>      Filter output to specified fields (comma-separated dot-paths)
+      --lang <LANG>          UI language as a BCP-47 tag (`zh`/`en`; other well-formed
+                             tags fall back to the English catalog). Overrides
+                             CONFERS_LANG and locale detection
   -h, --help                 Print help
   -V, --version              Print version
 ```
@@ -641,7 +644,7 @@ let orchestrator = CanaryOrchestrator::new(
     health,
 );
 let outcome = orchestrator.run().await?;
-// RolloutOutcome::Completed { batches, instances } 或 Aborted { batch, reason, directive }
+// RolloutOutcome::Completed { batches, instances } 或 Aborted { batch, reason, mesh_rolled_back_failed }
 # Ok(())
 # }
 ```

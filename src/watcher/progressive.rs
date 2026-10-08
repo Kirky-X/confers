@@ -758,6 +758,14 @@ mod tests {
         }
     }
 
+    /// MockProvider 提供的是空源：无键可读，键列表恒为空。
+    #[test]
+    fn mock_provider_serves_an_empty_source() {
+        let provider = MockProvider;
+        assert!(provider.get_raw("any.key").is_none());
+        assert!(provider.keys().is_empty());
+    }
+
     #[test]
     fn test_current_returns_initial() {
         let reloader = ProgressiveReloader::new(Arc::new(42i32), ReloadStrategy::Immediate);

@@ -47,6 +47,8 @@ error-reload-precommit-validation-failed = pre-commit validation: { $reason }
 error-reload-linear-step-rolled-back = linear step { $step }: { $reason }
 error-reload-linear-step-failed = Linear step { $step } failed: { $reason }
 
+error-interpolation-unterminated-ref = unterminated variable reference
+
 error-path-empty = file path must not be empty
 error-path-cannot-resolve = Cannot resolve file path
 error-path-access-denied = Access to { $path } is not allowed

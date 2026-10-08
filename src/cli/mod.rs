@@ -17,7 +17,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use crate::AnnotatedValue;
 use crate::ConfigBuilder;
 use crate::ConfigResult;
-use crate::i18n::{tr, tr_args};
+use crate::i18n::{set_locale, tr, tr_args};
 
 const DEFAULT_SNAPSHOT_DISPLAY_LIMIT: usize = 10;
 
@@ -218,6 +218,11 @@ struct Cli {
     #[arg(long, global = true)]
     fields: Option<String>,
 
+    /// UI language as a BCP-47 tag (`zh`/`en`; other well-formed tags fall
+    /// back to the English catalog). Overrides CONFERS_LANG and locale detection.
+    #[arg(long, global = true, value_name = "LANG")]
+    lang: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -382,6 +387,44 @@ enum SnapshotCommands {
     },
 }
 
+/// Pre-scan argv for `--lang <LANG>` / `--lang=<LANG>` and install the locale
+/// override before [`Cli::parse()`] renders any clap text.
+///
+/// clap builds help and usage/error strings during the parse itself, so
+/// applying the parsed `--lang` value afterwards would leave `--help` output
+/// and argument errors in the auto-detected language. The pre-scan is
+/// best-effort (malformed values are ignored here); the declared `--lang`
+/// argument still applies and validates authoritatively after the parse.
+fn preset_lang_from_argv() {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if let Some(lang) = find_lang_preset(&args) {
+        let _ = set_locale(&lang);
+    }
+}
+
+/// Extract the first `--lang` preset from raw arguments.
+///
+/// Accepts both `--lang <value>` and `--lang=<value>`; a value that is empty
+/// or starts with `-` is not a language and the scan continues, leaving the
+/// real usage error to clap.
+fn find_lang_preset(args: &[std::ffi::OsString]) -> Option<String> {
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        let arg = arg.to_string_lossy();
+        let value = if let Some(v) = arg.strip_prefix("--lang=") {
+            Some(v.to_string())
+        } else if arg == "--lang" {
+            iter.next().map(|v| v.to_string_lossy().into_owned())
+        } else {
+            None
+        };
+        if let Some(lang) = value.filter(|v| !v.is_empty() && !v.starts_with('-')) {
+            return Some(lang);
+        }
+    }
+    None
+}
+
 /// Run the CLI entry point
 ///
 /// Generic over the config type `T` for type-safe validation and schema
@@ -399,7 +442,16 @@ where
     // Localize before anything user-facing (including clap help/about) is
     // produced; idempotent and safe to call repeatedly.
     crate::i18n::init();
+    // `--lang` must be in effect before the parse: clap renders help and
+    // argument-error text while parsing (see [`preset_lang_from_argv`]).
+    preset_lang_from_argv();
     let cli = Cli::parse();
+
+    // Authoritative `--lang` application. Unlike the pre-parse preset this
+    // fails loudly on a malformed value instead of silently ignoring it.
+    if let Some(lang) = &cli.lang {
+        set_locale(lang).map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
 
     if let Some(env_file) = &cli.env_file {
         load_env_file(env_file)?;
@@ -2299,7 +2351,7 @@ pub fn agent_knowledge_json() -> serde_json::Value {
             {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
             {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
         ],
-        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>"],
+        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>", "--lang <bcp47> (zh/en; others fall back to en)"],
         "exit_codes": {
             "0": "success (or doctor: healthy)",
             "1": "configuration error / doctor has warnings",
@@ -2408,6 +2460,50 @@ fn cmd_doctor(
 mod tests {
     #![allow(clippy::write_with_newline)]
     use super::*;
+
+    fn os_args(args: &[&str]) -> Vec<std::ffi::OsString> {
+        args.iter().map(std::ffi::OsString::from).collect()
+    }
+
+    #[test]
+    fn test_find_lang_preset_space_form() {
+        assert_eq!(
+            find_lang_preset(&os_args(&["--lang", "zh"])),
+            Some("zh".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_lang_preset_equals_form() {
+        assert_eq!(
+            find_lang_preset(&os_args(&["--lang=xx"])),
+            Some("xx".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_lang_preset_after_subcommand() {
+        // `--lang` is global: it may appear after the subcommand.
+        assert_eq!(
+            find_lang_preset(&os_args(&[
+                "inspect", "--config", "a.toml", "--lang", "zh-CN"
+            ])),
+            Some("zh-CN".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_lang_preset_absent_or_flag_value() {
+        assert_eq!(find_lang_preset(&os_args(&["inspect"])), None);
+        // No value supplied.
+        assert_eq!(find_lang_preset(&os_args(&["--lang"])), None);
+        // A following flag is not a language value.
+        assert_eq!(
+            find_lang_preset(&os_args(&["--lang", "--config", "a.toml"])),
+            None
+        );
+        assert_eq!(find_lang_preset(&os_args(&["--lang="])), None);
+    }
 
     #[test]
     fn test_format_location_none() {

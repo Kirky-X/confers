@@ -43,6 +43,8 @@ error-reload-precommit-validation-failed = 提交前校验失败: { $reason }
 error-reload-linear-step-rolled-back = 线性步骤 { $step }: { $reason }
 error-reload-linear-step-failed = 线性步骤 { $step } 失败: { $reason }
 
+error-interpolation-unterminated-ref = 变量引用未闭合
+
 error-path-empty = 文件路径不能为空
 error-path-cannot-resolve = 无法解析文件路径
 error-path-access-denied = 不允许访问 { $path }

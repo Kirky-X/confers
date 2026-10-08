@@ -79,7 +79,7 @@
 </tr>
 <tr>
 <td width="50%" style="vertical-align:top; padding: 12px">🧾 <b>审计日志</b><br><span style="color:#64748B">HMAC 签名保护完整性，敏感字段自动脱敏</span></td>
-<td width="50%" style="vertical-align:top; padding: 12px">🧰 <b>CLI 诊断工具</b><br><span style="color:#64748B">inspect、validate、diff、export、snapshot、schema、doctor 等子命令</span></td>
+<td width="50%" style="vertical-align:top; padding: 12px">🧰 <b>CLI 诊断工具</b><br><span style="color:#64748B">inspect、validate、export、diff、snapshot、schema、get、docs、doctor 子命令</span></td>
 </tr>
 </table>
 
@@ -303,7 +303,7 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.6：单元测试 2487 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 770 个（`tests/`，64 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.6：单元测试 2396 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 771 个（`tests/`，65 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 
@@ -393,7 +393,7 @@ cargo fuzz run parser
 | 版本 | 日期 | 要点 |
 |------|------|------|
 | 0.6.0-rc.6 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
-| 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，零外部依赖）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
+| 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，基于 `fluent-bundle`/`unic-langid`）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
 | 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |
 | 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |
 | 0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时开关；修复 SSRF 白名单绕过与 TLS 版本比较等问题 |

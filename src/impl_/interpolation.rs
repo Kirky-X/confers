@@ -43,6 +43,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::t_simple;
 
 /// Interpolate variable references in a string.
 ///
@@ -250,7 +251,7 @@ where
                 scan_var_content(template, bytes, i + 2).map_err(|var_content| {
                     ConfigError::InterpolationError {
                         variable: var_content,
-                        message: "unterminated variable reference".to_string(),
+                        message: t_simple("error-interpolation-unterminated-ref"),
                     }
                 })?;
             i = next_i;
