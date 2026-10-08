@@ -899,10 +899,12 @@ mod tests {
             result.err()
         );
 
-        // Nothing was recorded while the lock was contended.
+        // Nothing was recorded while the lock was contended: the backoff
+        // is still at its base delay (any recorded failure would at least
+        // double it).
         assert_eq!(
-            source.circuit_breaker.lock().unwrap().failure_count(),
-            0,
+            source.circuit_breaker.lock().unwrap().backoff_duration(),
+            Duration::from_secs(1),
             "no failure may be recorded for a contended round"
         );
     }

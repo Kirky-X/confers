@@ -520,12 +520,6 @@ impl ConfigValidator {
         ConfigValidatorBuilder::new()
     }
 
-    /// 获取敏感数据检测器（用于测试）
-    #[cfg(test)]
-    pub fn sensitive_detector(&self) -> &SensitiveDataDetector {
-        &self.sensitive_detector
-    }
-
     /// 验证配置数据
     pub fn validate(&self, data: &HashMap<String, String>) -> ConfigValidationResult {
         let mut errors = Vec::new();

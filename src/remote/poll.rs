@@ -271,20 +271,7 @@ fn validate_url_parts(parsed: &url::Url) -> ConfigResult<()> {
     Ok(())
 }
 
-/// Validate a URL string for security (SSRF protection) — DNS-free checks only.
-///
-/// Parses the URL and applies the static SSRF checks (HTTPS-only scheme, host
-/// presence, blocked-range checks for direct IP hosts). DNS resolution for
-/// domain hosts is NOT performed here; it happens asynchronously on the poll
-/// path via `validate_url_full`.
-///
-/// Returns the parsed URL on success.
-#[cfg(test)]
-fn validate_url(url: &str) -> ConfigResult<url::Url> {
-    validate_url_with_mode(url, true)
-}
-
-/// [`validate_url`] with the enforcement flag made explicit: the builder's
+/// URL validation with the enforcement flag made explicit: the builder's
 /// `danger_disable_ssrf_protection` opt-out parses the URL only — every
 /// other check (poll path, pinned resolver, redirect hops) honors the same
 /// flag.
@@ -982,6 +969,12 @@ fn is_retryable_error(error: &reqwest::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Validate a URL string for security (SSRF protection) — DNS-free
+    /// checks only. Test-side shorthand for the enforced poll-path mode.
+    fn validate_url(url: &str) -> ConfigResult<url::Url> {
+        validate_url_with_mode(url, true)
+    }
 
     #[test]
     fn validate_url_parts_rejects_insecure_scheme_and_accepts_public_hosts() {

@@ -4844,7 +4844,6 @@ mod tests {
 }
 
 #[cfg(test)]
-#[cfg(test)]
 mod doctor_sources_unit_tests {
     use super::*;
     use crate::types::{ConfigValue, SourceId};

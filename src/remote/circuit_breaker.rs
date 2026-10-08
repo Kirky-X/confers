@@ -194,22 +194,6 @@ impl CircuitBreaker {
         }
     }
 
-    /// Returns the current circuit state.
-    ///
-    /// Test-only observation port: production code drives the breaker
-    /// through `allow_request`/`record_failure`/`record_success` and never
-    /// reads the state directly.
-    #[cfg(test)]
-    pub fn state(&self) -> CircuitState {
-        self.state
-    }
-
-    /// Returns the current consecutive failure count.
-    #[cfg(test)]
-    pub fn failure_count(&self) -> u32 {
-        self.failure_count
-    }
-
     /// Calculate the exponential backoff duration based on the current
     /// failure count.
     ///
@@ -244,8 +228,8 @@ mod tests {
     #[test]
     fn test_default_state_is_closed() {
         let cb = CircuitBreaker::new();
-        assert_eq!(cb.state(), CircuitState::Closed);
-        assert_eq!(cb.failure_count(), 0);
+        assert_eq!(cb.state, CircuitState::Closed);
+        assert_eq!(cb.failure_count, 0);
     }
 
     #[test]
@@ -259,11 +243,11 @@ mod tests {
         let mut cb = CircuitBreaker::new().with_threshold(3);
 
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.state, CircuitState::Closed);
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.state, CircuitState::Closed);
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
         assert!(!cb.can_execute());
     }
 
@@ -273,11 +257,11 @@ mod tests {
 
         cb.record_failure();
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
 
         cb.record_success();
-        assert_eq!(cb.state(), CircuitState::Closed);
-        assert_eq!(cb.failure_count(), 0);
+        assert_eq!(cb.state, CircuitState::Closed);
+        assert_eq!(cb.failure_count, 0);
         assert!(cb.can_execute());
     }
 
@@ -288,16 +272,16 @@ mod tests {
             .with_base_delay(Duration::from_millis(10));
 
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
 
         // Wait for backoff to expire
         std::thread::sleep(Duration::from_millis(20));
 
         assert!(cb.can_execute()); // transitions to HalfOpen
-        assert_eq!(cb.state(), CircuitState::HalfOpen);
+        assert_eq!(cb.state, CircuitState::HalfOpen);
 
         cb.record_success();
-        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.state, CircuitState::Closed);
     }
 
     #[test]
@@ -307,15 +291,15 @@ mod tests {
             .with_base_delay(Duration::from_millis(10));
 
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
 
         std::thread::sleep(Duration::from_millis(20));
 
         assert!(cb.can_execute()); // transitions to HalfOpen
-        assert_eq!(cb.state(), CircuitState::HalfOpen);
+        assert_eq!(cb.state, CircuitState::HalfOpen);
 
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
         assert!(!cb.can_execute());
     }
 
@@ -330,19 +314,19 @@ mod tests {
             .with_max_delay(Duration::from_millis(50));
 
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
 
         std::thread::sleep(Duration::from_millis(60));
 
         // Open -> HalfOpen: the first probe is admitted.
         assert!(cb.can_execute());
-        assert_eq!(cb.state(), CircuitState::HalfOpen);
+        assert_eq!(cb.state, CircuitState::HalfOpen);
 
         // A probe whose outcome is never recorded (cancelled future) must not
         // let further probes through immediately.
         assert!(!cb.can_execute());
         assert!(!cb.can_execute());
-        assert_eq!(cb.state(), CircuitState::HalfOpen);
+        assert_eq!(cb.state, CircuitState::HalfOpen);
 
         // After the probe interval elapses, exactly one new probe is admitted.
         std::thread::sleep(Duration::from_millis(60));
@@ -364,7 +348,7 @@ mod tests {
 
         assert!(cb.can_execute()); // HalfOpen probe admitted
         cb.record_success();
-        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.state, CircuitState::Closed);
 
         // Back in Closed, every request passes without rate limiting.
         assert!(cb.can_execute());
@@ -385,13 +369,13 @@ mod tests {
 
         assert!(cb.can_execute()); // HalfOpen probe admitted
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
         assert!(!cb.can_execute());
 
         std::thread::sleep(Duration::from_millis(30));
         assert!(cb.can_execute()); // new probe admitted
         cb.record_success();
-        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.state, CircuitState::Closed);
     }
 
     #[test]
@@ -437,7 +421,7 @@ mod tests {
         for _ in 0..100 {
             cb.record_failure();
         }
-        assert_eq!(cb.failure_count(), 100);
+        assert_eq!(cb.failure_count, 100);
     }
 
     #[test]
@@ -448,11 +432,11 @@ mod tests {
 
         cb.record_failure();
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
 
         // Should be blocked (backoff is 60s, we haven't waited)
         assert!(!cb.can_execute());
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
     }
 
     #[test]
@@ -477,6 +461,6 @@ mod tests {
         // With threshold 1, a single failure opens the circuit.
         let mut cb = CircuitBreaker::new().with_threshold(0);
         cb.record_failure();
-        assert_eq!(cb.state(), CircuitState::Open);
+        assert_eq!(cb.state, CircuitState::Open);
     }
 }

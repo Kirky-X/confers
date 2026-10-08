@@ -94,30 +94,6 @@ impl InjectionRateLimiter {
         }
     }
 
-    /// Create a rate limiter that is disabled (for testing)
-    #[cfg(test)]
-    pub fn disabled() -> Self {
-        Self {
-            window_counter: Arc::new(AtomicU64::new(0)),
-            window_start: Arc::new(AtomicU64::new(0)),
-            max_requests: usize::MAX,
-            window_seconds: u64::MAX,
-            rate_limiting_enabled: false,
-        }
-    }
-
-    /// Create a rate limiter with custom settings
-    #[cfg(test)]
-    pub fn with_limits(max_requests: usize, window_seconds: u64) -> Self {
-        Self {
-            window_counter: Arc::new(AtomicU64::new(0)),
-            window_start: Arc::new(AtomicU64::new(0)),
-            max_requests,
-            window_seconds,
-            rate_limiting_enabled: true,
-        }
-    }
-
     /// Check if the request is allowed under rate limit
     /// Returns Ok(()) if allowed, Err(retry_after_seconds) if rate limited
     pub fn check_rate_limit(&self) -> Result<(), u64> {
@@ -178,35 +154,11 @@ impl InjectionRateLimiter {
         // CAS 竞争 8 次仍未成功：保守拒绝而非放行（避免限流被绕过）
         Err(self.window_seconds)
     }
-
-    /// Get current usage statistics
-    #[cfg(test)]
-    pub fn usage_stats(&self) -> (usize, u64, f64) {
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let window_start = self.window_start.load(Ordering::SeqCst);
-        let counter = self.window_counter.load(Ordering::SeqCst);
-
-        let elapsed = now_secs.saturating_sub(window_start);
-        let remaining = self.window_seconds.saturating_sub(elapsed);
-        let usage_percent = (counter as f64 / self.max_requests as f64) * 100.0;
-
-        (counter as usize, remaining, usage_percent)
-    }
 }
 
-/// Global rate limiter instance (enabled by default).
-///
-/// Test builds use [`TEST_RATE_LIMITER`] instead (see `inject()`), so this
-/// static only exists — and is only consumed — in non-test builds.
-#[cfg(not(test))]
+/// Process-global rate limiter shared by every injector without a dedicated
+/// one (see `inject()` and `with_dedicated_rate_limiter`).
 pub(crate) static GLOBAL_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
-
-/// Global rate limiter for testing (disabled)
-#[cfg(test)]
-pub(crate) static TEST_RATE_LIMITER: OnceLock<InjectionRateLimiter> = OnceLock::new();
 
 /// Maximum number of entries the injector can hold (default: 10_000).
 const DEFAULT_MAX_ENTRIES: usize = 10_000;
@@ -295,17 +247,6 @@ impl ConfigInjector {
         self
     }
 
-    /// Use the provided rate limiter for this injector (non-global).
-    ///
-    /// This is the explicit-limiter variant of
-    /// [`Self::with_dedicated_rate_limiter`], useful for custom limit tuning
-    /// and deterministic tests.
-    #[cfg(test)]
-    pub(crate) fn with_rate_limiter(mut self, limiter: InjectionRateLimiter) -> Self {
-        self.rate_limiter = Some(Arc::new(limiter));
-        self
-    }
-
     /// 默认敏感字段模式
     fn default_sensitive_patterns() -> Vec<regex::Regex> {
         SENSITIVE_DETECTION_PATTERNS.clone()
@@ -330,10 +271,7 @@ impl ConfigInjector {
     /// 成功返回 Ok(())，失败返回错误信息
     pub fn inject(&self, name: &str, value: &str) -> Result<(), ConfigInjectionError> {
         // Rate limiting: use the instance's dedicated limiter when configured;
-        // otherwise share the process-global limiter (disabled in tests).
-        #[cfg(test)]
-        let shared_limiter = TEST_RATE_LIMITER.get_or_init(InjectionRateLimiter::disabled);
-        #[cfg(not(test))]
+        // otherwise share the process-global limiter.
         let shared_limiter = GLOBAL_RATE_LIMITER.get_or_init(InjectionRateLimiter::new);
         if let Err(retry_after) = self
             .rate_limiter
@@ -790,9 +728,38 @@ pub(crate) mod macros {
 mod tests {
     use super::*;
 
+    /// 限流旁路夹具：为注入器挂接禁用限流的实例级限流器，
+    /// 使测试免受进程级全局限流器窗口配额的影响。
+    fn without_rate_limit(mut injector: ConfigInjector) -> ConfigInjector {
+        injector.rate_limiter = Some(Arc::new(disabled_limiter()));
+        injector
+    }
+
+    /// 构造限流判定关闭的限流器。
+    fn disabled_limiter() -> InjectionRateLimiter {
+        InjectionRateLimiter {
+            window_counter: Arc::new(AtomicU64::new(0)),
+            window_start: Arc::new(AtomicU64::new(0)),
+            max_requests: usize::MAX,
+            window_seconds: u64::MAX,
+            rate_limiting_enabled: false,
+        }
+    }
+
+    /// 构造指定配额与窗口长度的限流器。
+    fn limiter_with_limits(max_requests: usize, window_seconds: u64) -> InjectionRateLimiter {
+        InjectionRateLimiter {
+            window_counter: Arc::new(AtomicU64::new(0)),
+            window_start: Arc::new(AtomicU64::new(0)),
+            max_requests,
+            window_seconds,
+            rate_limiting_enabled: true,
+        }
+    }
+
     #[test]
     fn test_config_injector_basic() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
 
         // 注入配置
         assert!(injector.inject("APP_PORT", "8080").is_ok());
@@ -825,7 +792,7 @@ mod tests {
     #[test]
     fn test_safe_retrieval() {
         let validator = EnvSecurityValidator::lenient();
-        let injector = ConfigInjector::with_validator(validator);
+        let injector = without_rate_limit(ConfigInjector::with_validator(validator));
         injector.inject("APP_SECRET", "my-secret-value").unwrap();
         injector.inject("APP_PORT", "8080").unwrap();
 
@@ -857,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_environment_config() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         injector.inject("APP_PORT", "8080").unwrap();
         injector.inject("APP_DEBUG", "true").unwrap();
         injector.inject("APP_NAME", "test-app").unwrap();
@@ -871,7 +838,7 @@ mod tests {
 
     #[test]
     fn test_clear_and_remove() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         injector.inject("APP_PORT", "8080").unwrap();
         injector
             .inject("APP_CONFIG_VALUE", "secret-key-value")
@@ -891,7 +858,7 @@ mod tests {
 
     #[test]
     fn test_validation_failure() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
 
         // 尝试注入无效配置名称
         assert!(injector.inject("path", "value").is_err());
@@ -904,7 +871,7 @@ mod tests {
 
     #[test]
     fn test_inject_blocked_and_invalid_name_errors() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         // 阻止的环境变量名
         let err = injector.inject("PATH", "value").unwrap_err();
         assert!(matches!(
@@ -929,7 +896,7 @@ mod tests {
 
     #[test]
     fn test_inject_value_dangerous_patterns() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         // 命令注入：危险模式 ;
         let err = injector.inject("APP_TEST", "hello;world").unwrap_err();
         assert!(matches!(
@@ -955,7 +922,7 @@ mod tests {
 
     #[test]
     fn test_inject_length_errors() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         // 名称过长（默认上限 256）
         let long_name = "A".repeat(300);
         let err = injector.inject(&long_name, "value").unwrap_err();
@@ -975,7 +942,9 @@ mod tests {
     #[test]
     fn test_sensitive_field_masking() {
         // 使用宽松验证器以注入敏感命名的字段
-        let injector = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        let injector = without_rate_limit(ConfigInjector::with_validator(
+            EnvSecurityValidator::lenient(),
+        ));
         injector.inject("APP_SECRET", "super-secret-value").unwrap(); // pragma: allowlist secret
         injector.inject("API_TOKEN", "token-1234567890").unwrap(); // pragma: allowlist secret
         injector.inject("APP_PORT", "8080").unwrap();
@@ -1014,7 +983,7 @@ mod tests {
 
     #[test]
     fn test_contains_remove_nonexistent() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         injector.inject("APP_PORT", "8080").unwrap();
         // contains false
         assert!(!injector.contains("MISSING").unwrap());
@@ -1029,7 +998,7 @@ mod tests {
 
     #[test]
     fn test_len_is_empty_and_validator_ref() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         assert!(injector.is_empty().unwrap());
         assert_eq!(injector.len().unwrap(), 0);
         injector.inject("APP_PORT", "8080").unwrap();
@@ -1065,7 +1034,7 @@ mod tests {
 
     #[test]
     fn test_environment_config_get_required() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         injector.inject("APP_PORT", "8080").unwrap();
         injector.inject("APP_BAD", "notanumber").unwrap();
 
@@ -1082,7 +1051,7 @@ mod tests {
 
     #[test]
     fn test_environment_config_get_with_default() {
-        let injector = ConfigInjector::new();
+        let injector = without_rate_limit(ConfigInjector::new());
         injector.inject("APP_PORT", "8080").unwrap();
         injector.inject("APP_DEBUG", "true").unwrap();
         injector.inject("APP_BAD", "notanumber").unwrap();
@@ -1149,16 +1118,18 @@ mod tests {
     #[test]
     fn test_config_injector_default_and_with_validator() {
         // default 等价于 new
-        let injector = ConfigInjector::default();
+        let injector = without_rate_limit(ConfigInjector::default());
         assert!(injector.inject("APP_PORT", "8080").is_ok());
         // 自定义验证器
-        let strict_injector = ConfigInjector::with_validator(EnvSecurityValidator::strict());
+        let strict_injector = without_rate_limit(ConfigInjector::with_validator(
+            EnvSecurityValidator::strict(),
+        ));
         assert!(strict_injector.inject("APP_PORT", "8080").is_ok());
     }
 
     #[test]
     fn test_rate_limiter_disabled_always_ok() {
-        let limiter = InjectionRateLimiter::disabled();
+        let limiter = disabled_limiter();
         // 禁用限流：多次调用均放行
         for _ in 0..10 {
             assert!(limiter.check_rate_limit().is_ok());
@@ -1169,7 +1140,7 @@ mod tests {
     fn test_rate_limiter_enforces_limit() {
         // Exact quota semantics: the first request starts the window AND
         // consumes one slot, so max_requests=1 allows exactly one call.
-        let limiter = InjectionRateLimiter::with_limits(1, 3600);
+        let limiter = limiter_with_limits(1, 3600);
         assert!(limiter.check_rate_limit().is_ok());
         assert!(limiter.check_rate_limit().is_err());
     }
@@ -1177,26 +1148,29 @@ mod tests {
     #[test]
     fn test_rate_limiter_zero_limit_rejects_everything() {
         // A zero quota rejects the very first request (no free request).
-        let limiter = InjectionRateLimiter::with_limits(0, 3600);
+        let limiter = limiter_with_limits(0, 3600);
         assert!(limiter.check_rate_limit().is_err());
         assert!(limiter.check_rate_limit().is_err());
     }
 
     #[test]
-    fn test_rate_limiter_usage_stats() {
-        // 全新限流器：window_start=0 -> remaining=0
-        let limiter = InjectionRateLimiter::with_limits(100, 60);
-        let (counter, remaining, usage) = limiter.usage_stats();
-        assert_eq!(counter, 0);
-        assert_eq!(remaining, 0);
-        assert_eq!(usage, 0.0);
+    fn test_rate_limiter_window_state() {
+        // 全新限流器：窗口未启动、计数为 0
+        let limiter = limiter_with_limits(100, 60);
+        assert_eq!(limiter.window_counter.load(Ordering::SeqCst), 0);
+        assert_eq!(limiter.window_start.load(Ordering::SeqCst), 0);
 
-        // 初始化窗口后：remaining 接近窗口长度；首个请求即计数为 1
+        // 初始化窗口后：首个请求即计数为 1，窗口起点落在当前时间
         assert!(limiter.check_rate_limit().is_ok());
-        let (counter, remaining, usage) = limiter.usage_stats();
-        assert_eq!(counter, 1);
-        assert_eq!(usage, 1.0);
-        assert!(remaining > 0 && remaining <= 60);
+        assert_eq!(limiter.window_counter.load(Ordering::SeqCst), 1);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(
+            now.saturating_sub(limiter.window_start.load(Ordering::SeqCst)) < 60,
+            "window start must be initialized to the current time"
+        );
     }
 
     #[test]
@@ -1204,10 +1178,10 @@ mod tests {
         // Regression: the process-global rate limiter was shared by every
         // ConfigInjector instance. Dedicated limiters are independent: quota
         // exhausted on one instance does not affect another.
-        let injector_a = ConfigInjector::with_validator(EnvSecurityValidator::lenient())
-            .with_rate_limiter(InjectionRateLimiter::with_limits(2, 3600));
-        let injector_b = ConfigInjector::with_validator(EnvSecurityValidator::lenient())
-            .with_rate_limiter(InjectionRateLimiter::with_limits(2, 3600));
+        let mut injector_a = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        injector_a.rate_limiter = Some(Arc::new(limiter_with_limits(2, 3600)));
+        let mut injector_b = ConfigInjector::with_validator(EnvSecurityValidator::lenient());
+        injector_b.rate_limiter = Some(Arc::new(limiter_with_limits(2, 3600)));
 
         assert!(injector_a.inject("APP_A1", "1").is_ok());
         assert!(injector_a.inject("APP_A2", "2").is_ok());
@@ -1278,7 +1252,7 @@ mod tests {
         assert!(limiter.check_rate_limit().is_ok());
 
         // 配额为 1 时第二个请求被限流,并拿到剩余等待秒数。
-        let tight = InjectionRateLimiter::with_limits(1, 60);
+        let tight = limiter_with_limits(1, 60);
         assert!(tight.check_rate_limit().is_ok());
         let retry = tight
             .check_rate_limit()
