@@ -392,6 +392,7 @@ cargo fuzz run parser
 
 | 版本 | 日期 | 要点 |
 |------|------|------|
+| 0.6.0-rc.7 | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
 | 0.6.0-rc.6 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
 | 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，零外部依赖）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
 | 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |

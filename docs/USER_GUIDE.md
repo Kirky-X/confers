@@ -88,7 +88,7 @@ cargo --version
 
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.6.0-rc.6"` | 包含 toml、json、dotenv |
+| **默认** | `confers = "0.6.0-rc.7"` | 包含 toml、json、dotenv |
 | **最小化** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["minimal"] }` | dotenv + JSON（对应 Cargo.toml 的 `minimal = ["dotenv", "json"]`） |
 | **推荐** | `confers = { version = "0.6.0-rc.6", default-features = false, features = ["recommended"] }` | TOML + JSON + Dotenv + 校验 + 安全规则 |
 | **全量** | `confers = { version = "0.6.0-rc.6", features = ["full"] }` | 全部特性 |

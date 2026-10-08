@@ -132,7 +132,7 @@
 
 ```toml
 [dependencies]
-confers = "0.6.0-rc.6"
+confers = "0.6.0-rc.7"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -145,7 +145,7 @@ cargo add confers serde --features serde/derive
 **可选特性：**
 
 ```toml
-confers = { version = "0.6.0-rc.6", features = ["watch", "remote", "cli"] }
+confers = { version = "0.6.0-rc.7", features = ["watch", "remote", "cli"] }
 ```
 
 **安装验证：**
@@ -176,23 +176,23 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.6.0-rc.6", default-features = false, features = ["minimal"] }
+confers = { version = "0.6.0-rc.7", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.6.0-rc.6", default-features = false, features = ["recommended"] }
+confers = { version = "0.6.0-rc.7", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.6.0-rc.6", default-features = false, features = ["production"] }
+confers = { version = "0.6.0-rc.7", default-features = false, features = ["production"] }
 
 # 分布式系统配置
 [dependencies]
-confers = { version = "0.6.0-rc.6", default-features = false, features = ["distributed"] }
+confers = { version = "0.6.0-rc.7", default-features = false, features = ["distributed"] }
 
 # 全量特性配置
 [dependencies]
-confers = { version = "0.6.0-rc.6", features = ["full"] }
+confers = { version = "0.6.0-rc.7", features = ["full"] }
 ```
 
 > 💡 **提示**：默认特性为 `toml`、`json`、`dotenv`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。

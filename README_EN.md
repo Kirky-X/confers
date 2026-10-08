@@ -393,6 +393,7 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 | Version | Date | Highlights |
 |------|------|------|
+| 0.6.0-rc.7 | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
 | 0.6.0-rc.6 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
 | 0.6.0-rc.5 | 2026-09-21 | in-house i18n facade (`src/i18n` catalog/locale, zero external deps); `keyring` / `cloud-kms` imply `encryption`; pre-commit gate and detect-secrets baseline; removed the `compact_str` direct dependency |
 | 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |
