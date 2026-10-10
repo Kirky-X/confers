@@ -36,6 +36,50 @@ error-watcher = Configuration watcher error: { $message }
 error-override-blocked = Override blocked for key '{ $key }': { $reason }
 error-health-check-failed = Health check failed: { $reason }
 
+# --- ConfigConfigError variants (mirror the thiserror #[error] Display) ---
+
+error-config-missing-field = Missing required configuration field: { $field }
+error-config-invalid-value = Invalid configuration value for '{ $field }' (expected { $expected_type }): { $message }
+error-config-file-not-found = Configuration file not found: { $filename }
+error-config-parse-error = Failed to parse { $format }: { $message }
+error-config-parse-error-at = Failed to parse { $format } at { $location }: { $message }
+error-config-size-limit-exceeded = Configuration size limit exceeded: { $actual } bytes (limit: { $limit })
+error-config-validation-failed = Configuration validation failed for field '{ $field }': { $message } (rule: { $rule })
+error-config-version-mismatch = Configuration version mismatch: found { $found }, expected { $expected }
+error-config-source-chain-error = Source chain configuration error: { $message }
+error-config-interpolation-error = Configuration interpolation error for '{ $variable }': { $message }
+error-config-circular-reference = Circular reference detected in configuration: { $path }
+
+# --- ConfigConfigError::user_message (sanitized user-facing form) ---
+
+error-config-user-missing-field = Missing required configuration field: '{ $field }'
+error-config-user-invalid-value = Invalid value for '{ $field }' (expected { $expected_type }): { $message }
+error-config-user-file-not-found = Configuration file '{ $filename }' not found
+error-config-user-size-limit-exceeded = Configuration size exceeded: { $actual } bytes (limit: { $limit })
+error-config-user-validation-failed = Field '{ $field }' failed validation: { $message }
+error-config-user-source-chain-error = { $message }
+error-config-user-interpolation-error = Interpolation error for '{ $variable }': { $message }
+error-config-user-circular-reference = Circular reference detected: { $path }
+
+# --- ConfigError::user_message (sanitized user-facing form; shares the
+# variant keys above wherever the wording already matches) ---
+
+error-user-file-not-found = Configuration file '{ $filename }' not found
+error-user-validation-failed = Field '{ $field }' failed validation: { $message }
+error-user-schema-validation-failed = Schema validation failed with { $count } error(s)
+error-user-decryption-failed = Failed to decrypt configuration value
+error-user-remote-unavailable = Remote configuration source is unavailable
+error-user-migration-failed = Migration from v{ $from } to v{ $to } failed: { $reason }
+error-user-reload-rolled-back = Configuration reload was rolled back: { $reason }
+error-user-reload-rejected = Configuration reload was rejected: { $reason }
+error-user-invalid-value = Invalid value for '{ $key }': { $message }
+error-user-source-chain = { $message }
+error-user-size-limit-exceeded = Size limit exceeded: { $actual } bytes (limit: { $limit })
+error-user-key-error = Encryption key error
+error-user-multi-source = Multiple sources failed: { $failed }/{ $total }
+error-user-watcher-error = Watcher error{ $path_suffix }: { $message }{ $recovery }
+error-user-override-blocked = Override blocked for key '{ $key }'{ $source_suffix }: { $reason }
+
 # --- component message fragments (embedded into ConfigError fields) ---
 
 error-env-path-conflict = variable maps to config path '{ $path }', which collides with { $existing } at '{ $at }'; rename one of the conflicting variables
@@ -161,3 +205,12 @@ log-hot-reload-rejected = hot reload rejected a candidate: { $reason }
 log-hot-reload-loader-failed = hot reload loader failed: { $reason }
 log-hot-reload-loader-panicked = hot reload loader panicked: { $reason }
 log-watcher-task-abnormal-shutdown = watcher task terminated abnormally during shutdown: { $reason }
+log-nats-consumer-error = NATS config-bus consumer error (bus may be offline; the client will reconnect automatically): { $message }
+log-inmemory-bus-subscriber-lagged = InMemoryBus subscriber lagged; { $skipped } configuration change event(s) were dropped
+log-keyring-fallback-file-store = OS keyring (secret-tool/Secret Service) unavailable; falling back to a chmod-600 file store — the master key is protected by file permissions only
+log-fs-watcher-debouncer-create-failed = failed to create file watcher debouncer: { $message }
+log-fs-watcher-no-path-watched = failed to watch any of the requested paths
+log-snapshot-prune-skip-metadata = SKIP: cannot read metadata for { $path }: { $message }
+log-snapshot-prune-skip-mtime = SKIP: cannot read modification time for { $path }: { $message }
+log-snapshot-prune-removing = Removing: { $file }
+log-snapshot-prune-remove-failed = FAIL: cannot remove { $path }: { $message }

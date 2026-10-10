@@ -32,6 +32,50 @@ error-watcher = 配置监视器错误: { $message }
 error-override-blocked = 配置键 '{ $key }' 的覆盖被阻止: { $reason }
 error-health-check-failed = 健康检查失败: { $reason }
 
+# --- ConfigConfigError 变体键(镜像 thiserror #[error] 规范 Display 串) ---
+
+error-config-missing-field = 缺少必需的配置字段: { $field }
+error-config-invalid-value = 配置项 '{ $field }' 的值无效(期望类型 { $expected_type }): { $message }
+error-config-file-not-found = 配置文件未找到: { $filename }
+error-config-parse-error = 解析 { $format } 失败: { $message }
+error-config-parse-error-at = 解析 { $format } 失败(位置 { $location }): { $message }
+error-config-size-limit-exceeded = 配置大小超出限制: { $actual } 字节(上限: { $limit })
+error-config-validation-failed = 配置项 '{ $field }' 校验失败: { $message }(规则: { $rule })
+error-config-version-mismatch = 配置版本不匹配: 期望 { $expected },实际 { $found }
+error-config-source-chain-error = 配置源链配置错误: { $message }
+error-config-interpolation-error = 配置变量 '{ $variable }' 插值错误: { $message }
+error-config-circular-reference = 配置中检测到循环引用: { $path }
+
+# --- ConfigConfigError::user_message(脱敏后的用户可见文案) ---
+
+error-config-user-missing-field = 缺少必需的配置字段: '{ $field }'
+error-config-user-invalid-value = '{ $field }' 的值无效(期望类型 { $expected_type }): { $message }
+error-config-user-file-not-found = 配置文件 '{ $filename }' 不存在
+error-config-user-size-limit-exceeded = 配置大小超出限制: { $actual } 字节(上限: { $limit })
+error-config-user-validation-failed = 字段 '{ $field }' 校验失败: { $message }
+error-config-user-source-chain-error = { $message }
+error-config-user-interpolation-error = 变量 '{ $variable }' 插值错误: { $message }
+error-config-user-circular-reference = 检测到循环引用: { $path }
+
+# --- ConfigError::user_message(脱敏后的用户可见文案; 措辞与变体键一致的
+# 直接复用上方对应键) ---
+
+error-user-file-not-found = 配置文件 '{ $filename }' 不存在
+error-user-validation-failed = 字段 '{ $field }' 校验失败: { $message }
+error-user-schema-validation-failed = schema 校验发现 { $count } 个错误
+error-user-decryption-failed = 配置值解密失败
+error-user-remote-unavailable = 远程配置源不可用
+error-user-migration-failed = 从 v{ $from } 迁移到 v{ $to } 失败: { $reason }
+error-user-reload-rolled-back = 配置重载已回滚: { $reason }
+error-user-reload-rejected = 配置重载被拒绝: { $reason }
+error-user-invalid-value = 配置项 '{ $key }' 的值无效: { $message }
+error-user-source-chain = { $message }
+error-user-size-limit-exceeded = 大小超出限制: { $actual } 字节(上限: { $limit })
+error-user-key-error = 加密密钥错误
+error-user-multi-source = 多个配置源加载失败: { $failed }/{ $total }
+error-user-watcher-error = 监视器错误{ $path_suffix }: { $message }{ $recovery }
+error-user-override-blocked = 配置键 '{ $key }' 的覆盖被阻止{ $source_suffix }: { $reason }
+
 # --- 组件消息片段(内嵌进 ConfigError 字段) ---
 
 error-env-path-conflict = 变量映射到配置路径 '{ $path }',与 { $existing } 在 '{ $at }' 处冲突; 请重命名其中一个冲突的变量
@@ -157,3 +201,12 @@ log-hot-reload-rejected = 热重载已拒绝候选配置: { $reason }
 log-hot-reload-loader-failed = 热重载加载器失败: { $reason }
 log-hot-reload-loader-panicked = 热重载加载器发生 panic: { $reason }
 log-watcher-task-abnormal-shutdown = watcher 任务在关闭期间异常终止: { $reason }
+log-nats-consumer-error = NATS 配置总线消费错误(总线可能离线; 客户端会自动重连): { $message }
+log-inmemory-bus-subscriber-lagged = InMemoryBus 订阅者已落后; 已丢弃 { $skipped } 个配置变更事件
+log-keyring-fallback-file-store = 操作系统密钥环(secret-tool/Secret Service)不可用; 已回退到 chmod-600 文件存储 —— 主密钥仅靠文件权限保护
+log-fs-watcher-debouncer-create-failed = 创建文件监视器 debouncer 失败: { $message }
+log-fs-watcher-no-path-watched = 所有被请求的路径都监视失败
+log-snapshot-prune-skip-metadata = 跳过: 无法读取 { $path } 的元数据: { $message }
+log-snapshot-prune-skip-mtime = 跳过: 无法读取 { $path } 的修改时间: { $message }
+log-snapshot-prune-removing = 正在删除: { $file }
+log-snapshot-prune-remove-failed = 失败: 无法删除 { $path }: { $message }

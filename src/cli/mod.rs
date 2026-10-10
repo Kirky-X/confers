@@ -91,22 +91,41 @@ static ENV_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 /// unrelated threads cannot be synchronized from here.
 pub fn load_env_file(path: &PathBuf) -> Result<()> {
     if !path.exists() {
-        anyhow::bail!("Environment file not found: {}", path.display());
-    }
-
-    let metadata = std::fs::metadata(path)
-        .with_context(|| format!("Failed to stat env file: {}", path.display()))?;
-    if metadata.len() > MAX_ENV_FILE_SIZE {
         anyhow::bail!(
-            "Environment file too large: size limit {} bytes exceeded (file is {} bytes): {}",
-            MAX_ENV_FILE_SIZE,
-            metadata.len(),
-            path.display()
+            "{}",
+            tr_args(
+                "cli-env-file-not-found",
+                &[("path", path.display().to_string())]
+            )
         );
     }
 
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read env file: {}", path.display()))?;
+    let metadata = std::fs::metadata(path).with_context(|| {
+        tr_args(
+            "cli-env-file-stat-failed",
+            &[("path", path.display().to_string())],
+        )
+    })?;
+    if metadata.len() > MAX_ENV_FILE_SIZE {
+        anyhow::bail!(
+            "{}",
+            tr_args(
+                "cli-env-file-too-large",
+                &[
+                    ("limit", MAX_ENV_FILE_SIZE.to_string()),
+                    ("size", metadata.len().to_string()),
+                    ("path", path.display().to_string()),
+                ]
+            )
+        );
+    }
+
+    let content = std::fs::read_to_string(path).with_context(|| {
+        tr_args(
+            "cli-env-file-read-failed",
+            &[("path", path.display().to_string())],
+        )
+    })?;
 
     // Serialize environment writes performed by this crate. A poisoned lock
     // still yields the guard: the previous holder may have panicked, but
@@ -116,10 +135,15 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
     for line in content.lines() {
         if line.len() > MAX_ENV_LINE_LENGTH {
             anyhow::bail!(
-                "Environment file line too long: limit {} bytes exceeded (line is {} bytes): {}",
-                MAX_ENV_LINE_LENGTH,
-                line.len(),
-                path.display()
+                "{}",
+                tr_args(
+                    "cli-env-file-line-too-long",
+                    &[
+                        ("limit", MAX_ENV_LINE_LENGTH.to_string()),
+                        ("size", line.len().to_string()),
+                        ("path", path.display().to_string()),
+                    ]
+                )
             );
         }
         let line = line.trim();
@@ -203,19 +227,26 @@ fn sanitize_json_strings(value: &serde_json::Value, depth: usize) -> serde_json:
 #[command(version)]
 struct Cli {
     /// Configuration file(s) to load
-    #[arg(short, long)]
+    #[arg(short, long, help = crate::i18n::tr("cli-config-help"))]
     config: Vec<PathBuf>,
 
     /// Additional environment file
-    #[arg(long)]
+    #[arg(long, help = crate::i18n::tr("cli-env-file-help"))]
     env_file: Option<PathBuf>,
 
     /// Allow absolute paths for config files (use with caution, mainly for testing)
-    #[arg(long)]
+    #[arg(
+        long,
+        help = crate::i18n::tr("cli-allow-absolute-paths-help")
+    )]
     allow_absolute_paths: bool,
 
     /// Filter output to only include specified fields (comma-separated dot-paths, e.g. "a.b,c.d")
-    #[arg(long, global = true)]
+    #[arg(
+        long,
+        global = true,
+        help = crate::i18n::tr("cli-fields-help")
+    )]
     fields: Option<String>,
 
     #[arg(
@@ -233,120 +264,180 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Inspect configuration - list all keys with their sources
+    #[command(about = crate::i18n::tr("cli-inspect-help"))]
     Inspect {
         /// Show only specific key(s)
-        #[arg(short, long)]
+        #[arg(short, long, help = crate::i18n::tr("cli-inspect-key-help"))]
         key: Vec<String>,
 
         /// Show all conflicts (values that were overridden)
-        #[arg(long)]
+        #[arg(
+            long,
+            help = crate::i18n::tr("cli-inspect-show-conflicts-help")
+        )]
         show_conflicts: bool,
 
         /// Output format (text, json)
-        #[arg(short, long, default_value = "text")]
+        #[arg(
+            short,
+            long,
+            default_value = "text",
+            help = crate::i18n::tr("cli-inspect-format-help")
+        )]
         format: String,
 
         /// Reveal values of sensitive-looking keys (default: masked)
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-inspect-reveal-help"))]
         reveal: bool,
     },
 
     /// Validate configuration against schema
+    #[command(about = crate::i18n::tr("cli-validate-help"))]
     Validate {
         /// Strict mode: treat warnings as errors
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-validate-strict-help"))]
         strict: bool,
 
         /// Output format (text, json)
-        #[arg(short, long, default_value = "text")]
+        #[arg(
+            short,
+            long,
+            default_value = "text",
+            help = crate::i18n::tr("cli-validate-format-help")
+        )]
         format: String,
     },
 
     /// Export merged configuration (sanitized)
+    #[command(about = crate::i18n::tr("cli-export-help"))]
     Export {
         /// Output format (json, toml, yaml)
-        #[arg(short, long, default_value = "json")]
+        #[arg(
+            short,
+            long,
+            default_value = "json",
+            help = crate::i18n::tr("cli-export-format-help")
+        )]
         format: String,
 
         /// Output file (default: stdout)
-        #[arg(short, long)]
+        #[arg(
+            short,
+            long,
+            help = crate::i18n::tr("cli-export-output-help")
+        )]
         output: Option<PathBuf>,
 
         /// Include provenance (source) information
-        #[arg(long)]
+        #[arg(
+            long,
+            help = crate::i18n::tr("cli-export-with-provenance-help")
+        )]
         with_provenance: bool,
 
         /// Do not sanitize sensitive values
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-export-raw-help"))]
         raw: bool,
     },
 
     /// Diff two configurations
+    #[command(about = crate::i18n::tr("cli-diff-help"))]
     Diff {
         /// Base configuration file
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-diff-base-help"))]
         base: PathBuf,
 
         /// Overlay configuration file
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-diff-overlay-help"))]
         overlay: PathBuf,
 
         /// Output format (text, json)
-        #[arg(short, long, default_value = "text")]
+        #[arg(
+            short,
+            long,
+            default_value = "text",
+            help = crate::i18n::tr("cli-diff-format-help")
+        )]
         format: String,
 
         /// Sanitize sensitive values in output
-        #[arg(long, default_value = "true")]
+        #[arg(
+            long,
+            default_value = "true",
+            help = crate::i18n::tr("cli-diff-sanitize-help")
+        )]
         sanitize: bool,
     },
 
     /// Manage configuration snapshots
+    #[command(about = crate::i18n::tr("cli-snapshot-help"))]
     Snapshot {
         #[command(subcommand)]
         action: SnapshotCommands,
     },
 
     /// Output JSON Schema for the configuration type
+    #[command(about = crate::i18n::tr("cli-schema-help"))]
     Schema {
         /// Infer a schema draft from the loaded configuration instance
         /// instead of the derived type (schema-first reverse engineering).
-        #[arg(long)]
+        #[arg(
+            long,
+            help = crate::i18n::tr("cli-schema-from-instance-help")
+        )]
         from_instance: bool,
         /// Generate Rust struct scaffolding from a JSON Schema draft file
         /// (2020-12 flavored; non-required fields become Option, scalar
         /// defaults become generated default fns, string enums become Rust
         /// enums; unsupported constructs fail loudly).
-        #[arg(long, value_name = "FILE", conflicts_with = "from_instance")]
+        #[arg(
+            long,
+            value_name = "FILE",
+            conflicts_with = "from_instance",
+            help = crate::i18n::tr("cli-schema-from-schema-help")
+        )]
         from_schema: Option<PathBuf>,
     },
 
     /// Get a specific configuration value by key path (dot-separated)
+    #[command(about = crate::i18n::tr("cli-get-help"))]
     Get {
         /// Configuration key path (e.g., "server.host" or "database.pool.size")
+        #[arg(help = crate::i18n::tr("cli-get-key-help"))]
         key: String,
 
         /// Reveal values of sensitive-looking keys (default: masked)
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-get-reveal-help"))]
         reveal: bool,
     },
 
     /// Documentation output. `--agent` emits the machine-readable knowledge
     /// pack (subcommands, arguments, exit-code contract, task recipes).
+    #[command(about = crate::i18n::tr("cli-docs-help"))]
     Docs {
         /// Emit the agent knowledge pack.
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-docs-agent-help"))]
         agent: bool,
 
         /// Knowledge format (json, markdown)
-        #[arg(long, default_value = "json")]
+        #[arg(
+            long,
+            default_value = "json",
+            help = crate::i18n::tr("cli-docs-format-help")
+        )]
         format: String,
     },
 
     /// Diagnose configuration health (schema, source chain, encryption,
     /// env overrides) and print a single-line JSON report.
+    #[command(about = crate::i18n::tr("cli-doctor-help"))]
     Doctor {
         /// Output format (json = single line, text)
-        #[arg(long, default_value = "json")]
+        #[arg(
+            long,
+            default_value = "json",
+            help = crate::i18n::tr("cli-doctor-format-help")
+        )]
         format: String,
     },
 }
@@ -354,38 +445,66 @@ enum Commands {
 #[derive(Subcommand, Debug)]
 enum SnapshotCommands {
     /// List all snapshots
+    #[command(about = crate::i18n::tr("cli-snapshot-list-help"))]
     List {
         /// Directory containing snapshots
-        #[arg(long, default_value = "./snapshots")]
+        #[arg(
+            long,
+            default_value = "./snapshots",
+            help = crate::i18n::tr("cli-snapshot-list-directory-help")
+        )]
         directory: PathBuf,
     },
     /// Diff between two snapshots
+    #[command(about = crate::i18n::tr("cli-snapshot-diff-help"))]
     Diff {
         /// Number of recent snapshots to compare
-        #[arg(long, default_value = "2")]
+        #[arg(
+            long,
+            default_value = "2",
+            help = crate::i18n::tr("cli-snapshot-diff-latest-help")
+        )]
         latest: usize,
         /// Directory containing snapshots
-        #[arg(long, default_value = "./snapshots")]
+        #[arg(
+            long,
+            default_value = "./snapshots",
+            help = crate::i18n::tr("cli-snapshot-diff-directory-help")
+        )]
         directory: PathBuf,
     },
     /// Prune old snapshots
+    #[command(about = crate::i18n::tr("cli-snapshot-prune-help"))]
     Prune {
         /// Keep snapshots newer than this (e.g., "30d", "7d")
-        #[arg(long, default_value = "30d")]
+        #[arg(
+            long,
+            default_value = "30d",
+            help = crate::i18n::tr("cli-snapshot-prune-older-than-help")
+        )]
         older_than: String,
         /// Directory containing snapshots
-        #[arg(long, default_value = "./snapshots")]
+        #[arg(
+            long,
+            default_value = "./snapshots",
+            help = crate::i18n::tr("cli-snapshot-prune-directory-help")
+        )]
         directory: PathBuf,
     },
     /// Restore (load and validate) a snapshot file (disaster recovery)
     #[cfg(feature = "snapshot")]
+    #[command(about = crate::i18n::tr("cli-snapshot-restore-help"))]
     Restore {
         /// Snapshot file to restore; defaults to the newest snapshot in the
         /// directory when omitted
-        #[arg(long)]
+        #[arg(long, help = crate::i18n::tr("cli-snapshot-restore-file-help"))]
         file: Option<PathBuf>,
         /// Directory containing snapshots
-        #[arg(long, default_value = "./snapshots")]
+        #[arg(
+            long,
+            default_value = "./snapshots",
+            help = crate::i18n::tr("cli-snapshot-restore-directory-help")
+        )]
         directory: PathBuf,
     },
 }
@@ -787,22 +906,34 @@ fn cmd_validate(
                     println!("{}", serde_json::to_string_pretty(&result)?);
                 }
                 _ => {
-                    println!("Configuration Validation");
+                    println!("{}", tr("cli-validate-title"));
                     println!("=======================");
                     println!();
-                    println!("✓ Configuration loaded successfully");
+                    println!("{}", tr("cli-validate-loaded-ok"));
 
                     if !issues.is_empty() {
-                        println!("\n✗ Found {} validation issue(s):", issues.len());
+                        println!(
+                            "{}",
+                            tr_args(
+                                "cli-validate-issues-found",
+                                &[("count", issues.len().to_string())]
+                            )
+                        );
                         for issue in &issues {
                             println!("  - {}", issue);
                         }
 
                         if strict {
-                            anyhow::bail!("Validation failed with {} issue(s)", issues.len());
+                            anyhow::bail!(
+                                "{}",
+                                tr_args(
+                                    "cli-validate-strict-failed",
+                                    &[("count", issues.len().to_string())]
+                                )
+                            );
                         }
                     } else {
-                        println!("✓ All validation checks passed");
+                        println!("{}", tr("cli-validate-all-passed"));
                     }
                 }
             }
@@ -817,13 +948,16 @@ fn cmd_validate(
                     println!("{}", serde_json::to_string_pretty(&result)?);
                 }
                 _ => {
-                    println!("Configuration Validation");
+                    println!("{}", tr("cli-validate-title"));
                     println!("=======================");
                     println!();
-                    println!("✗ Configuration error: {}", e);
+                    println!(
+                        "{}",
+                        tr_args("cli-validate-error", &[("message", e.to_string())])
+                    );
                 }
             }
-            anyhow::bail!("Validation failed");
+            anyhow::bail!("{}", tr("cli-validate-failed"));
         }
     }
 
@@ -1006,8 +1140,8 @@ fn cmd_export(
     use chrono::Utc;
 
     if raw {
-        eprintln!("⚠️  警告: 使用 --raw 选项将导出未脱敏的敏感数据！");
-        eprintln!("   请确保输出目标安全，避免泄露密码、密钥等敏感信息。");
+        eprintln!("{}", tr("cli-export-raw-warning"));
+        eprintln!("   {}", tr("cli-export-raw-warning-detail"));
         eprintln!();
     }
 
@@ -1043,7 +1177,10 @@ fn cmd_export(
             "json" => serde_json::to_string_pretty(&annotated_json)?,
             "toml" => toml::to_string_pretty(&annotated_json)?,
             "yaml" => serde_yaml_ng::to_string(&annotated_json)?,
-            _ => anyhow::bail!("Unsupported format: {}", format),
+            _ => anyhow::bail!(
+                "{}",
+                tr_args("cli-unsupported-format", &[("format", format.to_string())])
+            ),
         };
 
         if let Some(path) = output_path {
@@ -1082,7 +1219,10 @@ fn cmd_export(
             "json" => serde_json::to_string_pretty(&config)?,
             "toml" => toml::to_string_pretty(&config)?,
             "yaml" => serde_yaml_ng::to_string(&config)?,
-            _ => anyhow::bail!("Unsupported format: {}", format),
+            _ => anyhow::bail!(
+                "{}",
+                tr_args("cli-unsupported-format", &[("format", format.to_string())])
+            ),
         };
 
         if let Some(path) = output_path {
@@ -1110,55 +1250,81 @@ fn cmd_diff(
     // renderer would make a typo (`--format jsom`) look like a successful run.
     match format {
         "text" | "json" => {}
-        _ => anyhow::bail!("Unsupported format: {}", format),
+        _ => anyhow::bail!(
+            "{}",
+            tr_args("cli-unsupported-format", &[("format", format.to_string())])
+        ),
     }
 
     if !allow_absolute_paths {
         if base.is_absolute() {
             anyhow::bail!(
-                "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
-                base.display()
+                "{}",
+                tr_args(
+                    "cli-schema-absolute-path-not-allowed",
+                    &[("path", base.display().to_string())]
+                )
             );
         }
         if overlay.is_absolute() {
             anyhow::bail!(
-                "Absolute path not allowed: {}. Use --allow-absolute-paths to override.",
-                overlay.display()
+                "{}",
+                tr_args(
+                    "cli-schema-absolute-path-not-allowed",
+                    &[("path", overlay.display().to_string())]
+                )
             );
         }
     }
 
-    println!("Configuration Diff");
+    println!("{}", tr("cli-diff-title"));
     println!("=================");
     println!();
 
-    let base_content = std::fs::read_to_string(base)
-        .with_context(|| format!("Failed to read base config: {}", base.display()))?;
+    let base_content = std::fs::read_to_string(base).with_context(|| {
+        tr_args(
+            "cli-diff-read-base-failed",
+            &[("path", base.display().to_string())],
+        )
+    })?;
 
     let base_value = loader::parse_content(
         &base_content,
         loader::detect_format_from_path(base)
-            .ok_or_else(|| anyhow::anyhow!("Unknown format for base config"))?,
+            .ok_or_else(|| anyhow::anyhow!("{}", tr("cli-diff-base-format-unknown")))?,
         crate::types::SourceId::new(base.to_string_lossy().as_ref()),
         Some(base),
     )?;
 
-    let overlay_content = std::fs::read_to_string(overlay)
-        .with_context(|| format!("Failed to read overlay config: {}", overlay.display()))?;
+    let overlay_content = std::fs::read_to_string(overlay).with_context(|| {
+        tr_args(
+            "cli-diff-read-overlay-failed",
+            &[("path", overlay.display().to_string())],
+        )
+    })?;
 
     let overlay_value = loader::parse_content(
         &overlay_content,
         loader::detect_format_from_path(overlay)
-            .ok_or_else(|| anyhow::anyhow!("Unknown format for overlay config"))?,
+            .ok_or_else(|| anyhow::anyhow!("{}", tr("cli-diff-overlay-format-unknown")))?,
         crate::types::SourceId::new(overlay.to_string_lossy().as_ref()),
         Some(overlay),
     )?;
 
-    println!("{} vs {}", base.display(), overlay.display());
+    println!(
+        "{}",
+        tr_args(
+            "cli-diff-pair",
+            &[
+                ("base", base.display().to_string()),
+                ("overlay", overlay.display().to_string()),
+            ]
+        )
+    );
     println!();
 
     if base_content == overlay_content {
-        println!("Configurations are identical");
+        println!("{}", tr("cli-diff-identical"));
         return Ok(());
     }
 
@@ -1195,8 +1361,14 @@ fn cmd_diff(
             println!("{}", serde_json::to_string_pretty(&diff_result)?);
         }
         _ => {
-            println!("Configurations differ");
-            println!("\nBase ({}):", base.display());
+            println!("{}", tr("cli-diff-differ"));
+            println!(
+                "{}",
+                tr_args(
+                    "cli-diff-base-heading",
+                    &[("path", base.display().to_string())]
+                )
+            );
             for (i, line) in base_content.lines().take(20).enumerate() {
                 let shown = if sanitize {
                     sanitize_output_text(line)
@@ -1205,7 +1377,13 @@ fn cmd_diff(
                 };
                 println!("{:3}: {}", i + 1, shown);
             }
-            println!("\nOverlay ({}):", overlay.display());
+            println!(
+                "{}",
+                tr_args(
+                    "cli-diff-overlay-heading",
+                    &[("path", overlay.display().to_string())]
+                )
+            );
             for (i, line) in overlay_content.lines().take(20).enumerate() {
                 let shown = if sanitize {
                     sanitize_output_text(line)
@@ -1216,7 +1394,7 @@ fn cmd_diff(
             }
 
             let diff = similar::TextDiff::from_lines(&base_content, &overlay_content);
-            println!("\nUnified Diff:");
+            println!("{}", tr("cli-diff-unified"));
             for change in diff.iter_all_changes() {
                 let line = change.to_string();
                 let shown = if sanitize {

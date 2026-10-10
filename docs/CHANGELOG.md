@@ -18,6 +18,22 @@
 - 安全审计：`cargo audit` 无漏洞（1296 条公告 / 389 依赖）、`cargo deny check` advisories/bans/licenses/sources 全 ok；warn 级提示为重复传递版本、未命中的 license 白名单与有意的 path-only 开发依赖，无修复项
 - 自研依赖版本未动：`confers-macros` 与 examples/fuzz 的 confers 引用保持 0.6.0-rc.6（按发布链「自研依赖定值」阶段统一升版）
 
+## [0.6.0-rc.7] — 2026-10-08
+
+### Fixed
+
+- **async-core 聚合特性自洽**：补 `dep:async-trait` 缺失声明，`async-core` 单独启用可编译；新增 feature-matrix 工作流覆盖特性组合矩阵。
+- **默认 feature 组合测试门控**：gate `snapshot_extra` 测试模块按默认特性组合门控，修复默认组合下的编译/测试失败。
+
+### Removed
+
+- **死代码与测试专用函数清理**：删除编译器证实的死代码并按需 cfg 特性隔离；生产代码中的测试专用函数移除；测试桩 `allow(dead_code)` 收敛为带理由的精确标注。
+
+### Changed
+
+- **复杂热点收敛**：重复分支抽取辅助函数。
+- **治理与文档**：specmark 目录与 ws-R14 治理复核记录移出 git 跟踪；漏洞报告渠道统一为 GH 安全通告首选、邮箱备选；API 参考密钥管理锚点断链修复。
+
 ## [0.6.0-rc.6] — 2026-10-02
 
 ### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
