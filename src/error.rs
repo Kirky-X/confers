@@ -38,6 +38,7 @@ pub(crate) mod sanitize;
 pub use config_error::ConfigConfigError;
 pub use config_error::{ConfigErrorCode, InitResult};
 
+use crate::i18n::{tr, tr_args};
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -481,7 +482,7 @@ impl ConfigError {
                 } else {
                     path_str
                 };
-                format!("Configuration file '{}' not found", sanitized)
+                tr_args("error-user-file-not-found", &[("filename", sanitized)])
             }
             ConfigError::ParseError {
                 format,
@@ -490,111 +491,147 @@ impl ConfigError {
                 ..
             } => {
                 if let Some(loc) = location {
-                    format!("Failed to parse {} at {}: {}", format, loc, message)
+                    tr_args(
+                        "error-parse-error-at",
+                        &[
+                            ("format", format.clone()),
+                            ("location", loc.to_string()),
+                            ("message", message.clone()),
+                        ],
+                    )
                 } else {
-                    format!("Failed to parse {}: {}", format, message)
+                    tr_args(
+                        "error-parse-error",
+                        &[("format", format.clone()), ("message", message.clone())],
+                    )
                 }
             }
-            ConfigError::ValidationFailed { field, message, .. } => {
-                format!("Field '{}' failed validation: {}", field, message)
-            }
-            ConfigError::SchemaValidationFailed { count } => {
-                format!("Schema validation failed with {} error(s)", count)
-            }
-            ConfigError::DecryptionFailed { .. } => {
-                "Failed to decrypt configuration value".to_string()
-            }
-            ConfigError::RemoteUnavailable { .. } => {
-                "Remote configuration source is unavailable".to_string()
-            }
-            ConfigError::VersionMismatch { found, expected } => {
-                format!(
-                    "Configuration version mismatch: found {}, expected {}",
-                    found, expected
-                )
-            }
+            ConfigError::ValidationFailed { field, message, .. } => tr_args(
+                "error-user-validation-failed",
+                &[("field", field.clone()), ("message", message.clone())],
+            ),
+            ConfigError::SchemaValidationFailed { count } => tr_args(
+                "error-user-schema-validation-failed",
+                &[("count", count.to_string())],
+            ),
+            ConfigError::DecryptionFailed { .. } => tr("error-user-decryption-failed"),
+            ConfigError::RemoteUnavailable { .. } => tr("error-user-remote-unavailable"),
+            ConfigError::VersionMismatch { found, expected } => tr_args(
+                "error-version-mismatch",
+                &[
+                    ("found", found.to_string()),
+                    ("expected", expected.to_string()),
+                ],
+            ),
             ConfigError::MigrationFailed {
                 from, to, reason, ..
-            } => {
-                format!("Migration from v{} to v{} failed: {}", from, to, reason)
-            }
-            ConfigError::ModuleNotFound { group, module } => {
-                format!("Module '{}' not found in group '{}'", module, group)
-            }
-            ConfigError::ReloadRolledBack { reason } => {
-                format!("Configuration reload was rolled back: {}", reason)
-            }
+            } => tr_args(
+                "error-user-migration-failed",
+                &[
+                    ("from", from.to_string()),
+                    ("to", to.to_string()),
+                    ("reason", reason.clone()),
+                ],
+            ),
+            ConfigError::ModuleNotFound { group, module } => tr_args(
+                "error-module-not-found",
+                &[("module", module.clone()), ("group", group.clone())],
+            ),
+            ConfigError::ReloadRolledBack { reason } => tr_args(
+                "error-user-reload-rolled-back",
+                &[("reason", reason.clone())],
+            ),
             ConfigError::ReloadRejected { reason } => {
-                format!("Configuration reload was rejected: {}", reason)
+                tr_args("error-user-reload-rejected", &[("reason", reason.clone())])
             }
-            ConfigError::IoError(e) => format!("IO error: {}", e),
-            ConfigError::InvalidValue { key, message, .. } => {
-                format!("Invalid value for '{}': {}", key, message)
+            ConfigError::IoError(e) => tr_args("error-io", &[("message", e.to_string())]),
+            ConfigError::InvalidValue { key, message, .. } => tr_args(
+                "error-user-invalid-value",
+                &[("key", key.clone()), ("message", message.clone())],
+            ),
+            ConfigError::SourceChainError { message, .. } => {
+                tr_args("error-user-source-chain", &[("message", message.clone())])
             }
-            ConfigError::SourceChainError { message, .. } => message.clone(),
             ConfigError::Timeout { duration_ms } => {
-                format!("Operation timed out after {}ms", duration_ms)
+                tr_args("error-timeout", &[("duration_ms", duration_ms.to_string())])
             }
-            ConfigError::SizeLimitExceeded { actual, limit } => {
-                format!("Size limit exceeded: {} bytes (limit: {})", actual, limit)
-            }
-            ConfigError::InterpolationError { variable, message } => {
-                format!("Interpolation error for '{}': {}", variable, message)
-            }
-            ConfigError::KeyError { .. } => "Encryption key error".to_string(),
+            ConfigError::SizeLimitExceeded { actual, limit } => tr_args(
+                "error-user-size-limit-exceeded",
+                &[("actual", actual.to_string()), ("limit", limit.to_string())],
+            ),
+            ConfigError::InterpolationError { variable, message } => tr_args(
+                "error-interpolation",
+                &[("variable", variable.clone()), ("message", message.clone())],
+            ),
+            ConfigError::KeyError { .. } => tr("error-user-key-error"),
             ConfigError::CircularReference { path } => {
-                format!("Circular reference detected: {}", path)
+                tr_args("error-circular-reference", &[("path", path.clone())])
             }
             ConfigError::LockPoisoned { resource } => {
-                format!("Lock poisoned for resource '{}'", resource)
+                tr_args("error-lock-poisoned", &[("resource", resource.clone())])
             }
-            ConfigError::MultiSource { source } => {
-                format!(
-                    "Multiple sources failed: {}/{}",
-                    source.failed_count, source.total_count
-                )
-            }
-            ConfigError::ConcurrencyConflict { key, message, .. } => {
-                format!("Concurrency conflict on key '{}': {}", key, message)
-            }
+            ConfigError::MultiSource { source } => tr_args(
+                "error-user-multi-source",
+                &[
+                    ("failed", source.failed_count.to_string()),
+                    ("total", source.total_count.to_string()),
+                ],
+            ),
+            ConfigError::ConcurrencyConflict { key, message, .. } => tr_args(
+                "error-concurrency-conflict",
+                &[("key", key.clone()), ("message", message.clone())],
+            ),
             ConfigError::KeyRotationFailed {
                 from_version,
                 to_version,
                 reason,
-            } => {
-                format!(
-                    "Key rotation failed from '{}' to '{}': {}",
-                    from_version, to_version, reason
-                )
-            }
+            } => tr_args(
+                "error-key-rotation-failed",
+                &[
+                    ("from_version", from_version.clone()),
+                    ("to_version", to_version.clone()),
+                    ("reason", reason.clone()),
+                ],
+            ),
             ConfigError::WatcherError {
                 message,
                 path,
                 recoverable,
             } => {
-                let path_str = path
+                let path_suffix = path
                     .as_ref()
                     .map(|p| format!(" for '{}'", p.display()))
                     .unwrap_or_default();
-                let recovery_str = if *recoverable { " (recoverable)" } else { "" };
-                format!("Watcher error{}: {}{}", path_str, message, recovery_str)
+                let recovery = if *recoverable { " (recoverable)" } else { "" };
+                tr_args(
+                    "error-user-watcher-error",
+                    &[
+                        ("path_suffix", path_suffix),
+                        ("message", message.clone()),
+                        ("recovery", recovery.to_string()),
+                    ],
+                )
             }
             ConfigError::OverrideBlocked {
                 key,
                 reason,
                 override_source,
             } => {
-                let source_str = override_source
+                let source_suffix = override_source
                     .as_ref()
                     .map(|s| format!(" from '{}'", s))
                     .unwrap_or_default();
-                format!(
-                    "Override blocked for key '{}'{}: {}",
-                    key, source_str, reason
+                tr_args(
+                    "error-user-override-blocked",
+                    &[
+                        ("key", key.clone()),
+                        ("source_suffix", source_suffix),
+                        ("reason", reason.clone()),
+                    ],
                 )
             }
             ConfigError::HealthCheckFailed { reason } => {
-                format!("Health check failed: {}", reason)
+                tr_args("error-health-check-failed", &[("reason", reason.clone())])
             }
         }
     }
@@ -631,6 +668,19 @@ pub struct MultiSourceError {
     pub failed_count: usize,
     /// Total number of sources attempted
     pub total_count: usize,
+}
+
+impl crate::i18n::LocalizedMsg for MultiSourceError {
+    fn message_key(&self) -> &'static str {
+        "error-multi-source-detail"
+    }
+
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("failed", self.failed_count.to_string()),
+            ("total", self.total_count.to_string()),
+        ]
+    }
 }
 
 impl MultiSourceError {

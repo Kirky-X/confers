@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::tr;
 
 /// OS keyring port (object safe).
 pub trait KeyringStore: Send + Sync {
@@ -260,10 +261,7 @@ impl MasterKeyStore {
             Box::new(SecretToolKeyringStore::new())
         } else {
             crate::metrics::record_counter("confers_keyring_fallback_total", &[("store", "file")]);
-            log::warn!(
-                "OS keyring (secret-tool/Secret Service) unavailable; falling back to a \
-                 chmod-600 file store — the master key is protected by file permissions only"
-            );
+            log::warn!("{}", tr("log-keyring-fallback-file-store"));
             Box::new(FileKeyringStore::new(fallback_dir))
         }
     }

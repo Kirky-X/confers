@@ -20,6 +20,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 use crate::error::{ConfigConfigError, ConfigResult};
+use crate::i18n::tr_args;
 use crate::lifecycle::Lifecycle;
 
 #[cfg(feature = "nats-bus")]
@@ -143,7 +144,11 @@ impl ConfigBus for InMemoryBus {
                     // This must not be swallowed silently: the instance may
                     // now hold stale configuration and should re-sync.
                     log::warn!(
-                        "InMemoryBus subscriber lagged; {skipped} configuration change event(s) were dropped"
+                        "{}",
+                        tr_args(
+                            "log-inmemory-bus-subscriber-lagged",
+                            &[("skipped", skipped.to_string())]
+                        )
                     );
                     None
                 }

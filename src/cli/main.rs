@@ -31,18 +31,24 @@ fn main() {
     }
 }
 
-/// Render an anyhow error chain with every `ConfersError` segment localized
+/// Render an anyhow error chain with every confers error segment localized
 /// through the errors catalog; segments from other error types keep their
 /// original text. Mirrors anyhow's `{e:#}` alternate format (`a: b: c`).
 fn localized_chain(e: &anyhow::Error) -> String {
+    use confers::error::{ConfigConfigError, MultiSourceError};
     use confers::i18n::I18nExt;
     e.chain()
-        .map(
-            |cause| match cause.downcast_ref::<confers::ConfersError>() {
-                Some(config_err) => config_err.to_localized_string(),
-                None => cause.to_string(),
-            },
-        )
+        .map(|cause| {
+            if let Some(config_err) = cause.downcast_ref::<confers::ConfersError>() {
+                config_err.to_localized_string()
+            } else if let Some(config_err) = cause.downcast_ref::<ConfigConfigError>() {
+                config_err.to_localized_string()
+            } else if let Some(multi_err) = cause.downcast_ref::<MultiSourceError>() {
+                multi_err.to_localized_string()
+            } else {
+                cause.to_string()
+            }
+        })
         .collect::<Vec<_>>()
         .join(": ")
 }

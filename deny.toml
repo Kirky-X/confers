@@ -15,7 +15,6 @@ allow = [
     "MIT-0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
     "Unicode-3.0",
@@ -34,11 +33,11 @@ unused-allowed-license = "warn"
 [[licenses.clarify]]
 name = "confers"
 expression = "MIT"
-license-files = [{ path = "LICENSE", hash = 0x4f94917e }]
+license-files = [{ path = "LICENSE", hash = 0xfb13e7ad }]
 [[licenses.clarify]]
 name = "confers-macros"
 expression = "MIT"
-license-files = [{ path = "LICENSE", hash = 0x4f94917e }]
+license-files = [{ path = "../LICENSE", hash = 0xfb13e7ad }]
 
 [bans]
 multiple-versions = "warn"

@@ -19,6 +19,7 @@ use futures_util::{Stream, StreamExt};
 
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
+use crate::i18n::tr_args;
 use crate::lifecycle::Lifecycle;
 
 /// How long the NATS server may leave a pull consumer idle before removing
@@ -290,9 +291,7 @@ impl ConfigBus for NatsConfigBus {
                             // `NATS_MAX_DELIVER` times (the server terminates
                             // it afterwards). Best-effort: nak errors ignored.
                             let _ = msg
-                                .ack_with(async_nats::jetstream::AckKind::Nak(Some(
-                                    NATS_NAK_DELAY,
-                                )))
+                                .ack_with(async_nats::jetstream::AckKind::Nak(Some(NATS_NAK_DELAY)))
                                 .await;
                             None
                         }
@@ -304,7 +303,8 @@ impl ConfigBus for NatsConfigBus {
                     // automatically; log so the outage is visible instead of
                     // silently dropping the error.
                     log::warn!(
-                        "NATS config-bus consumer error (bus may be offline; the client will reconnect automatically): {e}"
+                        "{}",
+                        tr_args("log-nats-consumer-error", &[("message", e.to_string())])
                     );
                     None
                 }

@@ -9,7 +9,7 @@
 #[cfg(feature = "watch")]
 use crate::error::{ConfigError, ConfigResult};
 #[cfg(feature = "watch")]
-use crate::i18n::tr_args;
+use crate::i18n::{tr, tr_args};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -761,7 +761,13 @@ impl MultiFsWatcher {
                     // Make the failure observable instead of exiting
                     // silently: `is_running()` reports false and closing the
                     // sender store lets a pending `recv()` return `None`.
-                    log::error!("failed to create file watcher debouncer: {e}");
+                    log::error!(
+                        "{}",
+                        tr_args(
+                            "log-fs-watcher-debouncer-create-failed",
+                            &[("message", e.to_string())]
+                        )
+                    );
                     failed.store(true, std::sync::atomic::Ordering::SeqCst);
                     running.store(false, std::sync::atomic::Ordering::SeqCst);
                     close_sender(&tx_store);
@@ -785,7 +791,16 @@ impl MultiFsWatcher {
                 match debouncer.watch(target, RecursiveMode::Recursive) {
                     Ok(()) => watched_any = true,
                     Err(e) => {
-                        log::warn!("failed to watch {}: {e}", target.display());
+                        log::warn!(
+                            "{}",
+                            tr_args(
+                                "log-fs-watch-failed",
+                                &[
+                                    ("path", target.display().to_string()),
+                                    ("message", e.to_string()),
+                                ]
+                            )
+                        );
                     }
                 }
             }
@@ -796,7 +811,7 @@ impl MultiFsWatcher {
             // producing an event. Record the failure so `is_running()`
             // reports false, and close the channel so a pending `recv()`
             // returns `None`.
-            log::error!("failed to watch any of the requested paths");
+            log::error!("{}", tr("log-fs-watcher-no-path-watched"));
             failed.store(true, std::sync::atomic::Ordering::SeqCst);
             running.store(false, std::sync::atomic::Ordering::SeqCst);
             close_sender(&tx_store);
