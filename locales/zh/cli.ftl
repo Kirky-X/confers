@@ -1,6 +1,7 @@
 # confers CLI 目录(zh)。与 en/cli.ftl 键一一对应。
 
 cli-about = confers 配置诊断工具
+cli-lang-help = UI 语言,使用 BCP-47 标签(`zh`/`en`; 其他格式正确的标签回退到英文文案)。覆盖 CONFERS_LANG 与语言环境检测
 cli-error-prefix = 错误
 cli-inspect-title = 配置巡检
 cli-inspect-loaded-sources = 已加载 { $count } 个配置源
@@ -22,3 +23,4 @@ cli-doctor-encryption-not-compiled = 编译时未启用 encryption 特性; 加�
 cli-schema-absolute-path-not-allowed = 不允许使用绝对路径: { $path }; 可通过 --allow-absolute-paths 覆盖此限制
 cli-schema-read-failed = 读取 schema 失败: { $path }
 cli-schema-parse-failed = 解析 schema 失败: { $path }
+cli-docs-global-args-lang = --lang <bcp47> (zh/en; 其他标签回退到 en)

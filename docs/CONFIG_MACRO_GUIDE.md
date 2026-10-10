@@ -56,7 +56,7 @@ pub struct ConfersConfig {
 ```
 
 **效果**：
-- 读取环境变量时附加前缀
+- 读取环境变量时附加前缀（前缀按原样拼接，不自动补下划线：`"APP_"` → `APP_NAME`，写成 `"APP"` 会得到 `APPNAME`）
 - 例如：`APP_NAME=myapp` 映射到 `name` 字段
 
 ---
@@ -219,14 +219,14 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(env_prefix = "APP")]
+#[config(env_prefix = "APP_")]
 pub struct ConfersConfig {
-    #[config(name_env = "CUSTOM_PORT")]  // 读取 APP_CUSTOM_PORT
+    #[config(name_env = "CUSTOM_PORT")]  // 读取 CUSTOM_PORT（原样使用，不叠加前缀）
     pub port: u16,
 }
 ```
 
-**优先级**：`name_env` > 自动推导
+**优先级**：`name_env` > 自动推导（声明 `name_env` 后，该字段只读取声明的环境变量名，不叠加 `env_prefix`、也不回退默认派生命名）
 
 ---
 
@@ -709,7 +709,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `default` | 默认值表达式 |
 | `description` | 用于文档的字段描述 |
 | `name` | 覆盖配置键名 |
-| `name_env` | 覆盖环境变量名 |
+| `name_env` | 覆盖环境变量名（原样使用，不叠加 `env_prefix`） |
 | `name_clap_long` | CLI 长参数名 |
 | `name_clap_short` | CLI 短参数字符 |
 | `sensitive` | 标记为敏感字段（日志中隐藏）；字段类型必须为 `SecretString` / `SecretBytes`（需 `encryption` 特性） |

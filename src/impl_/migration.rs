@@ -336,12 +336,10 @@ impl MigrationRegistry {
             .get_migration_path(from, to)
             .ok_or_else(|| ConfigError::migration_not_found(from, to))?;
 
-        // Execute migrations along the path
         for i in 0..path.len() - 1 {
             let current_version = path[i];
             let next_version = path[i + 1];
 
-            // Get mutable reference to the migration function
             let migration = self
                 .migrations
                 .get_mut(&(current_version, next_version))

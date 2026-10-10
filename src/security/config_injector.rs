@@ -284,10 +284,8 @@ impl ConfigInjector {
             });
         }
 
-        // 验证配置名称
         self.validate_injection(name, value)?;
 
-        // 存储配置值
         {
             let mut values = self
                 .values
@@ -761,15 +759,12 @@ mod tests {
     fn test_config_injector_basic() {
         let injector = without_rate_limit(ConfigInjector::new());
 
-        // 注入配置
         assert!(injector.inject("APP_PORT", "8080").is_ok());
         assert!(injector.inject("APP_DEBUG", "true").is_ok());
 
-        // 获取配置
         assert_eq!(injector.get("APP_PORT"), Some("8080".to_string()));
         assert_eq!(injector.get("APP_DEBUG"), Some("true".to_string()));
 
-        // 检查存在性
         assert!(injector.contains("APP_PORT").unwrap());
         assert!(!injector.contains("APP_NONEXISTENT").unwrap());
     }

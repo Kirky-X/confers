@@ -1081,7 +1081,6 @@ mod tests {
 
     #[test]
     fn test_normalize_accepts_valid_relative_path() {
-        // Create a temp file to test with
         let temp_dir = std::env::temp_dir();
         let test_file = temp_dir.join("confers_test_config.toml");
         std::fs::write(&test_file, "[test]\nkey = \"value\"").unwrap();
@@ -1093,7 +1092,6 @@ mod tests {
                 .unwrap_or_else(|_| &test_file)
                 .display()
         );
-        // Use the temp file directly
         let result = normalize_and_validate_path(&test_file, &[], false, true);
 
         // Should succeed - temp dir is canonicalized and is in current dir tree

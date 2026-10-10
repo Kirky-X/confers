@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 //! Remote configuration source & bus integration tests —
-//! HTTP polled sources, etcd, consul, NATS bus, and Redis bus.
+//! HTTP polled sources, etcd, consul, nacos, NATS bus, and Redis bus.
 
 #[path = "../common.rs"]
 pub mod common;
@@ -11,4 +11,5 @@ mod bus;
 mod consul;
 mod etcd;
 mod etcd_watch;
+mod nacos;
 mod remote;

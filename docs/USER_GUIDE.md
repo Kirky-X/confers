@@ -117,7 +117,7 @@ use confers::{Config, ConfigBuilder};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Config)]
-#[config(env_prefix = "APP")]
+#[config(env_prefix = "APP_")]
 struct ConfersConfig {
     #[config(default = 8080)]
     port: u16,
@@ -206,7 +206,7 @@ graph TB
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, Config)]
-#[config(env_prefix = "APP")]
+#[config(env_prefix = "APP_")]
 pub struct ConfersConfig {
     #[config(default = "\"127.0.0.1\".to_string()")]
     pub host: String,
@@ -297,7 +297,7 @@ struct DatabaseConfig {
 }
 
 #[derive(Config, Deserialize)]
-#[config(env_prefix = "MYAPP")]
+#[config(env_prefix = "MYAPP_")]
 struct MyConfig {
     #[config(default = "100")]
     timeout_ms: u64,
@@ -439,7 +439,7 @@ confers -c app.toml export --with-provenance
 # 对比两份配置，输出 unified diff
 confers diff --base base.toml --overlay overlay.toml
 
-# 结构化 JSON 输出；--sanitize 控制是否脱敏（默认开启）
+# 结构化 JSON 输出；输出始终脱敏（--sanitize 是默认开启的布尔开关，不接受取值、无法关闭）
 confers diff --base a.toml --overlay b.toml --format json
 ```
 
@@ -752,7 +752,7 @@ use confers::secret::SecretString;
 use serde::Deserialize;
 
 #[derive(Config, Deserialize)]
-#[config(env_prefix = "APP")]
+#[config(env_prefix = "APP_")]
 struct SecureConfig {
     // 标记敏感字段，审计日志会自动脱敏；
     // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性）
@@ -1023,7 +1023,7 @@ beta_api = false
 
 | 问题 | 解决方案 |
 |------|----------|
-| **❓ 环境变量不生效** | 1. 检查 `#[config(env_prefix = "APP")]` 是否设置正确。<br>2. 环境变量名应为 `PREFIX_FIELD_NAME`（全大写）。<br>3. 嵌套结构体可用双下划线：先调用 `.env_separator("__")`（必须在 `env_prefix`/`env` 之前），随后 `APP_DB__HOST` 映射到 `db.host`；默认分隔符是单下划线。 |
+| **❓ 环境变量不生效** | 1. 检查 `#[config(env_prefix = "APP_")]` 是否设置正确：前缀按原样拼接、不自动补下划线，需自带分隔下划线（`"APP_"` → `APP_PORT`；写成 `"APP"` 只会得到 `APPPORT`）。<br>2. 环境变量名为「前缀 + 字段名（全大写）」，前缀需自带尾部下划线（`PREFIX_` → `PREFIX_FIELD_NAME`）。<br>3. 嵌套结构体可用双下划线：先调用 `.env_separator("__")`（必须在 `env_prefix`/`env` 之前），随后 `APP_DB__HOST` 映射到 `db.host`；默认分隔符是单下划线。 |
 | **❓ 加载时报 SizeLimitExceeded 错误** | 1. 检查配置文件是否过大或存在循环引用。<br>2. 通过 `.limits(ConfigLimits { .. })` 调整文件大小、嵌套深度、键数量等上限。 |
 | **❓ `confers_validate()` 校验失败** | 1. 检查 `garde` 约束逻辑。校验不会在构建阶段自动执行：需启用 `validation` 特性、使用 `#[config(validate_helper)]`，并在 `build()` 后显式调用 `confers_validate()`。<br>2. 查看错误输出，其中会指出哪个字段未通过哪条约束。 |
 | **❓ 远程配置加载失败 RemoteUnavailable** | 1. 检查网络连接与 URL 正确性。<br>2. 若启用了 TLS，确保证书路径正确且有效。<br>3. 检查认证令牌或用户名/口令是否过期。 |

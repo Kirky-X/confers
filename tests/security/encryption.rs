@@ -95,7 +95,6 @@ mod tests {
         let original = SecretBytes::new(vec![10, 20, 30]);
         let original_slice = original.as_slice().to_vec();
 
-        // Create another instance with same content
         let another = SecretBytes::new(original_slice.clone());
 
         assert_eq!(original.as_slice(), another.as_slice());

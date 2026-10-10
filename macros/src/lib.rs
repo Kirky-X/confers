@@ -225,16 +225,11 @@ pub fn config_clap_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
-    // Parse struct-level attributes
     let struct_attrs = StructAttrs::from_derive_input(input).map_err(syn::Error::from)?;
-
-    // Validate struct attributes
     struct_attrs.validate(input).map_err(syn::Error::from)?;
 
-    // Get the struct identifier
     let struct_ident = &input.ident;
 
-    // Get fields if it's a named struct
     let fields = match &input.data {
         Data::Struct(data) => &data.fields,
         _ => {

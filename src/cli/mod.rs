@@ -218,9 +218,12 @@ struct Cli {
     #[arg(long, global = true)]
     fields: Option<String>,
 
-    /// UI language as a BCP-47 tag (`zh`/`en`; other well-formed tags fall
-    /// back to the English catalog). Overrides CONFERS_LANG and locale detection.
-    #[arg(long, global = true, value_name = "LANG")]
+    #[arg(
+        long,
+        global = true,
+        value_name = "LANG",
+        help = crate::i18n::tr("cli-lang-help")
+    )]
     lang: Option<String>,
 
     #[command(subcommand)]
@@ -1102,6 +1105,13 @@ fn cmd_diff(
     allow_absolute_paths: bool,
 ) -> Result<()> {
     use crate::loader;
+
+    // Unknown formats must fail loud: silently falling back to the text
+    // renderer would make a typo (`--format jsom`) look like a successful run.
+    match format {
+        "text" | "json" => {}
+        _ => anyhow::bail!("Unsupported format: {}", format),
+    }
 
     if !allow_absolute_paths {
         if base.is_absolute() {
@@ -2351,7 +2361,7 @@ pub fn agent_knowledge_json() -> serde_json::Value {
             {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
             {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
         ],
-        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>", "--lang <bcp47> (zh/en; others fall back to en)"],
+        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>", tr("cli-docs-global-args-lang")],
         "exit_codes": {
             "0": "success (or doctor: healthy)",
             "1": "configuration error / doctor has warnings",
@@ -2503,6 +2513,26 @@ mod tests {
             None
         );
         assert_eq!(find_lang_preset(&os_args(&["--lang="])), None);
+    }
+
+    #[test]
+    fn test_lang_arg_help_is_catalog_backed() {
+        let expected = tr("cli-lang-help");
+        // A missing catalog key falls back to the key itself; the rendering
+        // assertion below would then pass vacuously.
+        assert_ne!(expected, "cli-lang-help", "catalog key is missing");
+        // Both `-h` and `--help` must render the catalog text for the active
+        // locale (a literal `help = "..."` would leak English under zh).
+        for rendered in [
+            <Cli as clap::CommandFactory>::command().render_help(),
+            <Cli as clap::CommandFactory>::command().render_long_help(),
+        ] {
+            let rendered = rendered.to_string();
+            assert!(
+                rendered.contains(&expected),
+                "--lang help must come from the catalog: {rendered}"
+            );
+        }
     }
 
     #[test]
@@ -3859,6 +3889,18 @@ mod tests {
     }
 
     #[test]
+    fn test_cmd_diff_unknown_format_flag_fails() {
+        // `--format xml` must bail before touching the files: an unknown
+        // value used to fall through to the text renderer and exit 0.
+        let base = std::path::PathBuf::from("base.toml");
+        let overlay = std::path::PathBuf::from("overlay.toml");
+        let result = cmd_diff(&base, &overlay, "xml", true, true);
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Unsupported format"), "got: {err}");
+        assert!(err.contains("xml"), "got: {err}");
+    }
+
+    #[test]
     fn test_cmd_diff_absolute_path_rejected() {
         use std::io::Write;
         let mut base = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
@@ -5034,6 +5076,19 @@ mod docs_agent_tests {
         for recipe in pack["recipes"].as_array().expect("recipes") {
             assert!(!recipe["command"].as_str().unwrap().is_empty());
         }
+    }
+
+    #[test]
+    fn knowledge_pack_global_args_lang_entry_is_catalog_backed() {
+        let pack = agent_knowledge_json();
+        let args = pack["global_args"].as_array().expect("global_args");
+        let entry = args.last().and_then(|v| v.as_str()).expect("lang entry");
+        assert_eq!(entry, tr("cli-docs-global-args-lang"));
+        // The flag name itself is never translated.
+        assert!(
+            entry.contains("--lang"),
+            "entry lost its flag name: {entry}"
+        );
     }
 
     #[test]

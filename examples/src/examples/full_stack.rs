@@ -141,7 +141,6 @@ fn demo_dynamic_fields() -> Result<(), Box<dyn std::error::Error>> {
     info!("Demo 4: Dynamic Fields");
     info!("============================================================");
 
-    // Create a dynamic field
     let field = DynamicField::new(42i32);
     info!("Initial value: {}", field.get());
 

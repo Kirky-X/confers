@@ -13,7 +13,8 @@
 //! - CLI-15 `snapshot list --directory` 非空目录输出快照表
 //! - CLI-16 `snapshot diff --latest 2` 快照不足 2 份时友好提示(退出码 0,行为固化)
 //! - CLI-17 `snapshot prune --older-than abc` → fail loud:invalid duration
-//! - CLI-23 `export --format xml` → "Unsupported format" 非零退出
+//! - CLI-23 `export --format xml` → "Unsupported format" 非零退出(同 ID 亦覆盖
+//!   `diff --format xml` 的同类 bail)
 //! - CLI-24 inspect 对长字符串截断;UTF-8 多字节按字符截断不 panic
 //! - SCH-05 validate `--format json` 对坏配置输出 `valid:false + issues`(schema 语义联动)
 //!
@@ -389,6 +390,42 @@ fn cli24_inspect_truncates_long_strings_char_safely() {
         "utf-8 value must be truncated on char boundaries: {cjk_row}"
     );
     assert!(!body.contains('\u{fffd}'), "no replacement chars allowed");
+}
+
+#[test]
+fn cli23b_diff_unsupported_format_bails_nonzero() {
+    let dir = setup_dir();
+    let base = write_config(&dir, "base.toml", "server.port = 8080\n");
+    let overlay = write_config(&dir, "overlay.toml", "server.port = 9090\n");
+
+    let out = run_cli(
+        &dir,
+        &[
+            "diff",
+            "--base",
+            &base,
+            "--overlay",
+            &overlay,
+            "--format",
+            "xml",
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "unsupported diff format must bail, stdout: {}",
+        stdout(&out)
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains("Unsupported format"),
+        "error must name the problem: {err}"
+    );
+    assert!(
+        !stdout(&out).contains("Unified Diff"),
+        "an unknown format must not fall back to the text renderer: {}",
+        stdout(&out)
+    );
 }
 
 #[test]

@@ -155,7 +155,7 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 
 ##### `env_prefix(prefix: impl Into<String>)`
 
-添加带前缀的环境变量来源。只加载以该前缀开头的环境变量。
+添加带前缀的环境变量来源：只加载以该前缀开头的环境变量，剥离前缀后映射到配置字段。前缀按原样匹配与剥离，不自动补分隔下划线：需写成 `"APP_"` 才能映射 `APP_PORT`；写成 `"APP"` 时 `APP_PORT` 会残留前导下划线，无法映射到 `port` 字段。
 
 ```rust
 pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self
@@ -165,7 +165,7 @@ pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self
 
 ```rust
 let builder = ConfigBuilder::<ConfersConfig>::new()
-    .env_prefix("APP");
+    .env_prefix("APP_");
 // 加载 APP_PORT、APP_HOST 等
 ```
 
@@ -174,10 +174,10 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 ```rust
 let builder = ConfigBuilder::<ConfersConfig>::new()
     .env()
-    .env_prefix("APP");
+    .env_prefix("APP_");
 ```
 
-**说明**：环境变量优先级高于配置文件，但低于内存来源。
+**说明**：环境变量优先级高于配置文件，但低于内存来源。`.env()` 与 `.env_prefix()` 添加的是两个相互独立的来源，同时调用时 `.env()` 仍会收集全部环境变量。
 
 ##### `with_snapshot(config: SnapshotConfig)`（需要 `snapshot` 特性）
 
@@ -972,7 +972,7 @@ storage.load()?;                     // 从存储路径加载密钥
 
 `XChaCha20Crypto` 实现 XChaCha20-Poly1305 加密以保护敏感配置值，提供带关联数据的认证加密（AEAD）。需要启用 `encryption` 特性。
 
-> **历史算法披露**：AES-256-GCM 已被 XChaCha20-Poly1305 取代，仅作历史密文的解密通道保留。错误变体 `CryptoError::LegacyDecryptionFailed`（「legacy decryption failed (AES-256-GCM)」）在源码中标 `#[deprecated(since = "0.4.2", note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5")]`——**计划于 v0.5 移除**，届时以 AES-256-GCM 加密的历史配置值将无法解密。仍持有旧密文的部署需在 v0.5 之前用新算法重新加密（读旧写新即可迁移），并把 `KeyStatus::Deprecated`（见密钥状态枚举）对应的密钥环排入轮换。
+> **历史算法披露**：AES-256-GCM 已被 XChaCha20-Poly1305 取代。错误变体 `CryptoError::LegacyDecryptionFailed`（「legacy decryption failed (AES-256-GCM)」）仍保留在枚举中，源码注记为 `#[deprecated(since = "0.4.2", note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5")]`；但**截至当前 v0.6.0-rc.6 该移除并未执行**，且 `src/` 内已无任何代码路径构造该变体（crate 依赖中也不含 AES 实现）——AES-256-GCM 解密通道实际已不存在，原「v0.5 之前完成迁移」的时限对用户不再适用。仍持有 AES-256-GCM 历史密文的部署应尽快用新算法重新加密（读旧写新即可迁移），并把 `KeyStatus::Deprecated`（见密钥状态枚举）对应的密钥环排入轮换。
 
 
 ```mermaid
@@ -1402,10 +1402,9 @@ let ts = TypeScriptGenerator::generate::<ConfersConfig>()?;
 println!("{}", ts);
 ```
 
-**输出：**
+**输出**（生成器只拼接 `export interface` / `export type`，不输出自动生成标记注释）：
 
 ```typescript
-// Auto-generated from Rust
 export interface ConfersConfig {
   name: string;
   port: number;
@@ -1457,7 +1456,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()
-        .env_prefix("MYAPP")
+        .env_prefix("MYAPP_")
         .build()?;
 
     println!("Database: {}", config.database_url);
@@ -1803,7 +1802,8 @@ writer.log_decrypt("api_key", true)?;
 # 使用环境变量存储敏感信息
 export APP_DATABASE_URL="postgres://user:password@localhost/db"  # pragma: allowlist secret
 export APP_API_KEY="your-api-key"  # pragma: allowlist secret
-export CONFERS_MASTER_KEY="base64-encoded-key"  # pragma: allowlist secret
+# CONFERS_MASTER_KEY 取 64 位 hex 编码的 32 字节密钥，或 32 字节 ASCII 密钥（不解析 base64）
+export CONFERS_MASTER_KEY="64-hex-chars-or-32-ascii-chars"  # pragma: allowlist secret
 ```
 
 **远程配置安全配置：**
@@ -1952,7 +1952,7 @@ pub fn log_load(&self, source: &str) -> ConfigResult<()>
 | 问题 | 解决方案 |
 |------|----------|
 | **问：找不到配置文件？** | 检查文件路径是否正确；使用 `.file("config.toml")` 显式指定路径，可选文件用 `.file_optional()`（不存在时静默跳过），或使用 `.source()` 接入自定义来源。 |
-| **问：环境变量不生效？** | 确认已调用 `.env()` 或 `.env_prefix("PREFIX")`，并检查环境变量名是否使用了正确的前缀。例如配置字段 `port` 对应的环境变量名为 `<PREFIX>_PORT`。 |
+| **问：环境变量不生效？** | 确认已调用 `.env()` 或 `.env_prefix("PREFIX_")`，并检查环境变量名是否使用了正确的前缀。前缀按原样匹配、不自动补下划线：例如 `.env_prefix("APP_")` 时配置字段 `port` 对应的环境变量名为 `APP_PORT`；写成 `.env_prefix("APP")` 会读不到该字段。 |
 | **问：加密/解密失败？** | 确保加密与解密使用同一 32 字节密钥；使用 `derive_field_key` 派生字段密钥时，`field_path` 与 `key_version` 必须与加密时完全一致。 |
 | **问：配置校验失败？** | 查看详细的校验错误信息，确保配置值满足全部校验约束。检查字段类型是否匹配。 |
 | **问：远程配置加载超时？** | 检查网络连接与远程服务可用性，在构建来源时配置超时：`HttpPolledSourceBuilder::new().url(url).timeout(Duration::from_secs(60)).build()?`。 |

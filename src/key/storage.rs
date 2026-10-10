@@ -1247,7 +1247,6 @@ mod tests {
         let storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
         let backup_dir = temp_dir.path().join("mixed");
         std::fs::create_dir_all(&backup_dir).unwrap();
-        // Create a valid backup file
         std::fs::write(backup_dir.join("keys_backup_1000.json"), "{}").unwrap();
         // Create non-backup files that should be ignored
         std::fs::write(backup_dir.join("random.json"), "{}").unwrap();

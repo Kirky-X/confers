@@ -168,7 +168,6 @@ mod tests {
     #[test]
     #[serial]
     fn test_key_length_exactly_32_bytes() {
-        // 设置正确的 32 字节密钥
         // SAFETY: Mutating the environment is only sound in single-threaded
         // code. This test is `#[serial]` (serialized against every other
         // env-touching test) and uses a variable name exclusive to this test,
@@ -192,7 +191,6 @@ mod tests {
     #[test]
     #[serial]
     fn test_key_length_31_bytes_rejected() {
-        // 设置 31 字节密钥（太短）
         // SAFETY: Mutating the environment is only sound in single-threaded
         // code. This test is `#[serial]` (serialized against every other
         // env-touching test) and uses a variable name exclusive to this test,
@@ -220,7 +218,6 @@ mod tests {
     #[test]
     #[serial]
     fn test_key_length_33_bytes_rejected() {
-        // 设置 33 字节密钥（太长）
         // SAFETY: Mutating the environment is only sound in single-threaded
         // code. This test is `#[serial]` (serialized against every other
         // env-touching test) and uses a variable name exclusive to this test,

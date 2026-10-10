@@ -439,11 +439,9 @@ mod tests {
             .register_key("v1".to_string(), SecretBytes::new(key1.clone()), true)
             .unwrap();
 
-        // Encrypt with key1
         let plaintext = b"secret message";
         let (nonce, ciphertext) = crypto.encrypt(plaintext, &key1).unwrap();
 
-        // Try to decrypt with registry
         let result = registry.try_decrypt_with_all_keys(&nonce, &ciphertext);
         assert!(result.is_ok());
 

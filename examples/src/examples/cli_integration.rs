@@ -142,7 +142,6 @@ fn main() -> anyhow::Result<()> {
     println!("  log_level: {:?}", cli_args.log_level);
     println!("  debug:     {}", cli_args.debug);
 
-    // 步骤 3: 转换为覆盖映射
     println!("\n=== 步骤 3: 转换为覆盖映射 (to_config_map) ===");
     let overrides = cli_args.to_config_map();
     print_overrides(&overrides);

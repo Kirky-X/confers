@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 依赖升级与特性裁剪（三方依赖升版 + 特性裁剪收口）
+
+- 直接依赖升版：`etcd-client` 0.20→0.21（0.x minor，属 semver 破坏性位次）：上游 0.21.0 发布说明为纯新增（etcd 3.7 streaming range reads、`MaintenanceClient::downgrade`、etcd 3.6 响应字段），`tls` 特性展开（`tls` → `tls-ring`）与 0.20 逐项一致，本仓用点（`Client`/`ConnectOptions`/`TlsOptions`/`GetOptions`/`EventType`/`WatchOptions`）无签名变化
+- 兼容性验证方式（本次实测）：`cargo check --workspace --all-features --all-targets`、`cargo hack check --each-feature`（53/53 组合，0 error）、`cargo test --all-features --lib`（2404 passed / 0 failed）、`cargo test --all-features --test remote`（74 passed，覆盖 `src/remote/etcd.rs` 与 `src/remote/etcd_watch.rs` 的用例）
+- 传递依赖 patch 刷新（`cargo update`，Cargo.lock）：toml 1.1.7→1.1.8、syn 3.0.6→3.0.7、cc 1.6.0→1.7.0、smallvec 1.16.2→1.16.3、tokio-util 0.7.19→0.7.20、toml_parser 1.1.4→1.1.5、uuid 1.27.0→1.28.0；`cargo outdated` 复核输出 All dependencies are up to date（matchit 0.8.4 由 axum 0.8.9 的 `=0.8.4` 精确锁定，非本仓可控）
+- 特性收窄（`default-features = false` 不变，显式特性最小化，root 与 `[workspace.dependencies]` 同步以免经继承回灌）：`async-nats` 去 `server_2_10`/`server_2_11`/`server_2_12`/`server_2_14`（仅门控新版本服务端 API 的 cfg 面，本仓只用核心 JetStream API，真实 NATS 2.10 JetStream 用例复验通过）；`clap` 去 `env`（仓库内无 `env` 参数属性使用点）；`futures-util` 去 `async-await`/`async-await-macro`、workspace `futures` 去 `async-await`（仓库内无 futures 宏使用点）；`tracing` 去 `attributes`（root + examples，全仓无 `#[instrument]`）；`confers-macros`（自研，未声明任何特性）补 `default-features = false` 以与全仓逐依赖显式声明约定一致
+- 保留的显式特性（有使用点或文档承诺，未裁）：`garde` `email`/`url`/`regex`、`clap` `color`/`suggestions`/`usage`/`error-context`、`moka` `future`+`sync`、`etcd-client` `tls`
+- CI actions 升级（SHA pin）：taiki-e/install-action v2.87.26→v2.87.27、dtolnay/rust-toolchain SHA 前进至 master HEAD；checkout/rust-cache/setup-protoc/codecov/upload-artifact/codeql/gh-release 经 gh api 逐个比对已是最新未动
+- 安全审计：`cargo audit` 无漏洞（1296 条公告 / 389 依赖）、`cargo deny check` advisories/bans/licenses/sources 全 ok；warn 级提示为重复传递版本、未命中的 license 白名单与有意的 path-only 开发依赖，无修复项
+- 自研依赖版本未动：`confers-macros` 与 examples/fuzz 的 confers 引用保持 0.6.0-rc.6（按发布链「自研依赖定值」阶段统一升版）
+
 ## [0.6.0-rc.6] — 2026-10-02
 
 ### fix-audit-defects-r1（2026-09-23 审计缺陷修复，52 项）
@@ -64,7 +75,7 @@
 
 ### 依赖升级与特性裁剪
 
-- 传递依赖 patch 升级（`cargo update`，Cargo.lock）：lazy_static 1.5.0→1.5.1、pulldown-cmark-to-cmark 22.0.1→22.0.3、quinn-proto 0.11.18→0.11.19、quinn-udp 0.5.15→0.5.16、tokio-rustls 0.26.5→0.26.6、xxhash-rust 0.8.18→0.8.19、yoke-derive 0.8.3→0.8.4；直接依赖 x.x 基线经 crates.io 核对均已在最新稳定 major.minor，无版本号变更
+- 传递依赖 patch 升级（`cargo update`，Cargo.lock）：lazy_static 1.5.0→1.5.1、pulldown-cmark-to-cmark 22.0.1→22.0.3、quinn-proto 0.11.18→0.11.19、quinn-udp 0.5.15→0.5.16、tokio-rustls 0.26.5→0.26.6、xxhash-rust 0.8.18→0.8.19、yoke-derive 0.8.3→0.8.4；直接依赖 x.x 基线经 crates.io 核对均已在最新稳定 major.minor，无版本号变更（该结论限于 rc.6 发布时点；其后 etcd-client 已升至 0.21、lock 另有 patch 刷新，见文首 `[Unreleased]` 节）
 - 特性收窄（`default-features = false` 不变，显式特性最小化）：`regex` `unicode` 全聚合 → `unicode-case` + `unicode-perl`（src 全部 75 个静态模式仅用 `(?i)`、`\d`/`\s`/`\w`/`\b`/`\S`，双特性集隔离对照验证编译与 ASCII 语义逐字节一致）；`rand` `["std","std_rng","sys_rng","thread_rng"]` → `["thread_rng"]`（前三项为其传递子集，代码仅用 `rng()`/`Rng::fill_bytes`）；examples 的 `notify` 移除 Linux 目标下空操作的 `macos_fsevent`
 - CI actions 升级（SHA pin）：taiki-e/install-action v2.87.20→v2.87.22、github/codeql-action v4.38.2 SHA 修正至官方 tag 当前指向、dtolnay/rust-toolchain master 前进（checkout/rust-cache/setup-protoc/codecov/gh-release 经比对已最新未动）
 

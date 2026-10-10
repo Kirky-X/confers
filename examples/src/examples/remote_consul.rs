@@ -23,7 +23,6 @@ use std::time::Duration;
 async fn demo_basic_poll(address: &str) -> anyhow::Result<()> {
     println!("\n=== 演示 1: 基础 Consul 配置轮询 ===\n");
 
-    // 使用 ConsulSourceBuilder 构建 ConsulSource
     // build() 是同步方法，返回 ConfigResult<ConsulSource>
     let source = ConsulSourceBuilder::new()
         .address(address)

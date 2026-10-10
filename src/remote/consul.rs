@@ -378,7 +378,6 @@ impl ConsulSource {
             format!("{}/v1/kv/{}?recurse=true", base_url, self.prefix)
         };
 
-        // Get the current index
         let current_index = {
             let guard = self
                 .last_index

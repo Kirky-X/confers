@@ -178,6 +178,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_lang_messages_en_and_zh() {
+        assert_eq!(
+            format_from_bundle("en", "cli-lang-help", &[]),
+            Some(
+                "UI language as a BCP-47 tag (`zh`/`en`; other well-formed tags fall back to \
+                 the English catalog). Overrides CONFERS_LANG and locale detection"
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            format_from_bundle("zh", "cli-lang-help", &[]),
+            Some(
+                "UI 语言,使用 BCP-47 标签(`zh`/`en`; 其他格式正确的标签回退到英文文案)。\
+                 覆盖 CONFERS_LANG 与语言环境检测"
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            format_from_bundle("en", "cli-docs-global-args-lang", &[]),
+            Some("--lang <bcp47> (zh/en; others fall back to en)".to_string())
+        );
+        assert_eq!(
+            format_from_bundle("zh", "cli-docs-global-args-lang", &[]),
+            Some("--lang <bcp47> (zh/en; 其他标签回退到 en)".to_string())
+        );
+    }
+
     // =========================================================================
     // Fallback chain
     // =========================================================================

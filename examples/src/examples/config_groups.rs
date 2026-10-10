@@ -197,17 +197,12 @@ fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::err
     println!("\n========== 使用 ConfigBuilder 加载配置 ==========");
     println!("环境: {}", env);
 
-    // 获取配置目录路径
     let config_dir = config_dir();
 
-    // 使用 ConfigBuilder 构建配置
     // 优先级从低到高：base.toml < {env}.toml < 环境变量
     let app_config: ConfersConfig = config::<ConfersConfig>()
-        // 第 1 层：基础配置（最低优先级）
         .file(config_dir.join("base.toml"))
-        // 第 2 层：环境配置（中等优先级）
         .file(config_dir.join(format!("{}.toml", env)))
-        // 第 3 层：环境变量（最高优先级）
         .env_prefix("APP_")
         .build()?;
 
@@ -219,28 +214,20 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
     println!("\n========== 使用 SourceChainBuilder 加载配置 ==========");
     println!("环境: {}", env);
 
-    // 获取配置目录路径
     let config_dir = config_dir();
 
-    // 构建 SourceChain
     // 优先级从低到高：base.toml < {env}.toml < 环境变量
     let chain = SourceChainBuilder::new()
-        // 第 1 层：基础配置（最低优先级）
         .file(config_dir.join("base.toml"))
-        // 第 2 层：环境配置（中等优先级）
         .file(config_dir.join(format!("{}.toml", env)))
-        // 第 3 层：环境变量（最高优先级）
         .env_with_prefix("APP_")
-        // 构建 SourceChain
         .build();
 
-    // 打印配置源信息
     println!("\n配置源链:");
     for (idx, name) in chain.source_names().iter().enumerate() {
         println!("  {}. {}", idx + 1, name);
     }
 
-    // 收集并合并所有配置源
     let merged = chain.collect()?;
     let all_paths = merged.all_paths();
     let top_sections: Vec<&str> = all_paths
@@ -250,7 +237,6 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
         .collect();
     println!("\n合并后的顶层配置段: {:?}", top_sections);
 
-    // 转换为目标配置结构
     let app_config: ConfersConfig = config::<ConfersConfig>()
         .file(config_dir.join("base.toml"))
         .file(config_dir.join(format!("{}.toml", env)))
@@ -264,7 +250,6 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
 fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n========== 配置优先级演示 ==========");
 
-    // 创建一个测试配置结构
     #[derive(Debug, Default, Deserialize)]
     struct PriorityTest {
         #[serde(default)]
@@ -275,7 +260,6 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
         level: String,
     }
 
-    // 创建一个配置源链用于演示
     let test_config: PriorityTest = config::<PriorityTest>()
         // 基础层配置
         .default("name", ConfigValue::string("BaseApp"))

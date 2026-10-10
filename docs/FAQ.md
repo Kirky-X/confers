@@ -338,8 +338,9 @@ config.confers_validate()?;
 **请负责任地报告安全问题：**
 
 1. **不要**创建公开的 GitHub Issue
-2. **邮件**：Kirky-X@outlook.com
-3. **请包含：**
+2. **首选渠道**：通过 [GitHub Security Advisories](https://github.com/Kirky-X/confers/security/advisories/new) 私密披露
+3. **备选渠道**：邮件 Kirky-X@outlook.com
+4. **请包含：**
     - 漏洞描述
     - 复现步骤
     - 潜在影响

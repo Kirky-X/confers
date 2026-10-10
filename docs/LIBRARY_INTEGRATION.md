@@ -25,21 +25,22 @@
 ```toml
 [dependencies]
 confers = { version = "0.6.0-rc.6", features = ["toml", "json", "dotenv"] }
+serde = { version = "1", features = ["derive"] }
 ```
 
 ### 2. 基本用法
 
 ```rust
-use confers::{ConfigBuilder, ConfigConnector, ConfigReader};
+use confers::ConfigBuilder;
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct ConfersConfig {
     pub name: String,
     pub port: u16,
 }
 
-fn main() -> confers::BuildResult<()> {
+fn main() -> confers::ConfigResult<()> {
     let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env()

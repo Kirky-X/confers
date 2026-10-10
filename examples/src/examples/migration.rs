@@ -16,7 +16,14 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    // 尊重 RUST_LOG；未设置时回落到 info 基线，保证演示输出可见
+    // （裸 fmt::init() 在无 RUST_LOG 环境下静默）。
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
     info!("=== 配置版本迁移示例 ===");
     info!("版本: V1 -> V2 -> V3");

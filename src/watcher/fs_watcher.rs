@@ -320,7 +320,6 @@ impl FsWatcher {
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        // Create the debouncer
         let mut debouncer =
             match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
                 let _ = bridge_tx.send(result);
@@ -753,7 +752,6 @@ impl MultiFsWatcher {
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        // Create the debouncer
         let mut debouncer =
             match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
                 let _ = bridge_tx.send(result);

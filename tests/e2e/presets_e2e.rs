@@ -13,6 +13,9 @@
 //!   full 构建态做正向断言。
 //! - PRS-08 §3.1 依赖链逐条核对(nats-bus→config-bus 等)与 security/encryption
 //!   解耦负面断言(security 不得隐含 encryption)。
+//! - CI 跨 OS 编译门禁的输入依据:ci.yml `build` job 的 3 OS 矩阵与
+//!   `--all-features`/`--no-default-features` 两条命令(对应 PRS-01/full 预设)。
+//!   跨 OS 编译本体只能在 GitHub Actions runner 上执行,本地固化矩阵与命令不被改坏。
 //!
 //! PRS 编译矩阵的**执行记录**(37 组特性组合逐组 cargo test 全绿)见
 //! reviews/acceptance-report.md 特性组合台账;本文件固化其输入依据的结构完整性。
@@ -276,4 +279,56 @@ fn prs08_dependency_chains_from_doc_section_3_1() {
     for (feature, deps) in chains {
         assert_contains(&features, feature, deps);
     }
+}
+
+/// 读取 `.github/workflows/ci.yml` 中一个顶层 job 的正文(到下一个顶层 job
+/// 键为止),供 CI 契约断言使用。
+fn ci_job_block(job: &str) -> String {
+    let workflow = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"),
+    )
+    .expect("ci.yml readable");
+    let header = format!("  {job}:");
+    let mut lines = workflow
+        .lines()
+        .skip_while(|line| line.trim_end() != header);
+    assert!(lines.next().is_some(), "ci.yml must define a `{job}` job");
+
+    let mut block = String::new();
+    for line in lines {
+        if !line.trim().is_empty() && !line.starts_with("    ") {
+            break; // 下一个顶层 job:2 空格缩进
+        }
+        block.push_str(line);
+        block.push('\n');
+    }
+    block
+}
+
+/// CI 跨 OS 编译门禁的输入依据固化(`--no-default-features` 对应 PRS-01、
+/// `--all-features` 对应 full 预设)。macOS/Windows 的实际编译只能由 GitHub
+/// Actions runner 执行,本机只能实跑 Linux 两条命令;因此这里守住 ci.yml
+/// `build` job 的 3 OS 矩阵与两条 cargo build 命令,防止矩阵被缩水或命令被
+/// 改回单一 feature 口径。
+#[test]
+fn ci_build_matrix_covers_cross_os_and_both_feature_modes() {
+    let block = ci_job_block("build");
+    for os in ["ubuntu-latest", "macos-latest", "windows-latest"] {
+        assert!(
+            block.contains(os),
+            "CI build matrix must include {os}:\n{block}"
+        );
+    }
+    assert!(
+        block.contains("runs-on: ${{ matrix.os }}"),
+        "CI build job must run on the matrix OS:\n{block}"
+    );
+    assert!(
+        block.contains("cargo build --workspace --all-features"),
+        "CI build job must compile the all-features workspace:\n{block}"
+    );
+    assert!(
+        block.contains("cargo build --workspace --no-default-features"),
+        "CI build job must compile the no-default-features workspace:\n{block}"
+    );
 }

@@ -471,7 +471,6 @@ async fn test_fs_watcher_file_creation_detection() {
     // the watch is active, causing the event to be missed.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Create a new file
     let new_file = config_dir.join("new_config.toml");
     fs::write(&new_file, "new_key = \"new_value\"").unwrap();
 
@@ -532,7 +531,6 @@ async fn test_fs_watcher_file_deletion_detection() {
 
     let mut watcher = FsWatcher::new(&config_file, 100).await.unwrap();
 
-    // Delete the file
     tokio::time::sleep(Duration::from_millis(50)).await;
     fs::remove_file(&config_file).unwrap();
 

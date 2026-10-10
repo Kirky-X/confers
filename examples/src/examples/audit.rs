@@ -18,7 +18,6 @@ fn main() -> anyhow::Result<()> {
     println!("  Audit - 审计日志示例");
     println!("========================================");
 
-    // 创建临时日志目录
     let log_dir = std::env::temp_dir().join("confers_audit_example");
     fs::create_dir_all(&log_dir)?;
     println!("\n日志目录: {}", log_dir.display());

@@ -191,7 +191,7 @@ let registry = SecurityValidatorRegistry::with_defaults();
 // （confers 不提供内置实现，需自行实现 ConfigProvider trait）
 let report = registry.validate_all(&config_provider);
 
-// is_ok(false)：存在任何违规（含警告）即返回 false
+// is_ok(false)：仅 Critical 违规返回 false（fail_on_warning=false 时 Warning 不影响）；is_ok(true) 才要求零违规
 if !report.is_ok(false) {
     // 处理安全违规……
 }
@@ -335,6 +335,16 @@ CONFERS_MASTER_KEY=your-256-bit-key
 CONFERS_LANG=zh                       # 消息语言（覆盖系统 locale 检测）
 CONFERS_RATE_LIMIT_MAX_REQUESTS=100   # 配置注入限流：窗口内最大请求数
 CONFERS_RATE_LIMIT_WINDOW_SECONDS=60  # 配置注入限流：窗口时长（秒）
+# locale 检测链（CONFERS_LANG 未设置时按序回退）：LC_ALL / LC_MESSAGES / LANG
+
+# 密钥/凭证集成读取（对应特性启用时；均为「未显式配置时的回退」，不设也可运行）
+VAULT_TOKEN=...            # Vault KeyProvider（encryption+remote）与 Cloud KMS Vault backend（cloud-kms）的 token 回退
+AWS_ACCESS_KEY_ID=...      # AWS KMS（cloud-kms）：访问密钥回退
+AWS_SECRET_ACCESS_KEY=...
+AWS_SESSION_TOKEN=...      # 可选：会话令牌回退
+KUBERNETES_SERVICE_HOST=...        # In-cluster API 探测（k8s）：服务主机
+KUBERNETES_SERVICE_PORT_HTTPS=...  # 可选；缺省回退 KUBERNETES_SERVICE_PORT，再缺省 443
+KUBERNETES_SERVICE_PORT=...
 ```
 
 > ⚠️ **注意**：审计开关、内存上限、超时、SSRF 黑名单等安全选项没有对应的内置环境变量，需在代码中通过 `AuditConfig`、`ConfigLimits`、`SecurityValidatorRegistry` 等配置项显式设置。

@@ -60,7 +60,7 @@
 - **类型**：`正常`（合法输入下的预期行为）/ `异常`（错误输入、故障注入，须给出明确错误）/ `边界`（极限值、并发、竞态、组合临界）。
 - **既有覆盖**：`文件::测试名` 表示已有测试（含 `src/**` 内联测试模块）；`无→需新增` 表示无既有覆盖。（历史说明：编写时曾用 `⚠死文件` 标注未注册、不执行的测试文件，该标注已全部清除，见下文重要发现-1。）
 - **E2E 落点**：计划写入 `tests/e2e/` 的目标文件（后续落地阶段创建）。
-- 依赖服务取值：`无` / `本地文件` / `NATS(4222)` / `Redis(16379)` / `etcd(2379)` / `Consul(8500)`（端口见 §4）。
+- 依赖服务取值：`无` / `本地文件` / `NATS(4222)` / `Redis(16379)` / `etcd(2379)` / `Consul(8500)` / `Nacos(8848)`（端口见 §4）。
 
 ### 重要发现（编写时盘点得出）
 
@@ -533,7 +533,7 @@
 | CLI-20 | `--env-file` 单行超 16 KiB → "line too long" 错误 | 异常 | cli,env | 本地文件 | src 内联 `test_load_env_file_rejects_oversized_line` | tests/e2e/cli_e2e.rs |
 | CLI-21 | `--help`/`--version` 输出子命令清单与版本号 | 正常 | cli | 无 | `tests/cli/commands.rs::test_help_flag/test_version_flag`、`tests/cli/help.rs`（6 例） | tests/e2e/cli_e2e.rs |
 | CLI-22 | `-c 不存在路径`：路径被跳过（仅 env 参与构建）不报错 | 边界 | cli | 本地文件 | src 内联 `test_build_config_from_cli_nonexistent_path_skipped` | tests/e2e/cli_e2e.rs |
-| CLI-23 | `export --format xml` → "Unsupported format" bail 非零退出 | 异常 | cli | 本地文件 | src 内联 unsupported format 分支；CLI 级→需新增 | tests/e2e/cli_e2e.rs |
+| CLI-23 | `export --format xml` / `diff --format xml` → "Unsupported format" bail 非零退出 | 异常 | cli | 本地文件 | src 内联 unsupported format 分支（export/diff）；CLI 级→需新增 | tests/e2e/cli_e2e.rs |
 | CLI-24 | inspect 对 >20 字符长字符串截断显示，UTF-8 多字节（中文）不 panic 按字符截断 | 边界 | cli | 本地文件 | src 内联 `test_format_value_long_string_truncation` 等 | tests/e2e/cli_e2e.rs |
 
 ### 2.25 派生宏与属性（MAC，18 条）
@@ -606,6 +606,19 @@
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-07 | `--features full`（39 项正式特性；不含 `hot-reload-kit` 与待移除兼容别名）编译 + 全部 `[[test]]` 通过（依赖 docker 服务时守卫跳过） | 边界 | full | 全部 | 现行 CI 常态→需固化为脚本断言 | tests/e2e/presets_e2e.rs |
 | PRS-08 | 单 feature 逐一开启（`[features]` 全部 51 个键，即 40 个正式单 feature + 6 预设 + 3 兼容别名 `env`/`schema`/`key` + 内部聚合 `async-core` + `default`）每项 `cargo check` 通过（依赖链自动生效：security-rules→security、nats-bus→config-bus 等；security 与 encryption 已解耦，security 单开不拉入加密栈） | 边界 | 全部单 feature | 无 | 无→需新增（循环脚本） | tests/e2e/presets_e2e.rs |
+
+PRS-01 / PRS-07 的跨 OS 分支：CI `build` job 用 3 OS 矩阵（ubuntu/macos/windows）分别跑 `cargo build --workspace --all-features` 与 `--no-default-features`。其验证边界：
+
+- **CI runner 独占**：macOS/Windows 上 `--all-features` 的真实编译。该组合拉入 reqwest→rustls→aws-lc-sys 与 etcd/nats 的 C/TLS 栈，交叉编译需要目标 OS 的 C 工具链与 SDK，本地无法复现；实际结果由 GitHub Actions `build` job 产出。
+- **本地固化（输入依据）**：`cargo test --test presets_e2e ci_build_matrix` 断言 ci.yml 的矩阵含 3 OS、`runs-on: ${{ matrix.os }}` 与上述两条 `cargo build` 命令，防止矩阵被缩水或命令被改成单一 feature 口径。
+- **本地交叉检查（等价证据）**：不依赖 C 工具链的 feature 集可对目标三元组做 `cargo check`，本机实测 exit 0（需先 `rustup target add x86_64-pc-windows-msvc x86_64-apple-darwin`）：
+
+  ```bash
+  cargo check -p confers --lib --no-default-features --target x86_64-pc-windows-msvc
+  cargo check -p confers --lib --target x86_64-pc-windows-msvc \
+    --features "cli,validation,watch,encryption,security,security-rules,key-management,json-schema,typescript-schema,dynamic,progressive-reload,audit,migration,snapshot,interpolation,feature-toggle,lazy-parse,modules,tracing,context-aware,canary,change-stream,config-bus,toml,json,yaml,ini,dotenv"
+  # 同上（macOS）：--target x86_64-apple-darwin
+  ```
 
 ---
 
@@ -685,6 +698,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | Redis | redis:7 | **16379**（映射容器 6379） | `redis-cli ping` | RDS-01…07；`tests/remote/bus.rs` redis 组 | 端口守卫跳过 |
 | etcd | quay.io/coreos/etcd:v3.5.16 | **2379** | `etcdctl endpoint health` | ETC-01…04/07/09/10、CMP-08、CMP-07（HTTP 轮询宿主）；`tests/remote/etcd.rs`、`tests/remote/remote.rs` source 组 | `is_service_available("http://127.0.0.1:2379/health")` 守卫跳过 |
 | Consul | hashicorp/consul:1.19（dev + ui） | **8500** | `wget http://127.0.0.1:8500/v1/status/leader` | CSL-01…03/05/07/08、REM-10/11、CMP-07；`tests/remote/consul.rs` | `is_service_available` 守卫跳过（Consul dev 模式默认 token 为空/`dev-…`，E2E 固化时以 ACL 关闭态为准） |
+| Nacos | nacos/nacos-server:v2.4.3（standalone + 嵌入存储，`NACOS_AUTH_ENABLE=false`） | **8848**（gRPC 9848 同映射） | `curl http://127.0.0.1:8848/nacos/v1/console/health/readiness`（JVM 冷启慢，健康检查含 30s `start_period`） | Nacos 配置源（`nacos` 特性）：`tests/remote/nacos.rs`（真实发布 → poll 解析 → 服务端变更 → 分组/命名空间作用域隔离） | `is_service_available(.../readiness)` 守卫跳过 |
 
 无服务依赖域（本地文件/纯内存，可在无 docker 的 CI 沙箱跑）：FMT、BLD、VAL、IPL、ENC、KEY、SEC、AUD、WAT、PGR、DYN、TGL、MIG、SNP、MOD、CTX、SCH、CLI、MAC、CCY、PRS。
 **E2E 原则**：集成/E2E 层禁 mock，依赖服务的场景必须打真实 compose 服务；"远程不可达"类异常场景一律使用显式不可达地址（如 `127.0.0.1:1`），不依赖网络波动。
@@ -697,10 +711,10 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 92 个 `#[cfg(test)]` 模块（2396 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 92 个 `#[cfg(test)]` 模块（2412 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 22 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
-| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test e2e_*` | 禁 mock |
+| L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test '*_e2e' --test cli_coverage_extra`（32 个目标名形如 `<域>_e2e`，如 `format_e2e`、`watch_e2e`；`cli_coverage_extra` 为矩阵外回归目标，不遵循该后缀） | 禁 mock |
 | 宏测试 | `macros/tests`（trybuild 编译失败用例与属性校验） | `cargo test -p confers-macros` | 允许 |
 | 模糊测试 | `fuzz/`（cargo-fuzz 目标：`parser`、`merger`、`interpolation`） | `cargo fuzz run parser`（在 `fuzz/` 目录下） | 禁 mock |
 | 基准测试 | `benches/`（10 组 Criterion，清单见 [性能指南 · 基准测试套件](PERFORMANCE.md#基准测试套件)） | `cargo bench --features dev,etcd-watch,change-stream --benches`（CI 口径；`required-features=["interpolation"]` 的 3 组需补 `--features interpolation`） | — |
@@ -803,12 +817,12 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 代码内测试规模
 
-（按 `#[test]` / `#[tokio::test]` 函数 grep 统计，截至 v0.6.0-rc.6 工作区）
+（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.6 工作区；`tests/` 求和为 781 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 780 个测试函数）
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，92 个） | 2396 |
-| 集成与 E2E（`tests/`，65 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 771 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，92 个） | 2413 |
+| 集成与 E2E（`tests/`，66 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 781 |
 | E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 33 |
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 10 |

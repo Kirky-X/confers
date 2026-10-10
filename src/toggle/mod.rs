@@ -182,7 +182,6 @@ impl FeatureToggleRegistry {
                     continue;
                 }
 
-                // Try to parse value as boolean
                 if let Some(value) = config.get_raw(&key) {
                     if let Some(bool_val) = value.as_bool() {
                         self.set_from_config(toggle_name, bool_val);

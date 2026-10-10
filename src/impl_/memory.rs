@@ -269,7 +269,6 @@ mod tests {
         async fn test_basic_operations() {
             let config = InMemoryConfig::new();
 
-            // Set a value
             let value = AnnotatedValue::new(
                 ConfigValue::string("test_value"),
                 SourceId::new("test"),
@@ -277,20 +276,16 @@ mod tests {
             );
             config.set("test.key", value).await.unwrap();
 
-            // Get the value
             let result = config.get_raw("test.key").await.unwrap();
             assert!(result.is_some());
             assert_eq!(result.unwrap().as_str(), Some("test_value"));
 
-            // Check keys
             let keys = config.keys().await.unwrap();
             assert!(keys.contains(&"test.key".to_string()));
 
-            // Delete
             let deleted = config.delete("test.key").await.unwrap();
             assert!(deleted);
 
-            // Verify deleted
             let result = config.get_raw("test.key").await.unwrap();
             assert!(result.is_none());
         }
@@ -385,7 +380,6 @@ mod tests {
         fn test_basic_operations() {
             let config = InMemoryConfig::new();
 
-            // Set a value
             let value = AnnotatedValue::new(
                 ConfigValue::string("test_value"),
                 SourceId::new("test"),
@@ -393,20 +387,16 @@ mod tests {
             );
             config.set("test.key", value).unwrap();
 
-            // Get the value
             let result = config.get_raw("test.key").unwrap();
             assert!(result.is_some());
             assert_eq!(result.unwrap().as_str(), Some("test_value"));
 
-            // Check keys
             let keys = config.keys().unwrap();
             assert!(keys.contains(&"test.key".to_string()));
 
-            // Delete
             let deleted = config.delete("test.key").unwrap();
             assert!(deleted);
 
-            // Verify deleted
             let result = config.get_raw("test.key").unwrap();
             assert!(result.is_none());
         }

@@ -147,7 +147,6 @@ fn demonstrate_secret_bytes() {
 fn demonstrate_encryption_decryption() {
     println!("\n=== Example 3: XChaCha20 Encryption/Decryption ===");
 
-    // Create crypto instance
     let crypto = XChaCha20Crypto::new();
 
     // Prepare plaintext data (ASCII only for byte string literal)
@@ -237,7 +236,6 @@ fn demonstrate_env_key_provider() {
     // Create EnvKeyProvider, reads key from environment variable
     let provider = EnvKeyProvider::new("APP_ENCRYPTION_KEY");
 
-    // Get key
     let key_result = provider.get_key();
 
     match key_result {
@@ -246,7 +244,6 @@ fn demonstrate_env_key_provider() {
             println!("Key length: {} bytes", key.as_slice().len());
             println!("Key type: {}", provider.provider_type());
 
-            // Use key for encryption
             let crypto = XChaCha20Crypto::new();
             let plaintext = b"Using EnvKeyProvider to protect sensitive data";
 
@@ -273,7 +270,6 @@ fn demonstrate_env_key_provider() {
         }
     }
 
-    // Test with builder pattern
     println!("\nUsing builder pattern:");
     let builder_provider = EnvKeyProvider::builder()
         .env_var("APP_ENCRYPTION_KEY")
@@ -284,7 +280,6 @@ fn demonstrate_env_key_provider() {
         println!("Builder pattern got key: {} bytes", key.as_slice().len());
     }
 
-    // Clean up environment variable
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("APP_ENCRYPTION_KEY") };
 
@@ -316,7 +311,6 @@ fn demonstrate_config_loading() {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
-    // Load config with defaults
     let config = ConfersConfig::load_sync().expect("Failed to load config");
 
     println!("App name: {}", config.name);
