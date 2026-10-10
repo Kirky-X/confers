@@ -106,6 +106,7 @@ mod tests {
     /// Smoke test: a critical-path span and an event reach the subscribed
     /// sink through the exact call-site pattern documented above.
     #[test]
+    #[serial_test::serial]
     #[cfg(feature = "tracing")]
     fn spans_and_events_reach_the_subscriber() {
         let spans = Arc::new(Mutex::new(Vec::new()));
@@ -115,10 +116,24 @@ mod tests {
             events: Arc::clone(&events),
         };
         tracing::subscriber::with_default(subscriber, || {
-            // The pattern used at the four instrumented critical paths.
-            let load_span = tracing::info_span!("confers.load");
-            let _guard = load_span.enter();
-            crate::telemetry::event("confers.load.completed", &[("ok", "true")]);
+            // The event callsite below is shared process-wide: a parallel test
+            // can first-register it with no dispatcher live, caching
+            // `Interest::never` (interest is computed against the registering
+            // thread's default only). `rebuild_interest_cache` re-evaluates
+            // every callsite against our subscriber. The bounded retry covers
+            // a parallel registration landing between the rebuild and the
+            // emit: once registered, the second rebuild deterministically
+            // repairs it, so two attempts always suffice.
+            for _ in 0..2 {
+                tracing_core::callsite::rebuild_interest_cache();
+                // The pattern used at the four instrumented critical paths.
+                let load_span = tracing::info_span!("confers.load");
+                let _guard = load_span.enter();
+                crate::telemetry::event("confers.load.completed", &[("ok", "true")]);
+                if !events.lock().unwrap().is_empty() {
+                    break;
+                }
+            }
         });
 
         let seen_spans = spans.lock().unwrap().clone();
@@ -132,6 +147,7 @@ mod tests {
 
     /// Without the feature the event helper must stay callable and no-op.
     #[test]
+    #[serial_test::serial]
     fn event_helper_is_callable_without_feature() {
         crate::telemetry::event("confers.load.completed", &[]);
     }
@@ -139,6 +155,7 @@ mod tests {
     /// Warning-level events (degraded conditions) reach the subscriber with
     /// their rendered fields, parallel to the info-level path above.
     #[test]
+    #[serial_test::serial]
     #[cfg(feature = "tracing")]
     fn warn_events_reach_the_subscriber() {
         let spans = Arc::new(Mutex::new(Vec::new()));
@@ -148,10 +165,17 @@ mod tests {
             events: Arc::clone(&events),
         };
         tracing::subscriber::with_default(subscriber, || {
-            crate::telemetry::warn(
-                "confers.encryption.missing",
-                &[("feature", "encryption"), ("fallback", "plaintext")],
-            );
+            // Same shared-callsite repair as the info-level test above.
+            for _ in 0..2 {
+                tracing_core::callsite::rebuild_interest_cache();
+                crate::telemetry::warn(
+                    "confers.encryption.missing",
+                    &[("feature", "encryption"), ("fallback", "plaintext")],
+                );
+                if !events.lock().unwrap().is_empty() {
+                    break;
+                }
+            }
         });
 
         let seen_events = events.lock().unwrap().clone();

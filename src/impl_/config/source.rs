@@ -316,12 +316,24 @@ impl EnvSource {
     }
 
     /// Parse an environment variable name into a config path.
+    ///
+    /// The prefix is matched and stripped as written — with or without a
+    /// trailing separator. Leading separators on the remainder (one or more)
+    /// are consumed, so both `env_prefix("APP_")` and `env_prefix("APP")` map
+    /// `APP_PORT` to `port` (docs/API_REFERENCE.md contract). A remainder that
+    /// holds nothing but separators (the variable is the bare prefix, e.g.
+    /// `APP` itself) maps to no config path and is skipped.
     fn parse_key(&self, env_key: &str) -> Option<String> {
         let key = if let Some(ref prefix) = self.prefix {
             if !env_key.starts_with(prefix) {
                 return None;
             }
-            &env_key[prefix.len()..]
+            let rest = &env_key[prefix.len()..];
+            let rest = rest.trim_start_matches(&self.separator);
+            if rest.is_empty() {
+                return None;
+            }
+            rest
         } else {
             env_key
         };
@@ -835,6 +847,39 @@ mod tests {
         } else {
             panic!("expected a map");
         }
+    }
+
+    #[test]
+    fn test_parse_key_prefix_with_trailing_separator() {
+        let source = EnvSource::with_prefix("APP_");
+        assert_eq!(source.parse_key("APP_PORT").as_deref(), Some("port"));
+        assert_eq!(source.parse_key("APP_HOST").as_deref(), Some("host"));
+        // 前缀不匹配的变量不收集
+        assert_eq!(source.parse_key("OTHER_PORT"), None);
+    }
+
+    #[test]
+    fn test_parse_key_prefix_without_trailing_separator() {
+        // 前缀不带结尾分隔符时，余量开头的前导分隔符被消费：
+        // APP_PORT 同样映射到 port（docs/API_REFERENCE.md 契约）
+        let source = EnvSource::with_prefix("APP");
+        assert_eq!(source.parse_key("APP_PORT").as_deref(), Some("port"));
+        assert_eq!(source.parse_key("APP_HOST").as_deref(), Some("host"));
+        // 多段前导分隔符一并归一化（APP__PORT → port），不再产生空串根键
+        assert_eq!(source.parse_key("APP__PORT").as_deref(), Some("port"));
+        // 前缀按原文匹配：无分隔符边界也照剥（APPLICATION_MODE → lication.mode）
+        assert_eq!(
+            source.parse_key("APPLICATION_MODE").as_deref(),
+            Some("lication.mode")
+        );
+        // 只剩分隔符的余量（变量即前缀本身）映射不到任何字段，跳过
+        assert_eq!(source.parse_key("APP"), None);
+        assert_eq!(source.parse_key("APP_"), None);
+        // _FILE 后缀在前导分隔符消费之后处理
+        assert_eq!(
+            source.parse_key("APP_PASSWORD_FILE").as_deref(),
+            Some("password")
+        );
     }
 
     #[test]

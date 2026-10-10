@@ -363,7 +363,10 @@ enum Commands {
         /// Sanitize sensitive values in output
         #[arg(
             long,
+            action = clap::ArgAction::Set,
+            num_args(0..=1),
             default_value = "true",
+            default_missing_value = "true",
             help = crate::i18n::tr("cli-diff-sanitize-help")
         )]
         sanitize: bool,
@@ -1516,7 +1519,13 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
     use std::fs;
 
     if !directory.exists() {
-        println!("Snapshot directory does not exist: {}", directory.display());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-dir-missing",
+                &[("directory", directory.display().to_string())]
+            )
+        );
         return Ok(());
     }
 
@@ -1531,12 +1540,29 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
         .collect();
 
     if entries.is_empty() {
-        println!("No snapshots found in {}", directory.display());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-none-found",
+                &[("directory", directory.display().to_string())]
+            )
+        );
         return Ok(());
     }
 
-    println!("Snapshots in {}:", directory.display());
-    println!("{:<30} {:<40} FORMAT", "TIMESTAMP", "FILENAME");
+    println!(
+        "{}",
+        tr_args(
+            "cli-snapshot-in-dir",
+            &[("directory", directory.display().to_string())]
+        )
+    );
+    println!(
+        "{:<30} {:<40} {}",
+        tr("cli-col-timestamp"),
+        tr("cli-col-filename"),
+        tr("cli-col-format")
+    );
     println!("{}", "-".repeat(90));
 
     let mut snapshots: Vec<_> = entries.into_iter().collect();
@@ -1569,7 +1595,13 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     use std::fs;
 
     if !directory.exists() {
-        println!("Snapshot directory does not exist: {}", directory.display());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-dir-missing",
+                &[("directory", directory.display().to_string())]
+            )
+        );
         return Ok(());
     }
 
@@ -1584,7 +1616,13 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
         .collect();
 
     if entries.len() < 2 {
-        println!("Need at least 2 snapshots to diff, found {}", entries.len());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-diff-need-two",
+                &[("count", entries.len().to_string())]
+            )
+        );
         return Ok(());
     }
 
@@ -1607,9 +1645,14 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     let diff = similar::TextDiff::from_lines(&content1, &content2);
 
     println!(
-        "Diff between {} and {}",
-        first.file_name().display(),
-        second.file_name().display()
+        "{}",
+        tr_args(
+            "cli-snapshot-diff-between",
+            &[
+                ("first", first.file_name().display().to_string()),
+                ("second", second.file_name().display().to_string()),
+            ]
+        )
     );
     for change in diff.iter_all_changes() {
         print!("{}", change);
@@ -1627,7 +1670,13 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     use std::fs;
 
     if !directory.exists() {
-        println!("Snapshot directory does not exist: {}", directory.display());
+        println!(
+            "{}",
+            tr_args(
+                "cli-snapshot-dir-missing",
+                &[("directory", directory.display().to_string())]
+            )
+        );
         return Ok(());
     }
 
@@ -1638,9 +1687,9 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         .trim_end_matches('D')
         .parse::<u64>()
         .with_context(|| {
-            format!(
-                "invalid duration '{}': expected a number of days with optional 'd' suffix (e.g., '30d')",
-                older_than
+            tr_args(
+                "cli-snapshot-prune-invalid-duration",
+                &[("value", older_than.to_string())],
             )
         })?;
 
@@ -1671,9 +1720,14 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
             Ok(m) => m,
             Err(e) => {
                 eprintln!(
-                    "SKIP: cannot read metadata for {}: {}",
-                    entry.path().display(),
-                    e
+                    "{}",
+                    tr_args(
+                        "log-snapshot-prune-skip-metadata",
+                        &[
+                            ("path", entry.path().display().to_string()),
+                            ("message", e.to_string()),
+                        ]
+                    )
                 );
                 skipped_count += 1;
                 continue;
@@ -1683,9 +1737,14 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
             Ok(t) => t,
             Err(e) => {
                 eprintln!(
-                    "SKIP: cannot read modification time for {}: {}",
-                    entry.path().display(),
-                    e
+                    "{}",
+                    tr_args(
+                        "log-snapshot-prune-skip-mtime",
+                        &[
+                            ("path", entry.path().display().to_string()),
+                            ("message", e.to_string()),
+                        ]
+                    )
                 );
                 skipped_count += 1;
                 continue;
@@ -1693,13 +1752,28 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
         };
 
         if modified < cutoff {
-            println!("Removing: {}", entry.file_name().display());
+            println!(
+                "{}",
+                tr_args(
+                    "log-snapshot-prune-removing",
+                    &[("file", entry.file_name().display().to_string())]
+                )
+            );
             // Delete failures are reported and counted as failed, not swallowed.
             // removed_count only counts successful removals (Rule 12).
             match fs::remove_file(entry.path()) {
                 Ok(()) => removed_count += 1,
                 Err(e) => {
-                    eprintln!("FAIL: cannot remove {}: {}", entry.path().display(), e);
+                    eprintln!(
+                        "{}",
+                        tr_args(
+                            "log-snapshot-prune-remove-failed",
+                            &[
+                                ("path", entry.path().display().to_string()),
+                                ("message", e.to_string()),
+                            ]
+                        )
+                    );
                     failed_count += 1;
                 }
             }
@@ -1707,8 +1781,16 @@ fn cmd_snapshot_prune(older_than: &str, directory: &PathBuf) -> Result<()> {
     }
 
     println!(
-        "Pruned {} snapshot(s) older than {} days ({} failed, {} skipped)",
-        removed_count, days, failed_count, skipped_count
+        "{}",
+        tr_args(
+            "cli-snapshot-prune-summary",
+            &[
+                ("removed", removed_count.to_string()),
+                ("days", days.to_string()),
+                ("failed", failed_count.to_string()),
+                ("skipped", skipped_count.to_string()),
+            ]
+        )
     );
     Ok(())
 }
@@ -2053,7 +2135,10 @@ pub fn run_doctor_checks(
             checks.push(DoctorCheck {
                 name: "load",
                 severity: DoctorSeverity::Ok,
-                message: format!("configuration loaded from {} file(s)", config_paths.len()),
+                message: tr_args(
+                    "cli-doctor-load-ok",
+                    &[("count", config_paths.len().to_string())],
+                ),
             });
             value
         }
@@ -2061,7 +2146,7 @@ pub fn run_doctor_checks(
             checks.push(DoctorCheck {
                 name: "load",
                 severity: DoctorSeverity::Error,
-                message: format!("configuration failed to load: {e}"),
+                message: tr_args("cli-doctor-load-failed", &[("message", e.to_string())]),
             });
             // Downstream checks cannot run without data; report them so the
             // report shape stays stable for consumers.
@@ -2069,7 +2154,7 @@ pub fn run_doctor_checks(
                 checks.push(DoctorCheck {
                     name,
                     severity: DoctorSeverity::Error,
-                    message: "skipped: configuration did not load".to_string(),
+                    message: tr("cli-doctor-skipped-not-loaded"),
                 });
             }
             return DoctorReport::from_checks(checks);
@@ -2090,12 +2175,14 @@ pub fn run_doctor_checks(
             DoctorSeverity::Error
         },
         message: if schema_issues.is_empty() {
-            "no schema issues detected".to_string()
+            tr("cli-doctor-schema-ok")
         } else {
-            format!(
-                "{} schema issue(s): {}",
-                schema_issues.len(),
-                schema_issues.join("; ")
+            tr_args(
+                "cli-doctor-schema-issues",
+                &[
+                    ("count", schema_issues.len().to_string()),
+                    ("issues", schema_issues.join("; ")),
+                ],
             )
         },
     });
@@ -2154,7 +2241,7 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
         return DoctorCheck {
             name: "sources",
             severity: DoctorSeverity::Error,
-            message: "no configuration values were contributed by any source".to_string(),
+            message: tr("cli-doctor-sources-none"),
         };
     }
 
@@ -2183,9 +2270,9 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
         return DoctorCheck {
             name: "sources",
             severity: DoctorSeverity::Warning,
-            message: format!(
-                "source(s) with inconsistent priorities across keys: {} {example}",
-                drifted.join(", ")
+            message: tr_args(
+                "cli-doctor-sources-drifted",
+                &[("sources", drifted.join(", ")), ("example", example)],
             ),
         };
     }
@@ -2217,9 +2304,9 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
         return DoctorCheck {
             name: "sources",
             severity: DoctorSeverity::Warning,
-            message: format!(
-                "env priority ({env_p}) is not above the file priority ({file_p}); \
-                 env overrides would lose"
+            message: tr_args(
+                "cli-doctor-sources-env-below-file",
+                &[("env", env_p.to_string()), ("file", file_p.to_string())],
             ),
         };
     }
@@ -2231,10 +2318,7 @@ fn check_source_chain(annotated: &AnnotatedValue) -> DoctorCheck {
     DoctorCheck {
         name: "sources",
         severity: DoctorSeverity::Ok,
-        message: format!(
-            "priority chain coherent across source(s): {}",
-            sources.join(", ")
-        ),
+        message: tr_args("cli-doctor-sources-ok", &[("sources", sources.join(", "))]),
     }
 }
 
@@ -2250,7 +2334,7 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
             return DoctorCheck {
                 name: "encryption",
                 severity: DoctorSeverity::Ok,
-                message: "no encrypted fields detected".to_string(),
+                message: tr("cli-doctor-encryption-none"),
             };
         }
 
@@ -2258,9 +2342,12 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
             return DoctorCheck {
                 name: "encryption",
                 severity: DoctorSeverity::Warning,
-                message: format!(
-                    "{} encrypted field(s) found but {DOCTOR_MASTER_KEY_ENV} is not set",
-                    candidates.len()
+                message: tr_args(
+                    "cli-doctor-encryption-no-key",
+                    &[
+                        ("count", candidates.len().to_string()),
+                        ("env_var", DOCTOR_MASTER_KEY_ENV.to_string()),
+                    ],
                 ),
             };
         };
@@ -2269,9 +2356,9 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
             return DoctorCheck {
                 name: "encryption",
                 severity: DoctorSeverity::Error,
-                message: format!(
-                    "{DOCTOR_MASTER_KEY_ENV} is not a valid 32-byte hex key; \
-                     encrypted field(s) cannot be decrypted"
+                message: tr_args(
+                    "cli-doctor-encryption-invalid-key",
+                    &[("env_var", DOCTOR_MASTER_KEY_ENV.to_string())],
                 ),
             };
         };
@@ -2287,19 +2374,21 @@ fn check_encryption(annotated: &AnnotatedValue) -> DoctorCheck {
             DoctorCheck {
                 name: "encryption",
                 severity: DoctorSeverity::Ok,
-                message: format!(
-                    "{} encrypted field(s) decrypt successfully",
-                    candidates.len()
+                message: tr_args(
+                    "cli-doctor-encryption-ok",
+                    &[("count", candidates.len().to_string())],
                 ),
             }
         } else {
             DoctorCheck {
                 name: "encryption",
                 severity: DoctorSeverity::Error,
-                message: format!(
-                    "decryption failed for {} encrypted field(s): {}",
-                    failures.len(),
-                    failures.join(", ")
+                message: tr_args(
+                    "cli-doctor-encryption-failed",
+                    &[
+                        ("count", failures.len().to_string()),
+                        ("fields", failures.join(", ")),
+                    ],
                 ),
             }
         }
@@ -2473,16 +2562,18 @@ fn check_env_override_conflicts(annotated: &AnnotatedValue) -> DoctorCheck {
         DoctorCheck {
             name: "env_overrides",
             severity: DoctorSeverity::Ok,
-            message: "no conflicting env overrides".to_string(),
+            message: tr("cli-doctor-env-overrides-ok"),
         }
     } else {
         DoctorCheck {
             name: "env_overrides",
             severity: DoctorSeverity::Warning,
-            message: format!(
-                "{} env override conflict(s): {}",
-                conflicts.len(),
-                conflicts.join("; ")
+            message: tr_args(
+                "cli-doctor-env-overrides-conflicts",
+                &[
+                    ("count", conflicts.len().to_string()),
+                    ("conflicts", conflicts.join("; ")),
+                ],
             ),
         }
     }
@@ -2620,8 +2711,14 @@ fn cmd_doctor(
     match format {
         "text" => {
             println!(
-                "Doctor (status: {}, exit: {})",
-                report.status, report.exit_code
+                "{}",
+                tr_args(
+                    "cli-doctor-header",
+                    &[
+                        ("status", report.status.to_string()),
+                        ("code", report.exit_code.to_string()),
+                    ]
+                )
             );
             for check in &report.checks {
                 println!(
@@ -4426,19 +4523,19 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_parse_diff_no_sanitize_unsupported() {
-        // Document a production-code limitation: the `Diff.sanitize` field is
-        // declared as `bool` with `default_value = "true"`, which makes clap
-        // use `ArgAction::SetTrue`. This action is one-way — it can only SET
-        // the flag to true, never to false. Neither `--sanitize=false`,
-        // `--sanitize false`, nor `--no-sanitize` is accepted.
-        //
-        // To support sanitize=false, production code would need
-        // `#[arg(long, action = clap::ArgAction::Set, default_value = "true")]`
-        // or `Option<bool>`. That is a behavior change, out of scope for the
-        // test-only coverage task. This test pins the current limitation.
-        let cases: &[&[&str]] = &[
-            &[
+    fn test_cli_parse_diff_sanitize_explicit_values() {
+        // `--sanitize` takes an optional value: `--sanitize=false` turns
+        // sanitization off, the bare flag keeps it on (`default_missing_value`),
+        // and omitting the flag entirely defaults to on (`default_value`).
+        let extract = |argv: &[&str]| {
+            let cli = Cli::try_parse_from(argv.iter().copied()).unwrap();
+            match cli.command {
+                Commands::Diff { sanitize, .. } => sanitize,
+                _ => panic!("expected Diff"),
+            }
+        };
+        assert!(
+            !extract(&[
                 "confers",
                 "diff",
                 "--base",
@@ -4446,25 +4543,38 @@ mod tests {
                 "--overlay",
                 "b",
                 "--sanitize=false",
-            ],
-            &[
+            ]),
+            "--sanitize=false must turn sanitization off"
+        );
+        assert!(
+            !extract(&[
                 "confers",
                 "diff",
                 "--base",
                 "a",
                 "--overlay",
                 "b",
-                "--no-sanitize",
-            ],
-        ];
-        for argv in cases {
-            let result = Cli::try_parse_from(argv.iter().copied());
-            assert!(
-                result.is_err(),
-                "expected parse failure for {:?}, but succeeded",
-                argv
-            );
-        }
+                "--sanitize",
+                "false",
+            ]),
+            "--sanitize false must turn sanitization off"
+        );
+        assert!(
+            extract(&[
+                "confers",
+                "diff",
+                "--base",
+                "a",
+                "--overlay",
+                "b",
+                "--sanitize",
+            ]),
+            "the bare --sanitize flag must keep sanitization on"
+        );
+        assert!(
+            extract(&["confers", "diff", "--base", "a", "--overlay", "b"]),
+            "omitting --sanitize must default to on"
+        );
     }
 
     #[test]

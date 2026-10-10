@@ -439,7 +439,7 @@ confers -c app.toml export --with-provenance
 # 对比两份配置，输出 unified diff
 confers diff --base base.toml --overlay overlay.toml
 
-# 结构化 JSON 输出；输出始终脱敏（--sanitize 是默认开启的布尔开关，不接受取值、无法关闭）
+# 结构化 JSON 输出；默认脱敏，--sanitize=false 关闭脱敏（裸开关等价 --sanitize=true）
 confers diff --base a.toml --overlay b.toml --format json
 ```
 

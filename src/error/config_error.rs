@@ -39,6 +39,7 @@
 //! }
 //! ```
 
+use crate::i18n::tr_args;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -273,26 +274,32 @@ impl ConfigConfigError {
     /// file paths, IP addresses, or other sensitive information.
     pub fn user_message(&self) -> String {
         match self {
-            ConfigConfigError::MissingField { field } => {
-                format!("Missing required configuration field: '{}'", field)
-            }
+            ConfigConfigError::MissingField { field } => tr_args(
+                "error-config-user-missing-field",
+                &[("field", field.clone())],
+            ),
             ConfigConfigError::InvalidValue {
                 field,
                 expected_type,
                 message,
-            } => {
-                format!(
-                    "Invalid value for '{}' (expected {}): {}",
-                    field, expected_type, message
-                )
-            }
+            } => tr_args(
+                "error-config-user-invalid-value",
+                &[
+                    ("field", field.clone()),
+                    ("expected_type", expected_type.clone()),
+                    ("message", message.clone()),
+                ],
+            ),
             ConfigConfigError::FileNotFound { filename, .. } => {
                 // Sanitize sensitive paths: any dot-prefixed directory
                 // component (".ssh", ".aws", ".config/gcloud", ...) is treated
                 // as sensitive, so no path under a hidden user directory is
                 // ever echoed verbatim. Only the file name is retained.
                 let sanitized = Self::sanitize_sensitive_path(filename);
-                format!("Configuration file '{}' not found", sanitized)
+                tr_args(
+                    "error-config-user-file-not-found",
+                    &[("filename", sanitized)],
+                )
             }
             ConfigConfigError::ParseError {
                 format,
@@ -301,33 +308,48 @@ impl ConfigConfigError {
                 ..
             } => {
                 if let Some(loc) = location {
-                    format!("Failed to parse {} at {}: {}", format, loc, message)
+                    tr_args(
+                        "error-config-parse-error-at",
+                        &[
+                            ("format", format.clone()),
+                            ("location", loc.to_string()),
+                            ("message", message.clone()),
+                        ],
+                    )
                 } else {
-                    format!("Failed to parse {}: {}", format, message)
+                    tr_args(
+                        "error-config-parse-error",
+                        &[("format", format.clone()), ("message", message.clone())],
+                    )
                 }
             }
-            ConfigConfigError::SizeLimitExceeded { actual, limit } => {
-                format!(
-                    "Configuration size exceeded: {} bytes (limit: {})",
-                    actual, limit
-                )
-            }
-            ConfigConfigError::ValidationFailed { field, message, .. } => {
-                format!("Field '{}' failed validation: {}", field, message)
-            }
-            ConfigConfigError::VersionMismatch { found, expected } => {
-                format!(
-                    "Configuration version mismatch: found {}, expected {}",
-                    found, expected
-                )
-            }
-            ConfigConfigError::SourceChainError { message, .. } => message.clone(),
-            ConfigConfigError::InterpolationError { variable, message } => {
-                format!("Interpolation error for '{}': {}", variable, message)
-            }
-            ConfigConfigError::CircularReference { path } => {
-                format!("Circular reference detected: {}", path)
-            }
+            ConfigConfigError::SizeLimitExceeded { actual, limit } => tr_args(
+                "error-config-user-size-limit-exceeded",
+                &[("actual", actual.to_string()), ("limit", limit.to_string())],
+            ),
+            ConfigConfigError::ValidationFailed { field, message, .. } => tr_args(
+                "error-config-user-validation-failed",
+                &[("field", field.clone()), ("message", message.clone())],
+            ),
+            ConfigConfigError::VersionMismatch { found, expected } => tr_args(
+                "error-config-version-mismatch",
+                &[
+                    ("found", found.to_string()),
+                    ("expected", expected.to_string()),
+                ],
+            ),
+            ConfigConfigError::SourceChainError { message, .. } => tr_args(
+                "error-config-user-source-chain-error",
+                &[("message", message.clone())],
+            ),
+            ConfigConfigError::InterpolationError { variable, message } => tr_args(
+                "error-config-user-interpolation-error",
+                &[("variable", variable.clone()), ("message", message.clone())],
+            ),
+            ConfigConfigError::CircularReference { path } => tr_args(
+                "error-config-user-circular-reference",
+                &[("path", path.clone())],
+            ),
         }
     }
 
@@ -388,6 +410,80 @@ impl ConfigConfigError {
             field: field.into(),
             expected_type: expected_type.into(),
             message: message.into(),
+        }
+    }
+}
+
+impl crate::i18n::LocalizedMsg for ConfigConfigError {
+    fn message_key(&self) -> &'static str {
+        match self {
+            ConfigConfigError::MissingField { .. } => "error-config-missing-field",
+            ConfigConfigError::InvalidValue { .. } => "error-config-invalid-value",
+            ConfigConfigError::FileNotFound { .. } => "error-config-file-not-found",
+            ConfigConfigError::ParseError {
+                location: Some(_), ..
+            } => "error-config-parse-error-at",
+            ConfigConfigError::ParseError { .. } => "error-config-parse-error",
+            ConfigConfigError::SizeLimitExceeded { .. } => "error-config-size-limit-exceeded",
+            ConfigConfigError::ValidationFailed { .. } => "error-config-validation-failed",
+            ConfigConfigError::VersionMismatch { .. } => "error-config-version-mismatch",
+            ConfigConfigError::SourceChainError { .. } => "error-config-source-chain-error",
+            ConfigConfigError::InterpolationError { .. } => "error-config-interpolation-error",
+            ConfigConfigError::CircularReference { .. } => "error-config-circular-reference",
+        }
+    }
+
+    fn message_args(&self) -> Vec<(&'static str, String)> {
+        match self {
+            ConfigConfigError::MissingField { field } => vec![("field", field.clone())],
+            ConfigConfigError::InvalidValue {
+                field,
+                expected_type,
+                message,
+            } => vec![
+                ("field", field.clone()),
+                ("expected_type", expected_type.clone()),
+                ("message", message.clone()),
+            ],
+            ConfigConfigError::FileNotFound { filename, .. } => {
+                vec![("filename", filename.display().to_string())]
+            }
+            ConfigConfigError::ParseError {
+                format,
+                location,
+                message,
+                ..
+            } => {
+                let mut args = vec![("format", format.clone()), ("message", message.clone())];
+                if let Some(loc) = location {
+                    args.push(("location", loc.to_string()));
+                }
+                args
+            }
+            ConfigConfigError::SizeLimitExceeded { actual, limit } => {
+                vec![("actual", actual.to_string()), ("limit", limit.to_string())]
+            }
+            ConfigConfigError::ValidationFailed {
+                field,
+                message,
+                rule,
+                ..
+            } => vec![
+                ("field", field.clone()),
+                ("message", message.clone()),
+                ("rule", rule.clone()),
+            ],
+            ConfigConfigError::VersionMismatch { found, expected } => vec![
+                ("found", found.to_string()),
+                ("expected", expected.to_string()),
+            ],
+            ConfigConfigError::SourceChainError { message, .. } => {
+                vec![("message", message.clone())]
+            }
+            ConfigConfigError::InterpolationError { variable, message } => {
+                vec![("variable", variable.clone()), ("message", message.clone())]
+            }
+            ConfigConfigError::CircularReference { path } => vec![("path", path.clone())],
         }
     }
 }

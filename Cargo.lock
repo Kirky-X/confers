@@ -575,6 +575,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tracing",
+ "tracing-core",
  "unic-langid",
  "url",
  "zeroize",

@@ -155,7 +155,7 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 
 ##### `env_prefix(prefix: impl Into<String>)`
 
-添加带前缀的环境变量来源：只加载以该前缀开头的环境变量，剥离前缀后映射到配置字段。前缀按原样匹配与剥离，不自动补分隔下划线：需写成 `"APP_"` 才能映射 `APP_PORT`；写成 `"APP"` 时 `APP_PORT` 会残留前导下划线，无法映射到 `port` 字段。
+添加带前缀的环境变量来源：只加载以该前缀开头的环境变量，剥离前缀后映射到配置字段。前缀按原样匹配与剥离，带不带结尾分隔符均可：余量开头的一段或多段分隔符会被消费，`"APP_"` 与 `"APP"` 都能把 `APP_PORT` 映射到 `port`（推荐写成 `"APP_"`）。只剩分隔符、无键部分的变量（如前缀为 `"APP"` 时的 `APP` 本身）无法映射到任何字段，跳过不报错。
 
 ```rust
 pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self

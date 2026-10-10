@@ -627,6 +627,47 @@ fn diff_json_format_reports_both_sides_and_sanitize_flag_is_accepted() {
 }
 
 #[test]
+fn diff_sanitize_false_disables_redaction() {
+    let dir = setup_dir();
+    // AWS 访问键样例(匹配 sanitize 的 AKIA 模式)——与默认脱敏用例同源可对照。
+    let base = write_file(
+        &dir,
+        "base.toml",
+        "server.port = 1\ncreds.access_key = \"AKIAIOSFODNN7EXAMPLE\"\n",
+    );
+    let overlay = write_file(
+        &dir,
+        "overlay.toml",
+        "server.port = 2\ncreds.access_key = \"AKIAIOSFODNN7EXAMPLE\"\n",
+    );
+
+    let out = run_cli(
+        &dir,
+        &[
+            "diff",
+            "--base",
+            &base,
+            "--overlay",
+            &overlay,
+            "--format",
+            "json",
+            "--sanitize=false",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let body = stdout(&out);
+    assert!(body.contains("\"sanitize\": false"), "{body}");
+    assert!(
+        body.contains("AKIAIOSFODNN7EXAMPLE"),
+        "--sanitize=false must echo raw values: {body}"
+    );
+    assert!(
+        !body.contains("<aws_access_key>"),
+        "no redaction markers expected: {body}"
+    );
+}
+
+#[test]
 fn diff_identical_configs_report_equality() {
     let dir = setup_dir();
     let a = write_file(&dir, "a.toml", "server.port = 1\n");
