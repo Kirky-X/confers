@@ -1138,7 +1138,7 @@ let port = injector.get("APP_PORT")?;
 
 #### SecurityValidatorRegistry（`security-rules` 特性）
 
-`security-rules` 特性提供一套标准化的安全校验规则库，内置校验器与注册表，可在启动时自动执行。
+`security-rules` 特性提供一套标准化的安全校验规则库，内置校验器与注册表；校验不会自动执行，需由调用方显式构造注册表并调用 `validate_all`。
 
 ```rust
 use confers::interface::ConfigProvider;
@@ -1952,7 +1952,7 @@ pub fn log_load(&self, source: &str) -> ConfigResult<()>
 | 问题 | 解决方案 |
 |------|----------|
 | **问：找不到配置文件？** | 检查文件路径是否正确；使用 `.file("config.toml")` 显式指定路径，可选文件用 `.file_optional()`（不存在时静默跳过），或使用 `.source()` 接入自定义来源。 |
-| **问：环境变量不生效？** | 确认已调用 `.env()` 或 `.env_prefix("PREFIX_")`，并检查环境变量名是否使用了正确的前缀。前缀按原样匹配、不自动补下划线：例如 `.env_prefix("APP_")` 时配置字段 `port` 对应的环境变量名为 `APP_PORT`；写成 `.env_prefix("APP")` 会读不到该字段。 |
+| **问：环境变量不生效？** | 确认已调用 `.env()` 或 `.env_prefix("PREFIX_")`，并检查环境变量名是否使用了正确的前缀。前缀按原样匹配与剥离，带不带结尾分隔符均可：余量开头的一段或多段分隔符会被消费，`.env_prefix("APP_")` 与 `.env_prefix("APP")` 都能把 `APP_PORT` 映射到 `port`（推荐写成 `"APP_"`）。 |
 | **问：加密/解密失败？** | 确保加密与解密使用同一 32 字节密钥；使用 `derive_field_key` 派生字段密钥时，`field_path` 与 `key_version` 必须与加密时完全一致。 |
 | **问：配置校验失败？** | 查看详细的校验错误信息，确保配置值满足全部校验约束。检查字段类型是否匹配。 |
 | **问：远程配置加载超时？** | 检查网络连接与远程服务可用性，在构建来源时配置超时：`HttpPolledSourceBuilder::new().url(url).timeout(Duration::from_secs(60)).build()?`。 |

@@ -171,6 +171,7 @@ cli-docs-recipe-schema-reverse = schema-first reverse engineering
 cli-docs-recipe-schema-adopt = schema-first adoption
 cli-docs-recipe-export-sanitized = export sanitized config
 cli-docs-markdown-title = # confers agent knowledge pack
+cli-docs-markdown-knowledge-version = knowledge_version: { $version }
 cli-docs-markdown-subcommands-heading = ## Subcommands
 cli-docs-markdown-exit-codes-heading = ## Exit codes
 cli-docs-markdown-recipes-heading = ## Recipes

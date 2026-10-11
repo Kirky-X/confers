@@ -256,15 +256,12 @@ where
                 })?;
             i = next_i;
 
-            // Parse variable name and default value
             let (var_name, default_value) = parse_var_content(&var_content)?;
 
-            // Track referenced variable (if tracking is enabled)
             if let Some(ref_vars) = referenced_vars.as_mut() {
                 ref_vars.insert(var_name.to_string());
             }
 
-            // Track sensitive references (if tracking is enabled)
             if is_sensitive && let Some(sens_refs) = sensitive_refs.as_mut() {
                 sens_refs.insert(var_name.to_string());
             }
@@ -512,11 +509,9 @@ impl InterpolationContext {
     /// other fields are preserved, and re-recording the same field does not
     /// create duplicates).
     pub fn record(&mut self, field_name: &str, result: &InterpolationResult) {
-        // Track all referenced variables
         self.all_referenced
             .extend(result.referenced_vars.iter().cloned());
 
-        // Track sensitive references
         if result.is_sensitive {
             for var in &result.referenced_vars {
                 let fields = self.sensitive_references.entry(var.clone()).or_default();

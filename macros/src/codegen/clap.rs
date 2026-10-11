@@ -35,7 +35,6 @@ pub fn generate_clap_impl(
                 .clone()
                 .unwrap_or_else(|| field_name.replace('.', "-"));
 
-            // Build arg attributes
             let mut arg_parts = vec![quote! { long = #cli_name }];
 
             if let Some(short) = field_attrs.name_clap_short {
@@ -43,10 +42,10 @@ pub fn generate_clap_impl(
             }
 
             if let Some(desc) = &field_attrs.description {
+                let desc = &desc.0;
                 arg_parts.push(quote! { help = #desc });
             }
 
-            // Check if field has a default
             let has_default = field_attrs.default.is_some();
 
             let type_str = quote!(#ty).to_string();

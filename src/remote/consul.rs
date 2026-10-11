@@ -388,7 +388,6 @@ impl ConsulSource {
             *guard
         };
 
-        // Build request
         let mut request = self.client.get(&path);
 
         // Add ACL token if provided
@@ -406,7 +405,6 @@ impl ConsulSource {
             }
         }
 
-        // Make the request
         let mut response = request
             .send()
             .await
@@ -547,14 +545,12 @@ impl ConsulSource {
             });
         }
 
-        // Find the maximum index
         let max_index = kv_responses
             .iter()
             .filter_map(|r| r.modify_index)
             .max()
             .unwrap_or(0);
 
-        // Update index if changed
         if max_index > current_index {
             let mut guard = self
                 .last_index
@@ -565,7 +561,6 @@ impl ConsulSource {
             *guard = max_index;
         }
 
-        // Merge all KV values into a single config
         let mut config_map = indexmap::IndexMap::new();
 
         for kv in &kv_responses {
@@ -604,10 +599,8 @@ impl ConsulSource {
             // Try to parse as TOML/JSON/YAML. An explicitly configured format
             // (issue #334) wins over content sniffing.
             if let Some(parsed) = try_parse_value_with_format(&value_str, self.format, "consul") {
-                // Merge into config map
                 merge_into_map(&mut config_map, &key, parsed);
             } else {
-                // Treat as simple string value
                 config_map.insert(
                     Arc::from(key.clone()),
                     AnnotatedValue::new(

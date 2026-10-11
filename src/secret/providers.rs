@@ -1109,12 +1109,9 @@ mod tests {
     #[cfg(feature = "remote")]
     #[tokio::test]
     async fn t039_expired_token_triggers_relogin_once() {
-        // 缓存 token 过期(403)后必须清缓存重登一次并成功取 key,
-        // 而不是永久失败直到进程重启。响应序列:
-        // 1. AppRole 登录 200 → token A
-        // 2. 用 token A 取 key → 403(过期)
-        // 3. 重新登录 200 → token B
-        // 4. 重试取 key → 200
+        // 缓存 token 过期(403)后必须清缓存重登一次并成功取 key，而不是永久失败直到进程重启。
+        // mock 响应序列与步骤一一对应：AppRole 登录 200 → token A；用 token A 取 key → 403(过期)；
+        // 重新登录 200 → token B；重试取 key → 200。
         let addr =
             spawn_mock_vault(vec![
             (

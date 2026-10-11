@@ -89,7 +89,6 @@ fn demo_encryption() -> Result<(), Box<dyn std::error::Error>> {
     info!("Demo 2: Encryption");
     info!("============================================================");
 
-    // SecretString usage
     let password = SecretString::new("super-secret-password");
     info!("Password (Debug): {:?}", password);
     info!("Password (expose): {}", password.expose());

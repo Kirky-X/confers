@@ -19,13 +19,14 @@
 //!   # 运行示例
 //!   cargo run --bin remote_etcd
 
+use confers::i18n::{tr, tr_args};
 use confers::loader::Format;
 use confers::remote::{EtcdSourceBuilder, EtcdTlsConfig, PolledSource};
 use std::time::Duration;
 
 /// 演示基础 etcd 连接和配置轮询
 async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
-    println!("\n=== Demo 1: Basic etcd configuration polling ===\n");
+    println!("\n{}\n", tr("example-remote-etcd-demo1"));
 
     // EtcdSourceBuilder 的 build() 是异步方法（与 Consul 的同步 build 不同）
     // 内部通过 etcd-client SDK 建立 gRPC 连接
@@ -40,16 +41,31 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
 
     let source = match build_result {
         Ok(s) => {
-            println!("EtcdSource built successfully");
-            println!("  source ID: {}", s.source_id().as_str());
-            println!("  poll interval: {:?}", s.poll_interval());
+            println!("{}", tr("example-remote-etcd-built"));
+            println!(
+                "  {}",
+                tr_args(
+                    "example-remote-etcd-source-id",
+                    &[("id", s.source_id().as_str().to_string())]
+                )
+            );
+            println!(
+                "  {}",
+                tr_args(
+                    "example-remote-etcd-poll-interval",
+                    &[("interval", format!("{:?}", s.poll_interval()))]
+                )
+            );
             s
         }
         Err(e) => {
             // gRPC 连接可能惰性建立，build 失败说明端点不可达
-            println!("✗ EtcdSource build failed (it is normal if etcd is not running)");
-            println!("  error: {}", e);
-            println!("\n  Hint: run the following command to start etcd:");
+            println!("{}", tr("example-remote-etcd-build-failed-normal"));
+            println!(
+                "  {}",
+                tr_args("example-remote-etcd-error", &[("error", e.to_string())])
+            );
+            println!("\n  {}", tr("example-remote-etcd-hint"));
             println!("    docker run -d --name etcd -p 2379:2379 \\");
             println!("      quay.io/coreos/etcd:v3.5 /usr/local/bin/etcd \\");
             println!("      --name s1 --data-dir /etcd-data \\");
@@ -60,21 +76,24 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
     };
 
     // 尝试轮询配置 —— gRPC 连接是惰性的，build 成功不代表 poll 也会成功
-    println!("\nPolling etcd KV (prefix: myapp/config)...");
+    println!("\n{}", tr("example-remote-etcd-polling"));
     match source.poll().await {
         Ok(value) => {
-            println!("✓ config loaded successfully");
+            println!("{}", tr("example-remote-etcd-loaded"));
             if value.is_map() {
-                println!("  value type: Map (multiple key-value pairs)");
+                println!("  {}", tr("example-remote-etcd-value-map"));
             } else if value.is_null() {
-                println!("  value type: Null (no configuration under the prefix)");
+                println!("  {}", tr("example-remote-etcd-value-null"));
             } else {
-                println!("  value type: scalar value");
+                println!("  {}", tr("example-remote-etcd-value-scalar"));
             }
         }
         Err(e) => {
-            println!("✗ Poll failed (it is normal if etcd is not running)");
-            println!("  error: {}", e);
+            println!("{}", tr("example-remote-etcd-poll-failed-normal"));
+            println!(
+                "  {}",
+                tr_args("example-remote-etcd-error", &[("error", e.to_string())])
+            );
         }
     }
 
@@ -83,7 +102,7 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
 
 /// 演示带用户名/密码认证的 etcd 连接
 async fn demo_with_auth(endpoint: &str) -> anyhow::Result<()> {
-    println!("\n=== Demo 2: Authenticated etcd connection ===\n");
+    println!("\n{}\n", tr("example-remote-etcd-demo2"));
 
     let build_result = EtcdSourceBuilder::new()
         .endpoints(vec![endpoint.to_string()])
@@ -96,28 +115,44 @@ async fn demo_with_auth(endpoint: &str) -> anyhow::Result<()> {
 
     match build_result {
         Ok(s) => {
-            println!("EtcdSource with authentication built successfully");
-            println!("  source ID: {}", s.source_id().as_str());
+            println!("{}", tr("example-remote-etcd-with-auth-built"));
+            println!(
+                "  {}",
+                tr_args(
+                    "example-remote-etcd-source-id",
+                    &[("id", s.source_id().as_str().to_string())]
+                )
+            );
             match s.poll().await {
-                Ok(_) => println!("✓ config loaded successfully"),
-                Err(e) => println!("✗ Poll failed: {}", e),
+                Ok(_) => println!("{}", tr("example-remote-etcd-loaded")),
+                Err(e) => println!(
+                    "{}",
+                    tr_args(
+                        "example-remote-etcd-poll-failed",
+                        &[("error", e.to_string())]
+                    )
+                ),
             }
         }
         Err(e) => {
-            println!("✗ build failed: {}", e);
+            println!(
+                "{}",
+                tr_args(
+                    "example-remote-etcd-build-failed",
+                    &[("error", e.to_string())]
+                )
+            );
         }
     }
 
-    println!(
-        "\n  Note: In production, read credentials from environment variables instead of hard-coding them"
-    );
+    println!("\n  {}", tr("example-remote-etcd-credentials-note"));
 
     Ok(())
 }
 
 /// 演示 TLS 配置与多端点集群
 async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
-    println!("\n=== Demo 3: TLS configuration and multi-endpoint cluster ===\n");
+    println!("\n{}\n", tr("example-remote-etcd-demo3"));
 
     // EtcdTlsConfig 指定 CA 证书、客户端证书和私钥的文件路径
     let tls = EtcdTlsConfig {
@@ -141,22 +176,37 @@ async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
 
     match build_result {
         Ok(s) => {
-            println!("EtcdSource with TLS built successfully");
-            println!("  source ID: {}", s.source_id().as_str());
-            println!("  poll interval: {:?}", s.poll_interval());
+            println!("{}", tr("example-remote-etcd-with-tls-built"));
+            println!(
+                "  {}",
+                tr_args(
+                    "example-remote-etcd-source-id",
+                    &[("id", s.source_id().as_str().to_string())]
+                )
+            );
+            println!(
+                "  {}",
+                tr_args(
+                    "example-remote-etcd-poll-interval",
+                    &[("interval", format!("{:?}", s.poll_interval()))]
+                )
+            );
         }
         Err(e) => {
-            println!("✗ build failed (unreachable remote endpoints are normal)");
-            println!("  error: {}", e);
+            println!("{}", tr("example-remote-etcd-build-failed-unreachable"));
+            println!(
+                "  {}",
+                tr_args("example-remote-etcd-error", &[("error", e.to_string())])
+            );
         }
     }
 
-    println!("\nProduction TLS configuration steps:");
-    println!("  1. Generate the CA certificate and key");
-    println!("  2. Generate certificates for the etcd server");
-    println!("  3. Generate certificates for the client");
-    println!("  4. Enable TLS when starting etcd (--cert-file, --key-file, --client-cert-auth)");
-    println!("  5. Connect the client through the TLS endpoint");
+    println!("\n{}", tr("example-remote-etcd-tls-steps"));
+    println!("  {}", tr("example-remote-etcd-tls-step-1"));
+    println!("  {}", tr("example-remote-etcd-tls-step-2"));
+    println!("  {}", tr("example-remote-etcd-tls-step-3"));
+    println!("  {}", tr("example-remote-etcd-tls-step-4"));
+    println!("  {}", tr("example-remote-etcd-tls-step-5"));
 
     Ok(())
 }
@@ -164,20 +214,25 @@ async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Remote etcd config source demo");
+    println!("  {}", tr("example-remote-etcd-title"));
     println!("========================================");
 
-    // 从环境变量读取 etcd 端点，默认本地
     let endpoint = std::env::var("ETCD_ENDPOINT").unwrap_or_else(|_| "127.0.0.1:2379".to_string());
 
-    println!("etcd endpoint: {}", endpoint);
+    println!(
+        "{}",
+        tr_args(
+            "example-remote-etcd-endpoint",
+            &[("endpoint", endpoint.clone())]
+        )
+    );
 
     demo_basic_poll(&endpoint).await?;
     demo_with_auth(&endpoint).await?;
     demo_tls_and_endpoints().await?;
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-remote-etcd-completed"));
     println!("========================================");
     Ok(())
 }

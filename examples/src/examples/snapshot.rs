@@ -9,16 +9,16 @@
 //! - 列出历史快照
 //! - 清理超出上限的旧快照
 
+use confers::i18n::{tr, tr_args};
 use confers::snapshot::{SnapshotConfig, SnapshotFormat, SnapshotManager};
 use confers::{AnnotatedValue, ConfigValue, ConfigWriter, SourceId, new_in_memory};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  config snapshot persistence demo");
+    println!("  {}", tr("example-snapshot-title"));
     println!("========================================\n");
 
-    // 1. 使用 confers 创建内存配置并设置值
     let config = new_in_memory();
     config
         .set(
@@ -40,9 +40,8 @@ async fn main() -> anyhow::Result<()> {
             ),
         )
         .await?;
-    println!("✓ In-memory config created with server.host and server.port");
+    println!("{}", tr("example-snapshot-in-memory-created"));
 
-    // 2. 构建用于快照的 AnnotatedValue 树（含敏感字段 password）
     let snapshot_value = AnnotatedValue::new(
         ConfigValue::map(vec![
             (
@@ -70,7 +69,6 @@ async fn main() -> anyhow::Result<()> {
         "",
     );
 
-    // 3. 创建快照管理器（输出到临时目录）
     let snapshot_dir =
         std::env::temp_dir().join(format!("confers-snapshot-demo-{}", std::process::id()));
     let manager = SnapshotManager::new(SnapshotConfig {
@@ -80,37 +78,59 @@ async fn main() -> anyhow::Result<()> {
         include_provenance: true,
     });
     println!(
-        "✓ Snapshot manager created; output directory: {:?}",
-        snapshot_dir
+        "{}",
+        tr_args(
+            "example-snapshot-manager-created",
+            &[("dir", format!("{snapshot_dir:?}"))]
+        )
     );
 
-    // 4. 保存快照（脱敏 password 字段）
     let path = manager.save(&snapshot_value, &["password"]).await?;
     println!(
-        "✓ Snapshot saved: {:?}",
-        path.file_name().unwrap_or_default()
+        "{}",
+        tr_args(
+            "example-snapshot-saved",
+            &[(
+                "file",
+                format!("{:?}", path.file_name().unwrap_or_default())
+            )]
+        )
     );
 
-    // 验证脱敏效果
     let content = std::fs::read_to_string(&path)?;
     assert!(content.contains("[REDACTED]"));
     assert!(!content.contains("super-secret"));
-    println!("✓ Sensitive field password redacted to [REDACTED]");
+    println!("{}", tr("example-snapshot-redacted"));
 
-    // 5. 列出快照
     let snapshots = manager.list_snapshots()?;
-    println!("\n--- Snapshot list ({} total)---", snapshots.len());
+    println!(
+        "\n{}",
+        tr_args(
+            "example-snapshot-list-header",
+            &[("count", snapshots.len().to_string())]
+        )
+    );
     for info in &snapshots {
         println!(
-            "  {} | {} bytes | {}",
-            info.path.file_name().unwrap().to_string_lossy(),
-            info.size_bytes,
-            info.created_at.format("%Y-%m-%d %H:%M:%S")
+            "  {}",
+            tr_args(
+                "example-snapshot-list-row",
+                &[
+                    (
+                        "name",
+                        info.path.file_name().unwrap().to_string_lossy().to_string()
+                    ),
+                    ("size", info.size_bytes.to_string()),
+                    (
+                        "created",
+                        info.created_at.format("%Y-%m-%d %H:%M:%S").to_string()
+                    ),
+                ]
+            )
         );
     }
 
-    // 6. 演示清理：多保存几个快照触发自动清理
-    println!("\n--- Demo: snapshot cleanup (max_snapshots=5)---");
+    println!("\n{}", tr("example-snapshot-cleanup-demo"));
     for i in 0..6u64 {
         let value = AnnotatedValue::new(
             ConfigValue::map(vec![(
@@ -126,16 +146,27 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let removed = manager.prune_old_snapshots()?;
-    println!("✓ Manual cleanup removed {} old snapshots", removed);
+    println!(
+        "{}",
+        tr_args(
+            "example-snapshot-cleanup-removed",
+            &[("count", removed.to_string())]
+        )
+    );
 
     let remaining = manager.list_snapshots()?;
-    println!("  Remaining snapshots: {}", remaining.len());
+    println!(
+        "  {}",
+        tr_args(
+            "example-snapshot-remaining",
+            &[("count", remaining.len().to_string())]
+        )
+    );
 
-    // 清理临时目录
     let _ = std::fs::remove_dir_all(&snapshot_dir);
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-snapshot-completed"));
     println!("========================================");
     Ok(())
 }

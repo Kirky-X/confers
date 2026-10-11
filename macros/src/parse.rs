@@ -211,6 +211,20 @@ impl darling::FromMeta for DefaultExpr {
     }
 }
 
+/// Field description attribute, accepting both the plain string form
+/// `#[config(description = "...")]` and the expression form
+/// `#[config(description = tr("..."))]` (the expression is emitted as the
+/// clap `help` value, so an i18n lookup is evaluated when the CLI command is
+/// built).
+#[derive(Debug, Clone)]
+pub struct DescriptionExpr(pub syn::Expr);
+
+impl darling::FromMeta for DescriptionExpr {
+    fn from_expr(expr: &syn::Expr) -> Result<Self, darling::Error> {
+        Ok(Self(expr.clone()))
+    }
+}
+
 impl DefaultExpr {
     /// Whether the expression is the literal `None` path.
     pub fn is_none(&self) -> bool {
@@ -236,8 +250,8 @@ pub struct FieldAttrs {
     /// explicit form `#[config(default = expr)]`, and `None`).
     pub default: Option<DefaultExpr>,
 
-    /// Field description for documentation
-    pub description: Option<String>,
+    /// Field description for documentation (string literal or expression)
+    pub description: Option<DescriptionExpr>,
 
     /// Override configuration key name
     pub name: Option<String>,

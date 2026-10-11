@@ -1424,7 +1424,6 @@ version = 0
             include_provenance: false,
         });
 
-        // Async path.
         let path = futures_executor_block_on(manager.save(&make_value(), &[])).unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(
@@ -1434,7 +1433,6 @@ version = 0
             mode & 0o777
         );
 
-        // Blocking path.
         let path2 = manager.save_blocking(&make_value(), &[]).unwrap();
         let mode = std::fs::metadata(&path2).unwrap().permissions().mode();
         assert_eq!(

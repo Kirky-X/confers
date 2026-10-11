@@ -19,6 +19,7 @@
 //! 本示例依赖 examples/config/ 下的 base.toml 与 {env}.toml。
 //! =============================================================================
 
+use confers::i18n::{tr, tr_args};
 use confers::{ConfigValue, SourceChainBuilder, config};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -194,8 +195,14 @@ pub struct ProductionConfig {
 /// ConfigBuilder 允许你精确控制配置源的优先级和组合顺序。
 /// 优先级规则：先添加的源优先级低，后添加的源优先级高（后者覆盖前者）。
 fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
-    println!("\n========== Load configuration with ConfigBuilder ==========");
-    println!("environment: {}", env);
+    println!("\n{}", tr("example-config-groups-builder-header"));
+    println!(
+        "{}",
+        tr_args(
+            "example-config-groups-environment",
+            &[("env", env.to_string())]
+        )
+    );
 
     let config_dir = config_dir();
 
@@ -211,8 +218,14 @@ fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::err
 
 /// 示例 2：使用 SourceChainBuilder 手动构建配置源链
 fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
-    println!("\n========== Load configuration with SourceChainBuilder ==========");
-    println!("environment: {}", env);
+    println!("\n{}", tr("example-config-groups-chain-header"));
+    println!(
+        "{}",
+        tr_args(
+            "example-config-groups-environment",
+            &[("env", env.to_string())]
+        )
+    );
 
     let config_dir = config_dir();
 
@@ -223,7 +236,7 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
         .env_with_prefix("APP_")
         .build();
 
-    println!("\nConfiguration source chain:");
+    println!("\n{}", tr("example-config-groups-source-chain"));
     for (idx, name) in chain.source_names().iter().enumerate() {
         println!("  {}. {}", idx + 1, name);
     }
@@ -236,8 +249,11 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
         .filter(|p| !p.is_empty() && !p.contains('.'))
         .collect();
     println!(
-        "\nMerged top-level configuration sections: {:?}",
-        top_sections
+        "\n{}",
+        tr_args(
+            "example-config-groups-merged-sections",
+            &[("sections", format!("{top_sections:?}"))]
+        )
     );
 
     let app_config: ConfersConfig = config::<ConfersConfig>()
@@ -251,7 +267,7 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
 
 /// 示例 3：演示配置优先级机制
 fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n========== Configuration priority demo ==========");
+    println!("\n{}", tr("example-config-groups-priority-header"));
 
     #[derive(Debug, Default, Deserialize)]
     struct PriorityTest {
@@ -275,18 +291,27 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
         ]))
         .build()?;
 
-    println!("Priority demo result:");
+    println!("{}", tr("example-config-groups-priority-result"));
     println!(
-        "  name = {} (high priority overrides low priority)",
-        test_config.name
+        "  {}",
+        tr_args(
+            "example-config-groups-priority-name",
+            &[("name", test_config.name.clone())]
+        )
     );
     println!(
-        "  port = {} (high priority overrides low priority)",
-        test_config.port
+        "  {}",
+        tr_args(
+            "example-config-groups-priority-port",
+            &[("port", test_config.port.to_string())]
+        )
     );
     println!(
-        "  level = {} (not set at high priority; low priority retained)",
-        test_config.level
+        "  {}",
+        tr_args(
+            "example-config-groups-priority-level",
+            &[("level", test_config.level.clone())]
+        )
     );
 
     Ok(())
@@ -312,60 +337,170 @@ fn config_dir() -> PathBuf {
 
 /// 打印完整配置信息
 fn print_config(config: &ConfersConfig) {
-    println!("\n========== Final configuration ==========");
+    println!("\n{}", tr("example-config-groups-final-header"));
 
-    // 应用元数据
-    println!("\n[App metadata]");
-    println!("  name: {}", config.app.name);
-    println!("  version: {}", config.app.version);
-    println!("  environment: {}", config.app.environment);
-
-    // 服务器配置
-    println!("\n[Server configuration]");
-    println!("  host: {}", config.server.host);
-    println!("  port: {}", config.server.port);
-    println!("  workers: {}", config.server.workers);
-
-    // 数据库配置
-    println!("\n[Database configuration]");
-    println!("  URL: {}", config.database.url);
-    println!("  Max connections: {}", config.database.max_connections);
+    println!("\n{}", tr("example-config-groups-app-section"));
     println!(
-        "  Connection timeout: {}s",
-        config.database.connection_timeout
+        "  {}",
+        tr_args(
+            "example-config-groups-app-name",
+            &[("name", config.app.name.clone())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-app-version",
+            &[("version", config.app.version.clone())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-app-environment",
+            &[("environment", config.app.environment.clone())]
+        )
     );
 
-    // 日志配置
-    println!("\n[Logging configuration]");
-    println!("  enabled: {}", config.logging.enable);
-    println!("  level: {}", config.logging.level);
-    println!("  format: {}", config.logging.format);
+    println!("\n{}", tr("example-config-groups-server-section"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-server-host",
+            &[("host", config.server.host.clone())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-server-port",
+            &[("port", config.server.port.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-server-workers",
+            &[("workers", config.server.workers.to_string())]
+        )
+    );
 
-    // 缓存配置
-    println!("\n[Cache configuration]");
-    println!("  enabled: {}", config.cache.enable);
+    println!("\n{}", tr("example-config-groups-database-section"));
+    println!("  URL: {}", config.database.url);
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-database-max-connections",
+            &[("count", config.database.max_connections.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-database-timeout",
+            &[("seconds", config.database.connection_timeout.to_string())]
+        )
+    );
+
+    println!("\n{}", tr("example-config-groups-logging-section"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-logging-enabled",
+            &[("enabled", config.logging.enable.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-logging-level",
+            &[("level", config.logging.level.clone())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-logging-format",
+            &[("format", config.logging.format.clone())]
+        )
+    );
+
+    println!("\n{}", tr("example-config-groups-cache-section"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-cache-enabled",
+            &[("enabled", config.cache.enable.to_string())]
+        )
+    );
     println!("  TTL: {}s", config.cache.ttl);
 
-    // 安全配置
-    println!("\n[Security configuration]");
+    println!("\n{}", tr("example-config-groups-security-section"));
     println!("  HTTPS: {}", config.security.https);
     println!("  CORS: {}", config.security.cors);
-    println!("  Allowed origins: {:?}", config.security.allowed_origins);
+    println!(
+        "  {}",
+        tr_args(
+            "example-config-groups-security-origins",
+            &[("origins", format!("{:?}", config.security.allowed_origins))]
+        )
+    );
 
-    // 环境特有配置
     if let Some(ref dev) = config.development {
-        println!("\n[Development environment configuration]");
-        println!("  Hot reload: {}", dev.hot_reload);
-        println!("  Debug endpoints: {}", dev.debug_endpoints);
-        println!("  Verbose errors: {}", dev.verbose_errors);
+        println!("\n{}", tr("example-config-groups-dev-section"));
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-dev-hot-reload",
+                &[("enabled", dev.hot_reload.to_string())]
+            )
+        );
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-dev-debug-endpoints",
+                &[("enabled", dev.debug_endpoints.to_string())]
+            )
+        );
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-dev-verbose-errors",
+                &[("enabled", dev.verbose_errors.to_string())]
+            )
+        );
     }
 
     if let Some(ref prod) = config.production {
-        println!("\n[Production environment configuration]");
-        println!("  Health check: {}", prod.health_check);
-        println!("  Rate limit: {}", prod.rate_limit);
-        println!("  Max request size: {} bytes", prod.max_request_size);
-        println!("  Performance monitoring: {}", prod.monitoring);
+        println!("\n{}", tr("example-config-groups-prod-section"));
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-prod-health-check",
+                &[("enabled", prod.health_check.to_string())]
+            )
+        );
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-prod-rate-limit",
+                &[("enabled", prod.rate_limit.to_string())]
+            )
+        );
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-prod-max-request-size",
+                &[("bytes", prod.max_request_size.to_string())]
+            )
+        );
+        println!(
+            "  {}",
+            tr_args(
+                "example-config-groups-prod-monitoring",
+                &[("enabled", prod.monitoring.to_string())]
+            )
+        );
     }
 
     println!("\n============================\n");
@@ -377,12 +512,11 @@ fn print_config(config: &ConfersConfig) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化日志
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    tracing::info!("Config groups example started");
+    tracing::info!("{}", tr("example-config-groups-started"));
 
     // 确定运行环境
     // 优先级：命令行参数 > 环境变量 > 默认值
@@ -396,50 +530,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "dev".to_string());
 
     println!("========================================");
-    println!("    Config Groups example");
+    println!("    {}", tr("example-config-groups-title"));
     println!("========================================");
-    println!("Current environment: {}", env);
-
-    // 演示配置优先级
-    demonstrate_priority()?;
-
-    // 方法 1：使用 ConfigBuilder 加载
-    match load_with_config_builder(&env) {
-        Ok(config) => {
-            println!("\n✓ ConfigBuilder loaded successfully!");
-            print_config(&config);
-        }
-        Err(e) => {
-            println!("\n✗ ConfigBuilder load failed: {}", e);
-        }
-    }
-
-    // 方法 2：使用 SourceChainBuilder 加载
-    match load_with_source_chain(&env) {
-        Ok(config) => {
-            println!("✓ SourceChainBuilder loaded successfully!");
-            print_config(&config);
-        }
-        Err(e) => {
-            println!("✗ SourceChainBuilder load failed: {}", e);
-        }
-    }
-
-    // 演示不同环境的配置差异
-    println!("\n========== Environment configuration comparison ==========");
-    println!("dev env traits: localhost, port=3000, debug logs, cache disabled");
-    println!("prod env traits: 0.0.0.0, port=8080, warn logs, cache enabled");
-
-    // 演示环境变量覆盖
-    println!("\n========== Environment variable override demo ==========");
-    println!("You can override configuration with these environment variables:");
-    println!("  APP_SERVER_PORT=9000      - override server port");
-    println!("  APP_DATABASE_URL=...       - override database URL");
-    println!("  APP_LOGGING_LEVEL=debug   - override log level");
     println!(
-        "\nExample: APP_SERVER_PORT=9000 cargo run -p confers-examples --bin config_groups -- dev"
+        "{}",
+        tr_args("example-config-groups-current-env", &[("env", env.clone())])
     );
 
-    tracing::info!("Example completed!");
+    demonstrate_priority()?;
+
+    match load_with_config_builder(&env) {
+        Ok(config) => {
+            println!("\n{}", tr("example-config-groups-builder-loaded"));
+            print_config(&config);
+        }
+        Err(e) => {
+            println!(
+                "\n{}",
+                tr_args(
+                    "example-config-groups-builder-failed",
+                    &[("error", e.to_string())]
+                )
+            );
+        }
+    }
+
+    match load_with_source_chain(&env) {
+        Ok(config) => {
+            println!("{}", tr("example-config-groups-chain-loaded"));
+            print_config(&config);
+        }
+        Err(e) => {
+            println!(
+                "{}",
+                tr_args(
+                    "example-config-groups-chain-failed",
+                    &[("error", e.to_string())]
+                )
+            );
+        }
+    }
+
+    println!("\n{}", tr("example-config-groups-comparison-header"));
+    println!("{}", tr("example-config-groups-dev-traits"));
+    println!("{}", tr("example-config-groups-prod-traits"));
+
+    println!("\n{}", tr("example-config-groups-override-header"));
+    println!("{}", tr("example-config-groups-override-hint"));
+    println!("{}", tr("example-config-groups-override-port"));
+    println!("{}", tr("example-config-groups-override-database-url"));
+    println!("{}", tr("example-config-groups-override-log-level"));
+    println!("\n{}", tr("example-config-groups-override-example"));
+
+    tracing::info!("{}", tr("example-config-groups-completed"));
     Ok(())
 }

@@ -15,8 +15,10 @@ use super::locale::current_locale;
 
 pub const EN_ERRORS_FTL: &str = include_str!("../../locales/en/errors.ftl");
 pub const EN_CLI_FTL: &str = include_str!("../../locales/en/cli.ftl");
+pub const EN_EXAMPLES_FTL: &str = include_str!("../../locales/en/examples.ftl");
 pub const ZH_ERRORS_FTL: &str = include_str!("../../locales/zh/errors.ftl");
 pub const ZH_CLI_FTL: &str = include_str!("../../locales/zh/cli.ftl");
+pub const ZH_EXAMPLES_FTL: &str = include_str!("../../locales/zh/examples.ftl");
 
 /// All embedded FTL resources as `(crate-relative path, content)` pairs.
 ///
@@ -25,12 +27,14 @@ pub const ZH_CLI_FTL: &str = include_str!("../../locales/zh/cli.ftl");
 pub const EMBEDDED_LOCALES: &[(&str, &str)] = &[
     ("locales/en/errors.ftl", EN_ERRORS_FTL),
     ("locales/en/cli.ftl", EN_CLI_FTL),
+    ("locales/en/examples.ftl", EN_EXAMPLES_FTL),
     ("locales/zh/errors.ftl", ZH_ERRORS_FTL),
     ("locales/zh/cli.ftl", ZH_CLI_FTL),
+    ("locales/zh/examples.ftl", ZH_EXAMPLES_FTL),
 ];
 
-const EN_FTLS: &[&str] = &[EN_ERRORS_FTL, EN_CLI_FTL];
-const ZH_FTLS: &[&str] = &[ZH_ERRORS_FTL, ZH_CLI_FTL];
+const EN_FTLS: &[&str] = &[EN_ERRORS_FTL, EN_CLI_FTL, EN_EXAMPLES_FTL];
+const ZH_FTLS: &[&str] = &[ZH_ERRORS_FTL, ZH_CLI_FTL, ZH_EXAMPLES_FTL];
 
 // ============================================================================
 // Translation entry points
@@ -259,7 +263,11 @@ mod tests {
 
     #[test]
     fn test_en_zh_key_parity() {
-        for (en, zh) in [(EN_ERRORS_FTL, ZH_ERRORS_FTL), (EN_CLI_FTL, ZH_CLI_FTL)] {
+        for (en, zh) in [
+            (EN_ERRORS_FTL, ZH_ERRORS_FTL),
+            (EN_CLI_FTL, ZH_CLI_FTL),
+            (EN_EXAMPLES_FTL, ZH_EXAMPLES_FTL),
+        ] {
             let en_keys = ftl_keys(en);
             let zh_keys = ftl_keys(zh);
             assert!(!en_keys.is_empty(), "en catalog must not be empty");

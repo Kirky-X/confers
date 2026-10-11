@@ -373,22 +373,20 @@ Commands:
   export    Export merged configuration (sanitized)
   diff      Diff two configurations
   snapshot  Manage configuration snapshots
-  schema    Output JSON Schema, or generate Rust scaffolding from a schema draft (--from-schema)
+  schema    Output JSON Schema for the configuration type
   get       Get a specific configuration value by key path (dot-separated)
-  docs      Documentation output（--agent 输出机器可读知识包）
-  doctor    Diagnose configuration health and print a single-line JSON report
+  docs      Documentation output. `--agent` emits the machine-readable knowledge pack (subcommands, arguments, exit-code contract, task recipes)
+  doctor    Diagnose configuration health (schema, source chain, encryption, env overrides) and print a single-line JSON report
   help      Print this message or the help of the given subcommand(s)
 
 Options:
-  -c, --config <CONFIG>      Configuration file(s) to load
-      --env-file <ENV_FILE>  Additional environment file
-      --allow-absolute-paths Allow absolute paths for config files
-      --fields <FIELDS>      Filter output to specified fields (comma-separated dot-paths)
-      --lang <LANG>          UI language as a BCP-47 tag (`zh`/`en`; other well-formed
-                             tags fall back to the English catalog). Overrides
-                             CONFERS_LANG and locale detection
-  -h, --help                 Print help
-  -V, --version              Print version
+  -c, --config <CONFIG>       Configuration file(s) to load
+      --env-file <ENV_FILE>   Additional environment file
+      --allow-absolute-paths  Allow absolute paths for config files (use with caution, mainly for testing)
+      --fields <FIELDS>       Filter output to only include specified fields (comma-separated dot-paths, e.g. "a.b,c.d")
+      --lang <LANG>           UI language as a BCP-47 tag (`zh`/`en`; other well-formed tags fall back to the English catalog). Overrides CONFERS_LANG and locale detection
+  -h, --help                  Print help
+  -V, --version               Print version
 ```
 
 #### inspect - 配置检视
@@ -459,7 +457,7 @@ confers snapshot prune --older-than 7d
 #### schema - Schema 生成与反向脚手架
 
 ```bash
-# 正向：为派生配置类型输出 JSON Schema（2020-12）
+# 正向：输出 JSON Schema（2020-12；内置二进制的输出见下方注意）
 confers schema
 
 # 反向（实例 → Schema 草稿）：从配置实例反推 schema-first 起点
@@ -468,6 +466,8 @@ confers -c app.toml schema --from-instance
 # 反向（Schema 草稿 → Rust 脚手架）：schema-first 落地的起点代码
 confers schema --from-schema config-schema.json
 ```
+
+> **注意**：随库安装的 `confers` 二进制固定以 `serde_json::Value` 作为配置类型实例化 CLI（`src/cli/main.rs`），因此不带参数的 `confers schema` 输出的是 `serde_json::Value` 的通用 schema（`title: "AnyValue"`），不是您的派生配置类型。要正向生成自己配置类型的 JSON Schema，请在项目中嵌入 CLI 并指定类型：`confers::cli::run::<MyConfig>()`（需 `cli` 特性）。
 
 `--from-schema` 的映射规则（完整规则见 `RustScaffoldGenerator` rustdoc）：
 
@@ -902,7 +902,7 @@ config.confers_validate()?;
 
 #### 7. 安全校验规则
 
-`security-rules` 特性提供一套标准化的安全校验规则库。内置校验器覆盖 JWT 密钥强度、CORS 配置、SSRF 防护与 TLS 设置 ：全部在启动时自动执行。
+`security-rules` 特性提供一套标准化的安全校验规则库。内置校验器覆盖 JWT 密钥强度、CORS 配置、SSRF 防护与 TLS 设置；校验不会自动执行，需由调用方显式构造注册表并调用 `validate_all`。
 
 ```toml
 # Cargo.toml

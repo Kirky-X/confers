@@ -165,7 +165,6 @@ async fn test_etcd_source_parse_config() {
 
     match result {
         Ok(config) => {
-            // Verify we got some config
             println!("Got config: {:?}", config);
             // Verify the config contains expected keys
             assert!(!config.is_empty(), "Config should not be empty");

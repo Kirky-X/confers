@@ -596,7 +596,6 @@ mod tests {
         assert_eq!(schedule.last_rotation, last_rotation);
         assert_eq!(schedule.max_versions, 5);
         assert!(schedule.auto_rotate);
-        // next_rotation = last_rotation + 90 days in seconds
         assert_eq!(schedule.next_rotation, last_rotation + 90 * SECONDS_PER_DAY);
     }
 

@@ -10,6 +10,7 @@
 //! - 访问和验证配置值
 
 use confers::Config;
+use confers::i18n::{tr, tr_args};
 use serde::Deserialize;
 
 /// 应用配置结构
@@ -65,56 +66,102 @@ pub struct ConfersConfig {
 
 /// 打印配置信息（用于演示）
 fn print_config(config: &ConfersConfig) {
-    println!("\n========== Configuration info ==========");
+    println!("\n{}", tr("example-basic-usage-config-info"));
 
-    // 服务器配置
-    println!("\n[Server configuration]");
-    println!("  host: {}", config.host);
-    println!("  port: {}", config.port);
-    println!("  workers: {}", config.workers);
+    println!("\n{}", tr("example-basic-usage-server-section"));
+    println!(
+        "  {}",
+        tr_args("example-basic-usage-host", &[("host", config.host.clone())])
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-port",
+            &[("port", config.port.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-workers",
+            &[("workers", config.workers.to_string())]
+        )
+    );
 
-    // 数据库配置
-    println!("\n[Database configuration]");
+    println!("\n{}", tr("example-basic-usage-database-section"));
     println!("  URL: {}", config.database_url);
-    println!("  Max connections: {}", config.max_connections);
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-max-connections",
+            &[("count", config.max_connections.to_string())]
+        )
+    );
 
-    // 功能配置
-    println!("\n[Feature configuration]");
-    println!("  logging enabled: {}", config.enable_logging);
-    println!("  metrics enabled: {}", config.enable_metrics);
-    println!("  log level: {}", config.log_level);
+    println!("\n{}", tr("example-basic-usage-feature-section"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-logging-enabled",
+            &[("enabled", config.enable_logging.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-metrics-enabled",
+            &[("enabled", config.enable_metrics.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-log-level",
+            &[("level", config.log_level.clone())]
+        )
+    );
 
-    // 应用元数据
-    println!("\n[App metadata]");
-    println!("  name: {}", config.app_name);
-    println!("  version: {}", config.app_version);
+    println!("\n{}", tr("example-basic-usage-app-metadata"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-app-name",
+            &[("name", config.app_name.clone())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-basic-usage-app-version",
+            &[("version", config.app_version.clone())]
+        )
+    );
 
     println!("\n==============================\n");
 }
 
 /// 验证配置的有效性
 fn validate_config(config: &ConfersConfig) -> Result<(), String> {
-    // 验证端口范围
     if config.port == 0 {
-        return Err("server port must not be 0".to_string());
+        return Err(tr("example-basic-usage-port-zero"));
     }
 
-    // 验证工作线程数
     if config.workers == 0 {
-        return Err("worker count must not be 0".to_string());
+        return Err(tr("example-basic-usage-workers-zero"));
     }
 
-    // 验证数据库连接数
     if config.max_connections == 0 {
-        return Err("max connections must not be 0".to_string());
+        return Err(tr("example-basic-usage-max-connections-zero"));
     }
 
-    // 验证日志级别
     let valid_log_levels = vec!["trace", "debug", "info", "warn", "error"];
     if !valid_log_levels.contains(&config.log_level.as_str()) {
-        return Err(format!(
-            "invalid log level: {} (valid values: {:?}",
-            config.log_level, valid_log_levels
+        return Err(tr_args(
+            "example-basic-usage-invalid-log-level",
+            &[
+                ("level", config.log_level.clone()),
+                ("valid", format!("{valid_log_levels:?}")),
+            ],
         ));
     }
 
@@ -127,53 +174,80 @@ fn validate_config(config: &ConfersConfig) -> Result<(), String> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化日志
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
 
     println!("========================================");
-    println!("  Basic Usage - basic config loading demo");
+    println!("  {}", tr("example-basic-usage-title"));
     println!("========================================");
     println!(
-        "\ncurrent working directory: {:?}",
-        std::env::current_dir()?
+        "\n{}",
+        tr_args(
+            "example-basic-usage-cwd",
+            &[("cwd", format!("{:?}", std::env::current_dir()?))]
+        )
     );
 
-    println!("\n[Environment variable override]");
-    println!("Override configuration values with these environment variables:");
+    println!("\n{}", tr("example-basic-usage-env-section"));
+    println!("{}", tr("example-basic-usage-env-hint"));
     println!("  export HOST=0.0.0.0");
     println!("  export PORT=9000");
     println!("  export DATABASE_URL='postgresql://prod-db/app'");
     println!("  export LOG_LEVEL=debug");
 
-    println!("\nLoading configuration...");
+    println!("\n{}", tr("example-basic-usage-loading"));
 
-    let config =
-        ConfersConfig::load_sync().map_err(|e| format!("configuration load failed: {:?}", e))?;
+    let config = ConfersConfig::load_sync().map_err(|e| {
+        tr_args(
+            "example-basic-usage-load-failed",
+            &[("error", format!("{e:?}"))],
+        )
+    })?;
 
     print_config(&config);
 
-    println!("Validating configuration...");
+    println!("{}", tr("example-basic-usage-validating"));
     if let Err(e) = validate_config(&config) {
-        eprintln!("Configuration validation failed: {}", e);
+        eprintln!(
+            "{}",
+            tr_args(
+                "example-basic-usage-validation-failed",
+                &[("error", e.clone())],
+            )
+        );
         return Err(e.into());
     }
-    println!("✓ Configuration validation passed!");
+    println!("{}", tr("example-basic-usage-validation-passed"));
 
-    println!("\nConfiguration loaded and validated; the application can start...");
-    println!("server address: {}:{}", config.host, config.port);
+    println!("\n{}", tr("example-basic-usage-ready"));
+    println!(
+        "{}",
+        tr_args(
+            "example-basic-usage-server-address",
+            &[
+                ("host", config.host.clone()),
+                ("port", config.port.to_string())
+            ]
+        )
+    );
 
     if config.enable_logging {
-        println!("logging enabled, level: {}", config.log_level);
+        println!(
+            "{}",
+            tr_args(
+                "example-basic-usage-logging-level",
+                &[("level", config.log_level.clone())]
+            )
+        );
     }
 
     if config.enable_metrics {
-        println!("metrics enabled");
+        println!("{}", tr("example-basic-usage-metrics-on"));
     }
 
     println!("\n========================================");
-    println!("  Example completed!");
+    println!("  {}", tr("example-basic-usage-completed"));
     println!("========================================");
     Ok(())
 }

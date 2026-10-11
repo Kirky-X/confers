@@ -137,7 +137,7 @@ let config = ConfigBuilder::<ConfersConfig>::new()
 
 ### 零拷贝读取
 
-内置内存配置（`new_in_memory()`，需 `remote`/`config-bus`/`encryption`/`watch` 任一特性）实现了 `SharedValueReader`，`get_shared()` 返回 `Arc` 句柄，读取大 value 时避免深拷贝：
+内置内存配置（`new_in_memory()`，需 `async-core` 特性；`remote`/`config-bus`/`encryption`/`watch` 任一启用都会自动带上该聚合特性）实现了 `SharedValueReader`，`get_shared()` 返回 `Arc` 句柄，读取大 value 时避免深拷贝：
 
 ```rust
 use confers::{new_in_memory, SharedValueReader};

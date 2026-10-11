@@ -9,6 +9,7 @@
 //! - 使用 `interpolate_tracked()` 跟踪引用来源
 //! - 使用 `InterpolationConfig` 与 `InterpolationContext` 管理敏感变量
 
+use confers::i18n::{tr, tr_args};
 use confers::interpolation::{
     InterpolationConfig, InterpolationContext, InterpolationWarning, interpolate,
     interpolate_tracked,
@@ -17,7 +18,7 @@ use std::collections::HashMap;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Interpolation - variable interpolation demo");
+    println!("  {}", tr("example-interpolation-title"));
     println!("========================================");
 
     // 准备变量表（resolver 将从中查找变量）
@@ -30,104 +31,217 @@ fn main() -> anyhow::Result<()> {
 
     let resolver = |key: &str| vars.get(key).cloned();
 
-    // 1. 基本插值
-    println!("\n[Basic interpolation]");
+    println!("\n{}", tr("example-interpolation-basic"));
     let template = "Server: ${HOST}:${PORT}";
     let result = interpolate(template, &resolver)?;
-    println!("  template: {}", template);
-    println!("  result: {}", result);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-template",
+            &[("template", template.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-result",
+            &[("result", result.to_string())]
+        )
+    );
 
-    // 2. 默认值
-    println!("\n[default values]");
+    println!("\n{}", tr("example-interpolation-default-values"));
     let template = "Timeout: ${TIMEOUT:30}";
     let result = interpolate(template, &resolver)?;
-    println!("  template: {}", template);
-    println!("  result: {}", result);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-template",
+            &[("template", template.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-result",
+            &[("result", result.to_string())]
+        )
+    );
 
-    // 3. 嵌套引用（DB_HOST -> ${DOMAIN} -> example.com）
-    println!("\n[nested references]");
+    println!("\n{}", tr("example-interpolation-nested-references"));
     let template = "Database: ${DB_HOST}";
     let result = interpolate(template, &resolver)?;
-    println!("  template: {}", template);
-    println!("  result: {}", result);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-template",
+            &[("template", template.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-result",
+            &[("result", result.to_string())]
+        )
+    );
 
-    // 4. URL 默认值中嵌套
-    println!("\n[Nesting in default values]");
+    println!("\n{}", tr("example-interpolation-nesting-in-defaults"));
     let template = "${URL:http://${HOST}:${PORT}}";
     let result = interpolate(template, &resolver)?;
-    println!("  template: {}", template);
-    println!("  result: {}", result);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-template",
+            &[("template", template.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-result",
+            &[("result", result.to_string())]
+        )
+    );
 
-    // 5. 跟踪插值 - 普通字段
-    println!("\n[Traced interpolation - normal field]");
+    println!("\n{}", tr("example-interpolation-traced-normal"));
     let result = interpolate_tracked("${HOST}:${PORT}", &resolver, false)?;
-    println!("  value: {}", result.value);
     println!(
-        "  referenced variables: {:?}",
-        result.referenced_vars().collect::<Vec<_>>()
+        "  {}",
+        tr_args(
+            "example-interpolation-value",
+            &[("value", result.value.to_string())]
+        )
     );
-    println!("  is sensitive field: {}", result.is_sensitive);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-referenced-variables",
+            &[(
+                "variables",
+                format!("{:?}", result.referenced_vars().collect::<Vec<_>>())
+            )]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-is-sensitive-field",
+            &[("sensitive", result.is_sensitive.to_string())]
+        )
+    );
 
-    // 6. 跟踪插值 - 敏感字段
-    println!("\n[Traced interpolation - sensitive field]");
+    println!("\n{}", tr("example-interpolation-traced-sensitive"));
     let result = interpolate_tracked("${API_KEY}", &resolver, true)?;
-    println!("  value: {}", result.value);
-    println!("  is sensitive field: {}", result.is_sensitive);
     println!(
-        "  contains sensitive references: {}",
-        result.has_sensitive_refs()
+        "  {}",
+        tr_args(
+            "example-interpolation-value",
+            &[("value", result.value.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-is-sensitive-field",
+            &[("sensitive", result.is_sensitive.to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-contains-sensitive-refs",
+            &[("contains", result.has_sensitive_refs().to_string())]
+        )
     );
 
-    // 7. InterpolationConfig 配置敏感变量
-    println!("\n[Interpolation config]");
+    println!("\n{}", tr("example-interpolation-config"));
     let config = InterpolationConfig::new()
         .with_sensitive_var("API_KEY")
         .with_sensitive_var("DB_PASSWORD")
         .with_warn_sensitive(true);
-    println!("  API_KEY is sensitive: {}", config.is_sensitive("API_KEY"));
     println!(
-        "  DB_PASSWORD is sensitive: {}",
-        config.is_sensitive("DB_PASSWORD")
+        "  {}",
+        tr_args(
+            "example-interpolation-api-key-sensitive",
+            &[("sensitive", config.is_sensitive("API_KEY").to_string())]
+        )
     );
-    println!("  HOST is sensitive: {}", config.is_sensitive("HOST"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-db-password-sensitive",
+            &[("sensitive", config.is_sensitive("DB_PASSWORD").to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-host-sensitive",
+            &[("sensitive", config.is_sensitive("HOST").to_string())]
+        )
+    );
 
-    // 8. InterpolationContext 批量跟踪
-    println!("\n[Batch interpolation context]");
+    println!("\n{}", tr("example-interpolation-batch-context"));
     let mut ctx = InterpolationContext::new();
     let normal = interpolate_tracked("${HOST}:${PORT}", &resolver, false)?;
     ctx.record("server_url", &normal);
     let sensitive = interpolate_tracked("${API_KEY}", &resolver, true)?;
     ctx.record("api_key", &sensitive);
     println!(
-        "  API_KEY is sensitive reference: {}",
-        ctx.is_sensitive_ref("API_KEY")
+        "  {}",
+        tr_args(
+            "example-interpolation-api-key-sensitive-ref",
+            &[("sensitive", ctx.is_sensitive_ref("API_KEY").to_string())]
+        )
     );
     println!(
-        "  HOST is sensitive reference: {}",
-        ctx.is_sensitive_ref("HOST")
+        "  {}",
+        tr_args(
+            "example-interpolation-host-sensitive-ref",
+            &[("sensitive", ctx.is_sensitive_ref("HOST").to_string())]
+        )
     );
     println!(
-        "  API_KEY referenced from field: {:?}",
-        ctx.sensitive_ref_field("API_KEY")
+        "  {}",
+        tr_args(
+            "example-interpolation-api-key-ref-field",
+            &[("field", format!("{:?}", ctx.sensitive_ref_field("API_KEY")))]
+        )
     );
 
-    // 9. 插值警告展示
-    println!("\n[Interpolation warnings]");
+    println!("\n{}", tr("example-interpolation-warnings"));
     let warning = InterpolationWarning::SensitiveFieldInterpolation {
         field: "password".to_string(),
         vars: vec!["DB_PASSWORD".to_string()],
     };
-    println!("  warning: {}", warning);
+    println!(
+        "  {}",
+        tr_args(
+            "example-interpolation-warning",
+            &[("warning", warning.to_string())]
+        )
+    );
 
-    // 10. 错误处理 - 未解析变量
-    println!("\n[Unresolved variable errors]");
+    println!("\n{}", tr("example-interpolation-unresolved-errors"));
     match interpolate("${UNDEFINED}", &resolver) {
-        Ok(v) => println!("  unreachable here: {}", v),
-        Err(e) => println!("  expected error: {:?}", e),
+        Ok(v) => println!(
+            "  {}",
+            tr_args(
+                "example-interpolation-unreachable",
+                &[("value", v.to_string())]
+            )
+        ),
+        Err(e) => println!(
+            "  {}",
+            tr_args(
+                "example-interpolation-expected-error",
+                &[("error", format!("{e:?}"))]
+            )
+        ),
     }
 
     println!("\n========================================");
-    println!("  Example completed!");
+    println!("  {}", tr("example-interpolation-completed"));
     println!("========================================");
     Ok(())
 }

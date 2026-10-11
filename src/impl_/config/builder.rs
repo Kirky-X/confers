@@ -669,12 +669,10 @@ where
         // read. Checked before the chain consumes accumulated sources.
         self.enforce_file_limits()?;
 
-        // Add accumulated defaults if any
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
 
-        // Add accumulated memory values if any
         if !self.accumulated_memory.is_empty() {
             self.chain_builder = self
                 .chain_builder

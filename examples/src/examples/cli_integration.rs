@@ -16,6 +16,7 @@
 
 use confers::Config;
 use confers::ConfigClap;
+use confers::i18n::tr;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -38,7 +39,7 @@ pub struct ConfersConfig {
     #[config(
         name = "server.host",
         default = Some("127.0.0.1".to_string()),
-        description = "Server listening address"
+        description = tr("example-cli-integration-host-description")
     )]
     pub host: Option<String>,
 
@@ -46,23 +47,29 @@ pub struct ConfersConfig {
     #[config(
         name = "server.port",
         default = Some(8080u16),
-        description = "Server listening port"
+        description = tr("example-cli-integration-port-description")
     )]
     pub port: Option<u16>,
 
     /// 工作线程数
-    #[config(default = Some(4usize), description = "Number of worker threads")]
+    #[config(
+        default = Some(4usize),
+        description = tr("example-cli-integration-workers-description")
+    )]
     pub workers: Option<usize>,
 
     /// 日志级别
     #[config(
         default = Some("info".to_string()),
-        description = "Log level (trace|debug|info|warn|error)"
+        description = tr("example-cli-integration-log-level-description")
     )]
     pub log_level: Option<String>,
 
     /// 调试模式（bool → CLI 标志 --debug）
-    #[config(default = false, description = "Enable debug mode")]
+    #[config(
+        default = false,
+        description = tr("example-cli-integration-debug-description")
+    )]
     pub debug: bool,
 }
 
@@ -78,9 +85,9 @@ fn print_config(label: &str, config: &ConfersConfig) {
 
 /// 打印 CLI 覆盖映射
 fn print_overrides(map: &HashMap<String, confers::ConfigValue>) {
-    println!("\n[CLI override mapping (to_config_map)]");
+    println!("\n{}", tr("example-cli-integration-override-mapping"));
     if map.is_empty() {
-        println!("  (empty)");
+        println!("  {}", tr("example-cli-integration-override-empty"));
     } else {
         for (key, value) in map {
             println!("  {} = {:?}", key, value);
@@ -119,40 +126,37 @@ fn merge_config(
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  CLI integration demo - ConfigClap derive macro");
+    println!("  {}", tr("example-cli-integration-title"));
     println!("========================================");
-    println!("\nHow to run:");
+    println!("\n{}", tr("example-cli-integration-how-to-run"));
     println!("  cargo run --bin cli_integration -- --help");
     println!("  cargo run --bin cli_integration -- --server-host 0.0.0.0 --debug");
 
-    // 步骤 1: 加载默认配置（来自 #[config(default = ...)]）
-    println!("\n=== Step 1: Default configuration ===");
+    // 默认值来自 #[config(default = ...)] 声明。
+    println!("\n{}", tr("example-cli-integration-step1"));
     let config = ConfersConfig::default();
-    print_config("Default config", &config);
+    print_config(&tr("example-cli-integration-default-config"), &config);
 
-    // 步骤 2: 解析 CLI 参数
-    // clap_args() 调用 clap::Parser::parse()，解析 std::env::args()
-    // 传入 --help 时 clap 会打印帮助并退出
-    println!("\n=== Step 2: Parse CLI arguments (clap_args) ===");
+    // clap_args() 解析 std::env::args()；传入 --help 时 clap 打印帮助并退出。
+    println!("\n{}", tr("example-cli-integration-step2"));
     let cli_args = ConfersConfig::clap_args();
-    println!("\n[CLI parsing result]");
+    println!("\n{}", tr("example-cli-integration-parsing-result"));
     println!("  host:      {:?}", cli_args.host);
     println!("  port:      {:?}", cli_args.port);
     println!("  workers:   {:?}", cli_args.workers);
     println!("  log_level: {:?}", cli_args.log_level);
     println!("  debug:     {}", cli_args.debug);
 
-    println!("\n=== Step 3: Convert to override mapping (to_config_map) ===");
+    println!("\n{}", tr("example-cli-integration-step3"));
     let overrides = cli_args.to_config_map();
     print_overrides(&overrides);
 
-    // 步骤 4: 合并配置（CLI 非 Null 值覆盖默认值）
-    println!("\n=== Step 4: Merge configuration (CLI overrides defaults) ===");
+    println!("\n{}", tr("example-cli-integration-step4"));
     let merged = merge_config(&config, &overrides);
-    print_config("Merged config", &merged);
+    print_config(&tr("example-cli-integration-merged-config"), &merged);
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-cli-integration-completed"));
     println!("========================================");
     Ok(())
 }

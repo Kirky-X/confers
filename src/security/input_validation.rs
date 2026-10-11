@@ -99,7 +99,6 @@ impl SensitiveDataDetector {
         let field_lower = field_name.to_lowercase();
         let value_lower = field_value.to_lowercase();
 
-        // 检查字段名是否在敏感列表中
         if self
             .high_sensitivity_keywords
             .contains(field_lower.as_str())
@@ -110,7 +109,6 @@ impl SensitiveDataDetector {
             };
         }
 
-        // 检查自定义敏感字段
         if self.custom_sensitive_fields.contains(&field_lower) {
             return SensitivityResult::Medium {
                 field: field_name.to_string(),
@@ -118,7 +116,6 @@ impl SensitiveDataDetector {
             };
         }
 
-        // 检查字段值是否匹配敏感模式
         // Patterns are matched with token boundaries (see
         // `patterns::is_match_with_token_boundary`): `my_secret` and
         // `api_key` match, while `secretary`, `author`, or `monkey` do not.
@@ -241,7 +238,6 @@ impl InputValidator {
 
     /// 验证字符串
     pub fn validate_string(&self, value: &str) -> Result<(), InputValidationError> {
-        // 检查长度
         if value.len() > self.max_string_length {
             return Err(InputValidationError::TooLong {
                 max: self.max_string_length,
@@ -249,14 +245,12 @@ impl InputValidator {
             });
         }
 
-        // 检查允许的字符
         if let Some(ref pattern) = self.allowed_chars_pattern
             && !pattern.is_match(value)
         {
             return Err(InputValidationError::InvalidCharacters);
         }
 
-        // 检查危险模式
         for pattern in &self.dangerous_patterns {
             if pattern.is_match(value) {
                 return Err(InputValidationError::DangerousPattern {
@@ -270,7 +264,6 @@ impl InputValidator {
 
     /// 验证并清理字符串
     pub fn sanitize_string(&self, value: &str) -> Result<String, InputValidationError> {
-        // 先清理危险字符
         let mut result = String::new();
         for c in value.chars() {
             if !self.is_dangerous_char(c) {
@@ -278,7 +271,6 @@ impl InputValidator {
             }
         }
 
-        // 验证清理后的结果
         self.validate_string(&result)?;
 
         Ok(result)
@@ -316,7 +308,6 @@ impl InputValidator {
 
     /// 验证 URL
     pub fn validate_url(&self, url: &str) -> Result<(), InputValidationError> {
-        // 检查长度
         if url.len() > self.max_string_length {
             return Err(InputValidationError::TooLong {
                 max: self.max_string_length,
@@ -324,15 +315,12 @@ impl InputValidator {
             });
         }
 
-        // 解析 URL
         let parsed = url::Url::parse(url).map_err(|_| InputValidationError::InvalidUrl)?;
 
-        // 只允许 HTTP/HTTPS
         if !matches!(parsed.scheme(), "http" | "https") {
             return Err(InputValidationError::InvalidUrlScheme);
         }
 
-        // 检查危险模式
         for pattern in &self.dangerous_patterns {
             if pattern.is_match(url) {
                 return Err(InputValidationError::DangerousPattern {
@@ -526,7 +514,6 @@ impl ConfigValidator {
         let mut sensitive_fields = Vec::new();
 
         for (name, value) in data {
-            // 验证字段名
             if let Err(e) = self.input_validator.validate_field_name(name) {
                 errors.push(ConfigValidationError::FieldError {
                     field: name.clone(),
@@ -534,7 +521,6 @@ impl ConfigValidator {
                 });
             }
 
-            // 验证字段值
             if let Err(e) = self.input_validator.validate_string(value) {
                 errors.push(ConfigValidationError::FieldError {
                     field: name.clone(),
@@ -542,7 +528,6 @@ impl ConfigValidator {
                 });
             }
 
-            // 检测敏感数据
             let sensitivity = self.sensitive_detector.is_sensitive(name, value);
             if sensitivity.needs_protection() {
                 sensitive_fields.push((name.clone(), sensitivity));

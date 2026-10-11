@@ -118,7 +118,6 @@ impl ErrorSanitizer {
     pub fn sanitize(&self, error_message: &str) -> String {
         let mut sanitized = error_message.to_string();
 
-        // 根据脱敏级别进行不同程度的处理
         match self.level {
             SanitizationLevel::Minimal => {
                 sanitized = self.sanitize_full_key(&sanitized);
@@ -609,7 +608,7 @@ impl KeyStorage {
         match &self.error_sanitizer {
             Some(sanitizer) => sanitizer.sanitize(error_message),
             None => {
-                // 如果没有设置脱敏器，进行基本的后备脱敏处理
+                // No master key configured: no key material to redact.
                 error_message.to_string()
             }
         }
@@ -1065,7 +1064,6 @@ mod tests {
         storage_a
             .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
             .expect("initialize");
-        // Verify state in storage_a
         let km_a = storage_a.get_key_manager();
         assert_eq!(km_a.get_default_key_id(), "prod");
         assert_eq!(km_a.list_keys().len(), 1);
@@ -1160,17 +1158,15 @@ mod tests {
             .initialize_with_master_key(&master_key, "prod".to_string(), "team".to_string())
             .unwrap();
 
-        // 1. keys.json (via the atomic write_store path).
+        // keys.json is written via the atomic write_store path.
         let keys_path = temp_dir.path().join("keys.json");
         assert!(keys_path.exists(), "initialize_with_master_key saved keys");
         assert_mode_0600(&keys_path, "keys.json");
 
-        // 2. export file.
         let export_path = temp_dir.path().join("export.json");
         storage.export_keys(&export_path).expect("export_keys");
         assert_mode_0600(&export_path, "export file");
 
-        // 3. backup file.
         let backup_dir = temp_dir.path().join("backups");
         storage.backup(&backup_dir).expect("backup");
         let backups = storage.list_backups(&backup_dir).expect("list_backups");
@@ -1624,7 +1620,6 @@ mod tests {
         let mut storage = KeyStorage::new(temp_dir.path().to_path_buf()).unwrap();
         let master_key = [0xAE; 32];
         storage.set_master_key(&master_key);
-        // Write invalid JSON to keys.json
         let keys_path = temp_dir.path().join("keys.json");
         std::fs::write(&keys_path, "{ this is not valid json }").unwrap();
 
@@ -2002,7 +1997,6 @@ mod tests {
             .unwrap();
 
         let export_path = temp_dir.path().join("export.json");
-        // Pre-write some garbage to the export path.
         std::fs::write(&export_path, "garbage").unwrap();
         // export_keys opens with truncate=true, so it must overwrite the garbage.
         storage.export_keys(&export_path).expect("export");

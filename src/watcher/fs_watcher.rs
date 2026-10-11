@@ -122,7 +122,6 @@ impl FsWatcher {
     ) -> ConfigResult<Self> {
         let watch_path = Arc::new(path.as_ref().to_path_buf());
 
-        // Verify the path exists
         if !watch_path.exists() {
             return Err(ConfigError::FileNotFound {
                 filename: watch_path.as_ref().clone(),

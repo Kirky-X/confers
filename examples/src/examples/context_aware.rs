@@ -10,24 +10,50 @@
 use confers::context::{
     ContextAwareField, ContextAwareFieldBuilder, ContextRule, ContextValue, EvaluationContext,
 };
+use confers::i18n::{tr, tr_args};
 use std::sync::Arc;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Context-Aware - context-aware config demo");
+    println!("  {}", tr("example-context-aware-title"));
     println!("========================================");
 
-    // 1. ContextValue 类型转换与访问
-    println!("\n[ContextValue types]");
+    println!("\n{}", tr("example-context-aware-value-types"));
     let s: ContextValue = "production".into();
     let n: ContextValue = 8080i64.into();
     let b: ContextValue = true.into();
-    println!("  String: {:?} (as_str={:?})", s, s.as_str());
-    println!("  Number: {:?} (as_number={:?})", n, n.as_number());
-    println!("  Bool: {:?} (as_bool={:?})", b, b.as_bool());
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-string",
+            &[
+                ("value", format!("{s:?}")),
+                ("as_str", format!("{:?}", s.as_str())),
+            ]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-number",
+            &[
+                ("value", format!("{n:?}")),
+                ("as_number", format!("{:?}", n.as_number())),
+            ]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-bool",
+            &[
+                ("value", format!("{b:?}")),
+                ("as_bool", format!("{:?}", b.as_bool())),
+            ]
+        )
+    );
 
-    // 2. 使用 ContextAwareFieldBuilder 构建上下文感知字段
-    println!("\n[Build context-aware fields - upload limit]");
+    println!("\n{}", tr("example-context-aware-build-upload-limit"));
     let builder: ContextAwareFieldBuilder<u64> = ContextAwareField::builder();
     let upload_limit: ContextAwareField<u64> = builder
         .default(100 * 1024 * 1024) // 100MB
@@ -40,24 +66,37 @@ fn main() -> anyhow::Result<()> {
             10u64 * 1024 * 1024 * 1024, // 10GB
         )
         .build();
-    println!("  free plan: 100MB");
-    println!("  pro plan: 1GB");
-    println!("  enterprise plan: 10GB");
+    println!("  {}", tr("example-context-aware-free-plan"));
+    println!("  {}", tr("example-context-aware-pro-plan"));
+    println!("  {}", tr("example-context-aware-enterprise-plan"));
 
-    // 3. 不同上下文解析
-    println!("\n[Resolve by plan]");
+    println!("\n{}", tr("example-context-aware-resolve-by-plan"));
     let free_ctx = EvaluationContext::new().attr("plan", "free");
     let pro_ctx = EvaluationContext::new().attr("plan", "pro");
     let enterprise_ctx = EvaluationContext::new().attr("plan", "enterprise");
-    println!("  free: {} bytes", upload_limit.evaluate(&free_ctx));
-    println!("  pro: {} bytes", upload_limit.evaluate(&pro_ctx));
     println!(
-        "  enterprise: {} bytes",
-        upload_limit.evaluate(&enterprise_ctx)
+        "  {}",
+        tr_args(
+            "example-context-aware-free-bytes",
+            &[("bytes", upload_limit.evaluate(&free_ctx).to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-pro-bytes",
+            &[("bytes", upload_limit.evaluate(&pro_ctx).to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-enterprise-bytes",
+            &[("bytes", upload_limit.evaluate(&enterprise_ctx).to_string())]
+        )
     );
 
-    // 4. 基于环境属性解析日志级别
-    println!("\n[Resolve log level by environment]");
+    println!("\n{}", tr("example-context-aware-resolve-log-level"));
     let log_level: ContextAwareField<String> = ContextAwareField::new("info".to_string())
         .when(
             |ctx| *ctx.environment() == Arc::from("production"),
@@ -74,8 +113,7 @@ fn main() -> anyhow::Result<()> {
     println!("  development: {}", log_level.evaluate(&dev_ctx));
     println!("  default: {}", log_level.evaluate(&default_ctx));
 
-    // 5. 基于区域解析 API 端点
-    println!("\n[Resolve API endpoints by region]");
+    println!("\n{}", tr("example-context-aware-resolve-endpoints"));
     let endpoint: ContextAwareField<String> =
         ContextAwareField::new("api.global.example.com".to_string())
             .when(
@@ -92,8 +130,7 @@ fn main() -> anyhow::Result<()> {
     println!("  eu-west-1: {}", endpoint.evaluate(&eu_ctx));
     println!("  global: {}", endpoint.evaluate(&EvaluationContext::new()));
 
-    // 6. 基于 targeting_key 解析特性开关
-    println!("\n[Resolve feature flags by target key]");
+    println!("\n{}", tr("example-context-aware-resolve-feature-flags"));
     let feature_flag: ContextAwareField<bool> =
         ContextAwareField::new(false).when(|ctx| ctx.targeting_key() == Some("admin"), true);
     let admin_ctx = EvaluationContext::new().with_key("admin");
@@ -101,17 +138,28 @@ fn main() -> anyhow::Result<()> {
     println!("  admin: {}", feature_flag.evaluate(&admin_ctx));
     println!("  user: {}", feature_flag.evaluate(&user_ctx));
 
-    // 7. ContextRule 带描述
-    println!("\n[ContextRule description]");
+    println!("\n{}", tr("example-context-aware-rule-description"));
     let rule: ContextRule<u32> =
         ContextRule::new(|ctx| ctx.attributes().get("tier").is_some(), 100u32)
-            .with_description("returns 100 when the tier attribute is present");
+            .with_description(tr("example-context-aware-rule-desc-text"));
     let ctx_with_tier = EvaluationContext::new().attr("tier", "premium");
-    println!("  rule matches: {}", rule.matches(&ctx_with_tier));
-    println!("  rule value: {}", rule.value());
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-rule-matches",
+            &[("matches", rule.matches(&ctx_with_tier).to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-context-aware-rule-value",
+            &[("value", rule.value().to_string())]
+        )
+    );
 
     println!("\n========================================");
-    println!("  Example completed!");
+    println!("  {}", tr("example-context-aware-completed"));
     println!("========================================");
     Ok(())
 }

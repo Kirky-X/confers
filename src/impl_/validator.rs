@@ -95,7 +95,6 @@ impl ValidationRule {
     pub fn from_str(s: &str) -> Option<Self> {
         let s = s.trim();
 
-        // Check for length rules
         if let Some(inner) = s.strip_prefix("length(")
             && let Some(inner) = inner.strip_suffix(')')
         {
@@ -103,7 +102,6 @@ impl ValidationRule {
             return Some(Self::Length { min, max });
         }
 
-        // Check for range rules
         if let Some(inner) = s.strip_prefix("range(")
             && let Some(inner) = inner.strip_suffix(')')
         {
@@ -111,7 +109,6 @@ impl ValidationRule {
             return Some(Self::Range { min, max });
         }
 
-        // Check for simple rules
         match s {
             "email" => Some(Self::Email),
             "url" => Some(Self::Url),

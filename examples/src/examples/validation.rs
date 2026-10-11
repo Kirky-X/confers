@@ -15,6 +15,7 @@
 //! 运行方式：
 //!   cargo run --bin validation
 
+use confers::i18n::{tr, tr_args};
 use confers::validator::ValidationRule;
 use serde::Deserialize;
 
@@ -164,8 +165,6 @@ impl ValidationReport {
         let errors = report
             .iter()
             .map(|(path, error): &(garde::Path, garde::Error)| {
-                // 从路径中提取字段名作为错误类型
-                // 使用 path 的 Display 表示，然后提取最后一个字段名
                 let path_str = path.to_string();
                 let error_type = path_str
                     .split('.')
@@ -202,11 +201,17 @@ impl ValidationReport {
     /// 打印验证报告
     pub fn print(&self) {
         if self.is_valid() {
-            println!("  Validation passed");
+            println!("  {}", tr("example-validation-passed"));
             return;
         }
 
-        println!("  Validation failed ({} errors):", self.error_count());
+        println!(
+            "  {}",
+            tr_args(
+                "example-validation-failed-count",
+                &[("count", self.error_count().to_string())]
+            )
+        );
         for (i, error) in self.errors.iter().enumerate() {
             println!("    {}. {}", i + 1, error);
         }
@@ -215,11 +220,11 @@ impl ValidationReport {
     /// 以友好格式打印
     pub fn print_pretty(&self) {
         if self.is_valid() {
-            println!("\n  [OK] Configuration validation passed");
+            println!("\n  {}", tr("example-validation-pretty-ok"));
             return;
         }
 
-        println!("\n  [FAIL] Configuration validation failed");
+        println!("\n  {}", tr("example-validation-pretty-fail"));
         println!("  {}", "-".repeat(40));
 
         // 按错误类型分组
@@ -233,13 +238,31 @@ impl ValidationReport {
         for (error_type, errors) in by_type {
             println!("\n  {error_type}:");
             for error in errors {
-                println!("    - field: {}", error.path);
-                println!("      reason: {}", error.message);
+                println!(
+                    "    {}",
+                    tr_args(
+                        "example-validation-error-field",
+                        &[("field", error.path.clone())]
+                    )
+                );
+                println!(
+                    "      {}",
+                    tr_args(
+                        "example-validation-error-reason",
+                        &[("reason", error.message.clone())]
+                    )
+                );
             }
         }
 
         println!("\n  {}", "-".repeat(40));
-        println!("  Total {} validation errors", self.error_count());
+        println!(
+            "  {}",
+            tr_args(
+                "example-validation-total-errors",
+                &[("count", self.error_count().to_string())]
+            )
+        );
     }
 }
 
@@ -257,13 +280,13 @@ impl ValidationEngine {
     /// 拒绝：空字符串，超过 253 字符
     pub fn validate_host(host: &str) -> Result<(), String> {
         if host.is_empty() {
-            return Err("host must not be empty".to_string());
+            return Err(tr("example-validation-host-empty"));
         }
 
         if host.len() > 253 {
-            return Err(format!(
-                "host exceeds max length of 253 characters (current: {})",
-                host.len()
+            return Err(tr_args(
+                "example-validation-host-too-long",
+                &[("length", host.len().to_string())],
             ));
         }
 
@@ -272,7 +295,10 @@ impl ValidationEngine {
             .chars()
             .any(|c| !c.is_ascii_alphanumeric() && c != '.' && c != '-' && c != ':')
         {
-            return Err(format!("host contains invalid characters: {}", host));
+            return Err(tr_args(
+                "example-validation-host-invalid-chars",
+                &[("host", host.to_string())],
+            ));
         }
 
         Ok(())
@@ -281,13 +307,13 @@ impl ValidationEngine {
     /// 验证端口范围
     pub fn validate_port(port: u16) -> Result<(), String> {
         if port == 0 {
-            return Err("port must not be 0 (reserved)".to_string());
+            return Err(tr("example-validation-port-reserved"));
         }
 
         if port < 1024 {
-            return Err(format!(
-                "port {} is a privileged port (< 1024), consider using an unprivileged port",
-                port
+            return Err(tr_args(
+                "example-validation-port-privileged",
+                &[("port", port.to_string())],
             ));
         }
 
@@ -301,9 +327,12 @@ impl ValidationEngine {
         let valid_levels = ["trace", "debug", "info", "warn", "error", "off"];
 
         if !valid_levels.contains(&level.to_lowercase().as_str()) {
-            return Err(format!(
-                "invalid log level: '{}' (valid values: {:?})",
-                level, valid_levels
+            return Err(tr_args(
+                "example-validation-log-level-invalid",
+                &[
+                    ("level", level.to_string()),
+                    ("valid", format!("{valid_levels:?}")),
+                ],
             ));
         }
 
@@ -313,30 +342,30 @@ impl ValidationEngine {
     /// 验证邮箱格式
     pub fn validate_email(email: &str) -> Result<(), String> {
         if email.is_empty() {
-            return Err("email must not be empty".to_string());
+            return Err(tr("example-validation-email-empty"));
         }
 
         // 简单的格式检查：必须包含 @
         if !email.contains('@') {
-            return Err("invalid email format: missing @ symbol".to_string());
+            return Err(tr("example-validation-email-missing-at"));
         }
 
         let parts: Vec<&str> = email.split('@').collect();
         if parts.len() != 2 {
-            return Err("invalid email format: multiple @ symbols".to_string());
+            return Err(tr("example-validation-email-multiple-at"));
         }
 
         if parts[0].is_empty() {
-            return Err("invalid email format: local part is empty".to_string());
+            return Err(tr("example-validation-email-local-empty"));
         }
 
         if parts[1].is_empty() {
-            return Err("invalid email format: domain part is empty".to_string());
+            return Err(tr("example-validation-email-domain-empty"));
         }
 
         // 检查域名部分
         if !parts[1].contains('.') {
-            return Err("invalid email format: domain must contain a dot".to_string());
+            return Err(tr("example-validation-email-domain-dot"));
         }
 
         Ok(())
@@ -345,18 +374,21 @@ impl ValidationEngine {
     /// 验证超时时间
     pub fn validate_timeout(timeout: f64) -> Result<(), String> {
         if timeout <= 0.0 {
-            return Err("timeout must be greater than 0".to_string());
+            return Err(tr("example-validation-timeout-positive"));
         }
 
         if timeout > 86400.0 {
-            return Err(format!(
-                "timeout too long: {:.1}s (max: 86400s = 24h)",
-                timeout
+            return Err(tr_args(
+                "example-validation-timeout-too-long",
+                &[("timeout", format!("{timeout:.1}"))],
             ));
         }
 
         if timeout < 1.0 {
-            return Err(format!("timeout too short: {:.1}s (min: 1s)", timeout));
+            return Err(tr_args(
+                "example-validation-timeout-too-short",
+                &[("timeout", format!("{timeout:.1}"))],
+            ));
         }
 
         Ok(())
@@ -365,13 +397,13 @@ impl ValidationEngine {
     /// 验证最大连接数
     pub fn validate_max_connections(connections: u32) -> Result<(), String> {
         if connections == 0 {
-            return Err("max connections must not be 0".to_string());
+            return Err(tr("example-validation-max-connections-zero"));
         }
 
         if connections > 10000 {
-            return Err(format!(
-                "too many max connections: {} (recommended: <= 10000)",
-                connections
+            return Err(tr_args(
+                "example-validation-max-connections-too-many",
+                &[("connections", connections.to_string())],
             ));
         }
 
@@ -381,7 +413,7 @@ impl ValidationEngine {
     /// 验证 URL 格式
     pub fn validate_url(url: &str) -> Result<(), String> {
         if url.is_empty() {
-            return Err("URL must not be empty".to_string());
+            return Err(tr("example-validation-url-empty"));
         }
 
         // 简单检查：必须有协议前缀
@@ -393,9 +425,9 @@ impl ValidationEngine {
             "redis://",
         ];
         if !valid_prefixes.iter().any(|p| url.starts_with(p)) {
-            return Err(format!(
-                "URL must start with a valid scheme ({:?})",
-                valid_prefixes
+            return Err(tr_args(
+                "example-validation-url-scheme",
+                &[("schemes", format!("{valid_prefixes:?}"))],
             ));
         }
 
@@ -454,7 +486,6 @@ impl ValidationContext {
     pub fn validate(&self, config: &ConfersConfig) -> ValidationReport {
         let mut errors = Vec::new();
 
-        // 主机验证
         if !self.should_ignore("host")
             && let Err(msg) = ValidationEngine::validate_host(&config.host)
         {
@@ -465,7 +496,6 @@ impl ValidationContext {
             });
         }
 
-        // 端口验证
         if !self.should_ignore("port")
             && let Err(msg) = ValidationEngine::validate_port(config.port)
         {
@@ -476,7 +506,6 @@ impl ValidationContext {
             });
         }
 
-        // 日志级别验证
         if !self.should_ignore("log_level")
             && let Err(msg) = ValidationEngine::validate_log_level(&config.log_level)
         {
@@ -487,7 +516,6 @@ impl ValidationContext {
             });
         }
 
-        // 邮箱验证
         if !self.should_ignore("admin_email")
             && let Err(msg) = ValidationEngine::validate_email(&config.admin_email)
         {
@@ -498,7 +526,6 @@ impl ValidationContext {
             });
         }
 
-        // URL 验证
         if !self.should_ignore("database_url")
             && let Err(msg) = ValidationEngine::validate_url(&config.database_url)
         {
@@ -509,7 +536,6 @@ impl ValidationContext {
             });
         }
 
-        // 超时验证
         if !self.should_ignore("timeout_seconds")
             && let Err(msg) = ValidationEngine::validate_timeout(config.timeout_seconds)
         {
@@ -520,7 +546,6 @@ impl ValidationContext {
             });
         }
 
-        // 最大连接数验证
         if !self.should_ignore("max_connections")
             && let Err(msg) = ValidationEngine::validate_max_connections(config.max_connections)
         {
@@ -545,48 +570,53 @@ impl ValidationContext {
 
 /// 演示基础验证
 fn demo_basic_validation() {
-    println!("\n=== Demo 1: Basic field validation ===\n");
+    println!("\n{}\n", tr("example-validation-demo1"));
 
-    // 测试主机验证
-    println!("Host address validation:");
+    println!("{}", tr("example-validation-host-header"));
     for host in &["localhost", "127.0.0.1", "", "a".repeat(300).as_str()] {
         let result = ValidationEngine::validate_host(host);
         let status = if result.is_ok() { "OK" } else { "FAIL" };
         println!("  '{}': {}", host, status);
         if let Err(e) = result {
-            println!("    error: {}", e);
+            println!(
+                "    {}",
+                tr_args("example-validation-item-error", &[("error", e)])
+            );
         }
     }
 
-    // 测试端口验证
-    println!("\nPort range validation:");
+    println!("\n{}", tr("example-validation-port-header"));
     for port in &[0u16, 22, 8080, 65535] {
         let result = ValidationEngine::validate_port(*port);
         let status = if result.is_ok() { "OK" } else { "FAIL" };
         println!("  {}: {}", port, status);
         if let Err(e) = result {
-            println!("    warning: {}", e);
+            println!(
+                "    {}",
+                tr_args("example-validation-item-warning", &[("error", e)])
+            );
         }
     }
 
-    // 测试日志级别验证
-    println!("\nLog level validation:");
+    println!("\n{}", tr("example-validation-log-level-header"));
     for level in &["debug", "INFO", "warning", "error", "invalid"] {
         let result = ValidationEngine::validate_log_level(level);
         let status = if result.is_ok() { "OK" } else { "FAIL" };
         println!("  '{}': {}", level, status);
         if let Err(e) = result {
-            println!("    error: {}", e);
+            println!(
+                "    {}",
+                tr_args("example-validation-item-error", &[("error", e)])
+            );
         }
     }
 }
 
 /// 演示邮箱和 URL 验证
 fn demo_format_validation() {
-    println!("\n=== Demo 2: Format validation ===\n");
+    println!("\n{}\n", tr("example-validation-demo2"));
 
-    // 邮箱验证
-    println!("Email format validation:");
+    println!("{}", tr("example-validation-email-header"));
     for email in &[
         "admin@example.com",
         "user.name+tag@domain.co.uk",
@@ -599,12 +629,14 @@ fn demo_format_validation() {
         let status = if result.is_ok() { "OK" } else { "FAIL" };
         println!("  '{}': {}", email, status);
         if let Err(e) = result {
-            println!("    error: {}", e);
+            println!(
+                "    {}",
+                tr_args("example-validation-item-error", &[("error", e)])
+            );
         }
     }
 
-    // URL 验证
-    println!("\nDatabase URL validation:");
+    println!("\n{}", tr("example-validation-db-url-header"));
     for url in &[
         "postgresql://localhost:5432/app",
         "mysql://user:pass@host:3306/db",
@@ -616,14 +648,17 @@ fn demo_format_validation() {
         let status = if result.is_ok() { "OK" } else { "FAIL" };
         println!("  '{}': {}", url, status);
         if let Err(e) = result {
-            println!("    error: {}", e);
+            println!(
+                "    {}",
+                tr_args("example-validation-item-error", &[("error", e)])
+            );
         }
     }
 }
 
 /// 演示验证上下文
 fn demo_validation_context() {
-    println!("\n=== Demo 3: Validation context ===\n");
+    println!("\n{}\n", tr("example-validation-demo3"));
 
     let config = ConfersConfig {
         host: "".to_string(),
@@ -635,22 +670,19 @@ fn demo_validation_context() {
         timeout_seconds: -1.0,
     };
 
-    // 默认上下文
     let ctx = ValidationContext::new();
     let report = ctx.validate(&config);
-    println!("Default context validation result:");
+    println!("{}", tr("example-validation-default-context"));
     report.print_pretty();
 
-    // 忽略特定字段
-    println!("\nAfter ignoring 'port' and 'timeout_seconds':");
+    println!("\n{}", tr("example-validation-after-ignore"));
     let ctx = ValidationContext::new()
         .ignore_field("port")
         .ignore_field("timeout_seconds");
     let report = ctx.validate(&config);
     report.print_pretty();
 
-    // 严格模式
-    println!("\nStrict mode (show details):");
+    println!("\n{}", tr("example-validation-strict-mode"));
     let ctx = ValidationContext::new()
         .with_verbose(true)
         .with_strict(true);
@@ -662,11 +694,11 @@ fn demo_validation_context() {
 
 /// 演示有效配置验证
 fn demo_valid_config() {
-    println!("\n=== Demo 4: Valid configuration validation ===\n");
+    println!("\n{}\n", tr("example-validation-demo4"));
 
     let config = ConfersConfig::default();
 
-    println!("Validate default configuration:");
+    println!("{}", tr("example-validation-validate-default"));
     println!("  host: {}", config.host);
     println!("  port: {}", config.port);
     println!("  max_connections: {}", config.max_connections);
@@ -677,13 +709,13 @@ fn demo_valid_config() {
     let ctx = ValidationContext::new();
     let report = ctx.validate(&config);
 
-    println!("\nValidation result:");
+    println!("\n{}", tr("example-validation-result-header"));
     report.print_pretty();
 }
 
 /// 演示规则解析
 fn demo_rule_parsing() {
-    println!("\n=== Demo 5: Validation rule parsing ===\n");
+    println!("\n{}\n", tr("example-validation-demo5"));
 
     let rules = [
         "length(min=1, max=100)",
@@ -697,14 +729,20 @@ fn demo_rule_parsing() {
     for rule_str in &rules {
         match ValidationRule::from_str(rule_str) {
             Some(rule) => println!("  '{}' -> {:?}", rule_str, rule),
-            None => println!("  '{}' -> (unknown rule)", rule_str),
+            None => println!(
+                "  {}",
+                tr_args(
+                    "example-validation-unknown-rule",
+                    &[("rule", rule_str.to_string())]
+                )
+            ),
         }
     }
 }
 
 /// 演示错误处理策略
 fn demo_error_handling() {
-    println!("\n=== Demo 6: Error handling strategies ===\n");
+    println!("\n{}\n", tr("example-validation-demo6"));
 
     let config = ConfersConfig {
         host: "".to_string(),
@@ -720,30 +758,33 @@ fn demo_error_handling() {
     let report = ctx.validate(&config);
 
     // 策略 1: 打印并退出
-    println!("Strategy 1: exit the program if validation fails");
+    println!("{}", tr("example-validation-strategy-1"));
     if !report.is_valid() {
         println!(
-            "  Detected {} errors; the application cannot start",
-            report.error_count()
+            "  {}",
+            tr_args(
+                "example-validation-detected-errors",
+                &[("count", report.error_count().to_string())]
+            )
         );
         for error in &report.errors {
             println!("    - {}", error);
         }
-        println!("  Fix the configuration and restart");
+        println!("  {}", tr("example-validation-fix-and-restart"));
         return;
     }
 
     // 策略 2: 使用哨兵值继续运行
-    println!("Strategy 2: use sentinel values to run with warnings");
+    println!("{}", tr("example-validation-strategy-2"));
 }
 
 /// 演示与 Config derive 集成
 fn demo_config_integration() {
-    println!("\n=== Demo 7: Integration with Config Derive ===\n");
+    println!("\n{}\n", tr("example-validation-demo7"));
 
-    println!("ConfigDerive validation integration:");
+    println!("{}", tr("example-validation-derive-intro"));
     println!();
-    println!("  Method 1: automatic validation with #[config(validate)]");
+    println!("  {}", tr("example-validation-method-1"));
     println!();
     println!("  ```rust");
     println!("  use confers::Config;");
@@ -760,17 +801,17 @@ fn demo_config_integration() {
     println!("  }}");
     println!("  ```");
     println!();
-    println!("  Method 2: call validate() manually");
+    println!("  {}", tr("example-validation-method-2"));
     println!();
     println!("  ```rust");
     println!("  let config = ConfersConfig::load_sync()?;");
     println!("  if let Err(report) = config.validate() {{");
-    println!("      eprintln!(\"Validation failed: {{:?}}\", report);");
+    println!("      {}", tr("example-validation-validation-failed-print"));
     println!("      return Err(\"Invalid config\".into());");
     println!("  }}");
     println!("  ```");
     println!();
-    println!("  Method 3: custom validation with ValidationContext");
+    println!("  {}", tr("example-validation-method-3"));
     println!();
     println!("  ```rust");
     println!("  let ctx = ValidationContext::new()");
@@ -790,7 +831,7 @@ fn demo_config_integration() {
 
 fn main() {
     println!("========================================");
-    println!("  Validation Example - config validation");
+    println!("  {}", tr("example-validation-title"));
     println!("========================================");
 
     demo_basic_validation();
@@ -802,6 +843,6 @@ fn main() {
     demo_config_integration();
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-validation-completed"));
     println!("========================================");
 }

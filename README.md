@@ -83,7 +83,7 @@
 </tr>
 </table>
 
-除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 定义）见 [🎨 特性标志](#-特性标志) 一节。
+除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 单特性定义）见 [🎨 特性标志](#-特性标志) 一节。
 
 ---
 
@@ -160,7 +160,7 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ### 📋 功能矩阵
 
-下表逐项对应 `Cargo.toml` 的 `[features]` 定义，`default = ["toml", "json", "dotenv"]`。
+下表逐项对应 `Cargo.toml` 的 `[features]` 单特性定义（预设见上表），`default = ["toml", "json", "dotenv"]`。
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">特性</th><th style="text-align:center">默认</th><th style="text-align:left">说明</th></tr>
@@ -181,6 +181,8 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>schema</code></td><td align="center">❌</td><td><code>json-schema</code> 的兼容别名（启用时编译告警提示，下一版移除）</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>动态字段，arc-swap 无锁读取</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>渐进式重载，金丝雀发布与健康检查回滚（含 <code>watch</code>）</td></tr>
+<tr><td><code>hot-reload-kit</code></td><td align="center">❌</td><td>热重载工具集 <code>HotReloader</code> 门面（<code>watch</code> + <code>progressive-reload</code> 组合；不入 <code>full</code> 预设）</td></tr>
+<tr><td><code>async-core</code></td><td align="center">❌</td><td>内部异步聚合特性：<code>remote</code> / <code>config-bus</code> / <code>encryption</code> / <code>watch</code> 任一启用时自动生效（实现侧统一以它门控异步代码）</td></tr>
 <tr><td><code>audit</code></td><td align="center">❌</td><td>审计日志，HMAC 完整性与敏感字段脱敏；<code>AuditSink</code> 端口由同工作区 inklog 的 <code>confers-audit</code> 特性实现（可编译实跑示例见 inklog 仓库 <code>examples/src/bin/config/confers_audit.rs</code>）</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>配置版本迁移</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>快照与回滚</td></tr>
@@ -257,7 +259,7 @@ cd examples && ./verify_examples.sh
 cargo install confers --features cli
 ```
 
-提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（正向生成 / `--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
+提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
 
 ---
 
@@ -303,7 +305,7 @@ cargo fuzz run parser
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.6：单元测试 2412 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 776 个（`tests/`，65 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.6：单元测试 2415 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 782 个（`tests/`，66 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 
@@ -392,7 +394,7 @@ cargo fuzz run parser
 
 | 版本 | 日期 | 要点 |
 |------|------|------|
-| 0.6.0-rc.6 | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
+| 未发布（rc.6 之后） | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
 | 0.6.0-rc.6 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
 | 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，基于 `fluent-bundle`/`unic-langid`）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
 | 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |

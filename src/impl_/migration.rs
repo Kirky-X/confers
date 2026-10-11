@@ -291,10 +291,8 @@ impl MigrationRegistry {
             return Some(vec![from]);
         }
 
-        // Get edges from path cache
         let edges = self.path_cache.get(&(from, to))?;
 
-        // Convert edges to version sequence
         let mut versions = vec![from];
         for &(_v_from, v_to) in edges {
             versions.push(v_to);

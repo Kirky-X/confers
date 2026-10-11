@@ -722,7 +722,6 @@ fn cmd_inspect(
 
         print_config_value(&annotated_config, "", show_conflicts, reveal);
     } else {
-        // Show requested keys
         println!("{}", tr("cli-inspect-requested-keys"));
         println!(
             "{:<35} {:<25} {:<20} {:<20}",
@@ -2032,7 +2031,6 @@ fn filter_json_by_fields(value: &serde_json::Value, fields: &str) -> serde_json:
             continue;
         }
         if let Some(v) = navigate_json(value, field_path) {
-            // Use the last segment of the path as the key
             let key = field_path.rsplit('.').next().unwrap_or(field_path);
             result.insert(key.to_string(), v.clone());
         }
@@ -2673,8 +2671,11 @@ pub fn agent_knowledge_markdown() -> String {
     let knowledge = agent_knowledge_json();
     let mut out = format!("{}\n\n", tr("cli-docs-markdown-title"));
     out.push_str(&format!(
-        "knowledge_version: {}\n\n{}\n\n",
-        knowledge["knowledge_version"],
+        "{}\n\n{}\n\n",
+        tr_args(
+            "cli-docs-markdown-knowledge-version",
+            &[("version", knowledge["knowledge_version"].to_string())]
+        ),
         tr("cli-docs-markdown-subcommands-heading"),
     ));
     for sub in knowledge["subcommands"].as_array().expect("subcommands") {

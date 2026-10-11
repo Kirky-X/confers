@@ -359,20 +359,16 @@ mod tests {
 
     #[test]
     fn test_full_encryption_workflow() {
-        // 1. Setup master key
         let master_key = [0x1Au8; 32];
 
-        // 2. Derive field-specific key
         let field_key = derive_field_key(&master_key, "user.password", "v1").unwrap();
 
-        // 3. Encrypt sensitive data
         let crypto = XChaCha20Crypto::new();
         let password = "my-super-secret-password";
         let (nonce, ciphertext) = crypto
             .encrypt(password.as_bytes(), field_key.as_slice())
             .unwrap();
 
-        // 4. Decrypt and verify
         let decrypted = crypto
             .decrypt(&nonce, &ciphertext, field_key.as_slice())
             .unwrap();

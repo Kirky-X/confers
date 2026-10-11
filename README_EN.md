@@ -83,7 +83,7 @@ Tag a struct with `#[derive(Config)]`, merge sources by priority, and get strong
 </tr>
 </table>
 
-Beyond the core capabilities above, config migration, snapshots and rollback, variable interpolation, modular configuration, context-aware values, runtime feature toggles, OpenFeature-style evaluation, security rule validators, key management and cloud KMS, lazy segmented parsing, and the unified change stream are all provided as independent feature flags as well; the complete feature matrix (mirroring the `[features]` section of `Cargo.toml`) lives in the [🎨 Feature Flags](#-feature-flags) section.
+Beyond the core capabilities above, config migration, snapshots and rollback, variable interpolation, modular configuration, context-aware values, runtime feature toggles, OpenFeature-style evaluation, security rule validators, key management and cloud KMS, lazy segmented parsing, and the unified change stream are all provided as independent feature flags as well; the complete feature matrix (mirroring the single-feature definitions in the `[features]` section of `Cargo.toml`) lives in the [🎨 Feature Flags](#-feature-flags) section.
 
 ---
 
@@ -160,7 +160,7 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 
 ### 📋 Feature Matrix
 
-The table below mirrors the `[features]` section of `Cargo.toml`, where `default = ["toml", "json", "dotenv"]`.
+The table below mirrors the single-feature definitions in the `[features]` section of `Cargo.toml` (presets are listed above), where `default = ["toml", "json", "dotenv"]`.
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">Feature</th><th style="text-align:center">Default</th><th style="text-align:left">Description</th></tr>
@@ -181,6 +181,8 @@ The table below mirrors the `[features]` section of `Cargo.toml`, where `default
 <tr><td><code>schema</code></td><td align="center">❌</td><td>Compatibility alias of <code>json-schema</code> (emits a compile-time warning; removed in the next release)</td></tr>
 <tr><td><code>dynamic</code></td><td align="center">❌</td><td>Dynamic fields with lock-free arc-swap reads</td></tr>
 <tr><td><code>progressive-reload</code></td><td align="center">❌</td><td>Progressive reload with canary rollout and health-check rollback (includes <code>watch</code>)</td></tr>
+<tr><td><code>hot-reload-kit</code></td><td align="center">❌</td><td>Hot-reload toolkit with the <code>HotReloader</code> façade (<code>watch</code> + <code>progressive-reload</code>; not part of the <code>full</code> preset)</td></tr>
+<tr><td><code>async-core</code></td><td align="center">❌</td><td>Internal async aggregate feature: enabled automatically by any of <code>remote</code> / <code>config-bus</code> / <code>encryption</code> / <code>watch</code> (implementation code gates async paths on it)</td></tr>
 <tr><td><code>audit</code></td><td align="center">❌</td><td>Audit logging with HMAC integrity and sensitive-field masking; the <code>AuditSink</code> port is implemented by the sibling inklog crate's <code>confers-audit</code> feature (runnable example: <code>examples/src/bin/config/confers_audit.rs</code> in the inklog repository)</td></tr>
 <tr><td><code>migration</code></td><td align="center">❌</td><td>Configuration version migration</td></tr>
 <tr><td><code>snapshot</code></td><td align="center">❌</td><td>Snapshots and rollback</td></tr>
@@ -257,7 +259,7 @@ Beyond the runnable examples, the bundled CLI diagnostics tool (`cli` feature, e
 cargo install confers --features cli
 ```
 
-It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (forward generation / `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
+It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (no-arg output is the generic schema of the built-in `serde_json::Value` type; `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
 
 ---
 
@@ -304,7 +306,7 @@ Some integration tests require local external services: the bus group needs NATS
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.6: 2412 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 776 integration and E2E tests (`tests/`, 65 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.6: 2415 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 782 integration and E2E tests (`tests/`, 66 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 
@@ -393,7 +395,7 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 | Version | Date | Highlights |
 |------|------|------|
-| 0.6.0-rc.6 | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
+| Unreleased (post-rc.6) | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
 | 0.6.0-rc.6 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
 | 0.6.0-rc.5 | 2026-09-21 | in-house i18n facade (`src/i18n` catalog/locale, built on `fluent-bundle`/`unic-langid`); `keyring` / `cloud-kms` imply `encryption`; pre-commit gate and detect-secrets baseline; removed the `compact_str` direct dependency |
 | 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |

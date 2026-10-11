@@ -878,7 +878,6 @@ pub fn parse_ini(
                 .insert(key.into(), value.into());
             continue;
         }
-        // Track invalid lines for debugging
         _invalid_lines.push((line_num + 1, line.to_string(), "invalid INI syntax"));
     }
 

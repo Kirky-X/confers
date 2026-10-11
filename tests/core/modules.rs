@@ -473,11 +473,9 @@ fn test_multiple_groups_load() {
 
     registry.register_group("cache", vec![("redis", redis_relative)], Some("redis"));
 
-    // Load database
     let db_result = registry.load_module("database", "mysql", &LoaderConfig::default());
     assert!(db_result.is_ok());
 
-    // Load cache
     let cache_result = registry.load_module("cache", "redis", &LoaderConfig::default());
     assert!(cache_result.is_ok());
 }

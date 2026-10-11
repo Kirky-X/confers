@@ -21,16 +21,9 @@ pub fn generate_load_impl(
     // compile errors appended to the output instead of dropping the field.
     let (field_info, attr_errors) = parse_field_attrs(fields);
 
-    // Generate load() method
     let load_impl = generate_load_method(struct_ident, attrs, &field_info);
-
-    // generate load_sync() method
     let load_sync_impl = generate_load_sync_method(struct_ident, attrs, &field_info);
-
-    // Generate load_file() method
     let load_file_impl = generate_load_file_method(struct_ident, attrs, &field_info);
-
-    // Generate env_mapping() method
     let env_mapping_impl = generate_env_mapping(struct_ident, env_prefix, &field_info);
 
     quote! {

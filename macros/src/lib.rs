@@ -145,7 +145,9 @@ use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 /// # Struct Attributes
 ///
 /// - `env_prefix = "APP_"` - Prefix for environment variables
-/// - `app_name = "myapp"` - Application name for config search
+/// - `app_name = "myapp"` - Application identifier used as the generated CLI
+///   command name; validated for non-emptiness and length, and not used for
+///   configuration search
 /// - `validate` - No-op kept for compatibility: generates nothing; validation
 ///   rules come from `#[derive(garde::Validate)]` and nothing validates
 ///   automatically during loading
@@ -155,12 +157,15 @@ use parse::{FieldAttrs, StructAttrs, parse_field_attrs};
 ///   `validation` feature and `#[derive(garde::Validate)]`
 /// - `watch` - Enable file watching for hot reload
 /// - `version = 1` - Configuration version for migrations
-/// - `profile` - Enable APP_ENV profile overlay
+/// - `profile` - Enable the profile overlay: load `<stem>.<env>.<ext>` next
+///   to the base file when the profile env var (default `RUN_ENV`, set via
+///   `profile_env`) is non-empty
 ///
 /// # Field Attributes
 ///
 /// - `default = <expr>` - Default value expression
-/// - `description = "..."` - Field description for docs
+/// - `description = "..."` - Field description for docs (an expression such
+///   as `tr("key")` is also accepted and evaluated at runtime)
 /// - `name = "key"` - Override configuration key name
 /// - `name_env = "VAR"` - Override environment variable name
 /// - `sensitive = true` - Mark as sensitive (hidden in logs)

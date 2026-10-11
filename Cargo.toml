@@ -30,8 +30,8 @@ async-trait = { version = "0.1", default-features = false, optional = true }
 base64 = { version = "0.23", default-features = false, features = ["std"] }
 chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"], optional = true }
-clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive", "env"], optional = true }
-confers-macros = { version = "0.6.0-rc.6", path = "macros" }
+clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive"], optional = true }
+confers-macros = { version = "0.6.0-rc.6", path = "macros", default-features = false }
 dashmap = { version = "6.2", default-features = false, optional = true }
 garde = { version = "0.23", default-features = false, features = ["derive", "email", "url", "regex"], optional = true }
 fluent-bundle = { version = "0.16", default-features = false }
@@ -56,12 +56,12 @@ regex = { version = "1.13", default-features = false, features = ["std", "perf",
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 tokio = { version = "1.53", default-features = false, features = ["rt", "sync", "time", "fs"], optional = true }
 toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display", "preserve_order"], optional = true }
-zeroize = { version = "1.9", default-features = false, features = ["alloc", "derive"], optional = true }
+zeroize = { version = "1.9", default-features = false, features = ["alloc"], optional = true }
 tokio-stream = { version = "0.1", default-features = false, features = ["sync"], optional = true }
 unic-langid = { version = "0.9", default-features = false }
 etcd-client = { version = "0.21", default-features = false, features = ["tls"], optional = true }
 ipnet = { version = "2.12", default-features = false, features = ["std"], optional = true }
-redis = { version = "1.7", default-features = false, features = ["aio", "tokio-comp"], optional = true }
+redis = { version = "1.7", default-features = false, features = ["tokio-comp"], optional = true }
 url = { version = "2.5", default-features = false, features = ["std"] }
 hex = { version = "0.4", default-features = false, features = ["std"], optional = true }
 rand = { version = "0.10", default-features = false, features = ["thread_rng"], optional = true }
@@ -102,7 +102,6 @@ garde = { version = "0.23", default-features = false, features = ["derive", "ema
 indexmap = { version = "2.14", default-features = false, features = ["std", "serde"] }
 log = { version = "0.4", default-features = false }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
-proptest = { version = "1.11", default-features = false, features = ["std"] }
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
@@ -214,7 +213,6 @@ distributed = ["toml", "json", "dotenv", "watch", "validation", "config-bus", "p
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "async_tokio"] }
-proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }

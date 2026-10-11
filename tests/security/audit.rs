@@ -52,7 +52,6 @@ mod tests {
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        // Verify log directory exists
         assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
@@ -72,7 +71,6 @@ mod tests {
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        // Verify log directory exists
         assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
@@ -95,7 +93,6 @@ mod tests {
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        // Verify log directory exists
         assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 
@@ -115,7 +112,6 @@ mod tests {
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
 
-        // Verify log directory exists
         assert!(log_dir.exists(), "Log directory should exist after logging");
     }
 

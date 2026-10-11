@@ -14,23 +14,25 @@
 - 前一检查点的传递依赖 patch 刷新（Cargo.lock，21 包，依赖版本需求未动）：h2 0.4.19→0.4.20、hyper 1.11.1→1.12.0、tokio 1.53.1→1.53.2、libc 0.2.189→0.2.190、mio 1.2.3→1.2.4、cc 1.5.1→1.6.0、trybuild 1.0.121→1.0.122、unicase 2.9.0→2.10.0、want 0.3.1→0.3.2、zerocopy 0.8.59→0.8.62、zerocopy-derive 0.8.59→0.8.62、zeroize 1.9.0→1.9.1、uuid 1.26.1→1.27.0、toml 1.1.6→1.1.7、toml_datetime 1.1.1→1.1.2、toml_parser 1.1.3→1.1.4、toml_writer 1.1.2→1.1.3、serde_spanned 1.1.1→1.1.2、powerfmt 0.2.0→0.2.1、either 1.18.0→1.19.0、ctutils 0.4.2→0.4.3
 - 传递依赖 patch 刷新（`cargo update`，Cargo.lock）：toml 1.1.7→1.1.8、syn 3.0.6→3.0.7、cc 1.6.0→1.7.0、smallvec 1.16.2→1.16.3、tokio-util 0.7.19→0.7.20、toml_parser 1.1.4→1.1.5、uuid 1.27.0→1.28.0；`cargo outdated` 复核输出 All dependencies are up to date（matchit 0.8.4 由 axum 0.8.9 的 `=0.8.4` 精确锁定，非本仓可控）
 - 特性收窄（`default-features = false` 不变，显式特性最小化，root 与 `[workspace.dependencies]` 同步以免经继承回灌）：`async-nats` 去 `server_2_10`/`server_2_11`/`server_2_12`/`server_2_14`（仅门控新版本服务端 API 的 cfg 面，本仓只用核心 JetStream API，真实 NATS 2.10 JetStream 用例复验通过）；`clap` 去 `env`（仓库内无 `env` 参数属性使用点）；`futures-util` 去 `async-await`/`async-await-macro`、workspace `futures` 去 `async-await`（仓库内无 futures 宏使用点）；`tracing` 去 `attributes`（root + examples，全仓无 `#[instrument]`）；`confers-macros`（自研，未声明任何特性）补 `default-features = false` 以与全仓逐依赖显式声明约定一致
-- 保留的显式特性（有使用点或文档承诺，未裁）：`garde` `email`/`url`/`regex`、`clap` `color`/`suggestions`/`usage`/`error-context`、`moka` `future`+`sync`、`etcd-client` `tls`
-- CI actions 升级（SHA pin）：taiki-e/install-action v2.87.26→v2.87.27、dtolnay/rust-toolchain SHA 前进至 master HEAD；checkout/rust-cache/setup-protoc/codecov/upload-artifact/codeql/gh-release 经 gh api 逐个比对已是最新未动
-- 安全审计：`cargo audit` 无漏洞（1296 条公告 / 389 依赖）、`cargo deny check` advisories/bans/licenses/sources 全 ok；warn 级提示为重复传递版本、未命中的 license 白名单与有意的 path-only 开发依赖，无修复项
+- 保留的显式特性（有使用点或文档承诺，未裁）：`garde` `email`/`url`/`regex`（url 与 `pattern` 的文档承诺见 docs/CONFIG_MACRO_GUIDE.md 示例）、`clap` `color`/`suggestions`/`usage`/`error-context`、`moka` `future`+`sync`、`etcd-client` `tls`
+- 本轮依赖收口（三方，2026-10-11 实测）：删除零使用点的 dev-dependency `proptest`（`grep -rn proptest --include=*.rs .` 全仓 0 命中、`git log -S proptest -- src tests benches examples` 无历史使用点；锁内 `proptest`/`rand_xorshift`/`core_detect`/`unarray` 随之退出依赖图）；`zeroize` 去 `derive`（无 `#[derive(Zeroize)]`/`#[derive(ZeroizeOnDrop)]` 使用点，`secure_string.rs` 为手写 `impl ZeroizeOnDrop`；`zeroize_derive` 1.5.0 退出依赖图）；root `clap` 去 `env` 与 `[workspace.dependencies]` 对齐（`cargo tree -e features -i clap` 输出不再含 `clap feature "env"`）；`redis` 去冗余 `aio`（`tokio-comp` 已传递蕴含，特性树实测不变）；`confers-macros`（自研）补 `default-features = false` 落地
+- 传递依赖 patch 刷新（`cargo update`，Cargo.lock）：serde_json 1.0.151→1.0.152；锁内已无 `proptest`/`zeroize_derive`/`rand 0.9` 链
+- CI actions 升级（SHA pin）：taiki-e/install-action v2.87.26→v2.87.27、dtolnay/rust-toolchain SHA 前进至 master HEAD；checkout/rust-cache/setup-protoc/codecov/upload-artifact/codeql/gh-release 经 gh api 逐个比对已是最新未动；2026-10-11 以 `git ls-remote` 全量复核，8 个 pin（checkout v7.0.1、codeql v4.38.3、upload-artifact v7.0.2、codecov v7.1.1、rust-cache v2.9.2、install-action v2.87.27、setup-protoc v3.0.0、gh-release v3.0.3）均等于上游最新 tag，未动
+- 安全审计：`cargo audit` 无漏洞（1296 条公告 / 377 依赖）、`cargo deny check` advisories/bans/licenses/sources 全 ok；warn 级提示为重复传递版本、未命中的 license 白名单与有意的 path-only 开发依赖，无修复项
 - 自研依赖版本未动：`confers-macros` 与 examples/fuzz 的 confers 引用保持 0.6.0-rc.6（按发布链「自研依赖定值」阶段统一升版）
 
-## [0.6.0-rc.7] — 2026-10-08
+### 2026-10-08 批次（rc.6 之后，未打 tag）
 
-### Fixed
+#### Fixed
 
 - **async-core 聚合特性自洽**：补 `dep:async-trait` 缺失声明，`async-core` 单独启用可编译；新增 feature-matrix 工作流覆盖特性组合矩阵。
 - **默认 feature 组合测试门控**：gate `snapshot_extra` 测试模块按默认特性组合门控，修复默认组合下的编译/测试失败。
 
-### Removed
+#### Removed
 
 - **死代码与测试专用函数清理**：删除编译器证实的死代码并按需 cfg 特性隔离；生产代码中的测试专用函数移除；测试桩 `allow(dead_code)` 收敛为带理由的精确标注。
 
-### Changed
+#### Changed
 
 - **复杂热点收敛**：重复分支抽取辅助函数。
 - **治理与文档**：specmark 目录与 ws-R14 治理复核记录移出 git 跟踪；漏洞报告渠道统一为 GH 安全通告首选、邮箱备选；API 参考密钥管理锚点断链修复。

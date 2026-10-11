@@ -17,12 +17,13 @@
 //! 运行方式：
 //!   cargo run --bin schema_to_rust
 
+use confers::i18n::{tr, tr_args};
 use confers::schema::RustScaffoldGenerator;
 use serde_json::json;
 
 fn main() {
     println!("========================================");
-    println!("  JSON Schema -> Rust scaffolding demo");
+    println!("  {}", tr("example-schema-to-rust-title"));
     println!("========================================\n");
 
     demo_basic_scaffolding();
@@ -30,7 +31,7 @@ fn main() {
     demo_fail_loud();
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-schema-to-rust-completed"));
     println!("========================================");
 }
 
@@ -51,7 +52,7 @@ fn demo_basic_scaffolding() {
     });
 
     let code = RustScaffoldGenerator::generate(&schema).expect("schema is supported");
-    println!("--- Basic mapping ---\n{code}");
+    println!("{}\n{code}", tr("example-schema-to-rust-basic-mapping"));
 }
 
 /// $defs + 内部 $ref：共享子结构成为独立类型。
@@ -77,7 +78,7 @@ fn demo_defs_and_refs() {
     });
 
     let code = RustScaffoldGenerator::generate(&schema).expect("schema is supported");
-    println!("--- $defs and internal $ref ---\n{code}");
+    println!("{}\n{code}", tr("example-schema-to-rust-defs-and-refs"));
 }
 
 /// 不支持的结构显性报错：脚手架宁缺毋滥，绝不静默生成错误代码。
@@ -90,9 +91,15 @@ fn demo_fail_loud() {
         "required": ["union"]
     });
 
-    println!("--- Explicit error for unsupported structures ---");
+    println!("{}", tr("example-schema-to-rust-explicit-error"));
     match RustScaffoldGenerator::generate(&schema) {
-        Ok(_) => println!("(unreachable)"),
-        Err(e) => println!("Failed as expected: {e}"),
+        Ok(_) => println!("{}", tr("example-schema-to-rust-unreachable")),
+        Err(e) => println!(
+            "{}",
+            tr_args(
+                "example-schema-to-rust-failed-as-expected",
+                &[("error", e.to_string())]
+            )
+        ),
     }
 }

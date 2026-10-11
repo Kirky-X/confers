@@ -5,7 +5,9 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本 2.0.0](https://semver.org/spec/v2.0.0.html)。
 
-## [Unreleased]
+## 历史遗留：0.4.0 之前的未发布草稿
+
+> 本段为 0.4.0 之前的遗留草稿，不再随代码维护：所列条目与当前代码现状不完全对应（部分能力已在主仓发布版本落地，个别条目在当前代码中不存在）。宏版本变更自 0.4.0 起统一记录于主 [CHANGELOG](CHANGELOG.md)（见文末版本说明）。
 
 ### 新增
 
@@ -65,5 +67,4 @@
 - 通过 `flatten` 支持嵌套配置
 - 与 `garde` 的校验集成
 
-[Unreleased]: https://github.com/Kirky-X/confers/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/Kirky-X/confers/releases/tag/v0.3.0

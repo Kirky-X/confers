@@ -9,6 +9,7 @@
 //! - 检查点恢复机制
 //! - 零停机轮转
 
+use confers::i18n::{tr, tr_args};
 use confers::secret::{EnvKeyProvider, SecretKeyProvider, XChaCha20Crypto, derive_field_key};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -29,7 +30,7 @@ fn main() {
         )
         .init();
 
-    tracing::info!("Key rotation example starting");
+    tracing::info!("{}", tr("example-key-rotation-started"));
 
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
@@ -41,11 +42,11 @@ fn main() {
     demonstrate_env_key_provider_with_version();
     demonstrate_rollback_mechanism(); // added: rollback mechanism demo
 
-    tracing::info!("All example demos completed");
+    tracing::info!("{}", tr("example-key-rotation-all-completed"));
 }
 
 fn demonstrate_key_version_derivation() {
-    tracing::info!("=== Example 1: key version derivation ===");
+    tracing::info!("{}", tr("example-key-rotation-example-1"));
 
     let master_key = [
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -58,25 +59,37 @@ fn demonstrate_key_version_derivation() {
     let db_password_v2 = derive_field_key(&master_key, "database.password", "v2")
         .expect("failed to derive the v2 key");
 
-    tracing::info!("Database password v1 key: {:02x?}", &db_password_v1[..8]);
-    tracing::info!("Database password v2 key: {:02x?}", &db_password_v2[..8]);
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-db-password-v1-key",
+            &[("key", format!("{:02x?}", &db_password_v1[..8]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-db-password-v2-key",
+            &[("key", format!("{:02x?}", &db_password_v2[..8]))]
+        )
+    );
 
     assert_ne!(db_password_v1, db_password_v2);
-    tracing::info!("Different versions produce different keys: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-different-versions"));
 
     let api_key_v1 =
         derive_field_key(&master_key, "api.key", "v1").expect("failed to derive the API key");
     assert_ne!(db_password_v1, api_key_v1);
-    tracing::info!("Different fields produce different keys: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-different-fields"));
 
     let db_password_v1_again = derive_field_key(&master_key, "database.password", "v1")
         .expect("failed to re-derive the v1 key");
     assert_eq!(db_password_v1, db_password_v1_again);
-    tracing::info!("The same version produces the same key (deterministic): validation passed");
+    tracing::info!("{}", tr("example-key-rotation-deterministic"));
 }
 
 fn demonstrate_encryption_with_version() {
-    tracing::info!("\n=== Example 2: encryption with versioned keys ===");
+    tracing::info!("\n{}", tr("example-key-rotation-example-2"));
 
     let master_key = [
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -99,13 +112,37 @@ fn demonstrate_encryption_with_version() {
         .encrypt(plaintext, key_v2.as_slice())
         .expect("v2 encryption failed");
 
-    tracing::info!("v1 encryption - nonce: {:02x?}", &nonce_v1[..8]);
-    tracing::info!("v1 encryption - ciphertext: {:02x?}", &ciphertext_v1[..16]);
-    tracing::info!("v2 encryption - nonce: {:02x?}", &nonce_v2[..8]);
-    tracing::info!("v2 encryption - ciphertext: {:02x?}", &ciphertext_v2[..16]);
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-v1-nonce",
+            &[("nonce", format!("{:02x?}", &nonce_v1[..8]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-v1-ciphertext",
+            &[("ciphertext", format!("{:02x?}", &ciphertext_v1[..16]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-v2-nonce",
+            &[("nonce", format!("{:02x?}", &nonce_v2[..8]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-v2-ciphertext",
+            &[("ciphertext", format!("{:02x?}", &ciphertext_v2[..16]))]
+        )
+    );
 
     assert_ne!(ciphertext_v1, ciphertext_v2);
-    tracing::info!("Different version keys produce different ciphertexts: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-different-ciphertexts"));
 
     let decrypted_v1 = crypto
         .decrypt(&nonce_v1, &ciphertext_v1, key_v1.as_slice())
@@ -116,15 +153,15 @@ fn demonstrate_encryption_with_version() {
 
     assert_eq!(decrypted_v1.as_slice(), plaintext.as_slice());
     assert_eq!(decrypted_v2.as_slice(), plaintext.as_slice());
-    tracing::info!("Each version's key decrypts correctly: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-decrypt-correctly"));
 
     let cross_fail = crypto.decrypt(&nonce_v1, &ciphertext_v1, key_v2.as_slice());
     assert!(cross_fail.is_err());
-    tracing::info!("Cross-version keys cannot decrypt: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-cross-version-fail"));
 }
 
 fn demonstrate_key_rotation() {
-    tracing::info!("\n=== Example 3: key rotation flow ===");
+    tracing::info!("\n{}", tr("example-key-rotation-example-3"));
 
     let master_key = [
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -144,16 +181,40 @@ fn demonstrate_key_rotation() {
         .encrypt(plaintext, old_key.as_slice())
         .expect("old key encryption failed");
 
-    tracing::info!("Old version: {}", old_version);
-    tracing::info!("Old nonce: {:02x?}", &old_nonce[..8]);
-    tracing::info!("Old ciphertext: {:02x?}", &old_ciphertext[..16]);
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-old-version",
+            &[("version", old_version.to_string())]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-old-nonce",
+            &[("nonce", format!("{:02x?}", &old_nonce[..8]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-old-ciphertext",
+            &[("ciphertext", format!("{:02x?}", &old_ciphertext[..16]))]
+        )
+    );
 
     let decrypted_with_old = crypto
         .decrypt(&old_nonce, &old_ciphertext, old_key.as_slice())
         .expect("old key decryption failed");
     tracing::info!(
-        "Old key decryption succeeded: {:?}",
-        String::from_utf8_lossy(&decrypted_with_old)
+        "{}",
+        tr_args(
+            "example-key-rotation-old-decrypted",
+            &[(
+                "value",
+                format!("{:?}", String::from_utf8_lossy(&decrypted_with_old))
+            )]
+        )
     );
 
     let new_key = derive_field_key(&master_key, "api.key", new_version)
@@ -162,9 +223,27 @@ fn demonstrate_key_rotation() {
         .encrypt(plaintext, new_key.as_slice())
         .expect("new key encryption failed");
 
-    tracing::info!("New version: {}", new_version);
-    tracing::info!("New nonce: {:02x?}", &new_nonce[..8]);
-    tracing::info!("New ciphertext: {:02x?}", &new_ciphertext[..16]);
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-new-version",
+            &[("version", new_version.to_string())]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-new-nonce",
+            &[("nonce", format!("{:02x?}", &new_nonce[..8]))]
+        )
+    );
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-new-ciphertext",
+            &[("ciphertext", format!("{:02x?}", &new_ciphertext[..16]))]
+        )
+    );
 
     let encrypted_data = EncryptedData {
         version: new_version.to_string(),
@@ -173,12 +252,18 @@ fn demonstrate_key_rotation() {
         previous_version: Some(old_version.to_string()),
     };
 
-    tracing::info!("Encrypted data after rotation: {:?}", encrypted_data);
-    tracing::info!("Key rotation completed");
+    tracing::info!(
+        "{}",
+        tr_args(
+            "example-key-rotation-rotated-data",
+            &[("data", format!("{encrypted_data:?}"))]
+        )
+    );
+    tracing::info!("{}", tr("example-key-rotation-rotation-completed"));
 }
 
 fn demonstrate_data_migration() {
-    tracing::info!("\n=== Example 4: encrypted data migration ===");
+    tracing::info!("\n{}", tr("example-key-rotation-example-4"));
 
     let master_key = [
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -211,10 +296,18 @@ fn demonstrate_data_migration() {
     };
 
     tracing::info!(
-        "Stored old data: version={}, nonce length={}, ciphertext length={}",
-        stored_data.version,
-        stored_data.nonce.len(),
-        stored_data.ciphertext.len()
+        "{}",
+        tr_args(
+            "example-key-rotation-stored-old-data",
+            &[
+                ("version", stored_data.version.clone()),
+                ("nonce_length", stored_data.nonce.len().to_string()),
+                (
+                    "ciphertext_length",
+                    stored_data.ciphertext.len().to_string()
+                ),
+            ]
+        )
     );
 
     fn migrate_encrypted_data(
@@ -250,10 +343,18 @@ fn demonstrate_data_migration() {
     .expect("migration failed");
 
     tracing::info!(
-        "Migrated data: version={}, nonce length={}, ciphertext length={}",
-        migrated_data.version,
-        migrated_data.nonce.len(),
-        migrated_data.ciphertext.len()
+        "{}",
+        tr_args(
+            "example-key-rotation-migrated-data",
+            &[
+                ("version", migrated_data.version.clone()),
+                ("nonce_length", migrated_data.nonce.len().to_string()),
+                (
+                    "ciphertext_length",
+                    migrated_data.ciphertext.len().to_string()
+                ),
+            ]
+        )
     );
 
     let new_key = derive_field_key(&master_key, "field.data", new_version)
@@ -267,7 +368,7 @@ fn demonstrate_data_migration() {
         .expect("failed to verify decryption");
 
     assert_eq!(migrated_plaintext.as_slice(), original_plaintext);
-    tracing::info!("Data integrity check: passed");
+    tracing::info!("{}", tr("example-key-rotation-integrity-passed"));
 
     let verification_old = crypto.decrypt(
         &migrated_data.nonce,
@@ -275,11 +376,11 @@ fn demonstrate_data_migration() {
         old_key.as_slice(),
     );
     assert!(verification_old.is_err());
-    tracing::info!("Old keys cannot decrypt new data: validation passed");
+    tracing::info!("{}", tr("example-key-rotation-old-key-cannot-decrypt"));
 }
 
 fn demonstrate_env_key_provider_with_version() {
-    tracing::info!("\n=== Example 5: EnvKeyProvider and key versions ===");
+    tracing::info!("\n{}", tr("example-key-rotation-example-5"));
 
     let provider = EnvKeyProvider::new("APP_ENCRYPTION_KEY");
 
@@ -287,8 +388,14 @@ fn demonstrate_env_key_provider_with_version() {
 
     match key_result {
         Ok(key) => {
-            tracing::info!("Got the master key successfully");
-            tracing::info!("Key length: {} bytes", key.as_slice().len());
+            tracing::info!("{}", tr("example-key-rotation-master-key-ok"));
+            tracing::info!(
+                "{}",
+                tr_args(
+                    "example-key-rotation-key-length",
+                    &[("bytes", key.as_slice().len().to_string())]
+                )
+            );
 
             let crypto = XChaCha20Crypto::new();
             let plaintext = b"env-key-provider-protected-data";
@@ -304,10 +411,15 @@ fn demonstrate_env_key_provider_with_version() {
                     .unwrap_or_else(|_| panic!("{} encryption failed", version));
 
                 tracing::info!(
-                    "Version {} - nonce: {:02x?}, ciphertext: {:02x?}",
-                    version,
-                    &nonce[..8],
-                    &ciphertext[..12]
+                    "{}",
+                    tr_args(
+                        "example-key-rotation-version-keys",
+                        &[
+                            ("version", version.to_string()),
+                            ("nonce", format!("{:02x?}", &nonce[..8])),
+                            ("ciphertext", format!("{:02x?}", &ciphertext[..12])),
+                        ]
+                    )
                 );
 
                 let decrypted = crypto
@@ -316,10 +428,16 @@ fn demonstrate_env_key_provider_with_version() {
                 assert_eq!(decrypted.as_slice(), plaintext);
             }
 
-            tracing::info!("EnvKeyProvider integrates with multi-version keys: validation passed");
+            tracing::info!("{}", tr("example-key-rotation-env-provider-ok"));
         }
         Err(e) => {
-            tracing::error!("Failed to get the key: {:?}", e);
+            tracing::error!(
+                "{}",
+                tr_args(
+                    "example-key-rotation-get-key-failed",
+                    &[("error", format!("{e:?}"))]
+                )
+            );
         }
     }
 
@@ -329,7 +447,7 @@ fn demonstrate_env_key_provider_with_version() {
 
 /// 演示回滚机制：当密钥轮换出现问题时，可以快速回滚到旧版本
 fn demonstrate_rollback_mechanism() {
-    tracing::info!("\n=== Example 6: rollback mechanism ===");
+    tracing::info!("\n{}", tr("example-key-rotation-example-6"));
 
     let master_key = [
         0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
@@ -341,34 +459,29 @@ fn demonstrate_rollback_mechanism() {
     let plaintext = b"critical-data-that-needs-rollback";
     let field_name = "backup.critical";
 
-    // Step 1: 使用 v1 加密原始数据
     let key_v1 =
         derive_field_key(&master_key, field_name, "v1").expect("failed to derive the v1 key");
     let (nonce_v1, ciphertext_v1) = crypto
         .encrypt(plaintext, key_v1.as_slice())
         .expect("v1 encryption failed");
 
-    tracing::info!("Initial state: data encrypted with v1");
+    tracing::info!("{}", tr("example-key-rotation-initial-v1"));
     tracing::info!("v1 nonce: {:02x?}", &nonce_v1[..8]);
 
-    // Step 2: 执行密钥轮换 - 读取旧数据，用 v2 重新加密
     let key_v2 =
         derive_field_key(&master_key, field_name, "v2").expect("failed to derive the v2 key");
 
-    // 用 v1 解密数据
     let decrypted_for_rotation = crypto
         .decrypt(&nonce_v1, &ciphertext_v1, key_v1.as_slice())
         .expect("failed to decrypt old data");
 
-    // 用 v2 重新加密
     let (nonce_v2, ciphertext_v2) = crypto
         .encrypt(&decrypted_for_rotation, key_v2.as_slice())
         .expect("v2 encryption failed");
 
-    tracing::info!("After rotation: data encrypted with v2");
+    tracing::info!("{}", tr("example-key-rotation-after-rotation-v2"));
     tracing::info!("v2 nonce: {:02x?}", &nonce_v2[..8]);
 
-    // Step 3: 存储轮换后的数据，包含 previous_version 用于回滚
     let encrypted_data = EncryptedData {
         version: "v2".to_string(),
         nonce: nonce_v2.clone(),
@@ -377,12 +490,23 @@ fn demonstrate_rollback_mechanism() {
     };
 
     tracing::info!(
-        "Stored encrypted data: version={}, previous_version={}",
-        encrypted_data.version,
-        encrypted_data.previous_version.as_ref().unwrap()
+        "{}",
+        tr_args(
+            "example-key-rotation-stored-encrypted-data",
+            &[
+                ("version", encrypted_data.version.clone()),
+                (
+                    "previous_version",
+                    encrypted_data
+                        .previous_version
+                        .as_ref()
+                        .unwrap()
+                        .to_string()
+                ),
+            ]
+        )
     );
 
-    // Step 4: 验证当前版本密钥可以解密数据
     let current_decrypted = crypto
         .decrypt(
             &encrypted_data.nonce,
@@ -391,9 +515,8 @@ fn demonstrate_rollback_mechanism() {
         )
         .expect("failed to decrypt the current version");
     assert_eq!(current_decrypted.as_slice(), plaintext.as_slice());
-    tracing::info!("✓ current version (v2) decrypts successfully");
+    tracing::info!("{}", tr("example-key-rotation-current-version-ok"));
 
-    // Step 5: 使用 previous_version 进行回滚 - 解密旧版本数据
     // 回滚场景：从 v2 恢复到 v1，需要用旧密钥解密
     let rollback_version = encrypted_data.previous_version.as_ref().unwrap();
     let rollback_key = derive_field_key(&master_key, field_name, rollback_version)
@@ -405,9 +528,8 @@ fn demonstrate_rollback_mechanism() {
         .decrypt(&nonce_v1, &ciphertext_v1, rollback_key.as_slice())
         .expect("failed to decrypt historical data");
     assert_eq!(historical_decrypted.as_slice(), plaintext.as_slice());
-    tracing::info!("✓ decrypted historical data with previous_version successfully");
+    tracing::info!("{}", tr("example-key-rotation-historical-ok"));
 
-    // Step 6: 演示完整回滚流程 - 清除 previous_version
     let rolled_back_data = EncryptedData {
         version: "v1".to_string(),
         nonce: nonce_v1.clone(),
@@ -415,14 +537,21 @@ fn demonstrate_rollback_mechanism() {
         previous_version: None,
     };
 
-    tracing::info!("Rollback complete: data version reset to v1");
+    tracing::info!("{}", tr("example-key-rotation-rollback-complete"));
     tracing::info!(
-        "Current version: {}, previous_version: {:?}",
-        rolled_back_data.version,
-        rolled_back_data.previous_version
+        "{}",
+        tr_args(
+            "example-key-rotation-current-previous",
+            &[
+                ("version", rolled_back_data.version.clone()),
+                (
+                    "previous_version",
+                    format!("{:?}", rolled_back_data.previous_version)
+                ),
+            ]
+        )
     );
 
-    // 验证回滚后的数据可以用 v1 解密
     let final_decrypted = crypto
         .decrypt(
             &rolled_back_data.nonce,
@@ -431,10 +560,9 @@ fn demonstrate_rollback_mechanism() {
         )
         .expect("final decryption failed");
     assert_eq!(final_decrypted.as_slice(), plaintext.as_slice());
-    tracing::info!("✓ data decryption verified after rollback");
+    tracing::info!("{}", tr("example-key-rotation-rollback-verified"));
 
-    // Step 7: 验证安全性 - v1 密钥无法解密 v2 加密的数据
     let cross_fail = crypto.decrypt(&nonce_v2, &ciphertext_v2, key_v1.as_slice());
     assert!(cross_fail.is_err());
-    tracing::info!("✓ v1 keys cannot decrypt data encrypted with v2 (security check passed)");
+    tracing::info!("{}", tr("example-key-rotation-security-verified"));
 }

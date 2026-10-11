@@ -9,6 +9,7 @@
 //! - 版本升级策略
 //! - 热重载时的自动迁移
 
+use confers::i18n::{tr, tr_args};
 use confers::migration::{MigrationOnReload, MigrationRegistry};
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use indexmap::IndexMap;
@@ -25,24 +26,30 @@ fn main() {
         )
         .init();
 
-    info!("=== Configuration version migration example ===");
-    info!("Version: V1 -> V2 -> V3");
+    info!("{}", tr("example-migration-title"));
+    info!("{}", tr("example-migration-version-chain"));
 
     demo_basic_migration();
     demo_path_precomputation();
     demo_multi_step_migration();
     demo_migration_on_reload();
 
-    info!("=== All examples completed ===");
+    info!("{}", tr("example-migration-all-completed"));
 }
 
 fn demo_basic_migration() {
-    info!("\n--- Basic migration example ---");
+    info!("\n{}", tr("example-migration-basic-demo"));
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |mut v| {
-        info!("Execute migration: v{} -> v{}", 1, 2);
+        info!(
+            "{}",
+            tr_args(
+                "example-migration-execute",
+                &[("from", "1".to_string()), ("to", "2".to_string())]
+            )
+        );
         v.version = 2;
         Ok(v)
     });
@@ -58,62 +65,92 @@ fn demo_basic_migration() {
 
     match registry.migrate(value, 1, 2) {
         Ok(migrated) => {
-            info!("Migration succeeded! version: {} -> {}", 1, 2);
-            info!("version field after migration: {}", migrated.version);
+            info!(
+                "{}",
+                tr_args(
+                    "example-migration-succeeded",
+                    &[("from", "1".to_string()), ("to", "2".to_string())]
+                )
+            );
+            info!(
+                "{}",
+                tr_args(
+                    "example-migration-version-field",
+                    &[("version", migrated.version.to_string())]
+                )
+            );
         }
         Err(e) => {
-            warn!("Migration failed: {:?}", e);
+            warn!(
+                "{}",
+                tr_args("example-migration-failed", &[("error", format!("{e:?}"))])
+            );
         }
     }
 }
 
 fn demo_path_precomputation() {
-    info!("\n--- Path precomputation example ---");
+    info!("\n{}", tr("example-migration-path-demo"));
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |v| {
-        info!("Migrate 1 -> 2");
+        info!("{}", tr("example-migration-migrate-1-2"));
         Ok(v)
     });
 
     registry.register(2, 3, |v| {
-        info!("Migrate 2 -> 3");
+        info!("{}", tr("example-migration-migrate-2-3"));
         Ok(v)
     });
 
     registry.register(1, 3, |v| {
-        info!("Migrate 1 -> 3 directly");
+        info!("{}", tr("example-migration-migrate-1-3-direct"));
         Ok(v)
     });
 
     registry.precompute_paths();
 
     info!(
-        "Migration path (1 -> 3): {:?}",
-        registry.get_migration_path(1, 3)
+        "{}",
+        tr_args(
+            "example-migration-path-1-3",
+            &[("path", format!("{:?}", registry.get_migration_path(1, 3)))]
+        )
     );
     info!(
-        "Migration path (1 -> 2): {:?}",
-        registry.get_migration_path(1, 2)
+        "{}",
+        tr_args(
+            "example-migration-path-1-2",
+            &[("path", format!("{:?}", registry.get_migration_path(1, 2)))]
+        )
     );
     info!(
-        "Migration path (2 -> 3): {:?}",
-        registry.get_migration_path(2, 3)
+        "{}",
+        tr_args(
+            "example-migration-path-2-3",
+            &[("path", format!("{:?}", registry.get_migration_path(2, 3)))]
+        )
     );
 
     if let Some(path) = registry.get_migration_path(1, 3) {
-        info!("Found the optimal path: {:?}", path);
+        info!(
+            "{}",
+            tr_args(
+                "example-migration-optimal-path",
+                &[("path", format!("{path:?}"))]
+            )
+        );
     }
 }
 
 fn demo_multi_step_migration() {
-    info!("\n--- Multi-step migration example ---");
+    info!("\n{}", tr("example-migration-multi-step-demo"));
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |mut v| {
-        info!("[Step 1] Add the database configuration");
+        info!("{}", tr("example-migration-step-1"));
         let mut map = IndexMap::new();
         map.insert(
             Arc::from("database"),
@@ -129,7 +166,7 @@ fn demo_multi_step_migration() {
     });
 
     registry.register(2, 3, |mut v| {
-        info!("[Step 2] Add the cache and security configuration");
+        info!("{}", tr("example-migration-step-2"));
 
         let mut new_map = IndexMap::new();
 
@@ -170,47 +207,68 @@ fn demo_multi_step_migration() {
     )
     .with_version(1);
 
-    info!("Initial configuration version: {}", initial_value.version);
+    info!(
+        "{}",
+        tr_args(
+            "example-migration-initial-version",
+            &[("version", initial_value.version.to_string())]
+        )
+    );
 
     match registry.migrate(initial_value, 1, 3) {
         Ok(migrated) => {
-            info!("Multi-step migration succeeded!");
-            info!("Final version: {}", migrated.version);
+            info!("{}", tr("example-migration-multi-step-succeeded"));
+            info!(
+                "{}",
+                tr_args(
+                    "example-migration-final-version",
+                    &[("version", migrated.version.to_string())]
+                )
+            );
 
             if let ConfigValue::Map(map) = &migrated.inner {
-                info!("Configuration keys: {:?}", map.keys().collect::<Vec<_>>());
+                info!(
+                    "{}",
+                    tr_args(
+                        "example-migration-config-keys",
+                        &[("keys", format!("{:?}", map.keys().collect::<Vec<_>>()))]
+                    )
+                );
             }
         }
         Err(e) => {
-            warn!("Migration failed: {:?}", e);
+            warn!(
+                "{}",
+                tr_args("example-migration-failed", &[("error", format!("{e:?}"))])
+            );
         }
     }
 }
 
 fn demo_migration_on_reload() {
-    info!("\n--- MigrationOnReload example ---");
+    info!("\n{}", tr("example-migration-on-reload-demo"));
 
     let _always = MigrationOnReload::Always;
     let on_change = MigrationOnReload::OnVersionChange;
     let _disabled = MigrationOnReload::Disabled;
 
-    info!("MigrationOnReload::Always: run the migration on every reload");
-    info!("MigrationOnReload::OnVersionChange: migrate only when the version changes (default)");
-    info!("MigrationOnReload::Disabled: migrate when reload is disabled");
+    info!("{}", tr("example-migration-always-desc"));
+    info!("{}", tr("example-migration-on-version-change-desc"));
+    info!("{}", tr("example-migration-disabled-desc"));
 
     match on_change {
         MigrationOnReload::Always => {
-            info!("Current configuration: Always");
+            info!("{}", tr("example-migration-current-always"));
         }
         MigrationOnReload::OnVersionChange => {
-            info!("Current configuration: OnVersionChange (recommended)");
+            info!("{}", tr("example-migration-current-on-version-change"));
         }
         MigrationOnReload::Disabled => {
-            info!("Current configuration: Disabled");
+            info!("{}", tr("example-migration-current-disabled"));
         }
     }
 
-    info!("\nUsed in hot-reload scenarios:");
+    info!("\n{}", tr("example-migration-hot-reload-usage"));
     info!("  let reload_policy = MigrationOnReload::OnVersionChange;");
-    info!("  // migrate automatically when the configuration changes");
+    info!("  {}", tr("example-migration-auto-migrate-comment"));
 }

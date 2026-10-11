@@ -121,7 +121,6 @@ impl SecurityValidator for TlsConfigValidator {
             }
         }
 
-        // Check cipher suites
         if let Some(value) = config.get_raw("tls.cipher_suites")
             && let Some(suites_str) = value.as_str()
         {

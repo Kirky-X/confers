@@ -15,13 +15,14 @@
 //!   # 运行示例
 //!   cargo run --bin remote_consul
 
+use confers::i18n::{tr, tr_args};
 use confers::loader::Format;
 use confers::remote::{ConsulSourceBuilder, PolledSource};
 use std::time::Duration;
 
 /// 演示基础 Consul 连接和配置轮询
 async fn demo_basic_poll(address: &str) -> anyhow::Result<()> {
-    println!("\n=== Demo 1: Basic Consul configuration polling ===\n");
+    println!("\n{}\n", tr("example-remote-consul-demo1"));
 
     // build() 是同步方法，返回 ConfigResult<ConsulSource>
     let source = ConsulSourceBuilder::new()
@@ -31,28 +32,43 @@ async fn demo_basic_poll(address: &str) -> anyhow::Result<()> {
         .interval(Duration::from_secs(30))
         .build()?;
 
-    println!("ConsulSource built successfully");
-    println!("  source ID: {}", source.source_id().as_str());
-    println!("  poll interval: {:?}", source.poll_interval());
+    println!("{}", tr("example-remote-consul-built"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-remote-consul-source-id",
+            &[("id", source.source_id().as_str().to_string())]
+        )
+    );
+    println!(
+        "  {}",
+        tr_args(
+            "example-remote-consul-poll-interval",
+            &[("interval", format!("{:?}", source.poll_interval()))]
+        )
+    );
 
     // 尝试轮询配置 —— 如果没有 Consul 运行，预期会失败
-    println!("\nPolling Consul KV (prefix: myapp/config)...");
+    println!("\n{}", tr("example-remote-consul-polling"));
     match source.poll().await {
         Ok(value) => {
-            println!("✓ config loaded successfully");
+            println!("{}", tr("example-remote-consul-loaded"));
             if value.is_map() {
-                println!("  value type: Map (multiple key-value pairs)");
+                println!("  {}", tr("example-remote-consul-value-map"));
             } else if value.is_null() {
-                println!("  value type: Null (no configuration under the prefix)");
+                println!("  {}", tr("example-remote-consul-value-null"));
             } else {
-                println!("  value type: scalar value");
+                println!("  {}", tr("example-remote-consul-value-scalar"));
             }
         }
         Err(e) => {
             // 连接失败是预期行为（无 Consul 运行时）
-            println!("✗ Poll failed (it is normal if Consul is not running)");
-            println!("  error: {}", e);
-            println!("\n  Hint: run the following command to start Consul:");
+            println!("{}", tr("example-remote-consul-poll-failed-normal"));
+            println!(
+                "  {}",
+                tr_args("example-remote-consul-error", &[("error", e.to_string())])
+            );
+            println!("\n  {}", tr("example-remote-consul-hint"));
             println!("    docker run -d --name consul -p 8500:8500 consul:latest");
         }
     }
@@ -62,7 +78,7 @@ async fn demo_basic_poll(address: &str) -> anyhow::Result<()> {
 
 /// 演示带 ACL token 的 Consul 连接
 async fn demo_with_token(address: &str) -> anyhow::Result<()> {
-    println!("\n=== Demo 2: Connection with ACL token ===\n");
+    println!("\n{}\n", tr("example-remote-consul-demo2"));
 
     let source = ConsulSourceBuilder::new()
         .address(address)
@@ -71,14 +87,26 @@ async fn demo_with_token(address: &str) -> anyhow::Result<()> {
         .interval(Duration::from_secs(60))
         .build()?;
 
-    println!("ConsulSource with token built successfully");
-    println!("  source ID: {}", source.source_id().as_str());
+    println!("{}", tr("example-remote-consul-with-token-built"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-remote-consul-source-id",
+            &[("id", source.source_id().as_str().to_string())]
+        )
+    );
 
     match source.poll().await {
-        Ok(_) => println!("✓ Config loaded successfully (token verified)"),
+        Ok(_) => println!("{}", tr("example-remote-consul-loaded-token-verified")),
         Err(e) => {
-            println!("✗ Poll failed: {}", e);
-            println!("  Note: always use HTTPS + ACL token in production");
+            println!(
+                "{}",
+                tr_args(
+                    "example-remote-consul-poll-failed",
+                    &[("error", e.to_string())]
+                )
+            );
+            println!("  {}", tr("example-remote-consul-token-note"));
         }
     }
 
@@ -87,7 +115,7 @@ async fn demo_with_token(address: &str) -> anyhow::Result<()> {
 
 /// 演示构建参数与限制配置
 async fn demo_builder_options() -> anyhow::Result<()> {
-    println!("\n=== Demo 3: Builder parameters and security limits ===\n");
+    println!("\n{}\n", tr("example-remote-consul-demo3"));
 
     // 展示响应大小限制和条目数限制（防止 DoS）
     let source = ConsulSourceBuilder::new()
@@ -97,11 +125,17 @@ async fn demo_builder_options() -> anyhow::Result<()> {
         .max_kv_entries(5_000) // 最多 5000 条 KV
         .build()?;
 
-    println!("ConsulSource security limits configuration:");
-    println!("  source ID: {}", source.source_id().as_str());
-    println!("  Max response body: 4 MB");
-    println!("  Max KV entries: 5000");
-    println!("\nThese limits prevent DoS/OOM from oversized responses (CWE-400/CWE-502)");
+    println!("{}", tr("example-remote-consul-security-limits"));
+    println!(
+        "  {}",
+        tr_args(
+            "example-remote-consul-source-id",
+            &[("id", source.source_id().as_str().to_string())]
+        )
+    );
+    println!("  {}", tr("example-remote-consul-max-response-body"));
+    println!("  {}", tr("example-remote-consul-max-kv-entries"));
+    println!("\n{}", tr("example-remote-consul-dos-limits-note"));
 
     Ok(())
 }
@@ -109,20 +143,25 @@ async fn demo_builder_options() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Remote Consul config source demo");
+    println!("  {}", tr("example-remote-consul-title"));
     println!("========================================");
 
-    // 从环境变量读取 Consul 地址，默认本地
     let address = std::env::var("CONSUL_ADDRESS").unwrap_or_else(|_| "127.0.0.1:8500".to_string());
 
-    println!("Consul address: {}", address);
+    println!(
+        "{}",
+        tr_args(
+            "example-remote-consul-address",
+            &[("address", address.clone())]
+        )
+    );
 
     demo_basic_poll(&address).await?;
     demo_with_token(&address).await?;
     demo_builder_options().await?;
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-remote-consul-completed"));
     println!("========================================");
     Ok(())
 }

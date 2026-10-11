@@ -424,8 +424,9 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
 #[test]
 #[serial]
 fn test_env_parse_key_unicode_and_case() {
-    // Unicode keys survive parsing; lowercasing applies. A leading underscore
-    // after the prefix becomes an empty first segment → empty-keyed map.
+    // Lowercasing applies. A leading underscore after the prefix is a leading
+    // separator: it is consumed (docs/API_REFERENCE.md 契约), so `__TAG` maps
+    // to the top-level `tag` key and never yields an empty-string root key.
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG_HOSTNAME", "srv1") };
     // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -439,11 +440,16 @@ fn test_env_parse_key_unicode_and_case() {
             _ => panic!("expected map"),
         };
         assert!(map.contains_key("hostname"), "HOSTNAME → hostname");
-        // __TAG → "_tag" → [".", "tag"]? no: strip prefix DEEPCFG_ leaves "_TAG",
-        // lowercase "_tag", replace '_' → '.', giving ".tag" → ["", "tag"].
+        // __TAG → strip prefix DEEPCFG_ leaves "_TAG"; the leading separator is
+        // consumed → "tag"（多段前导分隔符一并归一化，不产生空串根键）。
+        assert_eq!(
+            map.get("tag").and_then(|v| v.inner.as_str()),
+            Some("underscore-prefixed"),
+            "leading underscore is consumed, mapping to `tag`"
+        );
         assert!(
-            map.contains_key(""),
-            "leading underscore becomes empty-keyed map"
+            !map.contains_key(""),
+            "no empty-string root key is produced"
         );
     }));
     // FIXME: Audit that the environment access only happens in single-threaded code.

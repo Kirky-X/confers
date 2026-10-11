@@ -224,7 +224,6 @@ impl ErrorSanitizer {
     /// behavior of strict-mode sanitization: `my_key` matches the keyword
     /// `key`, while `monkey`, `whiskey`, or `secretary` do not.
     pub fn contains_sensitive(&self, message: &str) -> bool {
-        // 检查是否匹配任何敏感模式
         for (pattern, _) in get_sensitive_patterns().iter() {
             if pattern.is_match(message) {
                 return true;

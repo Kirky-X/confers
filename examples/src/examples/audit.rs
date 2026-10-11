@@ -10,36 +10,40 @@
 
 use chrono::Utc;
 use confers::audit::{AuditConfig, AuditEvent, AuditLevel, AuditWriter};
+use confers::i18n::{tr, tr_args};
 use std::fs;
 use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Audit - audit log demo");
+    println!("  {}", tr("example-audit-title"));
     println!("========================================");
 
     let log_dir = std::env::temp_dir().join("confers_audit_example");
     fs::create_dir_all(&log_dir)?;
-    println!("\nLog directory: {}", log_dir.display());
+    println!(
+        "\n{}",
+        tr_args(
+            "example-audit-log-dir",
+            &[("path", log_dir.display().to_string())]
+        )
+    );
 
-    // 1. 使用 AuditConfigBuilder 构建 AuditConfig
-    println!("\n[Build AuditConfig]");
+    println!("\n{}", tr("example-audit-build-config"));
     let config = AuditConfig::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
         .build();
     println!("  enabled: {}", config.enabled);
 
-    // 2. 使用 AuditWriterBuilder 构建 AuditWriter
-    println!("\n[Build AuditWriter]");
+    println!("\n{}", tr("example-audit-build-writer"));
     let writer = AuditWriter::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
         .build();
     println!("  enabled: {}", writer.is_enabled());
 
-    // 3. 展示 AuditLevel 映射（Durable / BestEffort）
-    println!("\n[AuditLevel event mapping]");
+    println!("\n{}", tr("example-audit-level-mapping"));
     let now = Utc::now();
     let events: Vec<AuditEvent> = vec![
         AuditEvent::KeyAccess {
@@ -71,11 +75,19 @@ fn main() -> anyhow::Result<()> {
             AuditLevel::Durable => "Durable",
             AuditLevel::BestEffort => "BestEffort",
         };
-        println!("  event {} -> {}", i + 1, level_str);
+        println!(
+            "  {}",
+            tr_args(
+                "example-audit-event-level",
+                &[
+                    ("index", (i + 1).to_string()),
+                    ("level", level_str.to_string())
+                ]
+            )
+        );
     }
 
-    // 4. 使用便捷方法写入审计事件
-    println!("\n[Write audit events]");
+    println!("\n{}", tr("example-audit-write-events"));
     let _ = writer.log_load("config.toml");
     let _ = writer.log_key_access("master-key");
     let _ = writer.log_decrypt("api_token", true);
@@ -85,29 +97,42 @@ fn main() -> anyhow::Result<()> {
         source: "watcher".to_string(),
         timestamp: Utc::now(),
     });
-    println!("  Wrote 6 audit events");
+    println!("  {}", tr("example-audit-wrote-events"));
 
-    // 5. 读取并展示日志文件内容
     let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
     let log_path: PathBuf = log_dir.join(&filename);
-    println!("\n[Audit log contents] {}", log_path.display());
+    println!(
+        "\n{}",
+        tr_args(
+            "example-audit-log-contents",
+            &[("path", log_path.display().to_string())]
+        )
+    );
     match fs::read_to_string(&log_path) {
         Ok(content) => {
             for (i, line) in content.lines().enumerate() {
-                println!("  line {}: {}", i + 1, line);
+                println!(
+                    "  {}",
+                    tr_args(
+                        "example-audit-log-line",
+                        &[("index", (i + 1).to_string()), ("line", line.to_string())]
+                    )
+                );
             }
             if content.is_empty() {
-                println!("  (log file is empty)");
+                println!("  {}", tr("example-audit-log-empty"));
             }
         }
-        Err(e) => println!("  Failed to read log: {}", e),
+        Err(e) => println!(
+            "  {}",
+            tr_args("example-audit-read-log-failed", &[("error", e.to_string())])
+        ),
     }
 
-    // 6. 清理临时目录
     let _ = fs::remove_dir_all(&log_dir);
 
     println!("\n========================================");
-    println!("  Example completed!");
+    println!("  {}", tr("example-audit-completed"));
     println!("========================================");
     Ok(())
 }

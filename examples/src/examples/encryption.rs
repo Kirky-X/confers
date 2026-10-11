@@ -54,22 +54,16 @@ fn main() {
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", demo_key) };
     tracing::warn!("⚠️ Using DEMO encryption key - DO NOT use in production!");
 
-    // Example 1: Basic SecretString usage
     demonstrate_secret_string();
 
-    // Example 2: Basic SecretBytes usage
     demonstrate_secret_bytes();
 
-    // Example 3: XChaCha20 encryption/decryption
     demonstrate_encryption_decryption();
 
-    // Example 4: Field-level key derivation
     demonstrate_field_key_derivation();
 
-    // Example 5: Use EnvKeyProvider
     demonstrate_env_key_provider();
 
-    // Example 6: Basic config loading
     demonstrate_config_loading();
 
     println!("\n========================================");
@@ -152,21 +146,18 @@ fn demonstrate_encryption_decryption() {
     // Prepare plaintext data (ASCII only for byte string literal)
     let plaintext = b"This is sensitive config data with database password.";
 
-    // Generate 32-byte key
     let key = [
         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
         0x1f, 0x20,
     ];
 
-    // Encrypt: returns random nonce and ciphertext
     let (nonce, ciphertext) = crypto.encrypt(plaintext, &key).expect("Encryption failed");
 
     println!("Nonce length: {} bytes", nonce.len());
     println!("Plaintext length: {} bytes", plaintext.len());
     println!("Ciphertext length: {} bytes", ciphertext.len());
 
-    // Decrypt
     let decrypted = crypto
         .decrypt(&nonce, &ciphertext, &key)
         .expect("Decryption failed");
@@ -178,7 +169,6 @@ fn demonstrate_encryption_decryption() {
     let (nonce2, _ciphertext2) = crypto.encrypt(plaintext, &key).expect("Encryption failed");
     println!("Same plaintext re-encrypted: nonce different: {:?}", nonce2);
 
-    // Wrong key decryption fails
     let wrong_key = [0x00; 32];
     let result = crypto.decrypt(&nonce, &ciphertext, &wrong_key);
     match result {
@@ -291,7 +281,6 @@ fn demonstrate_env_key_provider() {
         Err(e) => println!("Correctly returned error for missing key: {:?}", e),
     }
 
-    // Test with short key
     println!("\nTesting short key:");
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("SHORT_KEY", "short") };

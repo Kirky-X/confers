@@ -132,7 +132,6 @@ impl EtcdSourceBuilder {
 
     /// Build the etcd source.
     pub async fn build(self) -> ConfigResult<EtcdSource> {
-        // Build connect options
         let mut options = ConnectOptions::new();
 
         // Validate that both or neither auth credentials are provided
@@ -276,7 +275,6 @@ impl EtcdSource {
             message: format!("Failed to fetch from etcd: {}", e),
         })?;
 
-        // Get header with revision
         let header = get_response.header();
         let current_revision: i64 = match header {
             Some(h) => {
@@ -291,24 +289,20 @@ impl EtcdSource {
             let last_rev = self.last_revision.load(Ordering::Acquire);
 
             if last_rev == current_revision {
-                // No changes, return cached value
                 let cached = self.cached_value.load();
                 if let Some(ref value) = **cached {
                     return Ok((**value).clone());
                 }
             }
 
-            // Update revision
             self.last_revision
                 .store(current_revision, Ordering::Release);
         }
 
-        // Build config from KV pairs
         let mut config_map = indexmap::IndexMap::new();
 
         let kvs = get_response.kvs();
         for kv in kvs.iter() {
-            // Get key as bytes and convert to string.
             // Use String::from_utf8 (not from_utf8_lossy) to surface
             // invalid UTF-8 as an error instead of silently replacing
             // invalid bytes with U+FFFD (Rule 12: Fail Loud).
@@ -320,7 +314,6 @@ impl EtcdSource {
                     message: format!("etcd key is not valid UTF-8: {}", e),
                 })?;
 
-            // Get value as bytes and convert to string (same fix).
             let value_bytes: &[u8] = kv.value();
             let value =
                 String::from_utf8(value_bytes.to_vec()).map_err(|e| ConfigError::InvalidValue {
@@ -329,7 +322,6 @@ impl EtcdSource {
                     message: format!("etcd value for key '{}' is not valid UTF-8: {}", key, e),
                 })?;
 
-            // Remove prefix from key
             let relative_key: String = if key.starts_with(&*self.prefix) {
                 key.strip_prefix(&*self.prefix)
                     .unwrap_or(&key)

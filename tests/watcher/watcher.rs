@@ -370,7 +370,6 @@ fn test_adaptive_debouncer_reset() {
     // Immediate second call should not process
     assert!(!debouncer.should_process());
 
-    // Reset the debouncer
     debouncer.reset();
 
     // After reset, should process again

@@ -296,8 +296,8 @@ pub struct ConfersConfig {
 ```
 
 **效果**：
-- 嵌套结构的字段被提升到顶层
-- 同时支持 `database.host` 与 `database_host` 两种访问方式
+- 嵌套结构的字段可在顶层直接书写：顶层 `host` 会在加载前归位到 `database.host`
+- 同时支持 `database.host` 点号嵌套写法（serde 原生）；两者同时出现时显式嵌套值优先
 
 **与 serde 集成**
 ```rust

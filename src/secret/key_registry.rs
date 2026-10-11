@@ -486,7 +486,6 @@ mod tests {
         // Verify all keys were registered
         assert_eq!(registry.version_count(), 10);
 
-        // Verify primary key exists
         let result = registry.get_primary_key();
         assert!(result.is_ok());
     }

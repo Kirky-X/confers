@@ -419,7 +419,6 @@ impl EnvSource {
     /// 4. f64 — only when the string contains `.`/`e`/`E`, then `str::parse::<f64>()`
     /// 5. fallback — `ConfigValue::String`
     pub fn infer_config_value(s: &str) -> ConfigValue {
-        // 1. bool
         if s.eq_ignore_ascii_case("true") {
             return ConfigValue::Bool(true);
         }
@@ -427,26 +426,22 @@ impl EnvSource {
             return ConfigValue::Bool(false);
         }
 
-        // 2. i64
         if let Ok(v) = s.parse::<i64>() {
             return ConfigValue::I64(v);
         }
 
-        // 3. u64 (catches values above i64::MAX, e.g. 18446744073709551615)
         if let Ok(v) = s.parse::<u64>() {
             return ConfigValue::U64(v);
         }
 
-        // 4. f64 — only attempt when the string looks like a float
-        //    (contains '.', 'e', or 'E'). This prevents "123abc" from
-        //    accidentally parsing via f64's permissive grammar.
+        // `str::parse::<f64>()` also accepts the non-float-looking literals
+        // "inf"/"infinity"/"NaN", so require '.', 'e' or 'E' before attempting.
         if (s.contains('.') || s.contains('e') || s.contains('E'))
             && let Ok(v) = s.parse::<f64>()
         {
             return ConfigValue::F64(v);
         }
 
-        // 5. fallback
         ConfigValue::String(s.to_string())
     }
 

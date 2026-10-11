@@ -171,6 +171,7 @@ cli-docs-recipe-schema-reverse = schema-first 逆向工程
 cli-docs-recipe-schema-adopt = 采用 schema-first
 cli-docs-recipe-export-sanitized = 导出脱敏后的配置
 cli-docs-markdown-title = # confers agent 知识包
+cli-docs-markdown-knowledge-version = knowledge_version: { $version }
 cli-docs-markdown-subcommands-heading = ## 子命令
 cli-docs-markdown-exit-codes-heading = ## 退出码
 cli-docs-markdown-recipes-heading = ## 配方

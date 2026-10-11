@@ -18,6 +18,7 @@
 //!   cargo run --bin json_schema -- --output schema.json
 
 use confers::ConfigSchema;
+use confers::i18n::{tr, tr_args};
 use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 
@@ -160,19 +161,19 @@ impl SchemaGenerator {
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "Application name",
+                    "description": tr("example-json-schema-desc-application-name"),
                     "examples": ["myapp", "production-api"]
                 },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "Server port",
+                    "description": tr("example-json-schema-desc-server-port"),
                     "examples": [8080, 3000, 9000]
                 },
                 "debug": {
                     "type": "boolean",
-                    "description": "Enable debug mode",
+                    "description": tr("example-json-schema-desc-enable-debug-mode"),
                     "default": false
                 }
             },
@@ -186,15 +187,15 @@ impl SchemaGenerator {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "title": "FullAppConfig",
             "type": "object",
-            "description": "Full application configuration with server, database and cache",
+            "description": tr("example-json-schema-desc-full-app-config"),
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "Application name"
+                    "description": tr("example-json-schema-desc-application-name")
                 },
                 "version": {
                     "type": "string",
-                    "description": "Application version",
+                    "description": tr("example-json-schema-desc-application-version"),
                     "pattern": "^\\d+\\.\\d+\\.\\d+$"
                 },
                 "server": {
@@ -214,19 +215,19 @@ impl SchemaGenerator {
                     "properties": {
                         "host": {
                             "type": "string",
-                            "description": "Host address",
+                            "description": tr("example-json-schema-desc-host-address"),
                             "default": "0.0.0.0"
                         },
                         "port": {
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 65535,
-                            "description": "Server port"
+                            "description": tr("example-json-schema-desc-server-port")
                         },
                         "timeout_seconds": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "Connection timeout (seconds)"
+                            "description": tr("example-json-schema-desc-connection-timeout")
                         }
                     },
                     "required": ["host", "port", "timeout_seconds"]
@@ -236,22 +237,22 @@ impl SchemaGenerator {
                     "properties": {
                         "host": {
                             "type": "string",
-                            "description": "Database host"
+                            "description": tr("example-json-schema-desc-database-host")
                         },
                         "port": {
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 65535,
-                            "description": "Database port"
+                            "description": tr("example-json-schema-desc-database-port")
                         },
                         "database": {
                             "type": "string",
-                            "description": "Database name"
+                            "description": tr("example-json-schema-desc-database-name")
                         },
                         "max_connections": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "Max connections"
+                            "description": tr("example-json-schema-desc-max-connections")
                         }
                     },
                     "required": ["host", "port", "database"]
@@ -261,17 +262,17 @@ impl SchemaGenerator {
                     "properties": {
                         "enabled": {
                             "type": "boolean",
-                            "description": "Whether caching is enabled"
+                            "description": tr("example-json-schema-desc-caching-enabled")
                         },
                         "ttl_seconds": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Cache TTL (seconds)"
+                            "description": tr("example-json-schema-desc-cache-ttl")
                         },
                         "max_entries": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "Cache max entries"
+                            "description": tr("example-json-schema-desc-cache-max-entries")
                         }
                     },
                     "required": ["enabled"]
@@ -292,35 +293,35 @@ impl SchemaGenerator {
                     "minLength": 1,
                     "maxLength": 253,
                     "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)*$",
-                    "description": "Hostname (RFC 1123 compliant)"
+                    "description": tr("example-json-schema-desc-hostname")
                 },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "Port number"
+                    "description": tr("example-json-schema-desc-port-number")
                 },
                 "email": {
                     "type": "string",
                     "format": "email",
-                    "description": "Administrator email"
+                    "description": tr("example-json-schema-desc-admin-email")
                 },
                 "url": {
                     "type": "string",
                     "format": "uri",
-                    "description": "Service URL"
+                    "description": tr("example-json-schema-desc-service-url")
                 },
                 "rate_limit": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 1000000,
-                    "description": "Requests-per-second limit"
+                    "description": tr("example-json-schema-desc-rate-limit")
                 },
                 "cache_ttl": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 86400,
-                    "description": "Cache TTL (seconds, 0-24h)"
+                    "description": tr("example-json-schema-desc-cache-ttl-24h")
                 },
                 "tags": {
                     "type": "array",
@@ -332,7 +333,7 @@ impl SchemaGenerator {
                     "minItems": 0,
                     "maxItems": 20,
                     "uniqueItems": true,
-                    "description": "Configuration tags"
+                    "description": tr("example-json-schema-desc-config-tags")
                 }
             },
             "required": ["hostname", "port"]
@@ -416,7 +417,6 @@ impl ValidationResult {
     pub fn validate(value: &Value, schema: &Value) -> Self {
         let mut errors = Vec::new();
 
-        // 基础类型检查
         if let Some(obj) = value.as_object() {
             if let Some(props) = schema.get("properties").and_then(|p| p.as_object()) {
                 for (key, prop_schema) in props {
@@ -428,7 +428,6 @@ impl ValidationResult {
                 }
             }
 
-            // 检查必需字段
             if let Some(required) = schema.get("required").and_then(|r| r.as_array()) {
                 for req in required {
                     if let Some(req_str) = req.as_str()
@@ -448,7 +447,6 @@ impl ValidationResult {
 
     /// 验证单个属性
     fn validate_property(name: &str, value: &Value, schema: &Value) -> Option<String> {
-        // 类型检查
         if let Some(type_str) = schema.get("type").and_then(|t| t.as_str()) {
             let value_type = match value {
                 Value::String(_) => "string",
@@ -473,7 +471,6 @@ impl ValidationResult {
             }
         }
 
-        // 范围检查
         if let Some(min) = schema.get("minimum").and_then(|m| m.as_i64())
             && let Some(num) = value.as_i64()
             && num < min
@@ -494,7 +491,6 @@ impl ValidationResult {
             ));
         }
 
-        // 字符串长度检查
         if let Some(min) = schema.get("minLength").and_then(|m| m.as_i64())
             && let Some(s) = value.as_str()
             && (s.len() as i64) < min
@@ -552,16 +548,15 @@ impl SchemaExporter {
 
 /// 演示简单 schema 生成
 fn demo_simple_schema() {
-    println!("\n=== Demo 1: simple configuration Schema generation ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo1"));
 
     let schema = SchemaGenerator::generate_simple_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("Generated JSON Schema:");
+    println!("{}", tr("example-json-schema-generated-schema"));
     println!("{}", schema_str);
     println!();
 
-    // 验证示例配置
     let valid_config = serde_json::json!({
         "name": "myapp",
         "port": 8080,
@@ -576,14 +571,26 @@ fn demo_simple_schema() {
 
     let result1 = ValidationResult::validate(&valid_config, &schema);
     println!(
-        "Validate a valid configuration: {}",
-        if result1.valid { "pass" } else { "fail" }
+        "{}",
+        tr_args(
+            "example-json-schema-validate-valid",
+            &[(
+                "status",
+                if result1.valid { "pass" } else { "fail" }.to_string()
+            )]
+        )
     );
 
     let result2 = ValidationResult::validate(&invalid_config, &schema);
     println!(
-        "Validate an invalid configuration: {}",
-        if result2.valid { "pass" } else { "fail" }
+        "{}",
+        tr_args(
+            "example-json-schema-validate-invalid",
+            &[(
+                "status",
+                if result2.valid { "pass" } else { "fail" }.to_string()
+            )]
+        )
     );
     for error in &result2.errors {
         println!("  - {}", error);
@@ -592,16 +599,15 @@ fn demo_simple_schema() {
 
 /// 演示嵌套结构 schema
 fn demo_nested_schema() {
-    println!("\n=== Demo 2: nested configuration Schema ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo2"));
 
     let schema = SchemaGenerator::generate_full_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("Generated nested JSON Schema (definitions section):");
+    println!("{}", tr("example-json-schema-nested-schema"));
     println!("{}", schema_str);
     println!();
 
-    // 验证完整配置
     let full_config = serde_json::json!({
         "name": "myapp",
         "version": "1.0.0",
@@ -625,26 +631,32 @@ fn demo_nested_schema() {
 
     let result = ValidationResult::validate(&full_config, &schema);
     println!(
-        "Validate the full configuration: {}",
-        if result.valid { "pass" } else { "fail" }
+        "{}",
+        tr_args(
+            "example-json-schema-validate-full",
+            &[(
+                "status",
+                if result.valid { "pass" } else { "fail" }.to_string()
+            )]
+        )
     );
 }
 
 /// 演示带约束的 schema
 fn demo_validated_schema() {
-    println!("\n=== Demo 3: Schema with validation constraints ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo3"));
 
     let schema = SchemaGenerator::generate_validated_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("with validation constraints Schema:");
+    println!("{}", tr("example-json-schema-validated-schema"));
     println!("{}", schema_str);
     println!();
 
     // 测试各种约束
     let test_cases = vec![
         (
-            "valid config",
+            tr("example-json-schema-case-valid-config"),
             serde_json::json!({
                 "hostname": "example.com",
                 "port": 8080,
@@ -657,7 +669,7 @@ fn demo_validated_schema() {
             true,
         ),
         (
-            "invalid port",
+            tr("example-json-schema-case-invalid-port"),
             serde_json::json!({
                 "hostname": "example.com",
                 "port": 99999
@@ -665,7 +677,7 @@ fn demo_validated_schema() {
             false,
         ),
         (
-            "missing required fields",
+            tr("example-json-schema-case-missing-required"),
             serde_json::json!({
                 "hostname": "example.com"
             }),
@@ -691,20 +703,20 @@ fn demo_validated_schema() {
 
 /// 演示 TypeScript 类型生成
 fn demo_typescript_types() {
-    println!("\n=== Demo 4: TypeScript type generation ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo4"));
 
     let ts_types = SchemaGenerator::generate_typescript_types();
-    println!("Generated TypeScript type definitions:");
+    println!("{}", tr("example-json-schema-generated-typescript"));
     println!("{}", ts_types);
     println!();
 
-    println!("IDE integration:");
-    println!("  - Copy the TypeScript type definition file into the frontend project");
-    println!("  - Use JSON Schema generators (such as quicktype) to generate more types");
-    println!("  - Use the schema file in VS Code for IntelliSense");
+    println!("{}", tr("example-json-schema-ide-integration"));
+    println!("  {}", tr("example-json-schema-ide-copy-types"));
+    println!("  {}", tr("example-json-schema-ide-quicktype"));
+    println!("  {}", tr("example-json-schema-ide-vscode"));
     println!();
 
-    println!("  // Used in TypeScript:");
+    println!("  {}", tr("example-json-schema-used-in-typescript"));
     println!("  import type {{ FullAppConfig }} from './types';");
     println!();
     println!("  async function loadConfig(): Promise<FullAppConfig> {{");
@@ -715,48 +727,83 @@ fn demo_typescript_types() {
 
 /// 演示 schema 导出到文件
 fn demo_schema_export() {
-    println!("\n=== Demo 5: Schema export to file ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo5"));
 
     let output_path = "config-schema.json";
     let schema = SchemaGenerator::generate_full_schema();
 
     match SchemaExporter::export_to_file(&schema, output_path) {
         Ok(_) => {
-            println!("  Schema exported to: {}", output_path);
+            println!(
+                "  {}",
+                tr_args(
+                    "example-json-schema-schema-exported",
+                    &[("path", output_path.to_string())]
+                )
+            );
 
-            // 验证导出成功
             match SchemaExporter::import_from_file(output_path) {
                 Ok(imported) => {
-                    println!("  verify import: success");
+                    println!("  {}", tr("example-json-schema-verify-import-ok"));
                     println!(
-                        "  Schema title: {:?}",
-                        imported.get("title").and_then(|v| v.as_str())
+                        "  {}",
+                        tr_args(
+                            "example-json-schema-schema-title",
+                            &[(
+                                "title",
+                                format!("{:?}", imported.get("title").and_then(|v| v.as_str()))
+                            )]
+                        )
                     );
                 }
                 Err(e) => {
-                    println!("  verify import: failed - {}", e);
+                    println!(
+                        "  {}",
+                        tr_args(
+                            "example-json-schema-verify-import-failed",
+                            &[("error", e.to_string())]
+                        )
+                    );
                 }
             }
         }
         Err(e) => {
-            println!("  export failed: {}", e);
+            println!(
+                "  {}",
+                tr_args(
+                    "example-json-schema-export-failed",
+                    &[("error", e.to_string())]
+                )
+            );
         }
     }
 
     // 同时导出 TypeScript 类型
     let ts_output = "config-types.ts";
     if let Err(e) = std::fs::write(ts_output, SchemaGenerator::generate_typescript_types()) {
-        println!("  TypeScript export failed: {}", e);
+        println!(
+            "  {}",
+            tr_args(
+                "example-json-schema-typescript-export-failed",
+                &[("error", e.to_string())]
+            )
+        );
     } else {
-        println!("  TypeScript types exported to: {}", ts_output);
+        println!(
+            "  {}",
+            tr_args(
+                "example-json-schema-typescript-exported",
+                &[("path", ts_output.to_string())]
+            )
+        );
     }
 }
 
 /// 演示 ConfigSchema 派生宏用法
 fn demo_config_schema_derive() {
-    println!("\n=== Demo 6: ConfigSchema derive macro ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo6"));
 
-    println!("Generate the schema automatically with #[derive(ConfigSchema)]:");
+    println!("{}", tr("example-json-schema-derive-intro"));
     println!();
     println!("  #[derive(ConfigSchema, Serialize, Deserialize)]");
     println!("  pub struct ConfersConfig {{");
@@ -765,45 +812,45 @@ fn demo_config_schema_derive() {
     println!("      pub debug: bool,");
     println!("  }}");
     println!();
-    println!("  // auto-generated methods:");
+    println!("  {}", tr("example-json-schema-auto-generated-methods"));
     println!("  // - ConfersConfig::json_schema() -> serde_json::Value");
     println!("  // - ConfersConfig::typescript_type() -> String");
     println!();
     println!("  let schema = ConfersConfig::json_schema();");
     println!("  let ts_type = ConfersConfig::typescript_type();");
     println!();
-    println!("  // export schema:");
+    println!("  {}", tr("example-json-schema-export-schema-comment"));
     println!("  let schema_json = serde_json::to_string_pretty(&schema).unwrap();");
     println!("  std::fs::write(\"schema.json\", schema_json).unwrap();");
 }
 
 /// 演示 schema 的实际应用场景
 fn demo_use_cases() {
-    println!("\n=== Demo 7: Schema use cases ===\n");
+    println!("\n{}\n", tr("example-json-schema-demo7"));
 
-    println!("1. IDE IntelliSense");
-    println!("   - Add the schema file to .vscode/settings.json");
-    println!("   - JSON/YAML config files get autocompletion");
+    println!("{}", tr("example-json-schema-use-case-1"));
+    println!("   {}", tr("example-json-schema-use-case-1a"));
+    println!("   {}", tr("example-json-schema-use-case-1b"));
     println!();
 
-    println!("2. Config validation");
-    println!("   - Validate config files against the schema at startup");
-    println!("   - Validate configuration changes at the CI/CD stage");
+    println!("{}", tr("example-json-schema-use-case-2"));
+    println!("   {}", tr("example-json-schema-use-case-2a"));
+    println!("   {}", tr("example-json-schema-use-case-2b"));
     println!();
 
-    println!("3. API documentation");
-    println!("   - auto-generate OpenAPI/Swagger specification");
-    println!("   - Keep frontend and backend types in sync");
+    println!("{}", tr("example-json-schema-use-case-3"));
+    println!("   {}", tr("example-json-schema-use-case-3a"));
+    println!("   {}", tr("example-json-schema-use-case-3b"));
     println!();
 
-    println!("4. Multi-language code generation");
-    println!("   - Use quicktype to generate Go/TypeScript/Python types from the schema");
-    println!("   - Keep type definitions consistent across languages");
+    println!("{}", tr("example-json-schema-use-case-4"));
+    println!("   {}", tr("example-json-schema-use-case-4a"));
+    println!("   {}", tr("example-json-schema-use-case-4b"));
     println!();
 
-    println!("5. Configuration editor");
-    println!("   - Render configuration forms in a web UI");
-    println!("   - Generate validation rules from the schema");
+    println!("{}", tr("example-json-schema-use-case-5"));
+    println!("   {}", tr("example-json-schema-use-case-5a"));
+    println!("   {}", tr("example-json-schema-use-case-5b"));
 }
 
 // =============================================================================
@@ -816,7 +863,6 @@ fn main() {
     println!("  ConfigSchema Derive Macro Demo");
     println!("========================================");
 
-    // 检查命令行参数
     let args: Vec<String> = std::env::args().collect();
     let output_path = args
         .iter()
@@ -832,16 +878,27 @@ fn main() {
     demo_config_schema_derive();
     demo_use_cases();
 
-    // 如果指定了输出路径，导出 schema
     if let Some(path) = output_path {
         let schema = SchemaGenerator::generate_full_schema();
         match SchemaExporter::export_to_file(&schema, &path) {
-            Ok(_) => println!("\nSchema exported to: {}", path),
-            Err(e) => eprintln!("export failed: {}", e),
+            Ok(_) => println!(
+                "\n{}",
+                tr_args(
+                    "example-json-schema-cli-exported",
+                    &[("path", path.clone())]
+                )
+            ),
+            Err(e) => eprintln!(
+                "{}",
+                tr_args(
+                    "example-json-schema-export-failed",
+                    &[("error", e.to_string())]
+                )
+            ),
         }
     }
 
     println!("\n========================================");
-    println!("  Example completed");
+    println!("  {}", tr("example-json-schema-completed"));
     println!("========================================");
 }

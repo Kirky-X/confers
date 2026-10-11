@@ -711,7 +711,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 92 个 `#[cfg(test)]` 模块（2412 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 92 个 `#[cfg(test)]` 模块（2415 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 22 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
 | L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test '*_e2e' --test cli_coverage_extra`（32 个目标名形如 `<域>_e2e`，如 `format_e2e`、`watch_e2e`；`cli_coverage_extra` 为矩阵外回归目标，不遵循该后缀） | 禁 mock |
@@ -817,12 +817,12 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 代码内测试规模
 
-（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.6 工作区；`tests/` 求和为 781 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 780 个测试函数）
+（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.6 工作区；`tests/` 求和为 783 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 782 个测试函数）
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，92 个） | 2413 |
-| 集成与 E2E（`tests/`，66 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 781 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，92 个） | 2415 |
+| 集成与 E2E（`tests/`，66 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 782 |
 | E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 33 |
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 10 |
