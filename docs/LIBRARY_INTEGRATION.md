@@ -24,7 +24,7 @@
 
 ```toml
 [dependencies]
-confers = { version = "0.6.0-rc.6", features = ["toml", "json", "dotenv"] }
+confers = { version = "0.6.0-rc.8", features = ["toml", "json", "dotenv"] }
 serde = { version = "1", features = ["derive"] }
 ```
 
@@ -165,7 +165,7 @@ match result {
 
 ```toml
 [dependencies]
-confers = { version = "0.6.0-rc.6", features = ["validation", "encryption"] }
+confers = { version = "0.6.0-rc.8", features = ["validation", "encryption"] }
 ```
 
 ### 加密密钥问题
