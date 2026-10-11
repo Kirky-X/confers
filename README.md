@@ -405,7 +405,7 @@ cargo fuzz run parser
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证，附加 [Commons Clause](LICENSE) v1.0 条件：未经单独授权不得销售本软件。详见 [LICENSE](LICENSE)。
+本项目采用 [MIT](LICENSE) 许可证发布。
 
 ---
 

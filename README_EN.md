@@ -406,7 +406,7 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 ## 📄 License
 
-This project is licensed under the MIT License with the [Commons Clause](LICENSE) v1.0 condition: the right to sell the software is excluded unless separately authorized. See [LICENSE](LICENSE).
+This project is licensed under the [MIT](LICENSE) License.
 
 ---
 
