@@ -160,19 +160,19 @@ impl SchemaGenerator {
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "应用名称",
+                    "description": "Application name",
                     "examples": ["myapp", "production-api"]
                 },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "服务器端口",
+                    "description": "Server port",
                     "examples": [8080, 3000, 9000]
                 },
                 "debug": {
                     "type": "boolean",
-                    "description": "启用调试模式",
+                    "description": "Enable debug mode",
                     "default": false
                 }
             },
@@ -186,15 +186,15 @@ impl SchemaGenerator {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "title": "FullAppConfig",
             "type": "object",
-            "description": "完整应用配置，包含服务器、数据库和缓存配置",
+            "description": "Full application configuration with server, database and cache",
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "应用名称"
+                    "description": "Application name"
                 },
                 "version": {
                     "type": "string",
-                    "description": "应用版本",
+                    "description": "Application version",
                     "pattern": "^\\d+\\.\\d+\\.\\d+$"
                 },
                 "server": {
@@ -214,19 +214,19 @@ impl SchemaGenerator {
                     "properties": {
                         "host": {
                             "type": "string",
-                            "description": "主机地址",
+                            "description": "Host address",
                             "default": "0.0.0.0"
                         },
                         "port": {
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 65535,
-                            "description": "服务器端口"
+                            "description": "Server port"
                         },
                         "timeout_seconds": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "连接超时时间（秒）"
+                            "description": "Connection timeout (seconds)"
                         }
                     },
                     "required": ["host", "port", "timeout_seconds"]
@@ -236,22 +236,22 @@ impl SchemaGenerator {
                     "properties": {
                         "host": {
                             "type": "string",
-                            "description": "数据库主机"
+                            "description": "Database host"
                         },
                         "port": {
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 65535,
-                            "description": "数据库端口"
+                            "description": "Database port"
                         },
                         "database": {
                             "type": "string",
-                            "description": "数据库名称"
+                            "description": "Database name"
                         },
                         "max_connections": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "最大连接数"
+                            "description": "Max connections"
                         }
                     },
                     "required": ["host", "port", "database"]
@@ -261,17 +261,17 @@ impl SchemaGenerator {
                     "properties": {
                         "enabled": {
                             "type": "boolean",
-                            "description": "是否启用缓存"
+                            "description": "Whether caching is enabled"
                         },
                         "ttl_seconds": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "缓存 TTL（秒）"
+                            "description": "Cache TTL (seconds)"
                         },
                         "max_entries": {
                             "type": "integer",
                             "minimum": 0,
-                            "description": "缓存最大条目数"
+                            "description": "Cache max entries"
                         }
                     },
                     "required": ["enabled"]
@@ -292,35 +292,35 @@ impl SchemaGenerator {
                     "minLength": 1,
                     "maxLength": 253,
                     "pattern": "^[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)*$",
-                    "description": "主机名（符合 RFC 1123）"
+                    "description": "Hostname (RFC 1123 compliant)"
                 },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "端口号"
+                    "description": "Port number"
                 },
                 "email": {
                     "type": "string",
                     "format": "email",
-                    "description": "管理员邮箱"
+                    "description": "Administrator email"
                 },
                 "url": {
                     "type": "string",
                     "format": "uri",
-                    "description": "服务 URL"
+                    "description": "Service URL"
                 },
                 "rate_limit": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 1000000,
-                    "description": "每秒请求限制"
+                    "description": "Requests-per-second limit"
                 },
                 "cache_ttl": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 86400,
-                    "description": "缓存 TTL（秒，0-24h）"
+                    "description": "Cache TTL (seconds, 0-24h)"
                 },
                 "tags": {
                     "type": "array",
@@ -332,7 +332,7 @@ impl SchemaGenerator {
                     "minItems": 0,
                     "maxItems": 20,
                     "uniqueItems": true,
-                    "description": "配置标签"
+                    "description": "Configuration tags"
                 }
             },
             "required": ["hostname", "port"]
@@ -552,12 +552,12 @@ impl SchemaExporter {
 
 /// 演示简单 schema 生成
 fn demo_simple_schema() {
-    println!("\n=== 演示 1: 简单配置 Schema 生成 ===\n");
+    println!("\n=== Demo 1: simple configuration Schema generation ===\n");
 
     let schema = SchemaGenerator::generate_simple_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("生成的 JSON Schema:");
+    println!("Generated JSON Schema:");
     println!("{}", schema_str);
     println!();
 
@@ -576,14 +576,14 @@ fn demo_simple_schema() {
 
     let result1 = ValidationResult::validate(&valid_config, &schema);
     println!(
-        "验证有效配置: {}",
-        if result1.valid { "通过" } else { "失败" }
+        "Validate a valid configuration: {}",
+        if result1.valid { "pass" } else { "fail" }
     );
 
     let result2 = ValidationResult::validate(&invalid_config, &schema);
     println!(
-        "验证无效配置: {}",
-        if result2.valid { "通过" } else { "失败" }
+        "Validate an invalid configuration: {}",
+        if result2.valid { "pass" } else { "fail" }
     );
     for error in &result2.errors {
         println!("  - {}", error);
@@ -592,12 +592,12 @@ fn demo_simple_schema() {
 
 /// 演示嵌套结构 schema
 fn demo_nested_schema() {
-    println!("\n=== 演示 2: 嵌套配置 Schema ===\n");
+    println!("\n=== Demo 2: nested configuration Schema ===\n");
 
     let schema = SchemaGenerator::generate_full_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("生成的嵌套 JSON Schema (definitions 部分):");
+    println!("Generated nested JSON Schema (definitions section):");
     println!("{}", schema_str);
     println!();
 
@@ -625,26 +625,26 @@ fn demo_nested_schema() {
 
     let result = ValidationResult::validate(&full_config, &schema);
     println!(
-        "验证完整配置: {}",
-        if result.valid { "通过" } else { "失败" }
+        "Validate the full configuration: {}",
+        if result.valid { "pass" } else { "fail" }
     );
 }
 
 /// 演示带约束的 schema
 fn demo_validated_schema() {
-    println!("\n=== 演示 3: 带验证约束的 Schema ===\n");
+    println!("\n=== Demo 3: Schema with validation constraints ===\n");
 
     let schema = SchemaGenerator::generate_validated_schema();
     let schema_str = serde_json::to_string_pretty(&schema).unwrap();
 
-    println!("带验证约束的 Schema:");
+    println!("with validation constraints Schema:");
     println!("{}", schema_str);
     println!();
 
     // 测试各种约束
     let test_cases = vec![
         (
-            "有效配置",
+            "valid config",
             serde_json::json!({
                 "hostname": "example.com",
                 "port": 8080,
@@ -657,7 +657,7 @@ fn demo_validated_schema() {
             true,
         ),
         (
-            "无效端口",
+            "invalid port",
             serde_json::json!({
                 "hostname": "example.com",
                 "port": 99999
@@ -665,7 +665,7 @@ fn demo_validated_schema() {
             false,
         ),
         (
-            "缺少必需字段",
+            "missing required fields",
             serde_json::json!({
                 "hostname": "example.com"
             }),
@@ -691,20 +691,20 @@ fn demo_validated_schema() {
 
 /// 演示 TypeScript 类型生成
 fn demo_typescript_types() {
-    println!("\n=== 演示 4: TypeScript 类型生成 ===\n");
+    println!("\n=== Demo 4: TypeScript type generation ===\n");
 
     let ts_types = SchemaGenerator::generate_typescript_types();
-    println!("生成的 TypeScript 类型定义:");
+    println!("Generated TypeScript type definitions:");
     println!("{}", ts_types);
     println!();
 
-    println!("IDE 集成:");
-    println!("  - 将 TypeScript 类型定义文件复制到前端项目");
-    println!("  - 使用 JSON Schema 生成器（如 quicktype）生成更多类型");
-    println!("  - 在 VS Code 中使用 schema 文件获取智能提示");
+    println!("IDE integration:");
+    println!("  - Copy the TypeScript type definition file into the frontend project");
+    println!("  - Use JSON Schema generators (such as quicktype) to generate more types");
+    println!("  - Use the schema file in VS Code for IntelliSense");
     println!();
 
-    println!("  // 在 TypeScript 中使用:");
+    println!("  // Used in TypeScript:");
     println!("  import type {{ FullAppConfig }} from './types';");
     println!();
     println!("  async function loadConfig(): Promise<FullAppConfig> {{");
@@ -715,48 +715,48 @@ fn demo_typescript_types() {
 
 /// 演示 schema 导出到文件
 fn demo_schema_export() {
-    println!("\n=== 演示 5: Schema 导出到文件 ===\n");
+    println!("\n=== Demo 5: Schema export to file ===\n");
 
     let output_path = "config-schema.json";
     let schema = SchemaGenerator::generate_full_schema();
 
     match SchemaExporter::export_to_file(&schema, output_path) {
         Ok(_) => {
-            println!("  Schema 已导出到: {}", output_path);
+            println!("  Schema exported to: {}", output_path);
 
             // 验证导出成功
             match SchemaExporter::import_from_file(output_path) {
                 Ok(imported) => {
-                    println!("  验证导入: 成功");
+                    println!("  verify import: success");
                     println!(
-                        "  Schema 标题: {:?}",
+                        "  Schema title: {:?}",
                         imported.get("title").and_then(|v| v.as_str())
                     );
                 }
                 Err(e) => {
-                    println!("  验证导入: 失败 - {}", e);
+                    println!("  verify import: failed - {}", e);
                 }
             }
         }
         Err(e) => {
-            println!("  导出失败: {}", e);
+            println!("  export failed: {}", e);
         }
     }
 
     // 同时导出 TypeScript 类型
     let ts_output = "config-types.ts";
     if let Err(e) = std::fs::write(ts_output, SchemaGenerator::generate_typescript_types()) {
-        println!("  TypeScript 导出失败: {}", e);
+        println!("  TypeScript export failed: {}", e);
     } else {
-        println!("  TypeScript 类型已导出到: {}", ts_output);
+        println!("  TypeScript types exported to: {}", ts_output);
     }
 }
 
 /// 演示 ConfigSchema 派生宏用法
 fn demo_config_schema_derive() {
-    println!("\n=== 演示 6: ConfigSchema 派生宏 ===\n");
+    println!("\n=== Demo 6: ConfigSchema derive macro ===\n");
 
-    println!("使用 #[derive(ConfigSchema)] 自动生成 Schema:");
+    println!("Generate the schema automatically with #[derive(ConfigSchema)]:");
     println!();
     println!("  #[derive(ConfigSchema, Serialize, Deserialize)]");
     println!("  pub struct ConfersConfig {{");
@@ -765,45 +765,45 @@ fn demo_config_schema_derive() {
     println!("      pub debug: bool,");
     println!("  }}");
     println!();
-    println!("  // 自动生成方法:");
+    println!("  // auto-generated methods:");
     println!("  // - ConfersConfig::json_schema() -> serde_json::Value");
     println!("  // - ConfersConfig::typescript_type() -> String");
     println!();
     println!("  let schema = ConfersConfig::json_schema();");
     println!("  let ts_type = ConfersConfig::typescript_type();");
     println!();
-    println!("  // 导出 schema:");
+    println!("  // export schema:");
     println!("  let schema_json = serde_json::to_string_pretty(&schema).unwrap();");
     println!("  std::fs::write(\"schema.json\", schema_json).unwrap();");
 }
 
 /// 演示 schema 的实际应用场景
 fn demo_use_cases() {
-    println!("\n=== 演示 7: Schema 应用场景 ===\n");
+    println!("\n=== Demo 7: Schema use cases ===\n");
 
-    println!("1. IDE 智能提示");
-    println!("   - 将 schema 文件添加到 .vscode/settings.json");
-    println!("   - JSON/YAML 配置文件获得自动完成");
+    println!("1. IDE IntelliSense");
+    println!("   - Add the schema file to .vscode/settings.json");
+    println!("   - JSON/YAML config files get autocompletion");
     println!();
 
-    println!("2. 配置验证");
-    println!("   - 启动时验证配置文件符合 schema");
-    println!("   - CI/CD 阶段验证配置变更");
+    println!("2. Config validation");
+    println!("   - Validate config files against the schema at startup");
+    println!("   - Validate configuration changes at the CI/CD stage");
     println!();
 
-    println!("3. API 文档");
-    println!("   - 自动生成 OpenAPI/Swagger 规范");
-    println!("   - 保持前端和后端类型同步");
+    println!("3. API documentation");
+    println!("   - auto-generate OpenAPI/Swagger specification");
+    println!("   - Keep frontend and backend types in sync");
     println!();
 
-    println!("4. 多语言代码生成");
-    println!("   - 使用 quicktype 从 schema 生成 Go/TypeScript/Python 类型");
-    println!("   - 保持各语言类型定义一致");
+    println!("4. Multi-language code generation");
+    println!("   - Use quicktype to generate Go/TypeScript/Python types from the schema");
+    println!("   - Keep type definitions consistent across languages");
     println!();
 
-    println!("5. 配置编辑器");
-    println!("   - 在 Web UI 中渲染配置表单");
-    println!("   - 根据 schema 生成验证规则");
+    println!("5. Configuration editor");
+    println!("   - Render configuration forms in a web UI");
+    println!("   - Generate validation rules from the schema");
 }
 
 // =============================================================================
@@ -836,12 +836,12 @@ fn main() {
     if let Some(path) = output_path {
         let schema = SchemaGenerator::generate_full_schema();
         match SchemaExporter::export_to_file(&schema, &path) {
-            Ok(_) => println!("\nSchema 已导出到: {}", path),
-            Err(e) => eprintln!("导出失败: {}", e),
+            Ok(_) => println!("\nSchema exported to: {}", path),
+            Err(e) => eprintln!("export failed: {}", e),
         }
     }
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
 }

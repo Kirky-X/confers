@@ -16,16 +16,16 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  ConfigBus 配置变更广播示例");
+    println!("  ConfigBus config change broadcast demo");
     println!("========================================\n");
 
     // 1. 使用 BusBuilder 创建 InMemoryBus
     let bus: InMemoryBus = BusBuilder::new().capacity(256).build();
-    println!("✓ InMemoryBus 已创建（容量 256）");
+    println!("✓ InMemoryBus created (capacity 256)");
 
     // 2. 订阅配置变更事件（先订阅再发布才能收到事件）
     let mut subscriber_a = bus.subscribe().await?;
-    println!("✓ 订阅者 A 已订阅");
+    println!("✓ Subscriber A subscribed");
 
     // 3. 发布第一个配置变更事件
     let event1 = ConfigChangeEvent::new(
@@ -35,24 +35,24 @@ async fn main() -> anyhow::Result<()> {
         "checksum-abc",
     );
     bus.publish(event1).await?;
-    println!("✓ 事件已发布: source=file_watcher, keys=[server.port, server.host]");
+    println!("✓ Event published: source=file_watcher, keys=[server.port, server.host]");
 
     // 4. 订阅者 A 接收事件
     if let Some(received) =
         tokio::time::timeout(Duration::from_secs(1), subscriber_a.next()).await?
     {
         println!(
-            "✓ 订阅者 A 收到事件: instance={}, source={}, checksum={}",
+            "✓ Subscriber A received event: instance={}, source={}, checksum={}",
             received.instance_id, received.source, received.checksum
         );
     }
 
     // 5. 演示多订阅者广播
-    println!("\n--- 演示多订阅者广播 ---");
+    println!("\n--- Demo: multi-subscriber broadcast ---");
     let mut subscriber_b = bus.subscribe().await?;
     let mut subscriber_c = bus.subscribe().await?;
     println!(
-        "✓ 订阅者 B、C 已订阅（当前订阅者数: {}）",
+        "✓ Subscribers B and C subscribed (current subscriber count: {})",
         bus.subscriber_count()
     );
 
@@ -63,24 +63,24 @@ async fn main() -> anyhow::Result<()> {
         "checksum-def",
     );
     bus.publish(event2).await?;
-    println!("✓ 事件已发布: source=env_override");
+    println!("✓ Event published: source=env_override");
 
     // B 和 C 都应收到事件（广播）
     if let Some(r) = tokio::time::timeout(Duration::from_secs(1), subscriber_b.next()).await? {
         println!(
-            "✓ 订阅者 B 收到: source={}, keys={:?}",
+            "✓ Subscriber B received: source={}, keys={:?}",
             r.source, r.changed_keys
         );
     }
     if let Some(r) = tokio::time::timeout(Duration::from_secs(1), subscriber_c.next()).await? {
         println!(
-            "✓ 订阅者 C 收到: source={}, keys={:?}",
+            "✓ Subscriber C received: source={}, keys={:?}",
             r.source, r.changed_keys
         );
     }
 
     // 6. 演示直接创建 InMemoryBus 并使用 ConfigBus trait 方法
-    println!("\n--- 演示直接创建 InMemoryBus ---");
+    println!("\n--- Demo: create InMemoryBus directly ---");
     let bus2 = InMemoryBus::with_capacity(128);
     let mut sub = bus2.subscribe().await?;
 
@@ -94,13 +94,13 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(r) = tokio::time::timeout(Duration::from_secs(1), sub.next()).await? {
         println!(
-            "✓ 通过 InMemoryBus 收到: source={}, checksum={}",
+            "✓ Received via InMemoryBus: source={}, checksum={}",
             r.source, r.checksum
         );
     }
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
     Ok(())
 }

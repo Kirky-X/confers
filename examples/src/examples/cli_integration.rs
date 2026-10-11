@@ -38,7 +38,7 @@ pub struct ConfersConfig {
     #[config(
         name = "server.host",
         default = Some("127.0.0.1".to_string()),
-        description = "服务器监听地址"
+        description = "Server listening address"
     )]
     pub host: Option<String>,
 
@@ -46,23 +46,23 @@ pub struct ConfersConfig {
     #[config(
         name = "server.port",
         default = Some(8080u16),
-        description = "服务器监听端口"
+        description = "Server listening port"
     )]
     pub port: Option<u16>,
 
     /// 工作线程数
-    #[config(default = Some(4usize), description = "工作线程数")]
+    #[config(default = Some(4usize), description = "Number of worker threads")]
     pub workers: Option<usize>,
 
     /// 日志级别
     #[config(
         default = Some("info".to_string()),
-        description = "日志级别 (trace|debug|info|warn|error)"
+        description = "Log level (trace|debug|info|warn|error)"
     )]
     pub log_level: Option<String>,
 
     /// 调试模式（bool → CLI 标志 --debug）
-    #[config(default = false, description = "启用调试模式")]
+    #[config(default = false, description = "Enable debug mode")]
     pub debug: bool,
 }
 
@@ -78,9 +78,9 @@ fn print_config(label: &str, config: &ConfersConfig) {
 
 /// 打印 CLI 覆盖映射
 fn print_overrides(map: &HashMap<String, confers::ConfigValue>) {
-    println!("\n[CLI 覆盖映射 (to_config_map)]");
+    println!("\n[CLI override mapping (to_config_map)]");
     if map.is_empty() {
-        println!("  (空)");
+        println!("  (empty)");
     } else {
         for (key, value) in map {
             println!("  {} = {:?}", key, value);
@@ -119,40 +119,40 @@ fn merge_config(
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  CLI 集成示例 - ConfigClap 派生宏");
+    println!("  CLI integration demo - ConfigClap derive macro");
     println!("========================================");
-    println!("\n运行方式:");
+    println!("\nHow to run:");
     println!("  cargo run --bin cli_integration -- --help");
     println!("  cargo run --bin cli_integration -- --server-host 0.0.0.0 --debug");
 
     // 步骤 1: 加载默认配置（来自 #[config(default = ...)]）
-    println!("\n=== 步骤 1: 默认配置 ===");
+    println!("\n=== Step 1: Default configuration ===");
     let config = ConfersConfig::default();
-    print_config("默认配置 (Default)", &config);
+    print_config("Default config", &config);
 
     // 步骤 2: 解析 CLI 参数
     // clap_args() 调用 clap::Parser::parse()，解析 std::env::args()
     // 传入 --help 时 clap 会打印帮助并退出
-    println!("\n=== 步骤 2: 解析 CLI 参数 (clap_args) ===");
+    println!("\n=== Step 2: Parse CLI arguments (clap_args) ===");
     let cli_args = ConfersConfig::clap_args();
-    println!("\n[CLI 解析结果]");
+    println!("\n[CLI parsing result]");
     println!("  host:      {:?}", cli_args.host);
     println!("  port:      {:?}", cli_args.port);
     println!("  workers:   {:?}", cli_args.workers);
     println!("  log_level: {:?}", cli_args.log_level);
     println!("  debug:     {}", cli_args.debug);
 
-    println!("\n=== 步骤 3: 转换为覆盖映射 (to_config_map) ===");
+    println!("\n=== Step 3: Convert to override mapping (to_config_map) ===");
     let overrides = cli_args.to_config_map();
     print_overrides(&overrides);
 
     // 步骤 4: 合并配置（CLI 非 Null 值覆盖默认值）
-    println!("\n=== 步骤 4: 合并配置 (CLI 覆盖默认值) ===");
+    println!("\n=== Step 4: Merge configuration (CLI overrides defaults) ===");
     let merged = merge_config(&config, &overrides);
-    print_config("合并后配置", &merged);
+    print_config("Merged config", &merged);
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
     Ok(())
 }

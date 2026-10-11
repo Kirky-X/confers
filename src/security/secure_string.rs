@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "计数器是全局的，会受其他测试影响，仅用于手动验证"]
+    #[ignore = "counters are global and affected by other tests; manual verification only"]
     fn test_allocation_counters() {
         let initial_allocated = allocated_secure_strings();
         let initial_deallocated = deallocated_secure_strings();
@@ -859,13 +859,13 @@ mod tests {
             let _s = SecureString::from("counter-test");
             assert!(
                 allocated_secure_strings() > allocated_before,
-                "创建 SecureString 必须推高分配计数"
+                "creating a SecureString must raise the allocation counter"
             );
         }
         // After drop, deallocated counter increments.
         assert!(
             deallocated_secure_strings() > deallocated_before,
-            "释放 SecureString 必须推高释放计数"
+            "releasing a SecureString must raise the deallocation counter"
         );
     }
     #[test]

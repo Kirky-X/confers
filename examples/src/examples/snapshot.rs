@@ -15,7 +15,7 @@ use confers::{AnnotatedValue, ConfigValue, ConfigWriter, SourceId, new_in_memory
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  配置快照持久化示例");
+    println!("  config snapshot persistence demo");
     println!("========================================\n");
 
     // 1. 使用 confers 创建内存配置并设置值
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
             ),
         )
         .await?;
-    println!("✓ 内存配置已创建，写入了 server.host 和 server.port");
+    println!("✓ In-memory config created with server.host and server.port");
 
     // 2. 构建用于快照的 AnnotatedValue 树（含敏感字段 password）
     let snapshot_value = AnnotatedValue::new(
@@ -79,24 +79,30 @@ async fn main() -> anyhow::Result<()> {
         format: SnapshotFormat::Json,
         include_provenance: true,
     });
-    println!("✓ 快照管理器已创建，输出目录: {:?}", snapshot_dir);
+    println!(
+        "✓ Snapshot manager created; output directory: {:?}",
+        snapshot_dir
+    );
 
     // 4. 保存快照（脱敏 password 字段）
     let path = manager.save(&snapshot_value, &["password"]).await?;
-    println!("✓ 快照已保存: {:?}", path.file_name().unwrap_or_default());
+    println!(
+        "✓ Snapshot saved: {:?}",
+        path.file_name().unwrap_or_default()
+    );
 
     // 验证脱敏效果
     let content = std::fs::read_to_string(&path)?;
     assert!(content.contains("[REDACTED]"));
     assert!(!content.contains("super-secret"));
-    println!("✓ 敏感字段 password 已脱敏为 [REDACTED]");
+    println!("✓ Sensitive field password redacted to [REDACTED]");
 
     // 5. 列出快照
     let snapshots = manager.list_snapshots()?;
-    println!("\n--- 快照列表（共 {} 个）---", snapshots.len());
+    println!("\n--- Snapshot list ({} total)---", snapshots.len());
     for info in &snapshots {
         println!(
-            "  {} | {} 字节 | {}",
+            "  {} | {} bytes | {}",
             info.path.file_name().unwrap().to_string_lossy(),
             info.size_bytes,
             info.created_at.format("%Y-%m-%d %H:%M:%S")
@@ -104,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 6. 演示清理：多保存几个快照触发自动清理
-    println!("\n--- 演示快照清理（max_snapshots=5）---");
+    println!("\n--- Demo: snapshot cleanup (max_snapshots=5)---");
     for i in 0..6u64 {
         let value = AnnotatedValue::new(
             ConfigValue::map(vec![(
@@ -120,16 +126,16 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let removed = manager.prune_old_snapshots()?;
-    println!("✓ 手动清理删除了 {} 个旧快照", removed);
+    println!("✓ Manual cleanup removed {} old snapshots", removed);
 
     let remaining = manager.list_snapshots()?;
-    println!("  当前剩余快照数: {}", remaining.len());
+    println!("  Remaining snapshots: {}", remaining.len());
 
     // 清理临时目录
     let _ = std::fs::remove_dir_all(&snapshot_dir);
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
     Ok(())
 }

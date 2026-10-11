@@ -14,20 +14,20 @@ use std::sync::Arc;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Context-Aware - 上下文感知配置示例");
+    println!("  Context-Aware - context-aware config demo");
     println!("========================================");
 
     // 1. ContextValue 类型转换与访问
-    println!("\n[ContextValue 类型]");
+    println!("\n[ContextValue types]");
     let s: ContextValue = "production".into();
     let n: ContextValue = 8080i64.into();
     let b: ContextValue = true.into();
-    println!("  字符串: {:?} (as_str={:?})", s, s.as_str());
-    println!("  数字: {:?} (as_number={:?})", n, n.as_number());
-    println!("  布尔: {:?} (as_bool={:?})", b, b.as_bool());
+    println!("  String: {:?} (as_str={:?})", s, s.as_str());
+    println!("  Number: {:?} (as_number={:?})", n, n.as_number());
+    println!("  Bool: {:?} (as_bool={:?})", b, b.as_bool());
 
     // 2. 使用 ContextAwareFieldBuilder 构建上下文感知字段
-    println!("\n[构建上下文感知字段 - 上传限制]");
+    println!("\n[Build context-aware fields - upload limit]");
     let builder: ContextAwareFieldBuilder<u64> = ContextAwareField::builder();
     let upload_limit: ContextAwareField<u64> = builder
         .default(100 * 1024 * 1024) // 100MB
@@ -40,24 +40,24 @@ fn main() -> anyhow::Result<()> {
             10u64 * 1024 * 1024 * 1024, // 10GB
         )
         .build();
-    println!("  free 计划: 100MB");
-    println!("  pro 计划: 1GB");
-    println!("  enterprise 计划: 10GB");
+    println!("  free plan: 100MB");
+    println!("  pro plan: 1GB");
+    println!("  enterprise plan: 10GB");
 
     // 3. 不同上下文解析
-    println!("\n[按计划解析]");
+    println!("\n[Resolve by plan]");
     let free_ctx = EvaluationContext::new().attr("plan", "free");
     let pro_ctx = EvaluationContext::new().attr("plan", "pro");
     let enterprise_ctx = EvaluationContext::new().attr("plan", "enterprise");
-    println!("  free: {} 字节", upload_limit.evaluate(&free_ctx));
-    println!("  pro: {} 字节", upload_limit.evaluate(&pro_ctx));
+    println!("  free: {} bytes", upload_limit.evaluate(&free_ctx));
+    println!("  pro: {} bytes", upload_limit.evaluate(&pro_ctx));
     println!(
-        "  enterprise: {} 字节",
+        "  enterprise: {} bytes",
         upload_limit.evaluate(&enterprise_ctx)
     );
 
     // 4. 基于环境属性解析日志级别
-    println!("\n[按环境解析日志级别]");
+    println!("\n[Resolve log level by environment]");
     let log_level: ContextAwareField<String> = ContextAwareField::new("info".to_string())
         .when(
             |ctx| *ctx.environment() == Arc::from("production"),
@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
     println!("  default: {}", log_level.evaluate(&default_ctx));
 
     // 5. 基于区域解析 API 端点
-    println!("\n[按区域解析 API 端点]");
+    println!("\n[Resolve API endpoints by region]");
     let endpoint: ContextAwareField<String> =
         ContextAwareField::new("api.global.example.com".to_string())
             .when(
@@ -93,7 +93,7 @@ fn main() -> anyhow::Result<()> {
     println!("  global: {}", endpoint.evaluate(&EvaluationContext::new()));
 
     // 6. 基于 targeting_key 解析特性开关
-    println!("\n[按目标键解析特性开关]");
+    println!("\n[Resolve feature flags by target key]");
     let feature_flag: ContextAwareField<bool> =
         ContextAwareField::new(false).when(|ctx| ctx.targeting_key() == Some("admin"), true);
     let admin_ctx = EvaluationContext::new().with_key("admin");
@@ -102,16 +102,16 @@ fn main() -> anyhow::Result<()> {
     println!("  user: {}", feature_flag.evaluate(&user_ctx));
 
     // 7. ContextRule 带描述
-    println!("\n[ContextRule 描述]");
+    println!("\n[ContextRule description]");
     let rule: ContextRule<u32> =
         ContextRule::new(|ctx| ctx.attributes().get("tier").is_some(), 100u32)
-            .with_description("有 tier 属性时返回 100");
+            .with_description("returns 100 when the tier attribute is present");
     let ctx_with_tier = EvaluationContext::new().attr("tier", "premium");
-    println!("  规则匹配: {}", rule.matches(&ctx_with_tier));
-    println!("  规则值: {}", rule.value());
+    println!("  rule matches: {}", rule.matches(&ctx_with_tier));
+    println!("  rule value: {}", rule.value());
 
     println!("\n========================================");
-    println!("  示例运行完成!");
+    println!("  Example completed!");
     println!("========================================");
     Ok(())
 }

@@ -659,7 +659,7 @@ where
             if agent {
                 cmd_docs(&format)?;
             } else {
-                anyhow::bail!("nothing to show: use `confers docs --agent` for the knowledge pack");
+                anyhow::bail!("{}", tr("cli-docs-nothing-to-show"));
             }
         }
     }
@@ -975,17 +975,17 @@ fn cmd_validate(
 const MAX_CHECK_DEPTH: usize = 16;
 
 /// Known required configuration sections: (section, [acceptable keys],
-/// message emitted when none of the acceptable keys is present).
+/// catalog key for the message emitted when none of the acceptable keys is present).
 const REQUIRED_SECTIONS: [(&str, [&str; 2], &str); 2] = [
     (
         "server",
         ["host", "port"],
-        "Server configuration missing host/port",
+        "cli-validate-missing-server-section",
     ),
     (
         "database",
         ["url", "host"],
-        "Database configuration missing connection details",
+        "cli-validate-missing-database-section",
     ),
 ];
 
@@ -1033,7 +1033,7 @@ fn check_required_keys_inner(
                         if key.as_ref() == *section
                             && !required.iter().any(|req| map.contains_key(*req))
                         {
-                            issues.push((*message).to_string());
+                            issues.push(tr(message));
                         }
                     }
                 }
@@ -1049,16 +1049,19 @@ fn check_required_keys_inner(
                             depth + 1,
                             issues,
                         ),
-                        crate::types::ConfigValue::Null => issues.push(format!(
-                            "Configuration key '{}[{}]' has null value",
-                            full_key, idx
+                        crate::types::ConfigValue::Null => issues.push(tr_args(
+                            "cli-validate-null-value-indexed",
+                            &[("key", full_key.to_string()), ("index", idx.to_string())],
                         )),
                         _ => {}
                     }
                 }
             }
             crate::types::ConfigValue::Null => {
-                issues.push(format!("Configuration key '{}' has null value", full_key));
+                issues.push(tr_args(
+                    "cli-validate-null-value",
+                    &[("key", full_key.to_string())],
+                ));
             }
             _ => {}
         }
@@ -1117,16 +1120,16 @@ fn check_types_inner(
 fn check_string_value(full_key: &str, s: &str, issues: &mut Vec<String>) {
     // Check if string looks like a number
     if s.parse::<i64>().is_ok() || s.parse::<f64>().is_ok() {
-        issues.push(format!(
-            "Key '{}' has string value that looks like a number: {}",
-            full_key, s
+        issues.push(tr_args(
+            "cli-validate-string-like-number",
+            &[("key", full_key.to_string()), ("value", s.to_string())],
         ));
     }
     // Check for boolean strings
     if s == "true" || s == "false" {
-        issues.push(format!(
-            "Key '{}' has string value that looks like boolean: {}",
-            full_key, s
+        issues.push(tr_args(
+            "cli-validate-string-like-boolean",
+            &[("key", full_key.to_string()), ("value", s.to_string())],
         ));
     }
 }
@@ -1188,7 +1191,13 @@ fn cmd_export(
 
         if let Some(path) = output_path {
             std::fs::write(&path, formatted)?;
-            println!("Exported annotated configuration to: {}", path.display());
+            println!(
+                "{}",
+                tr_args(
+                    "cli-export-wrote-annotated",
+                    &[("path", path.display().to_string())]
+                )
+            );
         } else {
             println!("{}", formatted);
         }
@@ -1230,7 +1239,13 @@ fn cmd_export(
 
         if let Some(path) = output_path {
             std::fs::write(&path, formatted)?;
-            println!("Exported configuration to: {}", path.display());
+            println!(
+                "{}",
+                tr_args(
+                    "cli-export-wrote-file",
+                    &[("path", path.display().to_string())]
+                )
+            );
         } else {
             println!("{}", formatted);
         }
@@ -1633,11 +1648,11 @@ fn cmd_snapshot_diff(count: usize, directory: &PathBuf) -> Result<()> {
     let count = count.max(1);
     let first = snapshots
         .first()
-        .ok_or_else(|| anyhow::anyhow!("No snapshots found after sorting"))?;
+        .ok_or_else(|| anyhow::anyhow!("{}", tr("cli-snapshot-none-after-sort")))?;
     let second = snapshots
         .get(count - 1)
         .or_else(|| snapshots.get(1))
-        .ok_or_else(|| anyhow::anyhow!("Not enough snapshots to compare"))?;
+        .ok_or_else(|| anyhow::anyhow!("{}", tr("cli-snapshot-diff-not-enough")))?;
 
     let content1 = std::fs::read_to_string(first.path())?;
     let content2 = std::fs::read_to_string(second.path())?;
@@ -2620,35 +2635,35 @@ pub fn agent_knowledge_json() -> serde_json::Value {
         "knowledge_version": AGENT_KNOWLEDGE_VERSION,
         "tool": "confers",
         "subcommands": [
-            {"name": "inspect", "purpose": "list keys with source+location provenance", "key_args": ["--key <k>...", "--show-conflicts", "--format text|json"]},
-            {"name": "validate", "purpose": "structural sanity checks (nulls, number-shaped strings)", "key_args": ["--strict", "--format text|json"]},
-            {"name": "export", "purpose": "print merged config (sanitized by default)", "key_args": ["--format json|toml|yaml", "--output <file>", "--with-provenance", "--raw"]},
-            {"name": "diff", "purpose": "diff two config files", "key_args": ["--base <file>", "--overlay <file>", "--format text|json", "--sanitize=true|false"]},
-            {"name": "snapshot", "purpose": "manage snapshots", "key_args": ["list|diff|prune"]},
-            {"name": "schema", "purpose": "JSON Schema for the config type, or Rust scaffolding from a draft", "key_args": ["--from-instance (reverse-engineer a draft from the loaded instance)", "--from-schema <file> (generate Rust struct scaffolding from a JSON Schema draft)"]},
-            {"name": "get", "purpose": "single key lookup, single-line JSON", "key_args": ["<dot.path>", "--fields a.b,c"]},
-            {"name": "doctor", "purpose": "health report: schema, source chain, encryption, env conflicts", "key_args": ["--format json|text"]},
-            {"name": "docs", "purpose": "this knowledge pack", "key_args": ["--format json|markdown"]},
+            {"name": "inspect", "purpose": tr("cli-docs-subcommand-inspect-purpose"), "key_args": ["--key <k>...", "--show-conflicts", "--format text|json"]},
+            {"name": "validate", "purpose": tr("cli-docs-subcommand-validate-purpose"), "key_args": ["--strict", "--format text|json"]},
+            {"name": "export", "purpose": tr("cli-docs-subcommand-export-purpose"), "key_args": ["--format json|toml|yaml", "--output <file>", "--with-provenance", "--raw"]},
+            {"name": "diff", "purpose": tr("cli-docs-subcommand-diff-purpose"), "key_args": ["--base <file>", "--overlay <file>", "--format text|json", "--sanitize=true|false"]},
+            {"name": "snapshot", "purpose": tr("cli-docs-subcommand-snapshot-purpose"), "key_args": ["list|diff|prune"]},
+            {"name": "schema", "purpose": tr("cli-docs-subcommand-schema-purpose"), "key_args": [tr("cli-docs-args-from-instance"), tr("cli-docs-args-from-schema")]},
+            {"name": "get", "purpose": tr("cli-docs-subcommand-get-purpose"), "key_args": ["<dot.path>", "--fields a.b,c"]},
+            {"name": "doctor", "purpose": tr("cli-docs-subcommand-doctor-purpose"), "key_args": ["--format json|text"]},
+            {"name": "docs", "purpose": tr("cli-docs-subcommand-docs-purpose"), "key_args": ["--format json|markdown"]},
         ],
-        "global_args": ["--config <file> (repeatable)", "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>", tr("cli-docs-global-args-lang")],
+        "global_args": [tr("cli-docs-global-args-config-file"), "--env-file <file>", "--allow-absolute-paths", "--fields <a.b,c>", tr("cli-docs-global-args-lang")],
         "exit_codes": {
-            "0": "success (or doctor: healthy)",
-            "1": "configuration error / doctor has warnings",
-            "2": "I/O error / doctor has errors",
+            "0": tr("cli-docs-exit-0"),
+            "1": tr("cli-docs-exit-1"),
+            "2": tr("cli-docs-exit-2"),
         },
         "machine_readable_contract": {
-            "doctor": "single-line JSON: {status, exit_code, checks:[{name, severity, message}]}; severity ok|warning|error",
-            "get": "single-line JSON",
-            "schema": "pretty-printed JSON Schema (draft 2020-12 flavor for --from-instance); --from-schema prints Rust source scaffolding",
+            "doctor": tr_args("cli-docs-contract-doctor", &[("shape", "{status, exit_code, checks:[{name, severity, message}]}".to_string())]),
+            "get": tr("cli-docs-contract-get"),
+            "schema": tr("cli-docs-contract-schema"),
         },
         "recipes": [
-            {"task": "load config with env overlay", "command": "confers --config app.toml --env-file .env inspect --format json"},
-            {"task": "quality gate a config in CI", "command": "confers --config app.toml doctor; echo exit=$?"},
-            {"task": "find where a value comes from", "command": "confers --config app.toml inspect --key database.host"},
-            {"task": "get one value", "command": "confers --config app.toml get database.pool.size"},
-            {"task": "schema-first reverse engineering", "command": "confers --config app.toml schema --from-instance > schema.draft.json"},
-            {"task": "schema-first adoption", "command": "confers schema --from-schema schema.draft.json > config.rs"},
-            {"task": "export sanitized config", "command": "confers --config app.toml export --format json"},
+            {"task": tr("cli-docs-recipe-load-env-overlay"), "command": "confers --config app.toml --env-file .env inspect --format json"},
+            {"task": tr("cli-docs-recipe-ci-gate"), "command": "confers --config app.toml doctor; echo exit=$?"},
+            {"task": tr("cli-docs-recipe-find-source"), "command": "confers --config app.toml inspect --key database.host"},
+            {"task": tr("cli-docs-recipe-get-value"), "command": "confers --config app.toml get database.pool.size"},
+            {"task": tr("cli-docs-recipe-schema-reverse"), "command": "confers --config app.toml schema --from-instance > schema.draft.json"},
+            {"task": tr("cli-docs-recipe-schema-adopt"), "command": "confers schema --from-schema schema.draft.json > config.rs"},
+            {"task": tr("cli-docs-recipe-export-sanitized"), "command": "confers --config app.toml export --format json"},
         ],
     })
 }
@@ -2656,28 +2671,48 @@ pub fn agent_knowledge_json() -> serde_json::Value {
 /// Render the knowledge pack as Markdown.
 pub fn agent_knowledge_markdown() -> String {
     let knowledge = agent_knowledge_json();
-    let mut out = String::from("# confers agent knowledge pack\n\n");
+    let mut out = format!("{}\n\n", tr("cli-docs-markdown-title"));
     out.push_str(&format!(
-        "knowledge_version: {}\n\n## Subcommands\n\n",
-        knowledge["knowledge_version"]
+        "knowledge_version: {}\n\n{}\n\n",
+        knowledge["knowledge_version"],
+        tr("cli-docs-markdown-subcommands-heading"),
     ));
     for sub in knowledge["subcommands"].as_array().expect("subcommands") {
-        out.push_str(&format!(
-            "- **{}** — {} (args: {})\n",
-            sub["name"].as_str().unwrap_or("?"),
-            sub["purpose"].as_str().unwrap_or(""),
-            sub["key_args"]
-                .as_array()
-                .map(|a| a
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "))
-                .unwrap_or_default(),
+        out.push_str(&tr_args(
+            "cli-docs-markdown-subcommand",
+            &[
+                ("name", sub["name"].as_str().unwrap_or("?").to_string()),
+                ("purpose", sub["purpose"].as_str().unwrap_or("").to_string()),
+                (
+                    "args",
+                    sub["key_args"]
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|v| v.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .unwrap_or_default(),
+                ),
+            ],
         ));
+        out.push('\n');
     }
-    out.push_str("\n## Exit codes\n\n- `0` success (doctor: healthy)\n- `1` config error / doctor warnings\n- `2` I/O error / doctor errors\n");
-    out.push_str("\n## Recipes\n\n```sh\n");
+    out.push_str(&format!(
+        "\n{}\n\n",
+        tr("cli-docs-markdown-exit-codes-heading"),
+    ));
+    out.push_str(&tr("cli-docs-markdown-exit-0"));
+    out.push('\n');
+    out.push_str(&tr("cli-docs-markdown-exit-1"));
+    out.push('\n');
+    out.push_str(&tr("cli-docs-markdown-exit-2"));
+    out.push('\n');
+    out.push_str(&format!(
+        "\n{}\n\n```sh\n",
+        tr("cli-docs-markdown-recipes-heading"),
+    ));
     for recipe in knowledge["recipes"].as_array().expect("recipes") {
         out.push_str(&format!(
             "# {}\n{}\n",

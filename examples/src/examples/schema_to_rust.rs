@@ -22,7 +22,7 @@ use serde_json::json;
 
 fn main() {
     println!("========================================");
-    println!("  JSON Schema → Rust 脚手架示例");
+    println!("  JSON Schema -> Rust scaffolding demo");
     println!("========================================\n");
 
     demo_basic_scaffolding();
@@ -30,7 +30,7 @@ fn main() {
     demo_fail_loud();
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
 }
 
@@ -40,7 +40,7 @@ fn demo_basic_scaffolding() {
         "title": "ServiceConfig",
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "服务名"},
+            "name": {"type": "string", "description": "Service name"},
             "port": {"type": "integer", "default": 8080},
             "status": {"type": "string", "enum": ["active", "paused"]},
             "nickname": {"type": "string"},
@@ -51,7 +51,7 @@ fn demo_basic_scaffolding() {
     });
 
     let code = RustScaffoldGenerator::generate(&schema).expect("schema is supported");
-    println!("--- 基础映射 ---\n{code}");
+    println!("--- Basic mapping ---\n{code}");
 }
 
 /// $defs + 内部 $ref：共享子结构成为独立类型。
@@ -77,7 +77,7 @@ fn demo_defs_and_refs() {
     });
 
     let code = RustScaffoldGenerator::generate(&schema).expect("schema is supported");
-    println!("--- $defs 与内部 $ref ---\n{code}");
+    println!("--- $defs and internal $ref ---\n{code}");
 }
 
 /// 不支持的结构显性报错：脚手架宁缺毋滥，绝不静默生成错误代码。
@@ -90,9 +90,9 @@ fn demo_fail_loud() {
         "required": ["union"]
     });
 
-    println!("--- 不支持结构的显性报错 ---");
+    println!("--- Explicit error for unsupported structures ---");
     match RustScaffoldGenerator::generate(&schema) {
-        Ok(_) => println!("（不应到达）"),
-        Err(e) => println!("按预期失败：{e}"),
+        Ok(_) => println!("(unreachable)"),
+        Err(e) => println!("Failed as expected: {e}"),
     }
 }

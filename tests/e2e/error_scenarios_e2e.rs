@@ -215,7 +215,7 @@ fn s12_missing_file_reports_not_found() {
     assert_eq!(direct.code(), ErrorCode::FileNotFound);
     assert!(direct.to_string().contains("not found"));
     println!(
-        "s12 evidence(abs path): display={:?}; code={:?}({}); 2200 常量存在={} 但属 ConfigErrorCode 族,loader 链路实测码 1",
+        "s12 evidence (abs path): display={:?}; code={:?}({}); 2200 constant exists={} but belongs to the ConfigErrorCode family; loader chain observes code 1",
         direct.to_string(),
         direct.code(),
         direct.code() as u16,
@@ -743,7 +743,7 @@ fn s46_required_file_missing_reports_file_not_found() {
     assert_eq!(err.code(), ErrorCode::FileNotFound);
     assert!(err.to_string().contains("not found"));
     println!(
-        "s46 evidence: display={:?}; code={}({}); 2200 属 ConfigErrorCode 族(build 链路实测码 1)",
+        "s46 evidence: display={:?}; code={}({}); 2200 belongs to the ConfigErrorCode family (build chain observes code 1)",
         err.to_string(),
         err.code() as u16,
         err.code()
@@ -804,7 +804,7 @@ fn s52_invalid_values_fail_validation_with_field_path() {
     }
     assert_eq!(err.code(), ErrorCode::ValidationFailed);
     println!(
-        "s52 evidence: {:?}; code={}({}); 2500 属 ConfigErrorCode 族",
+        "s52 evidence: {:?}; code={}({}); 2500 belongs to the ConfigErrorCode family",
         err,
         err.code() as u16,
         err.code()
@@ -824,11 +824,11 @@ fn s54_invalid_rule_string_is_rejected_not_silently_accepted() {
     assert!(ValidationRule::from_str("length(max=xyz)").is_none());
     assert!(
         ValidationRule::from_str("length(min=5, max=10").is_none(),
-        "未闭合括号必须拒绝"
+        "unclosed brackets must be rejected"
     );
     assert!(
         ValidationRule::from_str("length(min=10, max=1)").is_none(),
-        "min>max 必须拒绝"
+        "min>max must be rejected"
     );
     assert!(ValidationRule::from_str("range(min=abc)").is_none());
     assert!(ValidationRule::from_str("range(min=100, max=1)").is_none());
@@ -940,7 +940,7 @@ fn s61_undefined_variable_is_an_error() {
         .expect("default value must satisfy");
     assert_eq!(ok, "value=8080");
     println!(
-        "s61 evidence: variable=TOTALLY_MISSING code={}({}); 2800 属 ConfigErrorCode 族",
+        "s61 evidence: variable=TOTALLY_MISSING code={}({}); 2800 belongs to the ConfigErrorCode family",
         err.code() as u16,
         err.code()
     );
@@ -968,7 +968,7 @@ fn s62_circular_reference_detected() {
     }
     assert_eq!(err.code(), ErrorCode::CircularReference);
     println!(
-        "s62 evidence: {:?}; code={}({}); 2900 属 ConfigErrorCode 族",
+        "s62 evidence: {:?}; code={}({}); 2900 belongs to the ConfigErrorCode family",
         err,
         err.code() as u16,
         err.code()

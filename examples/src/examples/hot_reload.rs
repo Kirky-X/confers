@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_line_number(true)
         .init();
 
-    info!("=== 热重载示例程序启动 ===");
+    info!("=== Hot reload example started ===");
 
     // 模板拷贝到以进程号命名的临时目录，监听与修改都发生在副本上，
     // 多实例并行互不干扰，也不会污染仓库工作区。
@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&demo_dir)?;
     let config_path = demo_dir.join("config.toml");
     std::fs::write(&config_path, CONFIG_TEMPLATE)?;
-    info!("被监听的配置文件: {:?}", config_path);
+    info!("Watched config file: {:?}", config_path);
 
     let watcher_config = WatcherConfig::builder()
         .debounce_ms(300)
@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     info!(
-        "WatcherConfig 配置: debounce={}ms, min_reload_interval={}ms, max_failures={}",
+        "WatcherConfig settings: debounce={}ms, min_reload_interval={}ms, max_failures={}",
         watcher_config.debounce_ms,
         watcher_config.min_reload_interval_ms,
         watcher_config.max_consecutive_failures
@@ -149,23 +149,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(DEMO_MODIFY_DELAY).await;
         let modified = CONFIG_TEMPLATE.replace(PORT_OLD, PORT_NEW);
         if modified == CONFIG_TEMPLATE {
-            error!("模板中未找到 \"{PORT_OLD}\", 无法生成演示修改");
+            error!("\"{PORT_OLD}\" not found in template, cannot generate the demo modification");
             return;
         }
         match std::fs::write(&modify_path, modified) {
             Ok(()) => info!(
-                "演示写入完成: 已把配置文件中的 {} 修改为 {}",
+                "Demo write completed: changed {} to {} in the config file",
                 PORT_OLD, PORT_NEW
             ),
-            Err(e) => error!("演示写入失败: {e}"),
+            Err(e) => error!("Demo write failed: {e}"),
         }
     });
 
     info!(
-        "等待配置文件变化... (示例将在 {:.1}s 后自动修改配置文件)",
+        "Waiting for config file changes... (the example will modify the file in {:.1}s)",
         DEMO_MODIFY_DELAY.as_secs_f32()
     );
-    info!("按 Ctrl+C 可提前退出程序");
+    info!("Press Ctrl+C to exit early");
 
     let mut consecutive_failures = 0u32;
     let mut last_reload_time = std::time::Instant::now();
@@ -175,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
-            info!("收到退出信号，正在关闭...");
+            info!("Exit signal received, shutting down...");
         }
         _ = async {
             while let Some(changed_path) = watcher.recv().await {
@@ -184,34 +184,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if elapsed < watcher_config.min_reload_interval_ms {
                     info!(
-                        "跳过重载: 距离上次重载仅 {}ms (最小间隔: {}ms)",
+                        "Reload skipped: only {}ms since last reload (min interval: {}ms)",
                         elapsed,
                         watcher_config.min_reload_interval_ms
                     );
                     continue;
                 }
 
-                info!("检测到配置文件变化: {:?}", changed_path);
+                info!("Config file change detected: {:?}", changed_path);
 
                 match ConfersConfig::load(&changed_path) {
                     Ok(new_config) => {
                         consecutive_failures = 0;
                         last_reload_time = now;
 
-                        info!("配置重载成功!");
+                        info!("Config reload succeeded!");
                         print_config(&new_config);
                         reloaded = true;
                         break;
                     }
                     Err(e) => {
                         consecutive_failures += 1;
-                        error!("配置重载失败: {} (连续失败: {}/{})",
+                        error!("Config reload failed: {} (consecutive failures: {}/{})",
                                e,
                                consecutive_failures,
                                watcher_config.max_consecutive_failures);
 
                         if consecutive_failures >= watcher_config.max_consecutive_failures {
-                            warn!("连续失败次数达到上限，暂停监听 {}ms",
+                            warn!("Consecutive failure limit reached, pausing the watcher for {}ms",
                                   watcher_config.failure_pause_ms);
 
                             tokio::time::sleep(Duration::from_millis(watcher_config.failure_pause_ms)).await;
@@ -223,16 +223,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 循环结束而未重载成功：watcher 已停止或失败（recv 返回 None），
             // 例如监听建立失败或监听目录被移除。显式上报而非当作正常退出。
             if !reloaded {
-                error!("文件监听已停止或失败, 未能完成热重载演示");
+                error!("File watcher stopped or failed, hot reload demo not completed");
                 failed = true;
             }
         } => {}
         _ = tokio::time::sleep(DEMO_TIMEOUT) => {
             error!(
-                "在 {}s 内未收到配置变更事件, 热重载演示未完成。",
+                "No config change event received within {}s, hot reload demo not completed.",
                 DEMO_TIMEOUT.as_secs()
             );
-            error!("当前环境可能不支持文件系统事件通知 (网络文件系统、部分容器挂载等)。");
+            error!("The current environment may not support filesystem event notifications (network filesystems, some container mounts, etc.).");
             failed = true;
         }
     }
@@ -243,38 +243,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = std::fs::remove_dir_all(&demo_dir);
 
     if reloaded {
-        info!("=== 热重载演示完成，程序退出 ===");
+        info!("=== Hot reload demo completed, exiting ===");
         Ok(())
     } else if failed {
-        Err("热重载演示未完成".into())
+        Err("hot reload demo not completed".into())
     } else {
-        info!("=== 程序退出 ===");
+        info!("=== Exiting ===");
         Ok(())
     }
 }
 
 fn print_config(config: &ConfersConfig) {
     println!("\n{}", "=".repeat(60));
-    println!("当前配置 (已重载)");
+    println!("Current config (reloaded)");
     println!("{}", "=".repeat(60));
     println!(
-        "应用: {} v{} (环境: {})",
+        "app: {} v{} (environment: {})",
         config.application.name, config.application.version, config.application.environment
     );
     println!(
-        "服务器: {}:{} (最大连接数: {})",
+        "server: {}:{} (max connections: {})",
         config.server.host, config.server.port, config.server.max_connections
     );
     println!(
-        "日志: 级别={}, 格式={}, 输出={}",
+        "logs: level={}, format={}, output={}",
         config.logging.level, config.logging.format, config.logging.output
     );
     println!(
-        "数据库: {} (最大连接: {}, 超时: {}s)",
+        "database: {} (max connections: {}, timeout: {}s)",
         config.database.url, config.database.max_connections, config.database.timeout_seconds
     );
     println!(
-        "缓存: 启用={}, TTL={}s, 最大={}MB",
+        "cache: enabled={}, TTL={}s, max={}MB",
         config.cache.enabled, config.cache.ttl_seconds, config.cache.max_size_mb
     );
     println!("{}\n", "=".repeat(60));

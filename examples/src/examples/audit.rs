@@ -15,15 +15,15 @@ use std::path::PathBuf;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Audit - 审计日志示例");
+    println!("  Audit - audit log demo");
     println!("========================================");
 
     let log_dir = std::env::temp_dir().join("confers_audit_example");
     fs::create_dir_all(&log_dir)?;
-    println!("\n日志目录: {}", log_dir.display());
+    println!("\nLog directory: {}", log_dir.display());
 
     // 1. 使用 AuditConfigBuilder 构建 AuditConfig
-    println!("\n[构建 AuditConfig]");
+    println!("\n[Build AuditConfig]");
     let config = AuditConfig::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
@@ -31,15 +31,15 @@ fn main() -> anyhow::Result<()> {
     println!("  enabled: {}", config.enabled);
 
     // 2. 使用 AuditWriterBuilder 构建 AuditWriter
-    println!("\n[构建 AuditWriter]");
+    println!("\n[Build AuditWriter]");
     let writer = AuditWriter::builder()
         .enabled(true)
         .log_dir(log_dir.clone())
         .build();
-    println!("  已启用: {}", writer.is_enabled());
+    println!("  enabled: {}", writer.is_enabled());
 
     // 3. 展示 AuditLevel 映射（Durable / BestEffort）
-    println!("\n[AuditLevel 事件映射]");
+    println!("\n[AuditLevel event mapping]");
     let now = Utc::now();
     let events: Vec<AuditEvent> = vec![
         AuditEvent::KeyAccess {
@@ -71,11 +71,11 @@ fn main() -> anyhow::Result<()> {
             AuditLevel::Durable => "Durable",
             AuditLevel::BestEffort => "BestEffort",
         };
-        println!("  事件 {} -> {}", i + 1, level_str);
+        println!("  event {} -> {}", i + 1, level_str);
     }
 
     // 4. 使用便捷方法写入审计事件
-    println!("\n[写入审计事件]");
+    println!("\n[Write audit events]");
     let _ = writer.log_load("config.toml");
     let _ = writer.log_key_access("master-key");
     let _ = writer.log_decrypt("api_token", true);
@@ -85,29 +85,29 @@ fn main() -> anyhow::Result<()> {
         source: "watcher".to_string(),
         timestamp: Utc::now(),
     });
-    println!("  已写入 6 条审计事件");
+    println!("  Wrote 6 audit events");
 
     // 5. 读取并展示日志文件内容
     let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
     let log_path: PathBuf = log_dir.join(&filename);
-    println!("\n[审计日志内容] {}", log_path.display());
+    println!("\n[Audit log contents] {}", log_path.display());
     match fs::read_to_string(&log_path) {
         Ok(content) => {
             for (i, line) in content.lines().enumerate() {
-                println!("  行 {}: {}", i + 1, line);
+                println!("  line {}: {}", i + 1, line);
             }
             if content.is_empty() {
-                println!("  (日志文件为空)");
+                println!("  (log file is empty)");
             }
         }
-        Err(e) => println!("  读取日志失败: {}", e),
+        Err(e) => println!("  Failed to read log: {}", e),
     }
 
     // 6. 清理临时目录
     let _ = fs::remove_dir_all(&log_dir);
 
     println!("\n========================================");
-    println!("  示例运行完成!");
+    println!("  Example completed!");
     println!("========================================");
     Ok(())
 }

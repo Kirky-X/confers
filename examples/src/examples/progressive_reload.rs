@@ -36,7 +36,7 @@ impl ConfigProvider for EmptyProvider {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  渐进式重载示例");
+    println!("  progressive reload demo");
     println!("========================================\n");
 
     let initial = Arc::new(ConfersConfig {
@@ -46,9 +46,12 @@ async fn main() -> anyhow::Result<()> {
     let provider = Arc::new(EmptyProvider) as Arc<dyn ConfigProvider>;
 
     // --- 1. Immediate 策略：立即切换 ---
-    println!("--- 策略 1: Immediate（立即重载）---");
+    println!("--- Strategy 1: Immediate (immediate reload)---");
     let reloader = ProgressiveReloader::new(initial.clone(), ReloadStrategy::Immediate);
-    println!("初始配置: port={}, host={}", initial.port, initial.host);
+    println!(
+        "Initial config: port={}, host={}",
+        initial.port, initial.host
+    );
 
     let new_config = Arc::new(ConfersConfig {
         port: 9090,
@@ -59,13 +62,13 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     print_outcome(&outcome);
     println!(
-        "当前配置: port={}, host={}",
+        "current configuration: port={}, host={}",
         reloader.current().port,
         reloader.current().host
     );
 
     // --- 2. Canary 策略：金丝雀发布 ---
-    println!("\n--- 策略 2: Canary（金丝雀发布）---");
+    println!("\n--- Strategy 2: Canary (canary rollout)---");
     let canary_reloader = ProgressiveReloader::builder()
         .initial(initial.clone())
         .strategy(ReloadStrategy::Canary {
@@ -73,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             poll_interval: Duration::from_millis(20),
         })
         .build();
-    println!("初始配置: port={}", canary_reloader.current().port);
+    println!("Initial config: port={}", canary_reloader.current().port);
 
     let canary_config = Arc::new(ConfersConfig {
         port: 8443,
@@ -83,10 +86,10 @@ async fn main() -> anyhow::Result<()> {
         .begin_reload(canary_config.clone(), provider.clone())
         .await?;
     print_outcome(&outcome);
-    println!("当前配置: port={}", canary_reloader.current().port);
+    println!("Current config: port={}", canary_reloader.current().port);
 
     // --- 3. Linear 策略：线性推出 ---
-    println!("\n--- 策略 3: Linear（线性推出）---");
+    println!("\n--- Strategy 3: Linear (linear rollout)---");
     let linear_reloader = ProgressiveReloader::builder()
         .initial(initial.clone())
         .strategy(ReloadStrategy::Linear {
@@ -94,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
             interval: Duration::from_millis(20),
         })
         .build();
-    println!("初始配置: port={}", linear_reloader.current().port);
+    println!("Initial config: port={}", linear_reloader.current().port);
 
     let linear_config = Arc::new(ConfersConfig {
         port: 3000,
@@ -104,10 +107,10 @@ async fn main() -> anyhow::Result<()> {
         .begin_reload(linear_config.clone(), provider.clone())
         .await?;
     print_outcome(&outcome);
-    println!("当前配置: port={}", linear_reloader.current().port);
+    println!("Current config: port={}", linear_reloader.current().port);
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
     Ok(())
 }
@@ -115,9 +118,9 @@ async fn main() -> anyhow::Result<()> {
 /// 打印重载结果
 fn print_outcome(outcome: &ReloadOutcome) {
     match outcome {
-        ReloadOutcome::Committed => println!("✓ 重载结果: Committed（已提交）"),
+        ReloadOutcome::Committed => println!("✓ Reload result: Committed (committed)"),
         ReloadOutcome::RolledBack { reason } => {
-            println!("✗ 重载结果: RolledBack（已回滚）— {}", reason)
+            println!("✗ Reload result: RolledBack (rolled back) - {}", reason)
         }
     }
 }

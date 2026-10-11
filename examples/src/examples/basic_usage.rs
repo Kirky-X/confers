@@ -65,29 +65,29 @@ pub struct ConfersConfig {
 
 /// 打印配置信息（用于演示）
 fn print_config(config: &ConfersConfig) {
-    println!("\n========== 配置信息 ==========");
+    println!("\n========== Configuration info ==========");
 
     // 服务器配置
-    println!("\n[服务器配置]");
-    println!("  地址: {}", config.host);
-    println!("  端口: {}", config.port);
-    println!("  工作线程: {}", config.workers);
+    println!("\n[Server configuration]");
+    println!("  host: {}", config.host);
+    println!("  port: {}", config.port);
+    println!("  workers: {}", config.workers);
 
     // 数据库配置
-    println!("\n[数据库配置]");
+    println!("\n[Database configuration]");
     println!("  URL: {}", config.database_url);
-    println!("  最大连接数: {}", config.max_connections);
+    println!("  Max connections: {}", config.max_connections);
 
     // 功能配置
-    println!("\n[功能配置]");
-    println!("  启用日志: {}", config.enable_logging);
-    println!("  启用指标: {}", config.enable_metrics);
-    println!("  日志级别: {}", config.log_level);
+    println!("\n[Feature configuration]");
+    println!("  logging enabled: {}", config.enable_logging);
+    println!("  metrics enabled: {}", config.enable_metrics);
+    println!("  log level: {}", config.log_level);
 
     // 应用元数据
-    println!("\n[应用元数据]");
-    println!("  名称: {}", config.app_name);
-    println!("  版本: {}", config.app_version);
+    println!("\n[App metadata]");
+    println!("  name: {}", config.app_name);
+    println!("  version: {}", config.app_version);
 
     println!("\n==============================\n");
 }
@@ -96,24 +96,24 @@ fn print_config(config: &ConfersConfig) {
 fn validate_config(config: &ConfersConfig) -> Result<(), String> {
     // 验证端口范围
     if config.port == 0 {
-        return Err("服务器端口不能为 0".to_string());
+        return Err("server port must not be 0".to_string());
     }
 
     // 验证工作线程数
     if config.workers == 0 {
-        return Err("工作线程数不能为 0".to_string());
+        return Err("worker count must not be 0".to_string());
     }
 
     // 验证数据库连接数
     if config.max_connections == 0 {
-        return Err("最大连接数不能为 0".to_string());
+        return Err("max connections must not be 0".to_string());
     }
 
     // 验证日志级别
     let valid_log_levels = vec!["trace", "debug", "info", "warn", "error"];
     if !valid_log_levels.contains(&config.log_level.as_str()) {
         return Err(format!(
-            "无效的日志级别: {}（有效值: {:?}",
+            "invalid log level: {} (valid values: {:?}",
             config.log_level, valid_log_levels
         ));
     }
@@ -133,43 +133,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     println!("========================================");
-    println!("  Basic Usage - 基础配置加载示例");
+    println!("  Basic Usage - basic config loading demo");
     println!("========================================");
-    println!("\n当前工作目录: {:?}", std::env::current_dir()?);
+    println!(
+        "\ncurrent working directory: {:?}",
+        std::env::current_dir()?
+    );
 
-    println!("\n[环境变量覆盖]");
-    println!("可以通过设置以下环境变量来覆盖配置值：");
+    println!("\n[Environment variable override]");
+    println!("Override configuration values with these environment variables:");
     println!("  export HOST=0.0.0.0");
     println!("  export PORT=9000");
     println!("  export DATABASE_URL='postgresql://prod-db/app'");
     println!("  export LOG_LEVEL=debug");
 
-    println!("\n正在加载配置...");
+    println!("\nLoading configuration...");
 
-    let config = ConfersConfig::load_sync().map_err(|e| format!("配置加载失败: {:?}", e))?;
+    let config =
+        ConfersConfig::load_sync().map_err(|e| format!("configuration load failed: {:?}", e))?;
 
     print_config(&config);
 
-    println!("正在验证配置...");
+    println!("Validating configuration...");
     if let Err(e) = validate_config(&config) {
-        eprintln!("配置验证失败: {}", e);
+        eprintln!("Configuration validation failed: {}", e);
         return Err(e.into());
     }
-    println!("✓ 配置验证通过!");
+    println!("✓ Configuration validation passed!");
 
-    println!("\n应用配置已加载并验证，可以开始运行应用...");
-    println!("服务器地址: {}:{}", config.host, config.port);
+    println!("\nConfiguration loaded and validated; the application can start...");
+    println!("server address: {}:{}", config.host, config.port);
 
     if config.enable_logging {
-        println!("日志功能已启用，级别: {}", config.log_level);
+        println!("logging enabled, level: {}", config.log_level);
     }
 
     if config.enable_metrics {
-        println!("指标功能已启用");
+        println!("metrics enabled");
     }
 
     println!("\n========================================");
-    println!("  示例运行完成!");
+    println!("  Example completed!");
     println!("========================================");
     Ok(())
 }

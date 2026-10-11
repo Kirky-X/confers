@@ -194,8 +194,8 @@ pub struct ProductionConfig {
 /// ConfigBuilder 允许你精确控制配置源的优先级和组合顺序。
 /// 优先级规则：先添加的源优先级低，后添加的源优先级高（后者覆盖前者）。
 fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
-    println!("\n========== 使用 ConfigBuilder 加载配置 ==========");
-    println!("环境: {}", env);
+    println!("\n========== Load configuration with ConfigBuilder ==========");
+    println!("environment: {}", env);
 
     let config_dir = config_dir();
 
@@ -211,8 +211,8 @@ fn load_with_config_builder(env: &str) -> Result<ConfersConfig, Box<dyn std::err
 
 /// 示例 2：使用 SourceChainBuilder 手动构建配置源链
 fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error::Error>> {
-    println!("\n========== 使用 SourceChainBuilder 加载配置 ==========");
-    println!("环境: {}", env);
+    println!("\n========== Load configuration with SourceChainBuilder ==========");
+    println!("environment: {}", env);
 
     let config_dir = config_dir();
 
@@ -223,7 +223,7 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
         .env_with_prefix("APP_")
         .build();
 
-    println!("\n配置源链:");
+    println!("\nConfiguration source chain:");
     for (idx, name) in chain.source_names().iter().enumerate() {
         println!("  {}. {}", idx + 1, name);
     }
@@ -235,7 +235,10 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
         .map(|p| p.as_ref())
         .filter(|p| !p.is_empty() && !p.contains('.'))
         .collect();
-    println!("\n合并后的顶层配置段: {:?}", top_sections);
+    println!(
+        "\nMerged top-level configuration sections: {:?}",
+        top_sections
+    );
 
     let app_config: ConfersConfig = config::<ConfersConfig>()
         .file(config_dir.join("base.toml"))
@@ -248,7 +251,7 @@ fn load_with_source_chain(env: &str) -> Result<ConfersConfig, Box<dyn std::error
 
 /// 示例 3：演示配置优先级机制
 fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n========== 配置优先级演示 ==========");
+    println!("\n========== Configuration priority demo ==========");
 
     #[derive(Debug, Default, Deserialize)]
     struct PriorityTest {
@@ -272,11 +275,17 @@ fn demonstrate_priority() -> Result<(), Box<dyn std::error::Error>> {
         ]))
         .build()?;
 
-    println!("优先级演示结果:");
-    println!("  name = {} (高优先级覆盖低优先级)", test_config.name);
-    println!("  port = {} (高优先级覆盖低优先级)", test_config.port);
+    println!("Priority demo result:");
     println!(
-        "  level = {} (高优先级未设置，保留低优先级)",
+        "  name = {} (high priority overrides low priority)",
+        test_config.name
+    );
+    println!(
+        "  port = {} (high priority overrides low priority)",
+        test_config.port
+    );
+    println!(
+        "  level = {} (not set at high priority; low priority retained)",
         test_config.level
     );
 
@@ -303,57 +312,60 @@ fn config_dir() -> PathBuf {
 
 /// 打印完整配置信息
 fn print_config(config: &ConfersConfig) {
-    println!("\n========== 最终配置 ==========");
+    println!("\n========== Final configuration ==========");
 
     // 应用元数据
-    println!("\n[应用元数据]");
-    println!("  名称: {}", config.app.name);
-    println!("  版本: {}", config.app.version);
-    println!("  环境: {}", config.app.environment);
+    println!("\n[App metadata]");
+    println!("  name: {}", config.app.name);
+    println!("  version: {}", config.app.version);
+    println!("  environment: {}", config.app.environment);
 
     // 服务器配置
-    println!("\n[服务器配置]");
-    println!("  地址: {}", config.server.host);
-    println!("  端口: {}", config.server.port);
-    println!("  工作线程: {}", config.server.workers);
+    println!("\n[Server configuration]");
+    println!("  host: {}", config.server.host);
+    println!("  port: {}", config.server.port);
+    println!("  workers: {}", config.server.workers);
 
     // 数据库配置
-    println!("\n[数据库配置]");
+    println!("\n[Database configuration]");
     println!("  URL: {}", config.database.url);
-    println!("  最大连接数: {}", config.database.max_connections);
-    println!("  连接超时: {}s", config.database.connection_timeout);
+    println!("  Max connections: {}", config.database.max_connections);
+    println!(
+        "  Connection timeout: {}s",
+        config.database.connection_timeout
+    );
 
     // 日志配置
-    println!("\n[日志配置]");
-    println!("  启用: {}", config.logging.enable);
-    println!("  级别: {}", config.logging.level);
-    println!("  格式: {}", config.logging.format);
+    println!("\n[Logging configuration]");
+    println!("  enabled: {}", config.logging.enable);
+    println!("  level: {}", config.logging.level);
+    println!("  format: {}", config.logging.format);
 
     // 缓存配置
-    println!("\n[缓存配置]");
-    println!("  启用: {}", config.cache.enable);
+    println!("\n[Cache configuration]");
+    println!("  enabled: {}", config.cache.enable);
     println!("  TTL: {}s", config.cache.ttl);
 
     // 安全配置
-    println!("\n[安全配置]");
+    println!("\n[Security configuration]");
     println!("  HTTPS: {}", config.security.https);
     println!("  CORS: {}", config.security.cors);
-    println!("  允许的源: {:?}", config.security.allowed_origins);
+    println!("  Allowed origins: {:?}", config.security.allowed_origins);
 
     // 环境特有配置
     if let Some(ref dev) = config.development {
-        println!("\n[开发环境配置]");
-        println!("  热重载: {}", dev.hot_reload);
-        println!("  调试端点: {}", dev.debug_endpoints);
-        println!("  详细错误: {}", dev.verbose_errors);
+        println!("\n[Development environment configuration]");
+        println!("  Hot reload: {}", dev.hot_reload);
+        println!("  Debug endpoints: {}", dev.debug_endpoints);
+        println!("  Verbose errors: {}", dev.verbose_errors);
     }
 
     if let Some(ref prod) = config.production {
-        println!("\n[生产环境配置]");
-        println!("  健康检查: {}", prod.health_check);
-        println!("  限流: {}", prod.rate_limit);
-        println!("  最大请求大小: {} bytes", prod.max_request_size);
-        println!("  性能监控: {}", prod.monitoring);
+        println!("\n[Production environment configuration]");
+        println!("  Health check: {}", prod.health_check);
+        println!("  Rate limit: {}", prod.rate_limit);
+        println!("  Max request size: {} bytes", prod.max_request_size);
+        println!("  Performance monitoring: {}", prod.monitoring);
     }
 
     println!("\n============================\n");
@@ -370,7 +382,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    tracing::info!("配置组示例启动");
+    tracing::info!("Config groups example started");
 
     // 确定运行环境
     // 优先级：命令行参数 > 环境变量 > 默认值
@@ -384,9 +396,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "dev".to_string());
 
     println!("========================================");
-    println!("    配置组（Config Groups）示例");
+    println!("    Config Groups example");
     println!("========================================");
-    println!("当前环境: {}", env);
+    println!("Current environment: {}", env);
 
     // 演示配置优先级
     demonstrate_priority()?;
@@ -394,40 +406,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 方法 1：使用 ConfigBuilder 加载
     match load_with_config_builder(&env) {
         Ok(config) => {
-            println!("\n✓ ConfigBuilder 加载成功!");
+            println!("\n✓ ConfigBuilder loaded successfully!");
             print_config(&config);
         }
         Err(e) => {
-            println!("\n✗ ConfigBuilder 加载失败: {}", e);
+            println!("\n✗ ConfigBuilder load failed: {}", e);
         }
     }
 
     // 方法 2：使用 SourceChainBuilder 加载
     match load_with_source_chain(&env) {
         Ok(config) => {
-            println!("✓ SourceChainBuilder 加载成功!");
+            println!("✓ SourceChainBuilder loaded successfully!");
             print_config(&config);
         }
         Err(e) => {
-            println!("✗ SourceChainBuilder 加载失败: {}", e);
+            println!("✗ SourceChainBuilder load failed: {}", e);
         }
     }
 
     // 演示不同环境的配置差异
-    println!("\n========== 环境配置对比 ==========");
-    println!("dev 环境特点: localhost, port=3000, debug 日志, 关闭缓存");
-    println!("prod 环境特点: 0.0.0.0, port=8080, warn 日志, 开启缓存");
+    println!("\n========== Environment configuration comparison ==========");
+    println!("dev env traits: localhost, port=3000, debug logs, cache disabled");
+    println!("prod env traits: 0.0.0.0, port=8080, warn logs, cache enabled");
 
     // 演示环境变量覆盖
-    println!("\n========== 环境变量覆盖演示 ==========");
-    println!("你可以使用以下环境变量覆盖配置:");
-    println!("  APP_SERVER_PORT=9000      - 覆盖服务器端口");
-    println!("  APP_DATABASE_URL=...       - 覆盖数据库 URL");
-    println!("  APP_LOGGING_LEVEL=debug   - 覆盖日志级别");
+    println!("\n========== Environment variable override demo ==========");
+    println!("You can override configuration with these environment variables:");
+    println!("  APP_SERVER_PORT=9000      - override server port");
+    println!("  APP_DATABASE_URL=...       - override database URL");
+    println!("  APP_LOGGING_LEVEL=debug   - override log level");
     println!(
-        "\n示例: APP_SERVER_PORT=9000 cargo run -p confers-examples --bin config_groups -- dev"
+        "\nExample: APP_SERVER_PORT=9000 cargo run -p confers-examples --bin config_groups -- dev"
     );
 
-    tracing::info!("示例运行完成!");
+    tracing::info!("Example completed!");
     Ok(())
 }

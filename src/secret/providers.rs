@@ -927,7 +927,10 @@ mod tests {
                 .secret_key("key")
                 .allow_http(true)
                 .build();
-            assert!(provider.is_ok(), "回环地址应放行：{addr}");
+            assert!(
+                provider.is_ok(),
+                "loopback addresses must be allowed: {addr}"
+            );
         }
     }
 
@@ -941,7 +944,10 @@ mod tests {
                 .secret_key("key")
                 .allow_http(true)
                 .build();
-            assert!(result.is_err(), "非回环地址必须拒绝明文：{addr}");
+            assert!(
+                result.is_err(),
+                "non-loopback addresses must reject plaintext HTTP: {addr}"
+            );
         }
     }
 

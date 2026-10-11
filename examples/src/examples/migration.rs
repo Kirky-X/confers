@@ -25,24 +25,24 @@ fn main() {
         )
         .init();
 
-    info!("=== 配置版本迁移示例 ===");
-    info!("版本: V1 -> V2 -> V3");
+    info!("=== Configuration version migration example ===");
+    info!("Version: V1 -> V2 -> V3");
 
     demo_basic_migration();
     demo_path_precomputation();
     demo_multi_step_migration();
     demo_migration_on_reload();
 
-    info!("=== 所有示例完成 ===");
+    info!("=== All examples completed ===");
 }
 
 fn demo_basic_migration() {
-    info!("\n--- 基础迁移示例 ---");
+    info!("\n--- Basic migration example ---");
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |mut v| {
-        info!("执行迁移: v{} -> v{}", 1, 2);
+        info!("Execute migration: v{} -> v{}", 1, 2);
         v.version = 2;
         Ok(v)
     });
@@ -58,53 +58,62 @@ fn demo_basic_migration() {
 
     match registry.migrate(value, 1, 2) {
         Ok(migrated) => {
-            info!("迁移成功! 版本: {} -> {}", 1, 2);
-            info!("迁移后 version 字段: {}", migrated.version);
+            info!("Migration succeeded! version: {} -> {}", 1, 2);
+            info!("version field after migration: {}", migrated.version);
         }
         Err(e) => {
-            warn!("迁移失败: {:?}", e);
+            warn!("Migration failed: {:?}", e);
         }
     }
 }
 
 fn demo_path_precomputation() {
-    info!("\n--- 路径预计算示例 ---");
+    info!("\n--- Path precomputation example ---");
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |v| {
-        info!("迁移 1 -> 2");
+        info!("Migrate 1 -> 2");
         Ok(v)
     });
 
     registry.register(2, 3, |v| {
-        info!("迁移 2 -> 3");
+        info!("Migrate 2 -> 3");
         Ok(v)
     });
 
     registry.register(1, 3, |v| {
-        info!("直接迁移 1 -> 3");
+        info!("Migrate 1 -> 3 directly");
         Ok(v)
     });
 
     registry.precompute_paths();
 
-    info!("迁移路径 (1 -> 3): {:?}", registry.get_migration_path(1, 3));
-    info!("迁移路径 (1 -> 2): {:?}", registry.get_migration_path(1, 2));
-    info!("迁移路径 (2 -> 3): {:?}", registry.get_migration_path(2, 3));
+    info!(
+        "Migration path (1 -> 3): {:?}",
+        registry.get_migration_path(1, 3)
+    );
+    info!(
+        "Migration path (1 -> 2): {:?}",
+        registry.get_migration_path(1, 2)
+    );
+    info!(
+        "Migration path (2 -> 3): {:?}",
+        registry.get_migration_path(2, 3)
+    );
 
     if let Some(path) = registry.get_migration_path(1, 3) {
-        info!("找到最优路径: {:?}", path);
+        info!("Found the optimal path: {:?}", path);
     }
 }
 
 fn demo_multi_step_migration() {
-    info!("\n--- 多步迁移示例 ---");
+    info!("\n--- Multi-step migration example ---");
 
     let mut registry = MigrationRegistry::new();
 
     registry.register(1, 2, |mut v| {
-        info!("[Step 1] 添加 database 配置");
+        info!("[Step 1] Add the database configuration");
         let mut map = IndexMap::new();
         map.insert(
             Arc::from("database"),
@@ -120,7 +129,7 @@ fn demo_multi_step_migration() {
     });
 
     registry.register(2, 3, |mut v| {
-        info!("[Step 2] 添加 cache 和 security 配置");
+        info!("[Step 2] Add the cache and security configuration");
 
         let mut new_map = IndexMap::new();
 
@@ -161,47 +170,47 @@ fn demo_multi_step_migration() {
     )
     .with_version(1);
 
-    info!("初始配置 version: {}", initial_value.version);
+    info!("Initial configuration version: {}", initial_value.version);
 
     match registry.migrate(initial_value, 1, 3) {
         Ok(migrated) => {
-            info!("多步迁移成功!");
-            info!("最终版本: {}", migrated.version);
+            info!("Multi-step migration succeeded!");
+            info!("Final version: {}", migrated.version);
 
             if let ConfigValue::Map(map) = &migrated.inner {
-                info!("配置键: {:?}", map.keys().collect::<Vec<_>>());
+                info!("Configuration keys: {:?}", map.keys().collect::<Vec<_>>());
             }
         }
         Err(e) => {
-            warn!("迁移失败: {:?}", e);
+            warn!("Migration failed: {:?}", e);
         }
     }
 }
 
 fn demo_migration_on_reload() {
-    info!("\n--- MigrationOnReload 示例 ---");
+    info!("\n--- MigrationOnReload example ---");
 
     let _always = MigrationOnReload::Always;
     let on_change = MigrationOnReload::OnVersionChange;
     let _disabled = MigrationOnReload::Disabled;
 
-    info!("MigrationOnReload::Always: 每次重载都执行迁移");
-    info!("MigrationOnReload::OnVersionChange: 仅版本变化时迁移 (默认)");
-    info!("MigrationOnReload::Disabled: 禁用重载时迁移");
+    info!("MigrationOnReload::Always: run the migration on every reload");
+    info!("MigrationOnReload::OnVersionChange: migrate only when the version changes (default)");
+    info!("MigrationOnReload::Disabled: migrate when reload is disabled");
 
     match on_change {
         MigrationOnReload::Always => {
-            info!("当前配置: Always");
+            info!("Current configuration: Always");
         }
         MigrationOnReload::OnVersionChange => {
-            info!("当前配置: OnVersionChange (推荐)");
+            info!("Current configuration: OnVersionChange (recommended)");
         }
         MigrationOnReload::Disabled => {
-            info!("当前配置: Disabled");
+            info!("Current configuration: Disabled");
         }
     }
 
-    info!("\n在热重载场景中使用:");
+    info!("\nUsed in hot-reload scenarios:");
     info!("  let reload_policy = MigrationOnReload::OnVersionChange;");
-    info!("  // 配置变化时自动迁移");
+    info!("  // migrate automatically when the configuration changes");
 }

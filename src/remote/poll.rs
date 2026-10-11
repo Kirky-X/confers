@@ -1808,7 +1808,9 @@ mod tests {
     #[tokio::test]
     async fn test_poll_live_local_http_etag_cached_304() {
         if super::super::test_support::localhost_proxy_intercept().await {
-            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，localhost 网络断言不可靠");
+            eprintln!(
+                "[skip] local proxy detected intercepting 127.0.0.1 traffic; localhost network assertions are unreliable"
+            );
             return;
         }
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1895,7 +1897,9 @@ mod tests {
     #[tokio::test]
     async fn test_poll_live_local_http_circuit_breaker_open_and_recovers() {
         if super::super::test_support::localhost_proxy_intercept().await {
-            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，localhost 网络断言不可靠");
+            eprintln!(
+                "[skip] local proxy detected intercepting 127.0.0.1 traffic; localhost network assertions are unreliable"
+            );
             return;
         }
         use std::sync::Arc as StdArc;

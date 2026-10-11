@@ -121,7 +121,11 @@ async fn external_mock_implementation_drives_full_lifecycle() {
     let watcher = Arc::new(EtcdWatcher::new(
         Arc::clone(&mock) as Arc<dyn WatchEventSource>
     ));
-    assert_eq!(watcher.last_revision(), 0, "首个事件前 revision 为 0");
+    assert_eq!(
+        watcher.last_revision(),
+        0,
+        "revision is 0 before the first event"
+    );
 
     let sink: EventSink = Arc::new(Mutex::new(Vec::new()));
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -134,18 +138,25 @@ async fn external_mock_implementation_drives_full_lifecycle() {
     run_handle.abort();
 
     let events = sink.try_lock().unwrap();
-    assert_eq!(events.len(), 3, "两个连接交付的事件全部到达回调");
-    assert_eq!(events[0].mod_revision, 5, "交付顺序保持 etcd commit order");
+    assert_eq!(
+        events.len(),
+        3,
+        "all events from both connections reach the callback"
+    );
+    assert_eq!(
+        events[0].mod_revision, 5,
+        "delivery preserves etcd commit order"
+    );
     assert_eq!(events[1].mod_revision, 3);
     assert_eq!(events[2].mod_revision, 9);
     assert_eq!(
         watcher.last_revision(),
         9,
-        "last_revision 取已见最高 revision，乱序与重连均不回退"
+        "last_revision tracks the highest seen revision; out-of-order and reconnect do not regress it"
     );
     assert!(
         mock.connections.load(Ordering::SeqCst) >= 2,
-        "断流后必须重连"
+        "must reconnect after a stream break"
     );
 }
 
@@ -171,10 +182,17 @@ async fn deletion_events_surface_with_none_value() {
 
     let events = sink.try_lock().unwrap();
     assert_eq!(events.len(), 2);
-    assert_eq!(events[1].key, "cfg/x", "删除事件携带完整 key");
-    assert_eq!(events[1].value, None, "删除以 value=None 交付");
+    assert_eq!(events[1].key, "cfg/x", "deletion events carry the full key");
+    assert_eq!(
+        events[1].value, None,
+        "deletions are delivered as value=None"
+    );
     assert_eq!(events[1].mod_revision, 5);
-    assert_eq!(watcher.last_revision(), 5, "删除事件同样推进 revision");
+    assert_eq!(
+        watcher.last_revision(),
+        5,
+        "deletion events also advance revision"
+    );
 }
 
 /// 冻结的类型形状与默认语义：`EtcdWatchEvent` 公开可构造且 `PartialEq`
@@ -199,7 +217,7 @@ fn frozen_public_shapes_and_default_retry_semantics() {
             value: Some("v".to_string()),
             mod_revision: 1,
         },
-        "同字段事件相等（PartialEq 契约）"
+        "same-field events are equal (PartialEq contract)"
     );
     assert_ne!(
         event,
@@ -208,7 +226,7 @@ fn frozen_public_shapes_and_default_retry_semantics() {
             value: None,
             mod_revision: 1,
         },
-        "value 差异必须可区分（更新 vs 删除）"
+        "value differences must be distinguishable (update vs delete)"
     );
 
     let default_retry = EtcdWatchRetry::default();
@@ -217,16 +235,16 @@ fn frozen_public_shapes_and_default_retry_semantics() {
     assert_eq!(
         default_retry.delay_for(1),
         Duration::from_millis(500),
-        "首次重连延迟 = base"
+        "first reconnect delay equals base"
     );
     assert_eq!(
         default_retry.delay_for(2),
         Duration::from_secs(1),
-        "默认策略按 2 倍指数增长"
+        "default policy doubles the delay exponentially"
     );
     assert_eq!(
         default_retry.delay_for(17),
         Duration::from_secs(30),
-        "封顶于 max"
+        "delay is capped at max"
     );
 }

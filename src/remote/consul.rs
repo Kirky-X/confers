@@ -1121,7 +1121,9 @@ mod tests {
     #[tokio::test]
     async fn test_poll_internal_connection_refused() {
         if super::super::test_support::localhost_proxy_intercept().await {
-            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            eprintln!(
+                "[skip] local proxy detected intercepting 127.0.0.1 traffic; connection-refused assertions are unreliable"
+            );
             return;
         }
         // Reserve a port then drop it to get a guaranteed-closed port.
@@ -1168,7 +1170,9 @@ mod tests {
     #[tokio::test]
     async fn test_poll_internal_empty_returns_cached_value() {
         if super::super::test_support::localhost_proxy_intercept().await {
-            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            eprintln!(
+                "[skip] local proxy detected intercepting 127.0.0.1 traffic; connection-refused assertions are unreliable"
+            );
             return;
         }
         // First response caches a value (ModifyIndex=10); second response is
@@ -1349,7 +1353,9 @@ mod tests {
     #[tokio::test]
     async fn test_poll_internal_token_and_blocking_wait() {
         if super::super::test_support::localhost_proxy_intercept().await {
-            eprintln!("[skip] 检测到本机代理拦截 127.0.0.1 流量，connection-refused 断言不可靠");
+            eprintln!(
+                "[skip] local proxy detected intercepting 127.0.0.1 traffic; connection-refused assertions are unreliable"
+            );
             return;
         }
         // Two polls: the second has current_index > 0, exercising the blocking

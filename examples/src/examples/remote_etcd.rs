@@ -25,7 +25,7 @@ use std::time::Duration;
 
 /// 演示基础 etcd 连接和配置轮询
 async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
-    println!("\n=== 演示 1: 基础 etcd 配置轮询 ===\n");
+    println!("\n=== Demo 1: Basic etcd configuration polling ===\n");
 
     // EtcdSourceBuilder 的 build() 是异步方法（与 Consul 的同步 build 不同）
     // 内部通过 etcd-client SDK 建立 gRPC 连接
@@ -40,16 +40,16 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
 
     let source = match build_result {
         Ok(s) => {
-            println!("EtcdSource 构建成功");
-            println!("  源 ID: {}", s.source_id().as_str());
-            println!("  轮询间隔: {:?}", s.poll_interval());
+            println!("EtcdSource built successfully");
+            println!("  source ID: {}", s.source_id().as_str());
+            println!("  poll interval: {:?}", s.poll_interval());
             s
         }
         Err(e) => {
             // gRPC 连接可能惰性建立，build 失败说明端点不可达
-            println!("✗ EtcdSource 构建失败（如果没有运行 etcd 这是正常的）");
-            println!("  错误: {}", e);
-            println!("\n  提示: 运行以下命令启动 etcd:");
+            println!("✗ EtcdSource build failed (it is normal if etcd is not running)");
+            println!("  error: {}", e);
+            println!("\n  Hint: run the following command to start etcd:");
             println!("    docker run -d --name etcd -p 2379:2379 \\");
             println!("      quay.io/coreos/etcd:v3.5 /usr/local/bin/etcd \\");
             println!("      --name s1 --data-dir /etcd-data \\");
@@ -60,21 +60,21 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
     };
 
     // 尝试轮询配置 —— gRPC 连接是惰性的，build 成功不代表 poll 也会成功
-    println!("\n正在轮询 etcd KV (prefix: myapp/config)...");
+    println!("\nPolling etcd KV (prefix: myapp/config)...");
     match source.poll().await {
         Ok(value) => {
-            println!("✓ 配置加载成功");
+            println!("✓ config loaded successfully");
             if value.is_map() {
-                println!("  值类型: Map (包含多个键值对)");
+                println!("  value type: Map (multiple key-value pairs)");
             } else if value.is_null() {
-                println!("  值类型: Null (前缀下无配置)");
+                println!("  value type: Null (no configuration under the prefix)");
             } else {
-                println!("  值类型: 标量值");
+                println!("  value type: scalar value");
             }
         }
         Err(e) => {
-            println!("✗ 轮询失败（如果没有运行 etcd 这是正常的）");
-            println!("  错误: {}", e);
+            println!("✗ Poll failed (it is normal if etcd is not running)");
+            println!("  error: {}", e);
         }
     }
 
@@ -83,7 +83,7 @@ async fn demo_basic_poll(endpoint: &str) -> anyhow::Result<()> {
 
 /// 演示带用户名/密码认证的 etcd 连接
 async fn demo_with_auth(endpoint: &str) -> anyhow::Result<()> {
-    println!("\n=== 演示 2: 带认证的 etcd 连接 ===\n");
+    println!("\n=== Demo 2: Authenticated etcd connection ===\n");
 
     let build_result = EtcdSourceBuilder::new()
         .endpoints(vec![endpoint.to_string()])
@@ -96,26 +96,28 @@ async fn demo_with_auth(endpoint: &str) -> anyhow::Result<()> {
 
     match build_result {
         Ok(s) => {
-            println!("带认证的 EtcdSource 构建成功");
-            println!("  源 ID: {}", s.source_id().as_str());
+            println!("EtcdSource with authentication built successfully");
+            println!("  source ID: {}", s.source_id().as_str());
             match s.poll().await {
-                Ok(_) => println!("✓ 配置加载成功"),
-                Err(e) => println!("✗ 轮询失败: {}", e),
+                Ok(_) => println!("✓ config loaded successfully"),
+                Err(e) => println!("✗ Poll failed: {}", e),
             }
         }
         Err(e) => {
-            println!("✗ 构建失败: {}", e);
+            println!("✗ build failed: {}", e);
         }
     }
 
-    println!("\n  注意: 生产环境应从环境变量读取认证凭证，避免硬编码");
+    println!(
+        "\n  Note: In production, read credentials from environment variables instead of hard-coding them"
+    );
 
     Ok(())
 }
 
 /// 演示 TLS 配置与多端点集群
 async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
-    println!("\n=== 演示 3: TLS 配置与多端点集群 ===\n");
+    println!("\n=== Demo 3: TLS configuration and multi-endpoint cluster ===\n");
 
     // EtcdTlsConfig 指定 CA 证书、客户端证书和私钥的文件路径
     let tls = EtcdTlsConfig {
@@ -139,22 +141,22 @@ async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
 
     match build_result {
         Ok(s) => {
-            println!("带 TLS 的 EtcdSource 构建成功");
-            println!("  源 ID: {}", s.source_id().as_str());
-            println!("  轮询间隔: {:?}", s.poll_interval());
+            println!("EtcdSource with TLS built successfully");
+            println!("  source ID: {}", s.source_id().as_str());
+            println!("  poll interval: {:?}", s.poll_interval());
         }
         Err(e) => {
-            println!("✗ 构建失败（远程端点不可达是正常的）");
-            println!("  错误: {}", e);
+            println!("✗ build failed (unreachable remote endpoints are normal)");
+            println!("  error: {}", e);
         }
     }
 
-    println!("\n生产环境 TLS 配置步骤:");
-    println!("  1. 生成 CA 证书和密钥");
-    println!("  2. 为 etcd 服务器生成证书");
-    println!("  3. 为客户端生成证书");
-    println!("  4. etcd 启动时启用 TLS (--cert-file, --key-file, --client-cert-auth)");
-    println!("  5. 客户端通过 TLS 端点连接");
+    println!("\nProduction TLS configuration steps:");
+    println!("  1. Generate the CA certificate and key");
+    println!("  2. Generate certificates for the etcd server");
+    println!("  3. Generate certificates for the client");
+    println!("  4. Enable TLS when starting etcd (--cert-file, --key-file, --client-cert-auth)");
+    println!("  5. Connect the client through the TLS endpoint");
 
     Ok(())
 }
@@ -162,20 +164,20 @@ async fn demo_tls_and_endpoints() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("========================================");
-    println!("  Remote etcd 配置源示例");
+    println!("  Remote etcd config source demo");
     println!("========================================");
 
     // 从环境变量读取 etcd 端点，默认本地
     let endpoint = std::env::var("ETCD_ENDPOINT").unwrap_or_else(|_| "127.0.0.1:2379".to_string());
 
-    println!("etcd 端点: {}", endpoint);
+    println!("etcd endpoint: {}", endpoint);
 
     demo_basic_poll(&endpoint).await?;
     demo_with_auth(&endpoint).await?;
     demo_tls_and_endpoints().await?;
 
     println!("\n========================================");
-    println!("  示例运行完成");
+    println!("  Example completed");
     println!("========================================");
     Ok(())
 }
