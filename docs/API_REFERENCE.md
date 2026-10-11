@@ -972,7 +972,7 @@ storage.load()?;                     // 从存储路径加载密钥
 
 `XChaCha20Crypto` 实现 XChaCha20-Poly1305 加密以保护敏感配置值，提供带关联数据的认证加密（AEAD）。需要启用 `encryption` 特性。
 
-> **历史算法披露**：AES-256-GCM 已被 XChaCha20-Poly1305 取代。错误变体 `CryptoError::LegacyDecryptionFailed`（「legacy decryption failed (AES-256-GCM)」）仍保留在枚举中，源码注记为 `#[deprecated(since = "0.4.2", note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5")]`；但**截至当前 v0.6.0-rc.9 该移除并未执行**，且 `src/` 内已无任何代码路径构造该变体（crate 依赖中也不含 AES 实现）——AES-256-GCM 解密通道实际已不存在，原「v0.5 之前完成迁移」的时限对用户不再适用。仍持有 AES-256-GCM 历史密文的部署应尽快用新算法重新加密（读旧写新即可迁移），并把 `KeyStatus::Deprecated`（见密钥状态枚举）对应的密钥环排入轮换。
+> **历史算法披露**：AES-256-GCM 已被 XChaCha20-Poly1305 取代。错误变体 `CryptoError::LegacyDecryptionFailed`（「legacy decryption failed (AES-256-GCM)」）仍保留在枚举中，源码注记为 `#[deprecated(since = "0.4.2", note = "AES-256-GCM is superseded by XChaCha20-Poly1305; this variant will be removed in v0.5")]`；但**截至当前 v0.6.0-rc.10 该移除并未执行**，且 `src/` 内已无任何代码路径构造该变体（crate 依赖中也不含 AES 实现）——AES-256-GCM 解密通道实际已不存在，原「v0.5 之前完成迁移」的时限对用户不再适用。仍持有 AES-256-GCM 历史密文的部署应尽快用新算法重新加密（读旧写新即可迁移），并把 `KeyStatus::Deprecated`（见密钥状态枚举）对应的密钥环排入轮换。
 
 
 ```mermaid

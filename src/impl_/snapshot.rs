@@ -156,15 +156,20 @@ static SNAPSHOT_SEQ: AtomicU64 = AtomicU64::new(0);
 /// Blocking prune implementation used by both sync and async (via spawn_blocking) paths.
 /// 解析快照文件名内嵌的 (纳秒, 单调序号)——save 生成名时的同一格式
 /// （`config-{ts}-{nanos:09}-{seq:04}.{ext}`），解析失败返回 None（调用方回退 created）。
-fn snapshot_name_key(path: &Path) -> Option<(i64, i64)> {
+fn snapshot_name_key(path: &Path) -> Option<(i64, i64, i64)> {
     let stem = path.file_stem()?.to_str()?;
     let mut parts = stem.split('-');
     if parts.next()? != "config" {
         return None;
     }
+    let ts = parts.next()?;
+    let secs = chrono::NaiveDateTime::parse_from_str(ts, "%Y%m%dT%H%M%SZ")
+        .ok()?
+        .and_utc()
+        .timestamp();
     let nanos = parts.next()?.parse::<i64>().ok()?;
     let seq = parts.next()?.parse::<i64>().ok()?;
-    Some((nanos, seq))
+    Some((secs, nanos, seq))
 }
 
 fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<usize> {
@@ -186,9 +191,8 @@ fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<u
             // metadata.created() 在部分文件系统（overlayfs、旧内核 tmp）不可用，
             // fallback Utc::now() 会让全部文件同键、排序不确定而误删最新快照（CI 实测）。
             let created_at = snapshot_name_key(&path)
-                .map(|(nanos, seq)| {
-                    DateTime::from_timestamp(nanos / 1_000_000_000, (nanos % 1_000_000_000) as u32)
-                        .unwrap_or_else(Utc::now)
+                .map(|(secs, nanos, seq)| {
+                    DateTime::from_timestamp(secs, nanos as u32).unwrap_or_else(Utc::now)
                         + chrono::Duration::nanoseconds(seq)
                 })
                 .unwrap_or_else(|| {
