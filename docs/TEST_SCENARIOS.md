@@ -1,6 +1,6 @@
 # 🧪 Confers 测试场景矩阵
 
-> 适用版本：confers **0.6.0-rc.8**（workspace，Rust 1.97.1 / edition 2024）
+> 适用版本：confers **0.6.0-rc.9**（workspace，Rust 1.97.1 / edition 2024）
 > 用途：7 仓库统一 E2E 验收工程的第一步：先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
 > 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 92 个 `#[cfg(test)]` 模块、`examples/` 22 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
@@ -817,7 +817,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 代码内测试规模
 
-（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.8 工作区；`tests/` 求和为 783 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 782 个测试函数）
+（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.9 工作区；`tests/` 求和为 783 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 782 个测试函数）
 
 | 类别 | 数量 |
 |------|------|

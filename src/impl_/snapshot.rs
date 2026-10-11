@@ -154,6 +154,19 @@ fn plain_json_to_annotated(
 static SNAPSHOT_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Blocking prune implementation used by both sync and async (via spawn_blocking) paths.
+/// 解析快照文件名内嵌的 (纳秒, 单调序号)——save 生成名时的同一格式
+/// （`config-{ts}-{nanos:09}-{seq:04}.{ext}`），解析失败返回 None（调用方回退 created）。
+fn snapshot_name_key(path: &Path) -> Option<(i64, i64)> {
+    let stem = path.file_stem()?.to_str()?;
+    let mut parts = stem.split('-');
+    if parts.next()? != "config" {
+        return None;
+    }
+    let nanos = parts.next()?.parse::<i64>().ok()?;
+    let seq = parts.next()?.parse::<i64>().ok()?;
+    Some((nanos, seq))
+}
+
 fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<usize> {
     if !dir.exists() {
         return Ok(0);
@@ -169,10 +182,21 @@ fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<u
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(e) => return Err(ConfigError::IoError(e)),
             };
-            let created_at = metadata
-                .created()
-                .map(DateTime::from)
-                .unwrap_or_else(|_| Utc::now());
+            // 排序键优先取文件名内嵌的 (nanos, seq)——save 时生成、平台无关且单调。
+            // metadata.created() 在部分文件系统（overlayfs、旧内核 tmp）不可用，
+            // fallback Utc::now() 会让全部文件同键、排序不确定而误删最新快照（CI 实测）。
+            let created_at = snapshot_name_key(&path)
+                .map(|(nanos, seq)| {
+                    DateTime::from_timestamp(nanos / 1_000_000_000, (nanos % 1_000_000_000) as u32)
+                        .unwrap_or_else(Utc::now)
+                        + chrono::Duration::nanoseconds(seq)
+                })
+                .unwrap_or_else(|| {
+                    metadata
+                        .created()
+                        .map(DateTime::from)
+                        .unwrap_or_else(|_| Utc::now())
+                });
             snapshots.push(SnapshotInfo {
                 path,
                 created_at,

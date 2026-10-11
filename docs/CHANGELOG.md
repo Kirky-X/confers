@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
-## [0.6.0-rc.8] - 2026-10-10
+## [0.6.0-rc.9] - 2026-10-10
 
 ### 依赖升级与特性裁剪（三方依赖升版 + 特性裁剪收口）
 
