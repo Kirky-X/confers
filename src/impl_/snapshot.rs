@@ -589,7 +589,7 @@ impl SnapshotManager {
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
                 {
-                    serde_saphyr::from_str::<serde_json::Value>(&content).map_err(|e| {
+                    crate::impl_::convert::yaml_parse_value(&content).map_err(|e| {
                         crate::error::ConfigError::ParseError {
                             format: "yaml".to_string(),
                             message: e.to_string(),

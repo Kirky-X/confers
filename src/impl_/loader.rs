@@ -751,7 +751,7 @@ pub fn parse_yaml(
     source: SourceId,
     path: Option<&Path>,
 ) -> ConfigResult<AnnotatedValue> {
-    let v: serde_json::Value = serde_saphyr::from_str(content).map_err(|e| {
+    let v: serde_json::Value = crate::impl_::convert::yaml_parse_value(content).map_err(|e| {
         let loc = e.location().map(|l| {
             path.map(|p| ParseLocation::from_path(p, l.line() as usize, l.column() as usize))
                 .unwrap_or_else(|| {

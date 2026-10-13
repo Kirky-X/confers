@@ -117,6 +117,15 @@ pub(crate) fn json_to_config_value(
     }
 }
 
+/// YAML → 泛型值的统一解析入口。
+/// strict_booleans 对齐 serde_yaml_ng 的 YAML 1.2 口径（仅 true/false 是布尔）：
+/// saphyr 默认把 `n`/`no`/`off` 等 1.1 简写推断成布尔，会破坏与 JSON/TOML
+/// 的三格式语义等值（`name: n` 在 TOML/JSON 里是字符串 "n"）。
+#[cfg(feature = "yaml")]
+pub(crate) fn yaml_parse_value(content: &str) -> Result<serde_json::Value, serde_saphyr::Error> {
+    serde_saphyr::from_str_with_options(content, serde_saphyr::options! { strict_booleans: true })
+}
+
 #[cfg(feature = "yaml")]
 pub(crate) fn yaml_to_config_value(
     v: &serde_json::Value,
