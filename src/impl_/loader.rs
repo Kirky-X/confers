@@ -751,10 +751,12 @@ pub fn parse_yaml(
     source: SourceId,
     path: Option<&Path>,
 ) -> ConfigResult<AnnotatedValue> {
-    let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).map_err(|e| {
+    let v: serde_json::Value = serde_saphyr::from_str(content).map_err(|e| {
         let loc = e.location().map(|l| {
-            path.map(|p| ParseLocation::from_path(p, l.line(), l.column()))
-                .unwrap_or_else(|| ParseLocation::new(source.as_str(), l.line(), l.column()))
+            path.map(|p| ParseLocation::from_path(p, l.line() as usize, l.column() as usize))
+                .unwrap_or_else(|| {
+                    ParseLocation::new(source.as_str(), l.line() as usize, l.column() as usize)
+                })
         });
         ConfigError::ParseError {
             format: "YAML".into(),
@@ -829,11 +831,7 @@ pub fn parse_json_value(v: &serde_json::Value, source: &SourceId, prefix: &str) 
 
 /// Parse a YAML value into ConfigValue (public helper for remote sources).
 #[cfg(feature = "yaml")]
-pub fn parse_yaml_value(
-    v: &serde_yaml_ng::Value,
-    source: &SourceId,
-    prefix: &str,
-) -> AnnotatedValue {
+pub fn parse_yaml_value(v: &serde_json::Value, source: &SourceId, prefix: &str) -> AnnotatedValue {
     AnnotatedValue::new(
         yaml_to_config_value(v, source, prefix),
         source.clone(),
@@ -1643,7 +1641,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_parse_yaml_value_helper() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("key: value").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("key: value").unwrap();
         let av = parse_yaml_value(&v, &SourceId::new("src"), "prefix");
         assert!(av.is_map());
     }

@@ -459,12 +459,14 @@ mod yaml_converter {
             source: SourceId,
             path: Option<&Path>,
         ) -> ConfigResult<AnnotatedValue> {
-            let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).map_err(|e| {
+            let v: serde_json::Value = serde_saphyr::from_str(content).map_err(|e| {
                 let loc = e.location().map(|l| {
-                    path.map(|p| ParseLocation::from_path(p, l.line(), l.column()))
-                        .unwrap_or_else(|| {
-                            ParseLocation::new(source.as_str(), l.line(), l.column())
-                        })
+                    path.map(|p| {
+                        ParseLocation::from_path(p, l.line() as usize, l.column() as usize)
+                    })
+                    .unwrap_or_else(|| {
+                        ParseLocation::new(source.as_str(), l.line() as usize, l.column() as usize)
+                    })
                 });
                 ConfigError::ParseError {
                     format: "YAML".into(),
@@ -482,7 +484,7 @@ mod yaml_converter {
 
         fn serialize(&self, value: &AnnotatedValue) -> ConfigResult<String> {
             let yaml_val = yaml_value_from_config(&value.inner);
-            serde_yaml_ng::to_string(&yaml_val).map_err(|e| ConfigError::InvalidValue {
+            serde_saphyr::to_string(&yaml_val).map_err(|e| ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "YAML".to_string(),
                 message: format!("YAML serialization failed: {}", e),
@@ -507,22 +509,22 @@ mod yaml_converter {
         }
     }
 
-    fn yaml_value_from_config(value: &ConfigValue) -> serde_yaml_ng::Value {
+    fn yaml_value_from_config(value: &ConfigValue) -> serde_json::Value {
         match value {
-            ConfigValue::Null => serde_yaml_ng::Value::Null,
-            ConfigValue::Bool(b) => serde_yaml_ng::Value::Bool(*b),
-            ConfigValue::I64(i) => serde_yaml_ng::Value::Number(serde_yaml_ng::Number::from(*i)),
+            ConfigValue::Null => serde_json::Value::Null,
+            ConfigValue::Bool(b) => serde_json::Value::Bool(*b),
+            ConfigValue::I64(i) => serde_json::Value::Number(serde_json::Number::from(*i)),
             ConfigValue::U64(u) => {
                 // YAML Number via i64 cast; values > i64::MAX serialize as
                 // string to avoid silent truncation.
                 if *u <= i64::MAX as u64 {
-                    serde_yaml_ng::Value::Number(serde_yaml_ng::Number::from(*u as i64))
+                    serde_json::Value::Number(serde_json::Number::from(*u as i64))
                 } else {
-                    serde_yaml_ng::Value::String(u.to_string())
+                    serde_json::Value::String(u.to_string())
                 }
             }
-            ConfigValue::F64(f) => serde_yaml_ng::Value::String(f.to_string()),
-            ConfigValue::String(s) => serde_yaml_ng::Value::String(s.clone()),
+            ConfigValue::F64(f) => serde_json::Value::String(f.to_string()),
+            ConfigValue::String(s) => serde_json::Value::String(s.clone()),
             ConfigValue::Bytes(b) => {
                 // YAML has no dedicated binary type in the representation we
                 // emit, so bytes are encoded as a standard-base64 (RFC 4648)
@@ -531,21 +533,16 @@ mod yaml_converter {
                 // base64 alphabet to recover the original bytes (mirrors the
                 // JSON converter's base64 encoding).
                 use base64::Engine as _;
-                serde_yaml_ng::Value::String(base64::engine::general_purpose::STANDARD.encode(b))
+                serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(b))
             }
-            ConfigValue::Array(arr) => serde_yaml_ng::Value::Sequence(
+            ConfigValue::Array(arr) => serde_json::Value::Array(
                 arr.iter()
                     .map(|v| yaml_value_from_config(&v.inner))
                     .collect(),
             ),
-            ConfigValue::Map(map) => serde_yaml_ng::Value::Mapping(
+            ConfigValue::Map(map) => serde_json::Value::Object(
                 map.iter()
-                    .map(|(k, v)| {
-                        (
-                            serde_yaml_ng::Value::String(k.to_string()),
-                            yaml_value_from_config(&v.inner),
-                        )
-                    })
+                    .map(|(k, v)| (k.to_string(), yaml_value_from_config(&v.inner)))
                     .collect(),
             ),
         }

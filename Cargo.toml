@@ -42,9 +42,9 @@ notify-debouncer-full = { version = "0.7", default-features = false, features = 
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"], optional = true }
 schemars = { version = "1.2", default-features = false, features = ["derive", "std"], optional = true }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["std"] }
+serde_json = { version = "1.0", default-features = false, features = ["std", "preserve_order"] }
 serde_path_to_error = { version = "0.1", default-features = false }
-serde_yaml_ng = { version = "0.10", default-features = false, optional = true }
+serde-saphyr = { version = "1.3", default-features = false, features = ["serialize", "deserialize"], optional = true }
 sha2 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
 getrandom = { version = "0.4", default-features = false, optional = true }
 sys-locale = { version = "0.3", default-features = false }
@@ -103,8 +103,8 @@ proc-macro2 = { version = "1.0", default-features = false, features = ["proc-mac
 quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
-serde_json = { version = "1.0", default-features = false, features = ["std"] }
-serde_yaml_ng = { version = "0.10", default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["std", "preserve_order"] }
+serde-saphyr = { version = "1.3", default-features = false, features = ["serialize", "deserialize"] }
 similar = { version = "3.2", default-features = false, features = ["std", "text"] }
 syn = { version = "3.0", default-features = false, features = ["derive", "parsing", "printing", "clone-impls", "proc-macro", "full", "extra-traits"] }
 tempfile = { version = "3.27", default-features = false, features = ["getrandom"] }
@@ -128,7 +128,7 @@ default = ["toml", "json", "dotenv"]
 # Format support
 toml = ["dep:toml"]
 json = []
-yaml = ["dep:serde_yaml_ng"]
+yaml = ["dep:serde-saphyr"]
 ini = []
 # dotenv 正名（该特性实际语义是 .env 文件加载，env 曾与 SourceKind::Environment
 # 术语冲突）；env 降级为兼容别名，下一版本移除。

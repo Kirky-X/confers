@@ -1181,7 +1181,7 @@ fn cmd_export(
         let formatted = match format {
             "json" => serde_json::to_string_pretty(&annotated_json)?,
             "toml" => toml::to_string_pretty(&annotated_json)?,
-            "yaml" => serde_yaml_ng::to_string(&annotated_json)?,
+            "yaml" => serde_saphyr::to_string(&annotated_json)?,
             _ => anyhow::bail!(
                 "{}",
                 tr_args("cli-unsupported-format", &[("format", format.to_string())])
@@ -1229,7 +1229,7 @@ fn cmd_export(
         let formatted = match format {
             "json" => serde_json::to_string_pretty(&config)?,
             "toml" => toml::to_string_pretty(&config)?,
-            "yaml" => serde_yaml_ng::to_string(&config)?,
+            "yaml" => serde_saphyr::to_string(&config)?,
             _ => anyhow::bail!(
                 "{}",
                 tr_args("cli-unsupported-format", &[("format", format.to_string())])

@@ -90,7 +90,7 @@ pub(crate) fn try_parse_value_with_format(
         }
         #[cfg(feature = "yaml")]
         Format::Yaml => {
-            let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(content).ok()?;
+            let v: serde_json::Value = serde_saphyr::from_str(content).ok()?;
             Some(crate::loader::parse_yaml_value(
                 &v,
                 &SourceId::new(source_name),

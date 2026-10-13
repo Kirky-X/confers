@@ -401,7 +401,7 @@ impl SnapshotManager {
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
                 {
-                    serde_yaml_ng::to_string(&output).map_err(|e| {
+                    serde_saphyr::to_string(&output).map_err(|e| {
                         crate::error::ConfigError::ParseError {
                             format: "yaml".to_string(),
                             message: e.to_string(),
@@ -489,7 +489,7 @@ impl SnapshotManager {
                     source: Some(Box::new(e)),
                 })
             }
-            SnapshotFormat::Yaml => serde_yaml_ng::to_string(&output).map_err(|e| {
+            SnapshotFormat::Yaml => serde_saphyr::to_string(&output).map_err(|e| {
                 crate::error::ConfigError::ParseError {
                     format: "yaml".to_string(),
                     message: e.to_string(),
@@ -589,7 +589,7 @@ impl SnapshotManager {
             SnapshotFormat::Yaml => {
                 #[cfg(feature = "yaml")]
                 {
-                    serde_yaml_ng::from_str::<serde_json::Value>(&content).map_err(|e| {
+                    serde_saphyr::from_str::<serde_json::Value>(&content).map_err(|e| {
                         crate::error::ConfigError::ParseError {
                             format: "yaml".to_string(),
                             message: e.to_string(),

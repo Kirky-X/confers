@@ -119,21 +119,21 @@ pub(crate) fn json_to_config_value(
 
 #[cfg(feature = "yaml")]
 pub(crate) fn yaml_to_config_value(
-    v: &serde_yaml_ng::Value,
+    v: &serde_json::Value,
     source: &SourceId,
     prefix: &str,
 ) -> ConfigValue {
     match v {
-        serde_yaml_ng::Value::Null => ConfigValue::Null,
-        serde_yaml_ng::Value::Bool(b) => ConfigValue::Bool(*b),
-        serde_yaml_ng::Value::Number(n) => n
+        serde_json::Value::Null => ConfigValue::Null,
+        serde_json::Value::Bool(b) => ConfigValue::Bool(*b),
+        serde_json::Value::Number(n) => n
             .as_i64()
             .map(ConfigValue::I64)
             .or_else(|| n.as_u64().map(ConfigValue::U64))
             .or_else(|| n.as_f64().map(ConfigValue::F64))
             .unwrap_or_else(|| ConfigValue::String(n.to_string())),
-        serde_yaml_ng::Value::String(s) => ConfigValue::String(s.clone()),
-        serde_yaml_ng::Value::Sequence(s) => ConfigValue::Array(
+        serde_json::Value::String(s) => ConfigValue::String(s.clone()),
+        serde_json::Value::Array(s) => ConfigValue::Array(
             s.iter()
                 .enumerate()
                 .map(|(i, v)| {
@@ -143,28 +143,25 @@ pub(crate) fn yaml_to_config_value(
                 .collect::<Vec<_>>()
                 .into(),
         ),
-        serde_yaml_ng::Value::Mapping(m) => ConfigValue::map(
+        serde_json::Value::Object(m) => ConfigValue::map(
             m.iter()
-                .filter_map(|(k, v)| {
-                    k.as_str().map(|key| {
-                        let p = if prefix.is_empty() {
-                            key.to_string()
-                        } else {
-                            format!("{}.{}", prefix, key)
-                        };
-                        (
-                            Arc::from(key),
-                            AnnotatedValue::new(
-                                yaml_to_config_value(v, source, &p),
-                                source.clone(),
-                                key,
-                            ),
-                        )
-                    })
+                .map(|(k, v)| {
+                    let p = if prefix.is_empty() {
+                        k.to_string()
+                    } else {
+                        format!("{}.{}", prefix, k)
+                    };
+                    (
+                        Arc::from(k.as_str()),
+                        AnnotatedValue::new(
+                            yaml_to_config_value(v, source, &p),
+                            source.clone(),
+                            k.as_str(),
+                        ),
+                    )
                 })
                 .collect(),
         ),
-        serde_yaml_ng::Value::Tagged(t) => yaml_to_config_value(&t.value, source, prefix),
     }
 }
 
@@ -395,8 +392,8 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_nested_mapping_uses_bare_key() {
-        let v: serde_yaml_ng::Value =
-            serde_yaml_ng::from_str("database:\n  write_url: postgres://x\n").unwrap();
+        let v: serde_json::Value =
+            serde_saphyr::from_str("database:\n  write_url: postgres://x\n").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "");
         let map = cv.as_map().unwrap();
         let db_av = map
@@ -536,7 +533,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_null() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("null").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("null").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert!(cv.is_null());
     }
@@ -544,7 +541,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_bool_true() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("true").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("true").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_bool(), Some(true));
     }
@@ -552,7 +549,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_bool_false() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("false").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("false").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_bool(), Some(false));
     }
@@ -560,7 +557,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_integer_i64() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("-99").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("-99").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_i64(), Some(-99));
     }
@@ -568,7 +565,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_integer_u64_large() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str(&u64::MAX.to_string()).unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str(&u64::MAX.to_string()).unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_u64(), Some(u64::MAX));
     }
@@ -576,7 +573,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_float() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("1.5").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("1.5").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_f64(), Some(1.5));
     }
@@ -584,7 +581,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_string() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("hello").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("hello").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         assert_eq!(cv.as_str(), Some("hello"));
     }
@@ -592,7 +589,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_sequence_paths() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("- 1\n- 2").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("- 1\n- 2").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         let arr = cv.as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -604,7 +601,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_mapping_empty_prefix() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("a: 1").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("a: 1").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "");
         let map = cv.as_map().unwrap();
         let a = map.get("a").unwrap();
@@ -615,7 +612,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_mapping_with_prefix() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("a: 1").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("a: 1").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "root");
         let map = cv.as_map().unwrap();
         let a = map.get("a").unwrap();
@@ -625,7 +622,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_mapping_nested_path() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("outer:\n  inner: 1").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("outer:\n  inner: 1").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "");
         let map = cv.as_map().unwrap();
         let outer_av = map.get("outer").unwrap();
@@ -636,20 +633,22 @@ mod tests {
 
     #[cfg(feature = "yaml")]
     #[test]
-    fn test_yaml_mapping_non_string_key_filtered() {
-        // Numeric keys cannot be converted to &str and are silently filtered out.
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("1: foo\nname: bar").unwrap();
+    fn test_yaml_mapping_non_string_key_stringified() {
+        // serde_json::Value 的键恒为字符串：YAML 数字键被字符串化保留
+        // （serde_yaml_ng 时代是静默过滤，会丢数据）
+        let v: serde_json::Value = serde_saphyr::from_str("1: foo\nname: bar").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "");
         let map = cv.as_map().unwrap();
-        assert_eq!(map.len(), 1);
+        assert_eq!(map.len(), 2);
         assert!(map.get("name").is_some());
+        assert_eq!(map.get("1").unwrap().inner.as_str(), Some("foo"));
     }
 
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_tagged_unwraps_inner_value() {
         // A YAML tag like !!str on a numeric value should unwrap to the inner value.
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("!!str 42").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("!!str 42").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         // The Tagged wrapper is unwrapped, and the inner string "42" is used.
         assert_eq!(cv.as_str(), Some("42"));
@@ -658,7 +657,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_empty_sequence() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("[]").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("[]").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         let arr = cv.as_array().unwrap();
         assert_eq!(arr.len(), 0);
@@ -667,7 +666,7 @@ mod tests {
     #[cfg(feature = "yaml")]
     #[test]
     fn test_yaml_empty_mapping() {
-        let v: serde_yaml_ng::Value = serde_yaml_ng::from_str("{}").unwrap();
+        let v: serde_json::Value = serde_saphyr::from_str("{}").unwrap();
         let cv = yaml_to_config_value(&v, &src(), "p");
         let map = cv.as_map().unwrap();
         assert_eq!(map.len(), 0);
