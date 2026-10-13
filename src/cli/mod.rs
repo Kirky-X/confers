@@ -5221,14 +5221,15 @@ mod tests {
             "integer"
         );
 
-        // Every observed key is required.
+        // Every observed key is required；serde_json 开 preserve_order 后
+        // 键序与输入源序一致（host/port/database），不再是 BTreeMap 排序。
         let required: Vec<&str> = schema["required"]
             .as_array()
             .unwrap()
             .iter()
             .map(|v| v.as_str().unwrap())
             .collect();
-        assert_eq!(required, vec!["database", "host", "port"]);
+        assert_eq!(required, vec!["host", "port", "database"]);
         assert_eq!(schema["additionalProperties"], false);
     }
 

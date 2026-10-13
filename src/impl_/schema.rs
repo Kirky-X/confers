@@ -1278,13 +1278,15 @@ mod rust_scaffold_tests {
             "required": ["userName", "type", "user-name"]
         });
         let code = RustScaffoldGenerator::generate(&schema).unwrap();
+        // serde_json 开 preserve_order 后属性按源序处理：userName 先占
+        // user_name，user-name 落到 user_name_2（BTreeMap 排序时代相反）
         assert!(
-            code.contains("#[serde(rename = \"user-name\")]\n    pub user_name: String"),
+            code.contains("#[serde(rename = \"userName\")]\n    pub user_name: String"),
             "{code}"
         );
         assert!(code.contains("pub r#type: String"), "{code}");
         assert!(
-            code.contains("#[serde(rename = \"userName\")]\n    pub user_name_2: String"),
+            code.contains("#[serde(rename = \"user-name\")]\n    pub user_name_2: String"),
             "{code}"
         );
     }
