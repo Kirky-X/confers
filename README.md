@@ -8,7 +8,7 @@
 
 **生产级 Rust 配置库，零样板代码**
 
-[✨ 功能特性](#-功能特性) • [🚀 快速开始](#-快速开始) • [📚 文档](#-文档) • [💻 示例](#-示例) • [🤝 参与贡献](#-参与贡献)
+[✨ 功能特性](#✨-功能特性) • [🚀 快速开始](#🚀-快速开始) • [📚 文档](#📚-文档) • [💻 示例](#💻-示例) • [🤝 参与贡献](#🤝-参与贡献)
 
 </div>
 
@@ -35,22 +35,22 @@
 
 ## 📋 目录
 
-- [✨ 功能特性](#-功能特性)
-- [🚀 快速开始](#-快速开始)
-- [🎨 特性标志](#-特性标志)
-- [📚 文档](#-文档)
-- [💻 示例](#-示例)
-- [🏗️ 架构](#️-架构)
-- [🧪 测试](#-测试)
-- [📊 性能](#-性能)
-- [🔒 安全](#-安全)
-- [🗺️ 开发路线图](#️-开发路线图)
-- [🤝 参与贡献](#-参与贡献)
-- [📋 更新日志](#-更新日志)
-- [📄 许可证](#-许可证)
-- [🙏 致谢](#-致谢)
-- [📞 联系与支持](#-联系与支持)
-- [⭐ Star 历史](#-star-历史)
+- [✨ 功能特性](#✨-功能特性)
+- [🚀 快速开始](#🚀-快速开始)
+- [🎨 特性标志](#🎨-特性标志)
+- [📚 文档](#📚-文档)
+- [💻 示例](#💻-示例)
+- [🏗️ 架构](#🏗️-架构)
+- [🧪 测试](#🧪-测试)
+- [📊 性能](#📊-性能)
+- [🔒 安全](#🔒-安全)
+- [🗺️ 开发路线图](#🗺️-开发路线图)
+- [🤝 参与贡献](#🤝-参与贡献)
+- [📋 更新日志](#📋-更新日志)
+- [📄 许可证](#📄-许可证)
+- [🙏 致谢](#🙏-致谢)
+- [📞 联系与支持](#📞-联系与支持)
+- [⭐ Star 历史](#⭐-star-历史)
 
 ---
 
@@ -83,7 +83,7 @@
 </tr>
 </table>
 
-除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 单特性定义）见 [🎨 特性标志](#-特性标志) 一节。
+除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 单特性定义）见 [🎨 特性标志](#🎨-特性标志) 一节。
 
 ---
 
@@ -95,7 +95,7 @@
 cargo add confers
 ```
 
-要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`dotenv`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#-特性标志) 一节。
+要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`dotenv`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#🎨-特性标志) 一节。
 
 ### 💡 最小示例
 
@@ -259,7 +259,7 @@ cd examples && ./verify_examples.sh
 cargo install confers --features cli
 ```
 
-提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
+提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#💻-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
 
 ---
 
@@ -311,7 +311,7 @@ cargo fuzz run parser
 
 ## 📊 性能
 
-基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
+基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#📊-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#⚡-性能设计)。
 
 ---
 
@@ -319,7 +319,7 @@ cargo fuzz run parser
 
 ### 🛡️ 安全设计
 
-安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
+安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#🔒-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
 
 ### ⛓️ 供应链与门禁
 
@@ -341,7 +341,7 @@ cargo fuzz run parser
 <tr><td align="center">✅</td><td>安全与审计</td><td>XChaCha20-Poly1305 加密、密钥管理与轮换、审计日志、安全规则校验器</td></tr>
 <tr><td align="center">✅</td><td>远程与总线</td><td>HTTP 轮询、etcd、Consul、Nacos、Kubernetes ConfigMap / Secret、NATS 与 Redis 总线</td></tr>
 <tr><td align="center">✅</td><td>远程来源稳定</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code>、<code>etcd-watch</code> 转正：接口已冻结，1.0 前不再破坏性变更（watch 兼容性回归测试守护）</td></tr>
-<tr><td align="center">✅</td><td>性能优化</td><td>criterion 基线（<a href="docs/PERFORMANCE.md#-性能基线">性能基线</a>：加载 / 合并 / watch 分发）、内存上限与惰性分段解析、高频读取零拷贝热路径（<code>get_shared</code> 约 2.1x）</td></tr>
+<tr><td align="center">✅</td><td>性能优化</td><td>criterion 基线（<a href="docs/PERFORMANCE.md#📊-性能基线">性能基线</a>：加载 / 合并 / watch 分发）、内存上限与惰性分段解析、高频读取零拷贝热路径（<code>get_shared</code> 约 2.1x）</td></tr>
 <tr><td align="center">✅</td><td>云原生集成</td><td>服务网格流量切分（<code>canary</code> 编排器 + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio 样例</a>）、分布式追踪集成（<code>tracing</code> 门面：load/reload/decrypt/remote_fetch span）</td></tr>
 </table>
 
@@ -353,7 +353,7 @@ cargo fuzz run parser
 
 ### 🛠️ 开发环境
 
-工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#-环境准备)。
+工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#🧰-环境准备)。
 
 ### 💖 贡献方式
 

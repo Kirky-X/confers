@@ -4,11 +4,11 @@
 
 ## 📋 目录
 
-- [通用问题](#-通用问题)
-- [安装与配置](#-安装与配置)
-- [使用与特性](#️-使用与特性)
-- [性能](#-性能)
-- [故障排查](#-故障排查)
+- [通用问题](#🧭-通用问题)
+- [安装与配置](#📦-安装与配置)
+- [使用与特性](#🛠️-使用与特性)
+- [性能](#⚡-性能)
+- [故障排查](#🔧-故障排查)
 
 ---
 
@@ -54,7 +54,7 @@
 - ✅ 支持主流格式（TOML、JSON、YAML）
 - ✅ 环境变量覆盖
 - ✅ 校验框架
-- ✅ 远程来源（`remote`、`etcd`、`consul`、`etcd-watch`）：公开接口已冻结，1.0 前不做破坏性变更（与 [README 路线图](../README.md#️-开发路线图)一致）
+- ✅ 远程来源（`remote`、`etcd`、`consul`、`etcd-watch`）：公开接口已冻结，1.0 前不做破坏性变更（与 [README 路线图](../README.md#开发路线图)一致）
 
 **成熟度指标：**
 
@@ -107,7 +107,7 @@
 
 ### ❓ 项目采用什么许可证？
 
-本项目基于 [MIT 许可证 + Commons Clause v1.0](../LICENSE) 发布：在 MIT 条款之上附加 Commons Clause 条件——**未经单独授权，不得销售本软件**。License 整体不是 OSI 认证的开源许可证（与 [README · 许可证](../README.md#-许可证)一致）。
+本项目基于 [MIT 许可证 + Commons Clause v1.0](../LICENSE) 发布：在 MIT 条款之上附加 Commons Clause 条件——**未经单独授权，不得销售本软件**。License 整体不是 OSI 认证的开源许可证（与 [README · 许可证](../README.md#许可证)一致）。
 
 **您获得的权利：**
 
@@ -169,7 +169,7 @@ fn main() {
 
 **特性预设（推荐）：**
 
-`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../README.md#-特性标志)；下述 Cargo.toml 写法可直接套用。
+`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../README.md#特性标志)；下述 Cargo.toml 写法可直接套用。
 
 **用法示例：**
 
@@ -359,7 +359,7 @@ config.confers_validate()?;
 
 ### ❓ Confers 有多快？
 
-基准数据（加载、合并、变更流、零拷贝热路径等口径）统一由 [性能指南 · 性能基线](PERFORMANCE.md#-性能基线) 维护；典型小配置在开发机上加载约 0.7 µs 量级。自行复现：
+基准数据（加载、合并、变更流、零拷贝热路径等口径）统一由 [性能指南 · 性能基线](PERFORMANCE.md#性能基线) 维护；典型小配置在开发机上加载约 0.7 µs 量级。自行复现：
 
 ```bash
 cargo bench

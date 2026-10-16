@@ -4,17 +4,19 @@
 
 ## 📋 目录
 
-- [概述](#-概述)
-- [结构体级属性](#️-结构体级属性)
-- [字段级属性](#️-字段级属性)
-- [综合示例](#-综合示例)
-- [自动生成的方法](#️-自动生成的方法)
-- [完整使用示例](#-完整使用示例)
-- [属性速查表](#-属性速查表)
-- [使用 Garde 进行校验](#-使用-garde-进行校验)
-- [特性依赖](#-特性依赖)
-- [最佳实践](#-最佳实践)
-- [故障排查](#-故障排查)
+- [概述](#🎯-概述)
+- [结构体级属性](#结构体级属性)
+- [结构体级属性](#结构体级属性)
+- [字段级属性](#字段级属性)
+- [字段级属性](#字段级属性)
+- [综合示例](#📦-综合示例)
+- [自动生成的方法](#⚙️-自动生成的方法)
+- [完整使用示例](#💡-完整使用示例)
+- [属性速查表](#📑-属性速查表)
+- [使用 Garde 进行校验](#✅-使用-garde-进行校验)
+- [特性依赖](#🎨-特性依赖)
+- [最佳实践](#🌟-最佳实践)
+- [故障排查](#🔧-故障排查)
 
 ---
 
@@ -92,6 +94,7 @@ pub struct ConfersConfig {
 **现状**：
 - `strict` 与 `watch` 是结构体级属性，宏会解析它们，但当前生成的代码不读取这两个开关——它们**暂无实际效果**
 - CLI 参数解析的容错行为不受 `strict` 控制；热重载不受结构体级 `watch` 控制
+- 热重载请直接使用 `FsWatcher` / `MultiFsWatcher`（需 `watch` 特性；`build_with_watcher()` 已弃用，它不会随文件变更重载），完整监听循环见 [完整使用示例 · 热重载](#热重载)
 - 热重载请直接使用 `FsWatcher` / `MultiFsWatcher`（需 `watch` 特性；`build_with_watcher()` 已弃用，它不会随文件变更重载），完整监听循环见 [完整使用示例 · 热重载](#热重载)
 
 ---
@@ -250,7 +253,7 @@ pub struct ConfersConfig {
 
 ### 校验规则
 
-Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(...)]` 属性声明规则（范围、长度、邮箱、URL、模式、自定义函数等），并以 `#[config(validate_helper)]` 生成 `confers_validate()` 辅助方法，在 `build()` 之后由调用方显式执行校验（构建/加载管线不会自动校验）。各类规则的写法统一见 [✅ 使用 Garde 进行校验](#-使用-garde-进行校验) 一节。
+Confers 使用 `garde` 校验库：请派生 `garde::Validate`，用 `#[garde(...)]` 属性声明规则（范围、长度、邮箱、URL、模式、自定义函数等），并以 `#[config(validate_helper)]` 生成 `confers_validate()` 辅助方法，在 `build()` 之后由调用方显式执行校验（构建/加载管线不会自动校验）。各类规则的写法统一见 [✅ 使用 Garde 进行校验](#✅-使用-garde-进行校验) 一节。
 
 ---
 
@@ -537,6 +540,7 @@ let config = ConfigBuilder::<ConfersConfig>::new()
 ```
 
 热重载（需要 `watch` 特性）不经过 `ConfigBuilder` 链式方法，而是直接使用 `FsWatcher`；完整监听循环见 [完整使用示例 · 热重载](#热重载)。
+热重载（需要 `watch` 特性）不经过 `ConfigBuilder` 链式方法，而是直接使用 `FsWatcher`；完整监听循环见 [完整使用示例 · 热重载](#热重载)。
 
 ### 辅助函数
 
@@ -817,7 +821,7 @@ confers = { version = "0.6.0-rc.10", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
-`recommended` 预设包含的特性清单见 [README · 功能预设](../README.md#-特性标志)。
+`recommended` 预设包含的特性清单见 [README · 功能预设](../README.md#特性标志)。
 
 ### 开发环境配置
 
@@ -839,7 +843,7 @@ confers = { version = "0.6.0-rc.10", features = ["production"] }
 garde = { version = "0.23", features = ["derive"] }
 ```
 
-`production` 预设包含的特性清单同样见 [README · 功能预设](../README.md#-特性标志)。
+`production` 预设包含的特性清单同样见 [README · 功能预设](../README.md#特性标志)。
 
 ---
 
