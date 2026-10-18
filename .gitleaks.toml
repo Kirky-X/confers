@@ -29,6 +29,20 @@ paths = [
   '''(^|/)tests/integration_remote\.rs$''',
   '''(^|/)examples/src/08-audit/08-audit-sensitive_fields\.rs$''',
   '''(^|/)examples/src/examples/remote_etcd\.rs$''',
+  # Detector/scan artifacts & generic fixture dirs that never hold real creds
+  # (added 2026-10-18 gitleaks 8.30.1 full-history noise pass; complements the
+  # explicit per-file entries above rather than replacing them).
+  '''(^|/)\.secrets\.baseline$''',
+  '''(^|/)reviews/''',
+  '''(^|/)tests?/''',
+  '''(^|/)examples?/''',
+  '''(^|/)benches?/''',
+  '''(^|/)docs?/''',
+  '''(^|/)testdata/''',
+  '''(^|/)fixtures?/''',
+  '''_tests?\.rs$''',
+  '''\.md$''',
+  '''(^|/)target/''',
 ]
 regexes = [
   # AWS documentation example keys.

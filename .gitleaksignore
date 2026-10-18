@@ -36,3 +36,6 @@ tests/remote/etcd.rs:generic-api-key:144
 tests/remote/etcd.rs:generic-api-key:163
 tests/remote/remote.rs:generic-api-key:564
 tests/remote/remote.rs:generic-api-key:599
+
+# 2026-10-18 gitleaks 8.30.1 全历史复扫增量补充(src内联夹具/占位，逐条已核实非真实凭据)
+209ca78b6a0cf10db59c4455aee65382a6b53a38:src/key/storage.rs:generic-api-key:770
