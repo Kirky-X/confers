@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
+## [0.6.0-rc.11] - 2026-10-19
+
+### Changed
+
+- **YAML 后端迁移**：`serde_yaml_ng` → `serde-saphyr`（纯 Rust，从根源消除 `RUSTSEC-2024-0449`（unsafe-libyaml 归档告警））——解析统一走 `serde_json::Value` 中间态（`preserve_order` 保持源序），数字键由静默过滤改为字符串化保留，标签强制转换语义保持
+- **YAML 解析修复**：泛型值解析统一 `strict_booleans`——saphyr 默认把 `n`/`no`/`off` 等 YAML 1.1 简写推断为布尔，破坏三格式语义等值（`name: n` 在 TOML/JSON 为字符串）；typed 目标保持默认宽松不受影响
+- **License**：统一为纯 MIT，LICENSE 删除 Commons Clause 段，manifest `license = "MIT"`
+
+### Fixed
+
+- **测试**：`preserve_order` 后 schema/cli 键序断言对齐源序——`required` 列表与 `rename` 字段配对随源序更新，BTreeMap 排序时代口径退役
+
+### Internal
+
+- **CI 发布**：publish 凭证切换 crates.io trusted publishing（OIDC auth-action）；新增 rc prerelease 派生与发布幂等三元组（tag 级并发组 + 发布后 release 唯一性断言）
+- **安全/仓库卫生**：增补 gitleaks 降噪配置与误报指纹；gitignore 忽略设计文档；README 与 docs 锚点链接修复
+
+---
+
 ## [0.6.0-rc.10] - 2026-10-10
 
 ### 依赖升级与特性裁剪（三方依赖升版 + 特性裁剪收口）
