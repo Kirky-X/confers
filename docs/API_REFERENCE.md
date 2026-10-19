@@ -4,14 +4,14 @@
 
 ## 📋 目录
 
-- [概述](#🎯-概述)
-- [核心 API](#🧱-核心-api)
-- [配置/扩展 API](#🔌-配置扩展-api)
-- [错误类型](#🚨-错误类型)
-- [特性门控 API](#🚪-特性门控-api)
-- [使用示例](#💡-使用示例)
-- [最佳实践](#🌟-最佳实践)
-- [相关文档](#📚-相关文档)
+- [概述](#-概述)
+- [核心 API](#-核心-api)
+- [配置/扩展 API](#-配置扩展-api)
+- [错误类型](#-错误类型)
+- [特性门控 API](#-特性门控-api)
+- [使用示例](#-使用示例)
+- [最佳实践](#-最佳实践)
+- [相关文档](#-相关文档)
 
 ---
 
@@ -1634,8 +1634,8 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 密钥管理安全
 
-⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key-management 特性）](#密钥管理（key-management-特性）) 与 [使用示例 · 密钥轮换](#密钥轮换)。
-⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key-management 特性）](#密钥管理（key-management-特性）) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+⚠️ 在生产环境中，务必安全管理密钥：主密钥从环境变量或安全存储获取，不得硬编码或提交到版本控制，并定期轮换（建议每 90 天）。`KeyManager` 的初始化与轮换用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 ### 热重载配置
 
@@ -1643,8 +1643,8 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 敏感数据加密
 
-在结构体字段上声明 `#[config(encrypt = "xchacha20")]` 即可在加载时自动解密敏感配置值；`XChaCha20Crypto` 的 encrypt/decrypt 用法见 [加密函数（encryption 特性）](#加密函数（encryption-特性）) 与 [使用示例 · 配置加密](#配置加密)。
-在结构体字段上声明 `#[config(encrypt = "xchacha20")]` 即可在加载时自动解密敏感配置值；`XChaCha20Crypto` 的 encrypt/decrypt 用法见 [加密函数（encryption 特性）](#加密函数（encryption-特性）) 与 [使用示例 · 配置加密](#配置加密)。
+在结构体字段上声明 `#[config(encrypt = "xchacha20")]` 即可在加载时自动解密敏感配置值；`XChaCha20Crypto` 的 encrypt/decrypt 用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
+在结构体字段上声明 `#[config(encrypt = "xchacha20")]` 即可在加载时自动解密敏感配置值；`XChaCha20Crypto` 的 encrypt/decrypt 用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
 
 ### 性能优化
 
@@ -1726,8 +1726,8 @@ impl CachedConfig {
 
 **如何加密敏感数据：**
 
-使用 `XChaCha20Crypto` 的 `encrypt` / `decrypt`（返回 `(nonce, ciphertext)`，密钥须恰好 32 字节），用法见 [加密函数（encryption 特性）](#加密函数（encryption-特性）) 与 [使用示例 · 配置加密](#配置加密)。
-使用 `XChaCha20Crypto` 的 `encrypt` / `decrypt`（返回 `(nonce, ciphertext)`，密钥须恰好 32 字节），用法见 [加密函数（encryption 特性）](#加密函数（encryption-特性）) 与 [使用示例 · 配置加密](#配置加密)。
+使用 `XChaCha20Crypto` 的 `encrypt` / `decrypt`（返回 `(nonce, ciphertext)`，密钥须恰好 32 字节），用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
+使用 `XChaCha20Crypto` 的 `encrypt` / `decrypt`（返回 `(nonce, ciphertext)`，密钥须恰好 32 字节），用法见 [加密函数（encryption 特性）](#加密函数encryption-特性) 与 [使用示例 · 配置加密](#配置加密)。
 
 **⚠️ 安全提示：**
 
@@ -1755,8 +1755,8 @@ let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 
 **如何轮换密钥：**
 
-使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key-management 特性）](#密钥管理（key-management-特性）) 与 [使用示例 · 密钥轮换](#密钥轮换)。
-使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key-management 特性）](#密钥管理（key-management-特性）) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
+使用 `KeyManager::rotate_key()` 将密钥轮换到新版本，用法见 [密钥管理（key-management 特性）](#密钥管理key-management-特性) 与 [使用示例 · 密钥轮换](#密钥轮换)。
 
 **⚠️ 安全提示：**
 
