@@ -2,6 +2,15 @@
 
 本目录是 confers 的示例子 crate（包名 `confers-examples`，为 workspace 成员）。全部 22 个示例以 `[[bin]]` 二进制目标的形式组织在 `src/examples/` 下，依赖 `confers = { path = "..", features = ["full"] }`，覆盖库的全部主要功能。
 
+## 与父 crate 的关系
+
+| 项 | 内容 |
+|---|---|
+| 所属仓库 | [confers](https://github.com/Kirky-X/confers) |
+| 依赖方向 | 本 crate → `confers`（示例以 `path = ".."` 依赖父 crate） |
+| 是否发布 | 否：`publish = false`，仅用于演示与回归验证 |
+| 版本与支持 | 版本经 `version.workspace = true` 随仓库统一；仅维护当前 minor 版本线，见 [安全文档 · 支持的版本](../docs/SECURITY.md#-支持的版本与维护策略) |
+
 ## 环境要求
 
 - Rust 1.97.1+（与 workspace 的 `rust-version` 基线一致）
