@@ -28,7 +28,7 @@
 
 ### 📦 特性说明
 
-confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../README.md#特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
+confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../README.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
 
 ---
 
@@ -1630,7 +1630,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 配置校验
 
-始终在加载流程中校验配置：启用 `validation` 特性并使用 `#[config(validate_helper)]` 生成 `confers_validate()`，在 `build()` 之后由调用方显式执行——构建/加载管线不会自动校验。完整示例与规则写法见 [用户指南 · 校验与清洗](USER_GUIDE.md#校验与清洗) 与 [宏指南 · 使用 Garde 进行校验](CONFIG_MACRO_GUIDE.md#使用-garde-进行校验)。
+始终在加载流程中校验配置：启用 `validation` 特性并使用 `#[config(validate_helper)]` 生成 `confers_validate()`，在 `build()` 之后由调用方显式执行——构建/加载管线不会自动校验。完整示例与规则写法见 [用户指南 · 校验与清洗](USER_GUIDE.md#-校验与清洗) 与 [宏指南 · 使用 Garde 进行校验](CONFIG_MACRO_GUIDE.md#-使用-garde-进行校验)。
 
 ### 密钥管理安全
 
@@ -1639,7 +1639,7 @@ fn rollback_to_previous_version() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 热重载配置
 
-使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性），防抖等参数经 `WatcherConfig::builder()` 调整；连续重载失败的暂停策略经 `ReloadFailurePolicy::new(WatcherConfig)` 执行（失败计数达 `max_consecutive_failures` 即开启 `failure_pause_ms` 暂停窗口，`pause_remaining()` 返回 `Some` 期间跳过重载，暂停到期自动关闭）；监听循环的完整写法见 [用户指南 · 文件监听与热重载](USER_GUIDE.md#文件监听与热重载)。`build_with_watcher()` 的弃用说明见 [ConfigBuilder · build_with_watcher()](#buildwithwatcher（异步，已弃用）)。
+使用 `FsWatcher` 监听配置文件变更并重载（需要 `watch` 特性），防抖等参数经 `WatcherConfig::builder()` 调整；连续重载失败的暂停策略经 `ReloadFailurePolicy::new(WatcherConfig)` 执行（失败计数达 `max_consecutive_failures` 即开启 `failure_pause_ms` 暂停窗口，`pause_remaining()` 返回 `Some` 期间跳过重载，暂停到期自动关闭）；监听循环的完整写法见 [用户指南 · 文件监听与热重载](USER_GUIDE.md#-文件监听与热重载)。`build_with_watcher()` 的弃用说明见 [ConfigBuilder · build_with_watcher()](#build_with_watcher异步已弃用)。
 
 ### 敏感数据加密
 

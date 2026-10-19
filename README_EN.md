@@ -49,7 +49,7 @@ Tag a struct with `#[derive(Config)]`, merge sources by priority, and get strong
 - [📋 Changelog](#📋-changelog)
 - [📄 License](#📄-license)
 - [🙏 Acknowledgments](#🙏-acknowledgments)
-- [📞 Contact & Support](#📞-contact-support)
+- [📞 Contact & Support](#-contact--support)
 - [⭐ Star History](#⭐-star-history)
 
 ---

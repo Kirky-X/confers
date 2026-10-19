@@ -99,7 +99,7 @@ cargo build
 
 **默认特性：** `toml`、`json`、`dotenv`
 
-全部单项特性与功能预设的完整清单（逐项对应 `Cargo.toml` 的 `[features]` 定义）统一由 [README · 功能矩阵](../README.md#功能矩阵) 维护。
+全部单项特性与功能预设的完整清单（逐项对应 `Cargo.toml` 的 `[features]` 定义）统一由 [README · 功能矩阵](../README.md#-功能矩阵) 维护。
 
 运行测试时可以使用不同的特性组合：
 

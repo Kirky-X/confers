@@ -128,7 +128,7 @@ let source = HttpPolledSourceBuilder::new()
 
 ## 🎨 特性标志
 
-本库按特性门控。常用特性与完整功能矩阵（含默认启用状态）统一由 [README · 特性标志](../README.md#特性标志) 维护，完整的特性预设列表（`default`、`minimal`、`recommended`、`dev`、`production`、`distributed`、`full`）见 `Cargo.toml` 的 `[features]` 定义。
+本库按特性门控。常用特性与完整功能矩阵（含默认启用状态）统一由 [README · 特性标志](../README.md#-特性标志) 维护，完整的特性预设列表（`default`、`minimal`、`recommended`、`dev`、`production`、`distributed`、`full`）见 `Cargo.toml` 的 `[features]` 定义。
 
 ## 🚨 错误处理
 
@@ -151,7 +151,7 @@ match result {
 }
 ```
 
-完整变体清单见 [API 参考](API_REFERENCE.md#错误类型)。
+完整变体清单见 [API 参考](API_REFERENCE.md#-错误类型)。
 
 ## 🔄 从旧版 ConfersCli 快照迁移
 
