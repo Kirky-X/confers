@@ -2,13 +2,13 @@
 
 <img src="docs/assets/confers.png" alt="Confers Logo" width="240">
 
-[![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
+[![Rust 2024](https://img.shields.io/badge/Rust-2024-edded?logo=rust&style=for-the-badge)](https://www.rust-lang.org/) [![Rustc 1.97.1+](https://img.shields.io/badge/Rustc-1.97.1+-orange.svg?style=for-the-badge)](https://www.rust-lang.org/) [![crates.io](https://img.shields.io/crates/v/confers?style=for-the-badge)](https://crates.io/crates/confers) [![docs.rs](https://img.shields.io/docsrs/confers?style=for-the-badge)](https://docs.rs/confers) [![downloads](https://img.shields.io/crates/d/confers?style=for-the-badge)](https://crates.io/crates/confers) [![CI](https://img.shields.io/github/actions/workflow/status/Kirky-X/confers/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![coverage](https://img.shields.io/codecov/c/github/Kirky-X/confers?style=for-the-badge)](https://codecov.io/gh/Kirky-X/confers) [![license](https://img.shields.io/crates/l/confers?style=for-the-badge)](LICENSE)
 
 **中文** | [English](README_EN.md)
 
 **生产级 Rust 配置库，零样板代码**
 
-[✨ 功能特性](#✨-功能特性) • [🚀 快速开始](#🚀-快速开始) • [📚 文档](#📚-文档) • [💻 示例](#💻-示例) • [🤝 参与贡献](#🤝-参与贡献)
+[✨ 功能特性](#-功能特性) • [🚀 快速开始](#-快速开始) • [📚 文档](#-文档) • [💻 示例](#-示例) • [🤝 参与贡献](#-参与贡献)
 
 </div>
 
@@ -35,22 +35,27 @@
 
 ## 📋 目录
 
-- [✨ 功能特性](#✨-功能特性)
-- [🚀 快速开始](#🚀-快速开始)
-- [🎨 特性标志](#🎨-特性标志)
-- [📚 文档](#📚-文档)
-- [💻 示例](#💻-示例)
-- [🏗️ 架构](#🏗️-架构)
-- [🧪 测试](#🧪-测试)
-- [📊 性能](#📊-性能)
-- [🔒 安全](#🔒-安全)
-- [🗺️ 开发路线图](#🗺️-开发路线图)
-- [🤝 参与贡献](#🤝-参与贡献)
-- [📋 更新日志](#📋-更新日志)
-- [📄 许可证](#📄-许可证)
-- [🙏 致谢](#🙏-致谢)
-- [📞 联系与支持](#📞-联系与支持)
-- [⭐ Star 历史](#⭐-star-历史)
+<details open>
+<summary>📑 目录</summary>
+
+- [✨ 功能特性](#-功能特性)
+- [🚀 快速开始](#-快速开始)
+- [🎨 特性标志](#-特性标志)
+- [📚 文档](#-文档)
+- [💻 示例](#-示例)
+- [🏗️ 架构](#️-架构)
+- [🧪 测试](#-测试)
+- [📊 性能](#-性能)
+- [🔒 安全](#-安全)
+- [🗺️ 开发路线图](#️-开发路线图)
+- [🤝 参与贡献](#-参与贡献)
+- [📋 更新日志](#-更新日志)
+- [📄 许可证](#-许可证)
+- [🙏 致谢](#-致谢)
+- [📞 联系与支持](#-联系与支持)
+- [⭐ Star 历史](#-star-历史)
+
+</details>
 
 ---
 
@@ -83,7 +88,7 @@
 </tr>
 </table>
 
-除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 单特性定义）见 [🎨 特性标志](#🎨-特性标志) 一节。
+除上述核心能力外，配置迁移、快照与回滚、变量插值、模块化配置、上下文感知、运行时特性开关、OpenFeature 风格评估、安全规则校验器、密钥管理与云 KMS、惰性分段解析、统一变更流等能力也均以独立特性标志提供；完整的功能矩阵（逐项对应 `Cargo.toml` 的 `[features]` 单特性定义）见 [🎨 特性标志](#-特性标志) 一节。
 
 ---
 
@@ -91,15 +96,23 @@
 
 ### 📦 安装
 
+<details>
+<summary>📄 代码 · bash</summary>
+
 ```bash
 cargo add confers
 ```
 
-要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`dotenv`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#🎨-特性标志) 一节。
+</details>
+
+要求 Rust 1.97.1 及以上（MSRV，与仓库 `rust-toolchain.toml` 一致）。默认特性包含 `toml`、`json`、`dotenv`；各功能预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）的安装方式与特性清单统一见下方 [🎨 特性标志](#-特性标志) 一节。
 
 ### 💡 最小示例
 
 以下示例改编自 [`examples/src/examples/basic_usage.rs`](examples/src/examples/basic_usage.rs)：
+
+<details>
+<summary>📄 代码 · rust</summary>
 
 ```rust
 use confers::Config;
@@ -129,11 +142,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+</details>
+
+<details>
+<summary>📄 代码 · bash</summary>
+
 ```bash
 # 环境变量覆盖默认值
 export PORT=9000
 cargo run    # 输出: 监听地址: 127.0.0.1:9000
 ```
+
+</details>
 
 ### 🧭 核心概念
 
@@ -148,6 +168,9 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ### 📦 功能预设
 
+<details>
+<summary>📋 表格</summary>
+
 | 预设 | 安装方式 | 包含特性 | 适用场景 |
 |------|----------|----------|----------|
 | 默认 | `cargo add confers` | `toml`、`json`、`dotenv` | 开箱即用 |
@@ -158,9 +181,14 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 | `distributed` | `cargo add confers --features distributed` | `toml`、`json`、`dotenv`、`watch`、`validation`、`config-bus`、`progressive-reload`、`audit` | 分布式系统 |
 | `full` | `cargo add confers --features full` | 全部 39 项正式特性（不含 `hot-reload-kit` 与待移除兼容别名 `env`/`schema`/`key`） | 完整能力集 |
 
+</details>
+
 ### 📋 功能矩阵
 
 下表逐项对应 `Cargo.toml` 的 `[features]` 单特性定义（预设见上表），`default = ["toml", "json", "dotenv"]`。
+
+<details>
+<summary>📋 表格</summary>
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">特性</th><th style="text-align:center">默认</th><th style="text-align:left">说明</th></tr>
@@ -216,9 +244,14 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 <tr><td><code>lazy-parse</code></td><td align="center">❌</td><td>超大文档惰性分段解析</td></tr>
 </table>
 
+</details>
+
 ---
 
 ## 📚 文档
+
+<details>
+<summary>📋 表格</summary>
 
 | 文档 | 说明 |
 |------|------|
@@ -236,11 +269,16 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 | [📦 在线 API 文档](https://docs.rs/confers) | docs.rs 自动生成的最新文档 |
 | [📦 crates.io](https://crates.io/crates/confers) | 发布页面 |
 
+</details>
+
 ---
 
 ## 💻 示例
 
 全部 22 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
+
+<details>
+<summary>📄 代码 · bash</summary>
 
 ```bash
 # 运行单个示例（在 examples/ 目录下）
@@ -251,15 +289,22 @@ cd examples && cargo run --bin encryption
 cd examples && ./verify_examples.sh
 ```
 
+</details>
+
 ### 🤖 CLI 工具
 
 除运行示例外，也可以使用随库附带的 CLI 诊断工具（`cli` 特性，入口 `src/cli/main.rs`）排查真实项目中的配置：
+
+<details>
+<summary>📄 代码 · bash</summary>
 
 ```bash
 cargo install confers --features cli
 ```
 
-提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#💻-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
+</details>
+
+提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
 
 ---
 
@@ -278,6 +323,9 @@ Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块�
 测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、33 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，10 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
 
 ### ▶️ 运行命令（与 CI 一致）
+
+<details>
+<summary>📄 代码 · bash</summary>
 
 ```bash
 # 全量测试（CI 矩阵按 default / recommended / full 三档运行）
@@ -301,6 +349,8 @@ cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
 cargo fuzz run parser
 ```
 
+</details>
+
 部分集成测试需要本地外部服务：总线组需要 NATS（CI 使用 `nats:2.10 -js` 容器），Redis（16379）/ etcd（2379）/ Consul（8500）组的集成测试同样需要对应服务；`docker-compose.test.yml` 一并提供了这四个服务（无服务时按端口守卫跳过）。
 
 ### 📊 测试规模
@@ -311,7 +361,7 @@ cargo fuzz run parser
 
 ## 📊 性能
 
-基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#📊-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#⚡-性能设计)。
+基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
 
 ---
 
@@ -319,7 +369,7 @@ cargo fuzz run parser
 
 ### 🛡️ 安全设计
 
-安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#🔒-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
+安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
 
 ### ⛓️ 供应链与门禁
 
@@ -333,6 +383,9 @@ cargo fuzz run parser
 
 ## 🗺️ 开发路线图
 
+<details>
+<summary>📋 表格</summary>
+
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:center">状态</th><th style="text-align:left">方向</th><th style="text-align:left">条目</th></tr>
 <tr><td align="center">✅</td><td>核心引擎</td><td>派生宏、多格式支持、来源链合并、环境变量与 CLI 覆盖</td></tr>
@@ -345,6 +398,8 @@ cargo fuzz run parser
 <tr><td align="center">✅</td><td>云原生集成</td><td>服务网格流量切分（<code>canary</code> 编排器 + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio 样例</a>）、分布式追踪集成（<code>tracing</code> 门面：load/reload/decrypt/remote_fetch span）</td></tr>
 </table>
 
+</details>
+
 ---
 
 ## 🤝 参与贡献
@@ -353,7 +408,7 @@ cargo fuzz run parser
 
 ### 🛠️ 开发环境
 
-工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#🧰-环境准备)。
+工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#-环境准备)。
 
 ### 💖 贡献方式
 
@@ -392,6 +447,9 @@ cargo fuzz run parser
 
 完整版本历史见 [📋 更新日志](docs/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式，语义化版本）。
 
+<details>
+<summary>📋 表格</summary>
+
 | 版本 | 日期 | 要点 |
 |------|------|------|
 | 未发布（rc.6 之后） | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
@@ -400,6 +458,8 @@ cargo fuzz run parser
 | 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |
 | 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |
 | 0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时开关；修复 SSRF 白名单绕过与 TLS 版本比较等问题 |
+
+</details>
 
 ---
 
@@ -415,6 +475,9 @@ cargo fuzz run parser
 
 Confers 站在以下优秀开源项目的肩膀上：
 
+<details>
+<summary>📋 表格</summary>
+
 | 依赖 | 用途 |
 |------|------|
 | [serde](https://github.com/serde-rs/serde) | 序列化与反序列化框架 |
@@ -426,6 +489,8 @@ Confers 站在以下优秀开源项目的肩膀上：
 | [clap](https://github.com/clap-rs/clap) | CLI 框架 |
 | [schemars](https://github.com/GREsau/schemars) | JSON Schema 生成 |
 | [criterion](https://github.com/bheisler/criterion.rs) | 基准测试 |
+
+</details>
 
 ### 💝 特别感谢
 

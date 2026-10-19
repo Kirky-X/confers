@@ -2,13 +2,13 @@
 
 <img src="docs/assets/confers.png" alt="Confers Logo" width="240">
 
-[![CI Status](https://github.com/Kirky-X/confers/actions/workflows/ci.yml/badge.svg)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![Version](https://img.shields.io/crates/v/confers.svg)](https://crates.io/crates/confers) [![Docs.rs](https://docs.rs/confers/badge.svg)](https://docs.rs/confers) [![Downloads](https://img.shields.io/crates/d/confers.svg)](https://crates.io/crates/confers) [![License](https://img.shields.io/crates/l/confers.svg)](LICENSE) [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org/) [![Coverage](https://codecov.io/gh/Kirky-X/confers/branch/main/graph/badge.svg)](https://codecov.io/gh/Kirky-X/confers)
+[![Rust 2024](https://img.shields.io/badge/Rust-2024-edded?logo=rust&style=for-the-badge)](https://www.rust-lang.org/) [![Rustc 1.97.1+](https://img.shields.io/badge/Rustc-1.97.1+-orange.svg?style=for-the-badge)](https://www.rust-lang.org/) [![crates.io](https://img.shields.io/crates/v/confers?style=for-the-badge)](https://crates.io/crates/confers) [![docs.rs](https://img.shields.io/docsrs/confers?style=for-the-badge)](https://docs.rs/confers) [![downloads](https://img.shields.io/crates/d/confers?style=for-the-badge)](https://crates.io/crates/confers) [![CI](https://img.shields.io/github/actions/workflow/status/Kirky-X/confers/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![coverage](https://img.shields.io/codecov/c/github/Kirky-X/confers?style=for-the-badge)](https://codecov.io/gh/Kirky-X/confers) [![license](https://img.shields.io/crates/l/confers?style=for-the-badge)](LICENSE)
 
-**[Chinese](README.md)** | English
+[中文](README.md) | **English**
 
 **A production-ready Rust configuration library with zero boilerplate**
 
-[✨ Features](#✨-features) • [🚀 Quick Start](#🚀-quick-start) • [📚 Documentation](#📚-documentation) • [💻 Examples](#💻-examples) • [🤝 Contributing](#🤝-contributing)
+[✨ Features](#-features) • [🚀 Quick Start](#-quick-start) • [📚 Documentation](#-documentation) • [💻 Examples](#-examples) • [🤝 Contributing](#-contributing)
 
 </div>
 
@@ -35,22 +35,27 @@ Tag a struct with `#[derive(Config)]`, merge sources by priority, and get strong
 
 ## 📋 Table of Contents
 
-- [✨ Features](#✨-features)
-- [🚀 Quick Start](#🚀-quick-start)
-- [🎨 Feature Flags](#🎨-feature-flags)
-- [📚 Documentation](#📚-documentation)
-- [💻 Examples](#💻-examples)
-- [🏗️ Architecture](#🏗️-architecture)
-- [🧪 Testing](#🧪-testing)
-- [📊 Performance](#📊-performance)
-- [🔒 Security](#🔒-security)
-- [🗺️ Roadmap](#🗺️-roadmap)
-- [🤝 Contributing](#🤝-contributing)
-- [📋 Changelog](#📋-changelog)
-- [📄 License](#📄-license)
-- [🙏 Acknowledgments](#🙏-acknowledgments)
+<details open>
+<summary>Table of Contents</summary>
+
+- [✨ Features](#-features)
+- [🚀 Quick Start](#-quick-start)
+- [🎨 Feature Flags](#-feature-flags)
+- [📚 Documentation](#-documentation)
+- [💻 Examples](#-examples)
+- [🏗️ Architecture](#️-architecture)
+- [🧪 Testing](#-testing)
+- [📊 Performance](#-performance)
+- [🔒 Security](#-security)
+- [🗺️ Roadmap](#️-roadmap)
+- [🤝 Contributing](#-contributing)
+- [📋 Changelog](#-changelog)
+- [📄 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
 - [📞 Contact & Support](#-contact--support)
-- [⭐ Star History](#⭐-star-history)
+- [⭐ Star History](#-star-history)
+
+</details>
 
 ---
 
@@ -83,7 +88,7 @@ Tag a struct with `#[derive(Config)]`, merge sources by priority, and get strong
 </tr>
 </table>
 
-Beyond the core capabilities above, config migration, snapshots and rollback, variable interpolation, modular configuration, context-aware values, runtime feature toggles, OpenFeature-style evaluation, security rule validators, key management and cloud KMS, lazy segmented parsing, and the unified change stream are all provided as independent feature flags as well; the complete feature matrix (mirroring the single-feature definitions in the `[features]` section of `Cargo.toml`) lives in the [🎨 Feature Flags](#🎨-feature-flags) section.
+Beyond the core capabilities above, config migration, snapshots and rollback, variable interpolation, modular configuration, context-aware values, runtime feature toggles, OpenFeature-style evaluation, security rule validators, key management and cloud KMS, lazy segmented parsing, and the unified change stream are all provided as independent feature flags as well; the complete feature matrix (mirroring the single-feature definitions in the `[features]` section of `Cargo.toml`) lives in the [🎨 Feature Flags](#-feature-flags) section.
 
 ---
 
@@ -91,15 +96,23 @@ Beyond the core capabilities above, config migration, snapshots and rollback, va
 
 ### 📦 Installation
 
+<details>
+<summary>📄 Code · bash</summary>
+
 ```bash
 cargo add confers
 ```
 
-Requires Rust 1.97.1 or later (MSRV, matching the repository `rust-toolchain.toml`). Default features include `toml`, `json`, and `dotenv`; the installation commands and feature lists for every preset (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) live in the [🎨 Feature Flags](#🎨-feature-flags) section below.
+</details>
+
+Requires Rust 1.97.1 or later (MSRV, matching the repository `rust-toolchain.toml`). Default features include `toml`, `json`, and `dotenv`; the installation commands and feature lists for every preset (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) live in the [🎨 Feature Flags](#-feature-flags) section below.
 
 ### 💡 Minimal Example
 
 The following example is adapted from [`examples/src/examples/basic_usage.rs`](examples/src/examples/basic_usage.rs):
+
+<details>
+<summary>📄 Code · rust</summary>
 
 ```rust
 use confers::Config;
@@ -129,11 +142,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+</details>
+
+<details>
+<summary>📄 Code · bash</summary>
+
 ```bash
 # Environment variables override defaults
 export PORT=9000
 cargo run    # Output: Listening on 127.0.0.1:9000
 ```
+
+</details>
 
 ### 🧭 Core Concepts
 
@@ -148,6 +168,9 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 
 ### 📦 Feature Presets
 
+<details>
+<summary>📋 Table</summary>
+
 | Preset | Installation | Features | Use Case |
 |------|----------|----------|----------|
 | Default | `cargo add confers` | `toml`, `json`, `dotenv` | Works out of the box |
@@ -158,9 +181,14 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 | `distributed` | `cargo add confers --features distributed` | `toml`, `json`, `dotenv`, `watch`, `validation`, `config-bus`, `progressive-reload`, `audit` | Distributed systems |
 | `full` | `cargo add confers --features full` | All 39 formal features (excludes `hot-reload-kit` and the to-be-removed compatibility aliases `env`/`schema`/`key`) | Complete capability set |
 
+</details>
+
 ### 📋 Feature Matrix
 
 The table below mirrors the single-feature definitions in the `[features]` section of `Cargo.toml` (presets are listed above), where `default = ["toml", "json", "dotenv"]`.
+
+<details>
+<summary>📋 Table</summary>
 
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:left">Feature</th><th style="text-align:center">Default</th><th style="text-align:left">Description</th></tr>
@@ -216,9 +244,14 @@ The table below mirrors the single-feature definitions in the `[features]` secti
 <tr><td><code>lazy-parse</code></td><td align="center">❌</td><td>Lazy segmented parsing of oversized documents</td></tr>
 </table>
 
+</details>
+
 ---
 
 ## 📚 Documentation
+
+<details>
+<summary>📋 Table</summary>
 
 | Document | Description |
 |------|------|
@@ -236,11 +269,16 @@ The table below mirrors the single-feature definitions in the `[features]` secti
 | [📦 Online API Docs](https://docs.rs/confers) | Latest documentation auto-generated on docs.rs |
 | [📦 crates.io](https://crates.io/crates/confers) | Release page |
 
+</details>
+
 ---
 
 ## 💻 Examples
 
 All 22 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
+
+<details>
+<summary>📄 Code · bash</summary>
 
 ```bash
 # Run a single example (from the examples/ directory)
@@ -251,15 +289,22 @@ cd examples && cargo run --bin encryption
 cd examples && ./verify_examples.sh
 ```
 
+</details>
+
 ### 🤖 CLI Tool
 
 Beyond the runnable examples, the bundled CLI diagnostics tool (`cli` feature, entry point `src/cli/main.rs`) troubleshoots configuration in real projects:
+
+<details>
+<summary>📄 Code · bash</summary>
 
 ```bash
 cargo install confers --features cli
 ```
 
-It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (no-arg output is the generic schema of the built-in `serde_json::Value` type; `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#💻-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
+</details>
+
+It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (no-arg output is the generic schema of the built-in `serde_json::Value` type; `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
 
 ---
 
@@ -278,6 +323,9 @@ For the architecture diagram, the public core and feature-gated module tables, t
 The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 33 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 10 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
 
 ### ▶️ Commands (matching CI)
+
+<details>
+<summary>📄 Code · bash</summary>
 
 ```bash
 # Full test run (CI matrix runs default / recommended / full)
@@ -302,6 +350,8 @@ cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
 cargo fuzz run parser
 ```
 
+</details>
+
 Some integration tests require local external services: the bus group needs NATS (CI uses a `nats:2.10 -js` container), and the Redis (16379) / etcd (2379) / Consul (8500) integration groups likewise need their services; `docker-compose.test.yml` provides all four (tests skip via port guards when a service is absent).
 
 ### 📊 Test Scale
@@ -312,7 +362,7 @@ As of v0.6.0-rc.10: 2415 unit tests (inline in `src/`, measured via `grep -rE -c
 
 ## 📊 Performance
 
-Baselines were collected locally on a development machine (criterion median): loading 50 fields takes about 691 ns and 200 fields about 713 ns, shallow merging 1000 entries about 20.9 µs, a change-stream roundtrip with one subscriber about 1.98 µs, and zero-copy reads (`get_shared`) are about 2.1x faster than deep copies (`get_raw`) for large values. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce. For the full benchmark tables and measurement methodology, see the [Performance Guide · baselines](docs/PERFORMANCE.md#📊-性能基线); for the design highlights (lock-free dynamic reads, `IndexMap` key order, adaptive debouncing, feature-gate trimming), see the [Architecture doc · performance design](docs/ARCHITECTURE.md#⚡-性能设计).
+Baselines were collected locally on a development machine (criterion median): loading 50 fields takes about 691 ns and 200 fields about 713 ns, shallow merging 1000 entries about 20.9 µs, a change-stream roundtrip with one subscriber about 1.98 µs, and zero-copy reads (`get_shared`) are about 2.1x faster than deep copies (`get_raw`) for large values. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce. For the full benchmark tables and measurement methodology, see the [Performance Guide · baselines](docs/PERFORMANCE.md#-性能基线); for the design highlights (lock-free dynamic reads, `IndexMap` key order, adaptive debouncing, feature-gate trimming), see the [Architecture doc · performance design](docs/ARCHITECTURE.md#-性能设计).
 
 ---
 
@@ -320,7 +370,7 @@ Baselines were collected locally on a development machine (criterion median): lo
 
 ### 🛡️ Security Design
 
-Security design centers on protecting sensitive data across its full lifecycle: XChaCha20-Poly1305 authenticated encryption with HKDF-SHA256 per-field key derivation, zeroize-on-drop memory safety, key version and rotation governance, built-in JWT/CORS/SSRF/TLS validators, error sanitization with HMAC-signed audit logs, plus SSRF validation and a circuit breaker for remote sources. Mechanism-level details live in the [Architecture doc · Security Design](docs/ARCHITECTURE.md#🔒-安全设计); security best practices and the vulnerability handling process are covered by the [Security doc](docs/SECURITY.md).
+Security design centers on protecting sensitive data across its full lifecycle: XChaCha20-Poly1305 authenticated encryption with HKDF-SHA256 per-field key derivation, zeroize-on-drop memory safety, key version and rotation governance, built-in JWT/CORS/SSRF/TLS validators, error sanitization with HMAC-signed audit logs, plus SSRF validation and a circuit breaker for remote sources. Mechanism-level details live in the [Architecture doc · Security Design](docs/ARCHITECTURE.md#-安全设计); security best practices and the vulnerability handling process are covered by the [Security doc](docs/SECURITY.md).
 
 ### ⛓️ Supply Chain and Gates
 
@@ -334,6 +384,9 @@ Please do not report security vulnerabilities through public issues. Use the pri
 
 ## 🗺️ Roadmap
 
+<details>
+<summary>📋 Table</summary>
+
 <table style="width:100%; border-collapse: collapse">
 <tr><th style="text-align:center">Status</th><th style="text-align:left">Area</th><th style="text-align:left">Items</th></tr>
 <tr><td align="center">✅</td><td>Core engine</td><td>Derive macros, multi-format support, source chain merging, env and CLI overrides</td></tr>
@@ -346,6 +399,8 @@ Please do not report security vulnerabilities through public issues. Use the pri
 <tr><td align="center">✅</td><td>Cloud-native integration</td><td>Service mesh traffic splitting (<code>canary</code> orchestrator + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio samples</a>), distributed tracing (<code>tracing</code> facade: load/reload/decrypt/remote_fetch spans)</td></tr>
 </table>
 
+</details>
+
 ---
 
 ## 🤝 Contributing
@@ -354,7 +409,7 @@ For the detailed contribution workflow and code standards, see the [🤝 Contrib
 
 ### 🛠️ Development Environment
 
-The toolchain is Rust 1.97.1 (pinned in `rust-toolchain.toml`); run `cargo fmt --all -- --check` and `cargo clippy --all-targets --all-features -- -D warnings` before committing; [lefthook](https://github.com/evilmartians/lefthook) Git hooks run rustfmt, clippy, `cargo deny check`, and private-key scanning on pre-commit, enforce Conventional Commits on commit-msg, and run `cargo audit` plus the coverage gate on pre-push. For the full environment setup, see the [Contributing Guide · environment prep](docs/CONTRIBUTING.md#🧰-环境准备).
+The toolchain is Rust 1.97.1 (pinned in `rust-toolchain.toml`); run `cargo fmt --all -- --check` and `cargo clippy --all-targets --all-features -- -D warnings` before committing; [lefthook](https://github.com/evilmartians/lefthook) Git hooks run rustfmt, clippy, `cargo deny check`, and private-key scanning on pre-commit, enforce Conventional Commits on commit-msg, and run `cargo audit` plus the coverage gate on pre-push. For the full environment setup, see the [Contributing Guide · environment prep](docs/CONTRIBUTING.md#-环境准备).
 
 ### 💖 Ways to Contribute
 
@@ -393,6 +448,9 @@ Want to contribute code?<br>
 
 For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and semantic versioning).
 
+<details>
+<summary>📋 Table</summary>
+
 | Version | Date | Highlights |
 |------|------|------|
 | Unreleased (post-rc.6) | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
@@ -401,6 +459,8 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 | 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |
 | 0.6.0-rc.2 | 2026-09-07 | Refreshed 12+ 0.x dependencies (async-nats 0.50, chacha20poly1305 0.11, garde 0.23, and more); solidified the test pyramid by adding and registering 7 E2E suites |
 | 0.5.1 | 2026-08-06 | New `SecurityValidator` security rules and `FeatureToggleRegistry` runtime toggles; fixed SSRF whitelist bypass, TLS version comparison, and more |
+
+</details>
 
 ---
 
@@ -416,6 +476,9 @@ This project is licensed under the [MIT](LICENSE) License.
 
 Confers stands on the shoulders of these excellent open source projects:
 
+<details>
+<summary>📋 Table</summary>
+
 | Dependency | Purpose |
 |------|------|
 | [serde](https://github.com/serde-rs/serde) | Serialization and deserialization framework |
@@ -427,6 +490,8 @@ Confers stands on the shoulders of these excellent open source projects:
 | [clap](https://github.com/clap-rs/clap) | CLI framework |
 | [schemars](https://github.com/GREsau/schemars) | JSON Schema generation |
 | [criterion](https://github.com/bheisler/criterion.rs) | Benchmarking |
+
+</details>
 
 ### 💝 Special Thanks
 
