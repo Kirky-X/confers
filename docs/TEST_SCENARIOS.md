@@ -760,7 +760,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 | 20 | `modules_demo` | 本地文件（部分段引用 consul/etcd 字符串仅为展示） | 退出码 0；模块注册与激活 profile 加载输出 |
 | 21 | `security` | 无 | 退出码 0；安全校验/脱敏演示输出 |
 
-批跑脚本（建议固化为 `scripts/run_examples.sh`）：`set -e; for b in $(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name=="confers-examples")|.targets[].name'); do cargo run -q -p confers-examples --bin "$b"; done`
+批跑命令：`set -e; for b in $(cargo metadata --format-version 1 | jq -r '.packages[]|select(.name=="confers-examples")|.targets[].name'); do cargo run -q -p confers-examples --bin "$b"; done`
 
 ### 5.3 场景 ID → E2E 文件映射汇总
 

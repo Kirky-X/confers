@@ -111,7 +111,7 @@ cargo test --features remote  # 仅运行远程配置相关测试
 
 ### Git 钩子（lefthook）
 
-仓库使用 [lefthook](https://github.com/evilmartians/lefthook) 执行本地质量门禁（启用：`lefthook install` 或 `bash scripts/install-pre-commit.sh`）：
+仓库使用 [lefthook](https://github.com/evilmartians/lefthook) 执行本地质量门禁（启用：`lefthook install`）：
 
 | 钩子 | 检查项 |
 |:-----|:-----|
