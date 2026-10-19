@@ -1,57 +1,55 @@
-# Gitleaks configuration for confers.
-#
-# This repository contains sanitization *self-tests* whose fixtures are
-# deliberately secret-shaped public example values (the jwt.io sample token,
-# the AWS documentation example keys, sequential fake keys). Those fixtures
-# are allowlisted below so scans stay focused on real leaks; the
-# `// pragma: allowlist secret` comments in source mark the same spots for
-# human reviewers.
-#
-# Git history also contains test fixtures that lived in files removed by
-# earlier refactors; those historical paths are allowlisted explicitly.
-#
-# Everything else keeps gitleaks defaults — this file extends, not replaces.
+# gitleaks 配置 —— 安全扫描误报降噪（非关闭检测）
+# 用法：gitleaks detect --source . --config .gitleaks.toml
+# 说明：[extend] useDefault=true 仅继承内置检测“规则”，不继承内置默认 allowlist，
+# 故此处显式枚举“永不存放真实凭据”的目录级噪声路径（检测器基线自报 / vendored crate
+# 缓存 / 历史扫描产物 / 测试 / 示例 / 基准 / 文档 / testdata/fixtures 夹具 / 构建产物）。
+# 生产源文件(src/)内联测试夹具的零星命中，改由 .gitleaksignore 逐行指纹精确忽略，
+# 保留这些文件对真实密钥的持续检出能力。
+
+title = "base/confers gitleaks config"
+
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Sanitizer self-test fixtures (public example values), local tooling artifacts, and removed test files (history only)"
+description = "目录级噪声放行：基线自报/vendored/扫描产物/测试/示例/基准/文档/testdata/fixtures/构建产物"
 paths = [
-  # Sanitizer self-test modules: secret-shaped strings here are fixtures
-  # under test, not credentials.
-  '''(^|/)src/error/sanitize\.rs$''',
-  '''(^|/)src/security/error_sanitization\.rs$''',
-  # Local tooling cache (never committed).
-  '''(^|/)\.mimosa/''',
-  # Removed by earlier refactors; gitleaks only sees these in git history.
-  '''(^|/)src/security/security_tests\.rs$''',
-  '''(^|/)tests/integration_etcd\.rs$''',
-  '''(^|/)tests/integration_remote\.rs$''',
-  '''(^|/)examples/src/08-audit/08-audit-sensitive_fields\.rs$''',
-  '''(^|/)examples/src/examples/remote_etcd\.rs$''',
-  # Detector/scan artifacts & generic fixture dirs that never hold real creds
-  # (added 2026-10-18 gitleaks 8.30.1 full-history noise pass; complements the
-  # explicit per-file entries above rather than replacing them).
-  '''(^|/)\.secrets\.baseline$''',
-  '''(^|/)reviews/''',
-  '''(^|/)tests?/''',
-  '''(^|/)examples?/''',
-  '''(^|/)benches?/''',
-  '''(^|/)docs?/''',
-  '''(^|/)testdata/''',
-  '''(^|/)fixtures?/''',
-  '''_tests?\.rs$''',
-  '''\.md$''',
-  '''(^|/)target/''',
+    '''(^|/)\.secrets\.baseline$''',
+    '''(^|/)\.cargo/registry/''',
+    '''(^|/)reviews/''',
+    '''(^|/)tests?/''',
+    '''(^|/)examples?/''',
+    '''(^|/)benches?/''',
+    '''(^|/)docs?/''',
+    '''(^|/)testdata/''',
+    '''(^|/)fixtures?/''',
+    '''_tests?\.rs$''',
+    '''\.md$''',
+    '''(^|/)target/''',
+    # --- 本仓专属：消毒器自检夹具与已删除的历史测试文件 ---
+    # src/error/sanitize.rs 与 src/security/error_sanitization.rs 内的
+    # 「密钥形状」字符串是被测对象（jwt.io 示例 token、AWS 文档示例 key、
+    # 顺序假 key），并非真实凭据；源码中的 `// pragma: allowlist secret`
+    # 注释为人工复核标记同一批位置。
+    '''(^|/)src/error/sanitize\.rs$''',
+    '''(^|/)src/security/error_sanitization\.rs$''',
+    # 本地工具缓存（不入库）。
+    '''(^|/)\.mimosa/''',
+    # 早期重构已删除的文件，gitleaks 仅在 git 历史中见到。
+    '''(^|/)src/security/security_tests\.rs$''',
+    '''(^|/)tests/integration_etcd\.rs$''',
+    '''(^|/)tests/integration_remote\.rs$''',
+    '''(^|/)examples/src/08-audit/08-audit-sensitive_fields\.rs$''',
+    '''(^|/)examples/src/examples/remote_etcd\.rs$''',
 ]
 regexes = [
-  # AWS documentation example keys.
-  '''AKIAIOSFODNN7EXAMPLE''',
-  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
-  # jwt.io documentation sample token (and the truncated form used in tests).
-  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]*''',
-  '''eyJhbGciOiJIUzI1NiJ9\.signature''',
-  # Sequential fake keys used in sanitizer/error tests (incl. git history).
-  '''abcdefghijklmnopqrstuvwxyz0123456789ABCD''',
-  '''abcdef0123456789abcdef0123456789''',
+    # AWS 文档示例 key
+    '''AKIAIOSFODNN7EXAMPLE''',
+    '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+    # jwt.io 文档示例 token（及测试中使用的截断形式）
+    '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_=-]+\.[A-Za-z0-9_=-]*''',
+    '''eyJhbGciOiJIUzI1NiJ9\.signature''',
+    # 消毒器/错误测试中的顺序假 key（含 git 历史）
+    '''abcdefghijklmnopqrstuvwxyz0123456789ABCD''',
+    '''abcdef0123456789abcdef0123456789''',
 ]

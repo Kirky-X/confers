@@ -1,10 +1,8 @@
-# typos 配置 — 词表白名单（修复 pre-commit 门禁摩擦）
+# typos 白名单 —— 仅登记「确为真词 / 真实标识符 / 刻意测试数据」的命中，
+# 不放宽任何门禁：真正的拼写错误仍会由 typos 报告并阻断提交。
 #
 # 背景：pre-commit 的 typos 钩子（crate-ci/typos v1.28）默认带 `--write-changes`，
-# 命中即原地改写文件。本仓存在若干「有意为之」的专有名词与算法常量，若不在此放行，
-# 会被改写成语义错误的内容（例如 TLS_RSA_WITH_3DES_EDE_CBC_SHA →
-# TLS_RSA_WITH_3DES_EDGE_CBC_SHA，导致 3DES/SWEET32 弱套件不再被安全规则识别，属安全回归）。
-#
+# 命中即原地改写文件；凡属「有意为之」的专有名词、算法缩写与测试夹具，须在此逐条放行。
 # 本文件只做最小范围的词级放行：不放宽钩子 args、不删除钩子、不改动安全规则原值。
 
 [default.extend-words]
@@ -27,6 +25,15 @@ flate = "flate"
 # 命中位置：src/bus/redis.rs、src/remote/poll.rs、src/security/rules/ssrf.rs、
 # src/security/rules/tls.rs 的注释与断言消息。
 unparseable = "unparseable"
+
+# lication —— 环境变量前缀剥离规则的**刻意期望值**：
+# src/impl_/config/source.rs 的测试断言 APPLICATION_MODE 剥前缀后得到
+# "lication.mode"（即配置键后缀）。这是被测输出本身，改写会直接改坏断言。
+lication = "lication"
+
+# tru —— src/impl_/snapshot.rs 的**残缺 JSON 夹具**：
+# 写入 "{\"partial\": tru" 以触发解析失败分支，tru 是不完整字面量而非 truncate 笔误。
+tru = "tru"
 
 # 测试夹具:自签名 CA PEM(base64 内容会被误判为拼写错误且无词级放行意义)。
 [files]

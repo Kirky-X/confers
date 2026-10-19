@@ -468,6 +468,8 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 This project is licensed under the [MIT](LICENSE) License.
 
+Copyright (c) 2026 Kirky.X🌠
+
 ---
 
 ## 🙏 Acknowledgments

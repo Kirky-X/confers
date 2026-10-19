@@ -465,7 +465,9 @@ cargo fuzz run parser
 
 ## 📄 许可证
 
-本项目采用 [MIT](LICENSE) 许可证发布。
+本项目基于 [MIT](LICENSE) 许可证发布。
+
+Copyright (c) 2026 Kirky.X🌠
 
 ---
 
