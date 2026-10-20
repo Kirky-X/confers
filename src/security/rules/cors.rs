@@ -87,7 +87,6 @@ impl SecurityValidator for CorsValidator {
             return Ok(());
         }
 
-        // Check allowed_origins for wildcard
         if let Some(value) = config.get_raw(&self.origins_key)
             && let Some(origins_str) = value.as_str()
             && origins_str.contains('*')
@@ -127,7 +126,6 @@ impl SecurityValidator for CorsValidator {
             });
         }
 
-        // Check max_age
         if let Some(value) = config.get_raw(&self.max_age_key) {
             // Try string representation first (e.g. "172800")
             if let Some(age_str) = value.as_str() {
@@ -144,19 +142,19 @@ impl SecurityValidator for CorsValidator {
                         severity: ViolationSeverity::Warning,
                     });
                 }
-            } else if let Some(age) = value.as_i64() {
-                // Try native i64 representation
-                if age >= 0 && age as u64 > MAX_AGE_LIMIT {
-                    violations.push(SecurityViolation {
-                        validator: self.name().to_string(),
-                        field: Some("cors.max_age".to_string()),
-                        message: format!(
-                            "CORS max_age {}s exceeds recommended maximum of {}s (24h)",
-                            age, MAX_AGE_LIMIT
-                        ),
-                        severity: ViolationSeverity::Warning,
-                    });
-                }
+            } else if let Some(age) = value.as_i64()
+                && age >= 0
+                && age as u64 > MAX_AGE_LIMIT
+            {
+                violations.push(SecurityViolation {
+                    validator: self.name().to_string(),
+                    field: Some("cors.max_age".to_string()),
+                    message: format!(
+                        "CORS max_age {}s exceeds recommended maximum of {}s (24h)",
+                        age, MAX_AGE_LIMIT
+                    ),
+                    severity: ViolationSeverity::Warning,
+                });
             }
         }
 
