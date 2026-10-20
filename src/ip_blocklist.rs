@@ -36,7 +36,7 @@ use std::sync::LazyLock;
 ///   IPv4-only networks and must never be reachable from a config fetch.
 static BLOCKED_NETWORKS: LazyLock<Vec<IpNet>> = LazyLock::new(|| {
     vec![
-        // --- IPv4 ---
+        // IPv4
         "0.0.0.0/8".parse().unwrap(),          // "this network"
         "127.0.0.0/8".parse().unwrap(),        // Loopback
         "10.0.0.0/8".parse().unwrap(),         // Class A private
@@ -51,7 +51,7 @@ static BLOCKED_NETWORKS: LazyLock<Vec<IpNet>> = LazyLock::new(|| {
         "224.0.0.0/4".parse().unwrap(),        // Multicast
         "240.0.0.0/4".parse().unwrap(),        // Reserved (former class E)
         "255.255.255.255/32".parse().unwrap(), // Limited broadcast
-        // --- IPv6 ---
+        // IPv6
         "::1/128".parse().unwrap(),      // Loopback
         "::/128".parse().unwrap(),       // Unspecified address
         "fc00::/7".parse().unwrap(),     // Unique local

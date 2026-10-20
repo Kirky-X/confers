@@ -155,7 +155,6 @@ impl TypeScriptGenerator {
             return ordered.join(" | ");
         }
 
-        // Handle single type string
         if let Some(type_str) = schema.get("type").and_then(|t| t.as_str()) {
             match type_str {
                 "string" | "number" | "integer" | "boolean" => Self::ts_primitive(type_str),
@@ -358,7 +357,7 @@ mod tests {
         assert!(ts_type.contains("tags: string[]"));
     }
 
-    // ---- from_json_value: each Value variant ----
+    // from_json_value: each Value variant
 
     #[test]
     fn test_from_json_value_string() {
@@ -424,7 +423,7 @@ mod tests {
         assert!(ts.contains("n: number"));
     }
 
-    // ---- get_typescript_type: $ref ----
+    // get_typescript_type: $ref
 
     #[test]
     fn test_get_typescript_type_ref_simple() {
@@ -452,7 +451,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: type arrays (Option-like) ----
+    // get_typescript_type: type arrays (Option-like)
 
     #[test]
     fn test_get_typescript_type_array_option_string() {
@@ -515,7 +514,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "string | any");
     }
 
-    // ---- get_typescript_type: single type string ----
+    // get_typescript_type: single type string
 
     #[test]
     fn test_get_typescript_type_string() {
@@ -607,7 +606,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: anyOf ----
+    // get_typescript_type: anyOf
 
     #[test]
     fn test_get_typescript_type_any_of_single() {
@@ -639,7 +638,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: oneOf ----
+    // get_typescript_type: oneOf
 
     #[test]
     fn test_get_typescript_type_one_of_single() {
@@ -675,7 +674,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: allOf ----
+    // get_typescript_type: allOf
 
     #[test]
     fn test_get_typescript_type_all_of_single() {
@@ -708,7 +707,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: enum ----
+    // get_typescript_type: enum
 
     #[test]
     fn test_get_typescript_type_enum_strings() {
@@ -734,7 +733,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- get_typescript_type: nothing recognizable ----
+    // get_typescript_type: nothing recognizable
 
     #[test]
     fn test_get_typescript_type_empty_object() {
@@ -742,7 +741,7 @@ mod tests {
         assert_eq!(TypeScriptGenerator::get_typescript_type(&s), "any");
     }
 
-    // ---- is_optional ----
+    // is_optional
 
     #[test]
     fn test_is_optional_no_required_array() {
@@ -768,7 +767,7 @@ mod tests {
         assert!(TypeScriptGenerator::is_optional("a", &s));
     }
 
-    // ---- generate_interface ----
+    // generate_interface
 
     #[test]
     fn test_generate_interface_one_of_returns_type_alias() {
@@ -919,7 +918,7 @@ mod tests {
         assert!(out.contains("export interface Empty"));
     }
 
-    // ---- convert_json_schema_to_typescript ----
+    // convert_json_schema_to_typescript
 
     #[test]
     fn test_convert_invalid_schema_returns_comment() {
@@ -994,7 +993,7 @@ mod tests {
         assert!(out.contains("interface Config"));
     }
 
-    // ---- generate<T>: end-to-end smoke tests ----
+    // generate<T>: end-to-end smoke tests
 
     #[test]
     fn test_generate_simple_struct() {

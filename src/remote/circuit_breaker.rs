@@ -274,7 +274,6 @@ mod tests {
         cb.record_failure();
         assert_eq!(cb.state, CircuitState::Open);
 
-        // Wait for backoff to expire
         std::thread::sleep(Duration::from_millis(20));
 
         assert!(cb.can_execute()); // transitions to HalfOpen

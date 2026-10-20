@@ -15,7 +15,7 @@ use confers::loader;
 #[cfg(feature = "snapshot")]
 use confers::snapshot::SnapshotFormat;
 
-// ============ Loader Module ============
+// Loader Module
 
 #[test]
 fn test_format_try_parse_all() {
@@ -69,7 +69,7 @@ fn test_detect_from_content_formats() {
     assert_eq!(loader::detect_format_from_content(""), None);
 }
 
-// ============ Source Module ============
+// Source Module
 
 #[test]
 fn test_memory_source_basic() {
@@ -148,7 +148,7 @@ fn test_source_kind_values() {
     );
 }
 
-// ============ Snapshot Module ============
+// Snapshot Module
 
 #[cfg(feature = "snapshot")]
 #[test]
@@ -160,7 +160,7 @@ fn test_snapshot_format_basics() {
     assert_ne!(SnapshotFormat::Toml, SnapshotFormat::Json);
 }
 
-// ============ Error Module ============
+// Error Module
 
 #[test]
 fn test_error_codes() {
@@ -202,7 +202,7 @@ fn test_error_is_retryable() {
     assert!(io_err.is_retryable());
 }
 
-// ============ Traits Module ============
+// Traits Module
 
 #[test]
 fn test_filter_sensitive_keys_works() {
@@ -242,7 +242,7 @@ fn test_health_status_variants() {
     assert!(c.requires_rollback());
 }
 
-// ============ ConfigValue Module ============
+// ConfigValue Module
 
 #[test]
 fn test_config_value_creation() {
@@ -264,7 +264,7 @@ fn test_config_value_conversions() {
     assert_eq!(v.as_str(), Some("test"));
 }
 
-// ============ Interpolation Module ============
+// Interpolation Module
 
 #[cfg(feature = "interpolation")]
 #[test]
@@ -291,7 +291,7 @@ fn test_interpolate_no_vars() {
     assert_eq!(interpolate("", &|_| None::<String>).unwrap(), "");
 }
 
-// ============ Dynamic Field Module ============
+// Dynamic Field Module
 
 #[cfg(feature = "dynamic")]
 #[test]
@@ -326,9 +326,9 @@ fn test_dynamic_field_no_callbacks() {
     assert_eq!(f.callback_count(), 0);
 }
 
-// ============ Context Module ============
+// Context Module
 
-// ============ Merger Module ============
+// Merger Module
 #[test]
 fn test_merge_strategies() {
     use confers::merger::MergeStrategy;
@@ -337,7 +337,7 @@ fn test_merge_strategies() {
     assert_ne!(MergeStrategy::Append, MergeStrategy::Prepend);
 }
 
-// ============ Validator Module ============
+// Validator Module
 
 #[cfg(feature = "validation")]
 mod validation_tests {

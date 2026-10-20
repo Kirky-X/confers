@@ -859,7 +859,7 @@ mod tests {
         assert_eq!(provider.cache_policy(), KeyCachePolicy::CacheIndefinitely);
     }
 
-    // ===== VaultKeyProvider tests (only when `remote` feature is enabled) =====
+    // VaultKeyProvider tests (only when `remote` feature is enabled)
 
     #[cfg(feature = "remote")]
     #[test]

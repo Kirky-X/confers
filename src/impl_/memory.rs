@@ -27,7 +27,7 @@ use crate::types::AnnotatedValue;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// ============== Async Implementation (feature-gated) ==============
+// Async Implementation (feature-gated)
 
 /// Zero-copy read port: fetch the shared handle (`Arc`) to a stored value
 /// instead of a deep clone.
@@ -154,7 +154,7 @@ mod async_impl {
 #[cfg(feature = "async-core")]
 pub use async_impl::InMemoryConfig;
 
-// ============== Sync Implementation (for minimal builds) ==============
+// Sync Implementation (for minimal builds)
 
 #[cfg(not(feature = "async-core"))]
 mod sync_impl {
@@ -254,7 +254,7 @@ mod sync_impl {
 #[cfg(not(feature = "async-core"))]
 pub use sync_impl::InMemoryConfig;
 
-// ============== Helper Methods (common to both) ==============
+// Helper Methods (common to both)
 
 #[cfg(test)]
 mod tests {

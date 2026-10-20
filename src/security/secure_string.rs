@@ -267,7 +267,6 @@ impl SecureString {
         hasher.update(&self.data);
         let result = hasher.finalize();
 
-        // 转换为十六进制字符串并截断
         let hex = hex::encode(result);
         if hex.len() > max_len {
             hex[..max_len].to_string()
@@ -524,7 +523,6 @@ mod tests {
         let _secret1 = SecureString::from("test1");
         let _secret2 = SecureString::from("test2");
 
-        // 检查分配数增加了2
         assert_eq!(
             allocated_secure_strings(),
             initial_allocated + 2,

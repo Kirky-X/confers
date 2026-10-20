@@ -49,7 +49,6 @@ impl ConfigProvider for TestProvider {
 fn test_toggle_lifecycle() {
     let registry = FeatureToggleRegistry::new();
 
-    // Register
     registry.register("feature_a", "Feature A", false);
     assert!(!registry.is_enabled("feature_a"));
 

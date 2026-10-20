@@ -45,7 +45,6 @@ impl PathValidator {
 
         let path = Path::new(file_path);
 
-        // Check for path traversal attempts
         let canonical = std::fs::canonicalize(path).map_err(|_| ConfigError::FileNotFound {
             filename: path.to_path_buf(),
             source: Some(std::io::Error::new(

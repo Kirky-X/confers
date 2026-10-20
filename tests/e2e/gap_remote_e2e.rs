@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-// --- 272/273/274: poll builder surface: stale_on_error, auth headers, default timeout ---
+// 272/273/274: poll builder surface: stale_on_error, auth headers, default timeout
 #[test]
 fn gs272_273_274_polled_builder_surface() {
     use confers::remote::HttpPolledSourceBuilder;
@@ -38,7 +38,7 @@ fn gs272_273_274_polled_builder_surface() {
     );
 }
 
-// --- 271: polled KV content change takes effect on the next poll ---
+// 271: polled KV content change takes effect on the next poll
 #[tokio::test]
 async fn gs271_poll_content_change_takes_effect() {
     use confers::remote::{HttpPolledSourceBuilder, PolledSource};
@@ -131,7 +131,7 @@ async fn gs271_poll_content_change_takes_effect() {
     server.abort();
 }
 
-// --- 507: PollInterval::custom range validation and clamp consistency ---
+// 507: PollInterval::custom range validation and clamp consistency
 #[test]
 fn gs507_poll_interval_custom_bounds_and_clamps() {
     use confers::remote::PollInterval;
@@ -145,7 +145,7 @@ fn gs507_poll_interval_custom_bounds_and_clamps() {
     assert!(m.is_err(), "u64::MAX is out of range");
 }
 
-// --- 300: BusEventLimiter reject / release / reset semantics ---
+// 300: BusEventLimiter reject / release / reset semantics
 #[test]
 fn gs300_bus_event_limiter() {
     use confers::BusEventLimiter;
@@ -169,7 +169,7 @@ fn gs300_bus_event_limiter() {
     assert!(limiter.try_acquire(), "reset clears the rate state");
 }
 
-// --- 304/305: VersionArbitratedBus arbitration and monotonic versions across restart ---
+// 304/305: VersionArbitratedBus arbitration and monotonic versions across restart
 #[tokio::test]
 async fn gs304_305_version_arbitrated_bus() {
     use confers::bus::VersionArbitratedBus;
@@ -193,7 +193,7 @@ async fn gs304_305_version_arbitrated_bus() {
     let _ = bus.dropped_total();
 }
 
-// --- 521: OpenFeature unregistered flag and missing targeting key edges ---
+// 521: OpenFeature unregistered flag and missing targeting key edges
 #[test]
 fn gs521_openfeature_missing_flag_and_key_edges() {
     use confers::context::EvaluationContext;
@@ -228,7 +228,7 @@ fn gs521_openfeature_missing_flag_and_key_edges() {
     });
 }
 
-// --- 474: unknown segment returns no error and no panic (lazy-parse) ---
+// 474: unknown segment returns no error and no panic (lazy-parse)
 #[test]
 fn gs474_lazy_unknown_segment_semantics() {
     use confers::lazy::LazySegmentedConfig;
@@ -241,7 +241,7 @@ fn gs474_lazy_unknown_segment_semantics() {
     }
 }
 
-// --- 472/473 supplement: parse-on-first-access and zero parse for untouched segments ---
+// 472/473 supplement: parse-on-first-access and zero parse for untouched segments
 #[test]
 fn gs472_473_lazy_segmentation_parse_and_cache() {
     use confers::lazy::LazySegmentedConfig;
@@ -262,7 +262,7 @@ fn gs472_473_lazy_segmentation_parse_and_cache() {
     assert_eq!(lazy.parsed_count(), 1, "second access served from cache");
 }
 
-// --- 475-477 supplement: metrics backend receives confers_-prefixed counters ---
+// 475-477 supplement: metrics backend receives confers_-prefixed counters
 #[test]
 fn gs484_metrics_backend_names() {
     // names are stable API; the emission path is covered by

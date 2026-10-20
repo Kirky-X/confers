@@ -14,9 +14,7 @@ mod tests {
     };
     use serial_test::serial;
 
-    // ========================================
     // SecretString Tests
-    // ========================================
 
     #[test]
     fn test_secret_string_debug_redacts() {
@@ -61,9 +59,7 @@ mod tests {
         assert_eq!(original.expose(), cloned.expose());
     }
 
-    // ========================================
     // SecretBytes Tests
-    // ========================================
 
     #[test]
     fn test_secret_bytes_debug_redacts() {
@@ -111,11 +107,9 @@ mod tests {
         assert_eq!(non_empty.len(), 5);
     }
 
-    // ========================================
     // XChaCha20Crypto Tests
     // Note: These tests use fixed keys for functional testing purposes.
     // In production, always use cryptographically secure random keys.
-    // ========================================
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
@@ -200,9 +194,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ========================================
     // HKDF Key Derivation Tests
-    // ========================================
 
     #[test]
     fn test_derive_field_key() {
@@ -241,9 +233,7 @@ mod tests {
         assert_eq!(key1, key2);
     }
 
-    // ========================================
     // EnvKeyProvider Tests
-    // ========================================
 
     #[test]
     #[serial]
@@ -353,9 +343,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ========================================
     // Integration Tests
-    // ========================================
 
     #[test]
     fn test_full_encryption_workflow() {
@@ -395,9 +383,7 @@ mod tests {
         assert_eq!(debug, "[REDACTED]");
     }
 
-    // ========================================
     // Edge Case Tests
-    // ========================================
 
     #[test]
     fn test_encrypt_empty_data() {

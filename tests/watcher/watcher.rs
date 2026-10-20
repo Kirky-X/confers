@@ -25,9 +25,7 @@ use confers::watcher::{
     AdaptiveDebouncer, FsWatcher, MultiFsWatcher, WatcherConfig, WatcherConfigBuilder, WatcherGuard,
 };
 
-// ========================================
 // Test Constants with Documented Meanings
-// ========================================
 
 /// Default debounce window in milliseconds
 const DEFAULT_DEBOUNCE_MS: u64 = 200;
@@ -47,9 +45,7 @@ const CUSTOM_MAX_FAILURES: u32 = 10;
 /// Custom failure pause duration for builder tests
 const CUSTOM_FAILURE_PAUSE_MS: u64 = 60000;
 
-// ========================================
 // Module Existence Tests (2.1.1)
-// ========================================
 
 #[test]
 #[allow(unused_imports)]
@@ -69,9 +65,7 @@ fn test_progressive_reload_module_exists() {
     };
 }
 
-// ========================================
 // WatcherConfig Tests
-// ========================================
 
 /// Test that default WatcherConfig has correct values.
 #[test]
@@ -294,9 +288,7 @@ fn test_watcher_config_debug() {
     assert!(debug_str.contains("debounce_ms"));
 }
 
-// ========================================
 // AdaptiveDebouncer Tests (2.1.5 - Debounce)
-// ========================================
 
 /// Test AdaptiveDebouncer with default window.
 #[test]
@@ -327,7 +319,6 @@ fn test_adaptive_debouncer_after_window() {
     // First call should process
     assert!(debouncer.should_process());
 
-    // Wait for window to expire
     std::thread::sleep(Duration::from_millis(60));
 
     // Should process again after window
@@ -376,9 +367,7 @@ fn test_adaptive_debouncer_reset() {
     assert!(debouncer.should_process());
 }
 
-// ========================================
 // FsWatcher Tests (2.1.2, 2.1.3, 2.1.4 - File Events)
-// ========================================
 
 /// A watcher that can receive a filesystem event path (shared by
 /// `FsWatcher` and `MultiFsWatcher`).
@@ -549,7 +538,6 @@ async fn test_fs_watcher_file_deletion_detection() {
     );
 }
 
-// ========================================
 // MultiFsWatcher Tests
 
 /// Test MultiFsWatcher requires at least one path.
@@ -671,9 +659,7 @@ async fn test_multi_fs_watcher_drop_stops_watcher() {
     // Reaching this point means cleanup succeeded.
 }
 
-// ========================================
 // Error Handling Tests (2.1.6, 2.1.7)
-// ========================================
 
 /// Test error handling for permission denied scenarios (2.1.6).
 #[tokio::test]
@@ -729,9 +715,7 @@ async fn test_watcher_guard_shutdown() {
     assert!(!guard.is_running());
 }
 
-// ========================================
 // WatcherConfig Builder Pattern Tests
-// ========================================
 
 /// Test WatcherConfigBuilder default.
 #[test]
@@ -764,9 +748,7 @@ fn test_watcher_config_builder_chaining() {
     assert!(config.rollback_on_validation_failure);
 }
 
-// ========================================
 // Progressive Reload Tests (with progressive-reload feature)
-// ========================================
 
 #[cfg(feature = "progressive-reload")]
 mod progressive_tests {

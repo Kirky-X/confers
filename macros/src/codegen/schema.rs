@@ -79,7 +79,6 @@ fn generate_type_schema(ty: &Type) -> TokenStream {
         return quote! { { "type": ["string", "null"] } };
     }
 
-    // Handle common types
     if type_str.contains("String") || type_str.contains("str") {
         return quote! { { "type": "string" } };
     }

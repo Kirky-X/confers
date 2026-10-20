@@ -184,7 +184,7 @@ mod tests {
         SourceId::new("test")
     }
 
-    // ===== toml_value_to_config_value =====
+    // toml_value_to_config_value
 
     #[cfg(feature = "toml")]
     #[test]
@@ -293,7 +293,7 @@ mod tests {
         assert_eq!(n.inner.as_str(), Some("v"));
     }
 
-    // ===== toml_table_to_config_value =====
+    // toml_table_to_config_value
 
     #[cfg(feature = "toml")]
     #[test]
@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(x_av.inner.as_i64(), Some(1));
     }
 
-    // ===== Regression: bare key for nested tables/objects/mappings (fix-0.4.1) =====
+    // Regression: bare key for nested tables/objects/mappings (fix-0.4.1)
 
     #[cfg(feature = "toml")]
     #[test]
@@ -419,7 +419,7 @@ mod tests {
         );
     }
 
-    // ===== json_to_config_value =====
+    // json_to_config_value
 
     #[cfg(feature = "json")]
     #[test]
@@ -537,7 +537,7 @@ mod tests {
         assert_eq!(av.path.as_ref(), "my_key");
     }
 
-    // ===== yaml_to_config_value =====
+    // yaml_to_config_value
 
     #[cfg(feature = "yaml")]
     #[test]

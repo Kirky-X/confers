@@ -22,9 +22,7 @@ fn get_relative_path(absolute_path: &std::path::Path) -> PathBuf {
         .to_path_buf()
 }
 
-// ============================================================================
 // ModuleConfig Tests
-// ============================================================================
 
 #[test]
 fn test_module_config_new() {
@@ -119,9 +117,7 @@ fn test_module_config_default_profile_without_default() {
     assert_eq!(config.active_profile(), "mysql");
 }
 
-// ============================================================================
 // ModuleRegistry Tests
-// ============================================================================
 
 #[test]
 fn test_registry_new() {
@@ -271,9 +267,7 @@ fn test_get_module_config() {
     assert!(nonexistent.is_none());
 }
 
-// ============================================================================
 // Load Module Tests
-// ============================================================================
 
 #[test]
 fn test_load_module_not_found_group() {
@@ -438,9 +432,7 @@ fn test_load_active_success() {
     );
 }
 
-// ============================================================================
 // Edge Cases Tests
-// ============================================================================
 
 #[test]
 fn test_registry_chaining() {

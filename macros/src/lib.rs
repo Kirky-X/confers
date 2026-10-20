@@ -249,7 +249,6 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
     // errors appended to the output instead of silently dropping the field.
     let (field_info, attr_errors) = parse_field_attrs(fields);
 
-    // Validate field attributes
     for (ident, _ty, attrs) in &field_info {
         attrs
             .validate(
@@ -261,7 +260,6 @@ fn impl_config_derive(input: &DeriveInput) -> syn::Result<proc_macro2::TokenStre
             .map_err(syn::Error::from)?;
     }
 
-    // Generate code
     let defaults_impl = generate_defaults_impl(struct_ident, &field_info);
     let load_impl = generate_load_impl(struct_ident, &struct_attrs, fields);
     let validate_impl = generate_validate_impl(&struct_attrs, &field_info);

@@ -218,7 +218,6 @@ impl FsWatcher {
             let _ = handle.join();
         }
 
-        // Close the receiver
         self.rx.take();
     }
 
@@ -339,7 +338,6 @@ impl FsWatcher {
                 }
             };
 
-        // Start watching
         if let Err(e) = debouncer.watch(&watch_target, RecursiveMode::Recursive) {
             log::error!(
                 "{}",
@@ -703,7 +701,6 @@ impl MultiFsWatcher {
             let _ = handle.join();
         }
 
-        // Close the receiver
         self.rx.take();
     }
 

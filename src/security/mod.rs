@@ -408,17 +408,14 @@ impl EnvSecurityValidator {
             });
         }
 
-        // Check for null bytes
         if value.contains('\0') {
             return Err(EnvSecurityError::NullByte);
         }
 
-        // Check for shell expansion patterns
         if value.contains("${") && value.contains('}') {
             return Err(EnvSecurityError::ShellExpansion);
         }
 
-        // Check for dangerous patterns
         if let Some(pattern) = Self::find_dangerous_pattern(value) {
             return Err(EnvSecurityError::CommandInjection { pattern });
         }

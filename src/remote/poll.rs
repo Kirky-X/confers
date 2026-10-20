@@ -962,9 +962,7 @@ fn is_retryable_error(error: &reqwest::Error) -> bool {
     error.is_timeout() || error.is_connect()
 }
 
-// =============================================================================
 // Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -990,9 +988,7 @@ mod tests {
         validate_url_parts(&ip).expect("public IP URL passes part validation");
     }
 
-    // =============================================================================
     // SSRF Protection Tests (9.1.7)
-    // =============================================================================
 
     #[test]
     fn test_is_ip_blocked_loopback_v4() {
@@ -1165,9 +1161,7 @@ mod tests {
         ))); // Cloudflare DNS
     }
 
-    // =============================================================================
     // URL Validation Tests (9.1.7)
-    // =============================================================================
 
     #[test]
     fn test_validate_url_rejects_non_https() {
@@ -1299,9 +1293,7 @@ mod tests {
         // If network is unavailable, test is skipped
     }
 
-    // =============================================================================
     // ValidatingResolver Tests (pinned DNS resolution, rebinding TOCTOU fix)
-    // =============================================================================
 
     /// The pinned resolver rejects domains whose resolution contains a
     /// blocked IP. This is the check reqwest runs at connection time on the
@@ -1380,9 +1372,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // Whitelist Matching Tests (pure helper)
-    // =============================================================================
 
     #[test]
     fn test_is_domain_whitelisted_exact_match() {
@@ -1417,9 +1407,7 @@ mod tests {
         assert!(!is_domain_whitelisted("example.com", &allowed));
     }
 
-    // =============================================================================
     // Redirect Hop Validation Tests (Issue #347, pure helper)
-    // =============================================================================
 
     #[test]
     fn test_validate_redirect_hop_resolves_relative_location() {
@@ -1482,9 +1470,7 @@ mod tests {
         }
     }
 
-    // =============================================================================
     // Builder Tests
-    // =============================================================================
 
     #[test]
     fn test_http_polled_source_builder() {
@@ -1592,9 +1578,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // Real Local HTTP Interaction (HTTP 远程源真实本地交互)
-    // =============================================================================
 
     /// Serve one HTTP/1.1 response with the given status, headers and body,
     /// then close the connection.
@@ -2013,9 +1997,7 @@ mod tests {
         server.await.expect("server task");
     }
 
-    // =============================================================================
     // Manual Redirect Following Tests (Issue #347)
-    // =============================================================================
 
     /// A reqwest client with automatic redirect following disabled, matching
     /// what `HttpPolledSourceBuilder::build()` configures.
@@ -2157,9 +2139,7 @@ mod tests {
         server.await.expect("server task");
     }
 
-    // =============================================================================
     // Default Timeouts & Auth Header Injection
-    // =============================================================================
 
     /// the builder applies default timeouts when none are set. The
     /// client itself does not expose its configuration, so the applied values
@@ -2252,9 +2232,7 @@ mod tests {
         assert!(debug.contains("[REDACTED]"), "redaction marker expected");
     }
 
-    // =============================================================================
     // stale_on_error (opt-in disaster fallback; default stays fail-loud)
-    // =============================================================================
 
     /// with `stale_on_error(false)` (the default) an open circuit
     /// still fails loud with `CircuitBreakerOpen` — the pre-existing

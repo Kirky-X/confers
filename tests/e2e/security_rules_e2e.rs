@@ -269,7 +269,7 @@ fn sec18_encryption_prefix_recognition_and_strip() {
     assert_eq!(prefix.strip("plain-value"), None);
 }
 
-// ===== 键重映射（RemappedConfigProvider + with_*_key 构造器） =====
+// 键重映射（RemappedConfigProvider + with_*_key 构造器）
 //
 // 对照基线：默认键名下各验证器的违规结论与违规 field 名（field 恒报规范键，
 // 不随实际键名漂移，保证下游告警规则的稳定性）。

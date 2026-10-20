@@ -24,13 +24,13 @@ use crate::HealthStatus;
 #[cfg(feature = "remote")]
 use crate::types::SourceId;
 
-// ============== Sealed Trait Pattern ==============
+// Sealed Trait Pattern
 
 pub(crate) mod sealed {
     pub trait Sealed {}
 }
 
-// ============== Async Traits (feature-gated, mirrors sync below) ==============
+// Async Traits (feature-gated, mirrors sync below)
 // NOTE: ConfigReader/ConfigWriter/ConfigConnector are intentionally defined in both
 // async (feature-gated) and sync (minimal builds) variants. The feature gate selects
 // which version is active at compile time — they are never both visible.
@@ -108,7 +108,7 @@ mod async_traits_impl {
     }
 }
 
-// ============== Sync Traits (for minimal builds) ==============
+// Sync Traits (for minimal builds)
 
 #[cfg(not(feature = "async-core"))]
 pub use sync_traits::*;
@@ -388,7 +388,7 @@ pub trait Versioned {
     const VERSION: u32;
 }
 
-// ============== Source traits (migrated from config/source.rs) ==============
+// Source traits (migrated from config/source.rs)
 
 /// Trait for configuration sources.
 ///
@@ -848,9 +848,7 @@ mod tests {
         assert_eq!(p.get_bool("count"), None);
     }
 
-    // =============================================================================
     // TypedConfigKey::get() and constructors
-    // =============================================================================
 
     #[test]
     fn test_typed_config_key_without_description() {
@@ -897,9 +895,7 @@ mod tests {
         assert!(MISSING_KEY.get(&provider).is_none());
     }
 
-    // =============================================================================
     // ConfigProviderExt: get_float, get_bool, get_uint direct tests
-    // =============================================================================
 
     #[test]
     fn test_config_provider_ext_get_float() {
@@ -997,9 +993,7 @@ mod tests {
         assert_eq!(p.get_string("num"), None);
     }
 
-    // =============================================================================
     // ConfigProviderExt: get_by_path edge cases
-    // =============================================================================
 
     #[test]
     fn test_config_provider_ext_get_by_path_empty_returns_none() {
@@ -1045,9 +1039,7 @@ mod tests {
         assert!(result.is_some());
     }
 
-    // =============================================================================
     // ConfigProviderExt: get_typed error paths
-    // =============================================================================
 
     #[test]
     fn test_config_provider_ext_get_typed_non_string_value() {
@@ -1115,9 +1107,7 @@ mod tests {
         ));
     }
 
-    // =============================================================================
     // Source trait: default methods
-    // =============================================================================
 
     #[test]
     fn test_source_trait_defaults() {
@@ -1196,9 +1186,7 @@ mod tests {
         assert_eq!(collected.as_str(), Some("file"));
     }
 
-    // =============================================================================
     // KeyProvider: default cache_policy
-    // =============================================================================
 
     #[test]
     fn test_key_provider_default_cache_policy() {
@@ -1249,9 +1237,7 @@ mod tests {
         assert_eq!(p.get_key().expect("get_key must run").len(), 3);
     }
 
-    // =============================================================================
     // MetricsBackend trait
-    // =============================================================================
 
     #[test]
     fn test_metrics_backend_custom_impl() {
@@ -1281,9 +1267,7 @@ mod tests {
         assert_eq!(m.histograms.load(Ordering::SeqCst), 1);
     }
 
-    // =============================================================================
     // Versioned trait (interface's own, not migration)
-    // =============================================================================
 
     #[test]
     fn test_versioned_trait_interface() {
@@ -1301,9 +1285,7 @@ mod tests {
         assert_ne!(ConfersConfig::VERSION, LegacyConfig::VERSION);
     }
 
-    // =============================================================================
     // filter_sensitive_keys edge cases
-    // =============================================================================
 
     #[test]
     fn test_filter_sensitive_keys_substring_not_prefix() {
@@ -1366,9 +1348,7 @@ mod tests {
         assert_eq!(filtered, vec!["host", "port"]);
     }
 
-    // =============================================================================
     // ConfigProvider::keys_all (debug builds only)
-    // =============================================================================
 
     #[test]
     #[cfg(debug_assertions)]
@@ -1400,9 +1380,7 @@ mod tests {
         assert_eq!(all.len(), 2);
     }
 
-    // =============================================================================
     // ConfigProvider::has default impl
-    // =============================================================================
 
     #[test]
     fn test_config_provider_has_default_impl() {
@@ -1429,9 +1407,7 @@ mod tests {
         assert!(!p.has("missing"));
     }
 
-    // =============================================================================
     // SourceKind variants
-    // =============================================================================
 
     #[test]
     fn test_source_kind_variants() {
@@ -1445,9 +1421,7 @@ mod tests {
         assert_ne!(SourceKind::File, SourceKind::Memory);
     }
 
-    // =============================================================================
     // AsyncSource trait is feature-gated; tested only when remote feature is on
-    // =============================================================================
 
     #[test]
     #[cfg(feature = "remote")]
@@ -1483,9 +1457,7 @@ mod tests {
         assert_eq!(s.name(), "dummy_async");
     }
 
-    // =============================================================================
     // Async ConfigReader default-method coverage (has/get_string/typed getters)
-    // =============================================================================
 
     #[cfg(feature = "async-core")]
     #[tokio::test]
@@ -1566,9 +1538,7 @@ mod tests {
         let _ = SourceKind::Memory;
     }
 
-    // =============================================================================
     // AsyncKeyProvider default ttl()/cache_policy()
-    // =============================================================================
 
     #[cfg(feature = "async-core")]
     #[tokio::test]
@@ -1592,9 +1562,7 @@ mod tests {
         assert_eq!(provider.get_key().await.unwrap().len(), 32);
     }
 
-    // =============================================================================
     // TypedConfigKey::with_description
-    // =============================================================================
 
     #[test]
     fn typed_config_key_with_description_is_reported() {
@@ -1605,10 +1573,8 @@ mod tests {
         assert_eq!(key.description(), Some("TCP listen port"));
     }
 
-    // =============================================================================
     // One instrumented ConfigProvider mock whose every method is exercised
     // (keys/keys_all/has/get_typed/get_many/get_by_path/typed getters)
-    // =============================================================================
 
     #[test]
     // `keys_all` 存在性与 `keys()` 一致的行为仅在 debug 构建可断言：

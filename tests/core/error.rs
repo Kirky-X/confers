@@ -18,9 +18,7 @@
 use super::common;
 use std::path::PathBuf;
 
-// ========================================
 // Basic Error Tests
-// ========================================
 
 /// Test ConfigError variants are accessible.
 #[test]
@@ -83,9 +81,7 @@ fn test_error_code_display() {
     );
 }
 
-// ========================================
 // Invalid Format Error Tests (4.2.1)
-// ========================================
 
 /// Test invalid TOML format error (4.2.1).
 #[test]
@@ -190,9 +186,7 @@ fn test_parse_error_from_path() {
     assert!(loc.source_name.contains("config.toml"));
 }
 
-// ========================================
 // Validation Failure Tests (4.2.2)
-// ========================================
 
 /// Test configuration validation failure (4.2.2).
 #[test]
@@ -209,7 +203,6 @@ fn test_config_validation_failure() {
         count: u32,
     }
 
-    // Create invalid config
     let config = ValidatedConfig {
         name: "".to_string(), // Empty name - should fail
         count: 200,           // Out of range - should fail
@@ -245,7 +238,6 @@ fn test_validation_error_custom_rule() {
 fn test_validation_error_from_garde_report() {
     use confers::ConfigError;
 
-    // Create a basic validation error
     let err = ConfigError::validation("test_field", "required", "test error");
 
     let code = err.code();
@@ -266,9 +258,7 @@ fn test_validation_error_user_message() {
     assert!(user_msg.contains("Invalid email format"));
 }
 
-// ========================================
 // Interpolation Error Tests (4.2.3)
-// ========================================
 
 /// Test circular reference detection (4.2.3).
 #[test]
@@ -372,9 +362,7 @@ fn test_nested_circular_reference() {
     assert!(result.is_err());
 }
 
-// ========================================
 // Missing Required Field Tests (4.2.4)
-// ========================================
 
 /// Test missing required field error (4.2.4).
 #[test]
@@ -439,9 +427,7 @@ fn test_missing_nested_required_field() {
     }
 }
 
-// ========================================
 // Type Mismatch Tests (4.2.5)
-// ========================================
 
 /// Test type mismatch error (4.2.5).
 #[test]
@@ -539,9 +525,7 @@ fn test_object_to_primitive_mismatch() {
     assert!(result.is_err());
 }
 
-// ========================================
 // Error Recovery and Retry Tests
-// ========================================
 
 /// Test retryable error detection.
 #[test]
@@ -617,9 +601,7 @@ fn test_watcher_error_retryability() {
     assert!(!non_recoverable_err.is_retryable());
 }
 
-// ========================================
 // Error Message Tests
-// ========================================
 
 /// Test error user message formatting.
 #[test]
@@ -727,9 +709,7 @@ fn test_multi_source_error_partial_config() {
     assert!(multi_err.partial_config().is_some());
 }
 
-// ========================================
 // BuildResult Tests
-// ========================================
 
 /// Test BuildResult creation.
 #[test]
@@ -798,9 +778,7 @@ fn test_warning_code_display() {
     assert_eq!(format!("{}", WarningCode::UnusedKey), "UNUSED_KEY");
 }
 
-// ========================================
 // Additional Error Scenario Tests
-// ========================================
 
 /// Test file not found error with source.
 #[test]

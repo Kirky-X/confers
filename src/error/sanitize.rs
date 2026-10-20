@@ -349,9 +349,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    // =============================================================================
     // Error Sanitization Tests (9.3.6)
-    // =============================================================================
 
     #[test]
     fn test_sanitize_error_message_full_path() {
@@ -477,7 +475,6 @@ mod tests {
     }
 
     // is_sensitive for sensitive patterns
-    // =============================================================================
 
     #[test]
     fn test_is_sensitive_url_with_credentials() {
@@ -557,9 +554,7 @@ mod tests {
         assert!(!err.is_sensitive());
     }
 
-    // =============================================================================
     // sanitized_chain with source errors
-    // =============================================================================
 
     #[test]
     fn test_sanitized_chain_parse_error_with_source() {
@@ -621,9 +616,7 @@ mod tests {
         assert_eq!(chain.len(), 1);
     }
 
-    // =============================================================================
     // #43: URL path segments must not be rewritten as file paths
-    // =============================================================================
 
     #[test]
     fn test_sanitize_error_message_preserves_url_path() {
@@ -653,9 +646,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // #42: AWS-secret-shaped tokens require sensitive context
-    // =============================================================================
 
     #[test]
     fn test_sanitize_error_message_aws_secret_key_with_context() {
@@ -689,9 +680,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // #47: hex redaction thresholds
-    // =============================================================================
 
     #[test]
     fn test_sanitize_error_message_sha256_hex_redacted() {
@@ -736,9 +725,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // #44: debug_message preserves the original URL scheme
-    // =============================================================================
 
     #[test]
     fn test_debug_message_preserves_http_scheme() {

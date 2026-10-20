@@ -39,7 +39,7 @@ fn write_temp_file(dir: &Path, name: &str, content: &str) -> PathBuf {
     path
 }
 
-// ============== FMT-07 / 场景 7:TOML 语法错误报行列 ==============
+// FMT-07 / 场景 7:TOML 语法错误报行列
 
 #[test]
 fn s07_toml_syntax_error_carries_line_column() {
@@ -86,7 +86,7 @@ fn s07_toml_syntax_error_carries_line_column() {
     );
 }
 
-// ============== FMT-08 / 场景 8:JSON 语法错误含位置 ==============
+// FMT-08 / 场景 8:JSON 语法错误含位置
 
 #[test]
 fn s08_json_syntax_error_includes_position() {
@@ -130,7 +130,7 @@ fn s08_json_syntax_error_includes_position() {
     );
 }
 
-// ============== FMT-09 / 场景 9:YAML 语法错误 ==============
+// FMT-09 / 场景 9:YAML 语法错误
 
 #[test]
 fn s09_yaml_syntax_error_reports_parse_error() {
@@ -157,7 +157,7 @@ fn s09_yaml_syntax_error_reports_parse_error() {
     );
 }
 
-// ============== FMT-11 / 场景 11:文件超 max_size 拒绝 ==============
+// FMT-11 / 场景 11:文件超 max_size 拒绝
 
 #[test]
 fn s11_oversized_file_rejected_before_parse() {
@@ -189,7 +189,7 @@ fn s11_oversized_file_rejected_before_parse() {
     );
 }
 
-// ============== FMT-12 / 场景 12:文件不存在报 FileNotFound ==============
+// FMT-12 / 场景 12:文件不存在报 FileNotFound
 
 #[test]
 fn s12_missing_file_reports_not_found() {
@@ -279,7 +279,7 @@ fn s12_missing_file_reports_not_found() {
     println!("s12 evidence(FileSource): display={:?}", err.to_string());
 }
 
-// ============== FMT-13 / 场景 13:路径穿越拒绝 ==============
+// FMT-13 / 场景 13:路径穿越拒绝
 
 #[test]
 fn s13_path_traversal_rejected() {
@@ -313,7 +313,7 @@ fn s13_path_traversal_rejected() {
     }
 }
 
-// ============== FMT-14 / 场景 14:符号链接逃逸拒绝 ==============
+// FMT-14 / 场景 14:符号链接逃逸拒绝
 
 #[cfg(unix)]
 #[test]
@@ -355,7 +355,7 @@ fn s14_symlink_escape_rejected_then_allowed_without_check() {
     println!("s14 evidence(allowed): value={:?}", value.to_json());
 }
 
-// ============== FMT-15 / 场景 15:绝对路径默认拒绝 ==============
+// FMT-15 / 场景 15:绝对路径默认拒绝
 
 #[test]
 fn s15_absolute_path_denied_by_default_allowed_option() {
@@ -388,7 +388,7 @@ fn s15_absolute_path_denied_by_default_allowed_option() {
     println!("s15 evidence: default denied; allow_absolute ok; builder ok: {built}");
 }
 
-// ============== FMT-16 / 场景 16:未知格式报错 ==============
+// FMT-16 / 场景 16:未知格式报错
 
 #[test]
 fn s16_unknown_format_reports_error() {
@@ -424,7 +424,7 @@ fn s16_unknown_format_reports_error() {
     println!("s16 evidence: {:?}", err.to_string());
 }
 
-// ============== BLD-14 / 场景 36:ConfigLimits::max_file_size_bytes 超限 ==============
+// BLD-14 / 场景 36:ConfigLimits::max_file_size_bytes 超限
 
 #[test]
 fn s36_limits_max_file_size_bytes_rejected_at_build() {
@@ -477,7 +477,7 @@ fn s36_limits_max_file_size_bytes_rejected_at_build() {
     println!("s36 evidence(within limit): {ok}");
 }
 
-// ============== BLD-15/16/17/18 / 场景 37-40:结构限制 ==============
+// BLD-15/16/17/18 / 场景 37-40:结构限制
 
 fn annotated(value: ConfigValue) -> AnnotatedValue {
     AnnotatedValue::new(value, SourceId::new("mem"), "")
@@ -579,7 +579,7 @@ fn s40_string_length_exceeded() {
     println!("s40 evidence: {:?}", err.to_string());
 }
 
-// ============== BLD-19 / 场景 41:必填字段缺失 ==============
+// BLD-19 / 场景 41:必填字段缺失
 
 #[expect(dead_code)] // 反序列化载体：字段由 serde 填充，测试只断言错误路径
 #[derive(Debug, Default, Deserialize)]
@@ -622,7 +622,7 @@ fn s41_missing_required_field_reports_error() {
     );
 }
 
-// ============== BLD-20 / 场景 42:类型不匹配 ==============
+// BLD-20 / 场景 42:类型不匹配
 
 #[expect(dead_code)] // 反序列化载体：字段由 serde 填充，测试只断言错误路径
 #[derive(Debug, Default, Deserialize)]
@@ -675,7 +675,7 @@ fn s42_type_mismatch_errors_not_panic() {
     println!("s42 evidence: str→u16 {err:?}; int→String {err2:?}");
 }
 
-// ============== BLD-22 / 场景 44:全源失败回退 fallback ==============
+// BLD-22 / 场景 44:全源失败回退 fallback
 
 #[derive(Debug, Default, Deserialize, Clone, PartialEq)]
 struct FallbackCfg {
@@ -726,7 +726,7 @@ fn s44_build_with_fallback_when_all_sources_fail() {
     );
 }
 
-// ============== BLD-24 / 场景 46:必选文件缺失报错 ==============
+// BLD-24 / 场景 46:必选文件缺失报错
 
 #[test]
 fn s46_required_file_missing_reports_file_not_found() {
@@ -750,7 +750,7 @@ fn s46_required_file_missing_reports_file_not_found() {
     );
 }
 
-// ============== VAL-02 / 场景 52:非法值报 ValidationFailed ==============
+// VAL-02 / 场景 52:非法值报 ValidationFailed
 
 #[derive(Debug, Default, Deserialize, garde::Validate)]
 struct ContactCfg {
@@ -811,7 +811,7 @@ fn s52_invalid_values_fail_validation_with_field_path() {
     );
 }
 
-// ============== VAL-04 / 场景 54:非法规则字符串 ==============
+// VAL-04 / 场景 54:非法规则字符串
 
 #[test]
 fn s54_invalid_rule_string_is_rejected_not_silently_accepted() {
@@ -842,7 +842,7 @@ fn s54_invalid_rule_string_is_rejected_not_silently_accepted() {
     println!("s54 evidence: all invalid rule strings rejected via None; valid rule parses");
 }
 
-// ============== VAL-06 / 场景 56:garde 报告转 ConfigError ==============
+// VAL-06 / 场景 56:garde 报告转 ConfigError
 
 #[test]
 fn s56_garde_report_conversion_keeps_field_and_readable_message() {
@@ -882,7 +882,7 @@ fn s56_garde_report_conversion_keeps_field_and_readable_message() {
     println!("s56 evidence: user_message={msg:?}");
 }
 
-// ============== VAL-07 / 场景 57:多字段违规聚合 ==============
+// VAL-07 / 场景 57:多字段违规聚合
 
 #[test]
 fn s57_multiple_violations_aggregate_into_one_report() {
@@ -917,7 +917,7 @@ fn s57_multiple_violations_aggregate_into_one_report() {
     );
 }
 
-// ============== IPL-03 / 场景 61:未定义变量报错 ==============
+// IPL-03 / 场景 61:未定义变量报错
 
 #[test]
 fn s61_undefined_variable_is_an_error() {
@@ -946,7 +946,7 @@ fn s61_undefined_variable_is_an_error() {
     );
 }
 
-// ============== IPL-04 / 场景 62:循环引用检测 ==============
+// IPL-04 / 场景 62:循环引用检测
 
 #[test]
 fn s62_circular_reference_detected() {

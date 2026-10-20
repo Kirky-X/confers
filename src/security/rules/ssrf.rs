@@ -161,7 +161,6 @@ impl SecurityValidator for SsrfValidator {
             // whitelisted internal address cannot bypass SSRF protection.
             let whitelisted = self.is_whitelisted(url_str);
 
-            // Check scheme
             if !whitelisted && self.enforce_https && parsed.scheme() != "https" {
                 violations.push(SecurityViolation {
                     validator: self.name().to_string(),

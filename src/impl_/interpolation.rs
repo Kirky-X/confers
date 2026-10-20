@@ -266,7 +266,6 @@ where
                 sens_refs.insert(var_name.to_string());
             }
 
-            // Check for circular reference
             if visited.contains(var_name) {
                 return Err(ConfigError::CircularReference {
                     path: var_name.to_string(),
@@ -820,7 +819,6 @@ mod tests {
         let result = interpolate_tracked("${API_KEY}", &r, true).unwrap();
         ctx.record("api_key", &result);
 
-        // Check tracking
         assert!(ctx.is_sensitive_ref("API_KEY"));
         assert!(!ctx.is_sensitive_ref("HOST"));
         assert_eq!(ctx.sensitive_ref_field("API_KEY"), Some("api_key"));

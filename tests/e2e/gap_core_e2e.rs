@@ -50,7 +50,7 @@ fn as_i64(v: &AnnotatedValue) -> i64 {
     }
 }
 
-// --- 1: legal TOML file parses into Map with nested tables/arrays ---
+// 1: legal TOML file parses into Map with nested tables/arrays
 #[test]
 fn gs001_toml_file_parses_to_nested_map() {
     let dir = tmp_dir("s001");
@@ -74,7 +74,7 @@ fn gs001_toml_file_parses_to_nested_map() {
     }
 }
 
-// --- 2: legal JSON file keeps nested structure ---
+// 2: legal JSON file keeps nested structure
 #[test]
 fn gs002_json_file_parses_nested_structure() {
     let dir = tmp_dir("s002");
@@ -109,7 +109,7 @@ fn gs002_json_file_parses_nested_structure() {
     assert!(app.flag);
 }
 
-// --- 3: legal YAML file with nested maps (yaml feature) ---
+// 3: legal YAML file with nested maps (yaml feature)
 #[test]
 fn gs003_yaml_file_parses_nested_structure() {
     let dir = tmp_dir("s003");
@@ -131,7 +131,7 @@ fn gs003_yaml_file_parses_nested_structure() {
     }
 }
 
-// --- 5: extension-based format detection ---
+// 5: extension-based format detection
 #[test]
 fn gs005_detect_format_from_path_all_extensions() {
     assert_eq!(
@@ -156,7 +156,7 @@ fn gs005_detect_format_from_path_all_extensions() {
     );
 }
 
-// --- 6: content sniffing for extensionless files ---
+// 6: content sniffing for extensionless files
 #[test]
 fn gs006_detect_format_from_content_sniffs() {
     assert_eq!(detect_format_from_content("{\"a\": 1}"), Some(Format::Json));
@@ -167,7 +167,7 @@ fn gs006_detect_format_from_content_sniffs() {
     assert_eq!(detect_format_from_content("key: v\n"), Some(Format::Yaml));
 }
 
-// --- 10: empty file parses to empty map ---
+// 10: empty file parses to empty map
 #[test]
 fn gs010_empty_file_yields_empty_map() {
     let dir = tmp_dir("s010");
@@ -179,7 +179,7 @@ fn gs010_empty_file_yields_empty_map() {
     }
 }
 
-// --- 17: .env file loaded as env source (dotenv feature) ---
+// 17: .env file loaded as env source (dotenv feature)
 #[test]
 fn gs017_dotenv_file_feeds_env_source() {
     let dir = tmp_dir("s017");
@@ -201,7 +201,7 @@ fn gs017_dotenv_file_feeds_env_source() {
     assert_eq!(cfg.port, 1234);
 }
 
-// --- 21: same nested structure in three formats produce equal maps ---
+// 21: same nested structure in three formats produce equal maps
 #[test]
 fn gs021_three_formats_same_semantics() {
     let dir = tmp_dir("s021");
@@ -229,7 +229,7 @@ fn gs021_three_formats_same_semantics() {
     assert_eq!(strip(&json), strip(&yaml));
 }
 
-// --- 23: malformed .env line is reported, not silently swallowed ---
+// 23: malformed .env line is reported, not silently swallowed
 #[test]
 #[serial_test::serial]
 fn gs023_invalid_dotenv_line_reported() {
@@ -254,7 +254,7 @@ fn gs023_invalid_dotenv_line_reported() {
     }
 }
 
-// --- 24: file + build deserializes into typed struct ---
+// 24: file + build deserializes into typed struct
 #[test]
 fn gs024_file_build_deserializes_typed_struct() {
     let dir = tmp_dir("s024");
@@ -274,7 +274,7 @@ fn gs024_file_build_deserializes_typed_struct() {
     assert_eq!(cfg.port, 8080);
 }
 
-// --- 25: build_annotated carries source + location per leaf ---
+// 25: build_annotated carries source + location per leaf
 #[test]
 fn gs025_build_annotated_has_source_and_location() {
     let dir = tmp_dir("s025");
@@ -296,7 +296,7 @@ fn gs025_build_annotated_has_source_and_location() {
     let _ = host.location;
 }
 
-// --- 26: single FileSource builds; SourceKind = File ---
+// 26: single FileSource builds; SourceKind = File
 #[test]
 fn gs026_single_file_source_builds() {
     let dir = tmp_dir("s026");
@@ -311,7 +311,7 @@ fn gs026_single_file_source_builds() {
     assert_eq!(as_str(get_map(&v, "host")), "h");
 }
 
-// --- 27: two chained files, later overrides same key ---
+// 27: two chained files, later overrides same key
 #[test]
 fn gs027_two_files_later_overrides() {
     let dir = tmp_dir("s027");
@@ -327,7 +327,7 @@ fn gs027_two_files_later_overrides() {
     assert_eq!(as_i64(get_map(&v, "port")), 1);
 }
 
-// --- 28: env variables build nested tree ---
+// 28: env variables build nested tree
 #[test]
 #[serial_test::serial]
 fn gs028_env_builds_nested_tree() {
@@ -352,7 +352,7 @@ fn gs028_env_builds_nested_tree() {
     assert_eq!(cfg.db.port, 5432);
 }
 
-// --- 29: env_prefix collects only prefixed vars and strips prefix ---
+// 29: env_prefix collects only prefixed vars and strips prefix
 #[test]
 #[serial_test::serial]
 fn gs029_env_prefix_filters_and_strips() {
@@ -369,7 +369,7 @@ fn gs029_env_prefix_filters_and_strips() {
     );
 }
 
-// --- 30: defaults provide full fallback, overridable by file ---
+// 30: defaults provide full fallback, overridable by file
 #[test]
 fn gs030_defaults_fully_overridable() {
     let dir = tmp_dir("s030");
@@ -387,7 +387,7 @@ fn gs030_defaults_fully_overridable() {
     assert_eq!(as_i64(get_map(&v, "port")), 80);
 }
 
-// --- 31: single-key default used when absent, overridden when present ---
+// 31: single-key default used when absent, overridden when present
 #[test]
 fn gs031_single_key_default_semantics() {
     let dir = tmp_dir("s031");
@@ -403,7 +403,7 @@ fn gs031_single_key_default_semantics() {
     assert_eq!(as_i64(get_map(&v, "port")), 1);
 }
 
-// --- 35: five global merge strategies ---
+// 35: five global merge strategies
 #[test]
 fn gs035_five_merge_strategies() {
     let dir = tmp_dir("s035");
@@ -444,7 +444,7 @@ fn gs035_five_merge_strategies() {
     assert_eq!(ja["kv"], serde_json::json!("one|two"));
 }
 
-// --- 46: file_optional skips missing path, build succeeds ---
+// 46: file_optional skips missing path, build succeeds
 #[test]
 fn gs046_file_optional_skips_missing() {
     #[derive(serde::Deserialize, Default)]
@@ -460,7 +460,7 @@ fn gs046_file_optional_skips_missing() {
     assert_eq!(cfg.host, "");
 }
 
-// --- 48: SourceChainBuilder manual assembly honors priority ---
+// 48: SourceChainBuilder manual assembly honors priority
 #[test]
 fn gs048_source_chain_builder_manual_assembly() {
     let dir = tmp_dir("s048");
@@ -479,7 +479,7 @@ fn gs048_source_chain_builder_manual_assembly() {
     assert_eq!(as_str(get_map(&v, "host")), "from-memory");
 }
 
-// --- 50: empty-config boundary: all-Option builds, all-required errors ---
+// 50: empty-config boundary: all-Option builds, all-required errors
 #[test]
 fn gs050_empty_config_boundary() {
     #[derive(serde::Deserialize, Default)]
@@ -507,7 +507,7 @@ fn gs050_empty_config_boundary() {
     );
 }
 
-// --- 51: new_in_memory full lifecycle ---
+// 51: new_in_memory full lifecycle
 #[tokio::test]
 async fn gs051_new_in_memory_full_lifecycle() {
     use confers::interface::ConfigReader;
@@ -531,7 +531,7 @@ async fn gs051_new_in_memory_full_lifecycle() {
     c.shutdown().await;
 }
 
-// --- 52: same-priority sources merge in declaration order (B over A) ---
+// 52: same-priority sources merge in declaration order (B over A)
 #[test]
 fn gs052_same_priority_declaration_order() {
     let dir = tmp_dir("s052");
@@ -550,7 +550,7 @@ fn gs052_same_priority_declaration_order() {
     );
 }
 
-// --- 53: prefixed env scalar-vs-nested conflict is an error or nested wins ---
+// 53: prefixed env scalar-vs-nested conflict is an error or nested wins
 #[test]
 #[serial_test::serial]
 fn gs053_env_path_conflict_reported() {
@@ -587,7 +587,7 @@ fn gs053_env_path_conflict_reported() {
     }
 }
 
-// --- 57: no automatic config file search from cwd ---
+// 57: no automatic config file search from cwd
 #[test]
 #[serial_test::serial]
 fn gs057_no_automatic_file_search() {
@@ -607,7 +607,7 @@ fn gs057_no_automatic_file_search() {
     );
 }
 
-// --- 62: custom security validator registered and invoked ---
+// 62: custom security validator registered and invoked
 #[test]
 fn gs062_custom_validator_registered_and_called() {
     use confers::interface::ConfigProvider;
@@ -655,7 +655,7 @@ fn gs062_custom_validator_registered_and_called() {
     );
 }
 
-// --- 66: #[config(validate)] legacy no-op compiles and loads unchanged ---
+// 66: #[config(validate)] legacy no-op compiles and loads unchanged
 #[test]
 #[serial_test::serial]
 fn gs066_validate_noop_compat() {
@@ -677,7 +677,7 @@ fn gs066_validate_noop_compat() {
     assert_eq!(c.host, "y");
 }
 
-// --- 77: self-referencing default does not false-positive circular ---
+// 77: self-referencing default does not false-positive circular
 #[test]
 fn gs077_self_default_no_false_circular() {
     use confers::interpolation::interpolate;
@@ -702,7 +702,7 @@ fn gs077_self_default_no_false_circular() {
     }
 }
 
-// --- 78: nested default split by depth ---
+// 78: nested default split by depth
 #[test]
 fn gs078_nested_default_depth_aware() {
     use confers::interpolation::interpolate;
@@ -714,7 +714,7 @@ fn gs078_nested_default_depth_aware() {
     );
 }
 
-// --- 489: ConfigProviderExt typed reads on in-memory connector ---
+// 489: ConfigProviderExt typed reads on in-memory connector
 #[tokio::test]
 async fn gs489_provider_ext_typed_reads() {
     use confers::interface::ConfigReader;
@@ -761,7 +761,7 @@ async fn gs489_provider_ext_typed_reads() {
     assert!(keys.contains(&"s".to_string()));
 }
 
-// --- 490: typed deserialization of wrong value errors instead of panicking ---
+// 490: typed deserialization of wrong value errors instead of panicking
 #[test]
 fn gs490_get_typed_wrong_type_errors() {
     // 字段由反序列化填充，用例只断言构建结果
@@ -784,7 +784,7 @@ fn gs490_get_typed_wrong_type_errors() {
     );
 }
 
-// --- 491: get_shared returns Arc handle, zero-copy semantics ---
+// 491: get_shared returns Arc handle, zero-copy semantics
 #[tokio::test]
 async fn gs491_get_shared_zero_copy() {
     use confers::SharedValueReader;
@@ -815,7 +815,7 @@ async fn gs491_get_shared_zero_copy() {
     );
 }
 
-// --- 496: MergeStrategy::Custom custom merge function ---
+// 496: MergeStrategy::Custom custom merge function
 #[test]
 fn gs496_custom_merge_strategy() {
     fn concat(a: &ConfigValue, b: &ConfigValue) -> ConfigValue {
@@ -840,7 +840,7 @@ fn gs496_custom_merge_strategy() {
     assert!(!MergeStrategy::join("|").is_custom());
 }
 
-// --- 497: EnvSource exclude_keys excludes collection ---
+// 497: EnvSource exclude_keys excludes collection
 #[test]
 #[serial_test::serial]
 fn gs497_envsource_exclude_keys() {
@@ -867,7 +867,7 @@ fn gs497_envsource_exclude_keys() {
     assert_eq!(cfg.dbhost, "db1");
 }
 
-// --- 498: unprefixed *_FILE variables skipped entirely ---
+// 498: unprefixed *_FILE variables skipped entirely
 #[test]
 #[serial_test::serial]
 fn gs498_unprefixed_file_vars_skipped() {
@@ -904,7 +904,7 @@ fn gs498_unprefixed_file_vars_skipped() {
     assert_eq!(cfgp.token, "LICENSE-CONTENT");
 }
 
-// --- 499: explicit with_format overrides detection, mislabel errors ---
+// 499: explicit with_format overrides detection, mislabel errors
 #[test]
 fn gs499_explicit_format_override_and_mislabel() {
     let dir = tmp_dir("s499");
@@ -926,7 +926,7 @@ fn gs499_explicit_format_override_and_mislabel() {
     assert!(err.is_err(), "mislabeled format must be a parse error");
 }
 
-// --- 501: map_json custom tree transform runs during build ---
+// 501: map_json custom tree transform runs during build
 #[test]
 fn gs501_map_json_custom_transform() {
     let dir = tmp_dir("s501");
@@ -944,7 +944,7 @@ fn gs501_map_json_custom_transform() {
     assert_eq!(v["injected"], serde_json::json!("by-map-json"));
 }
 
-// --- 503: all sources fail and no fallback aggregates MultiSource error ---
+// 503: all sources fail and no fallback aggregates MultiSource error
 #[test]
 fn gs503_all_sources_fail_multi_source_error() {
     let dir = tmp_dir("s503");
@@ -970,7 +970,7 @@ fn gs503_all_sources_fail_multi_source_error() {
     }
 }
 
-// --- 500: ConfigLimits facets are wired into the build ---
+// 500: ConfigLimits facets are wired into the build
 // (allowed_extensions / max_total_size / max_sources / allow_remote)
 #[test]
 fn gs500_config_limits_wired_into_build() {
@@ -1078,7 +1078,7 @@ fn gs500_config_limits_wired_into_build() {
     );
 }
 
-// --- 502: preload validators gate the build ---
+// 502: preload validators gate the build
 struct Gs502CriticalCheck;
 #[confers::async_trait]
 impl confers::watcher::ReloadHealthCheck for Gs502CriticalCheck {
@@ -1168,7 +1168,7 @@ async fn gs502_preload_validator_blocks_build_inside_runtime() {
     ));
 }
 
-// --- 517: NaN serialize as placeholder string, then rejected on typed read ---
+// 517: NaN serialize as placeholder string, then rejected on typed read
 #[test]
 fn gs517_nonfinite_float_placeholder_semantics() {
     let json: serde_json::Value = config::<serde_json::Value>()
@@ -1205,7 +1205,7 @@ fn gs517_nonfinite_float_placeholder_semantics() {
     );
 }
 
-// --- 518: load_file IO boundary tri-states ---
+// 518: load_file IO boundary tri-states
 #[test]
 fn gs518_load_file_io_boundary_tristate() {
     let dir = tmp_dir("s518");
@@ -1255,7 +1255,7 @@ fn is_root() -> bool {
         .unwrap_or(false)
 }
 
-// --- 519: redact_error_paths keeps parent dirs out of errors ---
+// 519: redact_error_paths keeps parent dirs out of errors
 #[test]
 fn gs519_redact_error_paths_hides_parents() {
     let dir = tmp_dir("s519_deep/nested");
@@ -1293,7 +1293,7 @@ fn gs519_redact_error_paths_hides_parents() {
     }
 }
 
-// --- 520: duplicate key semantics in TOML vs JSON ---
+// 520: duplicate key semantics in TOML vs JSON
 #[test]
 fn gs520_duplicate_key_semantics() {
     let dir = tmp_dir("s520");
@@ -1308,7 +1308,7 @@ fn gs520_duplicate_key_semantics() {
     }
 }
 
-// --- 522: explicit source priority inversion and .env precedence ---
+// 522: explicit source priority inversion and .env precedence
 #[test]
 #[serial_test::serial]
 fn gs522_explicit_priority_inversion_and_dotenv_order() {

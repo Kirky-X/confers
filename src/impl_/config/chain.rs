@@ -205,7 +205,6 @@ impl SourceChain {
             }
         }
 
-        // Handle all errors case
         if values.is_empty() && !errors.is_empty() {
             let multi_err = crate::error::MultiSourceError::new(sources.len(), errors);
             return ChainOutcome {

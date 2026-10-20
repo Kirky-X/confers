@@ -594,9 +594,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // Display impl for remaining ConfigErrorCode variants
-    // =============================================================================
 
     #[test]
     fn test_display_error_codes_remaining() {
@@ -630,9 +628,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // code() for all ConfigConfigError variants
-    // =============================================================================
 
     #[test]
     fn test_code_invalid_value() {
@@ -725,9 +721,7 @@ mod tests {
         assert_eq!(err.code() as u16, 2900);
     }
 
-    // =============================================================================
     // user_message for all remaining variants
-    // =============================================================================
 
     #[test]
     fn test_user_message_size_limit_exceeded() {
@@ -833,9 +827,7 @@ mod tests {
         assert!(msg.contains("key.json"));
     }
 
-    // =============================================================================
     // audit_message for additional variants
-    // =============================================================================
 
     #[test]
     fn test_audit_message_missing_field() {
@@ -883,9 +875,7 @@ mod tests {
         assert!(audit.contains("CONFIG_CIRCULAR_REFERENCE"));
     }
 
-    // =============================================================================
     // Display impl for ConfigConfigError (thiserror #[error(...)] formats)
-    // =============================================================================
 
     #[test]
     fn test_display_missing_field() {
@@ -1017,9 +1007,7 @@ mod tests {
         assert!(s.contains("a.b.a"));
     }
 
-    // =============================================================================
     // Debug derive for ConfigConfigError
-    // =============================================================================
 
     #[test]
     fn test_debug_format_config_config_error() {
@@ -1029,9 +1017,7 @@ mod tests {
         assert!(dbg.contains("x"));
     }
 
-    // =============================================================================
     // InitResult type alias
-    // =============================================================================
 
     #[test]
     fn test_init_result_type_alias() {
@@ -1042,9 +1028,7 @@ mod tests {
         assert!(err.is_err());
     }
 
-    // =============================================================================
     // Helper method return types — exhaustive variant matching
-    // =============================================================================
 
     #[test]
     fn test_helper_methods_field_values() {
@@ -1084,9 +1068,7 @@ mod tests {
         }
     }
 
-    // =============================================================================
     // #38: any dot-prefixed directory component is sensitive
-    // =============================================================================
 
     #[test]
     fn test_user_message_file_not_found_dot_config_path_sanitized() {
@@ -1126,9 +1108,7 @@ mod tests {
         );
     }
 
-    // =============================================================================
     // #40: audit_message field values are quoted and escaped
-    // =============================================================================
 
     #[test]
     fn test_audit_message_quotes_message_field() {

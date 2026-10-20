@@ -1377,7 +1377,7 @@ mod tests {
         unsafe { std::env::remove_var("MYTEST_NOPREFIX_FILE") }; // pragma: allowlist secret
     }
 
-    // ===== infer_config_value (fix-0.4.1 Bug 2) =====
+    // infer_config_value (fix-0.4.1 Bug 2)
 
     #[test]
     fn test_infer_config_value() {
@@ -1448,7 +1448,7 @@ mod tests {
         );
     }
 
-    // ===== collect() type inference integration (fix-0.4.1 Bug 2) =====
+    // collect() type inference integration (fix-0.4.1 Bug 2)
 
     #[serial_test::serial]
     #[test]

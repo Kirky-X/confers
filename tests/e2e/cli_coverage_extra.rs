@@ -44,9 +44,7 @@ fn write_file(dir: &Path, name: &str, content: &str) -> String {
     name.to_string()
 }
 
-// ============================================================================
 // snapshot restore
-// ============================================================================
 
 #[test]
 fn snapshot_restore_from_explicit_file_prints_summary() {
@@ -136,9 +134,7 @@ fn snapshot_restore_without_file_picks_the_newest_snapshot() {
     assert!(stdout(&out).contains("snapshot_20260102_000000.toml"));
 }
 
-// ============================================================================
 // snapshot prune / diff
-// ============================================================================
 
 #[test]
 fn snapshot_prune_zero_days_removes_every_snapshot_and_counts_skips() {
@@ -223,9 +219,7 @@ fn snapshot_diff_prints_changes_between_two_snapshots() {
     assert!(body.contains("1") && body.contains("2"), "{body}");
 }
 
-// ============================================================================
 // doctor
-// ============================================================================
 
 #[test]
 fn doctor_healthy_config_reports_json_and_exits_zero() {
@@ -356,9 +350,7 @@ fn doctor_invalid_master_key_errors() {
     assert!(body.contains("not a valid 32-byte hex key"), "{body}");
 }
 
-// ============================================================================
 // docs / schema --from-instance
-// ============================================================================
 
 #[test]
 fn docs_agent_emits_json_and_markdown_knowledge_packs() {
@@ -421,9 +413,7 @@ fn schema_from_instance_reverse_engineers_the_shape() {
     assert!(required.contains(&"server") && required.contains(&"tag"));
 }
 
-// ============================================================================
 // get:脱敏、--reveal、--fields 过滤、--env-file
-// ============================================================================
 
 #[test]
 fn get_masks_sensitive_keys_and_reveals_on_demand() {
@@ -475,9 +465,7 @@ fn env_file_flag_loads_variables_into_the_config_chain() {
     );
 }
 
-// ============================================================================
 // export:全格式、目录输出、--with-provenance
-// ============================================================================
 
 #[test]
 fn export_emits_toml_yaml_and_writes_into_output_directory() {
@@ -579,9 +567,7 @@ fn export_with_provenance_prints_annotated_tree_and_writes_files() {
     assert!(out_dir.read_dir().unwrap().next().is_some(), "file written");
 }
 
-// ============================================================================
 // diff:json 格式与 --sanitize
-// ============================================================================
 
 #[test]
 fn diff_json_format_reports_both_sides_and_sanitize_flag_is_accepted() {
@@ -678,9 +664,7 @@ fn diff_identical_configs_report_equality() {
     assert!(stdout(&out).contains("Configurations are identical"));
 }
 
-// ============================================================================
 // validate:嵌套与数组位置的类型启发式
-// ============================================================================
 
 #[test]
 fn validate_flags_number_like_strings_in_nested_and_array_positions() {

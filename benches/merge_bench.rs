@@ -25,9 +25,7 @@ use common::{
     annotated, av, create_large_map, create_nested_config, create_override_map, make_map,
 };
 
-// =============================================================================
 // Value construction benchmarks
-// =============================================================================
 
 fn bench_config_value_string(c: &mut Criterion) {
     c.bench_function("config_value_string", |b| {
@@ -59,9 +57,7 @@ fn bench_annotated_value(c: &mut Criterion) {
     });
 }
 
-// =============================================================================
 // Basic merge benchmarks
-// =============================================================================
 
 /// Merge two 100-field flat maps (Replace strategy).
 fn bench_merge_large_map(c: &mut Criterion) {
@@ -112,9 +108,7 @@ fn bench_merge_deep_nested(c: &mut Criterion) {
     });
 }
 
-// =============================================================================
 // COW efficiency benchmarks
-// =============================================================================
 
 /// COW fast path — merging identical values (no modification).
 fn bench_cow_no_modification(c: &mut Criterion) {
@@ -235,9 +229,7 @@ fn bench_cow_deep_merge(c: &mut Criterion) {
     });
 }
 
-// =============================================================================
 // Strategy comparison benchmarks
-// =============================================================================
 
 fn bench_merge_strategies(c: &mut Criterion) {
     let mut group = c.benchmark_group("merge_strategies");
@@ -275,9 +267,7 @@ fn bench_replace_strategy(c: &mut Criterion) {
     });
 }
 
-// =============================================================================
 // Parameterized merge scale benchmarks
-// =============================================================================
 
 fn bench_merge_shallow(c: &mut Criterion) {
     let mut group = c.benchmark_group("merge_shallow");
@@ -311,9 +301,7 @@ fn bench_merge_deep(c: &mut Criterion) {
     group.finish();
 }
 
-// =============================================================================
 // Incremental merge benchmarks
-// =============================================================================
 
 fn bench_incremental_merge(c: &mut Criterion) {
     let mut group = c.benchmark_group("incremental_merge");

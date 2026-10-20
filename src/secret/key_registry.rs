@@ -433,7 +433,6 @@ mod tests {
         let registry = KeyRegistry::new(KeyRotationConfig::default());
         let crypto = XChaCha20Crypto::new();
 
-        // Register first key
         let key1 = vec![1u8; 32];
         registry
             .register_key("v1".to_string(), SecretBytes::new(key1.clone()), true)

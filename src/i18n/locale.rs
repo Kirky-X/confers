@@ -130,9 +130,7 @@ mod tests {
         move |key| map.get(key).map(|v| (*v).to_string())
     }
 
-    // =========================================================================
     // normalize(): zh* -> zh, en* -> en, everything else -> None
-    // =========================================================================
 
     #[test]
     fn test_normalize_zh_variants_collapse_to_zh() {
@@ -177,9 +175,7 @@ mod tests {
         }
     }
 
-    // =========================================================================
     // detect_from(): chain order and fallbacks (pure — no process env access)
-    // =========================================================================
 
     #[test]
     fn test_detect_from_lang_zh_cn_utf8() {
@@ -262,10 +258,8 @@ mod tests {
         }
     }
 
-    // =========================================================================
     // Global override state (serialized into a single #[ignore] test to avoid
     // parallel-test races on the process-global override slot)
-    // =========================================================================
 
     /// 覆盖值与检测结果同语言:覆盖生效/清除对其他测试不可见,
     /// 因此可以安全地(串行)驱动 override 槽位的完整生命周期。

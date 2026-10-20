@@ -77,7 +77,7 @@ pub use serde_json as json;
 // Internal implementation (not exposed)
 mod impl_;
 
-// ============== Feature-gated Public Modules ==============
+// Feature-gated Public Modules
 
 #[cfg(feature = "validation")]
 pub mod validator;
@@ -158,7 +158,7 @@ pub mod remote;
 #[cfg(feature = "remote")]
 pub use async_trait::async_trait;
 
-// ============== Core Re-exports ==============
+// Core Re-exports
 
 pub use lifecycle::Lifecycle;
 
@@ -206,7 +206,7 @@ pub use confers_macros::ConfigModules;
 #[cfg(feature = "json-schema")]
 pub use confers_macros::ConfigSchema;
 
-// ============== Feature-gated Re-exports ==============
+// Feature-gated Re-exports
 
 #[cfg(feature = "validation")]
 pub use validator::{Validate, ValidationResult, ValidationRule};
@@ -285,7 +285,7 @@ pub use security::rules::{
 #[cfg(feature = "feature-toggle")]
 pub use toggle::{FeatureInfo, FeatureToggle, FeatureToggleRegistry};
 
-// ============== Factory Functions (BrickArchitecture) ==============
+// Factory Functions (BrickArchitecture)
 
 /// Create an in-memory configuration store.
 ///
@@ -320,7 +320,7 @@ pub fn new_in_memory() -> impl ConfigConnector {
 #[cfg(feature = "async-core")]
 pub use impl_::memory::SharedValueReader;
 
-// ============== Prelude ==============
+// Prelude
 
 /// Prelude for common imports.
 pub mod prelude {

@@ -84,7 +84,6 @@ impl SecurityValidator for JwtSecretValidator {
         match config.get_raw(&self.secret_key) {
             Some(value) => {
                 if let Some(secret) = value.as_str() {
-                    // Check length
                     if secret.len() < self.min_length {
                         violations.push(SecurityViolation {
                             validator: self.name().to_string(),

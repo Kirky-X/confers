@@ -14,7 +14,7 @@ struct Cfg {
     port: u16,
 }
 
-// --- 195 (+515): PreCommitCheck rejection stops the reload; reason flattened ---
+// 195 (+515): PreCommitCheck rejection stops the reload; reason flattened
 #[tokio::test]
 async fn gs195_515_pre_commit_check_rejects_and_flattens_reason() {
     struct Rejecting;
@@ -67,7 +67,7 @@ impl confers::interface::ConfigProvider for NoopProvider {
     }
 }
 
-// --- 486: peek_candidate observes the trial config without committing ---
+// 486: peek_candidate observes the trial config without committing
 #[tokio::test]
 async fn gs486_peek_candidate_observes_without_commit() {
     struct Allow;
@@ -96,7 +96,7 @@ async fn gs486_peek_candidate_observes_without_commit() {
     assert_eq!(reloader.current().port, 9, "healthy canary commits");
 }
 
-// --- 504: DynamicField callback panic isolated, counted, loop survives ---
+// 504: DynamicField callback panic isolated, counted, loop survives
 #[tokio::test]
 async fn gs504_dynamic_callback_panic_isolated() {
     use confers::dynamic::DynamicField;
@@ -127,7 +127,7 @@ async fn gs504_dynamic_callback_panic_isolated() {
     drop(fine);
 }
 
-// --- 505: version-ordered callbacks, stale update skipped, reentrant update no deadlock ---
+// 505: version-ordered callbacks, stale update skipped, reentrant update no deadlock
 #[tokio::test]
 async fn gs505_dynamic_version_order_and_reentrancy() {
     use confers::dynamic::DynamicField;
@@ -197,7 +197,7 @@ async fn gs505_dynamic_version_order_and_reentrancy() {
     );
 }
 
-// --- 238: snapshot files land with 0600 ---
+// 238: snapshot files land with 0600
 #[tokio::test]
 async fn gs238_snapshot_file_mode_0600() {
     use confers::snapshot::{SnapshotConfig, SnapshotManager};
@@ -222,7 +222,7 @@ async fn gs238_snapshot_file_mode_0600() {
     }
 }
 
-// --- 239: build failure still writes a snapshot (rc.6 contract) ---
+// 239: build failure still writes a snapshot (rc.6 contract)
 #[test]
 fn gs239_snapshot_written_on_build_failure() {
     let dir = tempfile::tempdir().unwrap();
@@ -272,7 +272,7 @@ fn gs239_snapshot_written_on_build_failure() {
     );
 }
 
-// --- 514: FsWatcher recv after stop returns instead of hanging ---
+// 514: FsWatcher recv after stop returns instead of hanging
 #[tokio::test]
 async fn gs514_fs_watcher_recv_after_stop_returns() {
     let dir = tempfile::tempdir().unwrap();
@@ -292,7 +292,7 @@ async fn gs514_fs_watcher_recv_after_stop_returns() {
     }
 }
 
-// --- 175/161 supplementary: WatcherConfig builder semantics with pause + rollback ---
+// 175/161 supplementary: WatcherConfig builder semantics with pause + rollback
 #[test]
 fn gs175_watcher_config_full_builder() {
     let config = WatcherConfig::new()

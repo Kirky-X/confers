@@ -47,9 +47,7 @@ pub const DEFAULT_K8S_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Default overall request timeout for Kubernetes API requests (30 seconds).
 pub const DEFAULT_K8S_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-// =============================================================================
 // Mounted-volume source (ConfigMap/Secret as files)
-// =============================================================================
 
 /// Configuration source reading a ConfigMap/Secret **mount volume**.
 ///
@@ -308,9 +306,7 @@ impl crate::remote::PolledSource for K8sMountedSource {
     }
 }
 
-// =============================================================================
 // REST API source (skeleton)
-// =============================================================================
 
 /// The object kind served by [`K8sApiSource`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -922,7 +918,7 @@ mod tests {
         assert_eq!(decode_base64("!!!"), None);
     }
 
-    // ==================== in-cluster client hardening ====================
+    // in-cluster client hardening
 
     /// A valid self-signed PEM used as a stand-in service-account CA bundle
     /// (fixture file: base64 trips spell-checkers/secret scanners; excluded
@@ -1055,9 +1051,7 @@ mod tests {
         }
     }
 
-    // =========================================================================
     // Mounted-source builder surface, format pinning, degenerate volumes
-    // =========================================================================
 
     #[test]
     fn mounted_source_builder_pins_format_interval_and_exposes_mount() {
@@ -1178,9 +1172,7 @@ mod tests {
         unsafe { std::env::remove_var("KUBERNETES_SERVICE_PORT") };
     }
 
-    // =========================================================================
     // API-source builder surface beyond the happy path
-    // =========================================================================
 
     #[test]
     fn api_builder_setters_shape_the_built_source() {

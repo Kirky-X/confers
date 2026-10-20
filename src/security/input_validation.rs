@@ -733,7 +733,6 @@ mod tests {
         // 高敏感度关键词命中
         let high = detector.is_sensitive("password", "v");
         assert!(matches!(high, SensitivityResult::High { .. }));
-        // 克隆后行为一致
         let cloned = detector.clone();
         assert!(cloned.is_sensitive("token", "v").needs_protection());
         // 非敏感字段
@@ -817,7 +816,6 @@ mod tests {
                 .validate_string("javascript:alert(document.cookie)")
                 .is_err()
         );
-        // 清理后应剥离 <>
         let sanitized = validator
             .sanitize_string("<script>alert(1)</script>")
             .unwrap();
@@ -1146,7 +1144,6 @@ mod tests {
         // 无白名单 -> 一律放行
         let validator = InputValidator::new();
         assert!(validator.validate_whitelist("anything").is_ok());
-        // 添加白名单
         let validator = InputValidator::new()
             .add_whitelist_pattern(r"^abc")
             .add_whitelist_pattern(r"^xyz");

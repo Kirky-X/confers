@@ -1113,7 +1113,7 @@ mod tests {
         );
     }
 
-    // ============== AuditSink multi-sink port ==============
+    // AuditSink multi-sink port
 
     use std::sync::{Arc, Mutex};
 
@@ -1348,9 +1348,7 @@ mod tests {
         assert!(sink.captured().is_empty(), "sinks only see accepted events");
     }
 
-    // =========================================================================
     // Chain serialization helpers
-    // =========================================================================
 
     #[test]
     fn constant_time_eq_compares_lengths_and_content() {

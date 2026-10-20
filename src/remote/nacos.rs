@@ -676,7 +676,7 @@ mod tests {
         assert!(NacosSourceBuilder::new("http://nacos", "").build().is_err());
     }
 
-    // ==================== auth & circuit-breaker fairness ====================
+    // auth & circuit-breaker fairness
 
     /// Mock Nacos server with auth: answers `POST /nacos/v1/auth/login`
     /// with a JSON `accessToken`, and `GET /nacos/v1/cs/configs` only when

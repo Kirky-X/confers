@@ -39,7 +39,7 @@ fn annotated(v: ConfigValue) -> AnnotatedValue {
     }
 }
 
-// --- 140: URL boundary matching, no prefix-bypass; 0.0.0.0/8 in blocklist ---
+// 140: URL boundary matching, no prefix-bypass; 0.0.0.0/8 in blocklist
 #[test]
 fn gs140_ssrf_url_boundary_no_prefix_bypass() {
     // whitelist entry must not prefix-match a lookalike domain
@@ -67,7 +67,7 @@ fn gs140_ssrf_url_boundary_no_prefix_bypass() {
     )));
 }
 
-// --- 141: TLS version compared as integer tuples, "1.12" is not < "1.2" ---
+// 141: TLS version compared as integer tuples, "1.12" is not < "1.2"
 #[test]
 fn gs141_tls_version_tuple_comparison() {
     // 1.12 >= 1.2 numerically → must NOT be flagged
@@ -80,7 +80,7 @@ fn gs141_tls_version_tuple_comparison() {
     assert!(res.is_err(), "1.0 must be flagged");
 }
 
-// --- 143: negative cors.max_age does not wrap around u64 ---
+// 143: negative cors.max_age does not wrap around u64
 #[test]
 fn gs143_cors_negative_max_age_no_wraparound() {
     let config = MapProvider::new()
@@ -101,7 +101,7 @@ fn gs143_cors_negative_max_age_no_wraparound() {
     }
 }
 
-// --- 144: malformed IPv6 (missing bracket) reported, not silently skipped ---
+// 144: malformed IPv6 (missing bracket) reported, not silently skipped
 #[test]
 fn gs144_ipv6_missing_bracket_reported() {
     let validator = SsrfValidator::with_config_key("server.url");
@@ -119,7 +119,7 @@ fn gs144_ipv6_missing_bracket_reported() {
     }
 }
 
-// --- 145: sensitive_names + PathValidator public surface ---
+// 145: sensitive_names + PathValidator public surface
 #[test]
 fn gs145_sensitive_names_and_path_validator() {
     assert!(sensitive_names::is_sensitive_name("password"));
@@ -144,7 +144,7 @@ fn gs145_sensitive_names_and_path_validator() {
     }
 }
 
-// --- 157: HMAC-chained audit log verifies, tampering breaks it ---
+// 157: HMAC-chained audit log verifies, tampering breaks it
 #[test]
 fn gs157_audit_chain_verify_and_tamper() {
     let dir = tempfile::tempdir().unwrap();
@@ -175,7 +175,7 @@ fn gs157_audit_chain_verify_and_tamper() {
     assert!(!res, "tampered chain must fail verification");
 }
 
-// --- 158: external HMAC key kept out of the file ---
+// 158: external HMAC key kept out of the file
 #[test]
 fn gs158_audit_external_hmac_key() {
     let dir = tempfile::tempdir().unwrap();
@@ -218,7 +218,7 @@ fn windows<'a>(it: std::slice::Windows<'a, u8>) -> impl Iterator<Item = &'a [u8]
     it.into_iter()
 }
 
-// --- 159: chain verification conclusions are stable (constant-time compare regression) ---
+// 159: chain verification conclusions are stable (constant-time compare regression)
 #[test]
 fn gs159_audit_chain_constant_time_regression() {
     let dir = tempfile::tempdir().unwrap();
@@ -245,7 +245,7 @@ fn gs159_audit_chain_constant_time_regression() {
     }
 }
 
-// --- 160: custom AuditSink receives sanitized events; local chain still written ---
+// 160: custom AuditSink receives sanitized events; local chain still written
 #[test]
 fn gs160_audit_sink_receives_events_chain_still_written() {
     use std::sync::Mutex;
@@ -294,7 +294,7 @@ fn gs160_audit_sink_receives_events_chain_still_written() {
     );
 }
 
-// --- 105: weak all-zero master key rejected in the load pipeline ---
+// 105: weak all-zero master key rejected in the load pipeline
 #[test]
 #[serial_test::serial]
 fn gs105_weak_all_zero_key_rejected() {
@@ -341,7 +341,7 @@ fn gs105_weak_all_zero_key_rejected() {
     );
 }
 
-// --- 99/100: derive-pipeline encrypt field with wrong master key fails load ---
+// 99/100: derive-pipeline encrypt field with wrong master key fails load
 #[test]
 #[serial_test::serial]
 fn gs100_encrypt_field_wrong_master_key_fails() {
@@ -401,7 +401,7 @@ fn gs100_encrypt_field_wrong_master_key_fails() {
     }
 }
 
-// --- 137/138/139: ConfigInjector inject / sensitive marking / rate limit ---
+// 137/138/139: ConfigInjector inject / sensitive marking / rate limit
 #[test]
 fn gs137_138_139_config_injector_surface() {
     use confers::security::ConfigInjector;
@@ -436,7 +436,7 @@ fn gs137_138_139_config_injector_surface() {
     assert!(res.is_err(), "max_entries must reject the third new key");
 }
 
-// --- 509: SecureString sensitivity levels and memory hygiene ---
+// 509: SecureString sensitivity levels and memory hygiene
 #[test]
 fn gs509_secure_string_levels_and_hygiene() {
     use confers::security::{SecureString, SensitivityLevel};
@@ -465,7 +465,7 @@ fn gs509_secure_string_levels_and_hygiene() {
     assert!(after_d >= before_d);
 }
 
-// --- 510: InputValidator generic input validation ---
+// 510: InputValidator generic input validation
 #[test]
 fn gs510_input_validator_rejects_bad_input() {
     use confers::security::InputValidator;
@@ -503,7 +503,7 @@ fn gs510_input_validator_rejects_bad_input() {
     let _cleaned = validator.sanitize_string("<script>&\"");
 }
 
-// --- 511: ConfigValidator batch validation with sensitive detection ---
+// 511: ConfigValidator batch validation with sensitive detection
 #[test]
 fn gs511_config_validator_batch_and_sensitive() {
     use confers::security::ConfigValidator;
@@ -532,7 +532,7 @@ fn gs511_config_validator_batch_and_sensitive() {
     assert_eq!(validator.validate_safe(&map), result.is_valid());
 }
 
-// --- 512: injector masked reads + required-miss via EnvironmentConfig ---
+// 512: injector masked reads + required-miss via EnvironmentConfig
 #[test]
 fn gs512_injector_read_side_and_required_miss() {
     use confers::security::ConfigInjector;
@@ -563,7 +563,7 @@ fn gs512_injector_read_side_and_required_miss() {
     );
 }
 
-// --- 67: invalid custom pattern regex returns error, not silently dropped (0.5.1 fix) ---
+// 67: invalid custom pattern regex returns error, not silently dropped (0.5.1 fix)
 #[test]
 fn gs067_invalid_custom_pattern_regex_errors() {
     use confers::security::SensitiveDataFilter;

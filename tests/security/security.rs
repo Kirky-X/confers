@@ -78,9 +78,7 @@ fn test_error_sanitization() {
     );
 }
 
-// =============================================================================
 // Security Rules Integration Tests
-// =============================================================================
 
 #[cfg(feature = "security-rules")]
 mod security_rules_tests {

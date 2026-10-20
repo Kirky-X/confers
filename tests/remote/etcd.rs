@@ -123,7 +123,6 @@ async fn test_etcd_source_parse_config() {
     let base_url = "http://127.0.0.1:2379/v3/kv/put";
     let encode = |value: &str| base64::engine::general_purpose::STANDARD.encode(value.as_bytes());
 
-    // Write host key
     let host_resp = client
         .post(base_url)
         .json(&serde_json::json!({
@@ -138,7 +137,6 @@ async fn test_etcd_source_parse_config() {
         return;
     }
 
-    // Write port key
     let port_resp = client
         .post(base_url)
         .json(&serde_json::json!({

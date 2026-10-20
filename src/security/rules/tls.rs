@@ -63,7 +63,6 @@ impl SecurityValidator for TlsConfigValidator {
             return Ok(());
         }
 
-        // Check min_version
         if let Some(value) = config.get_raw("tls.min_version")
             && let Some(version_str) = value.as_str()
         {

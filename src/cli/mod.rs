@@ -184,7 +184,7 @@ pub fn load_env_file(path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-// ============== Output sanitization (diff --sanitize) ==============
+// Output sanitization (diff --sanitize)
 //
 // `diff --sanitize` must actually redact sensitive material before printing.
 // The redaction rules live in `error::sanitize` (single source of truth --
@@ -1124,7 +1124,6 @@ fn check_string_value(full_key: &str, s: &str, issues: &mut Vec<String>) {
             &[("key", full_key.to_string()), ("value", s.to_string())],
         ));
     }
-    // Check for boolean strings
     if s == "true" || s == "false" {
         issues.push(tr_args(
             "cli-validate-string-like-boolean",
@@ -2038,7 +2037,7 @@ fn filter_json_by_fields(value: &serde_json::Value, fields: &str) -> serde_json:
     serde_json::Value::Object(result)
 }
 
-// ============== doctor: configuration self-diagnostics ==============
+// doctor: configuration self-diagnostics
 //
 // `doctor` aggregates health checks over the loaded configuration and emits a
 // machine-readable report:
@@ -2174,7 +2173,7 @@ pub fn run_doctor_checks(
         }
     };
 
-    // --- schema: structural sanity (same heuristics as `validate`) ---
+    // schema: structural sanity (same heuristics as `validate`)
     let mut schema_issues = Vec::new();
     if let crate::types::ConfigValue::Map(map) = &annotated.inner {
         check_required_keys(map, &mut schema_issues);
@@ -2200,13 +2199,13 @@ pub fn run_doctor_checks(
         },
     });
 
-    // --- sources: priority chain coherence ---
+    // sources: priority chain coherence
     checks.push(check_source_chain(annotated));
 
-    // --- encryption: encrypted fields decrypt with the master key ---
+    // encryption: encrypted fields decrypt with the master key
     checks.push(check_encryption(annotated));
 
-    // --- env_overrides: conflicting env spellings for the same key ---
+    // env_overrides: conflicting env spellings for the same key
     checks.push(check_env_override_conflicts(annotated));
 
     DoctorReport::from_checks(checks)
@@ -3032,7 +3031,7 @@ mod tests {
         print_config_value(&v, "", true, false);
     }
 
-    // ============== format_value: remaining variants ==============
+    // format_value: remaining variants
 
     #[test]
     fn test_format_value_u64() {
@@ -3111,7 +3110,7 @@ mod tests {
         assert!(formatted.ends_with("...\""));
     }
 
-    // ============== format_location edge cases ==============
+    // format_location edge cases
 
     #[test]
     fn test_format_location_zero_values() {
@@ -3122,7 +3121,7 @@ mod tests {
         assert!(r.contains("col 0"));
     }
 
-    // ============== load_env_file ==============
+    // load_env_file
 
     #[test]
     #[serial_test::serial]
@@ -3256,7 +3255,7 @@ mod tests {
         );
     }
 
-    // ============== find_value_by_key ==============
+    // find_value_by_key
 
     #[test]
     fn test_find_value_by_key_top_level() {
@@ -3375,7 +3374,7 @@ mod tests {
         assert_eq!(val.unwrap().as_i64(), Some(7));
     }
 
-    // ============== check_required_keys ==============
+    // check_required_keys
 
     #[test]
     fn test_check_required_keys_server_missing_host_and_port() {
@@ -3573,7 +3572,7 @@ mod tests {
         assert!(issues.is_empty());
     }
 
-    // ============== check_types ==============
+    // check_types
 
     #[test]
     fn test_check_types_normal_string_no_issue() {
@@ -3660,7 +3659,7 @@ mod tests {
         assert!(issues.is_empty());
     }
 
-    // ============== print_config_value ==============
+    // print_config_value
 
     #[test]
     fn test_print_config_value_conflict_marker_when_priority() {
@@ -3743,7 +3742,7 @@ mod tests {
         print_config_value(&v, "prefix", false, false);
     }
 
-    // ============== build_annotated_from_cli / build_config_from_cli ==============
+    // build_annotated_from_cli / build_config_from_cli
 
     #[test]
     fn test_build_annotated_from_cli_empty_paths() {
@@ -3800,7 +3799,7 @@ mod tests {
         assert!(av.is_map());
     }
 
-    // ============== cmd_inspect ==============
+    // cmd_inspect
 
     #[test]
     fn test_cmd_inspect_json_format_no_keys() {
@@ -3890,7 +3889,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ============== cmd_validate ==============
+    // cmd_validate
 
     #[test]
     fn test_cmd_validate_text_success() {
@@ -3977,7 +3976,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ============== cmd_export ==============
+    // cmd_export
 
     #[test]
     fn test_cmd_export_json_stdout() {
@@ -4108,7 +4107,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ============== cmd_diff ==============
+    // cmd_diff
 
     #[test]
     fn test_cmd_diff_text_different() {
@@ -4236,7 +4235,7 @@ mod tests {
         );
     }
 
-    // ============== cmd_snapshot_list ==============
+    // cmd_snapshot_list
 
     #[test]
     fn test_cmd_snapshot_list_nonexistent_dir() {
@@ -4279,7 +4278,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ============== cmd_snapshot_diff ==============
+    // cmd_snapshot_diff
 
     #[test]
     fn test_cmd_snapshot_diff_nonexistent_dir() {
@@ -4313,7 +4312,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ============== cmd_snapshot_prune ==============
+    // cmd_snapshot_prune
 
     #[test]
     fn test_cmd_snapshot_prune_nonexistent_dir() {
@@ -4398,7 +4397,7 @@ mod tests {
         );
     }
 
-    // ============== cmd_snapshot dispatch ==============
+    // cmd_snapshot dispatch
 
     #[test]
     fn test_cmd_snapshot_dispatch_list() {
@@ -4432,7 +4431,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ============== Cli parsing (clap) ==============
+    // Cli parsing (clap)
 
     #[test]
     fn test_cli_parse_inspect() {
@@ -4768,14 +4767,14 @@ mod tests {
         }
     }
 
-    // ============== Const sanity ==============
+    // Const sanity
 
     #[test]
     fn test_default_snapshot_display_limit_is_ten() {
         assert_eq!(DEFAULT_SNAPSHOT_DISPLAY_LIMIT, 10);
     }
 
-    // ============== Output sanitization (#27) ==============
+    // Output sanitization (#27)
 
     #[test]
     fn test_sanitize_output_text_redacts_paths_ips_and_keys() {
@@ -4833,7 +4832,7 @@ mod tests {
         assert_eq!(out, value, "non-sensitive values must be unchanged");
     }
 
-    // ============== Nested checks (#31) ==============
+    // Nested checks (#31)
 
     #[test]
     fn test_check_required_keys_nested_null_detected() {
@@ -4996,7 +4995,7 @@ mod tests {
         assert_eq!(issues.len(), MAX_CHECK_DEPTH);
     }
 
-    // ============== doctor ==============
+    // doctor
 
     use super::DoctorSeverity;
     // The two encryption-only tests below are compiled out without the
@@ -5201,7 +5200,7 @@ mod tests {
         assert!(line.contains("\"status\":\"healthy\""), "{line}");
     }
 
-    // ============== schema --from-instance ==============
+    // schema --from-instance
 
     #[test]
     fn infer_schema_object_with_required_and_nested() {

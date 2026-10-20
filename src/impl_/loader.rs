@@ -144,9 +144,7 @@ impl LoaderConfig {
     }
 }
 
-// =============================================================================
 // Path Traversal Protection (Group 9.2)
-// =============================================================================
 
 /// Error type for path traversal violations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1023,9 +1021,7 @@ mod tests {
         assert_eq!(LoaderConfig::default().max_size, DEFAULT_MAX_SIZE);
     }
 
-    // =============================================================================
     // Path Traversal Protection Tests (9.2.7)
-    // =============================================================================
 
     #[test]
     fn test_check_path_traversal_attempt_rejects_encoded() {

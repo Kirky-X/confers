@@ -896,7 +896,6 @@ mod tests {
         let sanitized = storage.sanitize_error(error_msg);
         assert_eq!(sanitized, error_msg);
 
-        // 设置主密钥后测试脱敏
         let master_key = [0x42; 32];
         storage.set_master_key(&master_key);
 

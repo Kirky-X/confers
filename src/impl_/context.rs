@@ -455,9 +455,7 @@ mod tests {
         assert_eq!(field1.evaluate(&ctx), field2.evaluate(&ctx));
     }
 
-    // =============================================================================
     // ContextValue accessor methods
-    // =============================================================================
 
     #[test]
     fn test_context_value_as_str_string() {
@@ -507,9 +505,7 @@ mod tests {
         assert_eq!(cv.as_bool(), None);
     }
 
-    // =============================================================================
     // ContextValue From impls
-    // =============================================================================
 
     #[test]
     fn test_context_value_from_owned_string() {
@@ -530,9 +526,7 @@ mod tests {
         assert!(matches!(cv, ContextValue::Integer(100)));
     }
 
-    // =============================================================================
     // ContextValue Integer variant (lossless integers, issue #87)
-    // =============================================================================
 
     #[test]
     fn test_context_value_from_i64_beyond_f53_no_precision_loss() {
@@ -583,9 +577,7 @@ mod tests {
         assert_eq!(ContextValue::Boolean(true).to_string(), "true");
     }
 
-    // =============================================================================
     // ContextValue Debug and PartialEq
-    // =============================================================================
 
     #[test]
     fn test_context_value_debug_format() {
@@ -608,9 +600,7 @@ mod tests {
         assert_ne!(a, d);
     }
 
-    // =============================================================================
     // EvaluationContext Default trait
-    // =============================================================================
 
     #[test]
     fn test_evaluation_context_default_trait() {
@@ -642,9 +632,7 @@ mod tests {
         assert_eq!(*ctx1.region(), *ctx2.region());
     }
 
-    // =============================================================================
     // ContextRule
-    // =============================================================================
 
     #[test]
     fn test_context_rule_with_description() {
@@ -678,9 +666,7 @@ mod tests {
         assert_eq!(rule1.matches(&ctx), rule2.matches(&ctx));
     }
 
-    // =============================================================================
     // ContextAwareFieldBuilder
-    // =============================================================================
 
     #[test]
     fn test_context_aware_field_builder_with_default() {
@@ -737,9 +723,7 @@ mod tests {
         assert_eq!(field.evaluate(&ctx), &100);
     }
 
-    // =============================================================================
     // ContextAwareField::with_default (deprecated)
-    // =============================================================================
 
     #[test]
     fn test_context_aware_field_with_default_deprecated() {
@@ -749,9 +733,7 @@ mod tests {
         assert_eq!(field.evaluate(&ctx), &42);
     }
 
-    // =============================================================================
     // ContextAwareField with multiple rule types
-    // =============================================================================
 
     #[test]
     fn test_context_aware_field_with_string_values() {
@@ -839,9 +821,7 @@ mod tests {
         assert_eq!(field.evaluate(&ctx), &42);
     }
 
-    // =============================================================================
     // EvaluationContext attr with different value types
-    // =============================================================================
 
     #[test]
     fn test_evaluation_context_attr_with_string_value() {

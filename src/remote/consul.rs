@@ -365,7 +365,6 @@ impl ConsulSource {
 
     /// Poll Consul for configuration.
     async fn poll_internal(&self) -> ConfigResult<AnnotatedValue> {
-        // Build the KV request URL
         let base_url = if self.address.contains("://") {
             self.address.to_string()
         } else {
@@ -390,7 +389,6 @@ impl ConsulSource {
 
         let mut request = self.client.get(&path);
 
-        // Add ACL token if provided
         if let Some(ref token) = self.token {
             request = request.header("X-Consul-Token", token.as_ref());
         }
@@ -1048,7 +1046,7 @@ mod tests {
         assert_eq!(DEFAULT_CONSUL_POLL_INTERVAL, Duration::from_secs(30));
     }
 
-    // --- Helpers for poll_internal coverage ---
+    // Helpers for poll_internal coverage
 
     /// Check whether a real Consul agent is reachable on the default port.
     fn consul_ready() -> bool {
@@ -1663,7 +1661,7 @@ mod tests {
         );
     }
 
-    // --- regression tests: response size & entry count limits ---
+    // regression tests: response size & entry count limits
 
     #[test]
     fn test_builder_max_response_bytes() {
@@ -1760,7 +1758,7 @@ mod tests {
         assert!(result.unwrap().is_map());
     }
 
-    // ==================== circuit breaker (consul) ====================
+    // circuit breaker (consul)
 
     /// acceptance: consecutive failures open the circuit, after which
     /// polls fail fast with `CircuitBreakerOpen` without touching the

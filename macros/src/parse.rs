@@ -96,7 +96,6 @@ impl StructAttrs {
     pub fn validate(&self, input: &syn::DeriveInput) -> darling::Result<()> {
         let mut errors = darling::Error::accumulator();
 
-        // Validate rename_all style
         if let Some(ref style) = self.rename_all {
             match style.as_str() {
                 "camelCase" | "snake_case" | "kebab-case" => {}

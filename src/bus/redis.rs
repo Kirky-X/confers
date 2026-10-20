@@ -340,7 +340,7 @@ mod tests {
         )
     }
 
-    // ==================== sanitize_url (private helper) ====================
+    // sanitize_url (private helper)
 
     #[test]
     fn test_sanitize_url_valid_host_and_port() {
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(RedisConfigBus::sanitize_url("not-a-url"), "invalid_url");
     }
 
-    // ==================== RedisBusBuilder ====================
+    // RedisBusBuilder
 
     #[test]
     fn test_builder_new_defaults() {
@@ -410,7 +410,7 @@ mod tests {
         }
     }
 
-    // ==================== connect error paths (no service needed) ====================
+    // connect error paths (no service needed)
 
     #[tokio::test]
     async fn test_connect_invalid_url_is_retryable() {
@@ -486,7 +486,7 @@ mod tests {
         ));
     }
 
-    // ==================== Lifecycle (start/stop are no-ops for Redis) ====================
+    // Lifecycle (start/stop are no-ops for Redis)
 
     #[tokio::test]
     async fn test_lifecycle_start_stop_are_noops() {
@@ -499,7 +499,7 @@ mod tests {
         bus.stop().await.expect("stop is always Ok");
     }
 
-    // ==================== Service-required tests ====================
+    // Service-required tests
 
     #[tokio::test]
     async fn test_build_success_uses_default_channel() {
@@ -585,7 +585,7 @@ mod tests {
         assert_eq!(received.instance_id, ev.instance_id);
     }
 
-    // ==================== pubsub reconnect loop (mock) ====================
+    // pubsub reconnect loop (mock)
 
     /// RESP helpers for a hand-rolled Redis pubsub mock (same convention as
     /// the hand-written TCP mocks in remote/k8s.rs and remote/nacos.rs).

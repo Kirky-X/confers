@@ -30,9 +30,7 @@ fn unique_prefix(base: &str) -> String {
     format!("{base}-{}-{}", nanos, SEQ.fetch_add(1, Ordering::Relaxed))
 }
 
-// ========================================
 // HTTP Polled Source Tests (Existing)
-// ========================================
 
 /// Test that HttpPolledSourceBuilder requires a URL.
 #[test]
@@ -166,9 +164,7 @@ fn test_trait_object() {
     let _interval = source.poll_interval();
 }
 
-// ========================================
 // Security Tests - SSRF Protection
-// ========================================
 
 /// Test that HTTP URLs are rejected.
 #[test]
@@ -224,9 +220,7 @@ fn test_empty_url_rejected() {
     assert!(result.is_err());
 }
 
-// ========================================
 // Etcd Integration Tests (4.1.1, 4.1.2, 4.1.3, 4.1.7)
-// ========================================
 
 #[cfg(feature = "etcd")]
 mod etcd_tests {
@@ -389,9 +383,7 @@ mod etcd_tests {
     }
 }
 
-// ========================================
 // Consul Integration Tests (4.1.4, 4.1.5)
-// ========================================
 
 #[cfg(feature = "consul")]
 mod consul_tests {
@@ -496,9 +488,7 @@ mod consul_tests {
     }
 }
 
-// ========================================
 // Etcd Integration Tests with Real Server (Skipped if unavailable)
-// ========================================
 
 /// Test etcd connection (4.1.1) - skips if not available.
 #[cfg(feature = "etcd")]
@@ -624,9 +614,7 @@ async fn test_etcd_source_parse_config() {
     );
 }
 
-// ========================================
 // Consul Integration Tests with Real Server (Skipped if unavailable)
-// ========================================
 
 /// Test Consul connection (4.1.4) - skips if not available.
 #[cfg(feature = "consul")]

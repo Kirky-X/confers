@@ -850,7 +850,7 @@ impl std::fmt::Display for WarningCode {
 /// Type alias for configuration results.
 pub type ConfigResult<T> = Result<T, ConfigError>;
 
-// ============== BrickArchitecture Error Types ==============
+// BrickArchitecture Error Types
 
 /// Runtime error type for BrickArchitecture compliance.
 ///
@@ -880,11 +880,9 @@ pub type ConfersError = ConfigError;
 /// configuration operations (get/set/delete/health_check/shutdown).
 pub type ConfersResult<T> = Result<T, ConfersError>;
 
-// ============================================================================
 // i18n 集成 — fluent 键位于 locales/{en,zh}/errors.ftl，键与变体一一对应；
 // 英文模板逐字符镜像 thiserror `#[error]` 的规范 Display 串
 // （由下方 tests 中的 translate_en == Display 守卫测试强制）。
-// ============================================================================
 
 impl crate::i18n::LocalizedMsg for ConfigError {
     fn message_key(&self) -> &'static str {
@@ -1213,9 +1211,7 @@ mod tests {
         }
     }
 
-    // =============================================================================
     // Additional coverage for ErrorCode Display impl
-    // =============================================================================
 
     #[test]
     fn test_error_code_display_all_variants() {
@@ -1277,9 +1273,7 @@ mod tests {
         assert_eq!(ErrorCode::Unknown.to_string(), "UNKNOWN");
     }
 
-    // =============================================================================
     // ConfigError::code() mapping for all variants
-    // =============================================================================
 
     #[test]
     fn test_config_error_code_mapping_all_variants() {
@@ -1413,9 +1407,7 @@ mod tests {
         assert_eq!(err.code(), ErrorCode::MultipleSources);
     }
 
-    // =============================================================================
     // validation() helper
-    // =============================================================================
 
     #[test]
     fn test_validation_helper_constructs_validation_failed() {
@@ -1434,9 +1426,7 @@ mod tests {
         }
     }
 
-    // =============================================================================
     // is_retryable for IO error kinds, watcher, concurrency, remote
-    // =============================================================================
 
     #[test]
     fn test_is_retryable_io_error_connection_refused() {
@@ -1529,9 +1519,7 @@ mod tests {
         assert!(!err.is_retryable());
     }
 
-    // =============================================================================
     // From<std::io::Error> impl
-    // =============================================================================
 
     #[test]
     fn test_from_io_error() {
@@ -1541,9 +1529,7 @@ mod tests {
         assert_eq!(config_err.code(), ErrorCode::IoError);
     }
 
-    // =============================================================================
     // user_message for all variants
-    // =============================================================================
 
     #[test]
     fn test_user_message_parse_error_with_location() {
@@ -1867,9 +1853,7 @@ mod tests {
         assert!(msg.contains(".env") || msg.contains("env"));
     }
 
-    // =============================================================================
     // MultiSourceError additional methods
-    // =============================================================================
 
     #[test]
     fn test_multi_source_error_with_partial() {
@@ -1938,9 +1922,7 @@ mod tests {
         assert_eq!(err.count_error_type(ErrorCode::FileNotFound), 0);
     }
 
-    // =============================================================================
     // BuildResult additional methods
-    // =============================================================================
 
     #[test]
     fn test_build_result_with_warnings() {
@@ -1985,9 +1967,7 @@ mod tests {
         assert!(!mapped.degraded);
     }
 
-    // =============================================================================
     // WarningCode Display for all variants
-    // =============================================================================
 
     #[test]
     fn test_warning_code_display_all_variants() {
@@ -2006,9 +1986,7 @@ mod tests {
         assert_eq!(WarningCode::UnusedKey.to_string(), "UNUSED_KEY");
     }
 
-    // =============================================================================
     // ConfersError / ConfersResult type aliases
-    // =============================================================================
 
     #[test]
     fn test_confers_error_type_alias_matches_config_error() {
@@ -2057,9 +2035,7 @@ mod tests {
         }
     }
 
-    // =============================================================================
     // Display impl for ConfigError (exercises thiserror #[error(...)] formats)
-    // =============================================================================
 
     #[test]
     fn test_config_error_display_file_not_found() {
@@ -2196,9 +2172,7 @@ mod tests {
         assert!(s.contains("Lock poisoned"));
     }
 
-    // =============================================================================
     // Debug derive for ConfigError and MultiSourceError
-    // =============================================================================
 
     #[test]
     fn test_config_error_debug_format() {
@@ -2216,9 +2190,7 @@ mod tests {
         assert!(dbg.contains("failed_count"));
     }
 
-    // =============================================================================
     // audit_message for additional variants
-    // =============================================================================
 
     #[test]
     fn test_audit_message_timeout() {
@@ -2241,10 +2213,8 @@ mod tests {
         assert!(audit.contains("CONCURRENCY_CONFLICT"));
     }
 
-    // =============================================================================
     // translate_en == Display 守卫（locales/*/errors.ftl 英文模板必须逐字符
     // 镜像 thiserror `#[error]` 规范串——任一侧漂移都会在此失败）
-    // =============================================================================
 
     #[test]
     fn test_translate_en_matches_display_for_all_variants() {

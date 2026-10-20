@@ -328,7 +328,6 @@ impl ConfigInjector {
         let mut success = Vec::new();
         let mut failures = Vec::new();
 
-        // Collect all valid injections first
         let mut valid_injections: Vec<(String, String)> = Vec::new();
 
         for (name, value) in config {
@@ -855,11 +854,9 @@ mod tests {
     fn test_validation_failure() {
         let injector = without_rate_limit(ConfigInjector::new());
 
-        // 尝试注入无效配置名称
         assert!(injector.inject("path", "value").is_err());
         assert!(injector.inject("HOME", "value").is_err());
 
-        // 尝试注入危险值
         assert!(injector.inject("APP_TEST", "hello;world").is_err());
         assert!(injector.inject("APP_TEST", "hello${world}").is_err());
     }

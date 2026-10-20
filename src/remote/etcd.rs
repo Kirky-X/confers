@@ -620,7 +620,7 @@ mod tests {
         assert_eq!(DEFAULT_ETCD_POLL_INTERVAL, Duration::from_secs(30));
     }
 
-    // --- Helpers for live etcd integration tests ---
+    // Helpers for live etcd integration tests
 
     /// Check whether a real etcd is reachable on the default gRPC port.
     fn etcd_ready() -> bool {

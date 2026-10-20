@@ -732,7 +732,7 @@ mod tests {
         );
     }
 
-    // ---- SnapshotFormat::default ----
+    // SnapshotFormat::default
 
     #[test]
     fn test_snapshot_format_default_is_toml() {
@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(parsed.path, info.path);
     }
 
-    // ---- list_snapshots ----
+    // list_snapshots
 
     #[test]
     fn test_list_snapshots_nonexistent_dir_returns_empty() {
@@ -890,7 +890,7 @@ mod tests {
         assert!(json_list[0].path.to_string_lossy().ends_with("b.json"));
     }
 
-    // ---- prune_old_snapshots ----
+    // prune_old_snapshots
 
     #[test]
     fn test_prune_old_snapshots_no_op_when_under_limit() {
@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(removed, 0);
     }
 
-    // ---- save (async) ----
+    // save (async)
 
     fn make_value() -> AnnotatedValue {
         let inner =
@@ -1121,7 +1121,7 @@ version = 0
         assert_eq!(loaded.inner.as_str(), Some("v"));
     }
 
-    // ---- legacy envelope detection (plain_json_to_annotated) ----
+    // legacy envelope detection (plain_json_to_annotated)
 
     /// Regression test for #221: a legitimate config whose top-level object
     /// happens to contain `inner`, `source`, `priority` and `version` keys must
@@ -1230,7 +1230,7 @@ version = 0
         assert_eq!(map.len(), 4);
     }
 
-    // ---- load_snapshot error paths ----
+    // load_snapshot error paths
 
     #[tokio::test]
     async fn test_load_snapshot_nonexistent_file_errors() {
@@ -1287,7 +1287,7 @@ version = 0
         assert!(res.is_err());
     }
 
-    // ---- provenance collection (via save) ----
+    // provenance collection (via save)
 
     #[tokio::test]
     async fn test_save_provenance_includes_nested_entries() {
@@ -1385,7 +1385,7 @@ version = 0
         assert!(!content.contains("_provenance"));
     }
 
-    // ---- atomic write / 0600 permissions ----
+    // atomic write / 0600 permissions
 
     /// acceptance: an interrupted write (temp file present, rename never
     /// happened) leaves NO file at the target path; the rename completes the
@@ -1485,7 +1485,7 @@ version = 0
             .block_on(fut)
     }
 
-    // ---- save + prune integration ----
+    // save + prune integration
 
     #[tokio::test]
     async fn test_save_prunes_old_snapshots_when_over_limit() {

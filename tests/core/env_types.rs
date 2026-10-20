@@ -78,7 +78,7 @@ fn test_env_vars_deserialize_into_typed_struct() {
     }
 }
 
-// ===== EnvSource type inference boundaries (R-scenario-coverage) =====
+// EnvSource type inference boundaries (R-scenario-coverage)
 //
 // EnvSource.infer_config_value is deterministic and public through the
 // EnvSource type; these tests pin the boundary behavior: bool case variants,
@@ -199,7 +199,7 @@ fn test_env_infer_non_numeric_guards() {
     );
 }
 
-// ===== Env array boundary: end-to-end through ConfigBuilder =====
+// Env array boundary: end-to-end through ConfigBuilder
 //
 // EnvSource leaves array-shaped values as plain strings — it never JSON-parses
 // env values. This means a JSON array literal in an env var cannot deserialize
@@ -269,7 +269,7 @@ fn test_env_json_array_stays_string_boundary() {
     }
 }
 
-// ===== Deep nesting + illegal key boundaries =====
+// Deep nesting + illegal key boundaries
 //
 // Deeply nested env vars (4+ levels) must produce a nested map tree, and the
 // dotted-key parser must tolerate empty segments without panicking.
@@ -462,7 +462,7 @@ fn test_env_parse_key_unicode_and_case() {
     }
 }
 
-// ===== ConfigBuilder::env_source =====
+// ConfigBuilder::env_source
 //
 // The builder-level env_source() constructor must behave identically to
 // env_prefix() for the same EnvSource configuration, keep the EnvSource's

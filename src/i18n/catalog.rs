@@ -9,9 +9,7 @@ use unic_langid::LanguageIdentifier;
 
 use super::locale::current_locale;
 
-// ============================================================================
 // Embedded FTL resources (compile-time mirror of the locales/ directory)
-// ============================================================================
 
 pub const EN_ERRORS_FTL: &str = include_str!("../../locales/en/errors.ftl");
 pub const EN_CLI_FTL: &str = include_str!("../../locales/en/cli.ftl");
@@ -36,9 +34,7 @@ pub const EMBEDDED_LOCALES: &[(&str, &str)] = &[
 const EN_FTLS: &[&str] = &[EN_ERRORS_FTL, EN_CLI_FTL, EN_EXAMPLES_FTL];
 const ZH_FTLS: &[&str] = &[ZH_ERRORS_FTL, ZH_CLI_FTL, ZH_EXAMPLES_FTL];
 
-// ============================================================================
 // Translation entry points
-// ============================================================================
 
 /// Translate a message key to the current locale.
 ///
@@ -73,9 +69,7 @@ pub fn warm_up() {
     let _ = ZH_BUNDLE.get_or_init(|| build_bundle("zh", ZH_FTLS));
 }
 
-// ============================================================================
 // Fluent bundle management (concurrent bundles: Send + Sync, static-safe)
-// ============================================================================
 
 static EN_BUNDLE: OnceLock<FluentBundle<FluentResource>> = OnceLock::new();
 static ZH_BUNDLE: OnceLock<FluentBundle<FluentResource>> = OnceLock::new();
@@ -125,10 +119,8 @@ fn build_bundle(lang: &str, ftls: &[&str]) -> FluentBundle<FluentResource> {
 mod tests {
     use super::*;
 
-    // =========================================================================
     // Bundle formatting (language pinned per call — no global state, safe
     // under parallel test execution)
-    // =========================================================================
 
     #[test]
     fn test_format_en_simple() {
@@ -210,9 +202,7 @@ mod tests {
         );
     }
 
-    // =========================================================================
     // Fallback chain
-    // =========================================================================
 
     #[test]
     fn test_unknown_language_falls_back_to_en_bundle() {
@@ -247,9 +237,7 @@ mod tests {
         );
     }
 
-    // =========================================================================
     // Catalog integrity guards
-    // =========================================================================
 
     /// Extract message ids from FTL source (`key = pattern` lines).
     fn ftl_keys(ftl: &str) -> std::collections::BTreeSet<&str> {

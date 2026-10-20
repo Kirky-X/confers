@@ -429,7 +429,7 @@ mod tests {
         let _ = async_nats::jetstream::new(client).delete_stream(name).await;
     }
 
-    // ==================== NatsBusBuilder ====================
+    // NatsBusBuilder
 
     #[test]
     fn test_builder_new_defaults() {
@@ -481,7 +481,7 @@ mod tests {
         }
     }
 
-    // ==================== connect error paths (no service needed) ====================
+    // connect error paths (no service needed)
 
     #[tokio::test]
     async fn test_connect_invalid_url_is_retryable() {
@@ -524,7 +524,7 @@ mod tests {
         ));
     }
 
-    // ==================== consumer naming (no service needed) ====================
+    // consumer naming (no service needed)
 
     #[test]
     fn test_subscriber_consumer_name_unique_per_subscription() {
@@ -550,7 +550,7 @@ mod tests {
         );
     }
 
-    // ==================== poison-message delivery cap ====================
+    // poison-message delivery cap
 
     /// the consumer configuration caps redelivery at 5 and keeps the
     /// broadcast/ephemeral semantics.
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(NATS_MAX_DELIVER, 5);
     }
 
-    // ==================== with_stream_name (not exercised by builder path) ====================
+    // with_stream_name (not exercised by builder path)
 
     #[tokio::test]
     async fn test_with_stream_name_sets_field() {
@@ -604,7 +604,7 @@ mod tests {
         assert_eq!(bus.stream_name, "CUSTOMSTREAM");
     }
 
-    // ==================== Service-required tests ====================
+    // Service-required tests
 
     #[tokio::test]
     async fn test_build_success_uses_defaults() {

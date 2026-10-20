@@ -1083,7 +1083,7 @@ impl ConflictReport {
     }
 }
 
-// ============== Data types migrated from interface.rs (BrickArchitecture D1) ==============
+// Data types migrated from interface.rs (BrickArchitecture D1)
 
 /// Caching policy for key providers.
 ///
@@ -1194,7 +1194,7 @@ impl crate::interface::MetricsBackend for NoOpMetrics {
     }
 }
 
-// ============== Source-related data types (migrated from config/source.rs) ==============
+// Source-related data types (migrated from config/source.rs)
 
 /// Kind of configuration source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -329,7 +329,6 @@ impl MigrationRegistry {
             return Ok(value);
         }
 
-        // Get migration path
         let path = self
             .get_migration_path(from, to)
             .ok_or_else(|| ConfigError::migration_not_found(from, to))?;
@@ -418,9 +417,7 @@ pub enum MigrationOnReload {
     Disabled,
 }
 
-// ============================================================================
 // ConfigError extensions for migration
-// ============================================================================
 
 impl ConfigError {
     /// Create a migration not found error.

@@ -110,7 +110,7 @@ fn test_prefixed_config_with_env_var() {
     });
 }
 
-// ===== Regression: env override for numeric fields (Bug 3) =====
+// Regression: env override for numeric fields (Bug 3)
 
 #[derive(Debug, Config, Deserialize, PartialEq)]
 struct NumericEnvConfig {
@@ -199,7 +199,7 @@ fn test_numeric_env_override_all() {
     }
 }
 
-// ===== Regression: env override with negative f64 (edge case) =====
+// Regression: env override with negative f64 (edge case)
 
 #[derive(Debug, Config, Deserialize, PartialEq)]
 struct SignedNumericConfig {
@@ -216,7 +216,7 @@ fn test_numeric_env_override_negative_f64() {
     });
 }
 
-// ===== ConfigSchema / ConfigMigration / ConfigModules / ConfigClap derives =====
+// ConfigSchema / ConfigMigration / ConfigModules / ConfigClap derives
 
 // Fields are exercised only through the derive-generated schema.
 #[allow(dead_code)]
