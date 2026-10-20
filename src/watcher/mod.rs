@@ -352,6 +352,7 @@ mod tests {
         );
 
         drop(guard);
+        // A completed sleep would deliver Ok(()); an aborted task drops the
         // sender without sending, so gone_rx resolves to Err.
         match tokio::time::timeout(Duration::from_secs(2), gone_rx).await {
             Ok(Err(_aborted)) => {}
