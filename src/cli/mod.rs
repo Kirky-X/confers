@@ -1188,7 +1188,7 @@ fn cmd_export(
         };
 
         if let Some(path) = output_path {
-            std::fs::write(&path, formatted)?;
+            crate::impl_::secure_write::write_owner_only(&path, &formatted)?;
             println!(
                 "{}",
                 tr_args(
@@ -1236,7 +1236,7 @@ fn cmd_export(
         };
 
         if let Some(path) = output_path {
-            std::fs::write(&path, formatted)?;
+            crate::impl_::secure_write::write_owner_only(&path, &formatted)?;
             println!(
                 "{}",
                 tr_args(
@@ -5429,5 +5429,22 @@ mod docs_agent_tests {
             "pack too long: {}",
             md.lines().count()
         );
+    }
+
+    /// `confers export -o <file>` writes a file that may contain every
+    /// plaintext secret (`--raw`), so it must be created owner-only — the
+    /// same discipline the snapshot and key-store writers use.
+    #[cfg(unix)]
+    #[test]
+    fn test_export_writes_owner_only_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let out = dir.path().join("export.json");
+        cmd_export(&[], "json", Some(out.clone()), false, true, false)
+            .expect("export must succeed");
+
+        let mode = std::fs::metadata(&out).expect("stat").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "the exported file must be owner-only");
     }
 }

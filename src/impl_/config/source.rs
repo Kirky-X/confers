@@ -364,35 +364,28 @@ impl EnvSource {
     /// Resolve the value, handling _FILE suffix mode for Docker secrets.
     ///
     /// When `env_key` ends with `_FILE`, the `raw` value is treated as a file path,
-    /// validated for security, and its contents are read instead. Policy
-    /// validation happens before the open; the content itself is read through
-    /// the opened file handle so a concurrent replacement of the path cannot
-    /// swap in a different file between validation and read (TOCTOU).
+    /// validated for security, and its contents are read instead. The file is
+    /// opened through the *canonical* path the validation returned, so a
+    /// concurrent replacement of the original path cannot swap in a file that
+    /// was never validated (TOCTOU). The read is size-capped.
     fn resolve_value(&self, raw: &str, env_key: &str) -> ConfigResult<String> {
         if self.file_suffix_enabled && env_key.ends_with(self.file_suffix) {
             // Docker secrets convention: value is a file path, read its content
-            self.validate_file_path(raw)?;
+            let validated_path = self.validate_file_path(raw)?;
             let cannot_read = || ConfigError::InvalidValue {
                 key: raw.to_string(),
                 expected_type: "readable file".to_string(),
                 message: format!("Cannot read file referenced by {}", env_key),
             };
-            let mut file = std::fs::File::open(raw).map_err(|_| cannot_read())?;
-            // Re-check the regular-file constraint against the opened
-            // handle's metadata: it describes the file we are about to read,
-            // not whatever the path may point to after a concurrent swap.
-            if !file.metadata().map_err(|_| cannot_read())?.is_file() {
-                return Err(ConfigError::InvalidValue {
-                    key: "file_path".to_string(),
-                    expected_type: "regular file".to_string(),
-                    message: "Only regular files can be read".to_string(),
-                });
-            }
-            let mut content = String::new();
-            use std::io::Read;
-            file.read_to_string(&mut content)
-                .map_err(|_| cannot_read())?;
-            Ok(content)
+            crate::path_validator::PathValidator::read_secret_file(&validated_path).map_err(|e| {
+                match e {
+                    // An oversized file is a size-limit violation, not an
+                    // I/O failure: keep the dedicated error so the caller can
+                    // tell them apart.
+                    ConfigError::SizeLimitExceeded { .. } => e,
+                    _ => cannot_read(),
+                }
+            })
         } else {
             Ok(raw.to_string())
         }
@@ -402,10 +395,11 @@ impl EnvSource {
     ///
     /// Delegates to [`crate::PathValidator`] so the env-source `_FILE`
     /// handling and the macro-generated `_FILE` handling share one policy.
-    fn validate_file_path(&self, file_path: &str) -> ConfigResult<()> {
-        crate::path_validator::PathValidator::new()
-            .validate_and_resolve(file_path)
-            .map(|_| ())
+    /// Returns the canonical path, which the caller must open: the policy
+    /// applies to the canonical form, so reading the original path again
+    /// would re-open the TOCTOU window.
+    fn validate_file_path(&self, file_path: &str) -> ConfigResult<PathBuf> {
+        crate::path_validator::PathValidator::new().validate_and_resolve(file_path)
     }
 
     /// Infer a `ConfigValue` from a raw string using deterministic type
@@ -1636,14 +1630,24 @@ mod tests {
             .collect()
             .expect_err("sensitive path must be refused");
         unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        // The sensitive-prefix list is POSIX-only: on Windows the same
+        // absolute path does not exist, so the refusal surfaces as "not
+        // found" instead of a path-policy message. The value is refused on
+        // every platform; only the reported reason differs.
+        let msg = err.to_string();
         assert!(
-            err.to_string().contains("file_path") || err.to_string().contains("path"),
+            msg.contains("file_path") || msg.contains("path") || msg.contains("not found"),
             "{err}"
         );
 
         // Directory instead of a regular file is refused.
+        // The directory name must not start with '.': the credential-file
+        // rule refuses dot-prefixed names first, which would mask the
+        // regular-file reason this case is about.
         let dir = tempfile::tempdir().unwrap();
-        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", dir.path().to_str().unwrap()) };
+        let sub_dir = dir.path().join("not_a_regular_file");
+        std::fs::create_dir_all(&sub_dir).unwrap();
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", sub_dir.to_str().unwrap()) };
         let err = source
             .collect()
             .expect_err("directory _FILE target must be refused");
@@ -1672,5 +1676,32 @@ mod tests {
             "file content must become the value: {password:?}"
         );
         let _: Option<Arc<str>> = None;
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_file_suffix_rejects_oversized_file() {
+        // The `_FILE` read is size-capped: without the cap a `_FILE` target
+        // could make the process allocate an unbounded buffer.
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.txt");
+        std::fs::write(
+            &big,
+            vec![b'x'; crate::path_validator::PathValidator::MAX_SECRET_FILE_SIZE + 1],
+        )
+        .unwrap();
+
+        let source = EnvSource::with_prefix("SECRTSTG_")
+            .file_suffix("_FILE")
+            .with_file_suffix(true);
+        unsafe { std::env::set_var("SECRTSTG_DB_PASSWORD_FILE", big.to_str().unwrap()) };
+        let err = source
+            .collect()
+            .expect_err("oversized _FILE target must fail");
+        unsafe { std::env::remove_var("SECRTSTG_DB_PASSWORD_FILE") };
+        assert!(
+            matches!(err, ConfigError::SizeLimitExceeded { .. }),
+            "expected SizeLimitExceeded, got {err:?}"
+        );
     }
 }

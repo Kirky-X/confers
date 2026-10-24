@@ -35,6 +35,8 @@ pub(crate) mod migration;
 pub(crate) mod modules;
 #[cfg(feature = "json-schema")]
 pub(crate) mod schema;
+#[cfg(any(feature = "cli", feature = "snapshot"))]
+pub(crate) mod secure_write;
 #[cfg(feature = "snapshot")]
 pub(crate) mod snapshot;
 #[cfg(feature = "validation")]

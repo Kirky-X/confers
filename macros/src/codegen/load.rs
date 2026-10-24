@@ -103,16 +103,22 @@ fn generate_env_calls(
                     if let Ok(file_path) = std::env::var(#file_env_name) {
                         let validator = confers::PathValidator::new();
                         let validated_path = validator.validate_and_resolve(&file_path)?;
-                        let content = std::fs::read_to_string(&validated_path).map_err(|_| {
-                            confers::ConfigError::InvalidValue {
-                                key: #file_env_name.to_string(),
-                                expected_type: "readable file".to_string(),
-                                message: confers::i18n::tr_args(
-                                    "error-env-file-unreadable",
-                                    &[("var", #file_env_name.to_string())],
-                                ),
-                            }
-                        })?;
+                        // Read through the canonical path that was validated
+                        // (not the original path) and cap the size, so a
+                        // concurrent path swap cannot redirect the read and
+                        // a huge target cannot exhaust memory.
+                        let content = confers::PathValidator::read_secret_file(&validated_path)
+                            .map_err(|e| match e {
+                                confers::ConfigError::SizeLimitExceeded { .. } => e,
+                                _ => confers::ConfigError::InvalidValue {
+                                    key: #file_env_name.to_string(),
+                                    expected_type: "readable file".to_string(),
+                                    message: confers::i18n::tr_args(
+                                        "error-env-file-unreadable",
+                                        &[("var", #file_env_name.to_string())],
+                                    ),
+                                },
+                            })?;
                         let val = content.trim().to_string();
                         env_map.insert(#field_key.to_string(), confers::EnvSource::infer_config_value(&val));
                     } else if let Ok(val) = std::env::var(#env_name) {

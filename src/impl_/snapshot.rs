@@ -4,82 +4,19 @@
 //! Configuration snapshot module.
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::impl_::secure_write::write_owner_only;
 use crate::types::{AnnotatedValue, ConfigValue, SerializeMode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Unix file mode for snapshot files: snapshots may contain sensitive
-/// configuration, so they are created owner-only (0600) instead of the
-/// process-default 0644.
-#[cfg(unix)]
-const SNAPSHOT_FILE_MODE: u32 = 0o600;
-
-/// Sibling temp-file path for `path` (same directory → same filesystem, so
-/// the final rename is atomic).
-fn sibling_tmp_path(path: &Path) -> PathBuf {
-    let mut name = path
-        .file_name()
-        .map(|n| n.to_os_string())
-        .unwrap_or_default();
-    name.push(".tmp");
-    path.with_file_name(name)
-}
-
-/// Atomically persist `content` at `path`.
+/// Atomically persist `content` at `path`, owner-only on unix.
 ///
-/// The data is written to a sibling temp file, fsynced, and then renamed over
-/// the target. A crash mid-write leaves at most a `.tmp` sibling — never a
-/// truncated/half-written target file. The temp file is removed when the
-/// write itself fails.
-///
-/// On unix the file is created with mode 0600.
+/// Snapshots may contain sensitive configuration, so the file is created
+/// with mode 0600 instead of the process-default 0644.
 fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
-    let tmp_path = sibling_tmp_path(path);
-
-    let write_result: std::io::Result<()> = (|| {
-        #[cfg(unix)]
-        let mut file = {
-            use std::fs::OpenOptions;
-            use std::os::unix::fs::OpenOptionsExt;
-            OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(SNAPSHOT_FILE_MODE)
-                .open(&tmp_path)?
-        };
-        #[cfg(not(unix))]
-        let mut file = {
-            use std::fs::OpenOptions;
-            OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&tmp_path)?
-        };
-        file.write_all(content.as_bytes())?;
-        // fsync so the data is on disk before the rename makes it visible.
-        file.sync_all()?;
-        Ok(())
-    })();
-
-    if let Err(e) = write_result {
-        // Clean up the temp file so failed writes leave no residue.
-        let _ = std::fs::remove_file(&tmp_path);
-        return Err(e);
-    }
-
-    // R3-L4: rename 失败也清理 tmp,避免 *.tmp 残骸在快照目录累积。
-    match std::fs::rename(&tmp_path, path) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp_path);
-            Err(e)
-        }
-    }
+    write_owner_only(path, content)
 }
 
 /// Whether a JSON object matches the serialized `AnnotatedValue` shape that
@@ -576,14 +513,24 @@ impl SnapshotManager {
             SnapshotFormat::Toml => {
                 #[cfg(feature = "toml")]
                 {
-                    toml::from_str::<serde_json::Value>(&content).map_err(|e| {
-                        crate::error::ConfigError::ParseError {
-                            format: "toml".to_string(),
-                            message: e.to_string(),
-                            location: None,
-                            source: Some(Box::new(e)),
-                        }
-                    })?
+                    toml::from_str::<serde_json::Value>(&content).map_err(
+                        |mut e: toml::de::Error| {
+                            // `toml::de::Error` keeps the whole parsed document in
+                            // its `input` field and renders it in both `Debug` and
+                            // `Display`. Boxing it into a public error type would
+                            // carry the snapshot's secrets into every `{:?}` and
+                            // into the CLI error chain. Drop the document and keep
+                            // the message, which still carries the diagnostic.
+                            let message = e.message().to_string();
+                            e.set_input(None);
+                            crate::error::ConfigError::ParseError {
+                                format: "toml".to_string(),
+                                message,
+                                location: None,
+                                source: Some(Box::new(e)),
+                            }
+                        },
+                    )?
                 }
             }
             SnapshotFormat::Yaml => {
@@ -640,6 +587,7 @@ impl Default for SnapshotManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::impl_::secure_write::sibling_tmp_path;
     use crate::types::SourceId;
 
     #[test]

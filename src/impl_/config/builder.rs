@@ -542,7 +542,7 @@ where
             Err(e) => {
                 let err = ConfigError::InvalidValue {
                     key: e.path().to_string(),
-                    expected_type: std::any::type_name::<T>().to_string(),
+                    expected_type: crate::error::short_type_label::<T>(),
                     message: e.inner().to_string(),
                 };
                 // persist the collected config before failing the build.
