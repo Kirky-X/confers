@@ -12,11 +12,8 @@ use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
-use crate::i18n::{tr, tr_args};
+use crate::i18n::tr_args;
 use crate::lifecycle::Lifecycle;
-
-/// Redis default port.
-const DEFAULT_REDIS_PORT: u16 = 6379;
 
 /// Initial reconnect backoff after the pubsub connection drops.
 pub const REDIS_RECONNECT_INITIAL_DELAY: Duration = Duration::from_secs(1);
@@ -34,26 +31,14 @@ pub struct RedisConfigBus {
 }
 
 impl RedisConfigBus {
-    fn sanitize_url(url: &str) -> String {
-        if let Ok(parsed) = url::Url::parse(url) {
-            let host = parsed.host_str().unwrap_or("unknown");
-            let port = parsed.port().unwrap_or(DEFAULT_REDIS_PORT);
-            format!("{}:{}", host, port)
-        } else {
-            "invalid_url".to_string()
-        }
-    }
-
     pub async fn connect(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
         Self::connect_with_config(url, channel).await
     }
 
     /// Connect to a Redis server without applying reconnect-backoff overrides.
     pub async fn connect_with_config(url: &str, channel: impl Into<String>) -> ConfigResult<Self> {
-        let safe_host = Self::sanitize_url(url);
-
         let client = redis::Client::open(url).map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: format!("redis_connection_failed: host={}, error={}", safe_host, e),
+            error_type: super::transport_error_type("redis_connection_failed", &e),
             retryable: true,
         })?;
 
@@ -86,14 +71,11 @@ impl RedisConfigBus {
         )
         .await
         .map_err(|_| ConfigError::RemoteUnavailable {
-            error_type: tr("error-redis-pubsub-connect-timeout"),
+            error_type: "redis_pubsub_connect_timeout".to_string(),
             retryable: true,
         })?
         .map_err(|e| ConfigError::RemoteUnavailable {
-            error_type: tr_args(
-                "error-redis-pubsub-connect-failed",
-                &[("message", e.to_string())],
-            ),
+            error_type: super::transport_error_type("redis_pubsub_connect_failed", &e),
             retryable: true,
         })?;
 
@@ -101,10 +83,7 @@ impl RedisConfigBus {
             .subscribe(channel)
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: tr_args(
-                    "error-redis-subscribe-failed",
-                    &[("message", e.to_string())],
-                ),
+                error_type: super::transport_error_type("redis_subscribe_failed", &e),
                 retryable: true,
             })?;
 
@@ -131,7 +110,7 @@ impl ConfigBus for RedisConfigBus {
             .get_multiplexed_async_connection()
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("redis_connection: {}", e),
+                error_type: super::transport_error_type("redis_connection_failed", &e),
                 retryable: true,
             })?;
 
@@ -143,7 +122,7 @@ impl ConfigBus for RedisConfigBus {
         conn.publish::<_, _, ()>(&self.channel, payload)
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("redis_publish: {}", e),
+                error_type: super::transport_error_type("redis_publish_failed", &e),
                 retryable: true,
             })?;
 
@@ -340,29 +319,6 @@ mod tests {
         )
     }
 
-    // sanitize_url (private helper)
-
-    #[test]
-    fn test_sanitize_url_valid_host_and_port() {
-        assert_eq!(
-            RedisConfigBus::sanitize_url("redis://1.2.3.4:7000"),
-            "1.2.3.4:7000"
-        );
-    }
-
-    #[test]
-    fn test_sanitize_url_uses_default_port_when_absent() {
-        assert_eq!(
-            RedisConfigBus::sanitize_url("redis://1.2.3.4"),
-            "1.2.3.4:6379"
-        );
-    }
-
-    #[test]
-    fn test_sanitize_url_invalid_returns_sentinel() {
-        assert_eq!(RedisConfigBus::sanitize_url("not-a-url"), "invalid_url");
-    }
-
     // RedisBusBuilder
 
     #[test]
@@ -424,13 +380,16 @@ mod tests {
                 error_type,
             } => {
                 assert!(retryable, "should be retryable");
-                // sanitize_url returns "invalid_url" for unparseable input, and
-                // the error_type embeds the sanitized host.
+                // The error_type is a stable label plus a sanitized detail:
+                // neither the endpoint nor a credential may appear in it.
                 assert!(
-                    error_type.contains("invalid_url")
-                        || error_type.contains("redis_connection_failed"),
+                    error_type.starts_with("redis_connection_failed"),
                     "error_type={}",
                     error_type
+                );
+                assert!(
+                    !error_type.contains("not-a-valid-url"),
+                    "the endpoint must not leak into the error: {error_type}"
                 );
             }
             other => panic!("expected RemoteUnavailable, got {:?}", other),

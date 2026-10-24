@@ -67,6 +67,7 @@ pub struct ConsulSourceBuilder {
     cb_threshold: Option<u32>,
     cb_base_delay: Option<Duration>,
     cb_max_delay: Option<Duration>,
+    allow_full_store_read: bool,
 }
 
 /// TLS configuration for Consul connection.
@@ -95,6 +96,7 @@ impl ConsulSourceBuilder {
             cb_threshold: None,
             cb_base_delay: None,
             cb_max_delay: None,
+            allow_full_store_read: false,
         }
     }
 
@@ -113,6 +115,17 @@ impl ConsulSourceBuilder {
     /// Set the KV prefix to watch.
     pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
+        self
+    }
+
+    /// Allow an empty prefix, which makes the source read the **entire** KV
+    /// store of the Consul agent (no prefix scoping at all).
+    ///
+    /// An empty prefix silently widens a tenant-scoped source to the whole
+    /// store, so it must be requested explicitly instead of being the
+    /// accidental result of an empty prefix.
+    pub fn allow_full_store_read(mut self, allow: bool) -> Self {
+        self.allow_full_store_read = allow;
         self
     }
 
@@ -217,6 +230,18 @@ impl ConsulSourceBuilder {
 
     /// Build the Consul source.
     pub fn build(self) -> ConfigResult<ConsulSource> {
+        // An empty prefix makes `recurse=true` list *every* key of the
+        // store — a silent widening of a tenant-scoped source. Fail loud
+        // unless the caller opted in explicitly.
+        if self.prefix.is_empty() && !self.allow_full_store_read {
+            return Err(ConfigError::InvalidValue {
+                key: "consul.prefix".to_string(),
+                expected_type: "non-empty prefix".to_string(),
+                message: "an empty consul prefix reads the entire KV store; \
+                          call allow_full_store_read(true) to opt in"
+                    .to_string(),
+            });
+        }
         // Issue #326: the client previously had no timeouts at all; bound the
         // connection and the overall request (including the 30s blocking
         // long poll).
@@ -1386,6 +1411,7 @@ mod tests {
         let source = ConsulSourceBuilder::new()
             .address(addr)
             .prefix("")
+            .allow_full_store_read(true)
             .build()
             .unwrap();
         let result = source.poll_internal().await;
@@ -1472,6 +1498,7 @@ mod tests {
         let source = ConsulSourceBuilder::new()
             .address(addr)
             .prefix("")
+            .allow_full_store_read(true)
             .build()
             .unwrap();
         let result = source.poll_internal().await;
@@ -1534,6 +1561,7 @@ mod tests {
         let source = ConsulSourceBuilder::new()
             .address(addr)
             .prefix("")
+            .allow_full_store_read(true)
             .format(Format::Json)
             .build()
             .unwrap();
@@ -1561,6 +1589,7 @@ mod tests {
         let source = ConsulSourceBuilder::new()
             .address(addr)
             .prefix("")
+            .allow_full_store_read(true)
             .format(Format::Toml)
             .build()
             .unwrap();
@@ -1960,6 +1989,34 @@ mod tests {
         assert!(
             err.to_string().contains("Failed to read TLS key file"),
             "{err}"
+        );
+    }
+
+    /// An empty prefix reads the *entire* KV store: it must be requested
+    /// explicitly instead of being the accidental result of an empty prefix.
+    #[test]
+    fn test_build_rejects_empty_prefix_without_opt_in() {
+        let err = match ConsulSourceBuilder::new()
+            .address("127.0.0.1:8500")
+            .prefix("")
+            .build()
+        {
+            Ok(_) => panic!("empty prefix must be refused"),
+            Err(e) => e,
+        };
+        assert!(
+            matches!(err, ConfigError::InvalidValue { .. }),
+            "expected InvalidValue, got {err:?}"
+        );
+
+        // The explicit opt-in still works.
+        assert!(
+            ConsulSourceBuilder::new()
+                .address("127.0.0.1:8500")
+                .prefix("")
+                .allow_full_store_read(true)
+                .build()
+                .is_ok()
         );
     }
 }

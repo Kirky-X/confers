@@ -56,7 +56,7 @@ impl NatsConfigBus {
             async_nats::connect(url)
                 .await
                 .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: format!("nats_connect: {}", e),
+                    error_type: super::transport_error_type("nats_connect_failed", &e),
                     retryable: true,
                 })?;
 
@@ -76,7 +76,7 @@ impl NatsConfigBus {
             .connect(url)
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_connect: {}", e),
+                error_type: super::transport_error_type("nats_connect_failed", &e),
                 retryable: true,
             })?;
 
@@ -107,7 +107,7 @@ impl NatsConfigBus {
             })
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_stream: {}", e),
+                error_type: super::transport_error_type("nats_stream_failed", &e),
                 retryable: true,
             })?;
 
@@ -172,7 +172,7 @@ impl Lifecycle for NatsConfigBus {
             .flush()
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_flush: {}", e),
+                error_type: super::transport_error_type("nats_flush_failed", &e),
                 retryable: false,
             })
     }
@@ -194,7 +194,7 @@ impl ConfigBus for NatsConfigBus {
             .publish(self.subject.clone(), payload.into())
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_publish: {}", e),
+                error_type: super::transport_error_type("nats_publish_failed", &e),
                 retryable: true,
             })?;
 
@@ -256,11 +256,13 @@ impl ConfigBus for NatsConfigBus {
 
         let consumer = consumer.ok_or_else(|| ConfigError::RemoteUnavailable {
             error_type: format!(
-                "nats_consumer: {} (after {} retries)",
-                last_err
-                    .as_ref()
-                    .map(|e| e.to_string())
-                    .unwrap_or_else(|| "unknown error".into()),
+                "nats_consumer_failed: {} (after {} retries)",
+                crate::error::sanitize::sanitize_error_message(
+                    &last_err
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "unknown error".into())
+                ),
                 max_retries
             ),
             retryable: true,
@@ -270,7 +272,7 @@ impl ConfigBus for NatsConfigBus {
             .messages()
             .await
             .map_err(|e| ConfigError::RemoteUnavailable {
-                error_type: format!("nats_messages: {}", e),
+                error_type: super::transport_error_type("nats_messages_failed", &e),
                 retryable: true,
             })?;
 
@@ -304,7 +306,13 @@ impl ConfigBus for NatsConfigBus {
                     // silently dropping the error.
                     log::warn!(
                         "{}",
-                        tr_args("log-nats-consumer-error", &[("message", e.to_string())])
+                        tr_args(
+                            "log-nats-consumer-error",
+                            &[(
+                                "message",
+                                crate::error::sanitize::sanitize_error_message(&e.to_string())
+                            )]
+                        )
                     );
                     None
                 }

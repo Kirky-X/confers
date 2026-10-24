@@ -28,6 +28,12 @@ mod nats;
 #[cfg(feature = "redis-bus")]
 mod redis;
 
+#[cfg(any(feature = "nats-bus", feature = "redis-bus"))]
+mod error_type;
+
+#[cfg(any(feature = "nats-bus", feature = "redis-bus"))]
+pub(crate) use error_type::transport_error_type;
+
 #[cfg(feature = "nats-bus")]
 pub use nats::{NatsBusBuilder, NatsConfigBus};
 #[cfg(feature = "redis-bus")]

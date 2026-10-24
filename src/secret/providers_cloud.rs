@@ -109,20 +109,11 @@ pub struct VaultTransitKeyProvider {
 /// hits: path separators, `..` segments, percent escapes and whitespace are
 /// rejected; plain key names (letters, digits, `.`, `_`, `-`) pass.
 fn validate_transit_key(key: &str) -> ConfigResult<()> {
-    let ok = !key.is_empty()
-        && !key.contains("..")
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
-    if ok {
-        Ok(())
-    } else {
-        Err(ConfigError::KeyError {
-            message: format!(
-                "transit key '{key}' contains characters outside [A-Za-z0-9._-] or a '..' segment"
-            ),
-        })
-    }
+    crate::secret::path_segments::validate_single_segment(key).map_err(|_| ConfigError::KeyError {
+        message: format!(
+            "transit key '{key}' contains characters outside [A-Za-z0-9._-] or a '..' segment"
+        ),
+    })
 }
 
 impl VaultTransitKeyProvider {

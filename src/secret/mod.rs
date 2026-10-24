@@ -10,6 +10,8 @@ pub(crate) mod key_provider;
 #[cfg(feature = "encryption")]
 pub(crate) mod key_registry;
 #[cfg(feature = "encryption")]
+pub(crate) mod path_segments;
+#[cfg(feature = "encryption")]
 pub(crate) mod providers;
 #[cfg(feature = "encryption")]
 pub(crate) mod string;

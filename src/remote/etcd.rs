@@ -37,6 +37,7 @@ pub struct EtcdSourceBuilder {
     tls: Option<EtcdTlsConfig>,
     operation_timeout: Duration,
     cb_threshold: u32,
+    allow_full_store_read: bool,
 }
 
 /// TLS configuration for etcd connection.
@@ -60,6 +61,7 @@ impl EtcdSourceBuilder {
             tls: None,
             operation_timeout: DEFAULT_ETCD_OPERATION_TIMEOUT,
             cb_threshold: 5,
+            allow_full_store_read: false,
         }
     }
 
@@ -90,6 +92,17 @@ impl EtcdSourceBuilder {
     /// Set the KV prefix to watch.
     pub fn prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
+        self
+    }
+
+    /// Allow an empty prefix, which makes the source read the **entire** etcd
+    /// key space (no prefix scoping at all).
+    ///
+    /// An empty prefix silently widens a tenant-scoped source to the whole
+    /// key space, so it must be requested explicitly instead of being the
+    /// accidental result of an empty prefix.
+    pub fn allow_full_store_read(mut self, allow: bool) -> Self {
+        self.allow_full_store_read = allow;
         self
     }
 
@@ -132,6 +145,18 @@ impl EtcdSourceBuilder {
 
     /// Build the etcd source.
     pub async fn build(self) -> ConfigResult<EtcdSource> {
+        // An empty prefix makes the ranged GET cover the **entire** key
+        // space — a silent widening of a tenant-scoped source. Fail loud
+        // unless the caller opted in explicitly.
+        if self.prefix.is_empty() && !self.allow_full_store_read {
+            return Err(ConfigError::InvalidValue {
+                key: "etcd.prefix".to_string(),
+                expected_type: "non-empty prefix".to_string(),
+                message: "an empty etcd prefix reads the entire key space; \
+                          call allow_full_store_read(true) to opt in"
+                    .to_string(),
+            });
+        }
         let mut options = ConnectOptions::new();
 
         // Validate that both or neither auth credentials are provided
@@ -984,6 +1009,30 @@ mod tests {
         assert!(
             err.to_string().contains("Failed to read TLS key file"),
             "{err}"
+        );
+    }
+
+    /// An empty prefix reads the *entire* key space: it must be requested
+    /// explicitly instead of being the accidental result of an empty prefix.
+    #[tokio::test]
+    async fn test_build_rejects_empty_prefix_without_opt_in() {
+        let err = match EtcdSourceBuilder::new().prefix("").build().await {
+            Ok(_) => panic!("empty prefix must be refused"),
+            Err(e) => e,
+        };
+        assert!(
+            matches!(err, ConfigError::InvalidValue { .. }),
+            "expected InvalidValue, got {err:?}"
+        );
+
+        // The explicit opt-in still works.
+        assert!(
+            EtcdSourceBuilder::new()
+                .prefix("")
+                .allow_full_store_read(true)
+                .build()
+                .await
+                .is_ok()
         );
     }
 }

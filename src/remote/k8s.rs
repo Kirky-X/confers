@@ -327,6 +327,46 @@ impl K8sObjectKind {
     }
 }
 
+/// Whether `value` is a valid DNS-1123 subdomain (the identifier grammar
+/// Kubernetes uses for namespaces and object names): lowercase alphanumerics,
+/// `-` and `.`, split into labels that start and end with an alphanumeric.
+fn is_dns1123_subdomain(value: &str) -> bool {
+    if value.is_empty() || value.len() > 253 {
+        return false;
+    }
+    value.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+    })
+}
+
+/// Validate a namespace or object name before it is interpolated into the
+/// Kubernetes API path.
+///
+/// The value reaches the request URL unchecked otherwise, and the `url` crate
+/// normalizes `..` segments while parsing — so a name like
+/// `x/../../other-ns` would move the request to a different namespace (or
+/// out of the `/namespaces/{ns}/{kind}/` prefix entirely) while still
+/// carrying the pod's service-account bearer token.
+fn validate_k8s_identifier(field: &str, value: &str) -> ConfigResult<()> {
+    if is_dns1123_subdomain(value) {
+        Ok(())
+    } else {
+        Err(ConfigError::InvalidValue {
+            key: field.to_string(),
+            expected_type: "DNS-1123 subdomain".to_string(),
+            message: format!(
+                "{field} '{value}' is not a valid DNS-1123 subdomain (lowercase alphanumeric, '-' or '.', labels must start and end with an alphanumeric)"
+            ),
+        })
+    }
+}
+
 /// Builder for [`K8sApiSource`].
 pub struct K8sApiSourceBuilder {
     namespace: String,
@@ -413,7 +453,14 @@ impl K8sApiSourceBuilder {
     /// Build the source. Fails when neither an explicit API host nor the
     /// in-cluster environment is available, and fails loudly when a
     /// configured CA file cannot be read or parsed (Rule 12).
+    ///
+    /// The namespace and the object name are validated here: they are
+    /// interpolated into the API path, and an unchecked value could redirect
+    /// the request to another namespace while still carrying the pod's
+    /// service-account token.
     pub fn build(self) -> ConfigResult<K8sApiSource> {
+        validate_k8s_identifier("namespace", &self.namespace)?;
+        validate_k8s_identifier("name", &self.name)?;
         let api_host = match self.api_host {
             Some(host) => host.trim_end_matches('/').to_string(),
             None => in_cluster_api_host().ok_or_else(|| ConfigError::InvalidValue {
@@ -735,6 +782,8 @@ mod tests {
         let _ = fs::remove_file(&tmp_link);
         #[cfg(unix)]
         std::os::unix::fs::symlink(from, &tmp_link).expect("create swap symlink");
+        #[cfg(not(unix))]
+        let _ = from;
         fs::rename(&tmp_link, dir.join("..data")).expect("atomic symlink swap");
     }
 
@@ -1268,5 +1317,41 @@ mod tests {
             .read_volume()
             .expect_err("non-UTF8 mounted key must fail loudly");
         assert!(err.to_string().contains("cannot read mounted key"), "{err}");
+    }
+
+    /// A namespace or name that is not a DNS-1123 subdomain must be
+    /// refused: it reaches the API path, and `..` segments would move the
+    /// request to another namespace.
+    #[test]
+    fn test_build_rejects_non_dns1123_namespace_and_name() {
+        for (namespace, name) in [
+            ("prod/../../other", "app-config"),
+            ("prod", "app/../../../secrets"),
+            ("Prod", "app-config"),
+            ("prod", "app_config"),
+            ("", "app-config"),
+        ] {
+            let err = match K8sApiSourceBuilder::new(namespace, name, K8sObjectKind::ConfigMap)
+                .api_host("https://kubernetes.default.svc")
+                .build()
+            {
+                Ok(_) => panic!("invalid identifier must be refused: {namespace:?}/{name:?}"),
+                Err(e) => e,
+            };
+            assert!(
+                matches!(err, ConfigError::InvalidValue { .. }),
+                "expected InvalidValue for {namespace:?}/{name:?}, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_accepts_valid_namespace_and_name() {
+        assert!(
+            K8sApiSourceBuilder::new("prod", "app-config", K8sObjectKind::ConfigMap)
+                .api_host("https://kubernetes.default.svc")
+                .build()
+                .is_ok()
+        );
     }
 }

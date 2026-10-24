@@ -10,6 +10,8 @@ use crate::i18n::tr;
 #[cfg(feature = "remote")]
 use crate::i18n::tr_args;
 use crate::interface::KeyProvider;
+#[cfg(feature = "remote")]
+use crate::secret::path_segments::validate_path_segments;
 use crate::types::{KeyCachePolicy, ZeroizingBytes};
 
 #[cfg(feature = "remote")]
@@ -363,9 +365,15 @@ impl VaultKeyProvider {
             });
         }
 
+        let secret_path = secret_path.into();
+        // The path is interpolated into the request URL; `..` segments would
+        // be normalized away by the URL parser and move the request out of
+        // the prefix the caller intended (e.g. another tenant's path).
+        validate_path_segments(&secret_path)?;
+
         Ok(Self {
             vault_addr: addr,
-            secret_path: secret_path.into(),
+            secret_path,
             secret_key: secret_key.into(),
             auth: VaultAuth::Token {
                 token: String::new(),
@@ -636,6 +644,11 @@ impl VaultKeyProviderBuilder {
             expected_type: "string".to_string(),
             message: "Secret path is required".to_string(),
         })?;
+
+        // The path is interpolated into the request URL; `..` segments would
+        // be normalized away by the URL parser and move the request out of
+        // the prefix the caller intended (e.g. another tenant's path).
+        validate_path_segments(&secret_path)?;
 
         let secret_key = self.secret_key.ok_or(ConfigError::InvalidValue {
             key: "secret_key".to_string(),
@@ -1459,5 +1472,32 @@ mod tests {
         assert_eq!(provider.auth.describe(), "approle");
         assert!(provider.allow_http);
         assert_eq!(provider.cache_policy, KeyCachePolicy::NoCache);
+    }
+
+    /// The Vault secret path is interpolated into the request URL: a `..`
+    /// segment would move the request out of the caller's prefix.
+    #[cfg(feature = "remote")]
+    #[test]
+    fn test_vault_secret_path_rejects_traversal() {
+        for path in [
+            "secret/data/tenant-a/../../tenant-b/db",
+            "secret/data/tenant-a/%2e%2e/tenant-b",
+            "secret/../sys/policy",
+        ] {
+            let err = match VaultKeyProvider::new("https://vault.example.com", path, "db") {
+                Ok(_) => panic!("a traversing secret path must be refused: {path}"),
+                Err(e) => e,
+            };
+            assert!(
+                matches!(err, ConfigError::KeyError { .. }),
+                "expected KeyError for {path}, got {err:?}"
+            );
+        }
+
+        // A plain path stays valid.
+        assert!(
+            VaultKeyProvider::new("https://vault.example.com", "secret/data/tenant-a/db", "db")
+                .is_ok()
+        );
     }
 }

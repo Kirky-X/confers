@@ -256,9 +256,11 @@ impl CloudKmsBackend for GcpKmsKeyProvider {
 
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
+            // The response body is remote-controlled content: it must not
+            // travel inside the public error type, where it would reach
+            // logs and crash reports verbatim.
             return Err(ConfigError::RemoteUnavailable {
-                error_type: format!("gcp_kms_response: {status} {body}"),
+                error_type: format!("gcp_kms_response: {status}"),
                 retryable: is_retryable_status(status.as_u16()),
             });
         }

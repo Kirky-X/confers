@@ -335,6 +335,19 @@ fn validate_redirect_hop(current: &url::Url, location: &str) -> ConfigResult<url
     Ok(next)
 }
 
+/// Whether two URLs share the same origin (scheme, host and effective port).
+///
+/// Decides whether builder-configured credentials may be sent to a redirect
+/// target: only a same-origin hop stays inside the trust boundary the
+/// caller configured. Mirrors reqwest's own `remove_sensitive_headers` rule,
+/// which drops `Authorization`/`Cookie`/`Proxy-Authorization` when a
+/// redirect crosses host, port or scheme.
+fn same_origin(a: &url::Url, b: &url::Url) -> bool {
+    a.scheme() == b.scheme()
+        && a.host_str() == b.host_str()
+        && a.port_or_known_default() == b.port_or_known_default()
+}
+
 /// Trait for polled configuration sources.
 ///
 /// Sources implementing this trait will be polled at regular intervals
@@ -524,12 +537,17 @@ impl HttpPolledSourceBuilder {
     }
 
     /// Add an HTTP header applied to every poll request, on every followed
-    /// redirect hop.
+    /// redirect hop that stays on the configured origin.
     ///
     /// Intended for authentication headers (e.g. `Authorization: Bearer …`).
     /// The value is stored redacted: it never appears in `Debug` output,
     /// error messages or logs — reqwest errors are mapped to their type name
     /// only.
+    ///
+    /// A redirect that changes scheme, host or port is a different origin:
+    /// the header is **not** sent to that target, because the redirect
+    /// target is chosen by the remote server and has not been trusted by
+    /// the caller.
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((name.into(), value.into()));
         self
@@ -818,6 +836,13 @@ impl HttpPolledSource {
                 message: "Invalid URL format".to_string(),
             })?;
 
+        // The origin the credentials were configured for. A redirect that
+        // leaves this origin must not receive the builder-configured
+        // headers: the redirect target is chosen by the remote server (or
+        // by whoever controls it) and has not been trusted by the caller.
+        let credential_origin = current_url.clone();
+        let mut send_credentials = true;
+
         let mut redirects_followed: u32 = 0;
 
         loop {
@@ -829,10 +854,13 @@ impl HttpPolledSource {
 
             let mut request = self.client.get(current_url.clone());
 
-            // builder-configured headers (e.g. authentication) are
-            // applied to every request, including each followed redirect hop.
-            for header in &*self.headers {
-                request = request.header(header.0.as_str(), header.1.as_str());
+            // builder-configured headers (e.g. authentication) are applied
+            // to the configured URL and to same-origin redirects only; a
+            // cross-origin hop is requested without them.
+            if send_credentials {
+                for header in &*self.headers {
+                    request = request.header(header.0.as_str(), header.1.as_str());
+                }
             }
 
             if let Some(etag) = self.last_etag.load().as_ref() {
@@ -847,7 +875,7 @@ impl HttpPolledSource {
                 .send()
                 .await
                 .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: std::any::type_name::<reqwest::Error>().to_string(),
+                    error_type: "HttpTransport".to_string(),
                     retryable: is_retryable_error(&e),
                 })?;
 
@@ -901,6 +929,11 @@ impl HttpPolledSource {
                             retryable: false,
                         })?
                 };
+                // Credentials follow the request only while it stays on the
+                // origin they were configured for. A cross-origin hop is
+                // requested without them, so a server-side redirect cannot
+                // hand the bearer token to a third-party host.
+                send_credentials = same_origin(&credential_origin, &current_url);
                 continue;
             }
 
@@ -928,7 +961,7 @@ impl HttpPolledSource {
                 .text()
                 .await
                 .map_err(|e| ConfigError::RemoteUnavailable {
-                    error_type: std::any::type_name::<reqwest::Error>().to_string(),
+                    error_type: "HttpTransport".to_string(),
                     retryable: is_retryable_error(&e),
                 })?;
 
@@ -2403,5 +2436,157 @@ mod tests {
             "the cached value is served after a request failure"
         );
         assert_eq!(dead.stale_served(), 1);
+    }
+
+    /// A redirect that leaves the configured origin must not receive the
+    /// builder-configured credentials: the redirect target is chosen by the
+    /// remote server and was never trusted by the caller.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
+    #[tokio::test]
+    async fn test_cross_origin_redirect_drops_credentials() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // The redirect target records whether it saw an Authorization header.
+        let target_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind target");
+        let target_addr = target_listener.local_addr().expect("target addr");
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen_flag = seen.clone();
+        let target = tokio::spawn(async move {
+            let (mut stream, _) = target_listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _n = stream.read(&mut buf).await.expect("read");
+            let request = String::from_utf8_lossy(&buf).to_ascii_lowercase();
+            if request.contains("authorization:") {
+                seen_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            let body = r#"{"app":{"host":"redirected"}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: {}
+Connection: close
+
+{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+        });
+
+        // The original origin answers with a redirect to the other port.
+        let origin_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind origin");
+        let origin_addr = origin_listener.local_addr().expect("origin addr");
+        let location = format!("http://{target_addr}/config.json");
+        let origin = tokio::spawn(async move {
+            let (mut stream, _) = origin_listener.accept().await.expect("accept");
+            let mut buf = [0u8; 4096];
+            let _n = stream.read(&mut buf).await.expect("read");
+            let response = format!(
+                "HTTP/1.1 302 Found
+Location: {location}
+Content-Length: 0
+Connection: close
+
+"
+            );
+            stream.write_all(response.as_bytes()).await.expect("write");
+            stream.flush().await.expect("flush");
+        });
+
+        let source = source_against_local_with_options(
+            origin_addr,
+            client_no_redirect(),
+            CircuitBreaker::new(),
+            vec![(
+                "Authorization".to_string(),
+                "Bearer super-secret-token".to_string(),
+            )],
+        );
+
+        source.poll().await.expect("poll must follow the redirect");
+
+        target.await.expect("target task");
+        origin.await.expect("origin task");
+        assert!(
+            !seen.load(std::sync::atomic::Ordering::SeqCst),
+            "the bearer token must not be forwarded to a cross-origin redirect target"
+        );
+    }
+
+    /// The counterpart: a same-origin redirect keeps the credentials, because
+    /// the caller configured that origin.
+    #[cfg_attr(
+        not(feature = "json"),
+        ignore = "requires json feature to parse HTTP response body"
+    )]
+    #[tokio::test]
+    async fn test_same_origin_redirect_keeps_credentials() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind ephemeral port");
+        let addr = listener.local_addr().expect("local addr");
+        let body = r#"{"app":{"host":"redirected"}}"#;
+        let seen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let seen_flag = seen.clone();
+
+        let server = tokio::spawn(async move {
+            for i in 0..2 {
+                let (mut stream, _) = listener.accept().await.expect("accept");
+                let mut buf = [0u8; 4096];
+                let _n = stream.read(&mut buf).await.expect("read");
+                let request = String::from_utf8_lossy(&buf).to_ascii_lowercase();
+                if request.contains("authorization:") {
+                    seen_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                let (status, headers, payload) = if i == 0 {
+                    (
+                        "302 Found",
+                        "Location: /real/config.json
+",
+                        "",
+                    )
+                } else {
+                    ("200 OK", "", body)
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}
+Content-Type: application/json
+{headers}Content-Length: {}
+Connection: close
+
+{payload}",
+                    payload.len()
+                );
+                stream.write_all(response.as_bytes()).await.expect("write");
+                stream.flush().await.expect("flush");
+            }
+        });
+
+        let source = source_against_local_with_options(
+            addr,
+            client_no_redirect(),
+            CircuitBreaker::new(),
+            vec![(
+                "Authorization".to_string(),
+                "Bearer super-secret-token".to_string(),
+            )],
+        );
+
+        source.poll().await.expect("poll must follow the redirect");
+        server.await.expect("server task");
+        assert!(
+            seen.load(std::sync::atomic::Ordering::SeqCst),
+            "a same-origin redirect must keep the configured credentials"
+        );
     }
 }
