@@ -607,6 +607,23 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
         },
     })?;
 
+    // The canonical path may name a directory or a device file. Opening a
+    // directory fails on Windows with "access denied", which would be
+    // reported as "not found" and hide the actual reason for the refusal.
+    // Check the resolved path's type first; the handle-based re-check below
+    // still governs the type of the file that is actually read.
+    if let Ok(resolved_meta) = std::fs::metadata(&validated_path)
+        && !resolved_meta.is_file()
+    {
+        return Err(ConfigError::InvalidValue {
+            key: "path".to_string(),
+            expected_type: "regular file".to_string(),
+            message: format!(
+                "Path is not a regular file: {:?}",
+                reported_path(&validated_path)
+            ),
+        });
+    }
     // Open the file once, then enforce the size limit against the opened
     // handle's own metadata and read through the handle. Re-resolving the
     // path for a second stat/read would race with a concurrent rename or
@@ -696,7 +713,7 @@ pub fn parse_toml(
 ) -> ConfigResult<AnnotatedValue> {
     use toml::de::Error as TomlError;
 
-    let table: toml::Table = toml::from_str(content).map_err(|e: TomlError| {
+    let table: toml::Table = toml::from_str(content).map_err(|mut e: TomlError| {
         let location = e.span().map(|span| {
             let line = content[..span.start].matches('\n').count() + 1;
             let col = span.start
@@ -708,9 +725,17 @@ pub fn parse_toml(
             path.map(|p| ParseLocation::from_path(p, line, col))
                 .unwrap_or_else(|| ParseLocation::new(source.as_str(), line, col))
         });
+        let message = e.message().to_string();
+        // `toml::de::Error` keeps the whole parsed document in its `input`
+        // field and renders it in *both* `Debug` and `Display`. Storing it
+        // in the public error type would put the raw configuration text —
+        // passwords, tokens — into every `{:?}` of a `ConfigError` and into
+        // the CLI's error chain. Drop the document; the message and the
+        // span already carry the diagnostic value.
+        e.set_input(None);
         ConfigError::ParseError {
             format: "TOML".into(),
-            message: e.message().to_string(),
+            message,
             location,
             source: Some(Box::new(e)),
         }
@@ -1015,6 +1040,30 @@ mod tests {
     #[cfg(feature = "toml")]
     fn test_parse_toml_error() {
         assert!(parse_toml("[section", SourceId::new("t"), None).is_err());
+    }
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_parse_toml_error_does_not_carry_the_document() {
+        // The whole parsed document would otherwise travel inside the
+        // public error type and reach every `{:?}` of a `ConfigError`.
+        let secret = "hunter2-SECRET";
+        let content = format!("db_password = \"{secret}\"\nbroken = [1, 2\n");
+        let err = parse_toml(&content, SourceId::new("t"), None).expect_err("must fail");
+        let debug = format!("{:?}", err);
+        assert!(
+            !debug.contains(secret),
+            "the parse error must not carry the document: {debug}"
+        );
+        let display = err.to_string();
+        assert!(
+            !display.contains(secret),
+            "the parse error message must not carry the document: {display}"
+        );
+        // The diagnostic value (the message) is kept.
+        assert!(
+            err.to_string().contains("TOML"),
+            "the error must still describe the failure: {err}"
+        );
     }
     #[test]
     fn test_loader_config_default() {

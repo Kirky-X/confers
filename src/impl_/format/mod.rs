@@ -183,25 +183,32 @@ mod toml_converter {
             source: SourceId,
             path: Option<&Path>,
         ) -> ConfigResult<AnnotatedValue> {
-            let table: toml::Table = toml::from_str(content).map_err(|e: toml::de::Error| {
-                let location = e.span().map(|span| {
-                    let line = content[..span.start].matches('\n').count() + 1;
-                    let col = span.start
-                        - content[..span.start]
-                            .rfind('\n')
-                            .map(|i| i + 1)
-                            .unwrap_or(0)
-                        + 1;
-                    path.map(|p| ParseLocation::from_path(p, line, col))
-                        .unwrap_or_else(|| ParseLocation::new(source.as_str(), line, col))
-                });
-                ConfigError::ParseError {
-                    format: "TOML".into(),
-                    message: e.message().to_string(),
-                    location,
-                    source: Some(Box::new(e)),
-                }
-            })?;
+            let table: toml::Table =
+                toml::from_str(content).map_err(|mut e: toml::de::Error| {
+                    let location = e.span().map(|span| {
+                        let line = content[..span.start].matches('\n').count() + 1;
+                        let col = span.start
+                            - content[..span.start]
+                                .rfind('\n')
+                                .map(|i| i + 1)
+                                .unwrap_or(0)
+                            + 1;
+                        path.map(|p| ParseLocation::from_path(p, line, col))
+                            .unwrap_or_else(|| ParseLocation::new(source.as_str(), line, col))
+                    });
+                    let message = e.message().to_string();
+                    // The error keeps the whole document in its `input` field and
+                    // renders it in `Debug` and `Display`; storing it in the
+                    // public error type would expose the raw configuration text
+                    // (passwords, tokens) through every `{:?}` of the error.
+                    e.set_input(None);
+                    ConfigError::ParseError {
+                        format: "TOML".into(),
+                        message,
+                        location,
+                        source: Some(Box::new(e)),
+                    }
+                })?;
 
             Ok(AnnotatedValue::new(
                 toml_table_to_config_value(&table, &source, ""),
@@ -1142,6 +1149,40 @@ key = "value""#
         let conv = toml_converter::TomlConverter::new();
         let result = conv.parse("[invalid", SourceId::new("t"), None);
         assert!(result.is_err());
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_toml_converter_parse_error_does_not_carry_the_document() {
+        let conv = toml_converter::TomlConverter::new();
+        let secret = "s3cr3t-value";
+        let content = format!("password = \"{secret}\"\n[invalid");
+        let err = conv
+            .parse(&content, SourceId::new("t"), None)
+            .expect_err("invalid TOML must fail");
+        // The `source` error must not echo the document: neither the
+        // `Debug` nor the `Display` rendering may contain the value.
+        let debug = format!("{:?}", err);
+        let display = format!("{}", err);
+        assert!(
+            !debug.contains(secret) && !display.contains(secret),
+            "the raw document must not survive in the error: {debug}"
+        );
+        // The crate-level diagnostics stay intact.
+        let ConfigError::ParseError {
+            message, location, ..
+        } = &err
+        else {
+            panic!("expected a ParseError, got {err:?}");
+        };
+        assert!(!message.is_empty());
+        let location = location
+            .as_ref()
+            .expect("the error location must be preserved");
+        assert_eq!(
+            location.line, 2,
+            "the failing line must still be reported: {err:?}"
+        );
     }
 
     #[cfg(feature = "toml")]

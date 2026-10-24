@@ -161,7 +161,14 @@ impl MergeEngine {
             return None;
         }
         let mask = |value: &AnnotatedValue| {
-            if self.is_sensitive_path(&value.path) {
+            let path: &str = &value.path;
+            let leaf = path.rsplit('.').next().unwrap_or(path);
+            // Same redaction strength as
+            // `AnnotatedValue::conflict_report_with_sensitive_paths`: the
+            // explicit path list plus the crate-wide key-name heuristic, so
+            // a credential that was never registered is not echoed into the
+            // report.
+            if self.is_sensitive_path(path) || crate::sensitive_names::is_sensitive_name(leaf) {
                 "[REDACTED]".to_string()
             } else {
                 format!("{:?}", value.inner)
@@ -967,6 +974,35 @@ mod tests {
         );
         let report = e.report_conflict(&other, &l).unwrap();
         assert_eq!(report.low_value, "String(\"plain\")");
+    }
+
+    #[test]
+    fn test_conflict_report_redacts_by_key_name_without_registration() {
+        // A credential that was never registered in `sensitive_paths` must
+        // not be echoed into the report either: the engine applies the same
+        // key-name heuristic as `AnnotatedValue::conflict_report`.
+        let e = MergeEngine::new();
+        let l = AnnotatedValue::new(
+            ConfigValue::string("hunter2"),
+            SourceId::new("file"),
+            "db.api_key",
+        );
+        let h = AnnotatedValue::new(
+            ConfigValue::string("s3cret"),
+            SourceId::new("env"),
+            "db.api_key",
+        );
+        let report = e.report_conflict(&l, &h).unwrap();
+        assert_eq!(report.low_value, "[REDACTED]");
+        assert_eq!(report.high_value, "[REDACTED]");
+
+        // A non-sensitive key is still reported verbatim.
+        let plain_low =
+            AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("file"), "db.host");
+        let plain_high =
+            AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("env"), "db.host");
+        let report = e.report_conflict(&plain_low, &plain_high).unwrap();
+        assert_eq!(report.low_value, "String(\"a\")");
     }
 
     #[test]
