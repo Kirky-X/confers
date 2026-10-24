@@ -264,10 +264,14 @@ let validator = EnvSecurityValidator::strict();
 validator.validate_env_name("APP_NAME", None)?;
 validator.validate_env_value("production")?;
 
-// ErrorSanitizer - 错误信息中的敏感数据脱敏（security 特性）
-use confers::security::ErrorSanitizer;
-let sanitizer = ErrorSanitizer::default();
-let safe_error = sanitizer.sanitize(&error_message);
+// SecurityErrorSanitizer - 错误信息中的敏感数据脱敏（security 特性）
+// 注意：该脱敏器的掩码会保留被遮蔽值的前 4-8 个字符（如 pa****），
+// 用于辨识凭证种类；需要不泄露任何前缀时用
+// confers::error::sanitize::sanitize_error_message。
+// 裸名 ErrorSanitizer 不再导出（与 key::ErrorSanitizer 消歧），
+// security::SecureLogger / SafeResult / SensitiveDataFilter /
+// FilterResult / LogLevel 五个已废弃类型已整体移除。
+use confers::security::SecurityErrorSanitizer;
 
 // ConfigInjector - 带校验与限速的运行时配置注入（security-rules 特性）
 use confers::security::ConfigInjector;

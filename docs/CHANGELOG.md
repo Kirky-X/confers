@@ -5,6 +5,50 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 变更（破坏面声明）
+
+- **废弃安全类型整体移除**：`security::SecureLogger` / `SafeResult` / `SensitiveDataFilter` / `FilterResult` / `LogLevel`（此前仅 `#[deprecated]` 标记）连同裸名 `security::ErrorSanitizer` 导出一并删除；消息脱敏器只以 `security::SecurityErrorSanitizer` 一个名字公开，替代项为 `confers::error::sanitize::sanitize_error_message`。仍引用旧类型的下游编译失败，属预期破坏
+- **`_FILE` 凭据路径策略收紧**（`PathValidator::validate_and_resolve`，经 `EnvSource` 与派生宏的 `_FILE` 读取生效）：**无扩展名的点文件**（如 `~/.myapp/.secret`）与**命中凭据目录分量**的路径（如 `/opt/docker/conf/app.toml`，分量 `docker`）一律被拒。fail-safe 方向正确，但会打断既有部署——把 `_FILE` 指向点文件或 docker 配置目录的用法必须先改名或改目录；升级前请逐个核对 `_FILE` 变量指向的目标文件名与路径分量
+- **凭据目录拒绝文案改为点名命中分量**：`PathValidator::validate_and_resolve` 命中凭据目录分量时，错误文案由固定的目录清单改为插值命中分量（英文 `access to credential directory docker is not allowed`）——清单此前以硬编码副本存在于两语文案里，新增分量时必漏（未加点的 `docker` 曾被拒却不出现于文案）；按旧文案字面匹配的日志与断言需同步更新
+
+### Security
+
+- **主密钥脱敏**：`ZeroizingBytes` 改用手写 `Debug`（恒为 `[REDACTED]`），不再由 `#[derive(Debug)]` 输出原始密钥字节；与 `SecretBytes`/`SecretString`/`zeroize::Zeroizing` 的既有约定对齐
+- **服务端路径不再外泄**：`SourceLocation` 改用手写 `Debug`，不再打印 `pub(crate) file_path`——该字段的注释本就声明"never exposed to end users"，但 `Debug` 通道（日志、`unwrap()` panic 文本、派生 `Debug` 的包装结构体）此前绕过了该不变量
+- **解析错误不再携带原文**：TOML 解析失败时清除 `toml::de::Error` 持有的整份文档（`Debug` 与 `Display` 均不再回显出错行原文），`ConfigError::ParseError` 的 `source` 只保留 message 与 span
+- **`_FILE` 读取 TOCTOU**：`EnvSource` 改为打开 `PathValidator` 返回的**规范化路径**，关闭"校验 canonical、打开 raw"之间的符号链接替换窗口（与 `impl_/loader.rs`、`macros/src/codegen/load.rs` 的既有正确写法对齐）
+- **`_FILE` 读取大小上限**：新增 `PathValidator::MAX_SECRET_FILE_SIZE`（10 MiB）与 `PathValidator::read_secret_file`，`EnvSource` 与派生宏的 `_FILE` 读取统一经此限流（此前无上限，可被环境变量触发无界内存分配）
+- **`_FILE` 凭据文件策略补全**：`PathValidator` 拒绝敏感系统位置（新增 `/etc/gshadow`、`/etc/sudoers`、`/etc/ssh` 等）、凭据目录（新增 `.docker`）与凭据文件基名（`.netrc`、`.npmrc`、`.pypirc`、`.git-credentials`、`credentials` 等）——此前这些无扩展名文件因 `Path::extension()` 返回 `None` 而完全跳过扩展名白名单
+- **重定向不再外泄凭据**：`HttpPolledSourceBuilder::with_header` 配置的头只随**同源**（scheme + host + 端口一致）的重定向跳发送，跨源跳不再携带 Bearer 凭据（对齐 reqwest 自身的 `remove_sensitive_headers` 语义）
+- **快照脱敏兜底**：`to_json_with_mode(Redacted, …)` 增加键名兜底（`sensitive_names::is_sensitive_name`），未登记到 `sensitive_paths` 的敏感字段不再以明文写入快照；派生宏的 `sensitive_paths()` 改用 `is_sensitive_effective()`，`SecretString` 字段自动登记
+- **导出文件权限**：`confers export -o <file>` 改用 owner-only（0600）原子写入，与快照/密钥库的落盘纪律一致（此前按进程 umask 落盘，典型为 0644）
+- **冲突报告脱敏**：`AnnotatedValue::conflict_report` 按键名脱敏被覆盖值（与 `MergeEngine::report_conflict` 的既有脱敏约定对齐），并新增 `AnnotatedValue::conflict_report_with_sensitive_paths` 供显式传入敏感路径清单
+- **远端路径段校验**：`VaultKeyProvider` 的 `secret_path` 与 `K8sApiSourceBuilder` 的 `namespace`/`name` 施加路径段白名单（拒绝 `..` 与非法标识符），避免 `url` 规范化把请求改写到别的租户/命名空间
+- **全量读取须显式声明**：Consul/etcd 来源的空 prefix 会在 `build()` 阶段报错，需显式 `allow_full_store_read(true)` 才放行
+- **错误类型稳定化**：`RemoteUnavailable.error_type` 不再写入 `reqwest::Error` 类型名等实现细节字符串，也不再携带远端响应体原文
+- **第二处 TOML 解析路径同样不携带原文**：`confers::format::converter_for(Format::Toml)`（公开 API）走的 `impl_/format` 解析路径此前未清除 `toml::de::Error` 持有的整份文档，`ConfigError::ParseError` 的 `Debug` 会回显出错行原文——现与 `impl_/loader.rs` 的处理一致
+- **配置总线错误类型稳定化**：`RedisConfigBus` / `NatsConfigBus` 的 `RemoteUnavailable.error_type` 不再拼接原始驱动错误与端点地址，改为稳定标签（`redis_connection_failed`、`nats_connect_failed` 等）+ 脱敏后的细节
+- **带凭据的非 HTTP 端点 URL 纳入脱敏**：`sanitize_error_message` 的凭据 URL 规则此前只覆盖 `http`/`https`，`redis://`、`nats://` 等驱动错误里的端点 URL 凭据不被遮蔽——现覆盖全部 scheme
+- **冲突报告脱敏口径统一**：`MergeEngine::report_conflict` 补上 `sensitive_names::is_sensitive_name` 键名兜底，与 `AnnotatedValue::conflict_report` 一致——未登记到 `sensitive_paths` 的凭据键不再以明文进入冲突报告
+- **落盘临时文件权限**：`write_owner_only`（快照与 `confers export`）改为独占创建临时文件，预先存在的 `.tmp` 兄弟文件（崩溃残留或共享目录中被预置）不再以自身权限接收明文，被预置的符号链接也不会被写入
+- **`_FILE` 读取符号链接兜底**：`PathValidator::read_secret_file` 在打开后校验路径仍指向同一文件（unix 比对 device/inode，windows 比对创建时间/修改时间/大小），末段被替换为符号链接时拒绝读取
+
+### Added
+
+- `confers::error::sanitize::sanitize_error_message` 转为公开 API（此前为 `pub(crate)`，而 `security::ErrorSanitizer` 的文档却推荐外部用户改用它）
+- `PathValidator::validate_and_read_secret_file`：校验 + 读取一体化的 `_FILE` 入口（避免调用方误把未校验的路径直接交给 `read_secret_file`）
+- `confers::security::SecurityErrorSanitizer`：`security::ErrorSanitizer` 的消歧别名（与 `key::ErrorSanitizer` 同名但语义不同）
+
+### Changed
+
+- `security::ErrorSanitizer` 的 rustdoc 明确标注"保留前 4-8 个字符"语义，并给出可达的全量替换替代项；`docs/SECURITY.md` 与 `docs/API_REFERENCE.md` 同步补充该警示
+- `security::SecureLogger` / `SafeResult` / `SensitiveDataFilter` / `FilterResult` / `LogLevel` 标记为 `#[deprecated]`：这五个类型此前只有 `security/error_sanitization.rs` 自身在用，替代项为 `confers::error::sanitize::sanitize_error_message`；**尚未删除**，待下个版本确认后再移除
+- 快照脱敏的键名兜底会把整个敏感节替换为字符串 `"[REDACTED]"`（而非对象）——按结构解析快照的下游需能容忍该节点类型不符（rustdoc 已标注该语义）
+
+---
+
 ## [0.6.0-rc.11] - 2026-10-19
 
 ### Changed

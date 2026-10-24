@@ -257,6 +257,8 @@ let config = ConfigBuilder::<ConfersConfig>::new()
     .build()?;
 ```
 
+> **注意**：`with_header(...)` 配置的头（通常是 `Authorization: Bearer …`）只随**同源**（scheme + host + 端口一致）的重定向跳发送。跨源重定向由远端服务器决定目标、未被调用方信任，因此不会携带凭据。
+
 **示例 - Etcd 来源：**
 
 ```rust
@@ -274,6 +276,8 @@ let config = ConfigBuilder::<ConfersConfig>::new()
     .build()?;
 ```
 
+> **注意**：空 prefix 会读取**整个**键空间（失去按前缀划分的租户边界），`build()` 会直接报错。需要全量读取时显式调用 `allow_full_store_read(true)`。
+
 **示例 - Consul 来源：**
 
 ```rust
@@ -288,6 +292,8 @@ let config = ConfigBuilder::<ConfersConfig>::new()
     .source(Box::new(consul_source))
     .build()?;
 ```
+
+> **注意**：与 etcd 相同，空 prefix 会读取整个 KV 空间，`build()` 会报错；全量读取需显式调用 `allow_full_store_read(true)`。
 
 #### 构建方法
 
@@ -503,6 +509,8 @@ pub trait KeyProvider: Send + Sync {
     fn cache_policy(&self) -> KeyCachePolicy { ... }
 }
 ```
+
+> **注意**：`ZeroizingBytes` 承载主密钥，其 `Debug` 实现已被脱敏（恒为 `[REDACTED]`），与 `zeroize::Zeroizing` 一致。任何 `{:?}` 格式化（日志、`unwrap()` 的 panic 文本、派生 `Debug` 的包装结构体）都不会输出原始密钥字节。
 
 #### KeyCachePolicy
 
@@ -1108,16 +1116,20 @@ validator.validate_env_mapping(&mapping)?;
 
 也可使用 `EnvSecurityValidator::strict()` / `EnvSecurityValidator::lenient()` 直接采用预设的严格/宽松规则。
 
-#### ErrorSanitizer
+#### SecurityErrorSanitizer
 
 错误信息中的敏感数据脱敏（`security` 模块内的该项导出由 `security` 特性门控）。
 
-```rust
-use confers::security::ErrorSanitizer;
+> **注意**：`confers::security::SecurityErrorSanitizer` 的掩码规则会**保留被遮蔽值的前 4-8 个字符**（如 `pa****`），用于在日志中辨识凭证种类；需要全量替换、不泄露任何前缀时，请用 `confers::error::sanitize::sanitize_error_message`。它与 `confers::key::ErrorSanitizer`（基于主密钥的全量替换）是两个无关类型——消息脱敏器只以 `SecurityErrorSanitizer` 这一个名字公开，裸名 `ErrorSanitizer` 不再导出。
 
-let sanitizer = ErrorSanitizer::default();
+```rust
+use confers::security::SecurityErrorSanitizer;
+
+let sanitizer = SecurityErrorSanitizer::default();
 let clean_msg = sanitizer.sanitize(&error_msg);
 ```
+
+> `security::SecureLogger` / `SafeResult` / `SensitiveDataFilter` / `FilterResult` / `LogLevel` 五个已废弃类型已整体移除（含裸名 `security::ErrorSanitizer` 导出），统一改用 `confers::error::sanitize::sanitize_error_message`。
 
 #### ConfigInjector
 
@@ -1735,6 +1747,57 @@ impl CachedConfig {
 - 🔴 **密钥轮换**：生产环境建议定期轮换密钥
 - 🔴 **密钥长度**：XChaCha20-Poly1305 的密钥必须恰好 32 字节（256 位）
 - 🔴 **nonce 存储**：nonce 须与密文一同存储以供解密
+
+#### `_FILE` 密钥文件策略
+
+`<VAR>_FILE` 指向的文件由 [`PathValidator`](https://docs.rs/confers/latest/confers/path_validator/struct.PathValidator.html) 统一裁决（`EnvSource` 与派生宏共用同一策略）：
+
+- 路径必须存在且解析为常规文件（拒绝设备、FIFO、目录）
+- 拒绝敏感系统位置（`/etc/shadow`、`/etc/passwd`、`/etc/gshadow`、`/etc/sudoers`、`/etc/ssh`、`/root` 等）
+- 拒绝凭据目录（`.ssh`、`.aws`、`.gnupg`、`.kube`、`.gcloud`、`.env`、`.docker`、`docker`）与凭据文件（`.netrc`、`.npmrc`、`.pypirc`、`.git-credentials`、`credentials` 等）
+- 拒绝**无扩展名的点文件**（`.secret`、`.myapp/.token` 等）——这类文件名正是按用户存放凭据的惯例
+- 扩展名白名单（`txt`/`json`/`yaml`/`yml`/`toml`/`ini`/`env`/`secret`/`key`/`pem`/`crt`）
+- 读取大小上限 [`PathValidator::MAX_SECRET_FILE_SIZE`]（10 MiB），超限返回 `ConfigError::SizeLimitExceeded`
+
+校验与读取都基于**规范化（canonical）路径**，避免校验与打开之间的符号链接替换窗口；打开后还会校验路径仍指向同一文件（unix 比对 device/inode，windows 比对创建时间/修改时间/大小），末段被换成符号链接时拒绝读取。
+
+推荐用一体化的 `PathValidator::validate_and_read_secret_file`（校验 + 读取）：
+
+```rust
+use confers::PathValidator;
+
+let validator = PathValidator::new();
+let content = validator.validate_and_read_secret_file("/run/secrets/db_password")?;
+```
+
+若需要分步调用，`read_secret_file` 的入参**必须**是 `validate_and_resolve` 返回的规范化路径：
+
+```rust
+let canonical = validator.validate_and_resolve("/run/secrets/db_password")?;
+let content = PathValidator::read_secret_file(&canonical)?;
+```
+
+#### 脱敏与错误输出契约
+
+以下类型的 `Debug` 已脱敏，`{:?}` 不会输出敏感内容：
+
+| 类型 | `Debug` 输出 |
+|:-----|:-------------|
+| `ZeroizingBytes` | `[REDACTED]`（主密钥字节） |
+| `SecretBytes` / `SecretString` | `[REDACTED]` |
+| `SourceLocation` | 仅 `source_name` / `line` / `column`，不含服务端绝对路径 |
+
+其他约定：
+
+- `ConfigError::ParseError` 的 `source` 只保留解析器的 message 与 span，不携带被解析的文档原文（`impl_/loader.rs` 与公开的 `confers::format::converter_for` 两条解析路径一致）
+- `AnnotatedValue::conflict_report` 与 `MergeEngine::report_conflict` 都按键名脱敏被覆盖值；需要按显式路径清单脱敏时用 `AnnotatedValue::conflict_report_with_sensitive_paths(&low, &high, &["db.password"])`
+- 快照脱敏（`to_json_with_mode(Redacted, …)`）会把整个敏感节替换为字符串 `"[REDACTED]"`（而非对象）——按结构解析快照的下游需容忍该节点类型不符
+- `RemoteUnavailable.error_type` 是稳定标签（`redis_connection_failed`、`nats_connect_failed`、`CircuitBreakerOpen`、`HTTP_503` 等）+ 脱敏后的细节，不含端点地址、响应体或驱动原始错误
+- 需要对自由文本做全量脱敏（不留前缀）时用 `confers::error::sanitize::sanitize_error_message`
+
+```rust
+let safe = confers::error::sanitize::sanitize_error_message(&raw_error);
+```
 
 #### 密钥管理
 
