@@ -45,11 +45,11 @@ static HEX_SHORT_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 
 /// Regex pattern for matching URLs with embedded credentials.
 ///
-/// Only `http`/`https` schemes are matched. Other schemes that commonly embed
-/// credentials (`ftp://`, `redis://`, `smtp://`, `mongodb://`, ...) are NOT
-/// covered by this pattern and their credentials are not redacted here.
+/// Every scheme is matched, not just `http`/`https`: the transport drivers
+/// (`redis://`, `nats://`, `mongodb://`, `ftp://`, ...) embed the endpoint
+/// URL in their error text, and that URL may carry the password.
 static URL_WITH_CREDS_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?P<scheme>https?)://[^/]+:[^@]+@[^/\s]+[/\s]?")
+    regex::Regex::new(r"(?P<scheme>[a-zA-Z][a-zA-Z0-9+.\-]*)://[^/]+:[^@]+@[^/\s]+[/\s]?")
         .expect("URL_WITH_CREDS_RE regex is valid")
 });
 
@@ -190,7 +190,7 @@ fn redact_with_context(text: &str, re: &regex::Regex, replacement: &str) -> Stri
 ///
 /// This is also the crate-wide sanitizer for free-form output text (e.g. the
 /// CLI `diff --sanitize` output), so all redaction rules live in one place.
-pub(crate) fn sanitize_error_message(msg: &str) -> String {
+pub fn sanitize_error_message(msg: &str) -> String {
     let mut result = msg.to_string();
 
     // Field-name driven redaction FIRST: `password = hunter2` style shapes
@@ -368,6 +368,22 @@ mod tests {
         // Should not contain the credentials
         assert!(!sanitized.contains("user:secret123"));
         assert!(sanitized.contains("<redacted_url>") || sanitized.contains("<redacted>"));
+    }
+
+    #[test]
+    fn test_sanitize_error_message_non_http_url_with_credentials() {
+        // Transport drivers put the endpoint URL into their error text; the
+        // password must not survive the sanitizer.
+        for msg in [
+            "error sending request for url (redis://user:secret123@cache.internal:6379/)",
+            "nats connect failed: nats://user:secret123@bus.internal:4222",
+        ] {
+            let sanitized = sanitize_error_message(msg);
+            assert!(
+                !sanitized.contains("secret123"),
+                "the password must be redacted, got: {sanitized}"
+            );
+        }
     }
 
     #[test]

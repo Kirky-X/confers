@@ -290,7 +290,7 @@ fn generate_sensitive_paths(
 
     let sensitive_paths: Vec<LitStr> = fields
         .iter()
-        .filter(|(_, _, attrs)| attrs.sensitive || attrs.encrypt.is_some())
+        .filter(|(_, _, attrs)| attrs.is_sensitive_effective())
         .map(|(ident, _, attrs)| {
             let name = attrs.name.clone().unwrap_or_else(|| ident.to_string());
             LitStr::new(&name, ident.span())

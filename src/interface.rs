@@ -278,14 +278,14 @@ pub trait ConfigProviderExt: ConfigProvider {
             .get_raw(key)
             .ok_or_else(|| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
-                expected_type: std::any::type_name::<T>().to_string(),
+                expected_type: crate::error::short_type_label::<T>(),
                 message: "key not found".to_string(),
             })?;
 
         let s = value.as_str().map(str::to_owned).ok_or_else(|| {
             crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
-                expected_type: std::any::type_name::<T>().to_string(),
+                expected_type: crate::error::short_type_label::<T>(),
                 message: "value is not a string".to_string(),
             }
         })?;
@@ -293,7 +293,7 @@ pub trait ConfigProviderExt: ConfigProvider {
         s.parse::<T>()
             .map_err(|e| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
-                expected_type: std::any::type_name::<T>().to_string(),
+                expected_type: crate::error::short_type_label::<T>(),
                 message: e.to_string(),
             })
     }

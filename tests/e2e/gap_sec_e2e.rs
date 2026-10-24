@@ -284,14 +284,17 @@ fn gs160_audit_sink_receives_events_chain_still_written() {
         .path();
     assert!(confers::audit::verify_audit_chain(&log_path).unwrap());
     // audit log file permissions: owner read/write only (0600)
-    use std::os::unix::fs::PermissionsExt;
-    let mode = std::fs::metadata(&log_path).unwrap().permissions().mode();
-    assert_eq!(
-        mode & 0o777,
-        0o600,
-        "audit log must be 0600, got {:o}",
-        mode & 0o777
-    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&log_path).unwrap().permissions().mode();
+        assert_eq!(
+            mode & 0o777,
+            0o600,
+            "audit log must be 0600, got {:o}",
+            mode & 0o777
+        );
+    }
 }
 
 // 105: weak all-zero master key rejected in the load pipeline
@@ -561,17 +564,4 @@ fn gs512_injector_read_side_and_required_miss() {
         42,
         "missing number falls back"
     );
-}
-
-// 67: invalid custom pattern regex returns error, not silently dropped (0.5.1 fix)
-#[test]
-fn gs067_invalid_custom_pattern_regex_errors() {
-    use confers::security::SensitiveDataFilter;
-    let mut filter = SensitiveDataFilter::new();
-    let bad = filter.add_allowed_pattern("(unbalanced[");
-    assert!(bad.is_err(), "invalid allowed pattern must error, got Ok");
-    let bad2 = filter.add_blocked_pattern("*");
-    assert!(bad2.is_err(), "invalid blocked pattern must error, got Ok");
-    let ok = filter.add_allowed_pattern("^safe-[a-z]+$");
-    assert!(ok.is_ok(), "valid pattern must be accepted");
 }

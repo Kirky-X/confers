@@ -899,10 +899,14 @@ pub(crate) mod error_sanitization;
 pub(crate) mod input_validation;
 pub(crate) mod secure_string;
 
-pub use error_sanitization::{
-    Error as SanitizationError, ErrorSanitizer, FilterResult, LogLevel, SafeResult, SecureLogger,
-    SensitiveDataFilter,
-};
+pub use error_sanitization::Error as SanitizationError;
+
+/// The message sanitizer's only public name (`SecurityErrorSanitizer`).
+///
+/// `confers::key::ErrorSanitizer` is a different, unrelated type (it masks
+/// key-material with a master key), so the underlying type is deliberately
+/// not re-exported under its bare name.
+pub use error_sanitization::ErrorSanitizer as SecurityErrorSanitizer;
 
 // ── Public API re-exports ──────────────────────────────────────────────
 #[cfg(feature = "security-rules")]

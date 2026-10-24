@@ -175,6 +175,28 @@ mod tests {
     }
 
     #[test]
+    fn test_credential_dir_denial_names_the_component() {
+        // Both catalogs interpolate the matched directory component, so the
+        // un-dotted `docker` component shows up in the message too.
+        assert_eq!(
+            format_from_bundle(
+                "en",
+                "error-path-credential-dir-denied",
+                &[("name", "docker".to_string())]
+            ),
+            Some("access to credential directory docker is not allowed".to_string())
+        );
+        assert_eq!(
+            format_from_bundle(
+                "zh",
+                "error-path-credential-dir-denied",
+                &[("name", "docker".to_string())]
+            ),
+            Some("不允许访问凭据目录 docker".to_string())
+        );
+    }
+
+    #[test]
     fn test_lang_messages_en_and_zh() {
         assert_eq!(
             format_from_bundle("en", "cli-lang-help", &[]),

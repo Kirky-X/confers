@@ -32,11 +32,21 @@
 pub mod config_error;
 
 // Sanitization logic (regex patterns, sanitize_error_message, is_sensitive, etc.)
-pub(crate) mod sanitize;
+pub mod sanitize;
 
 // Re-export configuration phase error types
 pub use config_error::ConfigConfigError;
 pub use config_error::{ConfigErrorCode, InitResult};
+
+/// 错误载荷里 `expected_type` 的稳定短标签：只保留类型名末段，
+/// `std::any::type_name` 的完整模块路径不进用户可见错误。
+pub(crate) fn short_type_label<T>() -> String {
+    std::any::type_name::<T>()
+        .rsplit("::")
+        .next()
+        .unwrap_or("value")
+        .to_string()
+}
 
 use crate::i18n::{tr, tr_args};
 use std::path::PathBuf;

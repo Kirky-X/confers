@@ -80,7 +80,7 @@ impl From<String> for SourceId {
 }
 
 /// Precise location in a source file.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SourceLocation {
     /// Source file name (without full path for privacy)
     pub source_name: Arc<str>,
@@ -91,6 +91,21 @@ pub struct SourceLocation {
     /// Full file path for internal diagnostics only (never serialized or
     /// exposed to end users)
     pub(crate) file_path: Option<Box<std::path::PathBuf>>,
+}
+
+impl std::fmt::Debug for SourceLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `file_path` is omitted for the same reason `Serialize` omits it:
+        // it is internal diagnostic data holding the server-side absolute
+        // path, and `Debug` is a public formatting surface (log lines,
+        // `unwrap()` panic texts, `#[derive(Debug)]` wrappers) that would
+        // otherwise expose the deployment's filesystem layout.
+        f.debug_struct("SourceLocation")
+            .field("source_name", &self.source_name)
+            .field("line", &self.line)
+            .field("column", &self.column)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Serialize for SourceLocation {
@@ -880,19 +895,34 @@ impl AnnotatedValue {
     }
 
     /// Convert to JSON with optional redaction.
+    ///
+    /// A node whose own key name is sensitive (per the crate's canonical
+    /// heuristic) or that is covered by `sensitive_paths` is replaced by the
+    /// string `"[REDACTED]"` — **including a whole section**: a map at
+    /// `credentials` becomes a JSON string, not an object. The redaction is
+    /// fail-safe on purpose (a section's children are not individually
+    /// classified), but a consumer that parses the result structurally must
+    /// expect a type mismatch at that node.
     #[cfg(feature = "json")]
     pub fn to_json_with_mode(
         &self,
         mode: SerializeMode,
         sensitive_paths: &[&str],
     ) -> serde_json::Value {
+        let path = self.path.as_ref();
         let is_sensitive = sensitive_paths.iter().any(|p| {
             // Segment-aware match (same semantics as
             // `interface::filter_sensitive_keys`): `db.password` must not
             // match `db.password_hash`, and `db` must not match `dbx.*`.
-            let path = self.path.as_ref();
             path == *p || path.starts_with(&format!("{p}."))
-        });
+        }) || crate::sensitive_names::is_sensitive_name(
+            // Name-based fallback: a field that was never registered in
+            // `sensitive_paths` (the list is opt-in per struct/field) must
+            // still not be written to a snapshot in cleartext. The key-name
+            // heuristic is the crate's single source of truth and is already
+            // applied by the CLI and the audit log.
+            path.rsplit('.').next().unwrap_or(path),
+        );
 
         if is_sensitive && mode == SerializeMode::Redacted {
             return serde_json::Value::String("[REDACTED]".to_string());
@@ -981,13 +1011,46 @@ impl AnnotatedValue {
     ///
     /// The conflict report shows the lower and higher priority values
     /// along with their sources for diagnostic purposes.
+    ///
+    /// Values whose key name is sensitive (per the crate's canonical
+    /// heuristic) are redacted: the report embeds the *overridden* value,
+    /// which for a credential is exactly the plaintext secret that must
+    /// not reach a log file or a crash dump. Use
+    /// [`Self::conflict_report_with_sensitive_paths`] to additionally
+    /// redact paths that were explicitly registered as sensitive.
     pub fn conflict_report(low: &Self, high: &Self) -> ConflictReport {
+        Self::conflict_report_with_sensitive_paths(low, high, &[])
+    }
+
+    /// Compare two values and produce a conflict report with an explicit
+    /// sensitive-path list.
+    ///
+    /// `sensitive_paths` uses the same segment-aware semantics as
+    /// [`crate::impl_::merger::MergeEngine::with_sensitive_paths`]: a path
+    /// matches itself and everything nested below it.
+    pub fn conflict_report_with_sensitive_paths(
+        low: &Self,
+        high: &Self,
+        sensitive_paths: &[&str],
+    ) -> ConflictReport {
+        let mask = |value: &Self| {
+            let path: &str = &value.path;
+            let listed = sensitive_paths
+                .iter()
+                .any(|p| path == *p || path.starts_with(&format!("{p}.")));
+            let leaf = path.rsplit('.').next().unwrap_or(path);
+            if listed || crate::sensitive_names::is_sensitive_name(leaf) {
+                "[REDACTED]".to_string()
+            } else {
+                format!("{:?}", value.inner)
+            }
+        };
         ConflictReport::new(
             low.path.clone(),
-            format!("{:?}", low.inner),
+            mask(low),
             low.source.clone(),
             low.location.clone(),
-            format!("{:?}", high.inner),
+            mask(high),
             high.source.clone(),
             high.location.clone(),
             if low.priority >= high.priority {
@@ -1108,7 +1171,6 @@ impl Default for KeyCachePolicy {
 }
 
 /// A wrapper for bytes that zeroizes on drop.
-#[derive(Debug)]
 pub struct ZeroizingBytes(Vec<u8>);
 
 impl ZeroizingBytes {
@@ -1130,6 +1192,17 @@ impl ZeroizingBytes {
     /// Check if empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+}
+
+impl std::fmt::Debug for ZeroizingBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The wrapped buffer is key material: `{:?}` must never render the
+        // raw bytes, otherwise any `{:?}` on a `KeyProvider::get_key()`
+        // result (log line, error context, panic message) leaks the master
+        // key in cleartext. Mirrors `zeroize::Zeroizing`'s own redacted
+        // `Debug` and the crate's `SecretBytes`/`SecretString`.
+        write!(f, "[REDACTED]")
     }
 }
 
@@ -2149,22 +2222,44 @@ mod tests {
 
     #[test]
     #[cfg(feature = "json")]
+    fn test_to_json_redacted_collapses_a_sensitive_section() {
+        // The key-name fallback redacts the whole section: the node becomes
+        // the string "[REDACTED]" instead of an object, because the
+        // children of the section are not classified individually.
+        let section = AnnotatedValue::new(
+            ConfigValue::map(vec![(
+                "user".to_string(),
+                AnnotatedValue::new(
+                    ConfigValue::string("alice"),
+                    SourceId::new("t"),
+                    "credentials.user",
+                ),
+            )]),
+            SourceId::new("t"),
+            "credentials",
+        );
+        let redacted = section.to_json_with_mode(SerializeMode::Redacted, &[]);
+        assert_eq!(redacted, serde_json::json!("[REDACTED]"));
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
     fn test_to_json_redacted_segment_matching() {
-        // Sensitive path matching is segment-aware: "db.password" must not
-        // redact "db.password_hash" ...
-        let password_hash = AnnotatedValue::new(
+        // Sensitive path matching is segment-aware: "db.user" must not
+        // redact "db.user_hash" ...
+        let user_hash = AnnotatedValue::new(
             ConfigValue::string("salt"),
             SourceId::new("t"),
-            "db.password_hash",
+            "db.user_hash",
         );
-        let redacted = password_hash.to_json_with_mode(SerializeMode::Redacted, &["db.password"]);
+        let redacted = user_hash.to_json_with_mode(SerializeMode::Redacted, &["db.user"]);
         assert_eq!(redacted, serde_json::Value::String("salt".to_string()));
 
-        // ... and "db" must not redact "dbx.secret".
+        // ... and "db" must not redact "dbx.user".
         let dbx = AnnotatedValue::new(
             ConfigValue::string("hidden"),
             SourceId::new("t"),
-            "dbx.secret",
+            "dbx.user",
         );
         let redacted = dbx.to_json_with_mode(SerializeMode::Redacted, &["db"]);
         assert_eq!(redacted, serde_json::Value::String("hidden".to_string()));
@@ -2190,6 +2285,33 @@ mod tests {
             redacted,
             serde_json::Value::String("[REDACTED]".to_string())
         );
+    }
+
+    #[test]
+    #[cfg(feature = "json")]
+    fn test_to_json_redacted_falls_back_to_sensitive_name() {
+        // A path that was never registered in `sensitive_paths` is still
+        // redacted when its key name is sensitive by the crate's canonical
+        // heuristic — the same rule the CLI and the audit log apply.
+        let unregistered = AnnotatedValue::new(
+            ConfigValue::string("plaintext-token"),
+            SourceId::new("t"),
+            "db.api_token",
+        );
+        let redacted = unregistered.to_json_with_mode(SerializeMode::Redacted, &[]);
+        assert_eq!(
+            redacted,
+            serde_json::Value::String("[REDACTED]".to_string())
+        );
+
+        // A non-sensitive name is left untouched.
+        let plain = AnnotatedValue::new(
+            ConfigValue::string("localhost"),
+            SourceId::new("t"),
+            "db.host",
+        );
+        let redacted = plain.to_json_with_mode(SerializeMode::Redacted, &[]);
+        assert_eq!(redacted, serde_json::Value::String("localhost".to_string()));
     }
 
     #[test]
@@ -2544,5 +2666,76 @@ mod tests {
         assert!(obj.contains_key("priority"));
         assert!(obj.contains_key("version"));
         assert!(obj["location"].is_object());
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    #[test]
+    fn zeroizing_bytes_debug_is_redacted() {
+        let bytes = ZeroizingBytes::new(vec![0xAA; 32]);
+        let rendered = format!("{:?}", bytes);
+        assert_eq!(rendered, "[REDACTED]");
+        assert!(
+            !rendered.contains("170"),
+            "the raw key bytes must not appear in the Debug output: {rendered}"
+        );
+    }
+
+    #[test]
+    fn source_location_debug_omits_file_path() {
+        let loc =
+            SourceLocation::from_path(std::path::Path::new("/srv/prod/secrets/db.toml"), 12, 3);
+        let rendered = format!("{:?}", loc);
+        assert!(
+            !rendered.contains("/srv/prod/secrets"),
+            "the server-side absolute path must not appear in the Debug output: {rendered}"
+        );
+        assert!(rendered.contains("db.toml"), "{rendered}");
+    }
+
+    #[test]
+    fn conflict_report_redacts_sensitive_names() {
+        let low = AnnotatedValue::new(
+            ConfigValue::string("old-password"),
+            SourceId::new("file"),
+            "db.password",
+        );
+        let high = AnnotatedValue::new(
+            ConfigValue::string("new-password"),
+            SourceId::new("env"),
+            "db.password",
+        );
+        let report = AnnotatedValue::conflict_report(&low, &high);
+        assert_eq!(report.low_value, "[REDACTED]");
+        assert_eq!(report.high_value, "[REDACTED]");
+    }
+
+    #[test]
+    fn conflict_report_keeps_non_sensitive_names() {
+        let low = AnnotatedValue::new(ConfigValue::string("a"), SourceId::new("file"), "db.host");
+        let high = AnnotatedValue::new(ConfigValue::string("b"), SourceId::new("env"), "db.host");
+        let report = AnnotatedValue::conflict_report(&low, &high);
+        assert_eq!(report.low_value, format!("{:?}", ConfigValue::string("a")));
+    }
+
+    #[test]
+    fn conflict_report_redacts_explicit_sensitive_paths() {
+        let low = AnnotatedValue::new(
+            ConfigValue::string("opaque"),
+            SourceId::new("file"),
+            "db.blob",
+        );
+        let high = AnnotatedValue::new(
+            ConfigValue::string("opaque2"),
+            SourceId::new("env"),
+            "db.blob",
+        );
+        let report =
+            AnnotatedValue::conflict_report_with_sensitive_paths(&low, &high, &["db.blob"]);
+        assert_eq!(report.low_value, "[REDACTED]");
+        assert_eq!(report.high_value, "[REDACTED]");
     }
 }
