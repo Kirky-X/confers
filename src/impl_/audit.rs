@@ -1215,14 +1215,14 @@ mod tests {
             .build();
         writer.write(key_access("perm-check")).expect("write");
 
-        let path = std::fs::read_dir(dir.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .next()
-            .expect("audit log exists");
         #[cfg(unix)]
         {
+            let path = std::fs::read_dir(dir.path())
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .next()
+                .expect("audit log exists");
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&path).unwrap().permissions().mode();
             assert_eq!(

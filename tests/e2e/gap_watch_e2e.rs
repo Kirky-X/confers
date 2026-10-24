@@ -210,15 +210,18 @@ async fn gs238_snapshot_file_mode_0600() {
     manager.save(&value, &[]).await.unwrap();
     let entries: Vec<_> = std::fs::read_dir(dir.path()).unwrap().collect();
     assert!(!entries.is_empty(), "snapshot file written");
-    use std::os::unix::fs::PermissionsExt;
-    for e in entries {
-        let mode = e.unwrap().metadata().unwrap().permissions().mode();
-        assert_eq!(
-            mode & 0o777,
-            0o600,
-            "snapshot must be 0600, got {:o}",
-            mode & 0o777
-        );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for e in entries {
+            let mode = e.unwrap().metadata().unwrap().permissions().mode();
+            assert_eq!(
+                mode & 0o777,
+                0o600,
+                "snapshot must be 0600, got {:o}",
+                mode & 0o777
+            );
+        }
     }
 }
 

@@ -208,15 +208,15 @@ impl KeyringStore for FileKeyringStore {
             file.write_all(secret).map_err(|e| ConfigError::KeyError {
                 message: format!("cannot write keyring fallback file: {e}"),
             })?;
+            Ok(())
         }
         #[cfg(not(unix))]
         {
             let _ = (service, account, secret);
-            return Err(ConfigError::KeyError {
+            Err(ConfigError::KeyError {
                 message: "file keyring fallback requires unix".to_string(),
-            });
+            })
         }
-        Ok(())
     }
 
     fn get_secret(&self, service: &str, account: &str) -> ConfigResult<Option<Vec<u8>>> {

@@ -1217,30 +1217,34 @@ fn gs518_load_file_io_boundary_tristate() {
     let dres = load_file(&dir, &LoaderConfig::new().allow_absolute());
     assert!(dres.is_err(), "directory must be rejected");
 
-    let locked = write(&dir, "locked.toml", "host = \"h\"\n");
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
-    if is_root() {
-        let v = load_file(&locked, &LoaderConfig::new().allow_absolute());
-        assert!(v.is_ok(), "root can read 000 files; behavior documented");
-    } else {
-        let res = load_file(&locked, &LoaderConfig::new().allow_absolute());
-        match res {
-            Err(e) => {
-                let repr = format!("{e:?}");
-                assert!(
-                    repr.contains("FileNotFound")
-                        || repr.contains("NotFound")
-                        || repr.contains("2200"),
-                    "permission error folds into 2200 family: {e:?}"
-                );
+    #[cfg(unix)]
+    {
+        let locked = write(&dir, "locked.toml", "host = \"h\"\n");
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if is_root() {
+            let v = load_file(&locked, &LoaderConfig::new().allow_absolute());
+            assert!(v.is_ok(), "root can read 000 files; behavior documented");
+        } else {
+            let res = load_file(&locked, &LoaderConfig::new().allow_absolute());
+            match res {
+                Err(e) => {
+                    let repr = format!("{e:?}");
+                    assert!(
+                        repr.contains("FileNotFound")
+                            || repr.contains("NotFound")
+                            || repr.contains("2200"),
+                        "permission error folds into 2200 family: {e:?}"
+                    );
+                }
+                Ok(_) => panic!("chmod 000 must not silently succeed for non-root"),
             }
-            Ok(_) => panic!("chmod 000 must not silently succeed for non-root"),
         }
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
     }
-    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 }
 
+#[cfg(unix)]
 fn is_root() -> bool {
     std::fs::read_to_string("/proc/self/status")
         .ok()
