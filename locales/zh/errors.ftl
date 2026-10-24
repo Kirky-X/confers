@@ -92,7 +92,8 @@ error-interpolation-unterminated-ref = 变量引用未闭合
 error-path-empty = 文件路径不能为空
 error-path-cannot-resolve = 无法解析文件路径
 error-path-access-denied = 不允许访问 { $path }
-error-path-credential-dir-denied = 不允许访问凭据目录(.ssh、.aws、.gnupg、.kube、.gcloud、.env)
+error-path-credential-dir-denied = 不允许访问凭据目录 { $name }
+error-path-credential-file-denied = 不允许访问凭据文件 { $name }
 error-path-not-regular-file = 只能读取常规文件
 error-path-extension-denied = 文件扩展名 { $ext } 不在允许范围内
 
@@ -116,9 +117,6 @@ error-crypto-weak-key = 弱密钥已被拒绝(全零等常量字节密钥材料�
 error-crypto-key-not-found = 未找到密钥
 error-crypto-legacy-decryption-failed = 旧版解密失败(AES-256-GCM)
 
-error-redis-pubsub-connect-timeout = redis_pubsub: 连接超时 (10s)
-error-redis-pubsub-connect-failed = redis_pubsub: { $message }
-error-redis-subscribe-failed = redis_subscribe: { $message }
 error-vault-token-not-provided = 未提供 Vault token
 error-vault-request-failed = vault_request: { $message }
 

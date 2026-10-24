@@ -96,7 +96,8 @@ error-interpolation-unterminated-ref = unterminated variable reference
 error-path-empty = file path must not be empty
 error-path-cannot-resolve = Cannot resolve file path
 error-path-access-denied = Access to { $path } is not allowed
-error-path-credential-dir-denied = access to credential directories (.ssh, .aws, .gnupg, .kube, .gcloud, .env) is not allowed
+error-path-credential-dir-denied = access to credential directory { $name } is not allowed
+error-path-credential-file-denied = access to credential file { $name } is not allowed
 error-path-not-regular-file = Only regular files can be read
 error-path-extension-denied = File extension { $ext } is not allowed
 
@@ -120,9 +121,6 @@ error-crypto-weak-key = weak key rejected (constant-byte key material such as al
 error-crypto-key-not-found = key not found
 error-crypto-legacy-decryption-failed = legacy decryption failed (AES-256-GCM)
 
-error-redis-pubsub-connect-timeout = redis_pubsub: connect timeout (10s)
-error-redis-pubsub-connect-failed = redis_pubsub: { $message }
-error-redis-subscribe-failed = redis_subscribe: { $message }
 error-vault-token-not-provided = Vault token not provided
 error-vault-request-failed = vault_request: { $message }
 
