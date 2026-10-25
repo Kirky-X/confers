@@ -7,6 +7,7 @@
 
 ## [Unreleased]
 
+## [0.6.0-rc.12] - 2026-10-25
 ### 变更（破坏面声明）
 
 - **废弃安全类型整体移除**：`security::SecureLogger` / `SafeResult` / `SensitiveDataFilter` / `FilterResult` / `LogLevel`（此前仅 `#[deprecated]` 标记）连同裸名 `security::ErrorSanitizer` 导出一并删除；消息脱敏器只以 `security::SecurityErrorSanitizer` 一个名字公开，替代项为 `confers::error::sanitize::sanitize_error_message`。仍引用旧类型的下游编译失败，属预期破坏
