@@ -20,6 +20,7 @@
 //! - Runtime errors use `ConfersError`
 
 use crate::error::{ConfersResult, ConfigConfigError};
+use crate::i18n::t_simple;
 use crate::impl_::lifecycle::Lifecycle;
 use crate::interface::sealed::Sealed;
 use crate::interface::{ConfigConnector, ConfigReader, ConfigWriter};
@@ -139,7 +140,7 @@ mod async_impl {
                 Ok(())
             } else {
                 Err(crate::error::ConfigError::HealthCheckFailed {
-                    reason: "InMemoryConfig is not healthy".into(),
+                    reason: t_simple("error-inmemory-not-healthy"),
                 })
             }
         }
@@ -229,7 +230,7 @@ mod sync_impl {
                 Ok(())
             } else {
                 Err(crate::error::ConfigError::HealthCheckFailed {
-                    reason: "InMemoryConfig is not healthy".into(),
+                    reason: t_simple("error-inmemory-not-healthy"),
                 })
             }
         }

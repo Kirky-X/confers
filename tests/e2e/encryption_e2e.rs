@@ -97,7 +97,7 @@ fn enc02_plain_values_pass_through_untouched() {
     assert_eq!(cfg.api_key, "plain-token", "plaintext must pass through");
 }
 
-/// R2-M7(主密钥显式注入):ConfigBuilder::master_key 直接注入主密钥,
+/// (主密钥显式注入):ConfigBuilder::master_key 直接注入主密钥,
 /// 绕过 CONFERS_MASTER_KEY 环境查找;弱密钥/错密钥照常失败。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct InjectProbe {

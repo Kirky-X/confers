@@ -16,6 +16,7 @@
 #[cfg(any(feature = "toml", feature = "yaml"))]
 use crate::error::ParseLocation;
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::tr_args;
 use crate::types::{AnnotatedValue, SourceId};
 use std::path::{Component, Path, PathBuf};
 
@@ -603,7 +604,10 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
         other => ConfigError::InvalidValue {
             key: "path".to_string(),
             expected_type: "safe relative path".to_string(),
-            message: format!("Path validation failed: {}", other),
+            message: tr_args(
+                "error-path-validation-failed",
+                &[("message", other.to_string())],
+            ),
         },
     })?;
 
@@ -662,7 +666,10 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
         .or_else(|| detect_format_from_path(&validated_path))
         .ok_or_else(|| ConfigError::ParseError {
             format: "unknown".into(),
-            message: format!("Unknown extension: {:?}", validated_path.extension()),
+            message: tr_args(
+                "error-unknown-extension",
+                &[("extension", format!("{:?}", validated_path.extension()))],
+            ),
             location: None,
             source: None,
         })?;
@@ -799,7 +806,10 @@ pub fn parse_yaml(
 pub fn parse_toml(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<AnnotatedValue> {
     Err(ConfigError::ParseError {
         format: "TOML".into(),
-        message: "Add 'toml' feature".into(),
+        message: tr_args(
+            "error-format-feature-required",
+            &[("format", "toml".into())],
+        ),
         location: None,
         source: None,
     })
@@ -808,7 +818,10 @@ pub fn parse_toml(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<Annota
 pub fn parse_json(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<AnnotatedValue> {
     Err(ConfigError::ParseError {
         format: "JSON".into(),
-        message: "Add 'json' feature".into(),
+        message: tr_args(
+            "error-format-feature-required",
+            &[("format", "json".into())],
+        ),
         location: None,
         source: None,
     })
@@ -817,7 +830,10 @@ pub fn parse_json(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<Annota
 pub fn parse_yaml(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<AnnotatedValue> {
     Err(ConfigError::ParseError {
         format: "YAML".into(),
-        message: "Add 'yaml' feature".into(),
+        message: tr_args(
+            "error-format-feature-required",
+            &[("format", "yaml".into())],
+        ),
         location: None,
         source: None,
     })
@@ -826,7 +842,7 @@ pub fn parse_yaml(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<Annota
 pub fn parse_ini(_: &str, _: SourceId, _: Option<&Path>) -> ConfigResult<AnnotatedValue> {
     Err(ConfigError::ParseError {
         format: "INI".into(),
-        message: "Add 'ini' feature".into(),
+        message: tr_args("error-format-feature-required", &[("format", "ini".into())]),
         location: None,
         source: None,
     })

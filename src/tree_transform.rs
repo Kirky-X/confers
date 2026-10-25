@@ -128,7 +128,7 @@ fn resolve_template(
         }
         out.push_str(&rest[..start]);
         let after = &rest[start + 2..];
-        // Balanced-brace scan (R1-L3): a reference's default value may itself
+        // Balanced-brace scan: a reference's default value may itself
         // contain nested `${...}` templates, so the closing brace is the one
         // that brings the depth back to zero — not just the first `}`.
         let Some(end) = matching_brace(after) else {
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn r1l3_default_value_with_nested_template_resolves() {
-        // R1-L3 回归:default 内嵌 ${} 曾被首个 '}' 截断
+        // 回归:default 内嵌 ${} 曾被首个 '}' 截断
         // ("de${UPfault}");平衡扫描后 default 的递归解析真正可达。
         let mut json = json!({
             "t": "${missing:de${UP}fault}",

@@ -736,7 +736,7 @@ fn cmd_inspect(
             let value = find_value_by_key(&annotated_config, key);
             match value {
                 Some(v) => {
-                    // R3-H3: 显式指定 keys 的分支同样默认脱敏(此前漏网,
+                    // 显式指定 keys 的分支同样默认脱敏(此前漏网,
                     // `inspect db.password` 会明文回显)。
                     let last_segment = key.rsplit('.').next().unwrap_or(key);
                     let value_str =
@@ -2444,7 +2444,7 @@ fn collect_encrypted_values(value: &AnnotatedValue, prefix: &str, out: &mut Vec<
     }
 }
 
-/// Verify a field envelope against `master_key` (R2-H1): parse via the
+/// Verify a field envelope against `master_key`: parse via the
 /// unified [`EncryptedEnvelope`] (same grammar as the load pipeline), derive
 /// the per-field key from the envelope's `key_version` + the field path, and
 /// AEAD-open `nonce||ciphertext`. Exactly mirrors
@@ -5105,7 +5105,7 @@ mod tests {
     fn doctor_encrypted_field_decrypts_with_valid_key() {
         let key = [7u8; 32];
         let crypto = crate::secret::XChaCha20Crypto::new();
-        // R2-H1: 夹具与加载管线同方案 —— 字段派生密钥(api_key,v1)+
+        // 夹具与加载管线同方案 —— 字段派生密钥(api_key,v1)+
         // 统一 envelope(enc:v1:<keyver>:<payload>)。
         let field_key = crate::secret::crypto::derive_field_key(&key, "api_key", "v1")
             .expect("derive field key");

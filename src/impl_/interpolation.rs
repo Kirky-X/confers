@@ -43,7 +43,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::error::{ConfigError, ConfigResult};
-use crate::i18n::t_simple;
+use crate::i18n::{t_simple, tr_args};
 
 /// Interpolate variable references in a string.
 ///
@@ -235,7 +235,10 @@ where
     if visited.len() > max_depth {
         return Err(ConfigError::InterpolationError {
             variable: String::new(),
-            message: format!("maximum interpolation depth ({}) exceeded", max_depth),
+            message: tr_args(
+                "error-interpolation-max-depth",
+                &[("depth", max_depth.to_string())],
+            ),
         });
     }
     let mut result = String::with_capacity(template.len().saturating_mul(2).max(128));
@@ -326,7 +329,7 @@ where
             } else {
                 return Err(ConfigError::InterpolationError {
                     variable: var_name.to_string(),
-                    message: "variable not found and no default provided".to_string(),
+                    message: t_simple("error-interpolation-unresolved-variable"),
                 });
             }
         } else {
@@ -401,7 +404,7 @@ fn validate_var_name(name: &str) -> ConfigResult<()> {
     if name.is_empty() {
         return Err(ConfigError::InterpolationError {
             variable: "".to_string(),
-            message: "empty variable name".to_string(),
+            message: t_simple("error-interpolation-empty-var-name"),
         });
     }
 
@@ -412,7 +415,7 @@ fn validate_var_name(name: &str) -> ConfigResult<()> {
     if !first.is_ascii_alphabetic() && first != '_' {
         return Err(ConfigError::InterpolationError {
             variable: name.to_string(),
-            message: "variable name must start with letter or underscore".to_string(),
+            message: t_simple("error-interpolation-invalid-var-start"),
         });
     }
 
@@ -421,8 +424,7 @@ fn validate_var_name(name: &str) -> ConfigResult<()> {
         if !c.is_ascii_alphanumeric() && c != '_' {
             return Err(ConfigError::InterpolationError {
                 variable: name.to_string(),
-                message: "variable name can only contain letters, digits, and underscores"
-                    .to_string(),
+                message: t_simple("error-interpolation-invalid-var-chars"),
             });
         }
     }

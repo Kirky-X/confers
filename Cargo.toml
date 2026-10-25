@@ -96,7 +96,6 @@ clap = { version = "4.6", default-features = false, features = ["std", "color", 
 darling = { version = "0.24", default-features = false, features = ["suggestions"] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
 garde = { version = "0.23", default-features = false, features = ["derive", "email", "url", "regex"] }
-
 indexmap = { version = "2.14", default-features = false, features = ["std", "serde"] }
 log = { version = "0.4", default-features = false }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
@@ -113,7 +112,8 @@ tokio = { version = "1.53", default-features = false, features = ["rt", "sync", 
 tokio-stream = { version = "0.1", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse", "display", "preserve_order"] }
 trybuild = { version = "1.0", default-features = false }
-serial_test = { version = "4.0", default-features = false } # >=3.5 drops the `scc` dependency (RUSTSEC-2026-0205)
+# >=3.5 移除 `scc` 依赖（RUSTSEC-2026-0205）
+serial_test = { version = "4.0", default-features = false }
 
 [workspace.lints.rust]
 
@@ -130,8 +130,7 @@ toml = ["dep:toml"]
 json = []
 yaml = ["dep:serde-saphyr"]
 ini = []
-# dotenv 正名（该特性实际语义是 .env 文件加载，env 曾与 SourceKind::Environment
-# 术语冲突）；env 降级为兼容别名，下一版本移除。
+# dotenv 正名（实际语义是 .env 加载）；env 为兼容别名，下一版本移除
 dotenv = ["dep:dotenvy"]
 env = ["dotenv"]
 
@@ -184,8 +183,7 @@ redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 # Unified change stream port (reuses the config-bus transport)
 change-stream = ["config-bus", "watch"]
 
-# Canary rollout orchestrator：消费 ChangeStream 的多实例金丝雀编排
-# （复用 progressive-reload 的 HealthStatus 语义）
+# Canary rollout：消费 ChangeStream 的多实例金丝雀编排（复用 progressive-reload 的 HealthStatus）
 canary = ["change-stream", "progressive-reload"]
 
 # Context-aware：上下文感知配置（src/context——按调用方上下文解析/取值）
@@ -208,7 +206,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 serial_test = { workspace = true }
 log = { workspace = true, features = ["std"] }
-async-nats = { workspace = true }  # for test_nats_bus_options
+# test_nats_bus_options 所需
+async-nats = { workspace = true }
 tracing-core = { version = "0.1", default-features = false, features = ["std"] }
 
 [profile.release]

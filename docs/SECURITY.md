@@ -164,7 +164,7 @@ pub struct SecureConfig {
 }
 
 // 低层加密 API：XChaCha20-Poly1305 要求 32 字节密钥
-// T037: 密钥必须随机生成（全零等常量密钥会被库拒绝）。
+// 密钥必须随机生成（全零等常量密钥会被库拒绝）。
 let crypto = XChaCha20Crypto::new();
 let mut key_bytes = [0u8; 32];
 getrandom::fill(&mut key_bytes).expect("OS entropy"); // 实际应从密钥服务或环境变量读取

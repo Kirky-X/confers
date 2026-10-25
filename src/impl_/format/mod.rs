@@ -28,6 +28,7 @@
 //! ```
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::t_simple;
 use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::Path;
 
@@ -37,6 +38,8 @@ use super::convert::json_to_config_value;
 use super::convert::toml_table_to_config_value;
 #[cfg(feature = "yaml")]
 use super::convert::yaml_to_config_value;
+#[cfg(any(feature = "json", feature = "toml", feature = "yaml"))]
+use crate::i18n::tr_args;
 
 /// Result of format detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,7 +228,10 @@ mod toml_converter {
             toml::to_string_pretty(&toml_val).map_err(|e| ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "TOML".to_string(),
-                message: format!("TOML serialization failed: {}", e),
+                message: tr_args(
+                    "error-toml-serialization-failed",
+                    &[("message", e.to_string())],
+                ),
             })
         }
 
@@ -257,7 +263,7 @@ mod toml_converter {
             ConfigValue::Null => Err(ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "TOML".to_string(),
-                message: "TOML does not support null values; remove null entries before serializing or use a null-capable format such as JSON or YAML".to_string(),
+                message: t_simple("error-toml-null-unsupported"),
             }),
             ConfigValue::Bool(b) => Ok(toml::Value::Boolean(*b)),
             ConfigValue::I64(i) => Ok(toml::Value::Integer(*i)),
@@ -361,7 +367,10 @@ mod json_converter {
             serde_json::to_string_pretty(&json).map_err(|e| ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "JSON".to_string(),
-                message: format!("JSON serialization failed: {}", e),
+                message: tr_args(
+                    "error-json-serialization-failed",
+                    &[("message", e.to_string())],
+                ),
             })
         }
 
@@ -493,7 +502,10 @@ mod yaml_converter {
             serde_saphyr::to_string(&yaml_val).map_err(|e| ConfigError::InvalidValue {
                 key: "serialization".to_string(),
                 expected_type: "YAML".to_string(),
-                message: format!("YAML serialization failed: {}", e),
+                message: tr_args(
+                    "error-yaml-serialization-failed",
+                    &[("message", e.to_string())],
+                ),
             })
         }
 
@@ -670,7 +682,7 @@ mod ini_converter {
                 .ok_or_else(|| ConfigError::InvalidValue {
                     key: "serialization".to_string(),
                     expected_type: "INI".to_string(),
-                    message: "INI serialization requires a map value".to_string(),
+                    message: t_simple("error-ini-requires-map"),
                 })?;
 
             let mut output = String::new();

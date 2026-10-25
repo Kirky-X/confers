@@ -519,7 +519,11 @@ async fn test_fs_watcher_file_deletion_detection() {
 
     let mut watcher = FsWatcher::new(&config_file, 100).await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // 等监听真正建立：macOS FSEvents 的事件流是异步启动的（inotify 同步），
+    // 机器负载高时流尚未建立，删除事件就会随初始枚举一起丢失——删除发生在
+    // 流建立之前，枚举时文件已不存在，因此一个事件都不会有。等待窗口与本
+    // 文件其余用例一致。
+    tokio::time::sleep(Duration::from_millis(400)).await;
     fs::remove_file(&config_file).unwrap();
 
     // Wait for the watcher to detect the change (debounce + inotify latency)

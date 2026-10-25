@@ -208,3 +208,36 @@ log-snapshot-prune-skip-metadata = 跳过: 无法读取 { $path } 的元数据: 
 log-snapshot-prune-skip-mtime = 跳过: 无法读取 { $path } 的修改时间: { $message }
 log-snapshot-prune-removing = 正在删除: { $file }
 log-snapshot-prune-remove-failed = 失败: 无法删除 { $path }: { $message }
+
+# --- ConfigError 消息片段(在构造点本地化) ---
+
+error-invalid-locale = 无效的语言标签 '{ $locale }': { $error }
+error-lookup-key-not-found = 未找到该键
+error-lookup-value-not-a-string = 值不是字符串
+error-path-validation-failed = 路径校验失败: { $message }
+error-unknown-extension = 未知扩展名: { $extension }
+error-format-feature-required = 请启用 '{ $format }' 特性
+error-inmemory-not-healthy = InMemoryConfig 未处于健康状态
+error-extension-not-allowed = 文件扩展名不在已配置的 allowed_extensions 列表中
+error-remote-sources-disabled = 远程配置源已禁用(ConfigLimits::allow_remote = false)
+error-toml-serialization-failed = TOML 序列化失败: { $message }
+error-toml-null-unsupported = TOML 不支持 null 值; 请在序列化前移除 null 条目, 或改用支持 null 的格式(如 JSON 或 YAML)
+error-json-serialization-failed = JSON 序列化失败: { $message }
+error-yaml-serialization-failed = YAML 序列化失败: { $message }
+error-ini-requires-map = INI 序列化要求顶层为映射值
+error-watcher-paths-empty = 至少需要提供一个路径
+error-nats-url-required = 必须提供 NATS URL
+error-redis-url-required = 必须提供 Redis URL
+error-interpolation-unresolved-variable = 未找到变量, 且未提供默认值
+error-interpolation-invalid-var-chars = 变量名只能包含字母、数字和下划线
+error-lazy-segment-parse-failed = 惰性分段 '{ $key }' 解析失败: { $message }
+error-preload-validator-panicked = 预加载校验器 panic
+error-limit-exceeded = { $kind } { $actual } 超出已配置的上限 { $limit }
+error-limit-kind-nesting-depth = 嵌套深度
+error-limit-kind-total-field-count = 字段总数
+error-limit-kind-array-length = 数组长度
+error-limit-kind-string-length = 字符串长度
+error-interpolation-max-depth = 最大插值深度 ({ $depth }) 已超出
+error-interpolation-empty-var-name = 变量名为空
+error-interpolation-invalid-var-start = 变量名必须以字母或下划线开头
+error-bus-serialize-event = 序列化事件失败: { $error }

@@ -37,7 +37,7 @@ pub fn decrypt_encrypted_tree(json: &mut serde_json::Value) {
     decrypt_tree_with_key(json, None);
 }
 
-/// Builder-integrated entry point (R2-M7): runs the tree walk with the
+/// Builder-integrated entry point: runs the tree walk with the
 /// builder's injected master key when present, else the environment default.
 pub(crate) fn apply_field_decryption(json: &mut serde_json::Value, master_key: Option<&[u8]>) {
     decrypt_tree_with_key(json, master_key);
@@ -84,7 +84,7 @@ fn decrypt_at_path(value: &mut serde_json::Value, path: &str, master_override: O
                 if crate::envelope::EncryptedEnvelope::is_encrypted(text) {
                     // Looks encrypted but does not parse (bad key version,
                     // non-standard base64, ...): never hand it through as
-                    // the secret — fail loudly at the field (M4).
+                    // the secret — fail loudly at the field.
                     crate::telemetry::warn(
                         "confers.encryption.envelope_malformed",
                         &[("field", path)],

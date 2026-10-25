@@ -17,6 +17,7 @@ use crate::impl_::lifecycle::LifecycleRegistry;
 #[cfg(feature = "config-bus")]
 use crate::bus::ConfigBus;
 use crate::error::{BuildResult, ConfigError, ConfigResult, SourceWarning, WarningCode};
+use crate::i18n::t_simple;
 use crate::impl_::merger::MergeStrategy;
 #[cfg(feature = "snapshot")]
 use crate::impl_::snapshot::SnapshotConfig;
@@ -52,7 +53,7 @@ pub struct ConfigBuilder<T> {
     /// Whether the target type declares `#[config(encrypt)]` fields (set by
     /// the derive macro); gates the decryption pass.
     decrypt_fields: bool,
-    /// Explicitly injected master key (R2-M7), overriding the environment.
+    /// Explicitly injected master key, overriding the environment.
     master_key_override: Option<Vec<u8>>,
     /// Accumulated default values.
     accumulated_defaults: HashMap<String, ConfigValue>,
@@ -144,7 +145,7 @@ impl<T> ConfigBuilder<T> {
         self
     }
 
-    /// Inject the master key for field decryption directly (R2-M7), bypassing
+    /// Inject the master key for field decryption directly, bypassing
     /// the `CONFERS_MASTER_KEY` environment lookup. Must be 32 bytes
     /// (XChaCha20-Poly1305); weak (constant-byte) keys are rejected.
     #[cfg(feature = "encryption")]
@@ -399,8 +400,7 @@ where
                         "file extension within allowed set [{}]",
                         self.limits.allowed_extensions.join(", ")
                     ),
-                    message: "file extension is not in the configured allowed_extensions list"
-                        .to_string(),
+                    message: t_simple("error-extension-not-allowed"),
                 });
             }
             let Ok(meta) = std::fs::metadata(&path) else {
@@ -458,8 +458,7 @@ where
             return Err(ConfigError::InvalidValue {
                 key: "sources".to_string(),
                 expected_type: "no remote sources".to_string(),
-                message: "remote sources are disabled (ConfigLimits::allow_remote = false)"
-                    .to_string(),
+                message: t_simple("error-remote-sources-disabled"),
             });
         }
         Ok(())
@@ -945,7 +944,7 @@ fn run_preload_validators(
         let status = status.map_err(|_| ConfigError::InvalidValue {
             key: "preload_validator".to_string(),
             expected_type: "non-panicking health check".to_string(),
-            message: "preload validator panicked".to_string(),
+            message: t_simple("error-preload-validator-panicked"),
         })?;
         if let HealthStatus::Critical { reason } = status {
             return Err(ConfigError::ReloadRejected {

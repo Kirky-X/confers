@@ -273,7 +273,7 @@
 | SEC-15 | `TlsConfigValidator`：禁用校验/跳过 verify 判违规 | 异常 | security-rules | 无 | src 内联 `src/security/rules/tls.rs` tests | tests/e2e/security_rules_e2e.rs |
 | SEC-16 | `ViolationSeverity` 排序与 `SecurityReport` 汇总（critical 优先） | 边界 | security-rules | 无 | src 内联 rules/mod tests | tests/e2e/security_rules_e2e.rs |
 | SEC-17 | `config_injector`：把外部 env/secret 注入配置树指定前缀下 | 正常 | security | 无 | src 内联 `src/security/config_injector.rs` tests | tests/e2e/security_rules_e2e.rs |
-| SEC-18 | 敏感键前缀识别（password/secret/token/api_key 等模式表 `patterns.rs` + `prefix.rs`）自动标记 sensitive | 边界 | security | 无 | src 内联 `src/security/patterns.rs/prefix.rs` tests | tests/e2e/security_rules_e2e.rs |
+| SEC-18 | 敏感键前缀识别（password/secret/token/api_key 等模式表 `patterns.rs` + `prefix.rs`）自动标记 sensitive | 边界 | security | 无 | src 内联 `src/security/prefix.rs` tests | tests/e2e/security_rules_e2e.rs |
 
 ### 2.8 审计（AUD，11 条）
 

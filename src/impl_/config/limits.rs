@@ -3,6 +3,7 @@
 
 //! Configuration limits for safety and resource management.
 
+use crate::i18n::{t_simple, tr_args, translate_en};
 use crate::impl_::loader::Format;
 
 /// Configuration size and resource limits.
@@ -153,7 +154,7 @@ impl ConfigLimits {
         if depth > self.max_nesting_depth {
             return Err(limit_violation(
                 path,
-                "nesting depth",
+                "error-limit-kind-nesting-depth",
                 depth,
                 self.max_nesting_depth,
             ));
@@ -165,7 +166,7 @@ impl ConfigLimits {
                 if total > self.max_total_fields {
                     return Err(limit_violation(
                         path,
-                        "total field count",
+                        "error-limit-kind-total-field-count",
                         total,
                         self.max_total_fields,
                     ));
@@ -184,7 +185,7 @@ impl ConfigLimits {
                 if items.len() > self.max_array_length {
                     return Err(limit_violation(
                         path,
-                        "array length",
+                        "error-limit-kind-array-length",
                         items.len(),
                         self.max_array_length,
                     ));
@@ -197,7 +198,7 @@ impl ConfigLimits {
             ConfigValue::String(s) if s.len() > self.max_string_length => {
                 return Err(limit_violation(
                     path,
-                    "string length",
+                    "error-limit-kind-string-length",
                     s.len(),
                     self.max_string_length,
                 ));
@@ -247,15 +248,22 @@ impl ConfigLimits {
 /// Build a descriptive [`ConfigError::InvalidValue`] for a limit violation.
 fn limit_violation(
     path: &str,
-    kind: &str,
+    kind_key: &str,
     actual: usize,
     limit: usize,
 ) -> crate::error::ConfigError {
     let path = if path.is_empty() { "<root>" } else { path };
     crate::error::ConfigError::InvalidValue {
         key: path.to_string(),
-        expected_type: format!("{kind} within limit"),
-        message: format!("{kind} {actual} exceeds configured limit {limit}"),
+        expected_type: format!("{} within limit", translate_en(kind_key, &[])),
+        message: tr_args(
+            "error-limit-exceeded",
+            &[
+                ("kind", t_simple(kind_key)),
+                ("actual", actual.to_string()),
+                ("limit", limit.to_string()),
+            ],
+        ),
     }
 }
 

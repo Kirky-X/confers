@@ -194,7 +194,7 @@ pub trait ChangeStream: Send + Sync {
     /// eligible for redelivery by reliable implementations; the in-memory
     /// implementation uses ack only to release retained payloads.
     ///
-    /// Semantics note (R3-L2): ack is a GLOBAL release, not per-subscriber —
+    /// Semantics note: ack is a GLOBAL release, not per-subscriber —
     /// once one subscriber acks `version`, the in-memory implementation may
     /// evict that payload for everyone, and a slower subscriber that has not
     /// seen it yet receives the explicit `resync` event instead of silent

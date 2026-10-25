@@ -109,7 +109,7 @@ enum Replacement {
 
 /// 错误脱敏器
 ///
-/// 语义说明(R3-L7):本类型的 `MaskedGroup` 替换会**保留值的前 4-8 个字符**
+/// 语义说明:本类型的 `MaskedGroup` 替换会**保留值的前 4-8 个字符**
 /// (如 `pa****`),与库内其他脱敏路径(定长 `********` / `[REDACTED]`)不同。
 /// 适用于需要在日志中辨识凭证"种类"的诊断场景;若要求不泄露前缀,请改用
 /// [`crate::error::sanitize::sanitize_error_message`] 全路径。

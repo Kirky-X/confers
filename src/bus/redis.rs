@@ -12,7 +12,7 @@ use redis::AsyncCommands;
 
 use super::{ConfigBus, ConfigChangeEvent};
 use crate::error::{ConfigConfigError, ConfigError, ConfigResult};
-use crate::i18n::tr_args;
+use crate::i18n::{t_simple, tr_args};
 use crate::lifecycle::Lifecycle;
 
 /// Initial reconnect backoff after the pubsub connection drops.
@@ -63,7 +63,7 @@ impl RedisConfigBus {
         // incompatible with multiplexed-connection query semantics. The previous
         // implementation used `redis::cmd("SUBSCRIBE").query_async()` on a
         // multiplexed connection, which never delivers real published messages.
-        // R3-L5: connect 包超时 —— 对黑洞地址(SYN 丢弃)无超时会让重连
+        // connect 包超时 —— 对黑洞地址(SYN 丢弃)无超时会让重连
         // 循环无限悬挂、退避停摆。
         let mut pubsub = tokio::time::timeout(
             std::time::Duration::from_secs(10),
@@ -115,7 +115,7 @@ impl ConfigBus for RedisConfigBus {
             })?;
 
         let payload = serde_json::to_vec(&event).map_err(|e| ConfigError::SourceChainError {
-            message: format!("serialize event: {}", e),
+            message: tr_args("error-bus-serialize-event", &[("error", e.to_string())]),
             source_index: 0,
         })?;
 
@@ -261,7 +261,7 @@ impl RedisBusBuilder {
         let url = self.url.ok_or(ConfigError::InvalidValue {
             key: "redis_url".to_string(),
             expected_type: "string".to_string(),
-            message: "Redis URL is required".to_string(),
+            message: t_simple("error-redis-url-required"),
         })?;
 
         let channel = self.channel.unwrap_or_else(|| "config:events".to_string());

@@ -848,7 +848,7 @@ let source = HttpPolledSourceBuilder::new()
     .url("https://config.example.com/app.toml")
     .build()?;
 
-// 远程配置完整示例参见 examples/remote_consul.rs
+// 远程配置完整示例参见 examples/src/examples/remote_consul.rs
 ```
 
 **远程配置安全最佳实践：**

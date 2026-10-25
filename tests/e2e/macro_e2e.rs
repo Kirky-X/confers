@@ -640,7 +640,7 @@ fn t007_env_separator_maps_nested_path() {
     assert_eq!(cfg.db.host, "nested-env-host");
 }
 
-/// R1-L8:serde(rename) 字段的插值 —— codegen 现以 serde 名为插值键,
+/// serde(rename) 字段的插值 —— codegen 现以 serde 名为插值键,
 /// rename 后仍须生效。
 #[derive(Debug, confers::Config, serde::Deserialize)]
 struct RenamedInterpolate {

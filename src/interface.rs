@@ -14,6 +14,7 @@
 //! - `MetricsBackend` - Metrics collection interface
 
 use crate::error::{ConfersResult, ConfigResult};
+use crate::i18n::t_simple;
 use crate::types::{AnnotatedValue, KeyCachePolicy, SourceKind, ZeroizingBytes};
 use std::collections::HashMap;
 use std::path::Path;
@@ -279,14 +280,14 @@ pub trait ConfigProviderExt: ConfigProvider {
             .ok_or_else(|| crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
                 expected_type: crate::error::short_type_label::<T>(),
-                message: "key not found".to_string(),
+                message: t_simple("error-lookup-key-not-found"),
             })?;
 
         let s = value.as_str().map(str::to_owned).ok_or_else(|| {
             crate::error::ConfigError::InvalidValue {
                 key: key.to_string(),
                 expected_type: crate::error::short_type_label::<T>(),
-                message: "value is not a string".to_string(),
+                message: t_simple("error-lookup-value-not-a-string"),
             }
         })?;
 

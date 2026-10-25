@@ -25,6 +25,5 @@ name = "interpolation"
 path = "fuzz_targets/interpolation.rs"
 doc = false
 
-# 独立于主 workspace（根 Cargo.toml exclude = ["fuzz"]）；自带空 workspace 按
-# cargo-fuzz 惯例脱离继承，避免引用不存在的 workspace.package 字段
+# 独立于主 workspace（根 exclude）；自带空 workspace 按 cargo-fuzz 惯例脱离继承
 [workspace]

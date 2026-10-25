@@ -375,7 +375,7 @@ impl EnvSource {
             let cannot_read = || ConfigError::InvalidValue {
                 key: raw.to_string(),
                 expected_type: "readable file".to_string(),
-                message: format!("Cannot read file referenced by {}", env_key),
+                message: tr_args("error-env-file-unreadable", &[("var", env_key.to_string())]),
             };
             crate::path_validator::PathValidator::read_secret_file(&validated_path).map_err(|e| {
                 match e {

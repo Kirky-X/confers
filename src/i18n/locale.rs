@@ -39,9 +39,12 @@ pub fn current_locale() -> LanguageIdentifier {
 /// lookup; other well-formed BCP-47 tags are accepted here but fall back to
 /// the `en` bundle at format time.
 pub fn set_locale(locale: &str) -> Result<(), String> {
-    let parsed: LanguageIdentifier = locale
-        .parse()
-        .map_err(|e| format!("invalid locale '{locale}': {e}"))?;
+    let parsed: LanguageIdentifier = locale.parse::<LanguageIdentifier>().map_err(|e| {
+        super::tr_args(
+            "error-invalid-locale",
+            &[("locale", locale.to_string()), ("error", e.to_string())],
+        )
+    })?;
     let mut guard = OVERRIDE_LOCALE
         .write()
         .expect("locale override RwLock poisoned");

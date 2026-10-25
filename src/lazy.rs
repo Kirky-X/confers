@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::error::{ConfigError, ConfigResult};
+use crate::i18n::tr_args;
 use crate::loader::{Format, parse_content};
 use crate::types::{AnnotatedValue, SourceId};
 
@@ -124,7 +125,10 @@ impl LazySegmentedConfig {
         )
         .map_err(|e| ConfigError::ParseError {
             format: "toml".to_string(),
-            message: format!("lazy segment '{key}' failed to parse: {}", e),
+            message: tr_args(
+                "error-lazy-segment-parse-failed",
+                &[("key", key.to_string()), ("message", e.to_string())],
+            ),
             location: None,
             source: None,
         })?;

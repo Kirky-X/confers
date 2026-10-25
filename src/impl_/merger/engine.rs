@@ -242,7 +242,7 @@ fn merge_maps_with_cow(
     depth: usize,
 ) -> ConfigResult<ConfigValue> {
     // `_strategy`: per-key strategies are resolved from each child's full
-    // path (R1-H1) — the parent strategy no longer participates in leaf
+    // path — the parent strategy no longer participates in leaf
     // merges or the equality scan.
     // Fast path: identical Arc → no merge work needed at all
     if Arc::ptr_eq(low_map, high_map) {

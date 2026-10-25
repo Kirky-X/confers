@@ -18,6 +18,9 @@ pub(crate) mod progressive;
 pub(crate) mod fs_watcher;
 
 #[cfg(feature = "watch")]
+pub(crate) mod notify_normalize;
+
+#[cfg(feature = "watch")]
 pub(crate) mod field_watch;
 
 // 门面组件：固化 FsWatcher + begin_reload + watch 广播 + 优雅停机的装配形态，

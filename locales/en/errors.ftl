@@ -212,3 +212,36 @@ log-snapshot-prune-skip-metadata = SKIP: cannot read metadata for { $path }: { $
 log-snapshot-prune-skip-mtime = SKIP: cannot read modification time for { $path }: { $message }
 log-snapshot-prune-removing = Removing: { $file }
 log-snapshot-prune-remove-failed = FAIL: cannot remove { $path }: { $message }
+
+# --- ConfigError message fragments (localized at the construction site) ---
+
+error-invalid-locale = invalid locale '{ $locale }': { $error }
+error-lookup-key-not-found = key not found
+error-lookup-value-not-a-string = value is not a string
+error-path-validation-failed = Path validation failed: { $message }
+error-unknown-extension = Unknown extension: { $extension }
+error-format-feature-required = Add '{ $format }' feature
+error-inmemory-not-healthy = InMemoryConfig is not healthy
+error-extension-not-allowed = file extension is not in the configured allowed_extensions list
+error-remote-sources-disabled = remote sources are disabled (ConfigLimits::allow_remote = false)
+error-toml-serialization-failed = TOML serialization failed: { $message }
+error-toml-null-unsupported = TOML does not support null values; remove null entries before serializing or use a null-capable format such as JSON or YAML
+error-json-serialization-failed = JSON serialization failed: { $message }
+error-yaml-serialization-failed = YAML serialization failed: { $message }
+error-ini-requires-map = INI serialization requires a map value
+error-watcher-paths-empty = At least one path must be provided
+error-nats-url-required = NATS URL is required
+error-redis-url-required = Redis URL is required
+error-interpolation-unresolved-variable = variable not found and no default provided
+error-interpolation-invalid-var-chars = variable name can only contain letters, digits, and underscores
+error-lazy-segment-parse-failed = lazy segment '{ $key }' failed to parse: { $message }
+error-preload-validator-panicked = preload validator panicked
+error-limit-exceeded = { $kind } { $actual } exceeds configured limit { $limit }
+error-limit-kind-nesting-depth = nesting depth
+error-limit-kind-total-field-count = total field count
+error-limit-kind-array-length = array length
+error-limit-kind-string-length = string length
+error-interpolation-max-depth = maximum interpolation depth ({ $depth }) exceeded
+error-interpolation-empty-var-name = empty variable name
+error-interpolation-invalid-var-start = variable name must start with letter or underscore
+error-bus-serialize-event = serialize event: { $error }

@@ -9,8 +9,8 @@
 #[cfg(feature = "watch")]
 use crate::error::{ConfigError, ConfigResult};
 #[cfg(feature = "watch")]
-use crate::i18n::{tr, tr_args};
-use std::collections::HashSet;
+use crate::i18n::{t_simple, tr, tr_args};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -35,6 +35,49 @@ fn close_sender(store: &SenderStore) {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *guard = None;
+}
+
+/// Absolute, canonical form of a watch target.
+///
+/// The watcher reports event paths in canonical form — notify canonicalizes
+/// its watch root and joins event paths onto it — so every comparison against
+/// a caller-supplied path has to use the same form. Comparing a raw path
+/// against a canonicalized event path silently drops every event whenever
+/// the target traverses a symlink (e.g. macOS' TMPDIR under `/var` →
+/// `/private/var`), leaving the watcher permanently deaf.
+fn canonical_watch_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| {
+        // Target may not exist yet (delete+recreate flows): fall back to a
+        // lexical absolutization against the current dir.
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(path)
+        }
+    })
+}
+
+/// Absolute form of a caller-supplied path that keeps symlinks untouched.
+///
+/// `std::path::absolute` resolves against the current directory without
+/// resolving symlinks, so the watcher reports back exactly the path the
+/// caller asked to watch — `event == watched_path` holds even when the
+/// target sits behind a symlink.
+fn lexical_absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| canonical_watch_path(path))
+}
+
+/// Map a canonical event path back onto the caller's path form.
+///
+/// The watch root is canonical (notify canonicalizes it), so the event paths
+/// are canonical as well. The consumer must receive the path form it handed
+/// in, otherwise comparing the reported path with the watched path never
+/// matches for targets behind a symlink.
+fn reported_event_path(event_path: &Path, canonical_root: &Path, reported_root: &Path) -> PathBuf {
+    match event_path.strip_prefix(canonical_root) {
+        Ok(suffix) => reported_root.join(suffix),
+        Err(_) => event_path.to_path_buf(),
+    }
 }
 
 /// File system watcher with debouncing.
@@ -259,7 +302,8 @@ impl FsWatcher {
         dropped: Arc<std::sync::atomic::AtomicU64>,
     ) {
         use notify_debouncer_full::{
-            DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
+            DebounceEventResult, RecommendedCache, new_debouncer_opt,
+            notify::{Config, EventKind, RecursiveMode},
         };
 
         // Watch strategy: a file target is watched through its PARENT
@@ -271,7 +315,7 @@ impl FsWatcher {
         // directory survives both replacement and delete+recreate of the
         // watched path. Directory targets are watched directly and need no
         // filter (a directory inode is not swapped by renames of children).
-        // R3-H1: both the watch root and the filter must be ABSOLUTE.
+        // both the watch root and the filter must be ABSOLUTE.
         // notify-debouncer-full canonicalizes its watch root and joins event
         // paths onto it, while `path_filter` would otherwise hold the
         // caller's raw (possibly relative) path — the two never compare
@@ -279,26 +323,18 @@ impl FsWatcher {
         // silently deaf even though `is_running()` stays true (the rustdoc
         // example's `FsWatcher::new("./config.toml", ..)` used to hit
         // exactly this).
-        let absolutize = |p: &Path| -> PathBuf {
-            std::fs::canonicalize(p).unwrap_or_else(|_| {
-                // Target may not exist yet (delete+recreate flows): fall
-                // back to a lexical absolutization against the current dir.
-                if p.is_absolute() {
-                    p.to_path_buf()
-                } else {
-                    std::env::current_dir().unwrap_or_default().join(p)
-                }
-            })
-        };
-        let absolute = absolutize(path);
+        let absolute = canonical_watch_path(path);
+        // The path form the consumer gets back: the caller's own path made
+        // absolute, symlinks untouched.
+        let reported = lexical_absolute(path);
         let (watch_target, path_filter): (PathBuf, Option<PathBuf>) = if absolute.is_dir() {
-            (absolute, None)
+            (absolute.clone(), None)
         } else {
             let parent = absolute
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| absolute.clone());
-            (parent, Some(absolute))
+            (parent, Some(absolute.clone()))
         };
 
         // R-watch-007: for file targets the event outlet passes
@@ -318,25 +354,34 @@ impl FsWatcher {
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        let mut debouncer =
-            match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
+        let mut debouncer = match new_debouncer_opt::<
+            _,
+            super::notify_normalize::CreateAsModifyWatcher,
+            RecommendedCache,
+        >(
+            Duration::from_millis(debounce_ms),
+            None,
+            move |result: DebounceEventResult| {
                 let _ = bridge_tx.send(result);
-            }) {
-                Ok(d) => d,
-                Err(e) => {
-                    // Make the failure observable instead of exiting
-                    // silently: `is_running()` reports false and closing the
-                    // sender store lets a pending `recv()` return `None`.
-                    log::error!(
-                        "failed to create file watcher debouncer for {}: {e}",
-                        path.display()
-                    );
-                    failed.store(true, std::sync::atomic::Ordering::SeqCst);
-                    running.store(false, std::sync::atomic::Ordering::SeqCst);
-                    close_sender(&tx_store);
-                    return;
-                }
-            };
+            },
+            RecommendedCache::new(),
+            Config::default(),
+        ) {
+            Ok(d) => d,
+            Err(e) => {
+                // Make the failure observable instead of exiting
+                // silently: `is_running()` reports false and closing the
+                // sender store lets a pending `recv()` return `None`.
+                log::error!(
+                    "failed to create file watcher debouncer for {}: {e}",
+                    path.display()
+                );
+                failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                running.store(false, std::sync::atomic::Ordering::SeqCst);
+                close_sender(&tx_store);
+                return;
+            }
+        };
 
         if let Err(e) = debouncer.watch(&watch_target, RecursiveMode::Recursive) {
             log::error!(
@@ -439,7 +484,9 @@ impl FsWatcher {
                                                 .as_ref()
                                                 .is_none_or(|d| d.should_process());
                                             if forward {
-                                                match tx.try_send(event_path.clone()) {
+                                                match tx.try_send(reported_event_path(
+                                                    event_path, &absolute, &reported,
+                                                )) {
                                                     Ok(_) => {
                                                         // Critical-path metric: watcher
                                                         // trigger forwarded to reload
@@ -501,7 +548,25 @@ impl FsWatcher {
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // Continue
+                    // The watch root can disappear without the backend
+                    // reporting it — macOS FSEvents delivers no event for the
+                    // removal of the watched root, so the watcher would stay
+                    // silently deaf forever. Polling the root keeps the
+                    // failure observable, which is the whole point of the
+                    // parent-removal protocol above.
+                    if !watch_target.exists() {
+                        log::error!(
+                            "{}",
+                            tr_args(
+                                "log-fs-watcher-parent-removed",
+                                &[("path", watch_target.display().to_string())]
+                            )
+                        );
+                        failed.store(true, Ordering::SeqCst);
+                        running.store(false, Ordering::SeqCst);
+                        close_sender(&tx_store);
+                        return;
+                    }
                 }
             }
         }
@@ -605,7 +670,7 @@ impl MultiFsWatcher {
             return Err(ConfigError::InvalidValue {
                 key: "paths".to_string(),
                 expected_type: "non-empty path list".to_string(),
-                message: "At least one path must be provided".to_string(),
+                message: t_simple("error-watcher-paths-empty"),
             });
         }
 
@@ -742,62 +807,91 @@ impl MultiFsWatcher {
         dropped: Arc<std::sync::atomic::AtomicU64>,
     ) {
         use notify_debouncer_full::{
-            DebounceEventResult, new_debouncer, notify::EventKind, notify::RecursiveMode,
+            DebounceEventResult, RecommendedCache, new_debouncer_opt,
+            notify::{Config, EventKind, RecursiveMode},
         };
 
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        let mut debouncer =
-            match new_debouncer(Duration::from_millis(debounce_ms), None, move |result| {
+        let mut debouncer = match new_debouncer_opt::<
+            _,
+            super::notify_normalize::CreateAsModifyWatcher,
+            RecommendedCache,
+        >(
+            Duration::from_millis(debounce_ms),
+            None,
+            move |result: DebounceEventResult| {
                 let _ = bridge_tx.send(result);
-            }) {
-                Ok(d) => d,
-                Err(e) => {
-                    // Make the failure observable instead of exiting
-                    // silently: `is_running()` reports false and closing the
-                    // sender store lets a pending `recv()` return `None`.
-                    log::error!(
-                        "{}",
-                        tr_args(
-                            "log-fs-watcher-debouncer-create-failed",
-                            &[("message", e.to_string())]
-                        )
-                    );
-                    failed.store(true, std::sync::atomic::Ordering::SeqCst);
-                    running.store(false, std::sync::atomic::Ordering::SeqCst);
-                    close_sender(&tx_store);
-                    return;
-                }
-            };
+            },
+            RecommendedCache::new(),
+            Config::default(),
+        ) {
+            Ok(d) => d,
+            Err(e) => {
+                // Make the failure observable instead of exiting
+                // silently: `is_running()` reports false and closing the
+                // sender store lets a pending `recv()` return `None`.
+                log::error!(
+                    "{}",
+                    tr_args(
+                        "log-fs-watcher-debouncer-create-failed",
+                        &[("message", e.to_string())]
+                    )
+                );
+                failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                running.store(false, std::sync::atomic::Ordering::SeqCst);
+                close_sender(&tx_store);
+                return;
+            }
+        };
 
-        // Watch all paths. Individual failures are logged and skipped: the
-        // watcher stays partially functional as long as at least one path
+        // The event filter must use the same path form the watcher reports.
+        // notify canonicalizes its watch root, so event paths are canonical;
+        // matching them against the raw caller paths drops every event when
+        // the target traverses a symlink (e.g. macOS' TMPDIR under `/var` →
+        // `/private/var`), which leaves the watcher permanently deaf. The
+        // consumer, however, receives the caller's own path form back.
+        let report_map: HashMap<PathBuf, PathBuf> = paths
+            .iter()
+            .map(|p| (canonical_watch_path(p), lexical_absolute(p)))
+            .collect();
+
+        // Watch roots are deduplicated. Watched files usually share one
+        // parent directory, and re-watching the same root restarts the
+        // backend stream every time — with many files in one directory that
+        // restart storm is slow enough for the watch to be established only
+        // after the first writes already happened, so every early event is
+        // lost.
+        let mut targets: HashSet<PathBuf> = HashSet::new();
+        for path in paths {
+            if path.is_dir() {
+                targets.insert(path.clone());
+            } else if path.is_file()
+                && let Some(parent) = path.parent()
+            {
+                targets.insert(parent.to_path_buf());
+            }
+        }
+
+        // Watch all roots. Individual failures are logged and skipped: the
+        // watcher stays partially functional as long as at least one root
         // is being watched.
         let mut watched_any = false;
-        for path in paths {
-            let target = if path.is_dir() {
-                Some(path.as_path())
-            } else if path.is_file() {
-                path.parent()
-            } else {
-                None
-            };
-            if let Some(target) = target {
-                match debouncer.watch(target, RecursiveMode::Recursive) {
-                    Ok(()) => watched_any = true,
-                    Err(e) => {
-                        log::warn!(
-                            "{}",
-                            tr_args(
-                                "log-fs-watch-failed",
-                                &[
-                                    ("path", target.display().to_string()),
-                                    ("message", e.to_string()),
-                                ]
-                            )
-                        );
-                    }
+        for target in &targets {
+            match debouncer.watch(target, RecursiveMode::Recursive) {
+                Ok(()) => watched_any = true,
+                Err(e) => {
+                    log::warn!(
+                        "{}",
+                        tr_args(
+                            "log-fs-watch-failed",
+                            &[
+                                ("path", target.display().to_string()),
+                                ("message", e.to_string()),
+                            ]
+                        )
+                    );
                 }
             }
         }
@@ -843,8 +937,8 @@ impl MultiFsWatcher {
                                     // the path no longer exists and is_file() returns
                                     // false, silently dropping the Remove event.
                                     for event_path in &event.paths {
-                                        if paths.contains(event_path) {
-                                            match tx.try_send(event_path.clone()) {
+                                        if let Some(reported) = report_map.get(event_path) {
+                                            match tx.try_send(reported.clone()) {
                                                 Ok(_) => {
                                                     // Critical-path metric: watcher
                                                     // trigger forwarded to reload
@@ -904,7 +998,23 @@ impl MultiFsWatcher {
                     break;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // Continue
+                    // The watch roots can disappear without the backend
+                    // reporting it — macOS FSEvents delivers no event for the
+                    // removal of a watched root, so the watcher would stay
+                    // silently deaf for every path under it.
+                    if let Some(vanished) = targets.iter().find(|t| !t.exists()) {
+                        log::error!(
+                            "{}",
+                            tr_args(
+                                "log-fs-watcher-parent-removed",
+                                &[("path", vanished.display().to_string())]
+                            )
+                        );
+                        failed.store(true, Ordering::SeqCst);
+                        running.store(false, Ordering::SeqCst);
+                        close_sender(&tx_store);
+                        return;
+                    }
                 }
             }
         }
@@ -1298,7 +1408,7 @@ mod tests {
 
         // 文件目标的 watch 根是父目录（此处为 crate 根）且递归建立，慢盘
         // 高负载下（全量测试并行时）递归 watch 的建立可能晚于首次写入，
-        // 事件因此丢失；重写幂等，事件到达即证明相对路径过滤正确（R3-H1）。
+        // 事件因此丢失；重写幂等，事件到达即证明相对路径过滤正确。
         std::thread::sleep(std::time::Duration::from_millis(600));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let mut event = None;
