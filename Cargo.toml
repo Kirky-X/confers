@@ -103,7 +103,7 @@ quote = { version = "1.0", default-features = false, features = ["proc-macro"] }
 regex = { version = "1.13", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std", "preserve_order"] }
-serde-saphyr = { version = "1.3", default-features = false, features = ["serialize", "deserialize"] }
+serde-saphyr = { version = "2.0", default-features = false, features = ["serialize", "deserialize"] }
 similar = { version = "3.2", default-features = false, features = ["std", "text"] }
 syn = { version = "3.0", default-features = false, features = ["derive", "parsing", "printing", "clone-impls", "proc-macro", "full", "extra-traits"] }
 tempfile = { version = "3.27", default-features = false, features = ["getrandom"] }
