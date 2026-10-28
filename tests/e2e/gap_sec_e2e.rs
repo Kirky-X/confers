@@ -398,8 +398,8 @@ fn gs100_encrypt_field_wrong_master_key_fails() {
             );
         }
         Ok(cfg) => panic!(
-            "wrong master key must fail the load, got api_key={:?}",
-            cfg.api_key
+            "wrong master key must fail the load, got api_key_len={}",
+            cfg.api_key.len()
         ),
     }
 }

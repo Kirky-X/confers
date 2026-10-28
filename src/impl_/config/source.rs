@@ -1673,7 +1673,11 @@ mod tests {
             .expect("db.password present");
         assert!(
             matches!(&password, ConfigValue::String(s) if s.contains("s3cret-content")),
-            "file content must become the value: {password:?}"
+            "file content must become the value (len={})",
+            match &password {
+                ConfigValue::String(s) => s.len(),
+                _ => 0,
+            }
         );
         let _: Option<Arc<str>> = None;
     }
