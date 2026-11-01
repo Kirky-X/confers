@@ -94,3 +94,6 @@ reviews/
 # codenexus 工具索引缓存
 .codenexus/
 fuzz/corpus/
+
+# ZCode 工作区配置（agents/agents-catalog/rules 为指向工作区根的软链）
+.zcode/
