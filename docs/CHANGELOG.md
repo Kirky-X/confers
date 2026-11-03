@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **文件监听建立竞态（R-watch-008）**：`FsWatcher::new()` / `MultiFsWatcher::new()` 此前立即返回，OS 级 watch 由后台线程稍后建立——调用方在 `new()` 返回后立刻写入文件，该事件会**永久丢失**（macOS FSEvents 对流启动前的变化不补报；单 watcher 顺序场景即可复现，并发下丢失面扩大；fluxgate 热更新测试的并发失败曾被误判为"kqueue 平台缺陷"，实为本库缺陷）。现在 watch 建立同步完成于构造函数返回之前：`Ok` 返回即监听生效，此后立刻的修改必然可达；建立失败改为构造函数直接返回 `Err`（`ConfigError::WatcherError`），不再产出"看似存活实则失聪"的 watcher。建立后的失败语义不变（`is_running()` 转为 `false`、`recv()` 返回 `None`）。回归测试：`tests/watcher/establishment.rs`（单 watcher 立即写 + 9 watcher 并发立即写）
+
 ## [0.6.0-rc.12] - 2026-10-25
 ### 变更（破坏面声明）
 

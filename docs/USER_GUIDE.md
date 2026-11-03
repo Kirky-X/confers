@@ -622,6 +622,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 > **注意**：旧版 `ConfigBuilder::build_with_watcher()` 方法自 v0.3.0 起已弃用。它只构建初始配置，并会静默丢弃文件变更事件。如需真正的热重载支持，请如上所示直接使用 `FsWatcher` / `MultiFsWatcher`。
 
+> **生效保证**：`FsWatcher::new()` / `MultiFsWatcher::new()` 返回 `Ok` 即代表监听已生效——返回后**立刻**对文件的修改一定会收到事件，无需等待；无法建立监听时构造函数直接返回 `Err`，不会出现"看似存活实则收不到事件"的 watcher。监听建立之后发生的失败（如监听目录被删）仍经 `is_running()` 转为 `false`、`recv()` 返回 `None` 上报。
+
 #### 🐦 金丝雀发布编排（canary 特性）
 
 跨多实例的分批 rollout 编排（`canary` = `change-stream` + `progressive-reload`）：每实例的 `ProgressiveReloader` 把 canary 阶段转换发布到 `ChangeStream`，`CanaryOrchestrator` 在消费侧按 `RolloutPlan` 分批收集 `committed` 事件、批次健康检查（复用 `HealthStatus` 三态，仅 Critical 触发回滚），以 `canary.orchestrator` 指令事件（advance/rollback/completed）发布决策，并经 `MeshWeightPublisher` 把流量切分比例下发给服务网格（Envoy/Istio 配置样例见 docs/CANARY_ORCHESTRATION.md）。

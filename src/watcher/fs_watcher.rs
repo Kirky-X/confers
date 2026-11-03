@@ -17,6 +17,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache};
+
 /// Default recv timeout in milliseconds for polling the debouncer.
 const DEFAULT_RECV_TIMEOUT_MS: u64 = 50;
 
@@ -80,6 +82,30 @@ fn reported_event_path(event_path: &Path, canonical_root: &Path, reported_root: 
     }
 }
 
+/// An OS-level watch that is already live.
+///
+/// Produced by [`FsWatcher::establish_watch`]: from the moment the value
+/// exists, every change under the watch target is guaranteed observable by
+/// the backend. This closes the R-watch-008 race where the watch was only
+/// established later inside the watcher thread, silently dropping a change
+/// written right after [`FsWatcher::new`].
+struct EstablishedWatch {
+    debouncer: Debouncer<super::notify_normalize::CreateAsModifyWatcher, RecommendedCache>,
+    /// Receiver of debounced backend event batches.
+    bridge_rx: std::sync::mpsc::Receiver<DebounceEventResult>,
+    /// Directory actually watched: the file's parent for file targets.
+    watch_target: PathBuf,
+    /// Exact-path filter for file targets, `None` for directory targets.
+    path_filter: Option<PathBuf>,
+    /// Canonical watch root: event paths are canonical and are re-mapped
+    /// onto the caller's path form through `reported`.
+    absolute: PathBuf,
+    /// Path form the consumer gets back (caller's path, made absolute).
+    reported: PathBuf,
+    /// Outlet throttle for file targets (R-watch-007).
+    outlet_debouncer: Option<super::AdaptiveDebouncer>,
+}
+
 /// File system watcher with debouncing.
 ///
 /// This watcher monitors file changes and emits debounced events
@@ -95,10 +121,11 @@ pub struct FsWatcher {
     watcher_thread: Option<std::thread::JoinHandle<()>>,
     /// Running flag
     running: Arc<std::sync::atomic::AtomicBool>,
-    /// Set by the watcher thread when it cannot establish the watch
-    /// (debouncer creation or `watch` failure). Makes the failure
-    /// observable through [`FsWatcher::is_running`] instead of the thread
-    /// exiting silently.
+    /// Set by the watcher thread when it fails mid-run (parent directory
+    /// removed, bridge channel died). Makes the failure observable through
+    /// [`FsWatcher::is_running`] instead of the thread exiting silently.
+    /// Establishment failures are not folded in here any more: the
+    /// constructor returns `Err` for them (R-watch-008).
     failed: Arc<std::sync::atomic::AtomicBool>,
     /// Count of change events dropped because the event channel was full
     /// (slow consumer). Observable through [`FsWatcher::dropped_events`].
@@ -150,14 +177,23 @@ impl FsWatcher {
     /// Lower values mean faster response but higher CPU usage.
     /// Higher values mean slower response but lower CPU usage.
     ///
-    /// # Watch-thread failures
+    /// # Establishment contract (R-watch-008)
     ///
-    /// The path is verified to exist before the watcher thread starts, but
-    /// the OS may still refuse to establish the watch (e.g. permission
-    /// changes or inotify watch limits). In that case the thread logs the
-    /// error, records the failure and exits:
-    /// [`is_running()`](Self::is_running) then reports `false` and
-    /// [`recv()`](Self::recv) returns `None` instead of blocking forever.
+    /// The OS-level watch is established synchronously before this
+    /// constructor returns: after an `Ok(_)` return the watch is live, so a
+    /// change written by the caller at that instant is guaranteed
+    /// observable. Establishment failure (path gone, debouncer creation or
+    /// backend watch refused) is returned as `Err` — no deaf watcher is
+    /// handed out. Failures *after* establishment keep the observable
+    /// failure protocol: [`is_running()`](Self::is_running) reports `false`
+    /// and [`recv()`](Self::recv) returns `None` instead of blocking
+    /// forever.
+    ///
+    /// Residual limitation: the canonicalize → backend-watch handshake is
+    /// not atomic against symlink re-pointing (requires a local attacker
+    /// with a writable parent directory). This fix narrowed the
+    /// pre-existing window; eliminating it would need an inode re-check
+    /// after establishment.
     pub async fn with_recv_timeout(
         path: impl AsRef<Path>,
         debounce_ms: u64,
@@ -172,22 +208,48 @@ impl FsWatcher {
             });
         }
 
+        // Establish the OS-level watch before this constructor returns.
+        // Establishing inside the spawned thread left a scheduling-dependent
+        // window in which a change written by the caller right after `new()`
+        // happened before the backend watch existed and was silently lost
+        // forever (R-watch-008). After this call the watch is live: the
+        // first change the caller issues is observable. The blocking
+        // backend handshake runs on the blocking pool so the async worker
+        // is not stalled (up to a few ms per watcher, more on network
+        // mounts).
+        let path_for_establish = Arc::clone(&watch_path);
+        let watch = tokio::task::spawn_blocking(move || {
+            Self::establish_watch(path_for_establish.as_path(), debounce_ms)
+        })
+        .await
+        .map_err(|e| ConfigError::WatcherError {
+            // No panic payload in the message: the payload can carry
+            // arbitrary variable content (CWE-209); the boolean split keeps
+            // the two failure modes distinguishable without it.
+            message: if e.is_panic() {
+                "file watcher establishment task panicked".to_string()
+            } else {
+                "file watcher establishment task was cancelled".to_string()
+            },
+            path: Some(watch_path.as_ref().clone()),
+            recoverable: false,
+        })??;
+
         let (tx, rx) = mpsc::channel(100);
         let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let path_clone = Arc::clone(&watch_path);
         let running_clone = Arc::clone(&running);
         let failed_clone = Arc::clone(&failed);
         let dropped_clone = Arc::clone(&dropped);
         let tx_for_thread = SenderStore::clone(&tx_store);
 
-        // Spawn the watcher in a dedicated thread (not tokio task)
+        // Spawn the watcher in a dedicated thread (not tokio task); it only
+        // forwards already-established watch events.
         let watcher_thread = std::thread::spawn(move || {
-            Self::run_watcher(
-                &path_clone,
-                debounce_ms,
+            Self::forward_loop(
+                watch,
                 recv_timeout_ms,
                 tx_for_thread,
                 running_clone,
@@ -210,8 +272,8 @@ impl FsWatcher {
     /// Receive the next file change event.
     ///
     /// Returns `Some(path)` when a file change is detected, `None` if the
-    /// watcher is stopped or has failed to establish the watch (in which
-    /// case [`is_running()`](Self::is_running) also reports `false`).
+    /// watcher is stopped or has failed mid-run (in which case
+    /// [`is_running()`](Self::is_running) also reports `false`).
     ///
     /// The `is_running()` check is a fast path only: if the watcher thread
     /// fails while a `recv()` call is already awaiting, the thread closes
@@ -267,9 +329,9 @@ impl FsWatcher {
     /// Check if the watcher is running.
     ///
     /// Returns `false` after [`stop()`](Self::stop) and also when the
-    /// watcher thread exited early because the debouncer could not be
-    /// created or the path could not be watched (see
-    /// [`with_recv_timeout`](Self::with_recv_timeout)).
+    /// watcher thread failed mid-run (parent directory removed, bridge
+    /// channel died). Establishment failures are not part of this state:
+    /// the constructor returns `Err` for them (R-watch-008).
     pub fn is_running(&self) -> bool {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
@@ -286,25 +348,17 @@ impl FsWatcher {
         self.dropped.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Internal watcher function that runs in a dedicated thread.
+    /// Establish the OS-level watch synchronously on the calling thread.
     ///
-    /// `tx_store` is the shared sender store: on any failure this thread
-    /// empties it and drops its own sender clone on return, closing the
-    /// channel so a concurrently awaiting `recv()` returns `None` instead of
-    /// hanging (see `SenderStore`).
-    fn run_watcher(
-        path: &Path,
-        debounce_ms: u64,
-        recv_timeout_ms: u64,
-        tx_store: SenderStore,
-        running: Arc<std::sync::atomic::AtomicBool>,
-        failed: Arc<std::sync::atomic::AtomicBool>,
-        dropped: Arc<std::sync::atomic::AtomicU64>,
-    ) {
-        use notify_debouncer_full::{
-            DebounceEventResult, RecommendedCache, new_debouncer_opt,
-            notify::{Config, EventKind, RecursiveMode},
-        };
+    /// Blocks briefly (on macOS this spans `FSEventStreamStart`, typically
+    /// well under a millisecond) so that after this call the watch is live:
+    /// every change issued afterwards is guaranteed observable
+    /// (R-watch-008). Every establishment failure is returned as an error
+    /// instead of handing out a watcher that would silently never deliver
+    /// events.
+    fn establish_watch(path: &Path, debounce_ms: u64) -> ConfigResult<EstablishedWatch> {
+        use notify_debouncer_full::new_debouncer_opt;
+        use notify_debouncer_full::notify::{Config, RecursiveMode};
 
         // Watch strategy: a file target is watched through its PARENT
         // directory with an exact-path filter, mirroring the proven
@@ -354,7 +408,7 @@ impl FsWatcher {
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        let mut debouncer = match new_debouncer_opt::<
+        let mut debouncer = new_debouncer_opt::<
             _,
             super::notify_normalize::CreateAsModifyWatcher,
             RecommendedCache,
@@ -366,39 +420,83 @@ impl FsWatcher {
             },
             RecommendedCache::new(),
             Config::default(),
-        ) {
-            Ok(d) => d,
-            Err(e) => {
-                // Make the failure observable instead of exiting
-                // silently: `is_running()` reports false and closing the
-                // sender store lets a pending `recv()` return `None`.
-                log::error!(
+        )
+        .map_err(|e| {
+            log::error!(
+                "failed to create file watcher debouncer for {}: {e}",
+                path.display()
+            );
+            ConfigError::WatcherError {
+                message: format!(
                     "failed to create file watcher debouncer for {}: {e}",
                     path.display()
-                );
-                failed.store(true, std::sync::atomic::Ordering::SeqCst);
-                running.store(false, std::sync::atomic::Ordering::SeqCst);
-                close_sender(&tx_store);
-                return;
+                ),
+                path: Some(path.to_path_buf()),
+                recoverable: false,
             }
-        };
+        })?;
 
-        if let Err(e) = debouncer.watch(&watch_target, RecursiveMode::Recursive) {
-            log::error!(
-                "{}",
-                tr_args(
-                    "log-fs-watch-failed",
-                    &[
-                        ("path", watch_target.display().to_string()),
-                        ("message", e.to_string()),
-                    ]
-                )
-            );
-            failed.store(true, std::sync::atomic::Ordering::SeqCst);
-            running.store(false, std::sync::atomic::Ordering::SeqCst);
-            close_sender(&tx_store);
-            return;
-        }
+        debouncer
+            .watch(&watch_target, RecursiveMode::Recursive)
+            .map_err(|e| {
+                log::error!(
+                    "{}",
+                    tr_args(
+                        "log-fs-watch-failed",
+                        &[
+                            ("path", watch_target.display().to_string()),
+                            ("message", e.to_string()),
+                        ]
+                    )
+                );
+                // The error surfaces to the caller in the caller's own path
+                // form: the canonical target would expose the symlink
+                // resolution (e.g. `/etc/app` → `/data/app-v2`) beyond the
+                // internal log, where it stays for debugging.
+                ConfigError::WatcherError {
+                    message: format!("failed to watch {}: {e}", path.display()),
+                    path: Some(path.to_path_buf()),
+                    recoverable: false,
+                }
+            })?;
+
+        Ok(EstablishedWatch {
+            debouncer,
+            bridge_rx,
+            watch_target,
+            path_filter,
+            absolute,
+            reported,
+            outlet_debouncer,
+        })
+    }
+
+    /// Forward debounced events from an established watch to the consumer
+    /// channel until the watcher is stopped or fails observably.
+    ///
+    /// `tx_store` is the shared sender store: on any failure this thread
+    /// empties it and drops its own sender clone on return, closing the
+    /// channel so a concurrently awaiting `recv()` returns `None` instead of
+    /// hanging (see `SenderStore`).
+    fn forward_loop(
+        watch: EstablishedWatch,
+        recv_timeout_ms: u64,
+        tx_store: SenderStore,
+        running: Arc<std::sync::atomic::AtomicBool>,
+        failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
+    ) {
+        use notify_debouncer_full::notify::EventKind;
+
+        let EstablishedWatch {
+            debouncer,
+            bridge_rx,
+            watch_target,
+            path_filter,
+            absolute,
+            reported,
+            outlet_debouncer,
+        } = watch;
 
         let tx = {
             let guard = tx_store
@@ -407,13 +505,13 @@ impl FsWatcher {
             guard.as_ref().map(|s| s.clone())
         };
         let Some(tx) = tx else {
-            // `stop()` closed the store before the watch was established.
+            // `stop()` closed the store before the forwarding loop started.
             drop(debouncer);
             return;
         };
         // The thread keeps its `tx_store` reference for the whole run: a
         // mid-run bridge failure must still be able to close the outgoing
-        // channel (same as `MultiFsWatcher::run_watcher`).
+        // channel (same as `MultiFsWatcher`'s forwarding loop).
 
         let recv_timeout = Duration::from_millis(recv_timeout_ms);
 
@@ -574,6 +672,45 @@ impl FsWatcher {
         // Explicitly stop the debouncer
         drop(debouncer);
     }
+
+    /// Thread body used by the thread-level regression tests: establish
+    /// with failures folded into the shared flags (the pre-R-watch-008
+    /// protocol, where a failed establishment was only observable through
+    /// the flags) and then run the forwarding loop.
+    #[cfg(test)]
+    fn run_watcher(
+        path: &Path,
+        debounce_ms: u64,
+        recv_timeout_ms: u64,
+        tx_store: SenderStore,
+        running: Arc<std::sync::atomic::AtomicBool>,
+        failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
+    ) {
+        match Self::establish_watch(path, debounce_ms) {
+            Ok(watch) => {
+                Self::forward_loop(watch, recv_timeout_ms, tx_store, running, failed, dropped);
+            }
+            Err(e) => {
+                log::error!("failed to establish watch for {}: {e}", path.display());
+                failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                running.store(false, std::sync::atomic::Ordering::SeqCst);
+                close_sender(&tx_store);
+            }
+        }
+    }
+}
+
+/// An OS-level watch over multiple roots that is already live (see
+/// [`EstablishedWatch`] for the R-watch-008 rationale).
+struct MultiEstablishedWatch {
+    debouncer: Debouncer<super::notify_normalize::CreateAsModifyWatcher, RecommendedCache>,
+    /// Receiver of debounced backend event batches.
+    bridge_rx: std::sync::mpsc::Receiver<DebounceEventResult>,
+    /// Watch roots: deduplicated parents of file targets and dir targets.
+    targets: HashSet<PathBuf>,
+    /// Canonical event path → consumer-reported path.
+    report_map: HashMap<PathBuf, PathBuf>,
 }
 
 /// Multi-file watcher that watches multiple paths.
@@ -590,10 +727,11 @@ pub struct MultiFsWatcher {
     watcher_thread: Option<std::thread::JoinHandle<()>>,
     /// Running flag
     running: Arc<std::sync::atomic::AtomicBool>,
-    /// Set by the watcher thread when it cannot establish any watch
-    /// (debouncer creation failure, or every path failed to watch). Makes
-    /// the failure observable through [`MultiFsWatcher::is_running`] instead
-    /// of the thread exiting silently.
+    /// Set by the watcher thread when it fails mid-run (a watch root
+    /// disappeared, bridge channel died). Makes the failure observable
+    /// through [`MultiFsWatcher::is_running`] instead of the thread exiting
+    /// silently. Establishment failures are not folded in here any more:
+    /// the constructor returns `Err` for them (R-watch-008).
     failed: Arc<std::sync::atomic::AtomicBool>,
     /// Count of change events dropped because the event channel was full
     /// (slow consumer). Observable through [`MultiFsWatcher::dropped_events`].
@@ -648,14 +786,24 @@ impl MultiFsWatcher {
     /// Lower values mean faster response but higher CPU usage.
     /// Higher values mean slower response but lower CPU usage.
     ///
-    /// # Watch-thread failures
+    /// # Establishment contract (R-watch-008)
     ///
-    /// Individual paths that cannot be watched are logged and skipped; the
-    /// watcher keeps running for the remaining paths. If the debouncer
-    /// cannot be created or no path can be watched at all, the thread
-    /// records the failure and exits: [`is_running()`](Self::is_running)
-    /// then reports `false` and [`recv()`](Self::recv) returns `None`
-    /// instead of blocking forever.
+    /// All roots are established synchronously before this constructor
+    /// returns: after an `Ok(_)` return every accepted watch is live, so
+    /// changes written at that instant are guaranteed observable.
+    /// Individual paths that cannot be watched are logged and skipped; if
+    /// the debouncer cannot be created or no path can be watched at all,
+    /// the constructor returns `Err` instead of a deaf watcher. Skipped
+    /// roots are only observable through the warning logs — there is no
+    /// per-root query API. Failures *after* establishment keep the
+    /// observable failure protocol: [`is_running()`](Self::is_running)
+    /// reports `false` and [`recv()`](Self::recv) returns `None` instead of
+    /// blocking forever.
+    ///
+    /// Serial establishment costs roughly a millisecond per root (backend
+    /// handshake); the blocking handshake runs on tokio's blocking pool, so
+    /// async workers are not stalled. There is no built-in cap on the
+    /// number of roots; serial establishment cost grows linearly.
     pub async fn with_recv_timeout(
         paths: impl IntoIterator<Item = impl AsRef<Path>>,
         debounce_ms: u64,
@@ -684,6 +832,31 @@ impl MultiFsWatcher {
             }
         }
 
+        // Establish every root before this constructor returns: after this
+        // call the accepted watches are live, so a change written by the
+        // caller right away is observable (R-watch-008). Establishing inside
+        // the spawned thread used to leave a scheduling-dependent window in
+        // which an early change was silently lost. The serial backend
+        // handshake (~1 ms per root) runs on the blocking pool so the async
+        // worker is not stalled.
+        let paths_for_establish = watch_paths.clone();
+        let watch = tokio::task::spawn_blocking(move || {
+            Self::establish_watch_multi(&paths_for_establish, debounce_ms)
+        })
+        .await
+        .map_err(|e| ConfigError::WatcherError {
+            // No panic payload in the message: the payload can carry
+            // arbitrary variable content (CWE-209); the boolean split keeps
+            // the two failure modes distinguishable without it.
+            message: if e.is_panic() {
+                "file watcher establishment task panicked".to_string()
+            } else {
+                "file watcher establishment task was cancelled".to_string()
+            },
+            path: None,
+            recoverable: false,
+        })??;
+
         let (tx, rx) = mpsc::channel(100);
         let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -693,14 +866,13 @@ impl MultiFsWatcher {
         let running_clone = Arc::clone(&running);
         let failed_clone = Arc::clone(&failed);
         let dropped_clone = Arc::clone(&dropped);
-        let paths_for_thread = Arc::clone(&paths_arc);
         let tx_for_thread = SenderStore::clone(&tx_store);
 
-        // Spawn the watcher in a dedicated thread (not tokio task)
+        // Spawn the watcher in a dedicated thread (not tokio task); it only
+        // forwards already-established watch events.
         let watcher_thread = std::thread::spawn(move || {
-            Self::run_watcher(
-                &paths_for_thread,
-                debounce_ms,
+            Self::forward_loop_multi(
+                watch,
                 recv_timeout_ms,
                 tx_for_thread,
                 running_clone,
@@ -723,8 +895,8 @@ impl MultiFsWatcher {
     /// Receive the next file change event.
     ///
     /// Returns `Some(path)` when a file change is detected, `None` if the
-    /// watcher is stopped or has failed to establish any watch (in which
-    /// case [`is_running()`](Self::is_running) also reports `false`).
+    /// watcher is stopped or has failed mid-run (in which case
+    /// [`is_running()`](Self::is_running) also reports `false`).
     ///
     /// The `is_running()` check is a fast path only: if the watcher thread
     /// fails while a `recv()` call is already awaiting, the thread closes
@@ -772,9 +944,9 @@ impl MultiFsWatcher {
     /// Check if the watcher is running.
     ///
     /// Returns `false` after [`stop()`](Self::stop) and also when the
-    /// watcher thread exited early because the debouncer could not be
-    /// created or no path could be watched (see
-    /// [`with_recv_timeout`](Self::with_recv_timeout)).
+    /// watcher thread failed mid-run (a watch root disappeared, bridge
+    /// channel died). Establishment failures are not part of this state:
+    /// the constructor returns `Err` for them (R-watch-008).
     pub fn is_running(&self) -> bool {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
@@ -791,30 +963,22 @@ impl MultiFsWatcher {
         self.dropped.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Internal watcher function that runs in a dedicated thread.
-    ///
-    /// `tx_store` is the shared sender store: on any failure this thread
-    /// empties it and drops its own sender clone on return, closing the
-    /// channel so a concurrently awaiting `recv()` returns `None` instead of
-    /// hanging (see `SenderStore`).
-    fn run_watcher(
+    /// Establish the OS-level watches for all roots synchronously on the
+    /// calling thread (R-watch-008): after this call every accepted watch is
+    /// live. Individual unwatchable roots are logged and skipped; if nothing
+    /// can be watched, an error is returned instead of a watcher that would
+    /// silently never deliver events.
+    fn establish_watch_multi(
         paths: &HashSet<PathBuf>,
         debounce_ms: u64,
-        recv_timeout_ms: u64,
-        tx_store: SenderStore,
-        running: Arc<std::sync::atomic::AtomicBool>,
-        failed: Arc<std::sync::atomic::AtomicBool>,
-        dropped: Arc<std::sync::atomic::AtomicU64>,
-    ) {
-        use notify_debouncer_full::{
-            DebounceEventResult, RecommendedCache, new_debouncer_opt,
-            notify::{Config, EventKind, RecursiveMode},
-        };
+    ) -> ConfigResult<MultiEstablishedWatch> {
+        use notify_debouncer_full::new_debouncer_opt;
+        use notify_debouncer_full::notify::{Config, RecursiveMode};
 
         // Create a bridge channel for the debouncer callback
         let (bridge_tx, bridge_rx) = std::sync::mpsc::channel::<DebounceEventResult>();
 
-        let mut debouncer = match new_debouncer_opt::<
+        let mut debouncer = new_debouncer_opt::<
             _,
             super::notify_normalize::CreateAsModifyWatcher,
             RecommendedCache,
@@ -826,25 +990,21 @@ impl MultiFsWatcher {
             },
             RecommendedCache::new(),
             Config::default(),
-        ) {
-            Ok(d) => d,
-            Err(e) => {
-                // Make the failure observable instead of exiting
-                // silently: `is_running()` reports false and closing the
-                // sender store lets a pending `recv()` return `None`.
-                log::error!(
-                    "{}",
-                    tr_args(
-                        "log-fs-watcher-debouncer-create-failed",
-                        &[("message", e.to_string())]
-                    )
-                );
-                failed.store(true, std::sync::atomic::Ordering::SeqCst);
-                running.store(false, std::sync::atomic::Ordering::SeqCst);
-                close_sender(&tx_store);
-                return;
+        )
+        .map_err(|e| {
+            log::error!(
+                "{}",
+                tr_args(
+                    "log-fs-watcher-debouncer-create-failed",
+                    &[("message", e.to_string())]
+                )
+            );
+            ConfigError::WatcherError {
+                message: format!("failed to create file watcher debouncer: {e}"),
+                path: None,
+                recoverable: false,
             }
-        };
+        })?;
 
         // The event filter must use the same path form the watcher reports.
         // notify canonicalizes its watch root, so event paths are canonical;
@@ -897,16 +1057,48 @@ impl MultiFsWatcher {
         }
 
         if !watched_any {
-            // Nothing is being watched: the thread would spin without ever
-            // producing an event. Record the failure so `is_running()`
-            // reports false, and close the channel so a pending `recv()`
-            // returns `None`.
+            // Nothing is being watched: the loop would spin without ever
+            // producing an event. Fail the construction instead of handing
+            // out a watcher that can never deliver (R-watch-008).
             log::error!("{}", tr("log-fs-watcher-no-path-watched"));
-            failed.store(true, std::sync::atomic::Ordering::SeqCst);
-            running.store(false, std::sync::atomic::Ordering::SeqCst);
-            close_sender(&tx_store);
-            return;
+            return Err(ConfigError::WatcherError {
+                message: t_simple("log-fs-watcher-no-path-watched"),
+                path: None,
+                recoverable: false,
+            });
         }
+
+        Ok(MultiEstablishedWatch {
+            debouncer,
+            bridge_rx,
+            targets,
+            report_map,
+        })
+    }
+
+    /// Forward debounced events from the established watches to the consumer
+    /// channel until the watcher is stopped or fails observably.
+    ///
+    /// `tx_store` is the shared sender store: on any failure this thread
+    /// empties it and drops its own sender clone on return, closing the
+    /// channel so a concurrently awaiting `recv()` returns `None` instead of
+    /// hanging (see `SenderStore`).
+    fn forward_loop_multi(
+        watch: MultiEstablishedWatch,
+        recv_timeout_ms: u64,
+        tx_store: SenderStore,
+        running: Arc<std::sync::atomic::AtomicBool>,
+        failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
+    ) {
+        use notify_debouncer_full::notify::EventKind;
+
+        let MultiEstablishedWatch {
+            debouncer,
+            bridge_rx,
+            targets,
+            report_map,
+        } = watch;
 
         let tx = {
             let guard = tx_store
@@ -915,7 +1107,7 @@ impl MultiFsWatcher {
             guard.as_ref().map(|s| s.clone())
         };
         let Some(tx) = tx else {
-            // `stop()` closed the store before the watch was established.
+            // `stop()` closed the store before the forwarding loop started.
             drop(debouncer);
             return;
         };
@@ -1021,6 +1213,40 @@ impl MultiFsWatcher {
 
         // Explicitly stop the debouncer
         drop(debouncer);
+    }
+
+    /// Thread body used by the thread-level regression tests: establish
+    /// with failures folded into the shared flags (the pre-R-watch-008
+    /// protocol, where a failed establishment was only observable through
+    /// the flags) and then run the forwarding loop.
+    #[cfg(test)]
+    fn run_watcher(
+        paths: &HashSet<PathBuf>,
+        debounce_ms: u64,
+        recv_timeout_ms: u64,
+        tx_store: SenderStore,
+        running: Arc<std::sync::atomic::AtomicBool>,
+        failed: Arc<std::sync::atomic::AtomicBool>,
+        dropped: Arc<std::sync::atomic::AtomicU64>,
+    ) {
+        match Self::establish_watch_multi(paths, debounce_ms) {
+            Ok(watch) => {
+                Self::forward_loop_multi(
+                    watch,
+                    recv_timeout_ms,
+                    tx_store,
+                    running,
+                    failed,
+                    dropped,
+                );
+            }
+            Err(e) => {
+                log::error!("failed to establish multi watch: {e}");
+                failed.store(true, std::sync::atomic::Ordering::SeqCst);
+                running.store(false, std::sync::atomic::Ordering::SeqCst);
+                close_sender(&tx_store);
+            }
+        }
     }
 }
 
@@ -1258,89 +1484,33 @@ mod tests {
         watcher.stop();
     }
 
-    fn assert_thread_reported_failure(
-        running: &std::sync::atomic::AtomicBool,
-        failed: &std::sync::atomic::AtomicBool,
-        rx: &mut mpsc::Receiver<PathBuf>,
-    ) {
-        assert!(
-            failed.load(std::sync::atomic::Ordering::SeqCst),
-            "watcher thread must record the failure instead of exiting silently"
-        );
-        assert!(
-            !running.load(std::sync::atomic::Ordering::SeqCst),
-            "watcher thread must report itself as stopped after a failure"
-        );
-        // The thread dropped its sender on the failure path, so the channel
-        // is disconnected and `recv()` can never hang on it.
-        assert!(matches!(
-            rx.try_recv(),
-            Err(mpsc::error::TryRecvError::Disconnected)
-        ));
-    }
-
-    /// Regression test for issue #456 (FsWatcher): a watcher thread that
-    /// cannot establish the watch must surface the failure through the
-    /// shared flags instead of exiting silently. The public constructors
-    /// reject non-existent paths up front, so the thread body is exercised
-    /// directly with a path `debouncer.watch` must reject.
+    /// Regression test for issue #456 (FsWatcher): a path that cannot be
+    /// watched must fail establishment explicitly instead of producing a
+    /// deaf watcher. Since R-watch-008 the constructor surfaces this as
+    /// `Err`; the public path-not-found branch is covered by
+    /// `tests/watcher/establishment.rs`, so here the establishment helper
+    /// is exercised directly with an existing-but-unwatchable style target
+    /// (`debouncer.watch` must reject).
     #[test]
-    fn fs_watcher_thread_marks_failed_when_watch_cannot_be_established() {
-        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (tx, mut rx) = mpsc::channel::<PathBuf>(1);
-        let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
-
-        let handle = {
-            let running = Arc::clone(&running);
-            let failed = Arc::clone(&failed);
-            std::thread::spawn(move || {
-                FsWatcher::run_watcher(
-                    Path::new("/nonexistent/confers-watch-target.toml"),
-                    50,
-                    50,
-                    tx_store,
-                    running,
-                    failed,
-                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                );
-            })
-        };
-        handle.join().unwrap();
-
-        assert_thread_reported_failure(&running, &failed, &mut rx);
+    fn establish_watch_fails_for_unwatchable_path() {
+        let error =
+            FsWatcher::establish_watch(Path::new("/nonexistent/confers-watch-target.toml"), 50)
+                .err()
+                .expect("unwatchable path must fail establishment");
+        assert!(matches!(error, ConfigError::WatcherError { .. }));
     }
 
     /// Regression test for issue #456 (MultiFsWatcher): when no path can be
-    /// watched at all, the failure must be observable through the shared
-    /// flags rather than the thread spinning without ever producing events.
+    /// watched at all, the constructor must fail explicitly instead of
+    /// handing out a watcher that can never deliver events.
     #[test]
-    fn multi_fs_watcher_thread_marks_failed_when_no_path_is_watchable() {
-        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (tx, mut rx) = mpsc::channel::<PathBuf>(1);
-        let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
+    fn establish_watch_multi_fails_when_no_path_is_watchable() {
         let paths: HashSet<PathBuf> =
             [PathBuf::from("/nonexistent/confers-watch-target.toml")].into();
-
-        let handle = {
-            let running = Arc::clone(&running);
-            let failed = Arc::clone(&failed);
-            std::thread::spawn(move || {
-                MultiFsWatcher::run_watcher(
-                    &paths,
-                    50,
-                    50,
-                    tx_store,
-                    running,
-                    failed,
-                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                );
-            })
-        };
-        handle.join().unwrap();
-
-        assert_thread_reported_failure(&running, &failed, &mut rx);
+        let error = MultiFsWatcher::establish_watch_multi(&paths, 50)
+            .err()
+            .expect("unwatchable paths must fail establishment");
+        assert!(matches!(error, ConfigError::WatcherError { .. }));
     }
 
     /// `is_running()` and `recv()` must reflect an internally failed watcher
@@ -1378,17 +1548,26 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(600));
 
         drop(dir); // 删除父目录(tempdir 删除即整个目录树消失)
+        // 可观测 = 收到事件或通道关闭，二者任一即可：FSEvents 对被删根
+        // 目录可能投递其子文件(被监视文件)的 Remove 批次——转发为 Some
+        // 是正确行为；也可能不投递——此时经 Timeout 分支轮询到根消失，
+        // 关闭通道返回 None。静默失聪只有一个形态：3s 内既无事件、通道
+        // 也永远开着。
         let outcome = tokio::time::timeout(std::time::Duration::from_secs(3), watcher.recv()).await;
-        // 通道被关闭(Err/None)或事件流已终结 —— 绝不能是"仍在运行但
-        // 永远没有事件"的静默失聪状态。
         assert!(
-            outcome.is_err() || outcome.unwrap().is_none(),
-            "parent-dir removal must terminate the watch observably"
+            outcome.is_ok(),
+            "parent-dir removal must terminate the watch observably (recv hung for 3s)"
         );
-        assert!(
-            !watcher.is_running(),
-            "watcher must report not-running after parent removal"
-        );
+        // 无论先到的是事件还是 None，停机(failed)必须有界完成：Timeout
+        // 分支在 recv_timeout 节奏内轮询到根消失即标记失败并关闭通道。
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while watcher.is_running() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "watcher must report not-running after parent removal"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
     }
 
     #[tokio::test]
@@ -1433,32 +1612,16 @@ mod tests {
     }
 
     /// 相对路径的目标在 canonicalize 失败时走词法绝对化回退；父目录不存在
-    /// 则 watch 建立失败，失败必须可观测（不得静默失聪）。
+    /// 则 watch 建立失败——失败必须以 `Err` 显性化（不得静默失聪）。
     #[test]
-    fn fs_watcher_thread_reports_failure_for_relative_nonexistent_path() {
-        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (tx, mut rx) = mpsc::channel::<PathBuf>(1);
-        let tx_store: SenderStore = Arc::new(std::sync::Mutex::new(Some(tx)));
-
-        let handle = {
-            let running = Arc::clone(&running);
-            let failed = Arc::clone(&failed);
-            std::thread::spawn(move || {
-                FsWatcher::run_watcher(
-                    Path::new("confers-nonexistent-sub/confers-target.toml"),
-                    50,
-                    50,
-                    tx_store,
-                    running,
-                    failed,
-                    Arc::new(std::sync::atomic::AtomicU64::new(0)),
-                );
-            })
-        };
-        handle.join().unwrap();
-
-        assert_thread_reported_failure(&running, &failed, &mut rx);
+    fn establish_watch_fails_for_relative_nonexistent_path() {
+        let error = FsWatcher::establish_watch(
+            Path::new("confers-nonexistent-sub/confers-target.toml"),
+            50,
+        )
+        .err()
+        .expect("relative nonexistent path must fail establishment");
+        assert!(matches!(error, ConfigError::WatcherError { .. }));
     }
 
     /// 消费者退场（唯一接收端被丢弃）后事件投递必然 `Closed`：watcher
