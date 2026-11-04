@@ -13,6 +13,7 @@
 
 - **文件监听建立竞态（R-watch-008）**：`FsWatcher::new()` / `MultiFsWatcher::new()` 此前立即返回，OS 级 watch 由后台线程稍后建立——调用方在 `new()` 返回后立刻写入文件，该事件会**永久丢失**（macOS FSEvents 对流启动前的变化不补报；单 watcher 顺序场景即可复现，并发下丢失面扩大；fluxgate 热更新测试的并发失败曾被误判为"kqueue 平台缺陷"，实为本库缺陷）。现在 watch 建立同步完成于构造函数返回之前：`Ok` 返回即监听生效，此后立刻的修改必然可达；建立失败改为构造函数直接返回 `Err`（`ConfigError::WatcherError`），不再产出"看似存活实则失聪"的 watcher。建立后的失败语义不变（`is_running()` 转为 `false`、`recv()` 返回 `None`）。回归测试：`tests/watcher/establishment.rs`（单 watcher 立即写 + 9 watcher 并发立即写）
 - **测试诊断消息不再输出派生值**：`tests/e2e/gap_sec_e2e.rs` 中主密钥校验失败的 panic 文案去掉 `api_key` 字段长度输出（CodeQL `rust/cleartext-logging` 判定长度属敏感值派生信息，可作侧信道）。断言语义不变：`Ok` 分支仍 panic、`Err` 分支仍校验错误文案含 decrypt/encrypt/key
+- **监视不可读子目录的目录树现在会显式失败**：watch 建立同步化后，递归监视一棵含不可读子目录的目录树（如 Linux 上 `/tmp` 下的 `systemd-private-*`）会在构造时返回 `Err(ConfigError::WatcherError)`，而非此前的静默成功。这是「不再产出看似存活实则失聪的 watcher」的必然结果；受影响用法应改指向可读的具体子目录。CI 侧同一断言已改为使用独立临时目录，避免依赖宿主 `/tmp` 的可读性
 
 ### 依赖升级与特性裁剪（三方依赖升版 + 特性裁剪收口）
 

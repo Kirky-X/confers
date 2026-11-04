@@ -1541,9 +1541,14 @@ mod tests {
     /// instead of claiming it is alive and blocking forever.
     #[tokio::test]
     async fn failed_watcher_reports_not_running_and_recv_returns_none() {
-        let mut watcher = FsWatcher::with_recv_timeout(std::env::temp_dir(), 50, 50)
+        // A dedicated temp dir, not the system temp dir: recursive watch
+        // establishment fails on root-owned subdirectories (e.g. Linux CI's
+        // `/tmp/systemd-private-*`), which is a property of the host, not of
+        // the failure-observability contract under test.
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut watcher = FsWatcher::with_recv_timeout(dir.path(), 50, 50)
             .await
-            .expect("the system temp dir exists and is watchable");
+            .expect("a fresh temp dir is watchable");
         assert!(watcher.is_running());
 
         // Simulate the watcher thread recording an internal failure.
