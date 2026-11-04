@@ -351,11 +351,11 @@ cargo fuzz run parser
 
 </details>
 
-部分集成测试需要本地外部服务：总线组需要 NATS（CI 使用 `nats:2.10 -js` 容器），Redis（16379）/ etcd（2379）/ Consul（8500）组的集成测试同样需要对应服务；`docker-compose.test.yml` 一并提供了这四个服务（无服务时按端口守卫跳过）。
+部分集成测试需要本地外部服务：总线组需要 NATS（CI 使用 `nats:2.10 -js` 容器），Redis（16379）/ etcd（2379）/ Consul（8500）/ Nacos（8848）组的集成测试同样需要对应服务；`docker-compose.test.yml` 一并提供了这五个服务（无服务时按端口守卫跳过）。
 
 ### 📊 测试规模
 
-截至 v0.6.0-rc.10：单元测试 2415 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 782 个（`tests/`，66 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
+截至 v0.6.0-rc.12：单元测试 2433 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 784 个（`tests/`，67 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
 
 ---
 
@@ -452,8 +452,9 @@ cargo fuzz run parser
 
 | 版本 | 日期 | 要点 |
 |------|------|------|
-| 未发布（rc.6 之后） | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
-| 0.6.0-rc.10 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
+| 0.6.0-rc.10 | 2026-10-10 | 依赖升版与特性收窄：`etcd-client` 0.20→0.21、逐依赖显式特性最小化（async-nats/clap/futures/tracing 裁剪无使用点特性）；CI actions SHA pin 升级；`cargo audit` 无漏洞 |
+| 0.6.0-rc.7 | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
+| 0.6.0-rc.6 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
 | 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，基于 `fluent-bundle`/`unic-langid`）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
 | 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |
 | 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |

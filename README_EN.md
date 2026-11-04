@@ -352,11 +352,11 @@ cargo fuzz run parser
 
 </details>
 
-Some integration tests require local external services: the bus group needs NATS (CI uses a `nats:2.10 -js` container), and the Redis (16379) / etcd (2379) / Consul (8500) integration groups likewise need their services; `docker-compose.test.yml` provides all four (tests skip via port guards when a service is absent).
+Some integration tests require local external services: the bus group needs NATS (CI uses a `nats:2.10 -js` container), and the Redis (16379) / etcd (2379) / Consul (8500) / Nacos (8848) integration groups likewise need their services; `docker-compose.test.yml` provides all five (tests skip via port guards when a service is absent).
 
 ### 📊 Test Scale
 
-As of v0.6.0-rc.10: 2415 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 782 integration and E2E tests (`tests/`, 66 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
+As of v0.6.0-rc.12: 2433 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 784 integration and E2E tests (`tests/`, 67 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
 
 ---
 
@@ -453,8 +453,9 @@ For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (follo
 
 | Version | Date | Highlights |
 |------|------|------|
-| Unreleased (post-rc.6) | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
-| 0.6.0-rc.10 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
+| 0.6.0-rc.10 | 2026-10-10 | Dependency upgrades and feature trimming: `etcd-client` 0.20→0.21, per-dependency explicit feature minimization (unused features trimmed from async-nats/clap/futures/tracing); CI action SHA pins upgraded; `cargo audit` clean |
+| 0.6.0-rc.7 | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
+| 0.6.0-rc.6 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
 | 0.6.0-rc.5 | 2026-09-21 | in-house i18n facade (`src/i18n` catalog/locale, built on `fluent-bundle`/`unic-langid`); `keyring` / `cloud-kms` imply `encryption`; pre-commit gate and detect-secrets baseline; removed the `compact_str` direct dependency |
 | 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |
 | 0.6.0-rc.2 | 2026-09-07 | Refreshed 12+ 0.x dependencies (async-nats 0.50, chacha20poly1305 0.11, garde 0.23, and more); solidified the test pyramid by adding and registering 7 E2E suites |

@@ -1,8 +1,8 @@
 # 🧪 Confers 测试场景矩阵
 
-> 适用版本：confers **0.6.0-rc.10**（workspace，Rust 1.97.1 / edition 2024）
+> 适用版本：confers **0.6.0-rc.12**（workspace，Rust 1.97.1 / edition 2024）
 > 用途：7 仓库统一 E2E 验收工程的第一步：先穷举全部验收场景，后续按本文档逐条固化为 `tests/e2e/` 下的 E2E 测试。
-> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 92 个 `#[cfg(test)]` 模块、`examples/` 22 个示例、`docker-compose.test.yml`。
+> 编写依据（只读核对）：`Cargo.toml [features]`、`src/lib.rs` 导出面、`src/cli/mod.rs` 子命令、`macros/src/parse.rs` 属性表、`tests/{core,security,remote,watcher,cli}/`、src 内 98 个 `#[cfg(test)]` 模块、`examples/` 22 个示例、`docker-compose.test.yml`。
 > 所有引用的既有测试名均经 `grep` 核实存在。
 
 ## 📋 目录
@@ -53,7 +53,7 @@
 - [5. 执行计划](#5-执行计划)
 -   [5.1 层级与命令](#51-层级与命令)
 -   [5.1 层级与命令](#51-层级与命令)
--   [5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）](#52-examples-运行清单22-个cargo-run--p-confers-examples---bin-name依赖-examples-crate-默认-featuresfull)
+-   [5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，confers 依赖固定 `features=["full"]`）](#52-examples-运行清单22-个cargo-run--p-confers-examples---bin-nameconfers-依赖固定-featuresfull)
 -   [5.3 场景 ID → E2E 文件映射汇总](#53-场景-id--e2e-文件映射汇总)
 -   [5.4 建议执行顺序](#54-建议执行顺序)
 -   [5.4 建议执行顺序](#54-建议执行顺序)
@@ -72,7 +72,7 @@
 
 ### 重要发现（编写时盘点得出）
 
-1. **【已完成】死文件问题已解决**：`tests/core/error.rs`（42 个测试）现已在 `tests/core/mod.rs` 注册（`mod error;`），随 `cargo test --test core` 正常执行；与 `tests/security/encryption.rs` 内容重复的 `tests/core/encryption.rs` 已删除。`tests/core/mod.rs` 现注册 13 个测试子模块（context/coverage/derive/dynamic/env_types/error/load/merge/migration/modules/nested_deserialize/progressive/toggle）+ common。本文档正文中对 `tests/core/error.rs` 的引用均按已注册状态理解。
+1. **【已完成】死文件问题已解决**：`tests/core/error.rs`（42 个测试）现已在 `tests/core/mod.rs` 注册（`mod error;`），随 `cargo test --test core` 正常执行；与 `tests/security/encryption.rs` 内容重复的 `tests/core/encryption.rs` 已删除。`tests/core/mod.rs` 现注册 14 个测试子模块（context/coverage/derive/dynamic/env_types/error/load/merge/migration/modules/nested_deserialize/progressive/snapshot_extra/toggle，其中 snapshot_extra 由 `cfg(feature = "snapshot")` 门控）+ common。本文档正文中对 `tests/core/error.rs` 的引用均按已注册状态理解。
 2. `tests/remote/remote.rs` 内含与 `tests/remote/etcd.rs`、`tests/remote/consul.rs` 重复的 source 测试（两处均编译执行）。
 3. `Cargo.toml` 声明 `autotests = false`，新增 E2E 集成测试必须**显式添加 `[[test]]` 段**并按需声明 `required-features`。
 4. 空文件 `tests/core/load.rs::test_load_empty_file` 等已确认：空文件解析为空 Map 而非错误。
@@ -608,8 +608,8 @@
 | ID | 场景描述 | 类型 | 涉及 feature | 依赖服务 | 既有覆盖 | E2E 落点 |
 |----|---------|------|-------------|---------|---------|---------|
 | PRS-01 | `--no-default-features`（仅 core）全库编译 + core 单测通过 | 边界 | — | 无 | CI 部分覆盖→需固化脚本 | tests/e2e/presets_e2e.rs（编译门禁） |
-| PRS-02 | `--features minimal`（env+json）编译通过 | 边界 | minimal | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
-| PRS-03 | `--features recommended`（toml,env,validation,json,security-rules）编译通过 | 边界 | recommended | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
+| PRS-02 | `--features minimal`（dotenv+json）编译通过 | 边界 | minimal | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
+| PRS-03 | `--features recommended`（toml,dotenv,validation,json,security-rules）编译通过 | 边界 | recommended | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-04 | `--features dev`（12 项）编译 + tests/core 通过 | 边界 | dev | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-05 | `--features production`（14 项）编译通过 | 边界 | production | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
 | PRS-06 | `--features distributed`（8 项）编译通过 | 边界 | distributed | 无 | 无→需新增 | tests/e2e/presets_e2e.rs |
@@ -720,7 +720,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 | 层级 | 内容 | 命令 | 允许 mock？ |
 |------|------|------|-----------|
-| L1 单元 | src 内 92 个 `#[cfg(test)]` 模块（2415 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
+| L1 单元 | src 内 98 个 `#[cfg(test)]` 模块（2433 个内联测试）+ macros 内联测试 | `cargo test --features full --lib` | 允许 |
 | L2 集成 | `tests/{core,security,remote,watcher,cli}`（§重要发现-1 的死文件问题已解决，`error` 已注册回 `tests/core/mod.rs`） | `cargo test --features full --test core --test security --test watcher --test cli`；`docker compose -f docker-compose.test.yml up -d && cargo test --features full --test remote` | **禁 mock**（remote 组打真实服务） |
 | L3 examples | 22 个示例逐一运行（见 5.2） | `cargo run -p confers-examples --bin <name>` | 禁 mock（依赖服务的示例需先起 compose） |
 | L4 E2E | `tests/e2e/`（本文档 §2 场景 ID 落点） | 已注册 33 个 `[[test]]` 段（`autotests=false`）；`cargo test --features full --test '*_e2e' --test cli_coverage_extra`（32 个目标名形如 `<域>_e2e`，如 `format_e2e`、`watch_e2e`；`cli_coverage_extra` 为矩阵外回归目标，不遵循该后缀） | 禁 mock |
@@ -733,7 +733,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 1. ✅ 已完成：`tests/core/mod.rs` 已注册 `mod error;`（42 个测试复活）；重复的 `tests/core/encryption.rs` 已删除。
 2. ✅ 已完成：`Cargo.toml` 已为全部 33 个 `tests/e2e/*.rs` 注册 `[[test]]` 段（`cli_coverage_extra` 等按需声明 `required-features`）。
 
-### 5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，依赖 examples crate 默认 `features=["full"]`）
+### 5.2 examples 运行清单（22 个，`cargo run -p confers-examples --bin <name>`，confers 依赖固定 `features=["full"]`）
 
 | # | 示例 bin | 依赖服务 | 预期结果（判验收通过） |
 |---|---------|---------|----------------------|
@@ -796,7 +796,7 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 5.4 建议执行顺序
 
-1. ✅ 死文件修复已完成（§5.3 前置修复项 1）→ 2. L1+L2 全绿（无 docker 先跑非 remote 组）→ 3. compose 起 4 服务跑 L2 remote + L3 21 示例 → 4. 按 e2e 文件逐个落地场景（优先 CMP/CCY/异常类，因既有覆盖最薄）→ 5. PRS 编译门禁进 CI（每个 PR 与 nightly 各跑一轮）。
+1. ✅ 死文件修复已完成（§5.3 前置修复项 1）→ 2. L1+L2 全绿（无 docker 先跑非 remote 组）→ 3. compose 起 5 服务跑 L2 remote + L3 22 示例 → 4. 按 e2e 文件逐个落地场景（优先 CMP/CCY/异常类，因既有覆盖最薄）→ 5. PRS 编译门禁进 CI（每个 PR 与 nightly 各跑一轮）。
 
 ---
 
@@ -826,12 +826,12 @@ docker compose -f docker-compose.test.yml down         # 停止并移除
 
 ### 代码内测试规模
 
-（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.10 工作区；`tests/` 求和为 783 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 782 个测试函数）
+（按 `#[test]` / `#[tokio::test]` 属性行 grep 统计，截至 v0.6.0-rc.12 工作区；`tests/` 求和为 785 行，其中 1 行是 `tests/remote/etcd_watch.rs` 文档注释中的提及，按行首属性锚定为 784 个测试函数）
 
 | 类别 | 数量 |
 |------|------|
-| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，92 个） | 2415 |
-| 集成与 E2E（`tests/`，66 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 782 |
+| 单元测试（`src/` 内联 `#[cfg(test)]` 模块，98 个） | 2433 |
+| 集成与 E2E（`tests/`，67 个文件，含被四个 mod.rs 引入的共享 `common.rs`） | 784 |
 | E2E 套件（`tests/e2e/`，经 `[[test]]` 显式注册） | 33 |
 | 模糊测试目标（`fuzz/`） | 3 |
 | Criterion 基准组（`benches/`） | 10 |

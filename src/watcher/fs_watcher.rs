@@ -227,9 +227,9 @@ impl FsWatcher {
             // arbitrary variable content (CWE-209); the boolean split keeps
             // the two failure modes distinguishable without it.
             message: if e.is_panic() {
-                "file watcher establishment task panicked".to_string()
+                t_simple("error-watcher-establish-task-panicked")
             } else {
-                "file watcher establishment task was cancelled".to_string()
+                t_simple("error-watcher-establish-task-cancelled")
             },
             path: Some(watch_path.as_ref().clone()),
             recoverable: false,
@@ -454,7 +454,13 @@ impl FsWatcher {
                 // resolution (e.g. `/etc/app` → `/data/app-v2`) beyond the
                 // internal log, where it stays for debugging.
                 ConfigError::WatcherError {
-                    message: format!("failed to watch {}: {e}", path.display()),
+                    message: tr_args(
+                        "log-fs-watch-failed",
+                        &[
+                            ("path", path.display().to_string()),
+                            ("message", e.to_string()),
+                        ],
+                    ),
                     path: Some(path.to_path_buf()),
                     recoverable: false,
                 }
@@ -692,7 +698,16 @@ impl FsWatcher {
                 Self::forward_loop(watch, recv_timeout_ms, tx_store, running, failed, dropped);
             }
             Err(e) => {
-                log::error!("failed to establish watch for {}: {e}", path.display());
+                log::error!(
+                    "{}",
+                    tr_args(
+                        "log-fs-watch-establish-failed",
+                        &[
+                            ("path", path.display().to_string()),
+                            ("message", e.to_string()),
+                        ]
+                    )
+                );
                 failed.store(true, std::sync::atomic::Ordering::SeqCst);
                 running.store(false, std::sync::atomic::Ordering::SeqCst);
                 close_sender(&tx_store);
@@ -849,9 +864,9 @@ impl MultiFsWatcher {
             // arbitrary variable content (CWE-209); the boolean split keeps
             // the two failure modes distinguishable without it.
             message: if e.is_panic() {
-                "file watcher establishment task panicked".to_string()
+                t_simple("error-watcher-establish-task-panicked")
             } else {
-                "file watcher establishment task was cancelled".to_string()
+                t_simple("error-watcher-establish-task-cancelled")
             },
             path: None,
             recoverable: false,
@@ -1000,7 +1015,10 @@ impl MultiFsWatcher {
                 )
             );
             ConfigError::WatcherError {
-                message: format!("failed to create file watcher debouncer: {e}"),
+                message: tr_args(
+                    "log-fs-watcher-debouncer-create-failed",
+                    &[("message", e.to_string())],
+                ),
                 path: None,
                 recoverable: false,
             }
@@ -1241,7 +1259,13 @@ impl MultiFsWatcher {
                 );
             }
             Err(e) => {
-                log::error!("failed to establish multi watch: {e}");
+                log::error!(
+                    "{}",
+                    tr_args(
+                        "log-fs-watch-multi-establish-failed",
+                        &[("message", e.to_string())]
+                    )
+                );
                 failed.store(true, std::sync::atomic::Ordering::SeqCst);
                 running.store(false, std::sync::atomic::Ordering::SeqCst);
                 close_sender(&tx_store);

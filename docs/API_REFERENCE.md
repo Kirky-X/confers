@@ -43,7 +43,7 @@ graph TB
     subgraph Sources ["配置来源"]
         A["配置文件"]
         B["环境变量"]
-        C["CLI 参数"]
+        C["内存来源"]
         D["远程来源"]
     end
 

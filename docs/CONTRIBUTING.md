@@ -128,7 +128,7 @@ cargo build
 # 运行全部测试
 cargo test --all-features
 
-# 运行示例（examples 成员默认启用 full 特性）
+# 运行示例（examples 对 confers 的依赖固定启用 full 特性）
 cargo run -p confers-examples --bin basic_usage
 ```
 

@@ -116,9 +116,9 @@ confers/
 | `validator` | `validation` | 基于 `garde` 的配置校验 |
 | `interpolation` | `interpolation` | `${VAR}` / `${VAR:default}` 变量插值（深度感知嵌套，支持自引用默认值） |
 | `watcher` | `watch` | 文件监听热重载：`FsWatcher`、`MultiFsWatcher`、`AdaptiveDebouncer`；`progressive` 子模块实现渐进式发布 |
-| `secret` | `encryption` | 加密原语：`XChaCha20Crypto`、`derive_field_key`、`SecretBytes`、`KeyRegistry`、`EnvKeyProvider`/`FileKeyProvider` 等、`EncryptionPrefix`（`enc:` 前缀识别） |
+| `secret` | `encryption` | 加密原语：`XChaCha20Crypto`、`derive_field_key`、`SecretBytes`、`KeyRegistry`、`EnvKeyProvider`/`FileKeyProvider` 等 |
 | `key` | `key-management` | 密钥生命周期：`KeyManager`、`KeyStorage`（加密持久化）、`KeyRotationService`/`KeyRotationPolicy`、`KeyVersion`/`KeyInfo` |
-| `security` | `security` / `security-rules` | `EnvSecurityValidator`（环境变量注入防护）、`ErrorSanitizer`（错误脱敏）、`rules` 子模块内置 JWT/CORS/SSRF/TLS 校验器与 `SecurityValidatorRegistry` |
+| `security` | `security` / `security-rules` | `EnvSecurityValidator`（环境变量注入防护）、`ErrorSanitizer`（错误脱敏）、`EncryptionPrefix`（`enc:` 前缀识别）、`rules` 子模块内置 JWT/CORS/SSRF/TLS 校验器与 `SecurityValidatorRegistry` |
 | `audit` | `audit` | 审计日志（写入器、HMAC 完整性、敏感字段脱敏） |
 | `dynamic` | `dynamic` | 运行时动态字段：`DynamicField`/`DynamicFieldBuilder`、`CallbackGuard`、`FieldWatcher`，基于 `arc-swap` 快照 |
 | `snapshot` | `snapshot` | 配置快照与回滚（`SnapshotConfig`） |

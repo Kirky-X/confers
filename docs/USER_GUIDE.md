@@ -92,10 +92,10 @@ cargo --version
 
 | 安装方式 | 配置 | 适用场景 |
 |----------|------|----------|
-| **默认** | `confers = "0.6.0-rc.10"` | 包含 toml、json、dotenv |
-| **最小化** | `confers = { version = "0.6.0-rc.10", default-features = false, features = ["minimal"] }` | dotenv + JSON（对应 Cargo.toml 的 `minimal = ["dotenv", "json"]`） |
-| **推荐** | `confers = { version = "0.6.0-rc.10", default-features = false, features = ["recommended"] }` | TOML + JSON + Dotenv + 校验 + 安全规则 |
-| **全量** | `confers = { version = "0.6.0-rc.10", features = ["full"] }` | 全部特性 |
+| **默认** | `confers = "0.6.0-rc.12"` | 包含 toml、json、dotenv |
+| **最小化** | `confers = { version = "0.6.0-rc.12", default-features = false, features = ["minimal"] }` | dotenv + JSON（对应 Cargo.toml 的 `minimal = ["dotenv", "json"]`） |
+| **推荐** | `confers = { version = "0.6.0-rc.12", default-features = false, features = ["recommended"] }` | TOML + JSON + Dotenv + 校验 + 安全规则 |
+| **全量** | `confers = { version = "0.6.0-rc.12", features = ["full"] }` | 全部特性 |
 
 **可用的特性预设：**
 
@@ -157,18 +157,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```mermaid
 graph TB
-    subgraph Sources ["配置来源"]
+    subgraph Sources ["配置来源（库内建来源链）"]
         A["配置文件<br/>JSON, TOML, YAML"]
         B["环境变量"]
-        C["CLI 参数"]
+        M["内存来源<br/>MemorySource"]
         D["远程来源<br/>HTTP, Etcd, Consul"]
     end
 
-    subgraph Priority ["优先级从高到低"]
-        P1["CLI 参数<br/>最高优先级"]
+    subgraph Priority ["库内合并优先级从高到低"]
+        P1["内存来源<br/>最高优先级"]
         P2["环境变量"]
         P3["配置文件"]
         P4["默认值<br/>最低优先级"]
+    end
+
+    subgraph AppLayer ["应用层（库不自动处理）"]
+        C["CLI 参数<br/>经 ConfigClap 的 to_config_map()<br/>由应用自行合并（约定置于最高）"]
     end
 
     subgraph Result ["结果"]
@@ -177,6 +181,7 @@ graph TB
 
     Sources --> Priority
     Priority --> R
+    C -.->|"应用层合并"| R
 ```
 
 ### Config 派生宏
@@ -185,12 +190,14 @@ graph TB
 
 ### 分层加载
 
-`confers` 遵循"最后定义者生效"原则，按以下优先级顺序合并配置：
+`confers` 遵循"最后定义者生效"原则，库内建来源链按以下优先级顺序合并配置：
 
-1. **命令行参数**（最高优先级）
+1. **内存来源**（`MemorySource`，最高优先级）
 2. **环境变量**
 3. **配置文件**（如 `config.toml`）
 4. **默认值**（最低优先级）
+
+命令行参数不在库内建来源链中：`ConfigClap` 派生提供 `to_config_map()`，由应用层自行决定合并时机与顺序（约定置于最高优先级）。
 
 ### 灵活的数据来源
 
@@ -541,7 +548,7 @@ let config = ConfigBuilder::<MyConfig>::new()
 config.confers_validate()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`；加载/构建管线不会自动调用它，须由调用方显式执行。`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`；加载/构建管线不会自动调用它，须由调用方显式执行。`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
 
 ### ☁️ 远程配置（Etcd/Consul/HTTP）
 
@@ -895,7 +902,7 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
 config.confers_validate()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email", "url", "regex"] }`。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email"] }`。
 
 **配置校验最佳实践：**
 
@@ -913,7 +920,7 @@ config.confers_validate()?;
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["security-rules"] }
+confers = { version = "0.6.0-rc.12", features = ["security-rules"] }
 ```
 
 ```rust
@@ -972,7 +979,7 @@ if !report.is_ok(false) {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["feature-toggle"] }
+confers = { version = "0.6.0-rc.12", features = ["feature-toggle"] }
 ```
 
 ```rust
