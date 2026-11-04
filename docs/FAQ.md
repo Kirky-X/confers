@@ -129,7 +129,7 @@
 
 ```toml
 [dependencies]
-confers = "0.6.0-rc.12"
+confers = "0.6.0-rc.13"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -142,7 +142,7 @@ cargo add confers serde --features serde/derive
 **可选特性：**
 
 ```toml
-confers = { version = "0.6.0-rc.12", features = ["watch", "remote", "cli"] }
+confers = { version = "0.6.0-rc.13", features = ["watch", "remote", "cli"] }
 ```
 
 **安装验证：**
@@ -173,23 +173,23 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.6.0-rc.12", default-features = false, features = ["minimal"] }
+confers = { version = "0.6.0-rc.13", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.6.0-rc.12", default-features = false, features = ["recommended"] }
+confers = { version = "0.6.0-rc.13", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.6.0-rc.12", default-features = false, features = ["production"] }
+confers = { version = "0.6.0-rc.13", default-features = false, features = ["production"] }
 
 # 分布式系统配置
 [dependencies]
-confers = { version = "0.6.0-rc.12", default-features = false, features = ["distributed"] }
+confers = { version = "0.6.0-rc.13", default-features = false, features = ["distributed"] }
 
 # 全量特性配置
 [dependencies]
-confers = { version = "0.6.0-rc.12", features = ["full"] }
+confers = { version = "0.6.0-rc.13", features = ["full"] }
 ```
 
 > 💡 **提示**：默认特性为 `toml`、`json`、`dotenv`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
@@ -205,7 +205,7 @@ confers = { version = "0.6.0-rc.12", features = ["full"] }
 | `cli` | 21 | 134 | 中 | 小 |
 | `full` | 46 | 253 | 长 | 大 |
 
-> 📏 依赖数量为 v0.6.0-rc.12 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 119、`security-rules` 单开为 104；随依赖版本刷新会小幅浮动。
+> 📏 依赖数量为 v0.6.0-rc.13 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 119、`security-rules` 单开为 104；随依赖版本刷新会小幅浮动。
 
 选择合适的特性组合可以显著降低编译时间与二进制体积。
 

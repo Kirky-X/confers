@@ -365,6 +365,8 @@ fn gs100_encrypt_field_wrong_master_key_fails() {
     )
     .to_envelope_string();
 
+    // field exists for the derive; the test asserts on load() failing
+    #[allow(dead_code)]
     #[derive(Debug, Config, serde::Deserialize)]
     struct Probe {
         #[config(encrypt = "xchacha20")]
@@ -397,10 +399,7 @@ fn gs100_encrypt_field_wrong_master_key_fails() {
                 "expected a decryption error, got: {e}"
             );
         }
-        Ok(cfg) => panic!(
-            "wrong master key must fail the load, got api_key_len={}",
-            cfg.api_key.len()
-        ),
+        Ok(_) => panic!("wrong master key must fail the load"),
     }
 }
 
