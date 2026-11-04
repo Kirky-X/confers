@@ -11,6 +11,19 @@
 
 - **文件监听建立竞态（R-watch-008）**：`FsWatcher::new()` / `MultiFsWatcher::new()` 此前立即返回，OS 级 watch 由后台线程稍后建立——调用方在 `new()` 返回后立刻写入文件，该事件会**永久丢失**（macOS FSEvents 对流启动前的变化不补报；单 watcher 顺序场景即可复现，并发下丢失面扩大；fluxgate 热更新测试的并发失败曾被误判为"kqueue 平台缺陷"，实为本库缺陷）。现在 watch 建立同步完成于构造函数返回之前：`Ok` 返回即监听生效，此后立刻的修改必然可达；建立失败改为构造函数直接返回 `Err`（`ConfigError::WatcherError`），不再产出"看似存活实则失聪"的 watcher。建立后的失败语义不变（`is_running()` 转为 `false`、`recv()` 返回 `None`）。回归测试：`tests/watcher/establishment.rs`（单 watcher 立即写 + 9 watcher 并发立即写）
 
+### 依赖升级与特性裁剪（三方依赖升版 + 特性裁剪收口）
+
+- 直接依赖升版：`serde-saphyr` 1.3→2.1（跨大版本）：下载 2.1.0 源码逐项比对，本仓用点（`Error`、`from_str`、`from_str_with_options`、`options!` 宏的 `strict_booleans` 字段、`to_string`）签名不变；`serialize`/`deserialize` 特性保留，上游默认特性新增 `comments`，经 `default-features = false` 排除（YAML 解析口径不变）；MSRV 1.89 低于本仓 1.97.1
+- 直接依赖升版：`async-nats` 0.50→0.51（0.x minor，属 semver 破坏性位次）：diff 0.50/0.51 源码，本仓用点（`get_or_create_stream`、`create_consumer`、pull `Config` 的 `deliver_policy`/`durable_name`/`name`/`inactive_threshold`/`max_deliver` 字段、`messages()`、`AckKind::Nak(Some(delay))`、`ConnectOptions`）全部保留，变更均为新增（priority groups / pinned client，仅 `server_2_11+` 特性门控）；MSRV 1.89
+- 直接依赖升版：`tokio` 1.53→1.54、`redis` 1.7→1.8（稳定 minor，`tokio-comp` 特性展开不变，`src/bus/redis.rs` 仅用 `Client`/`AsyncCommands`/`aio::PubSub`）
+- 特性收窄（`default-features = false` 不变，root 与 `[workspace.dependencies]` 同步）：`garde` 去 `url`/`regex`（全仓 grep 仅用 `#[garde(length/range/email)]` 三种属性，`url` 与 `pattern` 属性无任何使用点；此前 rc.10 因 CONFIG_MACRO_GUIDE 文档示例保留，本次文档示例已同步标注所需特性）；其余直接依赖逐项核实特性与真实 API 使用对应，无需补特性
+- Cargo.lock 刷新（`cargo update`，27 包，含上述直接依赖）：granit-parser 1.3.0→2.1.0、tonic 0.14.6→0.14.9（含 tonic-build/tonic-prost/tonic-prost-build）、aws-lc-rs 1.18.2→1.19.0、aws-lc-sys 0.46.0→0.47.0、async-lock 3.4.2→3.5.0、cc 1.10.0→1.11.0、encoding_rs 0.8.42→0.8.44、notify-types 2.1.0→2.2.0、log 0.4.34→0.4.35、rustix 1.1.5→1.1.6、ctutils 0.4.5→0.4.8、openssl-probe 0.2.1→0.2.2、unicode-width 0.2.2→0.2.3、utf8_iter 1.0.4→1.1.0、wasm-bindgen 系 5 包（wasm-bindgen/wasm-bindgen-macro/wasm-bindgen-macro-support/wasm-bindgen-shared 0.2.129→0.2.130、wasm-bindgen-futures 0.4.79→0.4.80）、web-sys/js-sys 0.3.106→0.3.107，另新增 utf_types 1.0.0（随 utf8_iter 1.0.4→1.1.0 新增的依赖进入依赖图）；matchit 0.8.4 由 tonic 的版本约束保持不变
+- fuzz 目录（workspace 排除）Cargo.lock 刷新：confers 路径解析 0.6.0-rc.6→0.6.0-rc.12 对齐当前工作区；`libfuzzer-sys` 0.4.13 已是最新稳定版未动
+- CI actions 升级（SHA pin）：Swatinem/rust-cache v2.9.3、taiki-e/install-action v2.90.0、arduino/setup-protoc v3.0.0、github/codeql-action v4.39.2、softprops/action-gh-release v3.0.3、rust-lang/crates-io-auth-action v1.0.6、codecov/codecov-action 重钉至官方 v7.1.1 tag 当前指向（原 SHA 与 tag 不符）；actions/checkout v7.0.1 与 actions/upload-artifact v7.0.2 经比对已最新未动；dtolnay/rust-toolchain 为工具链分支钉（与 rust-toolchain.toml 1.97.1 一致）未动
+- 兼容性验证（本次实测）：`cargo check --workspace --all-features`、`--no-default-features`、预设组合 minimal/recommended/dev/production/distributed、单特性 yaml/nats-bus/redis-bus/validation/etcd-watch 全部 0 error；`cargo clippy --workspace --all-features -- -D warnings` 0 告警；定向测试全绿——`format_e2e` 8 通过（serde-saphyr 2.1 路径）、`error_scenarios_e2e` 24 通过（含 `#[garde(email)]` 规则）、`validation_e2e` 5 通过、lib 单测（yaml 特性）802 通过、lib 单测（bus 特性）832 通过、`cli` 32 通过、`combo_e2e`（full）16 通过；NATS/Redis 服务依赖用例本机自跳过（服务未运行，按设计显性跳过），真实网络路径由 CI test job 覆盖
+- 安全审计：`cargo audit`（advisory DB 1403 条 / 388 依赖）0 漏洞 0 警告、`cargo deny check` advisories/bans/licenses/sources 全 ok，无修复项
+- 自研依赖版本未动：`confers-macros` 为 path 依赖（workspace 成员），版本 0.6.0-rc.12 与 workspace 一致；本仓无「保持现钉版」的可选自研依赖
+
 ## [0.6.0-rc.12] - 2026-10-25
 ### 变更（破坏面声明）
 

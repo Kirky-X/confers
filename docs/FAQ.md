@@ -129,7 +129,7 @@
 
 ```toml
 [dependencies]
-confers = "0.6.0-rc.10"
+confers = "0.6.0-rc.12"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -142,7 +142,7 @@ cargo add confers serde --features serde/derive
 **可选特性：**
 
 ```toml
-confers = { version = "0.6.0-rc.10", features = ["watch", "remote", "cli"] }
+confers = { version = "0.6.0-rc.12", features = ["watch", "remote", "cli"] }
 ```
 
 **安装验证：**
@@ -173,23 +173,23 @@ fn main() {
 ```toml
 # 最小化使用
 [dependencies]
-confers = { version = "0.6.0-rc.10", default-features = false, features = ["minimal"] }
+confers = { version = "0.6.0-rc.12", default-features = false, features = ["minimal"] }
 
 # 推荐配置
 [dependencies]
-confers = { version = "0.6.0-rc.10", default-features = false, features = ["recommended"] }
+confers = { version = "0.6.0-rc.12", default-features = false, features = ["recommended"] }
 
 # 生产配置
 [dependencies]
-confers = { version = "0.6.0-rc.10", default-features = false, features = ["production"] }
+confers = { version = "0.6.0-rc.12", default-features = false, features = ["production"] }
 
 # 分布式系统配置
 [dependencies]
-confers = { version = "0.6.0-rc.10", default-features = false, features = ["distributed"] }
+confers = { version = "0.6.0-rc.12", default-features = false, features = ["distributed"] }
 
 # 全量特性配置
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["full"] }
+confers = { version = "0.6.0-rc.12", features = ["full"] }
 ```
 
 > 💡 **提示**：默认特性为 `toml`、`json`、`dotenv`。如需校验功能，请使用 `recommended` 预设或显式启用 `validation` 特性。
@@ -198,14 +198,14 @@ confers = { version = "0.6.0-rc.10", features = ["full"] }
 
 | 特性组合 | 直接依赖 | 含传递依赖（去重） | 编译时间 | 二进制体积 |
 |:--------|:--------:|:--------:|:--------:|:----------:|
-| `minimal` | 16 | 94 | 最短 | 最小 |
-| `recommended` | 22 | 118 | 短 | 小 |
-| `dev` | 33 | 158 | 中 | 中 |
-| `production` | 37 | 168 | 中 | 中 |
-| `cli` | 21 | 124 | 中 | 小 |
-| `full` | 46 | 240 | 长 | 大 |
+| `minimal` | 16 | 96 | 最短 | 最小 |
+| `recommended` | 22 | 120 | 短 | 小 |
+| `dev` | 33 | 168 | 中 | 中 |
+| `production` | 37 | 178 | 中 | 中 |
+| `cli` | 21 | 134 | 中 | 小 |
+| `full` | 46 | 253 | 长 | 大 |
 
-> 📏 依赖数量为 v0.6.0-rc.10 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 117、`security-rules` 单开为 102；随依赖版本刷新会小幅浮动。
+> 📏 依赖数量为 v0.6.0-rc.12 工作区实测（`cargo tree -e normal --no-default-features --features <组合>`：直接依赖为深度 1 去重计数，含传递依赖为全部节点按包名去重）；**「含传递依赖」列计数含 confers 根包自身**——不含根口径 `recommended` 为 119、`security-rules` 单开为 104；随依赖版本刷新会小幅浮动。
 
 选择合适的特性组合可以显著降低编译时间与二进制体积。
 
@@ -315,7 +315,7 @@ let config = ConfigBuilder::<ConfersConfig>::new()
 config.confers_validate()?;
 ```
 
-**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`，须在 `build()` 之后显式调用——加载/构建管线不会自动校验；`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
+**注意**：请在依赖中添加 `garde = { version = "0.23", features = ["derive", "email"] }`，并启用 confers 的 `validation` 特性。`#[config(validate_helper)]` 生成 `confers_validate()`，须在 `build()` 之后显式调用——加载/构建管线不会自动校验；`#[config(validate)]`（不带 `_helper`）为历史兼容保留的 no-op，不生成任何代码。
 
 ### ❓ Confers 安全吗？
 

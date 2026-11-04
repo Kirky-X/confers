@@ -757,19 +757,21 @@ pub username: String,
 
 ### 内置校验器
 
-**邮箱校验**
+> 各属性需要 garde 对应特性：`email` 需 `email`、`url` 需 `url`、`pattern` 需 `pattern`（`regex`）。本仓 manifest 默认携带 `["derive", "email"]`；用 `url`/`pattern` 需在自己的 `garde` 依赖上追加对应特性，照抄下方示例前先补齐，否则编译失败。
+
+**邮箱校验**（garde 特性 `email`，本仓 manifest 已含）
 ```rust
 #[garde(email)]
 pub email: String,
 ```
 
-**URL 校验**
+**URL 校验**（需自加 garde 特性 `url`）
 ```rust
 #[garde(url)]
 pub website: String,
 ```
 
-**模式校验**
+**模式校验**（需自加 garde 特性 `pattern`）
 ```rust
 #[garde(pattern(r"^[A-Z]{2}\d{6}$"))]
 pub id_code: String,
@@ -817,8 +819,8 @@ fn my_validator(value: &str, _: &()) -> garde::Result {
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["recommended"] }
-garde = { version = "0.23", features = ["derive"] }
+confers = { version = "0.6.0-rc.12", features = ["recommended"] }
+garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
 `recommended` 预设包含的特性清单见 [README · 功能预设](../README.md#-特性标志)。
@@ -828,8 +830,8 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["dev"] }
-garde = { version = "0.23", features = ["derive"] }
+confers = { version = "0.6.0-rc.12", features = ["dev"] }
+garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
 `dev` 特性包含面向开发便利的大多数特性。
@@ -839,8 +841,8 @@ garde = { version = "0.23", features = ["derive"] }
 ```toml
 # Cargo.toml
 [dependencies]
-confers = { version = "0.6.0-rc.10", features = ["production"] }
-garde = { version = "0.23", features = ["derive"] }
+confers = { version = "0.6.0-rc.12", features = ["production"] }
+garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
 `production` 预设包含的特性清单同样见 [README · 功能预设](../README.md#-特性标志)。
@@ -875,4 +877,4 @@ garde = { version = "0.23", features = ["derive"] }
 
 ---
 
-*本文档基于 Confers v0.6.0-rc.10 编写。*
+*本文档基于 Confers v0.6.0-rc.12 编写。*
