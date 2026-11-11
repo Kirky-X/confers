@@ -416,7 +416,6 @@ required-features = ["typescript-schema"]
 
 [[bin]]
 name = "confers"
-path = "src/cli/main.rs"
 required-features = ["cli"]
 bench = false
 
