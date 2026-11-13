@@ -1,6 +1,11 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
+//! 基座例外：受 `trait-kit → confers` 依赖环约束，本仓**必须**自持 FTL 引擎
+//! （`catalog.rs` 自建 FluentBundle），不能像家族其余仓那样经 trait-kit
+//! `I18nManager` 注册表取翻译。这是全家族「i18n 统一经 trait-kit」规范的
+//! 唯一合法例外：后续 grep 审计发现本仓直用 fluent-bundle 属预期，非违规。
+
 pub mod catalog;
 pub mod error_ext;
 pub mod locale;
