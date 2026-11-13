@@ -7,6 +7,27 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-14
+
+rc.13（2026-11-04）以来的正式定版：无 API 变更，rc.13 用户升级仅需改版本号。
+
+### Changed
+
+- **CLI 二进制入口迁移**：自定义 `[[bin]]` path（`src/cli/main.rs`）违反二进制统一规范；迁至根 `src/main.rs` 薄壳（调 `confers::cli::run`，`required-features = ["cli"]`、退出码契约与 i18n 初始化行为不变），`src/cli/` 仅保留库模块。CLI 框架维持 clap 现状：sdforge 依赖 confers，替换将构成反向环，结构性豁免
+- **i18n 基座例外登记**：依赖环约束下自持 FTL 引擎为基座例外，非家族规范违规（`src/i18n/mod.rs` 注释登记）
+
+### 依赖升级
+
+- `cargo update` 刷新 28 包候选、27 包落地（全部为 semver 兼容位次，运行时依赖图无跨位次升版）：prost 四件套 0.14.4→0.14.6、notify 8.2.1→8.2.2、notify-types 2.2.0→2.3.0、toml 1.1.8→1.2.1（含 toml_datetime 1.1.2→1.1.3、toml_writer 1.1.3→1.2.0、serde_spanned 1.1.2→1.1.3、winnow 1.0.4→1.0.5）、syn 3.0.9→3.0.10、serde-saphyr 2.1.0→2.1.1、uuid 1.29.0→1.29.2、arc-swap 1.9.3→1.9.5、cc 1.11.0→1.11.2、mio 1.2.4→1.2.5、rustls-pki-types 1.15.1→1.16.0、rustls-webpki 0.103.16→0.103.17、webpki-root-certs 1.0.11→1.0.12、fixedbitset 0.5.7→0.5.9、smallvec 1.16.4→1.16.5、itoa 1.0.18→1.0.19、annotate-snippets 0.12.17→0.12.18、errno 0.3.14→0.3.15、inout 0.2.5→0.2.6、mime 0.3.17→0.3.18
+- itertools 精确回退 0.15.0→0.13.0：prost-build 0.14.6 的 requirement 允许 0.13，回退后与 criterion 所用版本统一，消除 0.x 跨位次重复
+- prettyplease 0.3.0 新增进入编译期代码生成链（prost-build 0.14.6 强制 `^0.3`，与 tonic-build 所用 0.2.37 共存；均为 build-dependency，不进运行时依赖图；回退尝试被约束拒绝，随门禁全绿接受）
+- 按约束钉住未动：async-nats 0.51.0（0.52 需提升 Cargo.toml 版本要求，属后续主动升级）、matchit 0.8.4（tonic 版本约束持有）
+- fuzz 目录（workspace 排除）Cargo.lock 仅同步 confers/confers-macros 版本号 0.6.0-rc.13→0.6.0，无三方依赖变化
+
+### CI
+
+- dependabot actions 升级（SHA pin）：codecov/codecov-action 重钉官方 v7.1.1（#66）、Swatinem/rust-cache v2.9.3（#67）、arduino/setup-protoc v3.0.0（#68）、github/codeql-action init/analyze v4.39.2（#69、#70）
+
 ## [0.6.0-rc.13] - 2026-11-04
 
 ### Fixed
