@@ -1,10 +1,10 @@
+English | [中文](README_CN.md)
+
 <div align="center">
 
 <img src="docs/assets/confers.png" alt="Confers Logo" width="240">
 
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-edded?logo=rust&style=for-the-badge)](https://www.rust-lang.org/) [![Rustc 1.97.1+](https://img.shields.io/badge/Rustc-1.97.1+-orange.svg?style=for-the-badge)](https://www.rust-lang.org/) [![crates.io](https://img.shields.io/crates/v/confers?style=for-the-badge)](https://crates.io/crates/confers) [![docs.rs](https://img.shields.io/docsrs/confers?style=for-the-badge)](https://docs.rs/confers) [![downloads](https://img.shields.io/crates/d/confers?style=for-the-badge)](https://crates.io/crates/confers) [![CI](https://img.shields.io/github/actions/workflow/status/Kirky-X/confers/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![coverage](https://img.shields.io/codecov/c/github/Kirky-X/confers?style=for-the-badge)](https://codecov.io/gh/Kirky-X/confers) [![license](https://img.shields.io/crates/l/confers?style=for-the-badge)](LICENSE)
-
-[中文](README.md) | **English**
 
 **A production-ready Rust configuration library with zero boilerplate**
 
@@ -43,9 +43,6 @@ Tag a struct with `#[derive(Config)]`, merge sources by priority, and get strong
 - [🎨 Feature Flags](#-feature-flags)
 - [📚 Documentation](#-documentation)
 - [💻 Examples](#-examples)
-- [🏗️ Architecture](#️-architecture)
-- [🧪 Testing](#-testing)
-- [📊 Performance](#-performance)
 - [🔒 Security](#-security)
 - [🗺️ Roadmap](#️-roadmap)
 - [🤝 Contributing](#-contributing)
@@ -155,13 +152,6 @@ cargo run    # Output: Listening on 127.0.0.1:9000
 
 </details>
 
-### 🧭 Core Concepts
-
-- **Source chain**: declare `FileSource`, `EnvSource`, `MemorySource`, and remote sources via `ConfigBuilder` / `SourceChainBuilder`; declaration order is priority, later sources override earlier ones.
-- **Annotated values**: every config value is wrapped in an `AnnotatedValue` carrying `SourceId` and `SourceLocation` (down to row and column), so conflicts are traceable.
-- **Two-phase errors**: initialization failures return `ConfigConfigError`; runtime failures return `ConfersError`, keeping the two classes of problems separate.
-- **Feature gating**: every optional capability is an independent feature; compiled artifacts only include what you enable, down to a minimal `dotenv` + `json`.
-
 ---
 
 ## 🎨 Feature Flags
@@ -255,17 +245,19 @@ The table below mirrors the single-feature definitions in the `[features]` secti
 
 | Document | Description |
 |------|------|
-| [📖 User Guide](docs/USER_GUIDE.md) | Complete tutorial from installation to advanced usage |
-| [📘 API Reference](docs/API_REFERENCE.md) | Detailed description of all public APIs |
-| [🏗️ Architecture](docs/ARCHITECTURE.md) | Design principles, module layout, and data flow |
-| [🧭 Config Macro Guide](docs/CONFIG_MACRO_GUIDE.md) | Complete usage of the `Config` derive macro and `#[config(...)]` attributes |
-| [📈 Performance Guide](docs/PERFORMANCE.md) | Benchmark data, measurement methodology, and optimization tips |
-| [🔒 Security](docs/SECURITY.md) | Security design, best practices, and vulnerability handling records |
-| [❓ FAQ](docs/FAQ.md) | Frequently asked questions |
-| [📚 Library Integration Guide](docs/LIBRARY_INTEGRATION.md) | How to integrate the confers CLI into your projects |
-| [🧪 Test Scenario Matrix](docs/TEST_SCENARIOS.md) | Exhaustive E2E acceptance scenario matrix |
-| [📋 Changelog](docs/CHANGELOG.md) | Change records for every release |
-| [🤝 Contributing Guide](docs/CONTRIBUTING.md) | How to participate in project development |
+| [📖 User Guide](docs/en/USER_GUIDE.md) | Complete tutorial from installation to advanced usage |
+| [📘 API Reference](docs/en/API_REFERENCE.md) | Detailed description of all public APIs |
+| [🏗️ Architecture](docs/en/ARCHITECTURE.md) | Design principles, module layout, and data flow |
+| [🧭 Config Macro Guide](docs/en/CONFIG_MACRO_GUIDE.md) | Complete usage of the `Config` derive macro and `#[config(...)]` attributes |
+| [📈 Performance Guide](docs/en/PERFORMANCE.md) | Benchmark data, measurement methodology, and optimization tips |
+| [🔒 Security](docs/en/SECURITY.md) | Security design, best practices, and vulnerability handling records |
+| [❓ FAQ](docs/en/FAQ.md) | Frequently asked questions |
+| [📚 Library Integration Guide](docs/en/LIBRARY_INTEGRATION.md) | How to integrate the confers CLI into your projects |
+| [🧪 Test Scenario Matrix](docs/en/TEST_SCENARIOS.md) | Exhaustive E2E acceptance scenario matrix |
+| [🕊️ Canary Rollout Orchestration](docs/en/CANARY_ORCHESTRATION.md) | Cross-instance batched rollout orchestration and service-mesh weight delivery |
+| [📋 Changelog](docs/en/CHANGELOG.md) | Change records for every release |
+| [🤝 Contributing Guide](docs/en/CONTRIBUTING.md) | How to participate in project development |
+| [🤝 Code of Conduct](docs/en/CODE_OF_CONDUCT.md) | Community code of conduct and enforcement guidelines |
 | [📦 Online API Docs](https://docs.rs/confers) | Latest documentation auto-generated on docs.rs |
 | [📦 crates.io](https://crates.io/crates/confers) | Release page |
 
@@ -275,110 +267,13 @@ The table below mirrors the single-feature definitions in the `[features]` secti
 
 ## 💻 Examples
 
-All 22 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/TEST_SCENARIOS.md).
-
-<details>
-<summary>📄 Code · bash</summary>
-
-```bash
-# Run a single example (from the examples/ directory)
-cd examples && cargo run --bin basic_usage
-cd examples && cargo run --bin encryption
-
-# Verify all examples compile
-cd examples && ./verify_examples.sh
-```
-
-</details>
-
-### 🤖 CLI Tool
-
-Beyond the runnable examples, the bundled CLI diagnostics tool (`cli` feature, entry point `src/cli/main.rs`) troubleshoots configuration in real projects:
-
-<details>
-<summary>📄 Code · bash</summary>
-
-```bash
-cargo install confers --features cli
-```
-
-</details>
-
-It provides the `inspect`, `validate`, `export`, `diff`, `snapshot`, `schema` (no-arg output is the generic schema of the built-in `serde_json::Value` type; `--from-instance` reverse from an instance / `--from-schema` reverse Rust scaffolding), `get`, `doctor`, and `docs --agent` subcommands, with the exit code contract: 0 success, 1 configuration error, 2 I/O error. For arguments, output, and usage examples of the main commands (see `--help` for `get` / `docs`), see the [User Guide · CLI tool](docs/USER_GUIDE.md#-命令行工具); to integrate the CLI into your own projects, see the [Library Integration Guide](docs/LIBRARY_INTEGRATION.md).
-
----
-
-## 🏗️ Architecture
-
-Confers follows a facade-plus-implementation layered design: the public modules under `src/` only re-export while the real implementation lives in `src/impl_/`, and optional capabilities are gated behind independent features. The core data path runs from source chain registration, through loader format detection and parsing (errors pinned to row and column), `MergeEngine` deep merging along the source chain, and finally serde deserialization into strongly typed structs with optional garde validation and sensitive-field decryption; the derive macros are generated at compile time by the `confers-macros` proc-macro crate in the workspace.
-
-For the architecture diagram, the public core and feature-gated module tables, the loading / hot reload / multi-instance change broadcast data flows, and the interface segregation (`ConfigReader` / `ConfigWriter` / `ConfigConnector` / `ConfigProvider` traits) plus security and performance design, see the [Architecture doc](docs/ARCHITECTURE.md).
-
----
-
-## 🧪 Testing
-
-### 🎯 Test Strategy
-
-The test pyramid spans seven layers: inline unit tests in `src/`, integration tests organized by domain (`tests/core`, `tests/security`, `tests/remote`, `tests/watcher`, `tests/cli`), 33 E2E suites explicitly registered via `[[test]]` (`tests/e2e`), macro tests (`macros/tests`, trybuild compile-fail cases), fuzz testing (`fuzz/`, 3 cargo-fuzz targets), Criterion benchmarks (`benches/`, 10 groups), and doc tests on public APIs. For per-layer commands, the 357-row scenario matrix, and the E2E file mapping, see the [test scenario doc](docs/TEST_SCENARIOS.md).
-
-### ▶️ Commands (matching CI)
-
-<details>
-<summary>📄 Code · bash</summary>
-
-```bash
-# Full test run (CI matrix runs default / recommended / full)
-cargo test --workspace --features full
-
-# Lint and format gates
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
-
-# Coverage gate: at least 90% line coverage
-cargo llvm-cov --workspace --all-features --fail-under-lines 90
-
-# Benchmarks (matching CI; CI adds -- --save-baseline current)
-cargo bench --features dev,etcd-watch,change-stream --benches
-
-# interpolation benchmarks (merge_bench / interpolation_bench / value_path_bench
-# declare required-features = ["interpolation"]; the command above skips those
-# three, so run them separately)
-cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
-
-# Fuzz testing (from the fuzz/ directory)
-cargo fuzz run parser
-```
-
-</details>
-
-Some integration tests require local external services: the bus group needs NATS (CI uses a `nats:2.10 -js` container), and the Redis (16379) / etcd (2379) / Consul (8500) / Nacos (8848) integration groups likewise need their services; `docker-compose.test.yml` provides all five (tests skip via port guards when a service is absent).
-
-### 📊 Test Scale
-
-As of v0.6.0: 2433 unit tests (inline in `src/`, measured via `grep -rE -c '#\[(tokio::)?test\b' src`), 784 integration and E2E tests (`tests/`, 67 files), 3 fuzz targets, and 10 Criterion benchmark groups; the coverage gate requires at least 90% line coverage and is enforced by both CI and the pre-push hook. For the detailed counts, see the [test scenario doc · statistics](docs/TEST_SCENARIOS.md#6-统计汇总).
-
----
-
-## 📊 Performance
-
-Baselines were collected locally on a development machine (criterion median): loading 50 fields takes about 691 ns and 200 fields about 713 ns, shallow merging 1000 entries about 20.9 µs, a change-stream roundtrip with one subscriber about 1.98 µs, and zero-copy reads (`get_shared`) are about 2.1x faster than deep copies (`get_raw`) for large values. Real-world performance depends on config complexity and hardware; run `cargo bench` to reproduce. For the full benchmark tables and measurement methodology, see the [Performance Guide · baselines](docs/PERFORMANCE.md#-性能基线); for the design highlights (lock-free dynamic reads, `IndexMap` key order, adaptive debouncing, feature-gate trimming), see the [Architecture doc · performance design](docs/ARCHITECTURE.md#-性能设计).
+All 22 runnable examples live in the [`examples/`](examples/) directory, each mapped to a `cargo run --bin` target and covering every feature domain: basic loading, hot reload, encryption and key rotation, validation, interpolation, audit, snapshots, migration, dynamic fields, remote sources (etcd / Consul), bus, progressive reload, and schema generation. For the per-example file list, required services, and acceptance criteria, see the [test scenario doc · examples run list](docs/en/TEST_SCENARIOS.md).
 
 ---
 
 ## 🔒 Security
 
-### 🛡️ Security Design
-
-Security design centers on protecting sensitive data across its full lifecycle: XChaCha20-Poly1305 authenticated encryption with HKDF-SHA256 per-field key derivation, zeroize-on-drop memory safety, key version and rotation governance, built-in JWT/CORS/SSRF/TLS validators, error sanitization with HMAC-signed audit logs, plus SSRF validation and a circuit breaker for remote sources. Mechanism-level details live in the [Architecture doc · Security Design](docs/ARCHITECTURE.md#-安全设计); security best practices and the vulnerability handling process are covered by the [Security doc](docs/SECURITY.md).
-
-### ⛓️ Supply Chain and Gates
-
-Supply chain gates — `cargo deny check`, `cargo audit`, the lefthook private-key scan, and the coverage gate — are enforced by both CI and local Git hooks; for the full checklist, see the [Security doc · Supply Chain and Gates](docs/SECURITY.md#供应链与门禁).
-
-### 🚨 Reporting Security Issues
-
-Please do not report security vulnerabilities through public issues. Use the private GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/policy) disclosure channel instead. The project commits to acknowledging reports within 48 hours and providing an initial assessment within 7 days. See the full policy in [SECURITY.md](docs/SECURITY.md).
+Please do not report security vulnerabilities through public issues: use the private GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/policy) disclosure channel instead. For security design, supply-chain gates, and the vulnerability handling process, see the [Security doc](docs/en/SECURITY.md).
 
 ---
 
@@ -395,8 +290,8 @@ Please do not report security vulnerabilities through public issues. Use the pri
 <tr><td align="center">✅</td><td>Security and audit</td><td>XChaCha20-Poly1305 encryption, key management and rotation, audit logging, security rule validators</td></tr>
 <tr><td align="center">✅</td><td>Remote and bus</td><td>HTTP polling, etcd, Consul, Nacos, Kubernetes ConfigMap / Secret, NATS and Redis buses</td></tr>
 <tr><td align="center">✅</td><td>Remote sources stable</td><td><code>remote</code>, <code>etcd</code>, <code>consul</code>, and <code>etcd-watch</code> promoted: interfaces frozen, no breaking changes before 1.0 (guarded by watch compatibility regression tests)</td></tr>
-<tr><td align="center">✅</td><td>Performance</td><td>Criterion baselines (<a href="docs/PERFORMANCE.md#📊-性能基线">performance baselines</a>: load / merge / watch dispatch), memory limits and lazy segmented parsing, zero-copy hot path for high-frequency reads (<code>get_shared</code>, ~2.1x)</td></tr>
-<tr><td align="center">✅</td><td>Cloud-native integration</td><td>Service mesh traffic splitting (<code>canary</code> orchestrator + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio samples</a>), distributed tracing (<code>tracing</code> facade: load/reload/decrypt/remote_fetch spans)</td></tr>
+<tr><td align="center">✅</td><td>Performance</td><td>Criterion baselines (<a href="docs/en/PERFORMANCE.md#-performance-baselines">performance baselines</a>: load / merge / watch dispatch), memory limits and lazy segmented parsing, zero-copy hot path for high-frequency reads (<code>get_shared</code>, ~2.1x)</td></tr>
+<tr><td align="center">✅</td><td>Cloud-native integration</td><td>Service mesh traffic splitting (<code>canary</code> orchestrator + <a href="docs/en/CANARY_ORCHESTRATION.md">Envoy/Istio samples</a>), distributed tracing (<code>tracing</code> facade: load/reload/decrypt/remote_fetch spans)</td></tr>
 </table>
 
 </details>
@@ -405,13 +300,7 @@ Please do not report security vulnerabilities through public issues. Use the pri
 
 ## 🤝 Contributing
 
-For the detailed contribution workflow and code standards, see the [🤝 Contributing Guide](docs/CONTRIBUTING.md).
-
-### 🛠️ Development Environment
-
-The toolchain is Rust 1.97.1 (pinned in `rust-toolchain.toml`); run `cargo fmt --all -- --check` and `cargo clippy --all-targets --all-features -- -D warnings` before committing; [lefthook](https://github.com/evilmartians/lefthook) Git hooks run rustfmt, clippy, `cargo deny check`, and private-key scanning on pre-commit, enforce Conventional Commits on commit-msg, and run `cargo audit` plus the coverage gate on pre-push. For the full environment setup, see the [Contributing Guide · environment prep](docs/CONTRIBUTING.md#-环境准备).
-
-### 💖 Ways to Contribute
+For the detailed contribution workflow and code standards, see the [🤝 Contributing Guide](docs/en/CONTRIBUTING.md).
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -446,22 +335,7 @@ Want to contribute code?<br>
 
 ## 📋 Changelog
 
-For the full version history, see the [📋 Changelog](docs/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and semantic versioning).
-
-<details>
-<summary>📋 Table</summary>
-
-| Version | Date | Highlights |
-|------|------|------|
-| 0.6.0-rc.10 | 2026-10-10 | Dependency upgrades and feature trimming: `etcd-client` 0.20→0.21, per-dependency explicit feature minimization (unused features trimmed from async-nats/clap/futures/tracing); CI action SHA pins upgraded; `cargo audit` clean |
-| 0.6.0-rc.7 | 2026-10-08 | feature self-consistency fixes (async-core gains the `async-trait` dep, default-combo test gating); dead-code and test-only function cleanup; complexity hotspots converged via helper extraction; comment hygiene and governance records moved out of the repo |
-| 0.6.0-rc.6 | 2026-10-02 | 52 audit-defect fixes: `#[config(profile)]` environment-specific file overlay, real `encrypt` field attribute and Vault lease early refresh, CLI redaction by default, config merging in declaration order, sensitive files written 0600, dead deps `secrecy`/`aes-gcm` removed; breaking-change notes: `#[config(validate)]` becomes a compatible no-op, `CorsValidator` fieldified, `WatcherGuard::shutdown` panic semantics fixed |
-| 0.6.0-rc.5 | 2026-09-21 | in-house i18n facade (`src/i18n` catalog/locale, built on `fluent-bundle`/`unic-langid`); `keyring` / `cloud-kms` imply `encryption`; pre-commit gate and detect-secrets baseline; removed the `compact_str` direct dependency |
-| 0.6.0-rc.4 | 2026-09-13 | Unified change stream port (`change-stream`); new Kubernetes / Nacos sources and native etcd watch; CLI gained `doctor`, `schema`, and `get` subcommands; zero-copy hot path, HMAC-chained audit logs, and lazy segmented parsing (version 0.6.0-rc.3 was skipped and never published; its content shipped with this release) |
-| 0.6.0-rc.2 | 2026-09-07 | Refreshed 12+ 0.x dependencies (async-nats 0.50, chacha20poly1305 0.11, garde 0.23, and more); solidified the test pyramid by adding and registering 7 E2E suites |
-| 0.5.1 | 2026-08-06 | New `SecurityValidator` security rules and `FeatureToggleRegistry` runtime toggles; fixed SSRF whitelist bypass, TLS version comparison, and more |
-
-</details>
+For the full version history, see the [📋 Changelog](docs/en/CHANGELOG.md) (following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format and semantic versioning).
 
 ---
 

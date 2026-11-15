@@ -1,10 +1,10 @@
+[English](README.md) | 中文
+
 <div align="center">
 
 <img src="docs/assets/confers.png" alt="Confers Logo" width="240">
 
 [![Rust 2024](https://img.shields.io/badge/Rust-2024-edded?logo=rust&style=for-the-badge)](https://www.rust-lang.org/) [![Rustc 1.97.1+](https://img.shields.io/badge/Rustc-1.97.1+-orange.svg?style=for-the-badge)](https://www.rust-lang.org/) [![crates.io](https://img.shields.io/crates/v/confers?style=for-the-badge)](https://crates.io/crates/confers) [![docs.rs](https://img.shields.io/docsrs/confers?style=for-the-badge)](https://docs.rs/confers) [![downloads](https://img.shields.io/crates/d/confers?style=for-the-badge)](https://crates.io/crates/confers) [![CI](https://img.shields.io/github/actions/workflow/status/Kirky-X/confers/ci.yml?branch=main&label=CI&style=for-the-badge)](https://github.com/Kirky-X/confers/actions/workflows/ci.yml) [![coverage](https://img.shields.io/codecov/c/github/Kirky-X/confers?style=for-the-badge)](https://codecov.io/gh/Kirky-X/confers) [![license](https://img.shields.io/crates/l/confers?style=for-the-badge)](LICENSE)
-
-**中文** | [English](README_EN.md)
 
 **生产级 Rust 配置库，零样板代码**
 
@@ -43,9 +43,6 @@
 - [🎨 特性标志](#-特性标志)
 - [📚 文档](#-文档)
 - [💻 示例](#-示例)
-- [🏗️ 架构](#️-架构)
-- [🧪 测试](#-测试)
-- [📊 性能](#-性能)
 - [🔒 安全](#-安全)
 - [🗺️ 开发路线图](#️-开发路线图)
 - [🤝 参与贡献](#-参与贡献)
@@ -155,13 +152,6 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 </details>
 
-### 🧭 核心概念
-
-- **来源链**：通过 `ConfigBuilder` / `SourceChainBuilder` 声明 `FileSource`、`EnvSource`、`MemorySource` 与远程来源，声明顺序即优先级，后加入者覆盖先加入者。
-- **注解值**：每个配置值包装为 `AnnotatedValue`，携带 `SourceId` 与 `SourceLocation`（精确到行列），冲突可溯源。
-- **双阶段错误**：初始化期失败返回 `ConfigConfigError`，运行期失败返回 `ConfersError`，两类问题分开处理。
-- **特性门控**：全部可选能力均为独立 feature，编译产物只包含启用的部分，最小可只用 `dotenv` + `json`。
-
 ---
 
 ## 🎨 特性标志
@@ -255,17 +245,19 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 | 文档 | 说明 |
 |------|------|
-| [📖 用户指南](docs/USER_GUIDE.md) | 从安装到进阶的完整使用教程 |
-| [📘 API 参考](docs/API_REFERENCE.md) | 全部公开 API 的详细说明 |
-| [🏗️ 架构文档](docs/ARCHITECTURE.md) | 设计原则、模块划分与数据流 |
-| [🧭 宏配置指南](docs/CONFIG_MACRO_GUIDE.md) | `Config` 派生宏与 `#[config(...)]` 属性的完整用法 |
-| [📈 性能优化指南](docs/PERFORMANCE.md) | 基准数据、性能口径与优化建议 |
-| [🔒 安全文档](docs/SECURITY.md) | 安全设计、最佳实践与漏洞处理记录 |
-| [❓ FAQ](docs/FAQ.md) | 常见问题解答 |
-| [📚 库集成指南](docs/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目 |
-| [🧪 测试场景矩阵](docs/TEST_SCENARIOS.md) | E2E 验收场景穷举矩阵 |
-| [📋 更新日志](docs/CHANGELOG.md) | 每个版本的变更记录 |
-| [🤝 贡献指南](docs/CONTRIBUTING.md) | 如何参与项目开发 |
+| [📖 用户指南](docs/cn/USER_GUIDE.md) | 从安装到进阶的完整使用教程 |
+| [📘 API 参考](docs/cn/API_REFERENCE.md) | 全部公开 API 的详细说明 |
+| [🏗️ 架构文档](docs/cn/ARCHITECTURE.md) | 设计原则、模块划分与数据流 |
+| [🧭 宏配置指南](docs/cn/CONFIG_MACRO_GUIDE.md) | `Config` 派生宏与 `#[config(...)]` 属性的完整用法 |
+| [📈 性能优化指南](docs/cn/PERFORMANCE.md) | 基准数据、性能口径与优化建议 |
+| [🔒 安全文档](docs/cn/SECURITY.md) | 安全设计、最佳实践与漏洞处理记录 |
+| [❓ FAQ](docs/cn/FAQ.md) | 常见问题解答 |
+| [📚 库集成指南](docs/cn/LIBRARY_INTEGRATION.md) | 如何将 confers CLI 集成到您的项目 |
+| [🧪 测试场景矩阵](docs/cn/TEST_SCENARIOS.md) | E2E 验收场景穷举矩阵 |
+| [🕊️ 金丝雀发布编排](docs/cn/CANARY_ORCHESTRATION.md) | 跨实例分批 rollout 编排与服务网格权重下发 |
+| [📋 更新日志](docs/cn/CHANGELOG.md) | 每个版本的变更记录 |
+| [🤝 贡献指南](docs/cn/CONTRIBUTING.md) | 如何参与项目开发 |
+| [🤝 行为准则](docs/cn/CODE_OF_CONDUCT.md) | 社区行为准则与执行方针 |
 | [📦 在线 API 文档](https://docs.rs/confers) | docs.rs 自动生成的最新文档 |
 | [📦 crates.io](https://crates.io/crates/confers) | 发布页面 |
 
@@ -275,109 +267,13 @@ cargo run    # 输出: 监听地址: 127.0.0.1:9000
 
 ## 💻 示例
 
-全部 22 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/TEST_SCENARIOS.md)。
-
-<details>
-<summary>📄 代码 · bash</summary>
-
-```bash
-# 运行单个示例（在 examples/ 目录下）
-cd examples && cargo run --bin basic_usage
-cd examples && cargo run --bin encryption
-
-# 验证全部示例可编译
-cd examples && ./verify_examples.sh
-```
-
-</details>
-
-### 🤖 CLI 工具
-
-除运行示例外，也可以使用随库附带的 CLI 诊断工具（`cli` 特性，入口 `src/cli/main.rs`）排查真实项目中的配置：
-
-<details>
-<summary>📄 代码 · bash</summary>
-
-```bash
-cargo install confers --features cli
-```
-
-</details>
-
-提供 `inspect`、`validate`、`export`、`diff`、`snapshot`、`schema`（不带参数输出内置 `serde_json::Value` 类型的通用 schema；`--from-instance` 实例反推 / `--from-schema` 反向生成 Rust 脚手架）、`get`、`doctor`、`docs --agent` 子命令，退出码约定：0 成功、1 配置错误、2 I/O 错误。主要命令的参数、输出与用法示例见（`get` / `docs` 用法以 `--help` 为准） [📖 用户指南 · 命令行工具](docs/USER_GUIDE.md#-命令行工具)；将 CLI 集成到您自己的项目见 [📚 库集成指南](docs/LIBRARY_INTEGRATION.md)。
-
----
-
-## 🏗️ 架构
-
-Confers 采用门面与内部实现分离的分层设计：`src/` 公开模块只做转发动机，真正实现位于 `src/impl_/`，可选能力按 feature 独立门控；核心数据通路为来源链注册 → loader 格式探测与解析（错误精确到行列）→ `MergeEngine` 沿来源链深度合并 → serde 反序列化为强类型结构体（可选 garde 校验与敏感字段解密），派生宏由 workspace 内的 `confers-macros` 过程宏 crate 在编译期生成加载代码。
-
-架构图、公开核心与特性门控模块表、加载 / 热重载 / 多实例变更广播数据流，以及接口隔离（`ConfigReader` / `ConfigWriter` / `ConfigConnector` / `ConfigProvider` 等 trait）与安全、性能设计，详见 [🏗️ 架构文档](docs/ARCHITECTURE.md)。
-
----
-
-## 🧪 测试
-
-### 🎯 测试策略
-
-测试金字塔覆盖七层：`src/` 内联单元测试、按功能域组织的集成测试（`tests/core`、`tests/security`、`tests/remote`、`tests/watcher`、`tests/cli`）、33 个经 `[[test]]` 显式注册的 E2E 套件（`tests/e2e`）、宏测试（`macros/tests`，trybuild 编译失败用例）、模糊测试（`fuzz/`，3 个 cargo-fuzz 目标）、Criterion 基准（`benches/`，10 组）与公开 API 文档测试。各层命令、357 条场景矩阵与 E2E 文件映射见 [🧪 测试场景文档](docs/TEST_SCENARIOS.md)。
-
-### ▶️ 运行命令（与 CI 一致）
-
-<details>
-<summary>📄 代码 · bash</summary>
-
-```bash
-# 全量测试（CI 矩阵按 default / recommended / full 三档运行）
-cargo test --workspace --features full
-
-# Lint 与格式门禁
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo fmt --all -- --check
-
-# 覆盖率门禁：行覆盖率不低于 90%
-cargo llvm-cov --workspace --all-features --fail-under-lines 90
-
-# 基准测试（与 CI 一致；CI 另加 -- --save-baseline current）
-cargo bench --features dev,etcd-watch,change-stream --benches
-
-# interpolation 基准（merge_bench / interpolation_bench / value_path_bench 的
-# required-features = ["interpolation"]，上面的命令会跳过这三个，需补跑）
-cargo bench --features "dev,etcd-watch,change-stream,interpolation" --benches
-
-# 模糊测试（在 fuzz/ 目录下）
-cargo fuzz run parser
-```
-
-</details>
-
-部分集成测试需要本地外部服务：总线组需要 NATS（CI 使用 `nats:2.10 -js` 容器），Redis（16379）/ etcd（2379）/ Consul（8500）/ Nacos（8848）组的集成测试同样需要对应服务；`docker-compose.test.yml` 一并提供了这五个服务（无服务时按端口守卫跳过）。
-
-### 📊 测试规模
-
-截至 v0.6.0：单元测试 2433 个（`src/` 内联，`grep -rE -c '#\[(tokio::)?test\b' src` 实测）、集成与 E2E 共 784 个（`tests/`，67 个文件）、模糊测试目标 3 个、Criterion 基准 10 组；覆盖率门禁为行覆盖率不低于 90%，CI 与 pre-push 钩子双重执行。逐项统计见 [🧪 测试场景文档 · 统计汇总](docs/TEST_SCENARIOS.md#6-统计汇总)。
-
----
-
-## 📊 性能
-
-基线在开发机本地采集（criterion 中位数口径）：50 字段加载约 691 ns、200 字段约 713 ns、千级浅合并约 20.9 µs、变更流单订阅者往返约 1.98 µs、零拷贝读取（`get_shared`）较大值深拷贝（`get_raw`）约 2.1 倍提升；实际性能取决于配置复杂度与硬件，可运行 `cargo bench` 复现。完整基准数据表与测量口径见 [📈 性能优化指南 · 性能基线](docs/PERFORMANCE.md#-性能基线)；无锁动态读取、`IndexMap` 键序、自适应去抖与特性门控裁剪等设计要点见 [🏗️ 架构文档 · 性能设计](docs/ARCHITECTURE.md#-性能设计)。
+全部 22 个可运行示例位于 [`examples/`](examples/) 目录，每个示例对应一个 `cargo run --bin` 目标，覆盖基础加载、热重载、加密与密钥轮换、校验、插值、审计、快照、迁移、动态字段、远程来源（etcd / Consul）、总线、渐进发布、Schema 生成等全部特性域；逐示例的文件、依赖服务与验收标准见 [🧪 测试场景文档 · examples 运行清单](docs/cn/TEST_SCENARIOS.md)。
 
 ---
 
 ## 🔒 安全
 
-### 🛡️ 安全设计
-
-安全设计围绕敏感数据全生命周期防护展开：XChaCha20-Poly1305 认证加密与 HKDF-SHA256 字段级密钥派生、丢弃即清零的内存安全、密钥版本与轮换治理、内置 JWT/CORS/SSRF/TLS 校验规则、错误脱敏与 HMAC 签名审计日志、远程来源 SSRF 校验与熔断器。逐项机制的代码级细节见 [🏗️ 架构文档 · 安全设计](docs/ARCHITECTURE.md#-安全设计)，安全配置最佳实践与漏洞处理流程见 [🔒 安全文档](docs/SECURITY.md)。
-
-### ⛓️ 供应链与门禁
-
-`cargo deny check`、`cargo audit` 与 lefthook 私钥扫描、覆盖率门禁等供应链门禁在 CI 与本地 Git 钩子双重执行，完整清单见 [🔒 安全文档 · 供应链与门禁](docs/SECURITY.md#供应链与门禁)。
-
-### 🚨 报告安全漏洞
-
-请勿通过公开 issue 报告安全漏洞。请使用 GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/policy) 私密披露通道提交报告。项目承诺 48 小时内确认、7 天内给出初步评估。完整政策见 [SECURITY.md](docs/SECURITY.md)。
+请勿通过公开 issue 报告安全漏洞：请使用 GitHub [Security Advisories](https://github.com/Kirky-X/confers/security/policy) 私密披露通道提交报告。安全设计、供应链门禁与漏洞处理流程见 [🔒 安全文档](docs/cn/SECURITY.md)。
 
 ---
 
@@ -394,8 +290,8 @@ cargo fuzz run parser
 <tr><td align="center">✅</td><td>安全与审计</td><td>XChaCha20-Poly1305 加密、密钥管理与轮换、审计日志、安全规则校验器</td></tr>
 <tr><td align="center">✅</td><td>远程与总线</td><td>HTTP 轮询、etcd、Consul、Nacos、Kubernetes ConfigMap / Secret、NATS 与 Redis 总线</td></tr>
 <tr><td align="center">✅</td><td>远程来源稳定</td><td><code>remote</code>、<code>etcd</code>、<code>consul</code>、<code>etcd-watch</code> 转正：接口已冻结，1.0 前不再破坏性变更（watch 兼容性回归测试守护）</td></tr>
-<tr><td align="center">✅</td><td>性能优化</td><td>criterion 基线（<a href="docs/PERFORMANCE.md#📊-性能基线">性能基线</a>：加载 / 合并 / watch 分发）、内存上限与惰性分段解析、高频读取零拷贝热路径（<code>get_shared</code> 约 2.1x）</td></tr>
-<tr><td align="center">✅</td><td>云原生集成</td><td>服务网格流量切分（<code>canary</code> 编排器 + <a href="docs/CANARY_ORCHESTRATION.md">Envoy/Istio 样例</a>）、分布式追踪集成（<code>tracing</code> 门面：load/reload/decrypt/remote_fetch span）</td></tr>
+<tr><td align="center">✅</td><td>性能优化</td><td>criterion 基线（<a href="docs/cn/PERFORMANCE.md#-性能基线">性能基线</a>：加载 / 合并 / watch 分发）、内存上限与惰性分段解析、高频读取零拷贝热路径（<code>get_shared</code> 约 2.1x）</td></tr>
+<tr><td align="center">✅</td><td>云原生集成</td><td>服务网格流量切分（<code>canary</code> 编排器 + <a href="docs/cn/CANARY_ORCHESTRATION.md">Envoy/Istio 样例</a>）、分布式追踪集成（<code>tracing</code> 门面：load/reload/decrypt/remote_fetch span）</td></tr>
 </table>
 
 </details>
@@ -404,13 +300,7 @@ cargo fuzz run parser
 
 ## 🤝 参与贡献
 
-详细的贡献流程与代码规范请参阅 [🤝 贡献指南](docs/CONTRIBUTING.md)。
-
-### 🛠️ 开发环境
-
-工具链为 Rust 1.97.1（`rust-toolchain.toml` 锁定）；提交前运行 `cargo fmt --all -- --check` 与 `cargo clippy --all-targets --all-features -- -D warnings`；[lefthook](https://github.com/evilmartians/lefthook) Git 钩子在 pre-commit 执行 rustfmt、clippy、`cargo deny check` 与私钥扫描，commit-msg 校验 Conventional Commits，pre-push 执行 `cargo audit` 与覆盖率门禁。完整环境搭建步骤见 [🤝 贡献指南 · 环境准备](docs/CONTRIBUTING.md#-环境准备)。
-
-### 💖 贡献方式
+详细的贡献流程与代码规范请参阅 [🤝 贡献指南](docs/cn/CONTRIBUTING.md)。
 
 <table style="width:100%; border-collapse: collapse">
 <tr>
@@ -445,22 +335,7 @@ cargo fuzz run parser
 
 ## 📋 更新日志
 
-完整版本历史见 [📋 更新日志](docs/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式，语义化版本）。
-
-<details>
-<summary>📋 表格</summary>
-
-| 版本 | 日期 | 要点 |
-|------|------|------|
-| 0.6.0-rc.10 | 2026-10-10 | 依赖升版与特性收窄：`etcd-client` 0.20→0.21、逐依赖显式特性最小化（async-nats/clap/futures/tracing 裁剪无使用点特性）；CI actions SHA pin 升级；`cargo audit` 无漏洞 |
-| 0.6.0-rc.7 | 2026-10-08 | feature 自洽修复（async-core 补 `async-trait` 依赖、默认组合测试门控）；死代码与测试专用函数清理；复杂热点抽辅助函数收敛；注释卫生与治理记录出库 |
-| 0.6.0-rc.6 | 2026-10-02 | 52 项审计缺陷修复：`#[config(profile)]` 环境专属文件叠加、`encrypt` 字段属性真实化与 Vault lease 提前刷新、CLI 默认脱敏、配置源按声明序合并、敏感文件落盘 0600、移除死依赖 `secrecy`/`aes-gcm`；破坏面声明：`#[config(validate)]` no-op 化、`CorsValidator` 字段化、`WatcherGuard::shutdown` panic 语义修正 |
-| 0.6.0-rc.5 | 2026-09-21 | 自研 i18n 门面（`src/i18n` catalog/locale，基于 `fluent-bundle`/`unic-langid`）；`keyring` / `cloud-kms` 隐含 `encryption`；pre-commit 门禁与 detect-secrets 基线；移除 `compact_str` 直接依赖 |
-| 0.6.0-rc.4 | 2026-09-13 | 统一变更流端口（`change-stream`）；新增 Kubernetes / Nacos 配置源与 etcd 原生 watch；CLI 新增 `doctor`、`schema`、`get` 子命令；零拷贝热路径、审计 HMAC 链式签名与惰性分段解析（0.6.0-rc.3 版本号跳过未发布，内容随本版发布） |
-| 0.6.0-rc.2 | 2026-09-07 | 12 项以上 0.x 依赖刷新（async-nats 0.50、chacha20poly1305 0.11、garde 0.23 等）；测试金字塔固化，补齐 7 个 E2E 套件并注册 |
-| 0.5.1 | 2026-08-06 | 新增 `SecurityValidator` 安全规则与 `FeatureToggleRegistry` 运行时开关；修复 SSRF 白名单绕过与 TLS 版本比较等问题 |
-
-</details>
+完整版本历史见 [📋 更新日志](docs/cn/CHANGELOG.md)（遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 格式，语义化版本）。
 
 ---
 
