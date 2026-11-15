@@ -128,7 +128,7 @@ For etcd or Consul backends, enable the `etcd` or `consul` feature and use `Etcd
 
 ## 🎨 Feature Flags
 
-The library is feature-gated. Common features and the full feature matrix (with default-enabled state) are maintained in [README · Feature Flags](../README.md#-feature-flags); the complete feature preset list (`default`, `minimal`, `recommended`, `dev`, `production`, `distributed`, `full`) is in the `[features]` definition of `Cargo.toml`.
+The library is feature-gated. Common features and the full feature matrix (with default-enabled state) are maintained in [README · Feature Flags](../../README.md#-feature-flags); the complete feature preset list (`default`, `minimal`, `recommended`, `dev`, `production`, `distributed`, `full`) is in the `[features]` definition of `Cargo.toml`.
 
 ## 🚨 Error Handling
 

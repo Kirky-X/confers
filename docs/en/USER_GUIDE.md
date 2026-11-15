@@ -99,11 +99,11 @@ Add `confers` to your `Cargo.toml`:
 
 **Available feature presets:**
 
-The per-preset feature lists and use cases of the six presets `minimal` / `recommended` / `dev` / `production` / `distributed` / `full` are maintained in [README · Feature Presets](../README.md#-feature-flags).
+The per-preset feature lists and use cases of the six presets `minimal` / `recommended` / `dev` / `production` / `distributed` / `full` are maintained in [README · Feature Presets](../../README.md#-feature-flags).
 
 **Single features:**
 
-Every optional capability is an independent feature flag; the complete single-feature matrix (with default-enabled state and descriptions, mapping item by item to the `[features]` definition in `Cargo.toml`) is in [README · Feature Matrix](../README.md#-feature-matrix).
+Every optional capability is an independent feature flag; the complete single-feature matrix (with default-enabled state and descriptions, mapping item by item to the `[features]` definition in `Cargo.toml`) is in [README · Feature Matrix](../../README.md#-feature-matrix).
 
 For async/remote support, add tokio:
 
@@ -1055,4 +1055,4 @@ Before deploying to production, check every security item below:
 | [🔒 Security](SECURITY.md) | security policy and vulnerability reporting process |
 | [⚡ Performance Guide](PERFORMANCE.md) | performance optimization and benchmark data |
 | [❓ FAQ](FAQ.md) | frequently asked questions |
-| [💻 Example Code](../examples/) | real-world code examples |
+| [💻 Example Code](../../examples/) | real-world code examples |

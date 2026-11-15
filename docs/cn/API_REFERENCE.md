@@ -28,7 +28,7 @@
 
 ### 📦 特性说明
 
-confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../README.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
+confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../../README_CN.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
 
 ---
 
@@ -2050,4 +2050,4 @@ RUST_LOG=debug cargo run -p confers-examples --bin basic_usage
 
 如有疑问或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
 
-**[🏠 返回首页](../README.md)**
+**[🏠 返回首页](../../README_CN.md)**

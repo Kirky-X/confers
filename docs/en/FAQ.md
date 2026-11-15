@@ -54,7 +54,7 @@ It targets **Rust developers** who need a robust, production-grade configuration
 - ✅ Mainstream formats supported (TOML, JSON, YAML)
 - ✅ Environment variable overrides
 - ✅ Validation framework
-- ✅ Remote sources (`remote`, `etcd`, `consul`, `etcd-watch`): public interfaces frozen, no breaking changes before 1.0 (consistent with the [README roadmap](../README.md#️-development-roadmap))
+- ✅ Remote sources (`remote`, `etcd`, `consul`, `etcd-watch`): public interfaces frozen, no breaking changes before 1.0 (consistent with the [README roadmap](../../README.md#️-roadmap))
 
 **Maturity indicators:**
 
@@ -107,7 +107,7 @@ It targets **Rust developers** who need a robust, production-grade configuration
 
 ### ❓ What license does the project use?
 
-This project is released under the [MIT license](../LICENSE), an OSI-recognized permissive open-source license (consistent with [README · License](../README.md#-license)).
+This project is released under the [MIT license](../../LICENSE), an OSI-recognized permissive open-source license (consistent with [README · License](../../README.md#-license)).
 
 **All the rights you get:**
 
@@ -166,7 +166,7 @@ fn main() {
 
 **Feature presets (recommended):**
 
-The per-preset feature lists and use cases of the six presets `minimal` / `recommended` / `dev` / `production` / `distributed` / `full` are maintained in [README · Feature Presets](../README.md#-feature-flags); the Cargo.toml snippets below apply directly.
+The per-preset feature lists and use cases of the six presets `minimal` / `recommended` / `dev` / `production` / `distributed` / `full` are maintained in [README · Feature Presets](../../README.md#-feature-flags); the Cargo.toml snippets below apply directly.
 
 **Usage examples:**
 
@@ -413,4 +413,4 @@ Error: Validation failed: ...
 |:---------------:|:------------------:|:----------:|
 | [🐛 Report an issue](https://github.com/Kirky-X/confers/issues) | [💬 Community discussions](https://github.com/Kirky-X/confers/discussions) | [📧 Contact support](mailto:Kirky-X@outlook.com) |
 
-**[📖 User Guide](USER_GUIDE.md)** • **[🔧 Online API Docs](https://docs.rs/confers)** • **[🏠 Back to Home](../README.md)**
+**[📖 User Guide](USER_GUIDE.md)** • **[🔧 Online API Docs](https://docs.rs/confers)** • **[🏠 Back to Home](../../README.md)**

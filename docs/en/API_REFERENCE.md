@@ -28,7 +28,7 @@ This reference document fully covers Confers' public APIs, including the config 
 
 ### 📦 Feature Notes
 
-confers provides flexible feature configuration; users can pick the capabilities they need. The feature presets (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) and the list and default-enabled state of every single feature are maintained in [README · Feature Flags](../README.md#-feature-flags) (the feature matrix maps item by item to the `[features]` definition in `Cargo.toml`).
+confers provides flexible feature configuration; users can pick the capabilities they need. The feature presets (`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`) and the list and default-enabled state of every single feature are maintained in [README · Feature Flags](../../README.md#-feature-flags) (the feature matrix maps item by item to the `[features]` definition in `Cargo.toml`).
 
 ---
 
@@ -2050,4 +2050,4 @@ RUST_LOG=debug cargo run -p confers-examples --bin basic_usage
 
 For questions or suggestions, visit the [GitHub repository](https://github.com/Kirky-X/confers).
 
-**[🏠 Back to Home](../README.md)**
+**[🏠 Back to Home](../../README.md)**

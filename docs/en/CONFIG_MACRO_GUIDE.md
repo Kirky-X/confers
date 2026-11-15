@@ -823,7 +823,7 @@ confers = { version = "0.6.0", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
-The feature list of the `recommended` preset is in [README · Feature Presets](../README.md#-feature-flags).
+The feature list of the `recommended` preset is in [README · Feature Presets](../../README.md#-feature-flags).
 
 ### Development Configuration
 
@@ -845,7 +845,7 @@ confers = { version = "0.6.0", features = ["production"] }
 garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
-The feature list of the `production` preset is likewise in [README · Feature Presets](../README.md#-feature-flags).
+The feature list of the `production` preset is likewise in [README · Feature Presets](../../README.md#-feature-flags).
 
 ---
 

@@ -99,7 +99,7 @@ This project uses feature flags to enable different capabilities. During develop
 
 **Default features:** `toml`, `json`, `dotenv`
 
-The complete list of all single features and feature presets (mapping item by item to the `[features]` definition in `Cargo.toml`) is maintained in [README · Feature Matrix](../README.md#-feature-matrix).
+The complete list of all single features and feature presets (mapping item by item to the `[features]` definition in `Cargo.toml`) is maintained in [README · Feature Matrix](../../README.md#-feature-matrix).
 
 Tests can run under different feature combinations:
 

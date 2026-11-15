@@ -823,7 +823,7 @@ confers = { version = "0.6.0", features = ["recommended"] }
 garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
-`recommended` 预设包含的特性清单见 [README · 功能预设](../README.md#-特性标志)。
+`recommended` 预设包含的特性清单见 [README · 功能预设](../../README_CN.md#-特性标志)。
 
 ### 开发环境配置
 
@@ -845,7 +845,7 @@ confers = { version = "0.6.0", features = ["production"] }
 garde = { version = "0.23", features = ["derive", "email"] }
 ```
 
-`production` 预设包含的特性清单同样见 [README · 功能预设](../README.md#-特性标志)。
+`production` 预设包含的特性清单同样见 [README · 功能预设](../../README_CN.md#-特性标志)。
 
 ---
 
