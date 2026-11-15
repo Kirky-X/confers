@@ -171,23 +171,23 @@ The per-preset feature lists and use cases of the six presets `minimal` / `recom
 **Usage examples:**
 
 ```toml
-# 最小化使用
+# Minimal usage
 [dependencies]
 confers = { version = "0.6.0", default-features = false, features = ["minimal"] }
 
-# 推荐配置
+# Recommended configuration
 [dependencies]
 confers = { version = "0.6.0", default-features = false, features = ["recommended"] }
 
-# 生产配置
+# Production configuration
 [dependencies]
 confers = { version = "0.6.0", default-features = false, features = ["production"] }
 
-# 分布式系统配置
+# Distributed system configuration
 [dependencies]
 confers = { version = "0.6.0", default-features = false, features = ["distributed"] }
 
-# 全量特性配置
+# All-features configuration
 [dependencies]
 confers = { version = "0.6.0", features = ["full"] }
 ```
@@ -236,7 +236,7 @@ Choosing the right feature combination can significantly reduce compile time and
 use confers::Config;
 use serde::{Deserialize, Serialize};
 
-// 1. 定义配置结构
+// 1. Define the config struct
 #[derive(Config, Serialize, Deserialize, Debug)]
 #[config(env_prefix = "APP_")]
 struct ConfersConfig {
@@ -246,7 +246,7 @@ struct ConfersConfig {
 }
 
 fn main() -> anyhow::Result<()> {
-    // 2. 从默认来源加载配置
+    // 2. Load the configuration from default sources
     let config = ConfersConfig::load_sync()?;
 
     println!("Host: {}, Port: {}", config.host, config.port);
@@ -311,7 +311,7 @@ let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .build()?;
 
-// 校验不会自动执行：需在构建后显式调用
+// Validation does not run automatically: call it explicitly after building
 config.confers_validate()?;
 ```
 

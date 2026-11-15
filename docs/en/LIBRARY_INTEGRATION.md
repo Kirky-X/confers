@@ -46,7 +46,7 @@ fn main() -> confers::ConfigResult<()> {
         .env()
         .build()?;
 
-    // 访问带类型的配置
+    // Access the typed configuration
     println!("name = {}", config.name);
     println!("port = {}", config.port);
     Ok(())
@@ -64,7 +64,7 @@ let value = ConfigBuilder::<serde_json::Value>::new()
     .file("base.toml")
     .file("override.toml")
     .env()
-    .build_annotated()?; // 返回带有来源信息的 AnnotatedValue
+    .build_annotated()?; // Returns an AnnotatedValue with provenance
 ```
 
 ### Source chains

@@ -50,13 +50,13 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 **2. Install helper tools:**
 
 ```bash
-# 代码格式化工具
+# Code formatter
 rustup component add rustfmt
 
-# 静态分析工具
+# Static analysis tool
 rustup component add clippy
 
-# 代码覆盖率工具（可选）
+# Code coverage tool (optional)
 cargo install cargo-llvm-cov
 ```
 
@@ -83,13 +83,13 @@ cargo --version
 Before developing, confirm the dev environment is ready:
 
 ```bash
-# 安装 Rust 工具链
+# Install the Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 安装必要组件
+# Install required components
 rustup component add rustfmt clippy
 
-# 安装项目依赖
+# Install project dependencies
 cargo build
 ```
 
@@ -104,9 +104,9 @@ The complete list of all single features and feature presets (mapping item by it
 Tests can run under different feature combinations:
 
 ```bash
-cargo test --all-features  # 运行全部特性的测试
-cargo test --features cli  # 仅运行 CLI 相关测试
-cargo test --features remote  # 仅运行远程配置相关测试
+cargo test --all-features  # run tests with all features
+cargo test --features cli  # run only CLI-related tests
+cargo test --features remote  # run only remote-config-related tests
 ```
 
 ### Git Hooks (lefthook)
@@ -122,13 +122,13 @@ The repository uses [lefthook](https://github.com/evilmartians/lefthook) for loc
 ### Build and Test
 
 ```bash
-# 构建项目
+# Build the project
 cargo build
 
-# 运行全部测试
+# Run all tests
 cargo test --all-features
 
-# 运行示例（examples 对 confers 的依赖固定启用 full 特性）
+# Run an example (the examples crate pins the full feature set for its confers dependency)
 cargo run -p confers-examples --bin basic_usage
 ```
 
@@ -140,19 +140,19 @@ This project follows test-driven development (TDD): write the test first, then t
 
 ```mermaid
 graph LR
-    A[Fork 仓库] --> B[创建分支]
-    B --> C[修改代码]
-    C --> D[编写测试]
-    D --> E[运行测试]
-    E --> F{测试通过?}
-    F -->|否| C
-    F -->|是| G[提交代码]
-    G --> H[推送到 Fork]
-    H --> I[创建 PR]
-    I --> J[代码评审]
-    J --> K{评审通过?}
-    K -->|需要修改| C
-    K -->|是| L[已合并!]
+    A[Fork the repo] --> B[Create a branch]
+    B --> C[Modify code]
+    C --> D[Write tests]
+    D --> E[Run tests]
+    E --> F{Tests pass?}
+    F -->|No| C
+    F -->|Yes| G[Commit code]
+    G --> H[Push to fork]
+    H --> I[Create a PR]
+    I --> J[Code review]
+    J --> K{Review approved?}
+    K -->|Needs changes| C
+    K -->|Yes| L[Merged!]
 ```
 
 ### Detailed Steps
@@ -162,15 +162,15 @@ graph LR
 Branches should be created off `main`.
 
 ```bash
-# 同步 upstream 的 main 分支
+# Sync the main branch from upstream
 git fetch upstream
 git checkout main
 git merge upstream/main
 
-# 创建特性分支
+# Create a feature branch
 git checkout -b feature/TICKET-ID-description
 
-# 或创建缺陷修复分支
+# Or create a bugfix branch
 git checkout -b bugfix/TICKET-ID-description
 ```
 
@@ -190,13 +190,13 @@ git checkout -b bugfix/TICKET-ID-description
 Before committing, make sure the code passes all local checks.
 
 ```bash
-# 格式化代码
+# Format the code
 cargo fmt
 
-# 运行 Clippy 静态分析（必须零警告）
+# Run Clippy static analysis (zero warnings required)
 cargo clippy -- -D warnings
 
-# 运行全部测试
+# Run all tests
 cargo test --all-features
 ```
 
@@ -235,13 +235,13 @@ After finishing development or a bug fix, you **must** merge back to the main br
 Make sure all quality checks pass before merging:
 
 ```bash
-# 确保代码格式化
+# Make sure the code is formatted
 cargo fmt
 
-# 运行 Clippy 静态分析（要求零警告）
+# Run Clippy static analysis (zero warnings required)
 cargo clippy -- -D warnings
 
-# 启用全部特性运行全部测试
+# Run all tests with all features enabled
 cargo test --all-features
 ```
 
@@ -250,21 +250,21 @@ cargo test --all-features
 **Step 2: merge into main**
 
 ```bash
-# 切换到 main 分支
+# Switch to the main branch
 git checkout main
 
-# 与 upstream 同步
+# Sync with upstream
 git fetch upstream
 git merge upstream/main
 
-# 合并你的 feature/bugfix 分支
+# Merge your feature/bugfix branch
 git merge --no-ff feature/TICKET-ID-description
 
-# 如有冲突则需要解决
-# 解决冲突后重新运行质量检查
+# Resolve conflicts if any
+# Re-run the quality checks after resolving conflicts
 cargo fmt && cargo clippy -- -D warnings && cargo test --all-features
 
-# 推送合并结果
+# Push the merge result
 git push origin main
 ```
 
@@ -273,13 +273,13 @@ git push origin main
 After a successful merge, **cleanup is mandatory**:
 
 ```bash
-# 删除本地分支
+# Delete the local branch
 git branch -d feature/TICKET-ID-description
 
-# 删除远程分支（如已推送）
+# Delete the remote branch (if pushed)
 git push origin --delete feature/TICKET-ID-description
 
-# 如果使用了 git worktree，将其移除
+# Remove it if you used a git worktree
 git worktree remove /path/to/worktree
 ```
 
@@ -296,8 +296,8 @@ git worktree remove /path/to/worktree
 
 ```mermaid
 graph TD
-    A[单元测试] --> B[集成测试]
-    B --> C[E2E 测试]
+    A[Unit tests] --> B[Integration tests]
+    B --> C[E2E tests]
 ```
 
 | Test Type | Description | Requirement |
@@ -323,16 +323,16 @@ The following coverage requirements are in effect (overall line coverage ≥ 90%
 **Coverage verification commands:**
 
 ```bash
-# 生成覆盖率报告（HTML）
+# Generate a coverage report (HTML)
 cargo llvm-cov --all-features --open
 
-# 生成 LCOV 格式供 CI 集成
+# Generate LCOV format for CI integration
 cargo llvm-cov --all-features --lcov --output-path lcov.info
 
-# 运行全部测试
+# Run all tests
 cargo test --all-features
 
-# 快速覆盖率检查
+# Quick coverage check
 cargo llvm-cov --all-features --summary-only
 ```
 
@@ -392,29 +392,35 @@ cargo llvm-cov --all-features --summary-only
 ### PR Template
 
 ```markdown
+## Change Description
+
+<!-- Briefly describe what this PR does and why -->
+
 ## Change Type
-- [ ] New feature
-- [ ] Bug fix
-- [ ] Refactoring
-- [ ] Documentation update
-- [ ] Other
 
-## Description
-Briefly describe the purpose and content of this change.
-
-## Testing Status
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Manual testing complete
+- [ ] feat: new feature
+- [ ] fix: bug fix
+- [ ] refactor: refactoring
+- [ ] perf: performance improvement
+- [ ] docs: documentation
+- [ ] test: tests
+- [ ] chore: miscellaneous
+- [ ] ci: CI/CD
+- [ ] breaking: breaking change
 
 ## Checklist
-- [ ] Code follows project coding standards
-- [ ] Necessary tests added
-- [ ] Documentation updated
-- [ ] No new warnings introduced (Zero Warning)
+
+- [ ] Code passes `cargo fmt --all -- --check`
+- [ ] Code passes `cargo clippy --all-targets -- <feature set> -- -D warnings`
+- [ ] Tests pass `cargo test --workspace <feature set>`
+- [ ] New features have corresponding test coverage
+- [ ] New features have a corresponding example
+- [ ] Documentation updated (if needed)
+- [ ] docs/CHANGELOG.md updated (for user-visible changes)
 
 ## Related Issue
-Closes #123
+
+<!-- Related issue number, e.g. Closes #123 -->
 ```
 
 ### Review Criteria

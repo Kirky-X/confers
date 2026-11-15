@@ -40,21 +40,21 @@ confers provides flexible feature configuration; users can pick the capabilities
 
 ```mermaid
 graph TB
-    subgraph Sources ["配置来源"]
-        A["配置文件"]
-        B["环境变量"]
-        C["内存来源"]
-        D["远程来源"]
+    subgraph Sources ["Config sources"]
+        A["Config files"]
+        B["Environment variables"]
+        C["In-memory source"]
+        D["Remote sources"]
     end
 
     subgraph Loader ["ConfigBuilder"]
-        E["智能合并"]
-        F["校验"]
-        G["热重载"]
+        E["Smart merge"]
+        F["Validation"]
+        G["Hot reload"]
     end
 
-    subgraph Output ["输出"]
-        H["类型安全的配置"]
+    subgraph Output ["Output"]
+        H["Type-safe configuration"]
     end
 
     Sources --> Loader
@@ -134,7 +134,7 @@ pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self
 ```rust
 let builder = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
-    .file_optional("config.local.toml"); // 可能不存在
+    .file_optional("config.local.toml"); // may not exist
 ```
 
 ##### `env()`
@@ -166,7 +166,7 @@ pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self
 ```rust
 let builder = ConfigBuilder::<ConfersConfig>::new()
     .env_prefix("APP_");
-// 加载 APP_PORT、APP_HOST 等
+// Loads APP_PORT, APP_HOST, etc.
 ```
 
 **Example:**
@@ -264,7 +264,7 @@ let config = ConfigBuilder::<ConfersConfig>::new()
 ```rust
 use confers::remote::EtcdSourceBuilder;
 
-// 注意：EtcdSourceBuilder 的 build() 是异步方法（内部建立 gRPC 连接）
+// Note: EtcdSourceBuilder::build() is async (it establishes the gRPC connection internally)
 let etcd_source = EtcdSourceBuilder::new()
     .endpoints(vec!["localhost:2379"])
     .prefix("/myapp/config")
@@ -620,11 +620,11 @@ Config errors encountered at runtime. `ConfersError` is a type alias of `ConfigE
 
 ```rust
 pub struct KeyVersion {
-    pub id: String,           // 密钥版本唯一标识
-    pub version: u32,         // 版本号
-    pub created_at: u64,      // 创建时间戳
-    pub status: KeyStatus,    // 密钥状态
-    pub algorithm: String,    // 加密算法
+    pub id: String,           // unique key-version identifier
+    pub version: u32,         // version number
+    pub created_at: u64,      // creation timestamp
+    pub status: KeyStatus,    // key status
+    pub algorithm: String,    // encryption algorithm
 }
 ```
 
@@ -632,10 +632,10 @@ pub struct KeyVersion {
 
 ```rust
 pub enum KeyStatus {
-    Active,       // 活跃，可用于加解密
-    Deprecated,   // 已弃用，仅用于解密历史数据
-    Compromised,  // 已泄露，应立即轮换
-    Expired,      // 已过期，超过有效期
+    Active,       // active; usable for encrypt/decrypt
+    Deprecated,   // deprecated; decrypt-only for historical data
+    Compromised,  // compromised; rotate immediately
+    Expired,      // expired; past its validity window
 }
 ```
 
@@ -643,13 +643,13 @@ pub enum KeyStatus {
 
 ```rust
 pub struct KeyInfo {
-    pub key_id: String,           // 密钥环 ID
-    pub current_version: u32,     // 当前活跃版本
-    pub total_versions: usize,    // 总版本数
-    pub active_versions: usize,   // 活跃版本数
-    pub deprecated_versions: usize, // 已弃用版本数
-    pub created_at: u64,          // 创建时间戳
-    pub last_rotated_at: Option<u64>, // 上次轮换时间
+    pub key_id: String,           // key-ring ID
+    pub current_version: u32,     // current active version
+    pub total_versions: usize,    // total number of versions
+    pub active_versions: usize,   // number of active versions
+    pub deprecated_versions: usize, // number of deprecated versions
+    pub created_at: u64,          // creation timestamp
+    pub last_rotated_at: Option<u64>, // last rotation time
 }
 ```
 
@@ -657,11 +657,11 @@ pub struct KeyInfo {
 
 ```rust
 pub struct RotationResult {
-    pub key_id: String,           // 密钥环 ID
-    pub previous_version: u32,    // 轮换前版本
-    pub new_version: u32,         // 轮换后版本
-    pub rotated_at: u64,          // 轮换时间戳
-    pub reencryption_required: bool, // 是否需要重新加密
+    pub key_id: String,           // key-ring ID
+    pub previous_version: u32,    // version before rotation
+    pub new_version: u32,         // version after rotation
+    pub rotated_at: u64,          // rotation timestamp
+    pub reencryption_required: bool, // whether re-encryption is required
 }
 ```
 
@@ -752,23 +752,23 @@ Construction and composition: `FlagConfig::on_off(default_on: bool)` (produces a
 
 ```mermaid
 graph TB
-    subgraph Storage ["密钥存储"]
-        A["密钥环"]
-        B["版本历史"]
-        C["元数据"]
+    subgraph Storage ["Key storage"]
+        A["Key rings"]
+        B["Version history"]
+        C["Metadata"]
     end
 
     subgraph Manager ["KeyManager"]
-        D["轮换管理"]
-        E["版本控制"]
-        F["安全存储"]
+        D["Rotation management"]
+        E["Version control"]
+        F["Secure storage"]
     end
 
-    subgraph Operations ["操作"]
-        G["创建"]
-        H["轮换"]
-        I["获取"]
-        J["删除"]
+    subgraph Operations ["Operations"]
+        G["Create"]
+        H["Rotate"]
+        I["Fetch"]
+        J["Delete"]
     end
 
     Storage --> Manager
@@ -818,7 +818,7 @@ pub fn initialize(
 use confers::key::KeyManager;
 
 let mut km = KeyManager::new()?;
-let master_key = [0u8; 32]; // 从安全位置获取
+let master_key = [0u8; 32]; // obtain from a secure location
 let version = km.initialize(
     &master_key,
     "production".to_string(),
@@ -894,24 +894,24 @@ The `key-management` feature provides full key lifecycle management, including k
 ```rust
 use confers::key::KeyManager;
 
-// 创建密钥管理器
-let master_key = [0u8; 32]; // 从安全位置获取
+// Create the key manager
+let master_key = [0u8; 32]; // obtain from a secure location
 let mut manager = KeyManager::new()?;
 
-// 初始化新密钥环
+// Initialize a new key ring
 let version = manager.initialize(
     &master_key,
     "production".to_string(),
     "security-team".to_string()
 )?;
 
-// 生成新密钥
+// Generate a new key
 let key = manager.generate_key()?;
 
-// 列出所有密钥
+// List all keys
 let keys = manager.list_keys();
 
-// 轮换密钥
+// Rotate the key
 let result = manager.rotate_key(
     &master_key,
     Some("production".to_string()),
@@ -938,10 +938,10 @@ Automatic key rotation service.
 ```rust
 use confers::key::{KeyRotationPolicy, KeyRotationService};
 
-// 轮换策略（字段全部公开，可按需调整）
+// Rotation policy (all fields public; adjust as needed)
 let policy = KeyRotationPolicy {
     max_versions: 5,
-    rotation_interval_days: 90, // 建议每 90 天轮换
+    rotation_interval_days: 90, // rotating every 90 days is recommended
     grace_period_days: 14,
     auto_rotate: true,
     notify_before_expiry_days: 30,
@@ -949,7 +949,7 @@ let policy = KeyRotationPolicy {
 
 let mut service = KeyRotationService::new(policy);
 
-// 生成、校验并执行轮换（关联/实例方法，需要已初始化的密钥环）
+// Generate, validate, and execute the rotation (associated/instance methods; requires an initialized key ring)
 // let plan = KeyRotationService::create_rotation_plan(&key_ring, 2)?;
 // KeyRotationService::validate_rotation(&key_ring, &plan, &policy)?;
 // let result = service.execute_rotation(
@@ -969,9 +969,9 @@ use confers::key::KeyStorage;
 use std::path::PathBuf;
 
 let mut storage = KeyStorage::new(PathBuf::from("/path/to/keys"))?;
-storage.set_master_key(&master_key); // 设置主密钥，用于加解密密钥数据
-storage.save()?;                     // 将密钥持久化到存储路径
-storage.load()?;                     // 从存储路径加载密钥
+storage.set_master_key(&master_key); // set the master key used to encrypt/decrypt key data
+storage.save()?;                     // persist keys to the storage path
+storage.load()?;                     // load keys from the storage path
 ```
 
 ---
@@ -985,11 +985,11 @@ storage.load()?;                     // 从存储路径加载密钥
 
 ```mermaid
 graph LR
-    A["明文"] --> B["XChaCha20-Poly1305 加密"]
-    B --> C["输出<br/>nonce + ciphertext"]
-    C --> D["存储或传输"]
-    D --> E["解密"]
-    E --> F["恢复明文"]
+    A["Plaintext"] --> B["XChaCha20-Poly1305 encrypt"]
+    B --> C["Output<br/>nonce + ciphertext"]
+    C --> D["Store or transmit"]
+    D --> E["Decrypt"]
+    E --> F["Recover plaintext"]
 ```
 
 #### Creation
@@ -1029,7 +1029,7 @@ pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>)
 **Example:**
 
 ```rust
-let key = [0u8; 32]; // 应使用安全的随机密钥
+let key = [0u8; 32]; // use a securely random key
 let (nonce, ciphertext) = crypto.encrypt(b"my-secret-api-key", &key)?;
 ```
 
@@ -1050,7 +1050,7 @@ pub fn decrypt(&self, nonce: &[u8], ciphertext: &[u8], key: &[u8]) -> Result<Zer
 
 ```rust
 let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
-// Zeroizing<Vec<u8>> 经 Deref 可调用 Vec 的 as_slice()
+// Zeroizing<Vec<u8>> derefs to Vec, so as_slice() is available
 assert_eq!(decrypted.as_slice(), b"my-secret-api-key");
 ```
 
@@ -1075,7 +1075,7 @@ use confers::derive_field_key;
 
 let master_key = [0u8; 32];
 let field_key = derive_field_key(&master_key, "database.password", "v1")?;
-// field_key: Zeroizing<[u8; 32]>，可经 Deref 当 [u8; 32] 使用
+// field_key: Zeroizing<[u8; 32]>; derefs to [u8; 32]
 ```
 
 ---
@@ -1092,7 +1092,7 @@ Environment variable security validator preventing injection attacks.
 use confers::security::{EnvSecurityValidator, EnvironmentValidationConfig};
 use std::collections::HashMap;
 
-// 通过 EnvironmentValidationConfig 自定义校验规则
+// Customize validation rules via EnvironmentValidationConfig
 let config = EnvironmentValidationConfig::new()
     .with_custom_blocked_patterns(vec![
         r".*_SECRET$".to_string(),
@@ -1100,15 +1100,15 @@ let config = EnvironmentValidationConfig::new()
     ]);
 let validator = EnvSecurityValidator::with_config(config);
 
-// 校验单个环境变量名；第二个参数为值上下文，
-// 传入以 "enc:" 开头的加密值时会跳过敏感名封锁规则
+// Validate a single environment variable name; the second argument is a value context:
+// passing an encrypted value starting with "enc:" skips the sensitive-name block rules
 validator.validate_env_name("APP_NAME", None)?;
-validator.validate_env_name("DB_PASSWORD", None)?; // Err: 命中 *_PASSWORD$ 封锁规则
+validator.validate_env_name("DB_PASSWORD", None)?; // Err: hits the *_PASSWORD$ block rule
 
-// 校验环境变量值（长度与内容检查）
+// Validate an environment variable value (length and content checks)
 validator.validate_env_value("production")?;
 
-// 批量校验「配置字段名 -> 环境变量名」映射
+// Batch-validate "config field name -> environment variable name" mappings
 let mut mapping = HashMap::new();
 mapping.insert("app_name".to_string(), "APP_NAME".to_string());
 validator.validate_env_mapping(&mapping)?;
@@ -1158,8 +1158,8 @@ use confers::security::rules::{SecurityValidator, SecurityValidatorRegistry};
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::collections::HashMap;
 
-// confers 公开面没有内置的 ConfigProvider 实现，
-// 需为承载配置键值的类型自行实现该 trait
+// The confers public surface ships no built-in ConfigProvider implementation;
+// implement the trait yourself on the type holding the config keys/values
 struct ConfigMap(HashMap<String, AnnotatedValue>);
 
 impl ConfigProvider for ConfigMap {
@@ -1171,7 +1171,7 @@ impl ConfigProvider for ConfigMap {
     }
 }
 
-// 使用内置校验器（JWT、CORS、SSRF、TLS）
+// Use the built-in validators (JWT, CORS, SSRF, TLS)
 let registry = SecurityValidatorRegistry::with_defaults();
 let config = ConfigMap(HashMap::new());
 let report = registry.validate_all(&config);
@@ -1202,7 +1202,7 @@ struct MyValidator;
 
 impl SecurityValidator for MyValidator {
     fn validate(&self, config: &dyn ConfigProvider) -> Result<(), Vec<SecurityViolation>> {
-        // 自定义校验逻辑
+        // custom validation logic
         Ok(())
     }
     fn name(&self) -> &'static str { "my_validator" }
@@ -1225,16 +1225,16 @@ use confers::toggle::FeatureToggleRegistry;
 
 let registry = FeatureToggleRegistry::new();
 
-// 注册并控制特性
+// Register and control features
 registry.register("new_ui", "New UI Design", false);
 registry.enable("new_ui");
 assert!(registry.is_enabled("new_ui"));
 
-// 从配置切换（config 为自行实现的 ConfigProvider，
-// 如上文 SecurityValidatorRegistry 示例中的 ConfigMap 实例）
+// Toggle from configuration (config is your own ConfigProvider implementation,
+// e.g. the ConfigMap instance in the SecurityValidatorRegistry example above)
 registry.load_from_config(&config, "features");
 
-// 列出全部开关
+// List all toggles
 for info in registry.list() {
     println!("{}: enabled={}, desc={}", info.name, info.enabled, info.description);
 }
@@ -1294,12 +1294,12 @@ let mut config = ModuleConfig::new(
     Some("mysql"),
 );
 
-// 访问模块信息
+// Access module information
 assert_eq!(config.name(), "database");
 assert_eq!(config.active_profile(), "mysql");
 assert_eq!(config.profile_count(), 2);
 
-// 切换 profile
+// Switch profile
 config.set_active_profile("postgresql")?;
 assert_eq!(config.active_profile(), "postgresql");
 ```
@@ -1312,7 +1312,7 @@ Registry managing config groups (modules).
 use confers::modules::ModuleRegistry;
 use std::path::PathBuf;
 
-// ModuleRegistry 未提供 new()，使用 Default 或 with_capacity 创建
+// ModuleRegistry has no new(); create it with Default or with_capacity
 let mut registry = ModuleRegistry::default();
 ```
 
@@ -1342,7 +1342,7 @@ use std::path::PathBuf;
 
 let mut registry = ModuleRegistry::default();
 
-// 注册配置分组
+// Register config groups
 registry.register_group(
     "database",
     vec![
@@ -1361,16 +1361,16 @@ registry.register_group(
     Some("redis"),
 );
 
-// 以指定 profile 加载模块
+// Load modules under the specified profile
 let config = registry.load_module("database", "postgresql", &LoaderConfig::default())?;
 
-// 或以活跃 profile 加载
+// Or load under the active profile
 let config = registry.load_active("database", &LoaderConfig::default())?;
 
-// 切换 profile
+// Switch profile
 registry.set_active_profile("database", "mysql")?;
 
-// 从环境变量解析（如 DATABASE_PROFILE=postgresql）
+// Resolve from an environment variable (e.g. DATABASE_PROFILE=postgresql)
 registry.resolve_from_env(Some(""));
 ```
 
@@ -1402,7 +1402,7 @@ Generates TypeScript type definitions.
 use confers::schema::TypeScriptGenerator;
 use schemars::JsonSchema;
 
-// generate 要求类型实现 schemars::JsonSchema
+// generate requires the type to implement schemars::JsonSchema
 #[derive(confers::Config, JsonSchema)]
 pub struct ConfersConfig {
     pub name: String,
@@ -1484,7 +1484,7 @@ use confers::key::KeyManager;
 
 fn rotate_keys() -> Result<(), Box<dyn std::error::Error>> {
     let mut km = KeyManager::new()?;
-    let master_key = load_master_key()?; // 从安全存储加载主密钥
+    let master_key = load_master_key()?; // load the master key from secure storage
 
     let result = km.rotate_key(
         &master_key,
@@ -1537,7 +1537,7 @@ use confers::XChaCha20Crypto;
 
 fn encrypt_sensitive_data() -> Result<(), Box<dyn std::error::Error>> {
     let crypto = XChaCha20Crypto::new();
-    let key = load_encryption_key()?; // 32 字节密钥
+    let key = load_encryption_key()?; // 32-byte key
 
     let secret = b"my-super-secret-api-key";
     let (nonce, ciphertext) = crypto.encrypt(secret, &key)?;
@@ -1571,7 +1571,7 @@ fn validate_config() -> Result<(), Box<dyn std::error::Error>> {
         .file("server.toml")
         .build()?;
 
-    config.validate()?; // 使用 garde 校验
+    config.validate()?; // validate with garde
     println!("Configuration is valid");
     Ok(())
 }
@@ -1806,12 +1806,12 @@ let safe = confers::error::sanitize::sanitize_error_message(&raw_error);
 ```rust
 use rand::Rng;
 
-// 生成安全的随机密钥
+// Generate a securely random key
 let mut key = [0u8; 32];
 let mut rng = rand::thread_rng();
 rng.fill(&mut key);
 
-// 配合 XChaCha20Crypto 使用
+// Use together with XChaCha20Crypto
 let crypto = XChaCha20Crypto::new();
 let (nonce, ciphertext) = crypto.encrypt(b"secret", &key)?;
 ```
@@ -1836,19 +1836,19 @@ Use `KeyManager::rotate_key()` to rotate the key to a new version; for usage see
 use confers::audit::{AuditWriter, AuditConfig};
 use std::path::PathBuf;
 
-// 创建审计配置
+// Create the audit configuration
 let audit_config = AuditConfig::builder()
     .log_dir(PathBuf::from("/var/log/confers"))
     .enabled(true)
     .build();
 
-// 创建审计写入器
+// Create the audit writer
 let writer = AuditWriter::builder()
     .log_dir(PathBuf::from("/var/log/confers"))
     .enabled(true)
     .build();
 
-// 记录审计事件（各方法返回 ConfigResult<()>，务必处理错误）
+// Record audit events (each method returns ConfigResult<()>; always handle errors)
 writer.log_load("config.toml")?;
 writer.log_key_access("database_password")?;
 writer.log_decrypt("api_key", true)?;
@@ -1866,17 +1866,17 @@ writer.log_decrypt("api_key", true)?;
 **Environment variable security configuration:**
 
 ```bash
-# 使用环境变量存储敏感信息
+# Store secrets in environment variables
 export APP_DATABASE_URL="postgres://user:password@localhost/db"  # pragma: allowlist secret
 export APP_API_KEY="your-api-key"  # pragma: allowlist secret
-# CONFERS_MASTER_KEY 取 64 位 hex 编码的 32 字节密钥，或 32 字节 ASCII 密钥（不解析 base64）
+# CONFERS_MASTER_KEY accepts a 64-hex-character 32-byte key, or a 32-byte ASCII key (base64 is not parsed)
 export CONFERS_MASTER_KEY="64-hex-chars-or-32-ascii-chars"  # pragma: allowlist secret
 ```
 
 **Remote config security configuration:**
 
 ```rust
-// 远程配置需要直接使用远程来源
+// Remote configuration requires using the remote sources directly
 use confers::remote::HttpPolledSourceBuilder;
 
 let remote_source = HttpPolledSourceBuilder::new()
@@ -2004,7 +2004,7 @@ Validation is enabled via the `validation` feature and the `confers_validate()` 
 ///     port: u16,
 /// }
 ///
-/// // 校验不会自动执行：build() 之后由调用方显式调用
+/// // Validation does not run automatically: the caller invokes it explicitly after build()
 /// let config = ConfigBuilder::<ServerConfig>::new()
 ///     .file("config.toml")
 ///     .build()?;
@@ -2032,7 +2032,7 @@ The confers core does not bind to a specific logging facade; errors are returned
 The repository's example programs use `tracing` + `tracing-subscriber` to output runtime status; pair with `RUST_LOG` to control the log level:
 
 ```bash
-# 以 debug 级别运行某个示例
+# Run an example at debug level
 RUST_LOG=debug cargo run -p confers-examples --bin basic_usage
 ```
 

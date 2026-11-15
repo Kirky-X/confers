@@ -8,23 +8,23 @@
 
 ```mermaid
 flowchart LR
-    subgraph Instances["多实例（每实例一个 ProgressiveReloader）"]
-        R1["reloader-a\nCanary 试运行"]
-        R2["reloader-b\nCanary 试运行"]
-        R3["reloader-c\n等待放行"]
+    subgraph Instances["Multiple instances (one ProgressiveReloader each)"]
+        R1["reloader-a\nCanary trial"]
+        R2["reloader-b\nCanary trial"]
+        R3["reloader-c\nawaiting go-ahead"]
     end
-    subgraph Stream["ChangeStream（统一变更流）"]
-        E1["实例事件：key=canary\nstage=trial_started/committed/rolled_back"]
-        E2["编排指令：key=canary.orchestrator\nadvance / rollback / completed"]
+    subgraph Stream["ChangeStream (unified change stream)"]
+        E1["Instance events: key=canary\nstage=trial_started/committed/rolled_back"]
+        E2["Orchestrator directives: key=canary.orchestrator\nadvance / rollback / completed"]
     end
-    O["CanaryOrchestrator\n（消费侧：分批收集 committed\n→ 健康检查 → 推进/回滚）"]
-    M["MeshWeightPublisher\n（Envoy xDS / Istio 补丁）"]
+    O["CanaryOrchestrator\n(consumer side: collect committed in batches\n→ health check → advance/rollback)"]
+    M["MeshWeightPublisher\n(Envoy xDS / Istio patches)"]
 
     R1 -- "publish(Canary)" --> E1
     R2 -- "publish(Canary)" --> E1
     E1 -- "subscribe" --> O
     O -- "publish(Canary)" --> E2
-    E2 -- "实例消费/运维观察" --> R3
+    E2 -- "instance consumption / ops observation" --> R3
     O -- "publish_weights(canary%, baseline%)" --> M
     M -.-> R1
     M -.-> R2
@@ -44,10 +44,10 @@ Division of responsibilities (and reuse of single-instance components):
 use confers::canary::RolloutPlan;
 
 let plan = RolloutPlan {
-    batch_size: 2,                                  // 每批实例数
-    batch_interval: std::time::Duration::from_secs(30), // 批观察窗（等 committed + 健康轮询）
-    poll_interval: std::time::Duration::from_secs(5),   // 窗口内健康检查节奏
-    failure_threshold: 0.0,                         // Critical 比例上限，超出即回滚（0.0 = 任一 Critical 即回滚）
+    batch_size: 2,                                  // instances per batch
+    batch_interval: std::time::Duration::from_secs(30), // batch observation window (await committed + health polling)
+    poll_interval: std::time::Duration::from_secs(5),   // health-check cadence within the window
+    failure_threshold: 0.0,                         // Critical ratio cap; exceeding it triggers rollback (0.0 = any Critical rolls back)
 };
 ```
 
@@ -109,7 +109,7 @@ implementation only needs to push weights once. The equivalent Envoy and Istio c
 The adaptation layer calls Envoy Admin/EDS to update cluster weights; the static reference config:
 
 ```yaml
-# envoy.yaml（片段）：baseline 与 canary 两组 upstream cluster 按权重分流
+# envoy.yaml (excerpt): baseline and canary upstream clusters split traffic by weight
 static_resources:
   listeners:
     - name: app_listener
@@ -131,9 +131,9 @@ static_resources:
                             weighted_clusters:
                               clusters:
                                 - name: baseline_cluster
-                                  weight: 75      # ← publish_weights(25, 75) 的 baseline 侧
+                                  weight: 75      # ← baseline side of publish_weights(25, 75)
                                 - name: canary_cluster
-                                  weight: 25      # ← canary 侧（随批次线性增长）
+                                  weight: 25      # ← canary side (grows linearly with batches)
   clusters:
     - name: baseline_cluster
       connect_timeout: 1s
@@ -157,7 +157,7 @@ use confers::canary::MeshWeightPublisher;
 use confers::error::ConfigResult;
 
 struct EnvoyWeightPublisher {
-    /// xDS 治理面/Admin 端点，例如 http://envoy-admin:9901
+    /// xDS control plane / Admin endpoint, e.g. http://envoy-admin:9901
     admin_endpoint: String,
     http: reqwest::Client,
 }
@@ -165,8 +165,8 @@ struct EnvoyWeightPublisher {
 #[async_trait]
 impl MeshWeightPublisher for EnvoyWeightPublisher {
     async fn publish_weights(&self, canary_pct: u8, baseline_pct: u8) -> ConfigResult<()> {
-        // 生产实现：经 xDS（或 Admin API）把 weighted_clusters 权重更新为
-        // (canary_pct, baseline_pct)。此处示意 Admin 路径。
+        // Production implementation: update the weighted_clusters weights via xDS
+        // (or the Admin API) to (canary_pct, baseline_pct). Admin path shown here for illustration.
         let url = format!("{}/clusters", self.admin_endpoint);
         self.http.post(url)
             .body(format!(
@@ -199,9 +199,9 @@ spec:
   http:
     - route:
         - destination: { host: app, subset: baseline }
-          weight: 75            # ← publish_weights(25, 75) 的 baseline 侧
+          weight: 75            # ← baseline side of publish_weights(25, 75)
         - destination: { host: app, subset: canary }
-          weight: 25            # ← canary 侧（随批次线性增长）
+          weight: 25            # ← canary side (grows linearly with batches)
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -221,7 +221,7 @@ namespaces/<ns>/virtualservices/app-canary`, replacing the two routes' `weight`)
 
 ```rust
 struct IstioWeightPublisher {
-    /// k8s API 端点与命名空间
+    /// k8s API endpoint and namespace
     api: String,
     namespace: String,
     http: reqwest::Client,

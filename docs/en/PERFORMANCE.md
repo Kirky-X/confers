@@ -39,15 +39,15 @@ The following goals are the performance acceptance reference for production work
 ```rust
 use confers::Config;
 
-// 生产负载优先使用异步
+// Prefer async for production workloads
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 异步加载允许并发 I/O
+    // Async loading allows concurrent I/O
     let config = ConfersConfig::load().await?;
     Ok(())
 }
 
-// 简单脚本可使用同步加载
+// Simple scripts can use synchronous loading
 fn main() -> anyhow::Result<()> {
     let config = ConfersConfig::load_sync()?;
     Ok(())
@@ -63,10 +63,10 @@ use confers::lazy::LazySegmentedConfig;
 
 let config = LazySegmentedConfig::from_toml_document(&huge_toml_text);
 
-// 只解析被访问的段
+// Parse only the segments being accessed
 let server = config.get_segment("server")?;
 
-// 观察解析进度
+// Observe parsing progress
 println!("已解析 {}/{} 段", config.parsed_count(), config.segment_keys().len());
 ```
 
@@ -108,7 +108,7 @@ use confers::Config;
 pub struct Config {
     pub port: u16,
 
-    /// 不参与配置加载，使用结构体默认值
+    /// Not loaded from configuration; uses the struct default
     #[config(skip)]
     pub expensive_rule: ExpensiveValidator,
 }
@@ -128,7 +128,7 @@ use confers::{ConfigBuilder, ConfigLimits};
 let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .limits(ConfigLimits {
-        max_file_size_bytes: 64 * 1024 * 1024, // 单文件上限 64 MB
+        max_file_size_bytes: 64 * 1024 * 1024, // per-file cap: 64 MB
         max_nesting_depth: 32,
         ..Default::default()
     })
@@ -144,7 +144,7 @@ use confers::{new_in_memory, SharedValueReader};
 
 let config = new_in_memory();
 let shared = config.get_shared("large_key").await?;
-// shared: Option<Arc<AnnotatedValue>>（`?` 已解包 ConfersResult 外层），克隆只增加引用计数
+// shared: Option<Arc<AnnotatedValue>> (the `?` already unwrapped the ConfersResult outer layer); cloning only bumps the refcount
 ```
 
 ### Handling Large Files
@@ -162,12 +162,12 @@ let shared = config.get_shared("large_key").await?;
 use confers::dynamic::DynamicField;
 use std::sync::Arc;
 
-// 无锁读取，原子写入
+// Lock-free reads, atomic writes
 let field = Arc::new(DynamicField::new(config.clone()));
 
-// 多读者零争用
-let snapshot1 = field.get();  // 无需加锁
-let snapshot2 = field.get();  // 并发读取
+// Multiple readers, zero contention
+let snapshot1 = field.get();  // no locking needed
+let snapshot2 = field.get();  // concurrent reads
 ```
 
 ### Sharing Config Across Threads
@@ -183,11 +183,11 @@ let config = Arc::new(
         .build()?
 );
 
-// 在多个异步任务之间共享
+// Share across multiple async tasks
 tokio::spawn({
     let config = Arc::clone(&config);
     async move {
-        // 构建产物是普通类型化结构体，直接按字段访问
+        // The built artifact is a plain typed struct; access fields directly
         let host = config.host.clone();
         println!("{host}");
     }
@@ -205,7 +205,7 @@ The in-memory cache of parsed config values is an internal implementation of `In
 ```rust
 use confers::loader::LoaderConfig;
 
-// 仅加载行为配置：大小上限、允许目录、符号链接检查、格式探测、错误脱敏（无缓存字段）
+// Load behavior config only: size caps, allowed directories, symlink checks, format detection, error sanitization (no cache fields)
 let loader_config = LoaderConfig::default();
 ```
 
@@ -241,13 +241,13 @@ let restored = manager.load_snapshot(&path).await?;
 ### Running Benchmarks
 
 ```bash
-# 运行全部基准测试
+# Run all benchmarks
 cargo bench
 
-# 运行指定基准测试
+# Run a specific benchmark
 cargo bench --bench load_bench
 
-# 保存基线，供后续版本对比
+# Save a baseline for comparison across versions
 cargo bench --save-baseline <name>
 ```
 
@@ -275,11 +275,11 @@ The benchmarks predefined in `benches/`:
 Benchmarks cover the library's internal hot paths; for application-level profiling use the standard toolchain:
 
 ```bash
-# 火焰图（cargo-flamegraph，Linux 下基于 perf）
+# Flame graph (cargo-flamegraph, perf-based on Linux)
 cargo install flamegraph
 cargo flamegraph --bench load_bench
 
-# 或直接对运行中的示例采样（示例登记为 [[bin]] 目标，用 --bin 而非 --example）
+# Or sample a running example directly (examples are [[bin]] targets; use --bin, not --example)
 perf record -g cargo run --bin basic_usage -p confers-examples
 perf report
 ```
@@ -313,7 +313,7 @@ perf report
 | merge_shallow/size_1000 | ~20.9 µs |
 | merge_deep/depth_2 | ~3.93 µs |
 | merge_deep/depth_4 | ~830 µs |
-| merge_deep/depth_6 | ~244 ms（指数级用例，仅作上限参考） |
+| merge_deep/depth_6 | ~244 ms (exponential case; upper-bound reference only) |
 | merge_strategies/join | ~46.7 ms |
 | replace_strategy_1000 | ~66.3 µs |
 
@@ -325,10 +325,11 @@ End-to-end cost of the unified change stream (`ChangeStream`) publish → subscr
 | --- | --- |
 | change_stream_roundtrip_1_sub | ~1.98 µs |
 | change_stream_roundtrip_8_sub | ~3.72 µs |
-| change_stream_publish_ack（16 连发 + pending 记账） | ~5.89 µs |
+| change_stream_publish_ack (16-shot burst + pending accounting) | ~5.89 µs |
 
-结论：单订阅者一次变更通告约 2 µs，8 订阅者扇出 < 4 µs，通知路径不构成
-热重载瓶颈（对比一次典型 load 的 ~0.7 µs 量级一致）。
+Conclusion: one change notification costs about 2 µs for a single subscriber and the 8-subscriber
+fan-out stays < 4 µs — the notification path is not a hot-reload bottleneck (consistent with a
+typical load at the ~0.7 µs order of magnitude).
 
 ### etcd watch dispatch path (etcd_watch_bench, etcd-watch feature)
 
@@ -341,12 +342,13 @@ watcher/spawn fixed overheads are counted in (amortized over the whole 1000-even
 
 | Case | Time (estimate) |
 | --- | --- |
-| dispatch_1000_events_empty_callback（整批） | [83.8 µs, 84.8 µs, 86.0 µs] |
+| dispatch_1000_events_empty_callback (whole batch) | [83.8 µs, 84.8 µs, 86.0 µs] |
 
-结论：单位事件分发成本约 0.085 µs（首批口径 0.47 µs 系 setup clone 主导，
-已改 Arc 共享分离），对 watch 轮询间隔（秒级）可忽略；该路径为转正冻结
-契约的一部分，基线供后续版本回归对比。CI benchmarks job 以
-`--features dev,etcd-watch,change-stream` 运行，该基线随 CI 重测。
+Conclusion: per-event dispatch costs about 0.085 µs (the 0.47 µs first-batch figure is dominated by
+setup clones, since separated via Arc sharing) — negligible against watch poll intervals (seconds).
+This path is part of the stability-frozen contract; the baseline serves regression comparison across
+versions. The CI benchmarks job runs with `--features dev,etcd-watch,change-stream` and re-measures
+this baseline on every run.
 
 ### Zero-copy hot path (hot_path_bench)
 
@@ -356,12 +358,12 @@ Comparison of reading a 10 KiB string value (within the same run):
 
 | Read Path | Time (median) |
 | --- | --- |
-| `get_raw`（深拷贝，变更前路径） | ~337 ns |
-| `get_shared`（Arc 共享句柄，变更后路径） | ~161 ns |
+| `get_raw` (deep copy, pre-change path) | ~337 ns |
+| `get_shared` (Arc shared handle, post-change path) | ~161 ns |
 
-大 value 读取零拷贝路径约 **2.1x** 提升，且不随 value 体积增长。
-附带记录：`hot_path_get_100_keys`（100 键 get_string 扫描）≈ 24.9 µs。
-公共 API 零破坏：`get_raw`/`get_string` 语义不变，`get_shared` 为纯新增。
+The zero-copy large-value read path improves throughput by about **2.1x**, independent of value size.
+Side note: `hot_path_get_100_keys` (100-key get_string scan) ≈ 24.9 µs.
+Zero public-API breakage: `get_raw`/`get_string` semantics unchanged; `get_shared` is a pure addition.
 
 ---
 

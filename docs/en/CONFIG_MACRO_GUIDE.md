@@ -32,7 +32,7 @@ This document fully covers the usage of the `#[derive(Config)]` macro, including
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config, garde::Validate)]
-#[config(validate_helper)]  // 生成 confers_validate() 辅助方法（需 validation 特性）
+#[config(validate_helper)]  // generates the confers_validate() helper (validation feature required)
 pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
@@ -50,7 +50,7 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(env_prefix = "APP_")]  // 读取 APP_NAME、APP_PORT 等
+#[config(env_prefix = "APP_")]  // reads APP_NAME, APP_PORT, etc.
 pub struct ConfersConfig {
     pub name: String,
     pub port: u16,
@@ -67,7 +67,7 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(app_name = "myapp")]  // 应用标识符
+#[config(app_name = "myapp")]  // application identifier
 pub struct ConfersConfig {
     pub name: String,
 }
@@ -103,7 +103,7 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(version = 2)]  // 用于迁移的配置版本号
+#[config(version = 2)]  // config version used for migrations
 pub struct ConfersConfig {
     pub name: String,
 }
@@ -119,9 +119,9 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(rename_all = "camelCase")]  // 配置文件键使用 camelCase
+#[config(rename_all = "camelCase")]  // config file keys use camelCase
 pub struct ConfersConfig {
-    pub database_url: String,  // 配置键为 databaseUrl
+    pub database_url: String,  // config key is databaseUrl
 }
 ```
 
@@ -135,7 +135,7 @@ pub struct ConfersConfig {
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
-#[config(profile, profile_env = "APP_ENV")]  // APP_ENV=production 激活 production 覆盖
+#[config(profile, profile_env = "APP_ENV")]  // APP_ENV=production activates the production override
 pub struct ConfersConfig {
     pub log_level: String,
 }
@@ -208,7 +208,7 @@ pub struct ConfersConfig {
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct ConfersConfig {
-    #[config(name = "app_name")]  // 配置文件中使用 app_name
+    #[config(name = "app_name")]  // use app_name in the config file
     pub name: String,
 }
 ```
@@ -224,7 +224,7 @@ pub struct ConfersConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 #[config(env_prefix = "APP_")]
 pub struct ConfersConfig {
-    #[config(name_env = "CUSTOM_PORT")]  // 读取 CUSTOM_PORT（原样使用，不叠加前缀）
+    #[config(name_env = "CUSTOM_PORT")]  // reads CUSTOM_PORT (used as-is, no prefix stacking)
     pub port: u16,
 }
 ```
@@ -264,8 +264,8 @@ use confers::secret::SecretString;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct ConfersConfig {
-    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性），
-    // 否则宏展开期报错
+    // sensitive fields must use the SecretString / SecretBytes types (encryption feature required);
+    // otherwise macro expansion fails
     #[config(sensitive = true)]
     pub password: SecretString,
 
@@ -326,7 +326,7 @@ pub struct ConfersConfig {
     pub name: String,
 
     #[config(skip)]
-    pub temp_field: String,  // 不会从配置中加载
+    pub temp_field: String,  // not loaded from configuration
 }
 ```
 
@@ -362,7 +362,7 @@ pub struct ConfersConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct ConfersConfig {
     #[config(interpolate)]
-    pub database_url: String,  // 支持 ${VAR} 语法
+    pub database_url: String,  // supports ${VAR} syntax
 }
 ```
 
@@ -442,13 +442,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config, Validate)]
 #[config(
-    validate_helper,                             // 生成 confers_validate() 手动校验辅助方法
-    env_prefix = "APP_",                         // 环境变量前缀
-    app_name = "myapp",                         // 应用名称
-    version = 1,                                 // 配置版本
+    validate_helper,                             // generates the confers_validate() manual validation helper
+    env_prefix = "APP_",                         // environment variable prefix
+    app_name = "myapp",                         // application name
+    version = 1,                                 // config version
 )]
 pub struct ConfersConfig {
-    // ============ 基础类型 ============
+    // ============ Basic types ============
     #[config(description = "Application name")]
     pub name: String,
 
@@ -458,11 +458,11 @@ pub struct ConfersConfig {
     #[config(default = false, description = "Debug mode")]
     pub debug: bool,
 
-    // ============ 字符串类型 ============
+    // ============ String types ============
     #[config(default = "\"localhost\".to_string()", description = "Server host")]
     pub host: String,
 
-    // ============ 校验规则（使用 garde） ============
+    // ============ Validation rules (with garde) ============
     #[garde(range(min = 1, max = 65535))]
     #[config(description = "Admin port")]
     pub admin_port: u16,
@@ -479,30 +479,30 @@ pub struct ConfersConfig {
     #[config(description = "Website URL")]
     pub website: String,
 
-    // ============ 敏感字段（必须为 SecretString / SecretBytes，需 encryption 特性） ============
+    // ============ Sensitive fields (must be SecretString / SecretBytes; encryption feature required) ============
     #[config(sensitive = true, description = "Database password")]
     pub db_password: SecretString,
 
     #[config(sensitive = true, description = "API key")]
     pub api_key: SecretString,
 
-    // ============ 加密字段 ============
+    // ============ Encrypted fields ============
     #[config(encrypt = "xchacha20", description = "Secret token")]
     pub secret_token: String,
 
-    // ============ 变量插值 ============
+    // ============ Variable interpolation ============
     #[config(interpolate, description = "Database URL")]
     pub database_url: String,
 
-    // ============ 自定义映射 ============
+    // ============ Custom mapping ============
     #[config(name_env = "CUSTOM_DATABASE_URL", description = "Custom database URL")]
     pub custom_db_url: String,
 
-    // ============ 嵌套配置 ============
+    // ============ Nested config ============
     #[config(flatten, description = "Database configuration")]
     pub database: DatabaseConfig,
 
-    // ============ 跳过字段 ============
+    // ============ Skipped fields ============
     #[config(skip)]
     pub runtime_data: String,
 }
@@ -526,13 +526,13 @@ After using the `#[derive(Config)]` macro, the struct automatically gains the fo
 ```rust
 use confers::ConfigBuilder;
 
-// 使用 ConfigBuilder 进行基础加载
+// Basic loading with ConfigBuilder
 let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .env()
     .build()?;
 
-// 带环境变量前缀
+// With an environment variable prefix
 let config = ConfigBuilder::<ConfersConfig>::new()
     .file("config.toml")
     .env_prefix("APP_")
@@ -545,7 +545,7 @@ Hot reload (requires the `watch` feature) does not go through `ConfigBuilder` ch
 ### Helper Function
 
 ```rust
-// 便捷的 config() 函数
+// The convenient config() function
 let config = confers::config::<ConfersConfig>()
     .file("config.toml")
     .env()
@@ -555,13 +555,13 @@ let config = confers::config::<ConfersConfig>()
 ### Schema Generation
 
 ```rust
-// 生成 JSON Schema（需要 schema 特性）
-// 注意：需要派生 ConfigSchema
+// Generate a JSON Schema (requires the schema feature)
+// Note: derive ConfigSchema as well
 let schema = ConfersConfig::json_schema();
 
-// 生成 TypeScript 类型（需要 typescript-schema 特性）
-// 派生宏自带的 typescript_type() 目前是占位桩（只返回接口名，不含字段），
-// 真实的 TS 生成请使用 TypeScriptGenerator：
+// Generate TypeScript types (requires the typescript-schema feature)
+// The derive macro's built-in typescript_type() is currently a stub (returns only the interface name, no fields);
+// for real TS generation use TypeScriptGenerator:
 use confers::schema::TypeScriptGenerator;
 let ts_type = TypeScriptGenerator::generate::<ConfersConfig>()?;
 ```
@@ -569,10 +569,10 @@ let ts_type = TypeScriptGenerator::generate::<ConfersConfig>()?;
 ### Other Methods
 
 ```rust
-// 获取默认值
+// Get default values
 let default = ConfersConfig::default();
 
-// 访问配置值
+// Access config values
 let value = config.some_field;
 ```
 
@@ -642,7 +642,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Config)]
 pub struct SecureConfig {
-    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性）
+    // sensitive fields must use the SecretString / SecretBytes types (encryption feature required)
     #[config(sensitive = true)]
     pub password: SecretString,
 
@@ -651,7 +651,7 @@ pub struct SecureConfig {
 }
 ```
 
-**加密使用 XChaCha20-Poly1305 算法。nonce 与密文一同存储。**
+**Encryption uses the XChaCha20-Poly1305 algorithm. The nonce is stored alongside the ciphertext.**
 
 ### Hot Reload
 
@@ -673,14 +673,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Initial port: {}", config.port);
 
-    // 监听文件变更并重建配置
+    // Watch for file changes and rebuild the configuration
     let mut watcher = confers::watcher::FsWatcher::new("config.toml", 200).await?;
     while let Some(changed_path) = watcher.recv().await {
         println!("Config file changed: {:?}", changed_path);
         let new_config = ConfigBuilder::<HotReloadConfig>::new()
             .file("config.toml")
             .build()?;
-        // 将 new_config 应用到应用状态
+        // Apply new_config to your application state
     }
 
     Ok(())
@@ -783,7 +783,7 @@ pub id_code: String,
 #[garde(custom(my_validator))]
 pub field: String,
 
-// 第二参数是结构体的上下文类型 &Self::Context（未用 #[garde(context)] 时为 &()）
+// The second argument is the struct's context type &Self::Context (&() when #[garde(context)] is not used)
 fn my_validator(value: &str, _: &()) -> garde::Result {
     if value.contains("invalid") {
         return Err(garde::Error::new("value contains invalid content"));

@@ -229,7 +229,7 @@ Total scenarios: **357**; programmatic statistics by type, required service, and
 | ENC-17 | `VaultKeyProvider` (encryption+remote combination): unreachable Vault address → connection error rather than panic | Negative | encryption,remote | None (unreachable address) | Inline src tests in `src/secret/providers.rs` cfg(remote) | tests/e2e/encryption_e2e.rs |
 | ENC-18 | `KeyRegistry`: after rotate, `try_all_keys` decrypts old data with the old key and encrypts new data with the new key | Normal | encryption | None | `tests/security/security.rs::test_key_registry_rotation/test_key_registry_try_all_keys` | tests/e2e/encryption_e2e.rs |
 | ENC-19 | Full workflow: provider→derive_field_key→encrypt→decrypt (end-to-end isomorphic to `test_full_encryption_workflow`) | Normal | encryption | None | `tests/security/encryption.rs::test_full_encryption_workflow/test_secret_string_with_encryption` | tests/e2e/encryption_e2e.rs |
-| ENC-20 | Derive macro `#[config(encrypt = "xchacha20")]` field: ciphertext decrypted and injected at config load; wrong key → load failure | Normal/Negative | encryption,macros | Local file | Related inline src in `macros/src/codegen/security.rs`; integration → to add | tests/e2e/encryption_e2e.rs |
+| ENC-20 | Derive macro `#[config(encrypt = "xchacha20")]` field: ciphertext decrypted and injected at config load; wrong key → load failure | Normal/Negative | encryption,macros | Local file | Related inline src in `macros/src/codegen/load.rs` (encrypt-field decrypt injection); integration → to add | tests/e2e/encryption_e2e.rs |
 | ENC-21 | `encrypt = "aes256-gcm"`: syntax accepted but not implemented at runtime → macro-expansion compile error hinting `use "xchacha20"` | Negative | macros,encryption | None | Pinned: `macros/tests/compile_fail/t035_aes256_gcm_not_implemented.rs` (trybuild) | tests/e2e/macro_e2e.rs (trybuild) |
 | ENC-22 | Ciphertext injected via environment variable (`enc:<base64>` form) decrypted into SecretString by config_injector | Normal | security,encryption | None | Inline src tests in `src/security/config_injector.rs` | tests/e2e/encryption_e2e.rs |
 | ENC-23 | Illegal algorithm name `encrypt = "rot13"` → macro-expansion compile error (trybuild-level acceptance, hinting the supported list) | Negative | macros,encryption | None | Pinned: `macros/tests/compile_fail/` (encrypt_rot13 and 4 more cases, driven by `compile_fail.rs`) | tests/e2e/macro_e2e.rs (trybuild) |
@@ -636,9 +636,9 @@ Cross-OS branches of PRS-01 / PRS-07: the CI `build` job uses a 3-OS matrix (ubu
 ### 3.1 Dependency Chains (fixed by Cargo.toml `[features]`; the parts combination tests need not verify separately)
 
 ```text
-security          → zeroize, sha2, hex（§9.2-5 解耦：不隐含 encryption/加密栈）
+security          → zeroize, sha2, hex (§9.2-5 decoupling: does not imply encryption/the crypto stack)
 security-rules    → security, ipnet
-key-management    → encryption, chrono, rand, hex（key 为兼容别名 → key-management）
+key-management    → encryption, chrono, rand, hex (key is a compat alias → key-management)
 cli               → clap, similar, toml, json, yaml, chrono, json-schema
 progressive-reload→ watch, arc-swap, async-trait
 snapshot          → chrono, tokio, json, toml, yaml, dynamic
@@ -646,8 +646,8 @@ etcd              → remote, etcd-client, toml, json, yaml
 consul            → remote, toml, json, yaml
 nats-bus          → config-bus, async-nats
 redis-bus         → config-bus, redis, async-stream
-typescript-schema → json-schema（schema 为兼容别名 → json-schema）
-dotenv            → dotenvy（env 为兼容别名 → dotenv）
+typescript-schema → json-schema (schema is a compat alias → json-schema)
+dotenv            → dotenvy (env is a compat alias → dotenv)
 default           → toml, json, dotenv
 ```
 
@@ -696,9 +696,9 @@ Conclusion: **no mutually exclusive features exist**; all features can be stacke
 Source: `docker-compose.test.yml` (repository root). Start/stop:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d        # 启动全部
-docker compose -f docker-compose.test.yml up -d nats   # 只启动单个服务
-docker compose -f docker-compose.test.yml down         # 停止并移除
+docker compose -f docker-compose.test.yml up -d        # start all services
+docker compose -f docker-compose.test.yml up -d nats   # start a single service
+docker compose -f docker-compose.test.yml down         # stop and remove
 ```
 
 | Service | Image | Host Port | Health Check | Scenario Domains Requiring It | Existing Behavior Without the Service |
@@ -726,7 +726,7 @@ Service-dependency-free domains (local file / pure in-memory; runnable in CI san
 | L4 E2E | `tests/e2e/` (the §2 scenario-ID targets of this document) | 33 `[[test]]` sections registered (`autotests=false`); `cargo test --features full --test '*_e2e' --test cli_coverage_extra` (32 targets named like `<domain>_e2e`, e.g. `format_e2e`, `watch_e2e`; `cli_coverage_extra` is an off-matrix regression target that does not follow that suffix) | mocks forbidden |
 | Macro tests | `macros/tests` (trybuild compile-failure cases and attribute validation) | `cargo test -p confers-macros` | allowed |
 | Fuzzing | `fuzz/` (cargo-fuzz targets: `parser`, `merger`, `interpolation`) | `cargo fuzz run parser` (from the `fuzz/` directory) | mocks forbidden |
-| Benchmarks | `benches/` (10 Criterion groups, list in [Performance Guide · Benchmark Suite](PERFORMANCE.md#基准测试套件)) | `cargo bench --features dev,etcd-watch,change-stream --benches` (CI scope; the 3 groups with `required-features=["interpolation"]` additionally need `--features interpolation`) | — |
+| Benchmarks | `benches/` (10 Criterion groups, list in [Performance Guide · Benchmark Suite](PERFORMANCE.md#benchmark-suite)) | `cargo bench --features dev,etcd-watch,change-stream --benches` (CI scope; the 3 groups with `required-features=["interpolation"]` additionally need `--features interpolation`) | — |
 | Doc tests | public-API rustdoc examples | run with `cargo test --workspace` | — |
 
 Preparatory fixes (complete before landing E2E):

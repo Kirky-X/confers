@@ -75,13 +75,13 @@ Before starting, confirm the following tools are installed:
 <summary>🔍 Verify the Installation</summary>
 
 ```bash
-# 检查 Rust 版本
+# Check the Rust version
 rustc --version
-# 期望输出：rustc 1.97.1（或更高）
+# Expected output: rustc 1.97.1 (or newer)
 
-# 检查 Cargo 版本
+# Check the Cargo version
 cargo --version
-# 期望输出：cargo 1.97.1（或更高）
+# Expected output: cargo 1.97.1 (or newer)
 ```
 
 </details>
@@ -131,7 +131,7 @@ struct ConfersConfig {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 使用 ConfigBuilder 加载配置
+    // Load the configuration with ConfigBuilder
     let config = ConfigBuilder::<ConfersConfig>::new()
         .file("config.toml")
         .env_prefix("APP_")
@@ -157,31 +157,31 @@ Understanding the following core concepts helps you use `confers` more effective
 
 ```mermaid
 graph TB
-    subgraph Sources ["配置来源（库内建来源链）"]
-        A["配置文件<br/>JSON, TOML, YAML"]
-        B["环境变量"]
-        M["内存来源<br/>MemorySource"]
-        D["远程来源<br/>HTTP, Etcd, Consul"]
+    subgraph Sources ["Config sources (built-in source chain)"]
+        A["Config files<br/>JSON, TOML, YAML"]
+        B["Environment variables"]
+        M["In-memory source<br/>MemorySource"]
+        D["Remote sources<br/>HTTP, Etcd, Consul"]
     end
 
-    subgraph Priority ["库内合并优先级从高到低"]
-        P1["内存来源<br/>最高优先级"]
-        P2["环境变量"]
-        P3["配置文件"]
-        P4["默认值<br/>最低优先级"]
+    subgraph Priority ["Library merge priority, high to low"]
+        P1["In-memory source<br/>highest priority"]
+        P2["Environment variables"]
+        P3["Config files"]
+        P4["Defaults<br/>lowest priority"]
     end
 
-    subgraph AppLayer ["应用层（库不自动处理）"]
-        C["CLI 参数<br/>经 ConfigClap 的 to_config_map()<br/>由应用自行合并（约定置于最高）"]
+    subgraph AppLayer ["Application layer (not handled by the library)"]
+        C["CLI arguments<br/>merged by the application itself via<br/>ConfigClap's to_config_map() (convention: highest)"]
     end
 
-    subgraph Result ["结果"]
-        R["类型安全的配置"]
+    subgraph Result ["Result"]
+        R["Type-safe configuration"]
     end
 
     Sources --> Priority
     Priority --> R
-    C -.->|"应用层合并"| R
+    C -.->|"application-layer merge"| R
 ```
 
 ### The Config Derive Macro
@@ -225,8 +225,8 @@ pub struct ConfersConfig {
     pub port: u16,
 }
 
-// 只消费 APP_HOST / APP_PORT 等环境变量与字段默认值，
-// 当前目录即使存在 config.toml 也不会被读取。
+// Consumes only APP_HOST / APP_PORT environment variables and field defaults;
+// even if config.toml exists in the current directory, it is not read.
 let config = ConfersConfig::load_sync()?;
 ```
 
@@ -239,7 +239,7 @@ use confers::ConfigBuilder;
 
 let config = ConfigBuilder::<ConfersConfig>::new()
     .file("/etc/myapp/production.toml")
-    .env()                      // 可选：叠加环境变量
+    .env()                      // optional: layer environment variables on top
     .build()?;
 ```
 
@@ -251,13 +251,13 @@ With `#[config(profile)]` enabled, when `RUN_ENV` (or the variable named by `pro
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, Config)]
-#[config(profile)]  // profile_env 默认为 RUN_ENV
+#[config(profile)]  // profile_env defaults to RUN_ENV
 pub struct AppConfig {
     pub log_level: String,
 }
 
-// RUN_ENV=production 时，file("config.toml") 会在同目录追加加载
-// config.production.toml（后者覆盖前者的同名键）。
+// With RUN_ENV=production, file("config.toml") additionally loads
+// config.production.toml from the same directory (the latter overrides same-named keys).
 ```
 
 #### What `app_name` Actually Does
@@ -266,7 +266,7 @@ pub struct AppConfig {
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, Config)]
-#[config(app_name = "myapp")]  // 仅作校验与 CLI 显示名
+#[config(app_name = "myapp")]  // used only for validation and as the CLI display name
 pub struct ConfersConfig {
     pub host: String,
     pub port: u16,
@@ -313,11 +313,11 @@ struct MyConfig {
     #[config(default = "100")]
     timeout_ms: u64,
 
-    // 嵌套结构体
+    // nested struct
     db: DatabaseConfig,
 
-    // 敏感字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性），
-    // 审计日志与 debug 输出中自动脱敏
+    // sensitive fields must use the SecretString / SecretBytes types (encryption feature required);
+    // automatically redacted in audit logs and debug output
     #[config(sensitive = true)]
     api_key: SecretString,
 }
@@ -330,18 +330,18 @@ struct MyConfig {
 ```rust
 use confers::ConfigBuilder;
 
-// 基础同步加载
+// Basic synchronous loading
 let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
     .build()?;
 
-// 带环境变量与前缀
+// With environment variables and a prefix
 let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
     .env_prefix("MYAPP_")
     .build()?;
 
-// 设置资源上限（文件大小、嵌套深度、键数量等）
+// Set resource caps (file size, nesting depth, key count, etc.)
 use confers::ConfigLimits;
 let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
@@ -363,10 +363,10 @@ confers ships a diagnostics CLI with code generated from the config type (`cli` 
 #### Installing the CLI
 
 ```bash
-# 从源码安装（启用 cli 特性）
+# Install from source (enables the cli feature)
 cargo install confers --features cli
 
-# 查看帮助与版本
+# View help and version
 confers --help
 confers --version
 ```
@@ -403,82 +403,82 @@ Options:
 #### inspect - Config Inspection
 
 ```bash
-# 以文本表格列出全部键及其来源（KEY/VALUE/SOURCE/LOCATION）
+# List all keys with their sources as a text table (KEY/VALUE/SOURCE/LOCATION)
 confers -c app.toml inspect
 
-# 输出可解析 JSON（溯源树）
+# Output parseable JSON (provenance tree)
 confers -c app.toml inspect --format json
 
-# 只看指定键；不存在的键输出 [NOT FOUND]
+# Show only specific keys; missing keys print [NOT FOUND]
 confers -c app.toml inspect -k server.port
 
-# 显示被覆盖键的冲突标记
+# Show conflict markers for overridden keys
 confers -c app.toml inspect --show-conflicts
 ```
 
 #### validate - Config Validation
 
 ```bash
-# 校验配置（合法时输出 "All validation checks passed"）
+# Validate the configuration (prints "All validation checks passed" when valid)
 confers -c app.toml validate
 
-# 严格模式：把警告按错误处理，issue 存在时非零退出
+# Strict mode: treat warnings as errors; non-zero exit when issues exist
 confers -c app.toml validate --strict
 
-# JSON 输出：{"valid":...,"issues":[...]}
+# JSON output: {"valid":...,"issues":[...]}
 confers -c app.toml validate --format json
 ```
 
 #### export - Config Export
 
 ```bash
-# 导出合并后的配置（默认 json，自动脱敏敏感值）
+# Export the merged configuration (json by default; sensitive values redacted automatically)
 confers -c app.toml export --format toml
 
-# 写入文件；-o 指向目录时自动生成时间戳文件名
+# Write to a file; when -o points to a directory, a timestamped file name is generated
 confers -c app.toml export -o merged.json
 
-# 附带来源信息（source/location 溯源树）
+# Include provenance (source/location provenance tree)
 confers -c app.toml export --with-provenance
 ```
 
 #### diff - Config Diffing
 
 ```bash
-# 对比两份配置，输出 unified diff
+# Compare two configurations, printing a unified diff
 confers diff --base base.toml --overlay overlay.toml
 
-# 结构化 JSON 输出；默认脱敏，--sanitize=false 关闭脱敏（裸开关等价 --sanitize=true）
+# Structured JSON output; sanitized by default, --sanitize=false disables it (a bare flag equals --sanitize=true)
 confers diff --base a.toml --overlay b.toml --format json
 ```
 
 #### snapshot - Snapshot Management
 
 ```bash
-# 列出快照目录中的快照
+# List snapshots in the snapshot directory
 confers snapshot list --directory ./snapshots
 
-# 对比最近 N 份快照
+# Compare the most recent N snapshots
 confers snapshot diff --latest 2
 
-# 清理过期快照（如 7 天前）
+# Prune expired snapshots (e.g. older than 7 days)
 confers snapshot prune --older-than 7d
 ```
 
 #### schema - Schema Generation and Reverse Scaffolding
 
 ```bash
-# 正向：输出 JSON Schema（2020-12；内置二进制的输出见下方注意）
+# Forward: output a JSON Schema (2020-12; for the built-in binary's output see the note below)
 confers schema
 
-# 反向（实例 → Schema 草稿）：从配置实例反推 schema-first 起点
+# Reverse (instance → Schema draft): infer a schema-first starting point from a config instance
 confers -c app.toml schema --from-instance
 
-# 反向（Schema 草稿 → Rust 脚手架）：schema-first 落地的起点代码
+# Reverse (Schema draft → Rust scaffold): starter code for schema-first adoption
 confers schema --from-schema config-schema.json
 ```
 
-> **Note**: the `confers` binary installed with the library instantiates the CLI with `serde_json::Value` as the config type (`src/cli/main.rs`), so `confers schema` without arguments prints the generic schema of `serde_json::Value` (`title: "AnyValue"`), not your derived config type. To generate a JSON Schema for your own config type, embed the CLI in your project with your type: `confers::cli::run::<MyConfig>()` (requires the `cli` feature).
+> **Note**: the `confers` binary installed with the library instantiates the CLI with `serde_json::Value` as the config type (`src/main.rs`), so `confers schema` without arguments prints the generic schema of `serde_json::Value` (`title: "AnyValue"`), not your derived config type. To generate a JSON Schema for your own config type, embed the CLI in your project with your type: `confers::cli::run::<MyConfig>()` (requires the `cli` feature).
 
 Mapping rules of `--from-schema` (full rules in the `RustScaffoldGenerator` rustdoc):
 
@@ -506,8 +506,8 @@ Generation safety and identifier contract:
 #### doctor - Health Diagnostics
 
 ```bash
-# 五项检查：schema 结构 / 来源优先级链 / 加密字段可解密 / env 覆盖冲突 / 加载
-# 输出单行 JSON 报告；退出码 0 健康 / 1 警告 / 2 错误
+# Five checks: schema structure / source priority chain / encrypted fields decryptable / env override conflicts / loading
+# Prints a single-line JSON report; exit code 0 healthy / 1 warnings / 2 errors
 confers -c app.toml doctor
 ```
 
@@ -531,7 +531,7 @@ confers -c app.toml doctor
 use garde::Validate;
 
 #[derive(Config, Deserialize, Validate)]
-#[config(validate_helper)] // 生成 confers_validate() 校验辅助方法
+#[config(validate_helper)] // generates the confers_validate() validation helper
 struct MyConfig {
     #[garde(range(min = 1, max = 65535))]
     port: u16,
@@ -544,7 +544,7 @@ let config = ConfigBuilder::<MyConfig>::new()
     .file("config.toml")
     .build()?;
 
-// 校验不会自动执行：需在构建后显式调用，失败时返回 Err(String)（扁平化的 garde 报告）
+// Validation does not run automatically: call it explicitly after building; on failure it returns Err(String) (flattened garde report)
 config.confers_validate()?;
 ```
 
@@ -557,7 +557,7 @@ config.confers_validate()?;
 With the `remote` feature enabled, configuration can load from remote sources:
 
 ```rust
-// 使用 HTTP 轮询来源（内置）；自定义 Source 完整实现参见 examples 目录
+// Use the HTTP polling source (built in); see the examples directory for a full custom Source implementation
 #[cfg(feature = "remote")]
 use confers::remote::HttpPolledSourceBuilder;
 
@@ -586,12 +586,12 @@ use confers::secret::SecretString;
 
 #[derive(Config, Deserialize)]
 struct SecureConfig {
-    // sensitive 字段必须为 SecretString / SecretBytes 类型（需 encryption 特性）
+    // sensitive fields must use the SecretString / SecretBytes types (encryption feature required)
     #[config(sensitive = true)]
     db_password: SecretString,
 }
 
-// 敏感字段在日志与 debug 输出中自动脱敏
+// Sensitive fields are redacted automatically in logs and debug output
 ```
 
 ### 👀 File Watching and Hot Reload
@@ -606,21 +606,21 @@ use confers::watcher::FsWatcher;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 同步构建初始配置
+    // Build the initial configuration synchronously
     let config = ConfigBuilder::<MyConfig>::new()
         .file("config.toml")
         .build()?;
 
-    // 设置 FsWatcher 实现热重载（0.3.0+ 推荐）
+    // Set up FsWatcher for hot reload (recommended since 0.3.0+)
     let mut watcher = FsWatcher::new("config.toml", 200).await?;
 
-    // 监听文件变更并重建配置
+    // Watch for file changes and rebuild the configuration
     while let Some(changed_path) = watcher.recv().await {
         println!("Config file changed: {:?}", changed_path);
         let new_config = ConfigBuilder::<MyConfig>::new()
             .file("config.toml")
             .build()?;
-        // 将 new_config 应用到你的应用状态
+        // Apply new_config to your application state
     }
 
     Ok(())
@@ -652,12 +652,12 @@ let orchestrator = CanaryOrchestrator::new(
         batch_size: 1,
         batch_interval: Duration::from_secs(30),
         poll_interval: Duration::from_secs(5),
-        failure_threshold: 0.0, // 任一批实例 Critical 即全局回滚
+        failure_threshold: 0.0, // any batch instance going Critical triggers a global rollback
     },
     health,
 );
 let outcome = orchestrator.run().await?;
-// RolloutOutcome::Completed { batches, instances } 或 Aborted { batch, reason, mesh_rolled_back_failed }
+// RolloutOutcome::Completed { batches, instances } or Aborted { batch, reason, mesh_rolled_back_failed }
 # Ok(())
 # }
 ```
@@ -669,16 +669,16 @@ let outcome = orchestrator.run().await?;
 ```rust
 use confers::XChaCha20Crypto;
 
-// 创建加密器实例
+// Create a crypto instance
 let crypto = XChaCha20Crypto::new();
 
-// 生成 32 字节密钥（务必妥善保存！）
-let key = [0u8; 32]; // 生产环境请使用安全的随机密钥
+// Generate a 32-byte key (store it securely!)
+let key = [0u8; 32]; // use a securely random key in production
 
-// 加密敏感数据 - 返回 (nonce, ciphertext)
+// Encrypt sensitive data - returns (nonce, ciphertext)
 let (nonce, ciphertext) = crypto.encrypt(b"super_secret_password", &key)?;
 
-// 解密配置
+// Decrypt the configuration
 let decrypted = crypto.decrypt(&nonce, &ciphertext, &key)?;
 ```
 
@@ -767,15 +767,15 @@ use serde::Deserialize;
 #[derive(Config, Deserialize)]
 #[config(env_prefix = "APP_")]
 struct SecureConfig {
-    // 标记敏感字段，审计日志会自动脱敏；
-    // sensitive 字段必须使用 SecretString / SecretBytes 类型（需 encryption 特性）
+    // Mark sensitive fields; the audit log redacts them automatically;
+    // sensitive fields must use the SecretString / SecretBytes types (encryption feature required)
     #[config(sensitive = true)]
     database_password: SecretString,
 
     #[config(sensitive = true)]
     api_key: SecretString,
 
-    // 非敏感字段
+    // non-sensitive field
     server_name: String,
 }
 ```
@@ -797,18 +797,18 @@ Use XChaCha20-Poly1305 to encrypt sensitive config information and declare `#[co
 ```rust
 use confers::key::KeyManager;
 
-// 创建密钥管理器
+// Create the key manager
 let mut key_manager = KeyManager::new()?;
 
-// 初始化密钥环（仅首次需要）
-let master_key = [0u8; 32]; // 从安全位置获取
+// Initialize the key ring (first time only)
+let master_key = [0u8; 32]; // obtain from a secure location
 let version = key_manager.initialize(
     &master_key,
     "production".to_string(),
     "security-team".to_string()
 )?;
 
-// 定期轮换密钥（建议每 90 天）
+// Rotate keys regularly (every 90 days is recommended)
 let rotation_result = key_manager.rotate_key(
     &master_key,
     Some("production".to_string()),
@@ -852,12 +852,12 @@ When loading config from remote sources, connection security is mandatory.
 ```rust
 use confers::remote::HttpPolledSourceBuilder;
 
-// HttpPolledSourceBuilder 在构建期强制 HTTPS 并拒绝封锁网段目标
+// HttpPolledSourceBuilder enforces HTTPS at build time and rejects blocked-network targets
 let source = HttpPolledSourceBuilder::new()
     .url("https://config.example.com/app.toml")
     .build()?;
 
-// 远程配置完整示例参见 examples/src/examples/remote_consul.rs
+// See examples/src/examples/remote_consul.rs for a complete remote-config example
 ```
 
 **Remote config security best practices:**
@@ -879,9 +879,9 @@ use confers::{Config, ConfigBuilder};
 use serde::Deserialize;
 use garde::Validate;
 
-// 使用 garde 派生宏定义校验规则
+// Define validation rules with the garde derive macros
 #[derive(Config, Deserialize, Validate)]
-#[config(validate_helper)]  // 生成 confers_validate() 校验辅助方法
+#[config(validate_helper)]  // generates the confers_validate() validation helper
 struct ValidatedConfig {
     #[garde(range(min = 1, max = 65535))]
     port: u16,
@@ -897,8 +897,8 @@ let config = ConfigBuilder::<ValidatedConfig>::new()
     .file("config.toml")
     .build()?;
 
-// 校验不会自动执行，需在构建后显式调用
-// 失败时返回 Err(String)（扁平化的 garde 报告）
+// Validation does not run automatically; call it explicitly after building
+// On failure it returns Err(String) (flattened garde report)
 config.confers_validate()?;
 ```
 
@@ -929,8 +929,8 @@ use confers::security::rules::SecurityValidatorRegistry;
 use confers::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::collections::HashMap;
 
-// confers 公开面没有内置的 ConfigProvider 实现，
-// 需为承载配置键值的类型自行实现该 trait
+// The confers public surface ships no built-in ConfigProvider implementation;
+// implement the trait yourself on the type holding the config keys/values
 struct ConfigMap(HashMap<String, AnnotatedValue>);
 
 impl ConfigProvider for ConfigMap {
@@ -942,19 +942,19 @@ impl ConfigProvider for ConfigMap {
     }
 }
 
-// 创建包含全部内置校验器的注册表
+// Create a registry containing all built-in validators
 let registry = SecurityValidatorRegistry::with_defaults();
 
-// 对任意 ConfigProvider 实现执行全部校验器
+// Run all validators against any ConfigProvider implementation
 let config = ConfigMap(HashMap::new());
 let report = registry.validate_all(&config);
 
-// 检查结果
+// Inspect the result
 if !report.is_ok(false) {
     for v in &report.violations {
         eprintln!("[{:?}] {}: {}", v.severity, v.validator, v.message);
     }
-    // 出现严重问题时快速失败
+    // Fail fast on critical issues
     if report.critical_count() > 0 {
         std::process::exit(1);
     }
@@ -987,19 +987,19 @@ use confers::toggle::FeatureToggleRegistry;
 
 let registry = FeatureToggleRegistry::new();
 
-// 以默认状态注册特性
+// Register a feature with its default state
 registry.register("new_dashboard", "New Dashboard UI", false);
 registry.register("beta_api", "Beta API Endpoint", false);
 
-// 从配置加载覆盖值（config 为任何自行实现 ConfigProvider 的类型，
-// 例如上文的 ConfigMap）
+// Load overrides from configuration (config is any type implementing ConfigProvider yourself,
+// e.g. the ConfigMap above)
 registry.load_from_config(&config, "features");
 
-// 在应用代码中检查
+// Check in application code
 if registry.is_enabled("new_dashboard") {
-    // 使用新面板逻辑
+    // use the new dashboard logic
 } else {
-    // 使用旧逻辑
+    // use the legacy logic
 }
 ```
 

@@ -42,56 +42,56 @@ Overall four layers: source layer → load/parse layer → merge and typing laye
 
 ```mermaid
 graph TB
-    subgraph Sources ["来源层"]
+    subgraph Sources ["Source layer"]
         F["FileSource<br/>TOML/JSON/YAML/INI"]
-        E["EnvSource<br/>环境变量（可带前缀）"]
-        M["MemorySource<br/>内存/测试"]
-        R["remote<br/>HTTP 轮询 / etcd / Consul"]
+        E["EnvSource<br/>environment variables (optional prefix)"]
+        M["MemorySource<br/>in-memory / tests"]
+        R["remote<br/>HTTP polling / etcd / Consul"]
     end
 
-    subgraph Loader ["加载与解析层"]
-        L["loader<br/>格式探测 + 解析<br/>（SourceLocation 精确定位）"]
+    subgraph Loader ["Load and parse layer"]
+        L["loader<br/>format detection + parsing<br/>(precise SourceLocation)"]
     end
 
-    subgraph Merge ["合并与类型化层"]
-        MG["merger::MergeEngine<br/>MergeStrategy 深度合并"]
-        SC["SourceChain 优先级链"]
-        TY["serde 反序列化为 T<br/>校验由调用方显式执行"]
+    subgraph Merge ["Merge and typing layer"]
+        MG["merger::MergeEngine<br/>MergeStrategy deep merge"]
+        SC["SourceChain priority chain"]
+        TY["serde deserializes into T<br/>validation runs explicitly at the call site"]
     end
 
-    subgraph Ops ["可观测与运维"]
-        AU["audit 审计日志（HMAC）"]
-        SEC["security / secret 加密与脱敏"]
-        W["watcher 热重载<br/>FsWatcher / 自适应去抖 / 渐进发布"]
-        BUS["config-bus 变更广播<br/>NATS / Redis"]
+    subgraph Ops ["Observability and operations"]
+        AU["audit log (HMAC)"]
+        SEC["security / secret encryption and redaction"]
+        W["watcher hot reload<br/>FsWatcher / adaptive debounce / progressive rollout"]
+        BUS["config-bus change broadcast<br/>NATS / Redis"]
     end
 
-    APP["应用类型化的配置结构体"]
+    APP["application typed config struct"]
 
     Sources --> Loader
     Loader --> Merge
     SC --> MG
     Merge --> APP
-    W -.重载.-> Loader
-    BUS -.变更通知.-> APP
-    AU -.记录.-> Loader
-    SEC -.解密敏感字段.-> Merge
+    W -.reload.-> Loader
+    BUS -.change notification.-> APP
+    AU -.records.-> Loader
+    SEC -.decrypt sensitive fields.-> Merge
 ```
 
 The corresponding physical repository layout:
 
 ```text
 confers/
-├── src/            # 库本体（门面模块 + impl_ 内部实现）
-│   ├── lib.rs      # 模块声明与重导出（含特性门控）
-│   ├── config.rs / loader.rs / types.rs（merger 与 format 为目录模块：merger/、format/）
+├── src/            # library body (facade modules + impl_ internals)
+│   ├── lib.rs      # module declarations and re-exports (feature-gated)
+│   ├── config.rs / loader.rs / types.rs (merger and format are directory modules: merger/, format/)
 │   ├── interface.rs / error.rs / lifecycle.rs
-│   ├── impl_/      # 上述门面的内部实现
-│   └── <特性模块>/ # validator、watcher、secret、remote、bus、cli……
-├── macros/         # confers-macros 过程宏 crate（parse.rs + codegen/ 目录）
-├── examples/       # 可运行示例
-├── fuzz/           # 模糊测试
-└── benches/        # Criterion 基准测试
+│   ├── impl_/      # internal implementations behind the facade above
+│   └── <feature>/  # validator, watcher, secret, remote, bus, cli, …
+├── macros/         # confers-macros proc-macro crate (parse.rs + codegen/ directory)
+├── examples/       # runnable examples
+├── fuzz/           # fuzz testing
+└── benches/        # Criterion benchmarks
 ```
 
 ## 🧩 Module Layout
@@ -129,7 +129,7 @@ confers/
 | `toggle` | `feature-toggle` | runtime feature toggles: `FeatureToggleRegistry` (based on `dashmap`) |
 | `context` | `context-aware` | context-aware configuration |
 | `schema` | `json-schema` / `typescript-schema` | `TypeScriptGenerator`, generating TS definitions from Rust types |
-| `cli` | `cli` | the `confers` command-line tool (clap): inspect, validate, export, diff, snapshot (including list/restore), schema, get, docs, doctor; entry in `src/cli/main.rs` |
+| `cli` | `cli` | the `confers` command-line tool (clap): inspect, validate, export, diff, snapshot (including list/restore), schema, get, docs, doctor; entry in `src/main.rs` |
 
 ### workspace members
 
@@ -144,12 +144,12 @@ confers/
 ### Main config-loading flow
 
 ```text
-配置声明                     加载                        合并                        输出
+Config declaration             Load                       Merge                      Output
 ─────────                   ─────────                   ─────────                   ─────────
-#[derive(Config)]    →   FileSource / EnvSource  →   SourceChain 优先级链   →   serde 反序列化为 T
-#[config(...)] 属性       Format 探测 + parse          MergeEngine 逐键合并         调用方显式校验
-                          ConfigValue + SourceLocation MergeStrategy（覆盖/       可选敏感字段解密
-                          （精确行列定位）              追加/深度合并/自定义）      输出类型安全配置
+#[derive(Config)]    →   FileSource / EnvSource  →   SourceChain priority    →   serde deserializes into T
+#[config(...)] attribute     Format detect + parse       MergeEngine per-key merge   Caller-side validation
+                               ConfigValue + SourceLocation  MergeStrategy (override/   optional sensitive-field
+                               (exact row/column)           append/deep/custom)        decryption outputs typed config
 ```
 
 1. **Source registration**: the application declares sources via `ConfigBuilder` (or `SourceChainBuilder`); order is priority (later additions win).
@@ -162,16 +162,16 @@ confers/
 
 ```mermaid
 graph TD
-    A["文件变更"] --> B["notify-debouncer-full 事件"]
-    B --> C["AdaptiveDebouncer 自适应去抖"]
-    C --> D["FsWatcher / MultiFsWatcher 通知"]
-    D --> E["重新执行加载与合并"]
-    E --> F{"启用 progressive-reload？"}
-    F -->|否| G["直接应用新配置"]
-    F -->|是| H["渐进式发布<br/>分批切换实例"]
-    H --> I{"健康检查"}
-    I -->|通过| J["提交新配置"]
-    I -->|失败| K["自动回滚<br/>ReloadRolledBack"]
+    A["File change"] --> B["notify-debouncer-full event"]
+    B --> C["AdaptiveDebouncer adaptive debounce"]
+    C --> D["FsWatcher / MultiFsWatcher notify"]
+    D --> E["Re-run load and merge"]
+    E --> F{"progressive-reload enabled?"}
+    F -->|No| G["Apply new config directly"]
+    F -->|Yes| H["Progressive rollout<br/>switch instances in batches"]
+    H --> I{"Health check"}
+    I -->|Pass| J["Commit new config"]
+    I -->|Fail| K["Automatic rollback<br/>ReloadRolledBack"]
 ```
 
 Dynamic fields (`dynamic`) provide finer-grained runtime updates: `#[config(dynamic)]` generates a `DynamicField` handle that internally holds a config snapshot in `arc-swap` — readers read lock-free, writers atomically swap in the new snapshot — and can register callbacks (`CallbackGuard`) and field watchers (`FieldWatcher`).

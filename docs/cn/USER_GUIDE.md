@@ -478,7 +478,7 @@ confers -c app.toml schema --from-instance
 confers schema --from-schema config-schema.json
 ```
 
-> **注意**：随库安装的 `confers` 二进制固定以 `serde_json::Value` 作为配置类型实例化 CLI（`src/cli/main.rs`），因此不带参数的 `confers schema` 输出的是 `serde_json::Value` 的通用 schema（`title: "AnyValue"`），不是您的派生配置类型。要正向生成自己配置类型的 JSON Schema，请在项目中嵌入 CLI 并指定类型：`confers::cli::run::<MyConfig>()`（需 `cli` 特性）。
+> **注意**：随库安装的 `confers` 二进制固定以 `serde_json::Value` 作为配置类型实例化 CLI（`src/main.rs`），因此不带参数的 `confers schema` 输出的是 `serde_json::Value` 的通用 schema（`title: "AnyValue"`），不是您的派生配置类型。要正向生成自己配置类型的 JSON Schema，请在项目中嵌入 CLI 并指定类型：`confers::cli::run::<MyConfig>()`（需 `cli` 特性）。
 
 `--from-schema` 的映射规则（完整规则见 `RustScaffoldGenerator` rustdoc）：
 
