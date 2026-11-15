@@ -1,6 +1,6 @@
 # 🤝 Confers 贡献指南
 
-<img src="assets/confers.png" alt="Confers Logo" width="150">
+<img src="../assets/confers.png" alt="Confers Logo" width="150">
 
 感谢您关注 **confers**！无论您是在修复缺陷、添加新特性、改进文档还是帮助他人，您的贡献都弥足珍贵。
 
