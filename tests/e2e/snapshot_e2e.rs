@@ -21,6 +21,7 @@
 use confers::snapshot::{SnapshotConfig, SnapshotFormat, SnapshotManager};
 use confers::types::{ConfigValue, SourceId};
 use confers::{AnnotatedValue, ConfigBuilder};
+use std::collections::HashMap;
 
 fn sample_value() -> AnnotatedValue {
     AnnotatedValue::new(
@@ -368,4 +369,85 @@ mod t045 {
             assert_eq!(mode & 0o777, 0o600, "snapshot must be 0600, got {:o}", mode);
         }
     }
+}
+
+/// SNP-08 (`secure-hot-swap` T009): the declarative security policy drives
+/// the snapshot mode end-to-end — the builder saves an `Encrypted` snapshot
+/// (no plaintext secrets in the file) and a keyed restore returns the
+/// original values byte-for-byte.
+#[cfg(feature = "security")]
+#[tokio::test]
+async fn snp08_security_policy_encrypted_snapshot_roundtrip() {
+    use confers::security::{SecurityPolicy, SnapshotSensitiveMode};
+
+    let dir = tempfile::tempdir().unwrap();
+    let master: &[u8] = b"0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
+
+    let annotated = ConfigBuilder::<serde_json::Value>::new()
+        .security_policy(SecurityPolicy {
+            snapshot_sensitive_mode: SnapshotSensitiveMode::Encrypted,
+            ..SecurityPolicy::default()
+        })
+        .master_key(master.to_vec())
+        .memory(HashMap::from([
+            ("host".to_string(), ConfigValue::string("db.example")),
+            ("password".to_string(), ConfigValue::string("s3cret-pw")),
+        ]))
+        .with_snapshot(SnapshotConfig {
+            dir: dir.path().join("snaps"),
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+            ..SnapshotConfig::default()
+        })
+        .build_annotated()
+        .expect("build with encrypted snapshot policy must succeed");
+
+    // The builder's snapshot save ran during build(): find the file.
+    let snaps: Vec<_> = std::fs::read_dir(dir.path().join("snaps"))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(snaps.len(), 1, "exactly one snapshot file expected");
+    let body = std::fs::read_to_string(snaps[0].path()).unwrap();
+    assert!(
+        body.contains("enc:v1:"),
+        "snapshot must carry envelopes: {body}"
+    );
+    assert!(
+        !body.contains("s3cret-pw"),
+        "no plaintext secret may reach the snapshot file: {body}"
+    );
+
+    // Restore with the master key available (keys travel with the snapshot).
+    let manager = SnapshotManager::new(SnapshotConfig {
+        dir: dir.path().join("snaps"),
+        format: SnapshotFormat::Json,
+        include_provenance: false,
+        ..SnapshotConfig::default()
+    });
+    unsafe {
+        std::env::set_var(confers::field_crypto::MASTER_KEY_ENV, hex::encode(master));
+    }
+    let restored = manager.load_snapshot(&snaps[0].path()).await;
+    unsafe { std::env::remove_var(confers::field_crypto::MASTER_KEY_ENV) };
+    let restored = restored.expect("keyed restore must succeed");
+
+    assert_eq!(
+        restored
+            .inner
+            .as_map()
+            .and_then(|m| m.get("password"))
+            .and_then(|v| v.inner.as_str()),
+        Some("s3cret-pw"),
+        "restored value must match the plaintext byte-for-byte"
+    );
+    assert_eq!(
+        restored
+            .inner
+            .as_map()
+            .and_then(|m| m.get("host"))
+            .and_then(|v| v.inner.as_str()),
+        Some("db.example"),
+    );
+    let _ = annotated; // the built tree itself is not asserted here
 }
