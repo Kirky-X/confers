@@ -1,12 +1,16 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
+#[cfg(feature = "audit")]
+mod audit_port;
 mod manager;
 mod rotation;
 #[cfg(feature = "encryption")]
 mod storage;
 mod version;
 
+#[cfg(feature = "audit")]
+pub use audit_port::{NoopRotationAudit, RotationAuditPort};
 pub use manager::{KeyInfo, KeyManager, KeyVersion};
 pub use rotation::{KeyRotationPolicy, KeyRotationService, ReencryptPolicy, RotationResult};
 #[cfg(feature = "encryption")]
