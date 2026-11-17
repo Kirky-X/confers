@@ -280,6 +280,9 @@ pub use canary::{
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 
+#[cfg(feature = "security")]
+pub use security::hot_swap::{SecurityPolicy, SnapshotSensitiveMode};
+
 #[cfg(feature = "security-rules")]
 pub use security::rules::{
     CorsValidator, JwtSecretValidator, RemappedConfigProvider, SecurityReport, SecurityValidator,

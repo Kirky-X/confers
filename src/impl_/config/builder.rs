@@ -78,6 +78,10 @@ pub struct ConfigBuilder<T> {
     /// Lifecycle registry for managing component startup/shutdown.
     #[cfg(feature = "async-core")]
     lifecycle_registry: LifecycleRegistry,
+    /// Declarative security policy for reload/snapshot behavior
+    /// (zeroize-on-replace, snapshot sensitive mode, reload auditing).
+    #[cfg(feature = "security")]
+    security_policy: Option<crate::security::SecurityPolicy>,
 }
 
 impl<T> Default for ConfigBuilder<T> {
@@ -109,6 +113,8 @@ impl<T> ConfigBuilder<T> {
             json_maps: Vec::new(),
             #[cfg(feature = "async-core")]
             lifecycle_registry: LifecycleRegistry::new(),
+            #[cfg(feature = "security")]
+            security_policy: None,
             _marker: PhantomData,
         }
     }
@@ -311,6 +317,29 @@ impl<T> ConfigBuilder<T> {
     pub fn reload_health_check(mut self, health_check: Arc<dyn ReloadHealthCheck>) -> Self {
         self.reload_health_check = Some(health_check);
         self
+    }
+
+    /// Set the declarative security policy for reload/snapshot behavior
+    /// (`zeroize_on_replace`, `snapshot_sensitive_mode`, `audit_on_reload`).
+    ///
+    /// Unset (the default) keeps the pre-policy behavior everywhere: the
+    /// reload pipeline never scrubs previous trees, snapshots stay in
+    /// redacted mode, and no reload audit events are emitted.
+    #[cfg(feature = "security")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "security")))]
+    pub fn security_policy(mut self, policy: crate::security::SecurityPolicy) -> Self {
+        self.security_policy = Some(policy);
+        self
+    }
+
+    /// The stored security policy, if one was set via
+    /// [`security_policy`](Self::security_policy).
+    // Transitional allow: the first production consumer is the snapshot
+    // save path (T007); removed in the same change when that lands.
+    #[cfg(feature = "security")]
+    #[allow(dead_code)]
+    pub(crate) fn security_policy_ref(&self) -> Option<&crate::security::SecurityPolicy> {
+        self.security_policy.as_ref()
     }
 
     /// Register a lifecycle component for managed startup/shutdown.
@@ -1066,6 +1095,25 @@ mod tests {
         // Memory source has higher priority
         assert_eq!(config.name, "override");
         assert_eq!(config.port, 80);
+    }
+
+    #[cfg(feature = "security")]
+    #[test]
+    fn security_policy_setter_roundtrips_through_builder() {
+        let policy = crate::security::SecurityPolicy {
+            zeroize_on_replace: true,
+            snapshot_sensitive_mode: crate::security::SnapshotSensitiveMode::Encrypted,
+            audit_on_reload: true,
+        };
+        let builder = ConfigBuilder::<TestConfig>::new().security_policy(policy.clone());
+        assert_eq!(builder.security_policy_ref(), Some(&policy));
+    }
+
+    #[cfg(feature = "security")]
+    #[test]
+    fn security_policy_unset_returns_none() {
+        let builder = ConfigBuilder::<TestConfig>::new();
+        assert_eq!(builder.security_policy_ref(), None);
     }
 
     #[test]

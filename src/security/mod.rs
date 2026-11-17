@@ -921,6 +921,9 @@ pub use secure_string::{
     deallocated_secure_strings,
 };
 
+pub mod hot_swap;
+pub use hot_swap::{SecurityPolicy, SnapshotSensitiveMode, zeroize_sensitive_values};
+
 #[cfg(test)]
 mod security_mod_coverage_tests {
     use super::*;
