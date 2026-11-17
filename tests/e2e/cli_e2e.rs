@@ -574,3 +574,69 @@ fn t005_get_numeric_value_as_json() {
     let parsed: serde_json::Value = serde_json::from_str(&body).expect("must parse");
     assert_eq!(parsed, serde_json::json!(8080));
 }
+
+#[cfg(feature = "audit")]
+#[test]
+fn doctor_audit_log_flag_verifies_chain_and_errors_on_missing_file() {
+    // doctor --audit-log <完好链> → checks 含 {"name":"audit","severity":"ok"}；
+    // --audit-log <不存在路径> → severity error（链不可读即损坏语义）。
+    let dir = setup_dir();
+
+    // 写一条完整链（AuditWriter 落盘命名 audit_YYYYMMDD.log）。
+    let log_dir = dir.join("auditlogs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let writer = confers::audit::AuditWriter::builder()
+        .enabled(true)
+        .log_dir(log_dir.clone())
+        .build();
+    writer.log_load("e2e-src").expect("event must write");
+    drop(writer);
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&log_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect();
+    files.sort();
+    let chain = files.remove(0);
+    let chain_arg = chain.display().to_string();
+
+    let config = write_config(&dir, "app.toml", "server.port = 8080\n");
+
+    let find_audit_severity = |out: &Output| -> String {
+        let report: serde_json::Value =
+            serde_json::from_str(stdout(out).trim()).expect("single-line JSON report");
+        report["checks"]
+            .as_array()
+            .expect("checks array")
+            .iter()
+            .find(|c| c["name"] == "audit")
+            .map(|c| c["severity"].as_str().unwrap().to_string())
+            .unwrap_or_else(|| panic!("audit check missing: {report}"))
+    };
+
+    let ok = run_cli(&dir, &["-c", &config, "doctor", "--audit-log", &chain_arg]);
+    assert_eq!(
+        find_audit_severity(&ok),
+        "ok",
+        "intact chain: {}",
+        stdout(&ok)
+    );
+
+    let absent = dir.join("absent-audit.log");
+    let missing = run_cli(
+        &dir,
+        &[
+            "-c",
+            &config,
+            "doctor",
+            "--audit-log",
+            &absent.display().to_string(),
+        ],
+    );
+    assert_eq!(
+        find_audit_severity(&missing),
+        "error",
+        "missing file: {}",
+        stdout(&missing)
+    );
+}

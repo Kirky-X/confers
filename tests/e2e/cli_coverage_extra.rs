@@ -231,11 +231,25 @@ fn doctor_healthy_config_reports_json_and_exits_zero() {
     );
 
     let out = run_cli(&dir, &["-c", &config, "doctor"]);
-    assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+    // audit 特性开启且未提供 --audit-log 时 audit 检查报 warning → 退出码 1；
+    // 无 audit 特性时保持 healthy → 0（与 lib 内 doctor_healthy 同语义）。
+    let expected_exit = if cfg!(feature = "audit") { 1 } else { 0 };
+    assert_eq!(out.status.code(), Some(expected_exit), "{}", stdout(&out));
     let report: serde_json::Value =
         serde_json::from_str(stdout(&out).trim()).expect("single-line JSON report");
-    assert_eq!(report["status"], "healthy");
-    assert_eq!(report["exit_code"], 0);
+    assert_eq!(report["exit_code"], expected_exit);
+    if cfg!(feature = "audit") {
+        let audit_sev = report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["name"] == "audit")
+            .map(|c| c["severity"].clone())
+            .expect("audit check present");
+        assert_eq!(audit_sev, "warning");
+    } else {
+        assert_eq!(report["status"], "healthy");
+    }
     let names: Vec<&str> = report["checks"]
         .as_array()
         .unwrap()
@@ -255,7 +269,8 @@ fn doctor_text_format_lists_each_check() {
     let config = write_file(&dir, "app.toml", "server.port = 8080\n");
 
     let out = run_cli(&dir, &["-c", &config, "doctor", "--format", "text"]);
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
+    let expected_exit = if cfg!(feature = "audit") { 1 } else { 0 };
+    assert_eq!(out.status.code(), Some(expected_exit), "{}", stderr(&out));
     let body = stdout(&out);
     assert!(body.contains("Doctor (status:"), "{body}");
     assert!(body.contains("load"), "{body}");
