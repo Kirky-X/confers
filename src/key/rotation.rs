@@ -160,12 +160,25 @@ impl std::fmt::Display for RotationStatus {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KeyRotationService {
     policy: KeyRotationPolicy,
     /// In-memory audit trail of executed rotations. Capped at
     /// `MAX_ROTATION_HISTORY` entries; the oldest entries are dropped first.
     history: Vec<RotationHistory>,
+    /// 轮换审计出口端口；未注入时为 Noop（零行为变化）。
+    #[cfg(feature = "audit")]
+    audit_port: std::sync::Arc<dyn crate::key::audit_port::RotationAuditPort>,
+}
+
+impl std::fmt::Debug for KeyRotationService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 手写 Debug：端口是 trait 对象（非 Debug），且 history 只暴露条数。
+        f.debug_struct("KeyRotationService")
+            .field("policy", &self.policy)
+            .field("history_len", &self.history.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// Number of secondary key versions that are no longer Active.
@@ -185,7 +198,22 @@ impl KeyRotationService {
         Self {
             policy,
             history: Vec::new(),
+            #[cfg(feature = "audit")]
+            audit_port: std::sync::Arc::new(crate::key::audit_port::NoopRotationAudit),
         }
+    }
+
+    /// 注入轮换审计出口端口（builder 风格）。
+    ///
+    /// 端口在 `execute_rotation` 成功（`RotationStatus::Completed`）后收到
+    /// 一条 `AuditEvent::KeyRotation`；未注入时保持 Noop。
+    #[cfg(feature = "audit")]
+    pub fn with_audit_port(
+        mut self,
+        port: std::sync::Arc<dyn crate::key::audit_port::RotationAuditPort>,
+    ) -> Self {
+        self.audit_port = port;
+        self
     }
 
     pub fn create_rotation_plan(
@@ -348,6 +376,18 @@ impl KeyRotationService {
             self.history
                 .drain(..self.history.len() - MAX_ROTATION_HISTORY);
         }
+
+        // 轮换成功（Completed）后经端口发射审计事件；`RotationHistory`
+        // 内存账本继续保留，作为链外快速查询。
+        #[cfg(feature = "audit")]
+        self.audit_port
+            .record(crate::impl_::audit::AuditEvent::KeyRotation {
+                key_id: key_ring.key_id.clone(),
+                old_version: format!("v{old_version}"),
+                new_version: format!("v{}", new_key.metadata.version()),
+                fields_reencrypted: 0,
+                timestamp: chrono::Utc::now(),
+            });
 
         Ok(RotationResult {
             key_id: key_ring.key_id.clone(),
@@ -1074,6 +1114,77 @@ mod tests {
         assert!(rec.should_rotate);
         // days_since_rotation = 10, which is < 90, so not Critical; but should_rotate=true → High
         assert_eq!(rec.priority, RecommendationPriority::High);
+    }
+
+    /// 内存捕获端口：记录全部到达的审计事件供断言。
+    #[cfg(all(test, feature = "audit"))]
+    struct CapturingPort(std::sync::Arc<std::sync::RwLock<Vec<crate::impl_::audit::AuditEvent>>>);
+
+    #[cfg(all(test, feature = "audit"))]
+    impl crate::key::audit_port::RotationAuditPort for CapturingPort {
+        fn record(&self, event: crate::impl_::audit::AuditEvent) {
+            self.0.write().expect("capture lock").push(event);
+        }
+    }
+
+    #[cfg(all(test, feature = "audit", feature = "encryption"))]
+    #[test]
+    fn test_execute_rotation_emits_exactly_one_event_on_success() {
+        let master_key = [0x1b; 32];
+        let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
+        let events = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+        let mut service = KeyRotationService::new(KeyRotationPolicy::default())
+            .with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
+
+        let result = service
+            .execute_rotation(&mut ring, &master_key, "u".to_string(), None)
+            .expect("execute_rotation");
+
+        let captured = events.read().expect("capture lock").clone();
+        assert_eq!(captured.len(), 1, "success must emit exactly one event");
+        match &captured[0] {
+            crate::impl_::audit::AuditEvent::KeyRotation {
+                key_id,
+                old_version,
+                new_version,
+                ..
+            } => {
+                assert_eq!(key_id, "k");
+                assert_eq!(*old_version, format!("v{}", result.previous_version));
+                assert_eq!(*new_version, format!("v{}", result.new_version));
+            }
+            other => panic!("expected KeyRotation event, got {:?}", other),
+        }
+    }
+
+    #[cfg(all(test, feature = "audit", feature = "encryption"))]
+    #[test]
+    fn test_execute_rotation_emits_no_event_on_failure() {
+        let master_key = [0x1c; 32];
+        let mut ring = KeyRing::new(&master_key, "k".to_string(), "u".to_string()).unwrap();
+        // 先退役 max_versions 个版本，令后续 execute_rotation 失败。
+        let mut policy = KeyRotationPolicy::new(1, 90, 14, false);
+        policy.max_versions = 1;
+        let events = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+        let mut service = KeyRotationService::new(policy)
+            .with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
+
+        service
+            .execute_rotation(&mut ring, &master_key, "u".to_string(), None)
+            .expect("first rotation");
+        assert_eq!(events.read().expect("capture lock").len(), 1);
+
+        // v1 归档后仍是 Active secondary，需显式退役才计入 inactive 配额。
+        ring.deactivate_version(1);
+        let err = service
+            .execute_rotation(&mut ring, &master_key, "u".to_string(), None)
+            .unwrap_err();
+        assert!(err.to_string().contains("inactive"), "got: {}", err);
+        assert_eq!(
+            events.read().expect("capture lock").len(),
+            1,
+            "failure must not emit additional events"
+        );
     }
 
     #[test]
