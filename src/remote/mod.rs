@@ -19,6 +19,9 @@ pub mod k8s;
 pub mod nacos;
 pub(crate) mod poll;
 
+#[cfg(feature = "remote-baseline")]
+pub mod baseline;
+
 pub use interval::PollInterval;
 
 /// Record remote-fetch critical-path metrics around a poll future: the fetch
