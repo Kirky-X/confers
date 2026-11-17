@@ -54,7 +54,7 @@
 - ✅ 支持主流格式（TOML、JSON、YAML）
 - ✅ 环境变量覆盖
 - ✅ 校验框架
-- ✅ 远程来源（`remote`、`etcd`、`consul`、`etcd-watch`）：公开接口已冻结，1.0 前不做破坏性变更（与 [README 路线图](../README.md#️-开发路线图)一致）
+- ✅ 远程来源（`remote`、`etcd`、`consul`、`etcd-watch`）：公开接口已冻结，1.0 前不做破坏性变更（与 [README 路线图](../../README_CN.md#️-开发路线图)一致）
 
 **成熟度指标：**
 
@@ -107,7 +107,7 @@
 
 ### ❓ 项目采用什么许可证？
 
-本项目基于 [MIT 许可证](../LICENSE) 发布，是 OSI 认可的宽松开源许可证（与 [README · 许可证](../README.md#-许可证)一致）。
+本项目基于 [MIT 许可证](../../LICENSE) 发布，是 OSI 认可的宽松开源许可证（与 [README · 许可证](../../README_CN.md#-许可证)一致）。
 
 **您获得的全部权利：**
 
@@ -166,7 +166,7 @@ fn main() {
 
 **特性预设（推荐）：**
 
-`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../README.md#-特性标志)；下述 Cargo.toml 写法可直接套用。
+`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../../README_CN.md#-特性标志)；下述 Cargo.toml 写法可直接套用。
 
 **用法示例：**
 
@@ -413,4 +413,4 @@ Error: Validation failed: ...
 |:---------------:|:------------------:|:----------:|
 | [🐛 报告问题](https://github.com/Kirky-X/confers/issues) | [💬 社区讨论](https://github.com/Kirky-X/confers/discussions) | [📧 联系支持](mailto:Kirky-X@outlook.com) |
 
-**[📖 用户指南](USER_GUIDE.md)** • **[🔧 在线 API 文档](https://docs.rs/confers)** • **[🏠 返回首页](../README.md)**
+**[📖 用户指南](USER_GUIDE.md)** • **[🔧 在线 API 文档](https://docs.rs/confers)** • **[🏠 返回首页](../../README_CN.md)**

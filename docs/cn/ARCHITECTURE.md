@@ -129,7 +129,7 @@ confers/
 | `toggle` | `feature-toggle` | 运行时特性开关：`FeatureToggleRegistry`（基于 `dashmap`） |
 | `context` | `context-aware` | 上下文感知配置 |
 | `schema` | `json-schema` / `typescript-schema` | `TypeScriptGenerator`，从 Rust 类型生成 TS 定义 |
-| `cli` | `cli` | `confers` 命令行工具（clap）：inspect、validate、export、diff、snapshot（含 list/restore）、schema、get、docs、doctor；入口在 `src/cli/main.rs` |
+| `cli` | `cli` | `confers` 命令行工具（clap）：inspect、validate、export、diff、snapshot（含 list/restore）、schema、get、docs、doctor；入口在 `src/main.rs` |
 
 ### workspace 成员
 

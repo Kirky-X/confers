@@ -99,11 +99,11 @@ cargo --version
 
 **可用的特性预设：**
 
-`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../README.md#-特性标志)。
+`minimal` / `recommended` / `dev` / `production` / `distributed` / `full` 六个预设各自包含的特性清单与适用场景，统一见 [README · 功能预设](../../README_CN.md#-特性标志)。
 
 **单项特性：**
 
-每个可选能力均为独立特性标志；完整的单项特性矩阵（含默认启用状态与说明，逐项对应 `Cargo.toml` 的 `[features]` 定义）见 [README · 功能矩阵](../README.md#-功能矩阵)。
+每个可选能力均为独立特性标志；完整的单项特性矩阵（含默认启用状态与说明，逐项对应 `Cargo.toml` 的 `[features]` 定义）见 [README · 功能矩阵](../../README_CN.md#-功能矩阵)。
 
 如果需要异步/远程支持，请添加 tokio：
 
@@ -478,7 +478,7 @@ confers -c app.toml schema --from-instance
 confers schema --from-schema config-schema.json
 ```
 
-> **注意**：随库安装的 `confers` 二进制固定以 `serde_json::Value` 作为配置类型实例化 CLI（`src/cli/main.rs`），因此不带参数的 `confers schema` 输出的是 `serde_json::Value` 的通用 schema（`title: "AnyValue"`），不是您的派生配置类型。要正向生成自己配置类型的 JSON Schema，请在项目中嵌入 CLI 并指定类型：`confers::cli::run::<MyConfig>()`（需 `cli` 特性）。
+> **注意**：随库安装的 `confers` 二进制固定以 `serde_json::Value` 作为配置类型实例化 CLI（`src/main.rs`），因此不带参数的 `confers schema` 输出的是 `serde_json::Value` 的通用 schema（`title: "AnyValue"`），不是您的派生配置类型。要正向生成自己配置类型的 JSON Schema，请在项目中嵌入 CLI 并指定类型：`confers::cli::run::<MyConfig>()`（需 `cli` 特性）。
 
 `--from-schema` 的映射规则（完整规则见 `RustScaffoldGenerator` rustdoc）：
 
@@ -1055,4 +1055,4 @@ beta_api = false
 | [🔒 安全文档](SECURITY.md) | 安全策略与漏洞报告流程 |
 | [⚡ 性能指南](PERFORMANCE.md) | 性能优化与基准数据 |
 | [❓ FAQ](FAQ.md) | 常见问题解答 |
-| [💻 示例代码](../examples/) | 真实场景代码示例 |
+| [💻 示例代码](../../examples/) | 真实场景代码示例 |
