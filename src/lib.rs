@@ -245,7 +245,7 @@ pub use audit::{
 
 // 轮换审计端口随 key 模块存在，且其签名引用 audit 事件类型，需双 feature。
 #[cfg(all(feature = "audit", feature = "key-management"))]
-pub use key::{NoopRotationAudit, RotationAuditPort};
+pub use key::{AuditWriterPort, NoopRotationAudit, RotationAuditPort};
 
 #[cfg(feature = "dynamic")]
 pub use dynamic::{CallbackGuard, DynamicField, DynamicFieldBuilder};

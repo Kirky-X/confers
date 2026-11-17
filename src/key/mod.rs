@@ -10,7 +10,7 @@ mod storage;
 mod version;
 
 #[cfg(feature = "audit")]
-pub use audit_port::{NoopRotationAudit, RotationAuditPort};
+pub use audit_port::{AuditWriterPort, NoopRotationAudit, RotationAuditPort};
 pub use manager::{KeyInfo, KeyManager, KeyVersion};
 pub use rotation::{KeyRotationPolicy, KeyRotationService, ReencryptPolicy, RotationResult};
 #[cfg(feature = "encryption")]
