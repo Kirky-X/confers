@@ -237,3 +237,143 @@ fn key10111213_manager_error_paths_cleanup_and_expiry() {
     assert!(expired.is_expired(), "past expires_at → expired");
     assert!(!expired.is_active());
 }
+
+// ---------------------------------------------------------------------------
+// key-rotation-dual-window：轮换策略与审计闭环（T010）
+// ---------------------------------------------------------------------------
+
+use confers::key::{KeyRotationPolicy, ReencryptPolicy};
+
+/// 按加载管线同款原语构造信封（field 派生密钥 + 随机 nonce）。
+fn make_field_envelope(master: &[u8], field: &str, key_version: &str, plaintext: &str) -> String {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+
+    let field_key = confers::secret::derive_field_key(master, field, key_version).unwrap();
+    let (nonce, ct) = confers::secret::XChaCha20Crypto::new()
+        .encrypt(plaintext.as_bytes(), field_key.as_slice())
+        .unwrap();
+    let mut blob = nonce;
+    blob.extend_from_slice(&ct);
+    confers::EncryptedEnvelope::new(key_version, BASE64.encode(&blob)).to_envelope_string()
+}
+
+/// 用指定版本的派生密钥解信封，返回原文（roundtrip 断言用）。
+fn open_field_envelope(master: &[u8], field: &str, key_version: &str, envelope: &str) -> String {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+
+    let parsed = confers::EncryptedEnvelope::parse(envelope).expect("parse envelope");
+    let field_key = confers::secret::derive_field_key(master, field, key_version).unwrap();
+    let blob = BASE64.decode(parsed.payload.as_bytes()).unwrap();
+    let (nonce, ct) = blob.split_at(24);
+    let plain = confers::secret::XChaCha20Crypto::new()
+        .decrypt(nonce, ct, field_key.as_slice())
+        .expect("decrypt envelope");
+    String::from_utf8(plain.to_vec()).expect("utf8 plaintext")
+}
+
+/// KEY-14：轮换 → 旧版本信封经 `reencrypt_envelope` 改写 → Active 密钥还原原文。
+#[test]
+#[serial_test::serial]
+fn key14_rotation_then_lazy_reencrypt_restores_plaintext() {
+    let mk = master();
+    let master_ascii = std::str::from_utf8(&mk).unwrap().to_string();
+    unsafe { std::env::set_var(confers::field_crypto::MASTER_KEY_ENV, &master_ascii) };
+
+    let policy = KeyRotationPolicy {
+        reencrypt_read: ReencryptPolicy::Lazy,
+        ..KeyRotationPolicy::default()
+    };
+    let mut km = KeyManager::new().unwrap().with_rotation_policy(policy);
+    km.initialize(&mk, "prod".to_string(), "e2e".to_string())
+        .expect("initialize");
+
+    let envelope = make_field_envelope(&mk, "api_key", "v1", "e2e-secret-token");
+    let result = km
+        .rotate_key(&mk, None, "e2e".to_string(), None)
+        .expect("rotate");
+
+    let rewritten = km
+        .reencrypt_envelope("api_key", &envelope)
+        .expect("reencrypt")
+        .expect("lazy policy within window must rewrite");
+    assert!(
+        rewritten.starts_with("enc:v1:v2:"),
+        "rewritten envelope must carry the active version, got {rewritten}"
+    );
+
+    let plain = open_field_envelope(&mk, "api_key", "v2", &rewritten);
+    assert_eq!(plain, "e2e-secret-token");
+    // 旧信封本身保持 v1 不变（读路径不侵入）。
+    assert!(envelope.starts_with("enc:v1:v1:"));
+    assert_eq!(result.previous_version, 1);
+    assert_eq!(result.new_version, 2);
+
+    unsafe { std::env::remove_var(confers::field_crypto::MASTER_KEY_ENV) };
+}
+
+/// KEY-15：注入 `AuditWriterPort`（临时 log_dir）执行轮换 → HMAC 链完整且
+/// 含轮换事件记录（old_version/new_version 可检索）。
+#[cfg(feature = "audit")]
+#[test]
+#[serial_test::serial]
+fn key15_rotation_event_verifiable_in_hmac_chain() {
+    use std::sync::Arc;
+
+    let dir = tempfile::tempdir().unwrap();
+    let writer = Arc::new(
+        confers::audit::AuditWriter::builder()
+            .enabled(true)
+            .log_dir(dir.path().to_path_buf())
+            .build(),
+    );
+
+    let mk = master();
+    let master_ascii = std::str::from_utf8(&mk).unwrap().to_string();
+    unsafe { std::env::set_var(confers::field_crypto::MASTER_KEY_ENV, &master_ascii) };
+
+    let mut km = KeyManager::new()
+        .unwrap()
+        .with_audit_port(Arc::new(confers::AuditWriterPort::new(writer)));
+    km.initialize(&mk, "audit-prod".to_string(), "e2e".to_string())
+        .expect("initialize");
+    let result = km
+        .rotate_key(&mk, None, "e2e".to_string(), None)
+        .expect("rotate");
+
+    // 轮换事件经 AuditWriterPort 落入当天链文件。
+    let mut files: Vec<_> = std::fs::read_dir(dir.path())
+        .expect("log dir readable")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect();
+    files.sort();
+    assert!(
+        !files.is_empty(),
+        "rotation event must reach the chain file"
+    );
+    let chain_path = &files[0];
+
+    assert!(
+        confers::audit::verify_audit_chain_with_key(chain_path, None).unwrap(),
+        "chain must verify after the rotation event"
+    );
+
+    let content = std::fs::read_to_string(chain_path).expect("chain file readable");
+    assert!(content.contains("KeyRotation"), "got: {content}");
+    assert!(
+        content.contains(&format!("\"old_version\":\"v{}\"", result.previous_version)),
+        "old_version must be searchable, got: {content}"
+    );
+    assert!(
+        content.contains(&format!("\"new_version\":\"v{}\"", result.new_version)),
+        "new_version must be searchable, got: {content}"
+    );
+    assert!(
+        content.contains("\"key_id\":\"audit-prod\""),
+        "got: {content}"
+    );
+
+    unsafe { std::env::remove_var(confers::field_crypto::MASTER_KEY_ENV) };
+}
