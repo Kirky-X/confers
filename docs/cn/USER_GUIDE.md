@@ -831,6 +831,48 @@ println!("Key rotated from version {} to {}",
 - ❌ 不要将密钥提交到版本控制系统
 - ❌ 不要在日志中输出密钥
 
+##### 轮换策略与审计闭环
+
+`KeyRotationPolicy` 提供三个控制"双密钥并存窗口"与重加密行为的字段（serde 向后兼容，旧配置文件缺省时取默认值）：
+
+| 字段 | 类型 / 默认值 | 语义 |
+| ---- | ------------- | ---- |
+| `dual_key_window_secs` | `u64` / `grace_period_days * 86400`（serde 缺省固定 86400） | 新旧版本并存时窗（秒）。窗口外不再对旧版本信封做惰性重加密 |
+| `reencrypt_on_write` | `bool` / `true` | 新写入是否使用 Active 版本加密 |
+| `reencrypt_read` | `ReencryptPolicy` / `Never` | 读路径惰性重加密策略：`never`（保持原样）/ `lazy`（由 `reencrypt_envelope` 改写）/ `on_rotate`（轮换后立即改写——字段账本未就绪，`validate_rotation`/`can_rotate` 当前会拒绝） |
+
+```rust
+use confers::key::{KeyManager, KeyRotationPolicy, ReencryptPolicy};
+
+let policy = KeyRotationPolicy {
+    reencrypt_read: ReencryptPolicy::Lazy,
+    ..KeyRotationPolicy::default()
+};
+let mut key_manager = KeyManager::new()?.with_rotation_policy(policy);
+
+// 轮换后，旧版本信封可显式改写为 Active 版本（Lazy 策略 + 时窗内）：
+// 返回 Ok(Some(new_envelope)) 表示已改写；Ok(None) 表示无需/不应改写。
+if let Some(new_envelope) = key_manager.reencrypt_envelope("api_key", &old_envelope)? {
+    // 用新信封替换存储中的旧值
+}
+```
+
+`reencrypt_envelope` 的主密钥与加载管线同源（`CONFERS_MASTER_KEY`，hex 32 字节或 32 字节 ASCII）。
+
+**审计闭环**：`KeyManager::rotate_key` / `KeyRotationService::execute_rotation` 在轮换成功后经 `RotationAuditPort` 发射一条 `AuditEvent::KeyRotation`（含 `key_id`、`old_version`、`new_version`、`fields_reencrypted`）。默认端口为 `NoopRotationAudit`（零行为）；`audit` feature 下可注入 `AuditWriterPort` 落入本地 HMAC 审计链并转发全部 `AuditSink`：
+
+```rust
+use std::sync::Arc;
+
+let writer = Arc::new(confers::audit::AuditWriter::builder()
+    .enabled(true)
+    .log_dir("/var/log/confers".into())   // 必须显式配置
+    .build());
+let key_manager = KeyManager::new()?.with_audit_port(Arc::new(confers::AuditWriterPort::new(writer)));
+```
+
+> ⚠️ **`log_dir` 必须显式配置**：`KeyRotation` 属 durable 事件，`AuditWriter` 未配置 `log_dir` 时写入返回 `Err`。`AuditWriterPort` 按既有容错惯例吞掉该错误（仅记 telemetry 告警、不上抛），轮换本身不受影响——但这意味着不配置 `log_dir` 时轮换事件不会落链。
+
 #### 4. 审计日志配置
 
 配置审计日志以追踪所有配置的加载与修改操作。`AuditWriter` 的构建与事件记录示例见 [🔒 安全文档 · 审计日志](SECURITY.md#审计日志)，完整 API 签名见 [API 参考 · 审计日志配置](API_REFERENCE.md#审计日志配置)。

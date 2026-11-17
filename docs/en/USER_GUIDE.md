@@ -831,6 +831,49 @@ println!("Key rotated from version {} to {}",
 - ❌ Never commit keys to version control
 - ❌ Never print keys in logs
 
+##### Rotation Policy and Audit Loop
+
+`KeyRotationPolicy` adds three fields controlling the dual-key window and re-encryption behavior (serde is backward compatible; legacy config files fall back to the defaults):
+
+| Field | Type / default | Semantics |
+| ----- | -------------- | --------- |
+| `dual_key_window_secs` | `u64` / `grace_period_days * 86400` (serde default fixed at 86400) | Window (seconds) during which the old and new versions coexist. Outside the window, old-version envelopes are no longer lazily re-encrypted |
+| `reencrypt_on_write` | `bool` / `true` | Whether new writes encrypt with the Active version |
+| `reencrypt_read` | `ReencryptPolicy` / `Never` | Lazy re-encryption policy: `never` (leave as-is) / `lazy` (rewritten by `reencrypt_envelope`) / `on_rotate` (rewrite right after rotation — rejected by `validate_rotation`/`can_rotate` until the per-field ledger lands) |
+
+```rust
+use confers::key::{KeyManager, KeyRotationPolicy, ReencryptPolicy};
+
+let policy = KeyRotationPolicy {
+    reencrypt_read: ReencryptPolicy::Lazy,
+    ..KeyRotationPolicy::default()
+};
+let mut key_manager = KeyManager::new()?.with_rotation_policy(policy);
+
+// After a rotation, old-version envelopes can be rewritten to the Active
+// version explicitly (Lazy policy + inside the window): Ok(Some(new_envelope))
+// means rewritten, Ok(None) means no rewrite is needed or allowed.
+if let Some(new_envelope) = key_manager.reencrypt_envelope("api_key", &old_envelope)? {
+    // replace the stored old value with the new envelope
+}
+```
+
+`reencrypt_envelope` resolves its master key from the same source as the load pipeline (`CONFERS_MASTER_KEY`, hex-encoded 32 bytes or 32-byte ASCII).
+
+**Audit loop**: after a successful rotation, `KeyManager::rotate_key` / `KeyRotationService::execute_rotation` emit one `AuditEvent::KeyRotation` (carrying `key_id`, `old_version`, `new_version`, `fields_reencrypted`) through a `RotationAuditPort`. The default port is `NoopRotationAudit` (zero behavior); with the `audit` feature you can inject an `AuditWriterPort` to persist into the local HMAC audit chain and fan out to every `AuditSink`:
+
+```rust
+use std::sync::Arc;
+
+let writer = Arc::new(confers::audit::AuditWriter::builder()
+    .enabled(true)
+    .log_dir("/var/log/confers".into())   // must be configured explicitly
+    .build());
+let key_manager = KeyManager::new()?.with_audit_port(Arc::new(confers::AuditWriterPort::new(writer)));
+```
+
+> ⚠️ **`log_dir` must be configured explicitly**: `KeyRotation` is a durable event, and `AuditWriter` returns `Err` when `log_dir` is unset. `AuditWriterPort` swallows that error following the existing fault-tolerance convention (telemetry warning only, never propagated), so rotation itself is unaffected — but without a `log_dir` the rotation event never reaches the chain.
+
 #### 4. Audit Log Configuration
 
 Configure audit logging to trace every config load and modification. For `AuditWriter` construction and event recording examples, see [🔒 Security · Audit Logging](SECURITY.md#audit-logging); for full API signatures, see [API Reference · Audit Log Configuration](API_REFERENCE.md#audit-log-configuration).
