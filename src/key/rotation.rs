@@ -234,6 +234,18 @@ impl KeyRotationService {
         plan: &RotationPlan,
         policy: &KeyRotationPolicy,
     ) -> Result<(), ConfigError> {
+        // OnRotate 需要 KeyRing 携带"哪些字段用此密钥加密"的字段账本；账本
+        // 未就绪前显式拒绝，避免策略被静默忽略。
+        if policy.reencrypt_read == ReencryptPolicy::OnRotate {
+            return Err(ConfigError::InvalidValue {
+                key: "key.rotation".to_string(),
+                expected_type: "never | lazy".to_string(),
+                message: "reencrypt_read=on_rotate requires the per-field ledger, \
+                          which is not implemented yet"
+                    .to_string(),
+            });
+        }
+
         if plan.target_version > key_ring.current_version + policy.max_versions {
             return Err(ConfigError::ParseError {
                 format: "key".to_string(),
@@ -374,6 +386,17 @@ impl KeyRotationService {
     /// retained alongside the single Active primary — a ring holding
     /// `max_versions` non-Active secondaries must clean up before rotating.
     pub fn can_rotate(key_ring: &KeyRing, policy: &KeyRotationPolicy) -> Result<(), ConfigError> {
+        // 与 validate_rotation 相同的 OnRotate 拒绝：字段账本未就绪。
+        if policy.reencrypt_read == ReencryptPolicy::OnRotate {
+            return Err(ConfigError::InvalidValue {
+                key: "key.rotation".to_string(),
+                expected_type: "never | lazy".to_string(),
+                message: "reencrypt_read=on_rotate requires the per-field ledger, \
+                          which is not implemented yet"
+                    .to_string(),
+            });
+        }
+
         let inactive_count = inactive_secondary_count(key_ring);
 
         if inactive_count >= policy.max_versions {
@@ -817,6 +840,70 @@ mod tests {
         meta.set_expires_at(Some(now_timestamp() + 100 * SECONDS_PER_DAY));
         let status = KeyRotationService::check_key_expiration(&meta);
         assert_eq!(status, KeyExpirationStatus::Valid);
+    }
+
+    #[test]
+    fn test_validate_rotation_rejects_on_rotate_policy() {
+        let ring = make_key_ring(3, vec![], None, None);
+        let plan = RotationPlan::new("k".to_string(), 3, 5);
+        let mut policy = KeyRotationPolicy::new(10, 90, 14, false);
+        policy.reencrypt_read = ReencryptPolicy::OnRotate;
+
+        let err = KeyRotationService::validate_rotation(&ring, &plan, &policy).unwrap_err();
+        match err {
+            ConfigError::InvalidValue { key, message, .. } => {
+                assert_eq!(key, "key.rotation");
+                assert!(message.contains("ledger"), "got: {}", message);
+            }
+            other => panic!("expected InvalidValue, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_validate_rotation_allows_never_and_lazy_policies() {
+        let ring = make_key_ring(3, vec![], None, None);
+        let plan = RotationPlan::new("k".to_string(), 3, 5);
+        let mut policy = KeyRotationPolicy::new(10, 90, 14, false);
+
+        policy.reencrypt_read = ReencryptPolicy::Never;
+        KeyRotationService::validate_rotation(&ring, &plan, &policy)
+            .expect("Never must behave as before");
+
+        policy.reencrypt_read = ReencryptPolicy::Lazy;
+        KeyRotationService::validate_rotation(&ring, &plan, &policy)
+            .expect("Lazy must behave as before");
+    }
+
+    #[test]
+    fn test_can_rotate_rejects_on_rotate_policy() {
+        let ring = make_key_ring(3, vec![], None, None);
+        let policy = KeyRotationPolicy {
+            reencrypt_read: ReencryptPolicy::OnRotate,
+            ..KeyRotationPolicy::default()
+        };
+
+        let err = KeyRotationService::can_rotate(&ring, &policy).unwrap_err();
+        match err {
+            ConfigError::InvalidValue { key, .. } => assert_eq!(key, "key.rotation"),
+            other => panic!("expected InvalidValue, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_can_rotate_allows_never_and_lazy_policies() {
+        let ring = make_key_ring(3, vec![(1, KeyStatus::Deprecated)], None, None);
+
+        let never = KeyRotationPolicy {
+            reencrypt_read: ReencryptPolicy::Never,
+            ..KeyRotationPolicy::default()
+        };
+        KeyRotationService::can_rotate(&ring, &never).expect("Never must pass");
+
+        let lazy = KeyRotationPolicy {
+            reencrypt_read: ReencryptPolicy::Lazy,
+            ..KeyRotationPolicy::default()
+        };
+        KeyRotationService::can_rotate(&ring, &lazy).expect("Lazy must pass");
     }
 
     #[test]
