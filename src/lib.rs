@@ -240,7 +240,8 @@ pub use secret::{
 #[cfg(feature = "audit")]
 pub use audit::{
     AuditConfig, AuditConfigBuilder, AuditEvent, AuditLevel, AuditSink, AuditWriter,
-    AuditWriterBuilder, verify_audit_chain, verify_audit_chain_with_key,
+    AuditWriterBuilder, ChainVerificationReport, verify_audit_chain, verify_audit_chain_report,
+    verify_audit_chain_report_with_key, verify_audit_chain_with_key,
 };
 
 // 轮换审计端口随 key 模块存在，且其签名引用 audit 事件类型，需双 feature。

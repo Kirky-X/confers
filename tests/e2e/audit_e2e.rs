@@ -10,7 +10,7 @@
 //! AUD-01…10 已有覆盖(tests/security/audit.rs);
 //! CCY-06(8 线程压力档)固化于 concurrency_e2e.rs。
 
-use confers::audit::{AuditWriter, verify_audit_chain};
+use confers::audit::{AuditWriter, verify_audit_chain, verify_audit_chain_report};
 use std::collections::HashSet;
 
 #[test]
@@ -95,4 +95,80 @@ fn aud11_concurrent_writes_produce_one_intact_line_each() {
             file.display()
         );
     }
+}
+
+#[test]
+fn report_verification_locates_tamper_after_writer_roundtrip() {
+    // 写链 → report 版验证完好 → 篡改中间事件一个字节 → 断点定位在 2 且无 gap
+    // （篡改不产生 gap，删除才产生）。
+    let dir = tempfile::tempdir().unwrap();
+    let writer = AuditWriter::builder()
+        .enabled(true)
+        .log_dir(dir.path().to_path_buf())
+        .build();
+    for source in ["src-a", "src-b", "src-c"] {
+        writer.log_load(source).expect("event must write");
+    }
+    drop(writer); // 追加链尾并落盘。
+
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir.path())
+        .expect("log dir readable")
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect();
+    assert!(!files.is_empty(), "audit log file must exist");
+    files.sort();
+    let path = &files[0];
+
+    // 完好链：chain_intact 且全部事件 HMAC 有效。
+    let report = verify_audit_chain_report(path).expect("report must not IO-error");
+    assert!(report.chain_intact, "freshly written chain must be intact");
+    assert_eq!(report.total_entries, 3);
+    assert_eq!(report.hmac_valid_count, 3);
+
+    // 篡改中间事件行的一个字节。
+    let content = std::fs::read_to_string(path).expect("log file readable");
+    let lines: Vec<&str> = content.lines().collect();
+    let event_lines: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            serde_json::from_str::<serde_json::Value>(l)
+                .ok()
+                .and_then(|v| {
+                    let obj = v.as_object()?;
+                    Some(obj.contains_key("hmac") && !obj.contains_key("record"))
+                })
+                .unwrap_or(false)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(event_lines.len(), 3);
+    let tampered = lines[event_lines[1]].replace("src-b", "src-X");
+    assert_ne!(
+        tampered, lines[event_lines[1]],
+        "tamper must change the line"
+    );
+    let rewritten: Vec<String> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            if i == event_lines[1] {
+                tampered.clone()
+            } else {
+                (*l).to_string()
+            }
+        })
+        .collect();
+    std::fs::write(path, rewritten.join("\n") + "\n").expect("log file writable");
+
+    // 篡改后：断点定位在事件 2，且不产生删除 gap。
+    let report = verify_audit_chain_report(path).expect("report must not IO-error");
+    assert!(!report.chain_intact, "tampered chain must not be intact");
+    assert_eq!(report.first_broken_at, Some(2));
+    assert!(
+        report.gaps.is_empty(),
+        "tampering must not produce deletion gaps: {:?}",
+        report.gaps
+    );
 }
