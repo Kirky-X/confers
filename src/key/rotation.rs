@@ -15,6 +15,25 @@ const WARNING_EXPIRY_DAYS: u64 = 30;
 #[cfg(feature = "encryption")]
 const MAX_ROTATION_HISTORY: usize = 100;
 
+/// 惰性重加密策略：旧版本密文何时被改写为新版本。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReencryptPolicy {
+    /// 旧版本密文保持原样（默认，行为兼容）。
+    Never,
+    /// 解密方主动调用 `KeyManager::reencrypt_envelope` 时改写。
+    Lazy,
+    /// rotate_key 成功后立刻重加密 KeyRing 记录的字段清单。
+    /// 字段账本尚未就绪，`validate_rotation`/`can_rotate` 会拒绝该策略。
+    OnRotate,
+}
+
+impl Default for ReencryptPolicy {
+    fn default() -> Self {
+        Self::Never
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyRotationPolicy {
     pub max_versions: u32,
@@ -494,6 +513,40 @@ mod tests {
             created_at: 0,
             last_rotated_at,
         }
+    }
+
+    #[test]
+    fn test_reencrypt_policy_serde_strings() {
+        assert_eq!(
+            serde_json::to_string(&ReencryptPolicy::Never).unwrap(),
+            "\"never\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReencryptPolicy::Lazy).unwrap(),
+            "\"lazy\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReencryptPolicy::OnRotate).unwrap(),
+            "\"on_rotate\""
+        );
+    }
+
+    #[test]
+    fn test_reencrypt_policy_deserializes_snake_case_and_defaults_to_never() {
+        assert_eq!(
+            serde_json::from_str::<ReencryptPolicy>("\"never\"").unwrap(),
+            ReencryptPolicy::Never
+        );
+        assert_eq!(
+            serde_json::from_str::<ReencryptPolicy>("\"lazy\"").unwrap(),
+            ReencryptPolicy::Lazy
+        );
+        assert_eq!(
+            serde_json::from_str::<ReencryptPolicy>("\"on_rotate\"").unwrap(),
+            ReencryptPolicy::OnRotate
+        );
+        // 缺省反序列化得到 Never（serde(default) 字段的取值来源）。
+        assert_eq!(ReencryptPolicy::default(), ReencryptPolicy::Never);
     }
 
     #[test]

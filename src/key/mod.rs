@@ -8,7 +8,7 @@ mod storage;
 mod version;
 
 pub use manager::{KeyInfo, KeyManager, KeyVersion};
-pub use rotation::{KeyRotationPolicy, KeyRotationService, RotationResult};
+pub use rotation::{KeyRotationPolicy, KeyRotationService, ReencryptPolicy, RotationResult};
 #[cfg(feature = "encryption")]
 pub use storage::{ErrorSanitizer, KeyStorage, SanitizationLevel};
 pub use version::KeyFormatVersion;
