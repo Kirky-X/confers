@@ -26,6 +26,7 @@
 /// 32-byte ASCII secret (same decoding as the CLI doctor).
 pub const MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
 
+#[cfg(any(feature = "snapshot", feature = "encryption"))]
 use crate::error::{ConfigError, ConfigResult};
 
 /// Decrypt every envelope value found anywhere in the tree, in place
@@ -549,6 +550,9 @@ fn encrypt_to_envelope(path: &str, plaintext: &str, master_key: &[u8]) -> Config
 /// Scan a restored snapshot JSON for decrypt-failure markers and surface the
 /// first one as a loud error (T008): an unresolvable master key must fail
 /// the restore instead of handing out marker objects as configuration.
+/// Consumer is the snapshot restore path; gated to it so snapshot-less
+/// builds (e.g. confers-macros' dependency) do not carry dead code.
+#[cfg(feature = "snapshot")]
 pub(crate) fn ensure_no_decrypt_markers(json: &serde_json::Value) -> ConfigResult<()> {
     let mut offender: Option<(String, String)> = None;
     scan_markers(json, String::new(), &mut offender);
@@ -562,14 +566,14 @@ pub(crate) fn ensure_no_decrypt_markers(json: &serde_json::Value) -> ConfigResul
     }
 }
 
-#[cfg(not(feature = "encryption"))]
+#[cfg(all(feature = "snapshot", not(feature = "encryption")))]
 fn scan_markers(json: &serde_json::Value, path: String, offender: &mut Option<(String, String)>) {
     // Without the encryption feature envelopes are left untouched, so no
     // decrypt-failure markers can exist.
     let _ = (json, path, offender);
 }
 
-#[cfg(feature = "encryption")]
+#[cfg(all(feature = "snapshot", feature = "encryption"))]
 fn scan_markers(json: &serde_json::Value, path: String, offender: &mut Option<(String, String)>) {
     if offender.is_some() {
         return;

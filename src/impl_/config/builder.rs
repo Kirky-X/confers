@@ -93,6 +93,10 @@ impl<T> Default for ConfigBuilder<T> {
 /// Everything the snapshot save needs from the builder, captured before the
 /// build path moves builder fields (clones keep the context valid across the
 /// partial moves of `build`/`build_annotated`/`build_resilient`).
+/// Struct-level allow: dependent crates (confers-macros) build `confers`
+/// without the `snapshot` feature, where the save is a no-op and the
+/// snapshot-only fields are legitimately unread.
+#[cfg_attr(not(feature = "snapshot"), allow(dead_code))]
 struct SnapshotSaveCtx {
     sensitive_paths: Vec<String>,
     #[cfg(feature = "security")]
