@@ -9,6 +9,9 @@ yanked = "warn"
 # 按仓库填:传递依赖 RUSTSEC 豁免(每项须注释原因)
 # RUSTSEC-2024-0449(unsafe-libyaml unmaintained)已随 yaml 后端迁移
 # serde_yaml_ng → serde-saphyr(纯 Rust)退出依赖图,豁免条目回收。
+# RUSTSEC-2026-0543(chrono unmaintained):advisory-db 2026-11-17 更新引入阻断,
+# patched=[] 无升级路径;依赖替换(jiff/time)归依赖治理 change。
+ignore = ["RUSTSEC-2026-0543"]
 
 [licenses]
 # 允许的宽松许可证;新增非宽松许可证需在此放行
