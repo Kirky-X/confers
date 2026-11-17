@@ -224,11 +224,13 @@ fn prs07_full_preset_covers_all_domain_features() {
         "tracing",
         // 金丝雀编排(消费 change-stream,复用 progressive-reload 健康语义)。
         "canary",
+        // 安全热替换(secure-hot-swap change:清零/审计/快照加密三开关)。
+        "secure-hot-swap",
     ];
     assert_contains(&features, "full", &domains);
     assert_eq!(
         features["full"].len(),
-        39,
+        40,
         "full preset must stay the full capability surface"
     );
 
