@@ -21,12 +21,18 @@ use crate::error::{ConfersResult, ConfigResult};
 use crate::i18n::tr_args;
 use crate::interface::ConfigProvider;
 
+#[cfg(feature = "audit")]
+use crate::audit::{AuditEvent, AuditWriter};
 #[cfg(feature = "security")]
 use crate::security::SecurityPolicy;
 #[cfg(feature = "security")]
 use crate::types::AnnotatedValue;
 #[cfg(feature = "security")]
 use arc_swap::ArcSwap;
+#[cfg(feature = "audit")]
+use arc_swap::ArcSwapOption;
+#[cfg(feature = "audit")]
+use chrono::Utc;
 
 /// Loader closure the facade calls when a file event arrives: rebuilds the
 /// configuration from disk and hands back the new config together with its
@@ -75,10 +81,10 @@ pub struct HotReloader<T: Clone + Send + Sync + 'static> {
     stop_tx: tokio::sync::watch::Sender<bool>,
     failures: Arc<AtomicU64>,
     guard: super::WatcherGuard,
-    /// Zeroize-on-replace controls shared with the event loop so the policy
-    /// can be installed after `spawn` returns.
-    #[cfg(feature = "security")]
-    zeroize_ctl: Arc<ZeroizeCtl>,
+    /// Swap-semantics controls shared with the event loop so the policy and
+    /// the audit writer can be installed after `spawn` returns.
+    #[cfg(any(feature = "security", feature = "audit"))]
+    ctl: Arc<SwapCtl>,
 }
 
 /// Zeroize-on-replace controls: the declarative policy (zeroize-on-replace /
@@ -88,6 +94,17 @@ pub struct HotReloader<T: Clone + Send + Sync + 'static> {
 struct ZeroizeCtl {
     policy: ArcSwap<SecurityPolicy>,
     zeroized_fields: AtomicU64,
+}
+
+/// Swap-semantics controls shared between the facade handle and the event
+/// loop. Fields exist only under their enabling feature, so the struct
+/// compiles for any watch feature combination.
+#[cfg(any(feature = "security", feature = "audit"))]
+struct SwapCtl {
+    #[cfg(feature = "security")]
+    zeroize: ZeroizeCtl,
+    #[cfg(feature = "audit")]
+    audit_writer: ArcSwapOption<AuditWriter>,
 }
 
 impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
@@ -108,10 +125,15 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
         let (reload_tx, _rx) = tokio::sync::watch::channel(initial);
         let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
         let failures = Arc::new(AtomicU64::new(0));
-        #[cfg(feature = "security")]
-        let zeroize_ctl = Arc::new(ZeroizeCtl {
-            policy: ArcSwap::new(Arc::new(SecurityPolicy::default())),
-            zeroized_fields: AtomicU64::new(0),
+        #[cfg(any(feature = "security", feature = "audit"))]
+        let ctl = Arc::new(SwapCtl {
+            #[cfg(feature = "security")]
+            zeroize: ZeroizeCtl {
+                policy: ArcSwap::new(Arc::new(SecurityPolicy::default())),
+                zeroized_fields: AtomicU64::new(0),
+            },
+            #[cfg(feature = "audit")]
+            audit_writer: ArcSwapOption::empty(),
         });
 
         let reloader = Arc::new(reloader);
@@ -119,8 +141,8 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
             let reloader = Arc::clone(&reloader);
             let reload_tx = reload_tx.clone();
             let failures = Arc::clone(&failures);
-            #[cfg(feature = "security")]
-            let zeroize_ctl = Arc::clone(&zeroize_ctl);
+            #[cfg(any(feature = "security", feature = "audit"))]
+            let ctl = Arc::clone(&ctl);
             tokio::spawn(run_event_loop(
                 reloader,
                 watcher,
@@ -128,8 +150,8 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
                 reload_tx,
                 failures,
                 stop_rx,
-                #[cfg(feature = "security")]
-                zeroize_ctl,
+                #[cfg(any(feature = "security", feature = "audit"))]
+                ctl,
             ))
         };
         let guard = super::WatcherGuard::with_task(Arc::new(AtomicBool::new(true)), task);
@@ -140,8 +162,8 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
             stop_tx,
             failures,
             guard,
-            #[cfg(feature = "security")]
-            zeroize_ctl,
+            #[cfg(any(feature = "security", feature = "audit"))]
+            ctl,
         }
     }
 
@@ -161,7 +183,7 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
     /// right after [`spawn`](Self::spawn).
     #[cfg(feature = "security")]
     pub fn with_security_policy(self, policy: SecurityPolicy) -> Self {
-        self.zeroize_ctl.policy.store(Arc::new(policy));
+        self.ctl.zeroize.policy.store(Arc::new(policy));
         self
     }
 
@@ -171,7 +193,18 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
     /// shared with readers (see [`SecurityPolicy`] boundary notes).
     #[cfg(feature = "security")]
     pub fn zeroized_fields(&self) -> u64 {
-        self.zeroize_ctl.zeroized_fields.load(Ordering::SeqCst)
+        self.ctl.zeroize.zeroized_fields.load(Ordering::SeqCst)
+    }
+
+    /// Inject the [`AuditWriter`] that receives an
+    /// [`AuditEvent::ReloadTrigger`] after every successful reload commit
+    /// gated by the policy's `audit_on_reload` switch (always-on for
+    /// audit-only builds without the `security` feature). Write failures are
+    /// logged at debug level and never interrupt the reload.
+    #[cfg(feature = "audit")]
+    pub fn with_audit_writer(self, writer: Arc<AuditWriter>) -> Self {
+        self.ctl.audit_writer.store(Some(writer));
+        self
     }
 
     /// Subscribe to committed configuration updates. New subscribers see
@@ -212,6 +245,8 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
         let _ = self.reload_tx.send(new_config);
         #[cfg(feature = "security")]
         self.zeroize_after_commit(&previous);
+        #[cfg(feature = "audit")]
+        emit_reload_audit(&self.ctl, "manual");
         Ok(outcome)
     }
 
@@ -221,8 +256,8 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
     #[cfg(feature = "security")]
     fn zeroize_after_commit(&self, previous: &Arc<T>) {
         apply_zeroize_policy(
-            &self.zeroize_ctl.policy,
-            &self.zeroize_ctl.zeroized_fields,
+            &self.ctl.zeroize.policy,
+            &self.ctl.zeroize.zeroized_fields,
             previous,
         );
     }
@@ -245,7 +280,7 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
     reload_tx: tokio::sync::watch::Sender<Arc<T>>,
     failures: Arc<AtomicU64>,
     stop_rx: tokio::sync::watch::Receiver<bool>,
-    #[cfg(feature = "security")] zeroize_ctl: Arc<ZeroizeCtl>,
+    #[cfg(any(feature = "security", feature = "audit"))] ctl: Arc<SwapCtl>,
 ) {
     // Stop is polled instead of racing the event await via `tokio::select!`:
     // the select macro needs tokio's "macros" feature, which the shared
@@ -258,7 +293,9 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
         }
         match tokio::time::timeout(STOP_POLL_TICK, watcher.recv()).await {
             Ok(None) => break,
-            Ok(Some(_path)) => {
+            Ok(Some(path)) => {
+                #[cfg(not(feature = "audit"))]
+                let _ = path;
                 // The loader does blocking disk I/O: run it on the blocking
                 // thread pool so the reactor (and the stop-poll tick) keeps
                 // breathing. A loader panic surfaces here as a JoinError and
@@ -281,10 +318,12 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                                 let _ = reload_tx.send(candidate);
                                 #[cfg(feature = "security")]
                                 apply_zeroize_policy(
-                                    &zeroize_ctl.policy,
-                                    &zeroize_ctl.zeroized_fields,
+                                    &ctl.zeroize.policy,
+                                    &ctl.zeroize.zeroized_fields,
                                     &previous,
                                 );
+                                #[cfg(feature = "audit")]
+                                emit_reload_audit(&ctl, &path.to_string_lossy());
                             }
                             Err(e) => {
                                 failures.fetch_add(1, Ordering::SeqCst);
@@ -352,6 +391,36 @@ fn apply_zeroize_policy<T: Clone + Send + Sync + 'static>(
         log::debug!(
             "{}",
             tr_args("log-hot-reload-zeroized", &[("count", count)])
+        );
+    }
+}
+
+/// Emit the reload audit event for a successful commit. Gated by the
+/// policy's `audit_on_reload` switch when the `security` feature is present;
+/// always-on for audit-only builds (no policy to consult). A missing writer
+/// means no event; a write failure is debug-logged and never fatal.
+#[cfg(feature = "audit")]
+fn emit_reload_audit(ctl: &SwapCtl, source: &str) {
+    #[cfg(feature = "security")]
+    let policy_allows = ctl.zeroize.policy.load().audit_on_reload;
+    #[cfg(not(feature = "security"))]
+    let policy_allows = true;
+    if !policy_allows {
+        return;
+    }
+    let guard = ctl.audit_writer.load();
+    let Some(writer) = guard.as_ref() else {
+        return;
+    };
+    let event = AuditEvent::ReloadTrigger {
+        source: source.to_string(),
+        timestamp: Utc::now(),
+    };
+    if let Err(e) = writer.write(event) {
+        let reason = flatten_reason(&e.to_string());
+        log::debug!(
+            "{}",
+            tr_args("log-hot-reload-audit-write-failed", &[("reason", reason)])
         );
     }
 }
@@ -511,6 +580,181 @@ mod zeroize_tests {
                 .and_then(|v| v.inner.as_str()),
             Some("pw-initial"),
             "the tree we hold keeps its bytes (and zeroize would have skipped a shared tree anyway)"
+        );
+
+        kit.shutdown(Duration::from_millis(500)).await.unwrap();
+    }
+
+    #[cfg(feature = "audit")]
+    fn audit_writer(dir: &tempfile::TempDir) -> Arc<AuditWriter> {
+        Arc::new(AuditWriter::with_config(crate::audit::AuditConfig {
+            enabled: true,
+            log_dir: Some(dir.path().to_path_buf()),
+            hmac_key: None,
+        }))
+    }
+
+    #[cfg(feature = "audit")]
+    fn audit_dir_contents(dir: &tempfile::TempDir) -> String {
+        let mut out = String::new();
+        for entry in std::fs::read_dir(dir.path()).unwrap().flatten() {
+            out.push_str(&std::fs::read_to_string(entry.path()).unwrap_or_default());
+        }
+        out
+    }
+
+    #[cfg(all(feature = "audit", feature = "security"))]
+    #[tokio::test]
+    async fn audit_writer_records_reload_trigger_on_manual_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit_dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("app.conf");
+        std::fs::write(&cfg_path, "value=1").unwrap();
+
+        let watcher = FsWatcher::new(&cfg_path, 50).await.unwrap();
+        let reloader = ProgressiveReloader::new(
+            Arc::new(annotated_tree("pw-0")),
+            crate::watcher::ReloadStrategy::Immediate,
+        );
+        let loader: HotReloadLoader<AnnotatedValue> =
+            Arc::new(|| Ok((Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))));
+
+        let kit = HotReloader::spawn(reloader, watcher, loader)
+            .with_security_policy(SecurityPolicy {
+                audit_on_reload: true,
+                ..SecurityPolicy::default()
+            })
+            .with_audit_writer(audit_writer(&audit_dir));
+
+        kit.begin_reload(Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))
+            .await
+            .unwrap();
+
+        let contents = audit_dir_contents(&audit_dir);
+        assert!(
+            contents.contains("ReloadTrigger"),
+            "audit log must contain the reload_trigger record: {contents}"
+        );
+        assert!(
+            contents.contains("manual"),
+            "manual commits record their source: {contents}"
+        );
+
+        kit.shutdown(Duration::from_millis(500)).await.unwrap();
+    }
+
+    #[cfg(all(feature = "audit", feature = "security"))]
+    #[tokio::test]
+    async fn audit_without_writer_records_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit_dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("app.conf");
+        std::fs::write(&cfg_path, "value=1").unwrap();
+
+        let watcher = FsWatcher::new(&cfg_path, 50).await.unwrap();
+        let reloader = ProgressiveReloader::new(
+            Arc::new(annotated_tree("pw-0")),
+            crate::watcher::ReloadStrategy::Immediate,
+        );
+        let loader: HotReloadLoader<AnnotatedValue> =
+            Arc::new(|| Ok((Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))));
+
+        // Policy asks for audit-on-reload but no writer was injected:
+        // nothing is written anywhere (and T006 adds the advisory log).
+        let kit =
+            HotReloader::spawn(reloader, watcher, loader).with_security_policy(SecurityPolicy {
+                audit_on_reload: true,
+                ..SecurityPolicy::default()
+            });
+        kit.begin_reload(Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_dir(audit_dir.path()).unwrap().count(),
+            0,
+            "no audit file must appear without an injected writer"
+        );
+
+        kit.shutdown(Duration::from_millis(500)).await.unwrap();
+    }
+
+    #[cfg(all(feature = "audit", feature = "security"))]
+    #[tokio::test]
+    async fn audit_disabled_by_policy_records_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit_dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("app.conf");
+        std::fs::write(&cfg_path, "value=1").unwrap();
+
+        let watcher = FsWatcher::new(&cfg_path, 50).await.unwrap();
+        let reloader = ProgressiveReloader::new(
+            Arc::new(annotated_tree("pw-0")),
+            crate::watcher::ReloadStrategy::Immediate,
+        );
+        let loader: HotReloadLoader<AnnotatedValue> =
+            Arc::new(|| Ok((Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))));
+
+        // Writer injected but the policy keeps audit_on_reload off: the
+        // writer must not receive any reload event.
+        let kit = HotReloader::spawn(reloader, watcher, loader)
+            .with_audit_writer(audit_writer(&audit_dir));
+        kit.begin_reload(Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_dir(audit_dir.path()).unwrap().count(),
+            0,
+            "audit_on_reload=false must suppress reload events"
+        );
+
+        kit.shutdown(Duration::from_millis(500)).await.unwrap();
+    }
+
+    #[cfg(all(feature = "audit", feature = "security"))]
+    #[tokio::test]
+    async fn event_loop_commit_records_reload_trigger_with_source_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let audit_dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("app.conf");
+        std::fs::write(&cfg_path, "value=1").unwrap();
+
+        let watcher = FsWatcher::new(&cfg_path, 50).await.unwrap();
+        // 与既有 watch e2e 的 settle() 惯例一致：等待内核 watch 建立。
+        tokio::time::sleep(Duration::from_millis(400)).await;
+
+        let reloader = ProgressiveReloader::new(
+            Arc::new(annotated_tree("pw-0")),
+            crate::watcher::ReloadStrategy::Immediate,
+        );
+        let loader: HotReloadLoader<AnnotatedValue> =
+            Arc::new(|| Ok((Arc::new(annotated_tree("pw-1")), Arc::new(EmptyProvider))));
+
+        let kit = HotReloader::spawn(reloader, watcher, loader)
+            .with_security_policy(SecurityPolicy {
+                audit_on_reload: true,
+                ..SecurityPolicy::default()
+            })
+            .with_audit_writer(audit_writer(&audit_dir));
+
+        std::fs::write(&cfg_path, "value=2").unwrap();
+        // 轮询等待审计记录出现（事件去抖 + 阻塞池加载 + 提交）。
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if audit_dir_contents(&audit_dir).contains("ReloadTrigger") {
+                break;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "reload audit event never appeared"
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let contents = audit_dir_contents(&audit_dir);
+        assert!(
+            contents.contains("app.conf"),
+            "file-triggered commits record the watched path as source: {contents}"
         );
 
         kit.shutdown(Duration::from_millis(500)).await.unwrap();
