@@ -333,6 +333,10 @@ fn key15_rotation_event_verifiable_in_hmac_chain() {
     let master_ascii = std::str::from_utf8(&mk).unwrap().to_string();
     unsafe { std::env::set_var(confers::field_crypto::MASTER_KEY_ENV, &master_ascii) };
 
+    // 既有事件先行落链（KeyAccess/Decrypt），验证轮换事件与之共存时链不破。
+    writer.log_key_access("some.plain.key").expect("key access");
+    writer.log_decrypt("some.field", true).expect("decrypt");
+
     let mut km = KeyManager::new()
         .unwrap()
         .with_audit_port(Arc::new(confers::AuditWriterPort::new(writer)));
@@ -373,6 +377,21 @@ fn key15_rotation_event_verifiable_in_hmac_chain() {
     assert!(
         content.contains("\"key_id\":\"audit-prod\""),
         "got: {content}"
+    );
+
+    // 共存断言：KeyAccess/Decrypt 事件仍在链中且链完整（上文 verify 已过）。
+    assert!(content.contains("KeyAccess"), "got: {content}");
+    assert!(content.contains("Decrypt"), "got: {content}");
+
+    // 篡改链文件任一字节 → 同函数返回 Ok(false)。
+    let mut tampered = std::fs::read(chain_path).expect("chain bytes");
+    let mid = tampered.len() / 2;
+    tampered[mid] = tampered[mid].wrapping_add(1);
+    let tampered_path = dir.path().join("tampered.log");
+    std::fs::write(&tampered_path, &tampered).expect("write tampered");
+    assert!(
+        !confers::audit::verify_audit_chain_with_key(&tampered_path, None).unwrap(),
+        "tampered chain must fail verification"
     );
 
     unsafe { std::env::remove_var(confers::field_crypto::MASTER_KEY_ENV) };

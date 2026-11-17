@@ -1472,6 +1472,19 @@ mod tests {
             .with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
         km.initialize(&master, "prod".to_string(), "team".to_string())
             .expect("initialize");
+
+        // 分支 1（Active 版本）→ Ok(None)：不产生任何审计事件。
+        let env_active = make_field_envelope(&master, "api_key", "v1", "tok");
+        assert_eq!(
+            km.reencrypt_envelope("api_key", &env_active)
+                .expect("none path"),
+            None
+        );
+        assert!(
+            events.read().expect("capture lock").is_empty(),
+            "Ok(None) path must not emit audit events"
+        );
+
         km.rotate_key(&master, None, "u".to_string(), None)
             .expect("rotate");
 
@@ -1479,9 +1492,10 @@ mod tests {
         let after_rotate = events.read().expect("capture lock").len();
         assert_eq!(after_rotate, 1);
 
-        let env_v3_unknown_active = make_field_envelope(&master, "api_key", "v1", "tok");
+        // Lazy 改写恰好追加 1 条 Decrypt 事件。
+        let env_retired = make_field_envelope(&master, "api_key", "v1", "tok");
         assert!(
-            km.reencrypt_envelope("api_key", &env_v3_unknown_active)
+            km.reencrypt_envelope("api_key", &env_retired)
                 .expect("lazy rewrite")
                 .is_some()
         );
