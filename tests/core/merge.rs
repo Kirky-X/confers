@@ -72,16 +72,12 @@ mod tests {
         const PRECEDENCE_PREFIX: &str = "PRECEDENCE_CFG_";
 
         fn set_precedence_env() {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var(format!("{PRECEDENCE_PREFIX}HOST"), "env-host") };
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var(format!("{PRECEDENCE_PREFIX}PORT"), "9001") };
         }
 
         fn clear_precedence_env() {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::remove_var(format!("{PRECEDENCE_PREFIX}HOST")) };
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::remove_var(format!("{PRECEDENCE_PREFIX}PORT")) };
         }
 

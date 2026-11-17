@@ -32,7 +32,6 @@ fn main() {
 
     tracing::info!("{}", tr("example-key-rotation-started"));
 
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     demonstrate_key_version_derivation();
@@ -441,7 +440,6 @@ fn demonstrate_env_key_provider_with_version() {
         }
     }
 
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { env::remove_var("APP_ENCRYPTION_KEY") };
 }
 

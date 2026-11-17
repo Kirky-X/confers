@@ -143,7 +143,8 @@ async fn gs505_dynamic_version_order_and_reentrancy() {
 
     // Concurrent updaters: dispatch is serialized by the update lock, so the
     // callback observation sequence must be globally ordered and the LAST
-    // observation must equal the final stored value (R-watch-005).
+    // observation must equal the final stored value.
+
     let field_shared = Arc::new(field);
     let mut handles = Vec::new();
     for t in 0..4u32 {
@@ -165,7 +166,7 @@ async fn gs505_dynamic_version_order_and_reentrancy() {
             s.iter().all(|v| *v <= 3_049),
             "observations must be exact written values, got {s:?}"
         );
-        // R-watch-005: the LAST callback observation equals the final stored
+        // the LAST callback observation equals the final stored
         // value — late (stale-version) dispatches never regress the tail.
         assert_eq!(
             *s.last().unwrap(),

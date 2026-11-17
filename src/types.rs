@@ -1146,7 +1146,7 @@ impl ConflictReport {
     }
 }
 
-// Data types migrated from interface.rs (BrickArchitecture D1)
+// Data types migrated from interface.rs (BrickArchitecture)
 
 /// Caching policy for key providers.
 ///

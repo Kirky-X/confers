@@ -448,7 +448,7 @@ impl VaultKeyProvider {
                 _ => None,
             };
             let expires_at = match lease {
-                // lease 到期前 10% 主动刷新(与 design D6 一致)。
+                // lease 到期前 10% 主动刷新(一致)。
                 Some(secs) if secs > 0 => {
                     let early = (secs / 10).max(1);
                     Some(now + std::time::Duration::from_secs(secs.saturating_sub(early)))

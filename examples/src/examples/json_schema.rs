@@ -11,7 +11,7 @@
 //! - Schema 导出到文件
 //! - Schema 在 IDE 和文档中的使用
 //!
-//! 设计依据：ADR-012（Schema 生成与导出）
+//! 设计依据：Schema 生成与导出
 //!
 //! 运行方式：
 //!   cargo run --bin json_schema

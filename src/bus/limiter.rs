@@ -10,7 +10,7 @@
 //! - `last_process_ms`: timestamp of the last processed event
 //! - `in_progress`: flag indicating an event is currently being processed
 //!
-//! # Design (ADR-035 — ConfigBus)
+//! # Design
 //!
 //! Based on `AtomicU64` epoch ms timestamps for lock-free operation.
 //! No mutex, no channel, zero allocation on the fast path.

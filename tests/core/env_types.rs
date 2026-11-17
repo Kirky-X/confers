@@ -27,20 +27,14 @@ struct TypedConfig {
 const PREFIX: &str = "TYPEDCFG_";
 
 fn set_test_env() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(format!("{PREFIX}PORT"), "8080") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(format!("{PREFIX}DEBUG"), "true") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(format!("{PREFIX}HOST"), "localhost") };
 }
 
 fn cleanup_test_env() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(format!("{PREFIX}PORT")) };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(format!("{PREFIX}DEBUG")) };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(format!("{PREFIX}HOST")) };
 }
 
@@ -78,7 +72,8 @@ fn test_env_vars_deserialize_into_typed_struct() {
     }
 }
 
-// EnvSource type inference boundaries (R-scenario-coverage)
+// EnvSource type inference boundaries
+
 //
 // EnvSource.infer_config_value is deterministic and public through the
 // EnvSource type; these tests pin the boundary behavior: bool case variants,
@@ -217,16 +212,12 @@ struct ArrayEnvConfig {
 const ARRAY_PREFIX: &str = "ARRCFG_";
 
 fn set_array_env() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(format!("{ARRAY_PREFIX}TAGS"), r#"["a","b","c"]"#) };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(format!("{ARRAY_PREFIX}PORTS"), r#"[8080,9090]"#) };
 }
 
 fn clear_array_env() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(format!("{ARRAY_PREFIX}TAGS")) };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var(format!("{ARRAY_PREFIX}PORTS")) };
 }
 
@@ -302,12 +293,10 @@ const DEEP_PREFIX: &str = "DEEPCFG_";
 
 fn set_deep_env() {
     // a_b_c_value = "nested" → 4 levels deep
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG_A_B_C_VALUE", "deep-value") };
 }
 
 fn clear_deep_env() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("DEEPCFG_A_B_C_VALUE") };
 }
 
@@ -373,9 +362,7 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
     // Each underscore becomes a segment: A__C → a..c → a -> { "" -> { c } };
     // A___B → a...b → a -> { "" -> { "" -> { b } } }. This is the pinned
     // deterministic behavior of EnvSource key parsing.
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG_A___B", "empty-mid") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG_A__C", "empty-trailing") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let raw = confers::config::EnvSource::with_prefix(DEEP_PREFIX)
@@ -411,9 +398,7 @@ fn test_env_parse_key_empty_segments_do_not_panic() {
             .expect("leaf b under two empty segments (A___B)");
         assert_eq!(b.inner.as_str(), Some("empty-mid"));
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("DEEPCFG_A___B") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("DEEPCFG_A__C") };
     match result {
         Ok(()) => {}
@@ -427,9 +412,7 @@ fn test_env_parse_key_unicode_and_case() {
     // Lowercasing applies. A leading underscore after the prefix is a leading
     // separator: it is consumed (docs/API_REFERENCE.md 契约), so `__TAG` maps
     // to the top-level `tag` key and never yields an empty-string root key.
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG_HOSTNAME", "srv1") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("DEEPCFG__TAG", "underscore-prefixed") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let raw = confers::config::EnvSource::with_prefix(DEEP_PREFIX)
@@ -452,9 +435,7 @@ fn test_env_parse_key_unicode_and_case() {
             "no empty-string root key is produced"
         );
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("DEEPCFG_HOSTNAME") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("DEEPCFG__TAG") };
     match result {
         Ok(()) => {}
@@ -492,7 +473,6 @@ struct NestedDbConfig {
 #[test]
 #[serial]
 fn test_builder_env_source_matches_env_prefix_behavior() {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("CFASRC_A_KEY", "from-env") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let via_env_prefix: SingleKeyConfig = ConfigBuilder::new()
@@ -509,7 +489,6 @@ fn test_builder_env_source_matches_env_prefix_behavior() {
             "env_source(with_prefix) must load the same value as env_prefix"
         );
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CFASRC_A_KEY") };
     match result {
         Ok(()) => {}
@@ -524,7 +503,6 @@ fn test_builder_env_separator_does_not_retrofit_env_source() {
     // the builder creates afterwards (env()/env_prefix()); an EnvSource
     // handed to env_source() keeps its own separator, so the single-underscore
     // default still splits CFG separator keys into nested paths.
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("CFASRC_B_DB_HOST", "flat-sep") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let config: NestedDbConfig = ConfigBuilder::new()
@@ -537,7 +515,6 @@ fn test_builder_env_separator_does_not_retrofit_env_source() {
             "EnvSource's own '_' separator must stay authoritative for env_source()"
         );
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CFASRC_B_DB_HOST") };
     match result {
         Ok(()) => {}
@@ -550,7 +527,6 @@ fn test_builder_env_separator_does_not_retrofit_env_source() {
 fn test_builder_env_source_explicit_separator_applies() {
     // The caller sets the nesting separator on the EnvSource itself when a
     // non-default one is needed alongside env_source().
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("CFASRC_C_DB__HOST", "double-sep") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let config: NestedDbConfig = ConfigBuilder::new()
@@ -559,7 +535,6 @@ fn test_builder_env_source_explicit_separator_applies() {
             .expect("build with explicit separator");
         assert_eq!(config.db.host, "double-sep");
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CFASRC_C_DB__HOST") };
     match result {
         Ok(()) => {}
@@ -573,9 +548,7 @@ fn test_builder_env_source_priority_ordering_with_env_prefix() {
     // Two env sources merge in priority order (stable sort: equal priorities
     // keep declaration order, later declaration wins; higher priority wins
     // regardless of declaration order).
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("CFASRC_D_KEY", "from-custom") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("CFASRC_E_KEY", "from-prefix") };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let low_custom: SingleKeyConfig = ConfigBuilder::new()
@@ -598,9 +571,7 @@ fn test_builder_env_source_priority_ordering_with_env_prefix() {
             "priority-200 env_source must override env_prefix (priority 50)"
         );
     }));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CFASRC_D_KEY") };
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CFASRC_E_KEY") };
     match result {
         Ok(()) => {}

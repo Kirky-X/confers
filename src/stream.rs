@@ -101,7 +101,7 @@ impl ChangeEvent {
     /// Synthetic re-synchronization event for a subscriber that fell behind:
     /// versions below `from` were evicted from the retention store before
     /// this subscriber could observe them. `missed` is the version whose
-    /// lookup triggered the resync (R-watch-006).
+    /// lookup triggered the resync.
     pub fn resync(from: u64, missed: u64) -> Self {
         Self {
             version: missed,
@@ -237,7 +237,7 @@ struct BoundedPendingStore {
     order: std::collections::VecDeque<u64>,
     capacity: usize,
     /// Oldest version still retained; everything below was evicted. Used to
-    /// distinguish "lagged" from "never published" (R-watch-006).
+    /// distinguish "lagged" from "never published".
     min_retained: u64,
 }
 
@@ -331,7 +331,7 @@ impl InMemoryChangeStream {
         .await
     }
 
-    /// Resolve the retained payload for `version` (R-watch-006).
+    /// Resolve the retained payload for `version`.
     ///
     /// Returns the stored envelope while it is retained (until ack or FIFO
     /// eviction). A version inside the already-evicted range yields
@@ -407,7 +407,7 @@ impl ChangeStream for InMemoryChangeStream {
                 // The payload is gone: when the version fell inside the
                 // evicted range the subscriber lagged, and the event must
                 // surface as an explicit resync signal instead of being
-                // swallowed by this filter_map (R-watch-006).
+                // swallowed by this filter_map.
                 // Version 0 means the checksum could not be parsed at all —
                 // nothing to re-sync from, skip it.
                 if version > 0 && version < store.min_retained() {
@@ -580,7 +580,7 @@ mod tests {
         assert!(redelivered.is_err(), "acked event must not be redelivered");
     }
 
-    /// R-watch-006: versions evicted by the FIFO retention are
+    /// versions evicted by the FIFO retention are
     /// reported explicitly as `Lagged { from }` — never as a silent miss.
     #[tokio::test]
     async fn get_reports_lagged_for_evicted_versions() {
@@ -614,7 +614,7 @@ mod tests {
         );
     }
 
-    /// R-watch-006: a subscriber whose events were evicted before it
+    /// a subscriber whose events were evicted before it
     /// could observe them receives explicit resync events — the filter_map
     /// must not swallow the evicted versions silently.
     #[tokio::test]
@@ -861,7 +861,7 @@ mod tests {
     #[tokio::test]
     async fn lagging_subscriber_gets_resync_signal() {
         // 订阅者落后于保留窗口时必须收到显式 resync 信号,
-        // 而不是被静默吞掉(R-watch-006)。容量 2 的存储:发布 3 条后
+        // 而不是被静默吞掉。容量 2 的存储:发布 3 条后
         // version 1 被淘汰,min_retained 前移到 2。
         let stream = InMemoryChangeStream::with_capacity(2);
         let mut rx = stream.subscribe().await.unwrap();

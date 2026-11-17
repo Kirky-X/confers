@@ -50,7 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Full Stack - Complete Feature Set Example");
     info!("============================================================");
 
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     demo_config_loading()?;

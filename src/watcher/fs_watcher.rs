@@ -86,7 +86,7 @@ fn reported_event_path(event_path: &Path, canonical_root: &Path, reported_root: 
 ///
 /// Produced by [`FsWatcher::establish_watch`]: from the moment the value
 /// exists, every change under the watch target is guaranteed observable by
-/// the backend. This closes the R-watch-008 race where the watch was only
+/// the backend. This closes the race where the watch was only
 /// established later inside the watcher thread, silently dropping a change
 /// written right after [`FsWatcher::new`].
 struct EstablishedWatch {
@@ -102,7 +102,7 @@ struct EstablishedWatch {
     absolute: PathBuf,
     /// Path form the consumer gets back (caller's path, made absolute).
     reported: PathBuf,
-    /// Outlet throttle for file targets (R-watch-007).
+    /// Outlet throttle for file targets.
     outlet_debouncer: Option<super::AdaptiveDebouncer>,
 }
 
@@ -125,7 +125,7 @@ pub struct FsWatcher {
     /// removed, bridge channel died). Makes the failure observable through
     /// [`FsWatcher::is_running`] instead of the thread exiting silently.
     /// Establishment failures are not folded in here any more: the
-    /// constructor returns `Err` for them (R-watch-008).
+    ///constructor returns `Err` for them .
     failed: Arc<std::sync::atomic::AtomicBool>,
     /// Count of change events dropped because the event channel was full
     /// (slow consumer). Observable through [`FsWatcher::dropped_events`].
@@ -177,7 +177,7 @@ impl FsWatcher {
     /// Lower values mean faster response but higher CPU usage.
     /// Higher values mean slower response but lower CPU usage.
     ///
-    /// # Establishment contract (R-watch-008)
+    ///# Establishment contract
     ///
     /// The OS-level watch is established synchronously before this
     /// constructor returns: after an `Ok(_)` return the watch is live, so a
@@ -212,7 +212,7 @@ impl FsWatcher {
         // Establishing inside the spawned thread left a scheduling-dependent
         // window in which a change written by the caller right after `new()`
         // happened before the backend watch existed and was silently lost
-        // forever (R-watch-008). After this call the watch is live: the
+        // forever. After this call the watch is live: the
         // first change the caller issues is observable. The blocking
         // backend handshake runs on the blocking pool so the async worker
         // is not stalled (up to a few ms per watcher, more on network
@@ -331,7 +331,7 @@ impl FsWatcher {
     /// Returns `false` after [`stop()`](Self::stop) and also when the
     /// watcher thread failed mid-run (parent directory removed, bridge
     /// channel died). Establishment failures are not part of this state:
-    /// the constructor returns `Err` for them (R-watch-008).
+    ///the constructor returns `Err` for them .
     pub fn is_running(&self) -> bool {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
@@ -353,7 +353,7 @@ impl FsWatcher {
     /// Blocks briefly (on macOS this spans `FSEventStreamStart`, typically
     /// well under a millisecond) so that after this call the watch is live:
     /// every change issued afterwards is guaranteed observable
-    /// (R-watch-008). Every establishment failure is returned as an error
+    /// . Every establishment failure is returned as an error
     /// instead of handing out a watcher that would silently never deliver
     /// events.
     fn establish_watch(path: &Path, debounce_ms: u64) -> ConfigResult<EstablishedWatch> {
@@ -391,7 +391,7 @@ impl FsWatcher {
             (parent, Some(absolute.clone()))
         };
 
-        // R-watch-007: for file targets the event outlet passes
+        // for file targets the event outlet passes
         // through the library's own `AdaptiveDebouncer` (window =
         // `debounce_ms`), so rapid consecutive writes collapse into a
         // bounded number of forwarded events. The notify-level debounce
@@ -603,8 +603,7 @@ impl FsWatcher {
                                                     Err(mpsc::error::TrySendError::Full(_)) => {
                                                         // Channel full — the consumer fell
                                                         // behind. Make the loss observable:
-                                                        // warn now, count for later audit
-                                                        // (R-watch-002).
+                                                        //.
                                                         let total = dropped
                                                             .fetch_add(1, Ordering::SeqCst)
                                                             + 1;
@@ -680,7 +679,7 @@ impl FsWatcher {
     }
 
     /// Thread body used by the thread-level regression tests: establish
-    /// with failures folded into the shared flags (the pre-R-watch-008
+    /// with failures folded into the shared flags (the
     /// protocol, where a failed establishment was only observable through
     /// the flags) and then run the forwarding loop.
     #[cfg(test)]
@@ -717,7 +716,7 @@ impl FsWatcher {
 }
 
 /// An OS-level watch over multiple roots that is already live (see
-/// [`EstablishedWatch`] for the R-watch-008 rationale).
+/// [`EstablishedWatch`] for the rationale).
 struct MultiEstablishedWatch {
     debouncer: Debouncer<super::notify_normalize::CreateAsModifyWatcher, RecommendedCache>,
     /// Receiver of debounced backend event batches.
@@ -746,7 +745,7 @@ pub struct MultiFsWatcher {
     /// disappeared, bridge channel died). Makes the failure observable
     /// through [`MultiFsWatcher::is_running`] instead of the thread exiting
     /// silently. Establishment failures are not folded in here any more:
-    /// the constructor returns `Err` for them (R-watch-008).
+    ///the constructor returns `Err` for them .
     failed: Arc<std::sync::atomic::AtomicBool>,
     /// Count of change events dropped because the event channel was full
     /// (slow consumer). Observable through [`MultiFsWatcher::dropped_events`].
@@ -801,7 +800,7 @@ impl MultiFsWatcher {
     /// Lower values mean faster response but higher CPU usage.
     /// Higher values mean slower response but lower CPU usage.
     ///
-    /// # Establishment contract (R-watch-008)
+    ///# Establishment contract
     ///
     /// All roots are established synchronously before this constructor
     /// returns: after an `Ok(_)` return every accepted watch is live, so
@@ -849,7 +848,7 @@ impl MultiFsWatcher {
 
         // Establish every root before this constructor returns: after this
         // call the accepted watches are live, so a change written by the
-        // caller right away is observable (R-watch-008). Establishing inside
+        // caller right away is observable. Establishing inside
         // the spawned thread used to leave a scheduling-dependent window in
         // which an early change was silently lost. The serial backend
         // handshake (~1 ms per root) runs on the blocking pool so the async
@@ -961,7 +960,7 @@ impl MultiFsWatcher {
     /// Returns `false` after [`stop()`](Self::stop) and also when the
     /// watcher thread failed mid-run (a watch root disappeared, bridge
     /// channel died). Establishment failures are not part of this state:
-    /// the constructor returns `Err` for them (R-watch-008).
+    ///the constructor returns `Err` for them .
     pub fn is_running(&self) -> bool {
         self.running.load(std::sync::atomic::Ordering::SeqCst)
             && !self.failed.load(std::sync::atomic::Ordering::SeqCst)
@@ -979,7 +978,7 @@ impl MultiFsWatcher {
     }
 
     /// Establish the OS-level watches for all roots synchronously on the
-    /// calling thread (R-watch-008): after this call every accepted watch is
+    /// calling thread: after this call every accepted watch is
     /// live. Individual unwatchable roots are logged and skipped; if nothing
     /// can be watched, an error is returned instead of a watcher that would
     /// silently never deliver events.
@@ -1077,7 +1076,7 @@ impl MultiFsWatcher {
         if !watched_any {
             // Nothing is being watched: the loop would spin without ever
             // producing an event. Fail the construction instead of handing
-            // out a watcher that can never deliver (R-watch-008).
+            // out a watcher that can never deliver.
             log::error!("{}", tr("log-fs-watcher-no-path-watched"));
             return Err(ConfigError::WatcherError {
                 message: t_simple("log-fs-watcher-no-path-watched"),
@@ -1161,8 +1160,7 @@ impl MultiFsWatcher {
                                                 Err(mpsc::error::TrySendError::Full(_)) => {
                                                     // Channel full — the consumer fell
                                                     // behind. Make the loss observable:
-                                                    // warn now, count for later audit
-                                                    // (R-watch-002).
+                                                    //.
                                                     let total =
                                                         dropped.fetch_add(1, Ordering::SeqCst) + 1;
                                                     log::warn!(
@@ -1234,7 +1232,7 @@ impl MultiFsWatcher {
     }
 
     /// Thread body used by the thread-level regression tests: establish
-    /// with failures folded into the shared flags (the pre-R-watch-008
+    /// with failures folded into the shared flags (the
     /// protocol, where a failed establishment was only observable through
     /// the flags) and then run the forwarding loop.
     #[cfg(test)]
@@ -1350,7 +1348,7 @@ mod tests {
         Ok(events)
     }
 
-    /// Regression test (R-watch-001): FsWatcher on a file target must
+    /// Regression test: FsWatcher on a file target must
     /// keep delivering events across consecutive `rename(tmp, path)` atomic
     /// replacements. The old implementation watched the file's own inode;
     /// notify does not re-arm on `MOVE_SELF`, so the first rename silently
@@ -1389,7 +1387,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// Regression test (R-watch-001): deleting and recreating the
+    /// Regression test: deleting and recreating the
     /// watched file must not end the watch — changes to the new file stay
     /// observable (parent-directory watching, not inode watching).
     #[tokio::test]
@@ -1425,7 +1423,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// Regression test (R-watch-002): events overflowing the event
+    /// Regression test: events overflowing the event
     /// channel (slow consumer) must be observable through `dropped_events()`
     /// instead of vanishing silently. A warning log is emitted on the same
     /// guarded branch; the global `log` slot is process-wide and owned by the
@@ -1463,7 +1461,7 @@ mod tests {
         watcher.stop();
     }
 
-    /// R-watch-007: rapid consecutive writes to the watched file must
+    /// rapid consecutive writes to the watched file must
     /// be merged through the AdaptiveDebouncer outlet into a bounded number
     /// of forwarded events, and at least one event must be forwarded so the
     /// final written value is observable (a reload reads current content).
@@ -1510,7 +1508,7 @@ mod tests {
 
     /// Regression test for issue #456 (FsWatcher): a path that cannot be
     /// watched must fail establishment explicitly instead of producing a
-    /// deaf watcher. Since R-watch-008 the constructor surfaces this as
+    /// deaf watcher. Since the constructor surfaces this as
     /// `Err`; the public path-not-found branch is covered by
     /// `tests/watcher/establishment.rs`, so here the establishment helper
     /// is exercised directly with an existing-but-unwatchable style target
@@ -1760,7 +1758,7 @@ mod tests {
         assert!(watcher.recv().await.is_none());
     }
 
-    /// MultiFsWatcher（R-watch-002）：慢消费者把事件通道挤满后，被丢弃的
+    /// MultiFsWatcher：慢消费者把事件通道挤满后，被丢弃的
     /// 事件必须可通过 dropped_events() 观测，且 watcher 依然存活。
     #[tokio::test]
     async fn multi_fs_watcher_counts_dropped_events_on_slow_consumer() {

@@ -187,7 +187,6 @@ fn main() -> anyhow::Result<()> {
     }
 
     println!("\n{}", tr("example-modules-demo-env-parsing"));
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("APP_DATABASE_PROFILE", "mysql") };
     registry.resolve_from_env(Some("APP_"));
     println!(
@@ -200,7 +199,6 @@ fn main() -> anyhow::Result<()> {
             )]
         )
     );
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("APP_DATABASE_PROFILE") };
 
     println!("\n{}", tr("example-modules-demo-validate-active"));

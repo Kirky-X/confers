@@ -1902,7 +1902,7 @@ mod tests {
     }
 
     /// Integrated circuit-breaker recovery against a real local HTTP service
-    /// (R-scenario-coverage: 远程源轮询失败熔断与恢复).
+    /// (远程源轮询失败熔断与恢复).
     ///
     /// Sequence: success → threshold failures (500s) → circuit opens and polls
     /// are skipped without touching the network → backoff elapses → HalfOpen

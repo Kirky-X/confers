@@ -14,7 +14,7 @@
 //! the async version (using `async_trait`) is used. Otherwise, a sync
 //! version compiled with zero async dependencies takes its place.
 //!
-//! # Design (ADR-041)
+//! # Design
 //!
 //! - `start()` is idempotent
 //! - `stop()` must flush all pending persistent operations

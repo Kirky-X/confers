@@ -59,7 +59,6 @@ fn enc01_envelope_decrypts_to_plaintext_in_derive_pipeline() {
     .unwrap();
     let rel = file.path().strip_prefix(&cwd).unwrap_or(file.path());
 
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe {
         std::env::set_var(
             "CONFERS_MASTER_KEY",
@@ -67,7 +66,6 @@ fn enc01_envelope_decrypts_to_plaintext_in_derive_pipeline() {
         )
     };
     let cfg = EncryptedProbe::load_file(rel).expect("encrypted config must load");
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("CONFERS_MASTER_KEY") };
 
     assert_eq!(cfg.host, "db.internal");

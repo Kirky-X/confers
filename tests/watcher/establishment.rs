@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
-//! Watch establishment contract tests (R-watch-008).
+//! Watch establishment contract tests.
 //!
 //! `FsWatcher::new()` 返回即代表监听已生效：调用方在 `new()` 之后立刻写入
 //! 文件，事件必须可达。修复前 watch 的建立发生在 watcher 线程里，`new()`
@@ -35,7 +35,7 @@ async fn expect_event(watcher: &mut FsWatcher, label: &str, patience: Duration) 
     }
 }
 
-/// R-watch-008：`new()` 返回后的第一次写入（无任何沉降时间）必须产生事件。
+/// `new()` 返回后的第一次写入（无任何沉降时间）必须产生事件。
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn immediate_write_after_creation_is_delivered() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -60,7 +60,7 @@ async fn immediate_write_after_creation_is_delivered() {
     watcher.stop();
 }
 
-/// R-watch-008：并发建立 + 同时首写。9 个 watcher（对齐 fluxgate 热更新
+/// 并发建立 + 同时首写。9 个 watcher（对齐 fluxgate 热更新
 /// 测试规模）在栅栏后同时写入，所有事件必须可达。
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn parallel_watchers_immediate_first_writes_all_delivered() {
@@ -92,7 +92,7 @@ async fn parallel_watchers_immediate_first_writes_all_delivered() {
     }
 }
 
-/// R-watch-008：构造期语义——无法监听的路径必须以 `Err` 显性失败，不得
+/// 构造期语义——无法监听的路径必须以 `Err` 显性失败，不得
 /// 返回一个"看似存活实则失聪"的 watcher。本用例覆盖的是构造函数的
 /// 路径不存在预检分支（FileNotFound）；`establish_watch` → `Err` 的
 /// 传播路径由 src/watcher/fs_watcher.rs 内的单元测试

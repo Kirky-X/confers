@@ -119,10 +119,8 @@ mod dotenv_provider_tests {
     fn t037_env_provider_rejects_weak_key() {
         // 32 个相同字符 = 常量字节弱密钥(env 值不能含 NUL,用 'a' 等价验证)。
         let weak_key: String = "a".repeat(32);
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("T037_MASTER", weak_key) };
         let built = EnvKeyProvider::builder().env_var("T037_MASTER").build();
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("T037_MASTER") };
         assert!(
             matches!(built, Err(CryptoError::WeakKey)),

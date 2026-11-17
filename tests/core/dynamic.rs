@@ -365,7 +365,8 @@ fn test_callback_with_real_config() {
     assert_eq!(field.callback_count(), 1);
 }
 
-// R-watch-004: the macro-generated `*_handle()` must return the
+// the macro-generated `*_handle()` must return the
+
 // SHARED singleton handle — repeated calls yield the same `Arc`, and an
 // update pushed through one call site is observed through every other.
 #[derive(Debug, confers::Config, serde::Deserialize)]

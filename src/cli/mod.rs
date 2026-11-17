@@ -3143,7 +3143,6 @@ mod tests {
             "CONFERS_TEST_LIT_SINGLE",
             "CONFERS_TEST_LIT_SPACED",
         ] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::remove_var(k) };
         }
 
@@ -3173,7 +3172,6 @@ mod tests {
             "CONFERS_TEST_LIT_SINGLE",
             "CONFERS_TEST_LIT_SPACED",
         ] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::remove_var(k) };
         }
     }
@@ -3182,14 +3180,12 @@ mod tests {
     #[serial_test::serial]
     fn test_load_env_file_preserves_existing() {
         use std::io::Write;
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("CONFERS_TEST_PRESERVE", "original") };
         let mut tf = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
         writeln!(tf, "CONFERS_TEST_PRESERVE=should_not_overwrite").unwrap();
         tf.flush().unwrap();
         load_env_file(&tf.path().to_path_buf()).unwrap();
         assert_eq!(std::env::var("CONFERS_TEST_PRESERVE").unwrap(), "original");
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var("CONFERS_TEST_PRESERVE") };
     }
 

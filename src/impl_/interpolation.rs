@@ -637,7 +637,8 @@ mod tests {
     #[test]
     fn test_max_depth_exceeded_returns_error() {
         // A chain deeper than the configured max_depth must error instead of
-        // recursing forever (resource-limit guard: R-scenario-coverage depth).
+        // recursing forever (resource-limit guard: depth).
+
         let config = InterpolationConfig {
             max_depth: 3,
             ..InterpolationConfig::default()

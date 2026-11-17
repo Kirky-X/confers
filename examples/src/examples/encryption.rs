@@ -50,7 +50,6 @@ fn main() {
     // For production, use secure key management (e.g., HashiCorp Vault, AWS KMS)
     // Key must be 32 bytes for XChaCha20-Poly1305
     let demo_key = "12345678901234567890123456789012";
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", demo_key) };
     tracing::warn!("⚠️ Using DEMO encryption key - DO NOT use in production!");
 
@@ -270,7 +269,6 @@ fn demonstrate_env_key_provider() {
         println!("Builder pattern got key: {} bytes", key.as_slice().len());
     }
 
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("APP_ENCRYPTION_KEY") };
 
     // Test when key doesn't exist
@@ -282,14 +280,12 @@ fn demonstrate_env_key_provider() {
     }
 
     println!("\nTesting short key:");
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("SHORT_KEY", "short") };
     let short_key_provider = EnvKeyProvider::new("SHORT_KEY");
     match short_key_provider.get_key() {
         Ok(_) => println!("ERROR: Should have returned error!"),
         Err(e) => println!("Correctly returned error for short key: {:?}", e),
     }
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("SHORT_KEY") };
 }
 
@@ -297,7 +293,6 @@ fn demonstrate_config_loading() {
     println!("\n=== Example 6: Basic Config Loading ===");
 
     // Set the key again for this demo
-    // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("APP_ENCRYPTION_KEY", "12345678901234567890123456789012") };
 
     let config = ConfersConfig::load_sync().expect("Failed to load config");

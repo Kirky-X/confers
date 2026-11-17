@@ -71,9 +71,9 @@ pub struct DynamicField<T: Clone + Send + Sync + 'static> {
     last_version: AtomicU64,
     /// Serializes the store+dispatch step of concurrent (non-reentrant)
     /// updates so callback observation order equals the final stored value
-    /// (R-watch-005). Reads stay lock-free via ArcSwap.
+    /// . Reads stay lock-free via ArcSwap.
     update_lock: std::sync::Mutex<()>,
-    /// Count of callbacks that panicked during dispatch (R-watch-003).
+    /// Count of callbacks that panicked during dispatch.
     /// A panicking callback is isolated; this counter makes the isolation
     /// observable instead of silently swallowing the failure.
     callback_panics: AtomicU64,
@@ -142,12 +142,12 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
     /// callback that calls `on_change` or `update` would otherwise deadlock
     /// on the same shard's write lock — CWE-667).
     ///
-    /// A callback that panics is isolated (R-watch-003): the panic is
+    /// A callback that panics is isolated: the panic is
     /// swallowed and counted (see [`callback_panic_count`][Self::callback_panic_count]),
     /// the remaining callbacks still run, the stored value is unaffected and
     /// `update` returns normally.
     ///
-    /// # Ordering under concurrency (R-watch-005)
+    /// # Ordering under concurrency
     ///
     /// Each update claims a monotonic version before storing. The
     /// store+dispatch step is serialized through an update lock: an update
@@ -205,7 +205,7 @@ impl<T: Clone + Send + Sync + 'static> DynamicField<T> {
 
     /// Invoke a single callback with panic isolation.
     ///
-    /// `AssertUnwindSafe` is deliberate (design D4): the callback is user
+    /// `AssertUnwindSafe` is deliberate: the callback is user
     /// code behind `Arc<dyn Fn>`, and the library cannot vouch for the
     /// unwind safety of arbitrary user-captured interior state. It does not
     /// promise to propagate callback panics either — a poisoning callback
@@ -522,7 +522,7 @@ mod tests {
         assert_eq!(field.callback_count(), 0);
     }
 
-    /// Regression test (R-watch-003): a panicking callback must not
+    /// Regression test: a panicking callback must not
     /// poison the update path — `update` returns normally, callbacks after
     /// the panicking one still execute, the store keeps the new value, and
     /// the panic is counted. The field stays usable for later updates.
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(field.callback_panic_count(), 1);
     }
 
-    /// Regression test (R-watch-005): under concurrent updates the
+    /// Regression test: under concurrent updates the
     /// callback observation order must stay consistent with the final stored
     /// value — stale dispatches are skipped, so the LAST callback
     /// observation equals the final `get()`.

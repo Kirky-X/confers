@@ -271,10 +271,8 @@ mod tests {
             "api_key": envelope,
             "host": "db.internal",
         });
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&master)) };
         decrypt_encrypted_tree(&mut json);
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
 
         assert_eq!(json["api_key"], "tok-abc123", "envelope must decrypt");
@@ -292,10 +290,8 @@ mod tests {
         // open fails → the value must become the failure marker (never the
         // ciphertext, never null — null would wash the failure into None for
         // Option<String> fields).
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var(MASTER_KEY_ENV, hex_encode(&[9u8; 32])) };
         decrypt_encrypted_tree(&mut json);
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
 
         assert!(
@@ -310,7 +306,6 @@ mod tests {
     fn t035_missing_master_key_fails_loudly() {
         let envelope = make_envelope(b"0123456789abcdef0123456789abcdef", "pw", "v1", "x");
         let mut json = serde_json::json!({ "pw": envelope });
-        // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::remove_var(MASTER_KEY_ENV) };
         decrypt_encrypted_tree(&mut json);
         assert!(
