@@ -631,6 +631,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 > **生效保证**：`FsWatcher::new()` / `MultiFsWatcher::new()` 返回 `Ok` 即代表监听已生效——返回后**立刻**对文件的修改一定会收到事件，无需等待；无法建立监听时构造函数直接返回 `Err`，不会出现"看似存活实则收不到事件"的 watcher。监听建立之后发生的失败（如监听目录被删）仍经 `is_running()` 转为 `false`、`recv()` 返回 `None` 上报。
 
+#### 🔁 安全替换语义（secure-hot-swap 特性）
+
+`secure-hot-swap` = `watch` + `security` + `audit` 组合，为热替换管线提供三个显式 opt-in 的声明式开关（`SecurityPolicy`，默认 `(false, Redacted, false)` 即现状语义，未启用时行为逐字节不变）：
+
+| 开关 | 语义 |
+| ---- | ---- |
+| `zeroize_on_replace` | 重载提交成功后，对**管线自有的上一份** `AnnotatedValue` 树按敏感名启发式清零字符串叶子（`zeroize` 清零字节后清空，`zeroized_fields()` 返回累计计数）。仍被读者共享的树会被**跳过**而非克隆清零 |
+| `snapshot_sensitive_mode` | 快照保存对敏感值的处理：`Redacted`（占位符，默认）/ `Plain`（明文导出，调用方自担责任）/ `Encrypted`（`enc:v1:` 信封，需 `encryption` 特性，恢复需主密钥随行） |
+| `audit_on_reload` | 每次重载提交成功后经注入的 `AuditWriter` 落一条 `ReloadTrigger` 审计事件（未注入 writer 时 debug 日志提示一次） |
+
+```rust
+use confers::security::{SecurityPolicy, SnapshotSensitiveMode};
+
+let kit = confers::watcher::HotReloader::spawn(reloader, watcher, loader)
+    .with_security_policy(SecurityPolicy {
+        zeroize_on_replace: true,
+        audit_on_reload: true,
+        ..SecurityPolicy::default()
+    })
+    .with_audit_writer(std::sync::Arc::new(writer));
+```
+
+> **边界声明**：`zeroize_on_replace` 只覆盖管线自有的树。读者持有的 `Arc<T>` 副本（arc-swap 语义）库无法清零——这是 Rust 共享所有权的本质限制；`Encrypted` 快照与主密钥绑定，跨环境恢复必须携带同一密钥（`CONFERS_MASTER_KEY` 或 builder `master_key`）。
+
 #### 🐦 金丝雀发布编排（canary 特性）
 
 跨多实例的分批 rollout 编排（`canary` = `change-stream` + `progressive-reload`）：每实例的 `ProgressiveReloader` 把 canary 阶段转换发布到 `ChangeStream`，`CanaryOrchestrator` 在消费侧按 `RolloutPlan` 分批收集 `committed` 事件、批次健康检查（复用 `HealthStatus` 三态，仅 Critical 触发回滚），以 `canary.orchestrator` 指令事件（advance/rollback/completed）发布决策，并经 `MeshWeightPublisher` 把流量切分比例下发给服务网格（Envoy/Istio 配置样例见 docs/CANARY_ORCHESTRATION.md）。
