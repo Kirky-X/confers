@@ -164,6 +164,8 @@ tracing = ["dep:tracing"]
 
 # Remote sources
 remote = ["dep:reqwest", "dep:async-trait", "dep:tokio", "dep:ipnet", "dep:arc-swap", "async-core"]
+# 行为基线与异常检测（remote-source-baseline change）：延迟/体积/结构指纹
+remote-baseline = ["remote", "dep:sha2", "dep:hex", "dep:dashmap"]
 
 # Remote SDK integrations
 etcd = ["remote", "dep:etcd-client", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
@@ -198,7 +200,7 @@ modules = ["toml"]
 recommended = ["toml", "dotenv", "validation", "json", "security-rules"]
 dev = ["toml", "json", "yaml", "dotenv", "cli", "validation", "json-schema", "audit", "watch", "migration", "snapshot", "dynamic"]
 production = ["toml", "dotenv", "watch", "encryption", "validation", "audit", "json-schema", "cli", "migration", "dynamic", "progressive-reload", "snapshot", "security-rules", "feature-toggle"]
-full = ["toml", "json", "yaml", "ini", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key-management", "json-schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy-parse", "tracing", "canary", "secure-hot-swap"]
+full = ["toml", "json", "yaml", "ini", "dotenv", "cli", "validation", "watch", "encryption", "security", "security-rules", "key-management", "json-schema", "typescript-schema", "dynamic", "progressive-reload", "audit", "migration", "snapshot", "interpolation", "remote", "config-bus", "nats-bus", "redis-bus", "change-stream", "context-aware", "modules", "etcd", "consul", "feature-toggle", "etcd-watch", "k8s", "nacos", "cloud-kms", "keyring", "openfeature", "lazy-parse", "tracing", "canary", "secure-hot-swap", "remote-baseline"]
 minimal = ["dotenv", "json"]
 distributed = ["toml", "json", "dotenv", "watch", "validation", "config-bus", "progressive-reload", "audit"]
 

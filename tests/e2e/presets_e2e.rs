@@ -226,11 +226,13 @@ fn prs07_full_preset_covers_all_domain_features() {
         "canary",
         // 安全热替换(secure-hot-swap change:清零/审计/快照加密三开关)。
         "secure-hot-swap",
+        // 行为基线与异常检测(remote-source-baseline change)。
+        "remote-baseline",
     ];
     assert_contains(&features, "full", &domains);
     assert_eq!(
         features["full"].len(),
-        40,
+        41,
         "full preset must stay the full capability surface"
     );
 
