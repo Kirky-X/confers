@@ -28,7 +28,7 @@
 
 ### 📦 特性说明
 
-confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../README.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
+confers 提供灵活的特性配置，用户可按需选择所需功能。特性预设（`minimal` / `recommended` / `dev` / `production` / `distributed` / `full`）与全部单项特性的清单、默认启用状态，统一见 [README · 特性标志](../../README_CN.md#-特性标志)（功能矩阵逐项对应 `Cargo.toml` 的 `[features]` 定义）。
 
 ---
 
@@ -516,11 +516,11 @@ pub trait KeyProvider: Send + Sync {
 
 ```rust
 pub enum KeyCachePolicy {
-    /// Never cache keys — re-fetch on every access.
+    /// 从不缓存密钥——每次访问重新获取。
     NoCache,
-    /// Cache with a time-to-live (defaults to 1 hour when constructed via [`Default`]).
+    /// 带 TTL 缓存（经 [`Default`] 构造时默认 1 小时）。
     CacheWithTtl(Duration),
-    /// Cache indefinitely until explicitly invalidated.
+    /// 无限期缓存，直到被显式失效。
     CacheIndefinitely,
 }
 ```
@@ -1901,16 +1901,16 @@ let config = ConfigBuilder::<ConfersConfig>::new()
 **加密 API：**
 
 ```rust
-/// Encrypt sensitive configuration value
+/// 加密敏感配置值
 ///
-/// # Security Notes
+/// # 安全注意事项
 ///
-/// - ⚠️ **Key Management**: The encryption key must be stored securely and never committed to version control
-/// - ⚠️ **Key Rotation**: Regular key rotation is recommended for production environments
-/// - ⚠️ **Key Length**: The key must be exactly 32 bytes (256 bits) for XChaCha20-Poly1305
-/// - ⚠️ **Nonce Storage**: Store the nonce alongside the ciphertext for decryption
+/// - ⚠️ **密钥管理**：加密密钥必须安全存储，绝不提交到版本控制
+/// - ⚠️ **密钥轮换**：生产环境建议定期轮换密钥
+/// - ⚠️ **密钥长度**：XChaCha20-Poly1305 要求密钥恰好 32 字节（256 位）
+/// - ⚠️ **Nonce 存储**：nonce 需与密文一同存储以便解密
 ///
-/// # Example
+/// # 示例
 ///
 /// ```rust
 /// let crypto = XChaCha20Crypto::new();
@@ -1922,16 +1922,16 @@ pub fn encrypt(&self, plaintext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Vec<u8>)
 **密钥管理 API：**
 
 ```rust
-/// Initialize new keyring
+/// 初始化新的密钥环
 ///
-/// # Security Notes
+/// # 安全注意事项
 ///
-/// - ⚠️ **Master Key**: The master key must be stored securely and never shared
-/// - ⚠️ **Key ID**: Use descriptive key IDs (e.g., "production", "staging")
-/// - ⚠️ **Created By**: Include creator information for audit trail
-/// - ⚠️ **Key Backup**: Ensure you have a secure backup of the master key
+/// - ⚠️ **主密钥**：主密钥必须安全存储，绝不外泄
+/// - ⚠️ **密钥 ID**：使用有描述性的密钥 ID（如 "production"、"staging"）
+/// - ⚠️ **创建者**：包含创建者信息以留审计痕迹
+/// - ⚠️ **密钥备份**：确保主密钥有安全的备份
 ///
-/// # Example
+/// # 示例
 ///
 /// ```rust
 /// let version = km.initialize(
@@ -1951,16 +1951,16 @@ pub fn initialize(
 **审计日志 API：**
 
 ```rust
-/// Log configuration loading event
+/// 记录配置加载事件
 ///
-/// # Security Notes
+/// # 安全注意事项
 ///
-/// - ⚠️ **Log Path**: Store audit logs in a secure location with restricted access
-/// - ⚠️ **Log Rotation**: Configure log rotation to prevent disk space exhaustion
-/// - ⚠️ **Log Integrity**: Audit logs are signed to prevent tampering
-/// - ⚠️ **Log Monitoring**: Monitor audit logs for suspicious activity
+/// - ⚠️ **日志路径**：审计日志存储在访问受限的安全位置
+/// - ⚠️ **日志轮转**：配置日志轮转以防磁盘耗尽
+/// - ⚠️ **日志完整性**：审计日志经签名防篡改
+/// - ⚠️ **日志监控**：监控审计日志中的可疑活动
 ///
-/// # Example
+/// # 示例
 ///
 /// ```rust
 /// use confers::audit::{AuditWriter, AuditConfig};
@@ -1981,16 +1981,16 @@ pub fn log_load(&self, source: &str) -> ConfigResult<()>
 校验通过 `validation` 特性与 `#[config(validate_helper)]` 属性生成的 `confers_validate()` 启用，由调用方在 `ConfigBuilder::build()` 之后显式执行（构建/加载管线不会自动校验，`#[config(validate)]` 为兼容保留的 no-op）；失败时返回 `Err(String)`（扁平化的 garde 报告）。
 
 ```rust
-/// Configuration validation using garde derive macro
+/// 使用 garde 派生宏进行配置校验
 ///
-/// # Security Notes
+/// # 安全注意事项
 ///
-/// - ⚠️ **Input Validation**: Always validate user input before use
-/// - ⚠️ **Range Checking**: Ensure numeric values are within expected ranges
-/// - ⚠️ **Error Messages**: Avoid exposing sensitive information in error messages
-/// - ⚠️ **Validation Failures**: Treat validation failures as potential security incidents
+/// - ⚠️ **输入校验**：使用前始终校验用户输入
+/// - ⚠️ **范围检查**：确保数值处于预期范围内
+/// - ⚠️ **错误信息**：避免在错误信息中暴露敏感数据
+/// - ⚠️ **校验失败**：把校验失败当作潜在安全事件对待
 ///
-/// # Example
+/// # 示例
 ///
 /// ```rust
 /// use confers::Config;
@@ -2050,4 +2050,4 @@ RUST_LOG=debug cargo run -p confers-examples --bin basic_usage
 
 如有疑问或建议，请访问 [GitHub 仓库](https://github.com/Kirky-X/confers)。
 
-**[🏠 返回首页](../README.md)**
+**[🏠 返回首页](../../README_CN.md)**

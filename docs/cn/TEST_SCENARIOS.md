@@ -44,7 +44,7 @@
 -   [2.28 feature 预设编译矩阵（PRS，8 条）](#228-feature-预设编译矩阵prs8-条)
 - [3. feature 互斥 / 组合矩阵](#3-feature-互斥--组合矩阵)
 - [3. feature 互斥 / 组合矩阵](#3-feature-互斥--组合矩阵)
--   [3.1 依赖链（由 Cargo.toml `[features]` 固化，组合测试无需单独验证的部分）](#31-依赖链（由-cargotoml-features-固化，组合测试无需单独验证的部分）)
+-   [3.1 依赖链（由 Cargo.toml `[features]` 固化，组合测试无需单独验证的部分）](#31-依赖链由-cargotoml-features-固化组合测试无需单独验证的部分)
 -   [3.2 组合测试矩阵（CMP-01…17 的输入依据）](#32-组合测试矩阵cmp-0117-的输入依据)
 -   [3.3 预设覆盖关系（预设 → 展开清单，验证用 PRS-02…07）](#33-预设覆盖关系预设--展开清单验证用-prs-0207)
 - [4. Docker 服务需求汇总](#4-docker-服务需求汇总)
@@ -229,7 +229,7 @@
 | ENC-17 | `VaultKeyProvider`（encryption+remote 组合）：不可达 Vault 地址 → 连接错误而非 panic | 异常 | encryption,remote | 无（指向不可达地址） | src 内联 `src/secret/providers.rs` cfg(remote) tests | tests/e2e/encryption_e2e.rs |
 | ENC-18 | `KeyRegistry`：rotate 后 `try_all_keys` 可用旧密钥解密旧数据、新密钥加密新数据 | 正常 | encryption | 无 | `tests/security/security.rs::test_key_registry_rotation/test_key_registry_try_all_keys` | tests/e2e/encryption_e2e.rs |
 | ENC-19 | 完整工作流：provider→derive_field_key→encrypt→decrypt（`test_full_encryption_workflow` 同构端到端） | 正常 | encryption | 无 | `tests/security/encryption.rs::test_full_encryption_workflow/test_secret_string_with_encryption` | tests/e2e/encryption_e2e.rs |
-| ENC-20 | 派生宏 `#[config(encrypt = "xchacha20")]` 字段：配置加载时密文解密注入，错误密钥 → 加载失败 | 正常/异常 | encryption,macros | 本地文件 | src 内联 `macros/src/codegen/security.rs` 相关；集成→需新增 | tests/e2e/encryption_e2e.rs |
+| ENC-20 | 派生宏 `#[config(encrypt = "xchacha20")]` 字段：配置加载时密文解密注入，错误密钥 → 加载失败 | 正常/异常 | encryption,macros | 本地文件 | src 内联 `macros/src/codegen/load.rs`（encrypt 字段解密注入）相关；集成→需新增 | tests/e2e/encryption_e2e.rs |
 | ENC-21 | `encrypt = "aes256-gcm"`：语法接受但运行时未实现 → 宏展开期编译错误并提示 `use "xchacha20"` | 异常 | macros,encryption | 无 | 已固化：`macros/tests/compile_fail/t035_aes256_gcm_not_implemented.rs`（trybuild） | tests/e2e/macro_e2e.rs（trybuild） |
 | ENC-22 | 环境变量注入密文（`enc:<base64>` 形态）经 config_injector 解密为 SecretString | 正常 | security,encryption | 无 | src 内联 `src/security/config_injector.rs` tests | tests/e2e/encryption_e2e.rs |
 | ENC-23 | 非法算法名 `encrypt = "rot13"` → 宏展开期编译错误（trybuild 级验收，提示支持列表） | 异常 | macros,encryption | 无 | 已固化：`macros/tests/compile_fail/`（encrypt_rot13 等 5 组用例，由 `compile_fail.rs` 驱动） | tests/e2e/macro_e2e.rs（trybuild） |

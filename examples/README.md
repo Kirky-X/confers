@@ -9,7 +9,7 @@
 | 所属仓库 | [confers](https://github.com/Kirky-X/confers) |
 | 依赖方向 | 本 crate → `confers`（示例以 `path = ".."` 依赖父 crate） |
 | 是否发布 | 否：`publish = false`，仅用于演示与回归验证 |
-| 版本与支持 | 版本经 `version.workspace = true` 随仓库统一；仅维护当前 minor 版本线，见 [安全文档 · 支持的版本](../docs/SECURITY.md#-支持的版本与维护策略) |
+| 版本与支持 | 版本经 `version.workspace = true` 随仓库统一；仅维护当前 minor 版本线，见 [安全文档 · 支持的版本](../docs/cn/SECURITY.md#-支持的版本与维护策略) |
 
 ## 环境要求
 
@@ -123,12 +123,12 @@ export ETCD_ENDPOINT=127.0.0.1:2379
 ## 相关文档
 
 - [项目主 README](../README.md)
-- [用户指南](../docs/USER_GUIDE.md)
-- [API 参考](../docs/API_REFERENCE.md)
-- [常见问题 FAQ](../docs/FAQ.md)
-- [更新日志](../docs/CHANGELOG.md)
-- [安全设计](../docs/SECURITY.md)
-- [贡献指南](../docs/CONTRIBUTING.md)
+- [用户指南](../docs/cn/USER_GUIDE.md)
+- [API 参考](../docs/cn/API_REFERENCE.md)
+- [常见问题 FAQ](../docs/cn/FAQ.md)
+- [更新日志](../docs/cn/CHANGELOG.md)
+- [安全设计](../docs/cn/SECURITY.md)
+- [贡献指南](../docs/cn/CONTRIBUTING.md)
 
 ## 贡献新示例
 
