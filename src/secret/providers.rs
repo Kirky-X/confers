@@ -1426,6 +1426,7 @@ mod tests {
         assert_eq!(key.len(), 32);
     }
 
+    #[cfg(feature = "remote")]
     #[test]
     fn vault_auth_login_metadata_covers_all_variants() {
         // Token 无需登录端点;AppRole/Kubernetes 各有登录路径、凭据体与描述。
@@ -1459,6 +1460,7 @@ mod tests {
         assert_eq!(k8s.describe(), "kubernetes");
     }
 
+    #[cfg(feature = "remote")]
     #[test]
     fn vault_provider_builder_chain_is_configurable() {
         let provider = VaultKeyProvider::new("https://vault.example.com", "secret/data/app", "key")

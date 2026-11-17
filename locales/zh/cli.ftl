@@ -126,6 +126,10 @@ cli-snapshot-prune-summary = 已清理 { $removed } 个早于 { $days } 天的�
 # --- doctor ---
 
 cli-doctor-load-ok = 已从 { $count } 个配置文件加载
+cli-doctor-audit-ok = 审计链完好: 已验证 { $count }/{ $total } 条事件
+cli-doctor-audit-broken = 审计链在事件 { $first } 处断裂, 疑似缺失区间: { $gaps }
+cli-doctor-audit-skipped = 未提供审计日志, 已跳过检查
+cli-doctor-audit-log-help = 待验证的审计链文件(默认探测 ./audit/)
 cli-doctor-load-failed = 配置加载失败: { $message }
 cli-doctor-skipped-not-loaded = 已跳过: 配置未加载
 cli-doctor-schema-ok = 未发现 schema 问题

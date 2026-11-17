@@ -432,7 +432,7 @@ enum Commands {
     },
 
     /// Diagnose configuration health (schema, source chain, encryption,
-    /// env overrides) and print a single-line JSON report.
+    /// env overrides, audit chain) and print a single-line JSON report.
     #[command(about = crate::i18n::tr("cli-doctor-help"))]
     Doctor {
         /// Output format (json = single line, text)
@@ -442,6 +442,14 @@ enum Commands {
             help = crate::i18n::tr("cli-doctor-format-help")
         )]
         format: String,
+        /// Audit chain file to verify (default: probe ./audit/)
+        #[cfg(feature = "audit")]
+        #[arg(
+            long,
+            value_name = "PATH",
+            help = crate::i18n::tr("cli-doctor-audit-log-help")
+        )]
+        audit_log: Option<PathBuf>,
     },
 }
 
@@ -652,8 +660,16 @@ where
                 reveal,
             )?;
         }
-        Commands::Doctor { format } => {
-            cmd_doctor(&config_paths, &format, allow_absolute_paths)?;
+        Commands::Doctor {
+            format,
+            #[cfg(feature = "audit")]
+            audit_log,
+        } => {
+            #[cfg(feature = "audit")]
+            let audit_log = audit_log.as_deref();
+            #[cfg(not(feature = "audit"))]
+            let audit_log: Option<&std::path::Path> = None;
+            cmd_doctor(&config_paths, &format, allow_absolute_paths, audit_log)?;
         }
         Commands::Docs { agent, format } => {
             if agent {
@@ -2132,13 +2148,116 @@ pub const DOCTOR_ENVELOPE_PREFIX: &str = "enc:v1:";
 /// Environment variable carrying the hex-encoded 32-byte master key.
 pub const DOCTOR_MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
 
+/// First audit chain file under `./audit/` (writer naming `audit_*.log`,
+/// plus `*.jsonl` for externally produced chains), if any.
+#[cfg(feature = "audit")]
+fn probe_default_audit_file() -> Option<std::path::PathBuf> {
+    probe_audit_dir(std::path::Path::new("./audit"))
+}
+
+/// First chain file inside an explicit audit directory, sorted for
+/// deterministic discovery. Split from [`probe_default_audit_file`] so the
+/// discovery rules are testable without mutating the process CWD.
+#[cfg(feature = "audit")]
+fn probe_audit_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            p.is_file()
+                && (name.ends_with(".jsonl")
+                    || (name.starts_with("audit_") && name.ends_with(".log")))
+        })
+        .collect();
+    files.sort();
+    files.into_iter().next()
+}
+
+/// Audit-chain integrity check (`audit`).
+///
+/// `Some(path)` verifies that chain file; `None` falls back to the first
+/// chain file under `./audit/` and reports a Warning when none exists.
+/// Chains written with an externally managed `hmac_key` cannot be verified
+/// here: doctor never reads audit key material, so such files must be
+/// checked with the library's `verify_audit_chain_with_key`.
+#[cfg(feature = "audit")]
+fn check_audit_chain(audit_log: Option<&std::path::Path>) -> DoctorCheck {
+    use crate::audit::verify_audit_chain_report_with_key;
+
+    let probed;
+    let path: &std::path::Path = match audit_log {
+        Some(p) => p,
+        None => match probe_default_audit_file() {
+            Some(p) => {
+                probed = p;
+                &probed
+            }
+            None => {
+                return DoctorCheck {
+                    name: "audit",
+                    severity: DoctorSeverity::Warning,
+                    message: tr("cli-doctor-audit-skipped"),
+                };
+            }
+        },
+    };
+
+    match verify_audit_chain_report_with_key(path, None) {
+        Ok(report) if report.chain_intact => DoctorCheck {
+            name: "audit",
+            severity: DoctorSeverity::Ok,
+            message: tr_args(
+                "cli-doctor-audit-ok",
+                &[
+                    ("count", report.hmac_valid_count.to_string()),
+                    ("total", report.total_entries.to_string()),
+                ],
+            ),
+        },
+        Ok(report) => {
+            let first = report
+                .first_broken_at
+                .map_or_else(|| "n/a".to_string(), |n| n.to_string());
+            let gaps = if report.gaps.is_empty() {
+                "-".to_string()
+            } else {
+                report
+                    .gaps
+                    .iter()
+                    .map(|(lo, hi)| format!("({lo},{hi})"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            DoctorCheck {
+                name: "audit",
+                severity: DoctorSeverity::Error,
+                message: tr_args(
+                    "cli-doctor-audit-broken",
+                    &[("first", first), ("gaps", gaps)],
+                ),
+            }
+        }
+        Err(e) => DoctorCheck {
+            name: "audit",
+            severity: DoctorSeverity::Error,
+            message: e.to_string(),
+        },
+    }
+}
+
 /// Run every doctor check against an already-loaded annotated configuration.
 ///
 /// `load_result` is the outcome of the chain build: `None` signals a load
 /// failure (the remaining checks then report as skipped-but-error).
+/// `audit_log` selects the audit chain file for the `audit` check (only
+/// present when the `audit` feature is enabled; `None` probes `./audit/`).
 pub fn run_doctor_checks(
     load_result: &ConfigResult<AnnotatedValue>,
     config_paths: &[PathBuf],
+    #[cfg(not(feature = "audit"))] _audit_log: Option<&std::path::Path>,
+    #[cfg(feature = "audit")] audit_log: Option<&std::path::Path>,
 ) -> DoctorReport {
     let mut checks = Vec::new();
 
@@ -2162,7 +2281,13 @@ pub fn run_doctor_checks(
             });
             // Downstream checks cannot run without data; report them so the
             // report shape stays stable for consumers.
-            for name in ["schema", "sources", "encryption", "env_overrides"] {
+            #[cfg(feature = "audit")]
+            let downstream: [&'static str; 5] =
+                ["schema", "sources", "encryption", "env_overrides", "audit"];
+            #[cfg(not(feature = "audit"))]
+            let downstream: [&'static str; 4] =
+                ["schema", "sources", "encryption", "env_overrides"];
+            for name in downstream {
                 checks.push(DoctorCheck {
                     name,
                     severity: DoctorSeverity::Error,
@@ -2207,6 +2332,10 @@ pub fn run_doctor_checks(
 
     // env_overrides: conflicting env spellings for the same key
     checks.push(check_env_override_conflicts(annotated));
+
+    // audit: HMAC chain integrity of the audit log (feature-gated).
+    #[cfg(feature = "audit")]
+    checks.push(check_audit_chain(audit_log));
 
     DoctorReport::from_checks(checks)
 }
@@ -2739,9 +2868,10 @@ fn cmd_doctor(
     config_paths: &[PathBuf],
     format: &str,
     allow_absolute_paths: bool,
+    audit_log: Option<&std::path::Path>,
 ) -> anyhow::Result<()> {
     let load_result = build_annotated_from_cli(config_paths, allow_absolute_paths);
-    let report = run_doctor_checks(&load_result, config_paths);
+    let report = run_doctor_checks(&load_result, config_paths, audit_log);
 
     match format {
         "text" => {
@@ -5033,7 +5163,7 @@ mod tests {
             ("port", crate::types::ConfigValue::uint(8080)),
         ]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         // 无 encryption 特性的构建属于降级配置，doctor 有意报 warning
         // （exit 1）而非静默 Ok；只有完整构建才承诺 healthy → 0。
         #[cfg(not(feature = "encryption"))]
@@ -5046,7 +5176,19 @@ mod tests {
                 report.checks
             );
         }
-        #[cfg(feature = "encryption")]
+        // audit 特性开启但未提供审计日志时，audit 检查报 warning（exit 1），
+        // 与 encryption 降级同一语义：健康承诺只在检查项齐备且通过时给出。
+        #[cfg(all(feature = "encryption", feature = "audit"))]
+        {
+            assert_eq!(report.exit_code, 1, "audit warn: {:?}", report.checks);
+            assert_eq!(report.status, "warning");
+            assert!(
+                severity_of(&report, "audit") == DoctorSeverity::Warning,
+                "audit check must warn without a log: {:?}",
+                report.checks
+            );
+        }
+        #[cfg(all(feature = "encryption", not(feature = "audit")))]
         {
             assert_eq!(report.exit_code, 0, "healthy: {:?}", report.checks);
             assert_eq!(report.status, "healthy");
@@ -5062,7 +5204,7 @@ mod tests {
             ("broken", crate::types::ConfigValue::Null),
         ]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         assert!(severity_of(&report, "schema") == DoctorSeverity::Error);
         assert_eq!(report.exit_code, 2);
     }
@@ -5074,11 +5216,209 @@ mod tests {
             expected_type: "y".to_string(),
             message: "boom".to_string(),
         });
-        let report = super::run_doctor_checks(&err, &[]);
+        let report = super::run_doctor_checks(&err, &[], None);
         assert_eq!(report.exit_code, 2);
         assert!(severity_of(&report, "load") == DoctorSeverity::Error);
         assert!(severity_of(&report, "schema") == DoctorSeverity::Error);
+        #[cfg(feature = "audit")]
+        assert!(severity_of(&report, "audit") == DoctorSeverity::Error);
         assert!(report.to_json_line()["status"] == "error");
+    }
+
+    #[cfg(feature = "audit")]
+    mod audit_chain_check {
+        use super::super::{DoctorSeverity, check_audit_chain};
+
+        /// Write a three-event chain into `dir` and return its file path.
+        fn write_chain(dir: &std::path::Path) -> std::path::PathBuf {
+            let writer = crate::audit::AuditWriter::builder()
+                .enabled(true)
+                .log_dir(dir.to_path_buf())
+                .build();
+            for source in ["src-a", "src-b", "src-c"] {
+                writer.log_load(source).expect("event must write");
+            }
+            drop(writer);
+            let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+                .expect("log dir readable")
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .collect();
+            assert!(!files.is_empty(), "audit file must exist");
+            files.sort();
+            files.remove(0)
+        }
+
+        #[test]
+        fn intact_chain_reports_ok() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = write_chain(dir.path());
+
+            let check = check_audit_chain(Some(&path));
+            assert_eq!(check.name, "audit");
+            assert!(
+                check.severity == DoctorSeverity::Ok,
+                "intact chain: {}",
+                check.message
+            );
+            assert!(
+                check.message.contains("3"),
+                "ok message carries count/total: {}",
+                check.message
+            );
+        }
+
+        #[test]
+        fn broken_chain_reports_error_with_position() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = write_chain(dir.path());
+
+            // 篡改中间事件的一个字节。
+            let content = std::fs::read_to_string(&path).unwrap();
+            let lines: Vec<&str> = content.lines().collect();
+            let event_idx: Vec<usize> = lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| {
+                    serde_json::from_str::<serde_json::Value>(l)
+                        .ok()
+                        .and_then(|v| {
+                            let obj = v.as_object()?;
+                            Some(obj.contains_key("hmac") && !obj.contains_key("record"))
+                        })
+                        .unwrap_or(false)
+                })
+                .map(|(i, _)| i)
+                .collect();
+            let tampered = lines[event_idx[1]].replace("src-b", "src-X");
+            let rewritten: Vec<String> = lines
+                .iter()
+                .enumerate()
+                .map(|(i, l)| {
+                    if i == event_idx[1] {
+                        tampered.clone()
+                    } else {
+                        (*l).to_string()
+                    }
+                })
+                .collect();
+            std::fs::write(&path, rewritten.join("\n") + "\n").unwrap();
+
+            let check = check_audit_chain(Some(&path));
+            assert!(
+                check.severity == DoctorSeverity::Error,
+                "tampered chain: {}",
+                check.message
+            );
+            assert!(
+                check.message.contains('2'),
+                "message carries first broken position: {}",
+                check.message
+            );
+        }
+
+        #[test]
+        fn unreadable_path_reports_error() {
+            // 目录路径触发非 NotFound 的 IO 错误 → Err 分支。
+            let dir = tempfile::tempdir().unwrap();
+            let check = check_audit_chain(Some(dir.path()));
+            assert!(
+                check.severity == DoctorSeverity::Error,
+                "directory path: {}",
+                check.message
+            );
+            assert!(!check.message.is_empty());
+        }
+
+        #[test]
+        fn missing_log_reports_warning() {
+            // 仓库根无 ./audit/（测试进程 cwd）→ Warning skipped。不 chdir：
+            // 全局 cwd 变更会与并行测试竞争。
+            let check = check_audit_chain(None);
+            assert!(
+                check.severity == DoctorSeverity::Warning,
+                "no audit dir in cwd: {}",
+                check.message
+            );
+        }
+
+        #[test]
+        fn probe_prefers_writer_named_and_jsonl_chains() {
+            use super::super::probe_audit_dir;
+
+            // writer 命名（audit_*.log）与 .jsonl 均可被发现。
+            let dir = tempfile::tempdir().unwrap();
+            let log_dir = dir.path().join("audit");
+            std::fs::create_dir_all(&log_dir).unwrap();
+            std::fs::write(log_dir.join("readme.txt"), "not a chain\n").unwrap();
+            write_chain(&log_dir);
+            let found = probe_audit_dir(&log_dir).expect("writer-named chain must be discovered");
+            assert!(
+                found
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .starts_with("audit_"),
+                "{found:?}"
+            );
+            let check = check_audit_chain(Some(&found));
+            assert!(
+                check.severity == DoctorSeverity::Ok,
+                "probed chain verifies: {}",
+                check.message
+            );
+
+            std::fs::write(log_dir.join("chain.jsonl"), "{}\n").unwrap();
+            // 两个候选按字典序取首个（此处 audit_* 先于 chain.jsonl）。
+            assert_eq!(probe_audit_dir(&log_dir), Some(found));
+
+            // 空目录 → None。
+            let empty = tempfile::tempdir().unwrap();
+            assert_eq!(probe_audit_dir(empty.path().join("audit").as_path()), None);
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn doctor_audit_messages_exist_in_both_locales() {
+        use crate::i18n::{current_locale, set_locale, translate_en};
+
+        // en：占位符替换后含数值。
+        let ok = translate_en(
+            "cli-doctor-audit-ok",
+            &[("count", "2".into()), ("total", "3".into())],
+        );
+        assert!(ok.contains('2') && ok.contains('3'), "{ok}");
+        let broken = translate_en(
+            "cli-doctor-audit-broken",
+            &[("first", "2".into()), ("gaps", "(2,3)".into())],
+        );
+        assert!(broken.contains('2') && broken.contains("(2,3)"), "{broken}");
+        let skipped = translate_en("cli-doctor-audit-skipped", &[]);
+        assert!(!skipped.is_empty() && !skipped.contains('$'), "{skipped}");
+
+        // zh：非空且占位符替换生效。
+        let prev = current_locale().to_string();
+        set_locale("zh").expect("zh is a valid locale");
+        let ok_zh = tr_args(
+            "cli-doctor-audit-ok",
+            &[("count", "2".into()), ("total", "3".into())],
+        );
+        assert!(ok_zh.contains('2') && ok_zh.contains('3'), "{ok_zh}");
+        let broken_zh = tr_args(
+            "cli-doctor-audit-broken",
+            &[("first", "2".into()), ("gaps", "(2,3)".into())],
+        );
+        assert!(
+            broken_zh.contains('2') && broken_zh.contains("(2,3)"),
+            "{broken_zh}"
+        );
+        let skipped_zh = tr("cli-doctor-audit-skipped");
+        assert!(
+            !skipped_zh.is_empty() && !skipped_zh.contains('$'),
+            "{skipped_zh}"
+        );
+        set_locale(&prev).expect("restore locale");
     }
 
     #[cfg(feature = "encryption")]
@@ -5090,7 +5430,7 @@ mod tests {
             crate::types::ConfigValue::string(format!("{DOCTOR_ENVELOPE_PREFIX}AAAA")),
         )]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         assert!(severity_of(&report, "encryption") == DoctorSeverity::Warning);
         assert_eq!(report.exit_code, 1);
     }
@@ -5126,7 +5466,7 @@ mod tests {
         // Valid hex master key → decryption succeeds.
         let hex_key: String = key.iter().map(|b| format!("{b:02x}")).collect();
         unsafe { std::env::set_var(DOCTOR_MASTER_KEY_ENV, &hex_key) };
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         unsafe { std::env::remove_var(DOCTOR_MASTER_KEY_ENV) };
         assert!(
             severity_of(&report, "encryption") == DoctorSeverity::Ok,
@@ -5136,7 +5476,7 @@ mod tests {
         // Wrong key → decryption fails with an error.
         let wrong: String = [9u8; 32].iter().map(|b| format!("{b:02x}")).collect();
         unsafe { std::env::set_var(DOCTOR_MASTER_KEY_ENV, &wrong) };
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         unsafe { std::env::remove_var(DOCTOR_MASTER_KEY_ENV) };
         assert!(severity_of(&report, "encryption") == DoctorSeverity::Error);
     }
@@ -5164,7 +5504,7 @@ mod tests {
         // Two env spellings mapping to database.host with different values.
         unsafe { std::env::set_var("DATABASE_HOST", "a") };
         unsafe { std::env::set_var("DATABASE__HOST", "b") };
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         unsafe { std::env::remove_var("DATABASE_HOST") };
         unsafe { std::env::remove_var("DATABASE__HOST") };
 
@@ -5185,15 +5525,16 @@ mod tests {
     fn doctor_report_json_is_single_line_serializable() {
         let config = doctor_map(vec![("k", crate::types::ConfigValue::string("v"))]);
         let ok_result: ConfigResult<AnnotatedValue> = Ok(config);
-        let report = super::run_doctor_checks(&ok_result, &[]);
+        let report = super::run_doctor_checks(&ok_result, &[], None);
         let line = serde_json::to_string(&report.to_json_line()).expect("json");
         assert!(!line.contains('\n'), "single line: {line}");
-        // 降级构建（无 encryption）的 healthy 配置整体为 warning（见
-        // doctor_healthy_config_exits_zero），两种合法状态都须单行可序列化。
-        #[cfg(not(feature = "encryption"))]
-        assert!(line.contains("\"status\":\"warning\""), "{line}");
-        #[cfg(feature = "encryption")]
+        // 降级构建（无 encryption，或 audit 开启而无审计日志）的 healthy
+        // 配置整体为 warning（见 doctor_healthy_config_exits_zero），
+        // 两种合法状态都须单行可序列化。
+        #[cfg(all(feature = "encryption", not(feature = "audit"),))]
         assert!(line.contains("\"status\":\"healthy\""), "{line}");
+        #[cfg(any(not(feature = "encryption"), feature = "audit",))]
+        assert!(line.contains("\"status\":\"warning\""), "{line}");
     }
 
     // schema --from-instance

@@ -126,6 +126,10 @@ cli-snapshot-prune-summary = Pruned { $removed } snapshot(s) older than { $days 
 # --- doctor ---
 
 cli-doctor-load-ok = configuration loaded from { $count } file(s)
+cli-doctor-audit-ok = audit chain intact: { $count }/{ $total } entries verified
+cli-doctor-audit-broken = audit chain broken at entry { $first }, suspect gaps: { $gaps }
+cli-doctor-audit-skipped = audit log not provided, check skipped
+cli-doctor-audit-log-help = audit chain file to verify (default: probe ./audit/)
 cli-doctor-load-failed = configuration failed to load: { $message }
 cli-doctor-skipped-not-loaded = skipped: configuration did not load
 cli-doctor-schema-ok = no schema issues detected
