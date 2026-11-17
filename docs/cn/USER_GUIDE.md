@@ -879,6 +879,44 @@ let key_manager = KeyManager::new()?.with_audit_port(Arc::new(confers::AuditWrit
 
 除默认的本地 HMAC 链文件外，`AuditWriter` 还支持经 `AuditSink` 端口注入外部落盘管道；该端口的 inklog 实现由同工作区 inklog 的 `integrations` 模块提供（`ConfersAuditSink`，`confers-audit` 特性）：审计事件在本地 HMAC 链文件照旧的同时同步转发 inklog 结构化 sink。可编译实跑的集成示例见 inklog 仓库 `examples/src/bin/config/confers_audit.rs`（`cargo run --package inklog-examples --features confers-audit --bin confers_audit`）。
 
+##### 验证审计链
+
+布尔版 `verify_audit_chain(path) -> ConfigResult<bool>` 只回答"链是否完好"；需要定位损坏点时用详细报告版：
+
+```rust
+use confers::audit::{verify_audit_chain_report, verify_audit_chain_report_with_key, ChainVerificationReport};
+
+// 详细报告版（密钥取链头 salt）
+let report: ChainVerificationReport = verify_audit_chain_report(&path)?;
+// 外部 hmac_key 写入的链只能用带密钥变体验证
+let report = verify_audit_chain_report_with_key(&path, Some(&hmac_key))?;
+```
+
+`ChainVerificationReport` 字段语义（事件序号均为 1-based，自链头之后计数）：
+
+- `total_entries`：扫描到的事件行数（链头/链尾元数据行不计入）
+- `chain_intact`：仅当链头合法、无断点、无缺失区间且每行 HMAC 有效时为 `true`
+- `hmac_valid_count`：自身 HMAC 验证通过的事件行数
+- `first_broken_at`：首个校验失败事件的序号；文件缺失或链完好时为 `None`
+- `gaps`：疑似被删除事件的序号闭区间列表，如 `[(2, 3)]` 表示事件 2–3 疑似被整体删除
+
+验证为累积式：篡改（如第 k 条事件任意字节被改）报 `first_broken_at == Some(k)` 且不产生 gap；删除（第 k 条被整体移除）报 `gaps == [(k, k)]`。文件缺失返回全零报告（`chain_intact: false`）而非 `Err`；行非合法 JSON 或非 NotFound 的 IO 错误仍为 `Err`。
+
+CLI 侧 `confers doctor` 集成了同一验证（`audit` + `cli` 特性）：
+
+```bash
+# 显式指定链文件
+confers -c app.toml doctor --audit-log /var/log/confers/audit_20260101.log
+# 未指定时自动探测当前目录 ./audit/ 下首个链文件（audit_*.log 或 *.jsonl）；
+# 无链文件时该检查项报 warning（退出码 1）
+confers -c app.toml doctor
+```
+
+边界说明：
+
+- **外部 `hmac_key` 链不受 doctor 支持**：doctor 不读取审计密钥材料（避免把根密钥暴露给进程环境），经 `AuditConfig::hmac_key` 写入的链必须用库函数 `verify_audit_chain_report_with_key` 自行验证
+- **doctor 不做链修复**：验证器只诊断不重建——修复牵涉删除记录的合规含义，属审计策略决策
+
 **审计日志最佳实践：**
 
 - ✅ 将审计日志存储在安全位置（如 `/var/log/confers/`）

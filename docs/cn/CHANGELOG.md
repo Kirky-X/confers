@@ -9,6 +9,7 @@
 
 ### Added
 
+- **审计链详细验证与 doctor 集成（audit-chain-verification）**：新增 `ChainVerificationReport`（`total_entries`/`chain_intact`/`hmac_valid_count`/`first_broken_at`/`gaps`，gaps 为 1-based 删除疑点闭区间）与累积式验证 `verify_audit_chain_report(_with_key)`（断点后续扫、删除区间定位；文件缺失返回全零报告非 `Err`），既有布尔版 `verify_audit_chain(_with_key)` 委托报告版对外行为零变化；`confers doctor` 新增 `audit` 检查项与 `--audit-log <PATH>` 参数（未提供时探测 `./audit/`，无链文件报 warning；外部 `hmac_key` 链不受 doctor 支持，须用库函数验证），zh/en 各增 `cli-doctor-audit-*` 消息
 - **密钥轮换双窗口策略与审计闭环（key-rotation-dual-window）**：`KeyRotationPolicy` 新增 `dual_key_window_secs`（新旧版本并存时窗，serde 缺省 86400，`new`/`Default` 按 `grace_period_days * 86400` 计算）、`reencrypt_on_write`（缺省 `true`）、`reencrypt_read`（`ReencryptPolicy::Never`/`Lazy`/`OnRotate`，缺省 `Never`）三字段，serde 向后兼容；新增对象安全端口 `RotationAuditPort`（默认 `NoopRotationAudit` 零行为，`audit` feature 下提供 `AuditWriterPort` 包装 `AuditWriter` 落 HMAC 链并转发 `AuditSink`），`KeyManager::rotate_key` 与 `KeyRotationService::execute_rotation` 轮换成功后经端口发射 `AuditEvent::KeyRotation`（失败路径零事件）；新增 `KeyManager::reencrypt_envelope(field_path, envelope)` 惰性重加密助手（Lazy 策略 + 时窗内把旧版本信封改写为 Active 版本并发射 `AuditEvent::Decrypt`），`with_audit_port`/`with_rotation_policy` 注入；`ReencryptPolicy::OnRotate` 在字段账本就绪前被 `validate_rotation`/`can_rotate` 以 `ConfigError::InvalidValue { key: "key.rotation" }` 显式拒绝
 
 ### Breaking Changes
