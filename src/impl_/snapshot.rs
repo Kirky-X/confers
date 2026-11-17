@@ -5,6 +5,8 @@
 
 use crate::error::{ConfigError, ConfigResult};
 use crate::impl_::secure_write::write_owner_only;
+#[cfg(feature = "security")]
+use crate::security::SnapshotSensitiveMode;
 use crate::types::{AnnotatedValue, ConfigValue, SerializeMode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -282,6 +284,18 @@ impl SnapshotManager {
         value: &AnnotatedValue,
         sensitive_paths: &[&str],
     ) -> ConfigResult<PathBuf> {
+        let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);
+        self.persist_async(value, serialized).await
+    }
+
+    /// Shared write tail of the async save: provenance, format encoding,
+    /// atomic 0600 write, prune. The serialization step (and its security
+    /// mode) is chosen by the caller.
+    async fn persist_async(
+        &self,
+        value: &AnnotatedValue,
+        serialized: serde_json::Value,
+    ) -> ConfigResult<PathBuf> {
         tokio::fs::create_dir_all(&self.config.dir)
             .await
             .map_err(crate::error::ConfigError::IoError)?;
@@ -299,8 +313,6 @@ impl SnapshotManager {
             self.config.format.ext()
         );
         let path = self.config.dir.join(&filename);
-
-        let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);
 
         let output = if self.config.include_provenance {
             self.attach_provenance(serialized, value)
@@ -374,7 +386,6 @@ impl SnapshotManager {
                     e
                 )))
             })??;
-
         Ok(path)
     }
 
@@ -386,6 +397,90 @@ impl SnapshotManager {
         &self,
         value: &AnnotatedValue,
         sensitive_paths: &[&str],
+    ) -> ConfigResult<PathBuf> {
+        let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);
+        self.persist_sync(value, serialized)
+    }
+
+    /// Shared write tail of the blocking save: provenance, format encoding,
+    /// atomic 0600 write, prune. The serialization step (and its security
+    /// mode) is chosen by the caller.
+    /// Save with an explicit [`SnapshotSensitiveMode`] (T007 of
+    /// `secure-hot-swap`).
+    ///
+    /// * `Redacted` — the pre-policy behavior (placeholder strings).
+    /// * `Plain` — cleartext export, explicit caller opt-in.
+    /// * `Encrypted` — sensitive values (explicit `sensitive_paths` or the
+    ///   sensitive-name heuristic) are written as `enc:v1:` envelopes using
+    ///   the same field-key derivation the restore path applies. Requires
+    ///   the `encryption` feature; the master key comes from the override
+    ///   first, then `CONFERS_MASTER_KEY`.
+    #[cfg(feature = "security")]
+    pub async fn save_with_mode(
+        &self,
+        value: &AnnotatedValue,
+        sensitive_paths: &[&str],
+        mode: SnapshotSensitiveMode,
+        master_key: Option<&[u8]>,
+    ) -> ConfigResult<PathBuf> {
+        let serialized = Self::serialize_snapshot_tree(value, sensitive_paths, mode, master_key)?;
+        self.persist_async(value, serialized).await
+    }
+
+    /// Synchronous counterpart of [`SnapshotManager::save_with_mode`].
+    #[cfg(feature = "security")]
+    pub fn save_blocking_with_mode(
+        &self,
+        value: &AnnotatedValue,
+        sensitive_paths: &[&str],
+        mode: SnapshotSensitiveMode,
+        master_key: Option<&[u8]>,
+    ) -> ConfigResult<PathBuf> {
+        let serialized = Self::serialize_snapshot_tree(value, sensitive_paths, mode, master_key)?;
+        self.persist_sync(value, serialized)
+    }
+
+    /// Serialization step of the security-mode-aware save.
+    #[cfg(feature = "security")]
+    fn serialize_snapshot_tree(
+        value: &AnnotatedValue,
+        sensitive_paths: &[&str],
+        mode: SnapshotSensitiveMode,
+        master_key: Option<&[u8]>,
+    ) -> ConfigResult<serde_json::Value> {
+        match mode {
+            SnapshotSensitiveMode::Redacted => {
+                Ok(value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths))
+            }
+            SnapshotSensitiveMode::Plain => {
+                Ok(value.to_json_with_mode(SerializeMode::Full, sensitive_paths))
+            }
+            SnapshotSensitiveMode::Encrypted => {
+                #[cfg(feature = "encryption")]
+                {
+                    let mut json = value.to_json_with_mode(SerializeMode::Full, sensitive_paths);
+                    crate::field_crypto::encrypt_sensitive_paths(
+                        &mut json,
+                        sensitive_paths,
+                        master_key,
+                    )?;
+                    Ok(json)
+                }
+                #[cfg(not(feature = "encryption"))]
+                Err(ConfigError::InvalidValue {
+                    key: "snapshot.mode".into(),
+                    expected_type: "build with the encryption feature".into(),
+                    message: "SnapshotSensitiveMode::Encrypted requires the `encryption` feature"
+                        .into(),
+                })
+            }
+        }
+    }
+
+    fn persist_sync(
+        &self,
+        value: &AnnotatedValue,
+        serialized: serde_json::Value,
     ) -> ConfigResult<PathBuf> {
         std::fs::create_dir_all(&self.config.dir).map_err(crate::error::ConfigError::IoError)?;
 
@@ -402,7 +497,6 @@ impl SnapshotManager {
         );
         let path = self.config.dir.join(&filename);
 
-        let serialized = value.to_json_with_mode(SerializeMode::Redacted, sensitive_paths);
         let output = if self.config.include_provenance {
             self.attach_provenance(serialized, value)
         } else {
@@ -556,16 +650,28 @@ impl SnapshotManager {
             value
         };
 
+        // T008 (`secure-hot-swap`): `Encrypted` snapshots carry sensitive
+        // values as `enc:v1:` envelopes. Run the same decryption transform
+        // the load pipeline uses (env-key resolution) so Redacted→Encrypted
+        //→restore roundtrips; plain/redacted snapshots hold no envelopes
+        // and pass through untouched. A failed decrypt (e.g. no master key)
+        // fails the restore loudly instead of restoring marker objects.
+        let mut restored_value = clean_value;
+        crate::field_crypto::apply_field_decryption(&mut restored_value, None);
+        crate::field_crypto::ensure_no_decrypt_markers(&restored_value)?;
+
         // Snapshots written by `save` hold the plain config tree (plus optional
         // `_provenance`). Older versions wrote the AnnotatedValue envelope
         // ({"inner": .., "source": ..}); accept both shapes.
-        if let Some(annotated) =
-            plain_json_to_annotated(&clean_value, &crate::types::SourceId::new("snapshot"), "")
-        {
+        if let Some(annotated) = plain_json_to_annotated(
+            &restored_value,
+            &crate::types::SourceId::new("snapshot"),
+            "",
+        ) {
             return Ok(annotated);
         }
 
-        let annotated: AnnotatedValue = serde_json::from_value(clean_value).map_err(|e| {
+        let annotated: AnnotatedValue = serde_json::from_value(restored_value).map_err(|e| {
             crate::error::ConfigError::ParseError {
                 format: "json".to_string(),
                 message: e.to_string(),
@@ -963,6 +1069,206 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("[REDACTED]"));
         assert!(!content.contains("alice"));
+    }
+
+    // ---- secure-hot-swap T007: snapshot save modes ----
+
+    /// Fixture with a sensitive `password` leaf and a normal `host` leaf.
+    fn secret_value() -> AnnotatedValue {
+        let pw = AnnotatedValue::new(
+            ConfigValue::string("s3cret-pw"),
+            SourceId::new("test"),
+            "db.password",
+        );
+        let host = AnnotatedValue::new(
+            ConfigValue::string("db.local"),
+            SourceId::new("test"),
+            "db.host",
+        );
+        let db = AnnotatedValue::new(
+            ConfigValue::map(vec![("password", pw), ("host", host)]),
+            SourceId::new("test"),
+            "db",
+        );
+        AnnotatedValue::new(
+            ConfigValue::map(vec![("db", db)]),
+            SourceId::new("test"),
+            "",
+        )
+    }
+
+    #[cfg(feature = "security")]
+    fn json_manager(tmp: &tempfile::TempDir) -> SnapshotManager {
+        SnapshotManager::new(SnapshotConfig {
+            dir: tmp.path().to_path_buf(),
+            max_snapshots: 30,
+            format: SnapshotFormat::Json,
+            include_provenance: false,
+        })
+    }
+
+    #[cfg(feature = "security")]
+    #[tokio::test]
+    async fn save_with_mode_redacted_keeps_placeholder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = json_manager(&tmp)
+            .save_with_mode(&secret_value(), &[], SnapshotSensitiveMode::Redacted, None)
+            .await
+            .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("[REDACTED]"), "{content}");
+        assert!(!content.contains("s3cret-pw"), "{content}");
+    }
+
+    #[cfg(feature = "security")]
+    #[tokio::test]
+    async fn save_with_mode_plain_writes_cleartext() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = json_manager(&tmp)
+            .save_with_mode(&secret_value(), &[], SnapshotSensitiveMode::Plain, None)
+            .await
+            .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("s3cret-pw"), "{content}");
+        assert!(!content.contains("[REDACTED]"), "{content}");
+    }
+
+    #[cfg(all(feature = "security", feature = "encryption"))]
+    #[test]
+    #[serial_test::serial]
+    fn save_with_mode_encrypted_writes_envelopes_without_plaintext() {
+        let tmp = tempfile::tempdir().unwrap();
+        let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        let path = json_manager(&tmp)
+            .save_blocking_with_mode(
+                &secret_value(),
+                &[],
+                SnapshotSensitiveMode::Encrypted,
+                Some(&master),
+            )
+            .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("enc:v1:"), "{content}");
+        assert!(!content.contains("s3cret-pw"), "{content}");
+        assert!(
+            content.contains("db.local"),
+            "non-sensitive value stays plain: {content}"
+        );
+    }
+
+    #[cfg(all(feature = "security", feature = "encryption"))]
+    #[test]
+    #[serial_test::serial]
+    fn save_with_mode_encrypted_env_key_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        unsafe {
+            std::env::set_var(
+                crate::field_crypto::MASTER_KEY_ENV,
+                "3031323334353637383961626364656630313233343536373839616263646566",
+            );
+        }
+        let result = json_manager(&tmp).save_blocking_with_mode(
+            &secret_value(),
+            &[],
+            SnapshotSensitiveMode::Encrypted,
+            None,
+        );
+        unsafe { std::env::remove_var(crate::field_crypto::MASTER_KEY_ENV) };
+        assert!(result.is_ok(), "env key must be picked up: {result:?}");
+    }
+
+    #[cfg(all(feature = "security", feature = "encryption"))]
+    #[test]
+    #[serial_test::serial]
+    fn save_with_mode_encrypted_rejects_weak_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = json_manager(&tmp).save_blocking_with_mode(
+            &secret_value(),
+            &[],
+            SnapshotSensitiveMode::Encrypted,
+            Some(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), // pragma: allowlist secret
+        );
+        let err = result.expect_err("weak override key must fail loudly");
+        assert!(err.to_string().contains("snapshot.master_key"), "{err}");
+    }
+
+    #[cfg(all(feature = "security", not(feature = "encryption")))]
+    #[test]
+    fn save_with_mode_encrypted_without_encryption_feature_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let result = json_manager(&tmp).save_blocking_with_mode(
+            &secret_value(),
+            &[],
+            SnapshotSensitiveMode::Encrypted,
+            None,
+        );
+        let err = result.expect_err("Encrypted without the encryption feature must fail");
+        assert!(err.to_string().contains("snapshot.mode"), "{err}");
+    }
+
+    // ---- secure-hot-swap T008: encrypted snapshot restore ----
+
+    #[cfg(all(feature = "security", feature = "encryption"))]
+    #[test]
+    #[serial_test::serial]
+    fn encrypted_snapshot_roundtrips_with_master_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manager = json_manager(&tmp);
+        let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        let path = manager
+            .save_blocking_with_mode(
+                &secret_value(),
+                &[],
+                SnapshotSensitiveMode::Encrypted,
+                Some(&master),
+            )
+            .unwrap();
+
+        unsafe {
+            std::env::set_var(crate::field_crypto::MASTER_KEY_ENV, hex::encode(&master));
+        }
+        let restored = futures_executor_block_on(manager.load_snapshot(&path));
+        unsafe { std::env::remove_var(crate::field_crypto::MASTER_KEY_ENV) };
+        let restored = restored.unwrap();
+
+        // The sensitive value must come back byte-for-byte.
+        let db = restored.inner.as_map().and_then(|m| m.get("db")).unwrap();
+        let dbm = db.inner.as_map().unwrap();
+        assert_eq!(
+            dbm.get("password").and_then(|v| v.inner.as_str()),
+            Some("s3cret-pw"),
+            "encrypted value must decrypt back to the plaintext"
+        );
+        assert_eq!(
+            dbm.get("host").and_then(|v| v.inner.as_str()),
+            Some("db.local"),
+        );
+    }
+
+    #[cfg(all(feature = "security", feature = "encryption"))]
+    #[test]
+    #[serial_test::serial]
+    fn encrypted_snapshot_without_key_fails_loudly() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manager = json_manager(&tmp);
+        let master = b"0123456789abcdef0123456789abcdef".to_vec(); // pragma: allowlist secret
+        let path = manager
+            .save_blocking_with_mode(
+                &secret_value(),
+                &[],
+                SnapshotSensitiveMode::Encrypted,
+                Some(&master),
+            )
+            .unwrap();
+
+        unsafe { std::env::remove_var(crate::field_crypto::MASTER_KEY_ENV) };
+        let restored = futures_executor_block_on(manager.load_snapshot(&path));
+        let err = restored.expect_err("restore without the master key must fail loudly");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("db.password") && msg.contains("master key"),
+            "error must name the field and the missing key: {msg}"
+        );
     }
 
     #[tokio::test]

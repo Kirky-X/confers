@@ -90,7 +90,41 @@ impl<T> Default for ConfigBuilder<T> {
     }
 }
 
+/// Everything the snapshot save needs from the builder, captured before the
+/// build path moves builder fields (clones keep the context valid across the
+/// partial moves of `build`/`build_annotated`/`build_resilient`).
+struct SnapshotSaveCtx {
+    sensitive_paths: Vec<String>,
+    #[cfg(feature = "security")]
+    mode: crate::security::SnapshotSensitiveMode,
+    #[cfg(feature = "security")]
+    master_key: Option<Vec<u8>>,
+}
+
 impl<T> ConfigBuilder<T> {
+    /// Capture the snapshot save context (policy mode + master key) from the
+    /// declarative [`SecurityPolicy`], defaulting to the behavior-compatible
+    /// `Redacted` mode when no policy is set.
+    #[cfg(feature = "security")]
+    fn snapshot_save_ctx(&self) -> SnapshotSaveCtx {
+        SnapshotSaveCtx {
+            sensitive_paths: self.sensitive_paths.clone(),
+            mode: self
+                .security_policy_ref()
+                .map(|p| p.snapshot_sensitive_mode)
+                .unwrap_or(crate::security::SnapshotSensitiveMode::Redacted),
+            master_key: self.master_key_override.clone(),
+        }
+    }
+
+    /// Capture without the `security` feature: plain paths only.
+    #[cfg(not(feature = "security"))]
+    fn snapshot_save_ctx(&self) -> SnapshotSaveCtx {
+        SnapshotSaveCtx {
+            sensitive_paths: self.sensitive_paths.clone(),
+        }
+    }
+
     /// Create a new configuration builder.
     pub fn new() -> Self {
         Self {
@@ -334,10 +368,7 @@ impl<T> ConfigBuilder<T> {
 
     /// The stored security policy, if one was set via
     /// [`security_policy`](Self::security_policy).
-    // Transitional allow: the first production consumer is the snapshot
-    // save path (T007); removed in the same change when that lands.
     #[cfg(feature = "security")]
-    #[allow(dead_code)]
     pub(crate) fn security_policy_ref(&self) -> Option<&crate::security::SecurityPolicy> {
         self.security_policy.as_ref()
     }
@@ -504,6 +535,9 @@ where
         // sources.
         self.enforce_file_limits()?;
 
+        // Capture before the build path moves builder fields (clones).
+        let snapshot_ctx = self.snapshot_save_ctx();
+
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
         }
@@ -530,15 +564,15 @@ where
             Ok(merged) => merged,
             Err(e) => {
                 let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
-                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
+                Self::save_snapshot(&snapshot_ctx, snapshot_config, &partial)?;
                 return Err(e);
             }
         };
         if let Err(e) = self.limits.validate_value(&merged) {
-            Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+            Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
             return Err(e);
         }
-        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+        Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
 
         // Preload health checks gate the build on the merged tree: a
         // Critical verdict blocks the configuration from going live.
@@ -574,7 +608,7 @@ where
                     message: e.inner().to_string(),
                 };
                 // persist the collected config before failing the build.
-                Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+                Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
                 return Err(err);
             }
         };
@@ -596,6 +630,9 @@ where
         // Check file sizes/extensions before the chain consumes accumulated
         // sources.
         self.enforce_file_limits()?;
+
+        // Capture before the build path moves builder fields (clones).
+        let snapshot_ctx = self.snapshot_save_ctx();
 
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -619,16 +656,16 @@ where
             Ok(merged) => merged,
             Err(e) => {
                 let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
-                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
+                Self::save_snapshot(&snapshot_ctx, snapshot_config, &partial)?;
                 return Err(e);
             }
         };
         if let Err(e) = self.limits.validate_value(&merged) {
             // persist the collected config before failing the build.
-            Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+            Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
             return Err(e);
         }
-        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+        Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
 
         // Preload health checks gate the annotated build too.
         #[cfg(feature = "progressive-reload")]
@@ -644,29 +681,35 @@ where
     }
 
     /// Persist the built configuration via `with_snapshot`, when configured.
+    /// With the `security` feature the declarative policy's snapshot mode
+    /// and the builder master key drive the save (T007 of `secure-hot-swap`).
     #[cfg(feature = "snapshot")]
     fn save_snapshot(
+        ctx: &SnapshotSaveCtx,
         snapshot_config: Option<&SnapshotConfig>,
         merged: &AnnotatedValue,
-        sensitive_paths: &[String],
     ) -> ConfigResult<()> {
-        match snapshot_config {
-            Some(snapshot_config) => {
-                let borrowed: Vec<&str> = sensitive_paths.iter().map(String::as_str).collect();
-                crate::impl_::snapshot::SnapshotManager::new(snapshot_config.clone())
-                    .save_blocking(merged, &borrowed)
-                    .map(|_| ())
-            }
-            None => Ok(()),
+        let Some(snapshot_config) = snapshot_config else {
+            return Ok(());
+        };
+        let manager = crate::impl_::snapshot::SnapshotManager::new(snapshot_config.clone());
+        let borrowed: Vec<&str> = ctx.sensitive_paths.iter().map(String::as_str).collect();
+        #[cfg(feature = "security")]
+        {
+            manager
+                .save_blocking_with_mode(merged, &borrowed, ctx.mode, ctx.master_key.as_deref())
+                .map(|_| ())
         }
+        #[cfg(not(feature = "security"))]
+        manager.save_blocking(merged, &borrowed).map(|_| ())
     }
 
     /// No-op when the `snapshot` feature is disabled.
     #[cfg(not(feature = "snapshot"))]
     fn save_snapshot<Cfg>(
+        _ctx: &SnapshotSaveCtx,
         _snapshot_config: Option<&Cfg>,
         _merged: &AnnotatedValue,
-        _sensitive_paths: &[String],
     ) -> ConfigResult<()> {
         Ok(())
     }
@@ -696,6 +739,9 @@ where
         // below): violated even in resilient mode, before any source is
         // read. Checked before the chain consumes accumulated sources.
         self.enforce_file_limits()?;
+
+        // Capture before the build path moves builder fields (clones).
+        let snapshot_ctx = self.snapshot_save_ctx();
 
         if !self.accumulated_defaults.is_empty() {
             self.chain_builder = self.chain_builder.defaults(self.accumulated_defaults);
@@ -735,7 +781,7 @@ where
                 // 容灾兜底: the partial collection state is still persisted
                 // before the degraded result is returned.
                 let partial = outcome.partial.unwrap_or_else(Self::empty_root_value);
-                Self::save_snapshot(snapshot_config, &partial, &self.sensitive_paths)?;
+                Self::save_snapshot(&snapshot_ctx, snapshot_config, &partial)?;
                 warnings.push(SourceWarning {
                     code: WarningCode::SourceError,
                     message: format!("source collection failed, using defaults: {e}"),
@@ -758,7 +804,7 @@ where
         // `build()` does. Resilient mode tolerates *source* errors, not
         // violated safety limits.
         self.limits.validate_value(&merged)?;
-        Self::save_snapshot(snapshot_config, &merged, &self.sensitive_paths)?;
+        Self::save_snapshot(&snapshot_ctx, snapshot_config, &merged)?;
 
         // Preload health checks gate the resilient build too: a Critical
         // verdict is a safety verdict, not a source error.

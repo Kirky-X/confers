@@ -26,6 +26,8 @@
 /// 32-byte ASCII secret (same decoding as the CLI doctor).
 pub const MASTER_KEY_ENV: &str = "CONFERS_MASTER_KEY";
 
+use crate::error::{ConfigError, ConfigResult};
+
 /// Decrypt every envelope value found anywhere in the tree, in place
 /// (see module docs).
 ///
@@ -425,5 +427,175 @@ mod no_feature_tests {
             json["api_key"], "enc:v1:k:YWJj",
             "without the encryption feature the envelope must be left untouched (warn only)"
         );
+    }
+}
+
+/// Snapshot-save encryption pass (T007 of `secure-hot-swap`).
+///
+/// Replaces every string value covered by the snapshot redaction rules —
+/// explicit `sensitive_paths` match (segment-aware, same semantics as
+/// `to_json_with_mode`) or the crate-wide sensitive-name heuristic — with a
+/// canonical `enc:v1:` envelope. Key derivation and key resolution mirror
+/// the restore path exactly (`decrypt_at_path`): the derivation path is the
+/// value's full dotted JSON path, and the key comes from the explicit
+/// override (builder `master_key`) first, then `CONFERS_MASTER_KEY`.
+///
+/// Without the `encryption` feature this function does not exist; the
+/// snapshot save layer rejects the `Encrypted` mode with a clear
+/// [`ConfigError::InvalidValue`] instead (the save must not silently pretend
+/// encryption happened).
+#[cfg(feature = "encryption")]
+pub(crate) fn encrypt_sensitive_paths(
+    json: &mut serde_json::Value,
+    sensitive_paths: &[&str],
+    master_override: Option<&[u8]>,
+) -> ConfigResult<()> {
+    let resolved = match master_override {
+        Some(k) if k.len() == 32 && !crate::secret::crypto::is_weak_key(k) => Some(k.to_vec()),
+        Some(_) => {
+            return Err(ConfigError::InvalidValue {
+                key: "snapshot.master_key".into(),
+                expected_type: "32-byte master key".into(),
+                message: "master_key override is not a usable 32-byte key".into(),
+            });
+        }
+        None => resolve_master_key(),
+    };
+    let Some(master_key) = resolved else {
+        return Err(ConfigError::InvalidValue {
+            key: "snapshot.master_key".into(),
+            expected_type: "32-byte key via CONFERS_MASTER_KEY".into(),
+            message: "no usable master key for an encrypted snapshot (set CONFERS_MASTER_KEY or builder master_key)"
+                .into(),
+        });
+    };
+    encrypt_walk(json, String::new(), sensitive_paths, &master_key)
+}
+
+/// Same coverage rules as the snapshot redaction: a node whose dotted path
+/// matches `sensitive_paths` (exact or subtree) or whose leaf name passes the
+/// sensitive-name heuristic is covered.
+#[cfg(feature = "encryption")]
+fn snapshot_path_is_sensitive(path: &str, sensitive_paths: &[&str]) -> bool {
+    if path.is_empty() {
+        return false;
+    }
+    sensitive_paths
+        .iter()
+        .any(|p| path == *p || path.starts_with(&format!("{p}.")))
+        || crate::sensitive_names::is_sensitive_name(path.rsplit('.').next().unwrap_or(path))
+}
+
+#[cfg(feature = "encryption")]
+fn encrypt_walk(
+    json: &mut serde_json::Value,
+    path: String,
+    sensitive_paths: &[&str],
+    master_key: &[u8],
+) -> ConfigResult<()> {
+    match json {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                let child_path = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
+                encrypt_walk(v, child_path, sensitive_paths, master_key)?;
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (idx, v) in items.iter_mut().enumerate() {
+                let child_path = format!("{path}.{idx}");
+                encrypt_walk(v, child_path, sensitive_paths, master_key)?;
+            }
+        }
+        serde_json::Value::String(text) if snapshot_path_is_sensitive(&path, sensitive_paths) => {
+            *text = encrypt_to_envelope(&path, text, master_key)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Envelope one plaintext string at `path` (same primitives as the key
+/// manager's lazy re-encryption path).
+#[cfg(feature = "encryption")]
+fn encrypt_to_envelope(path: &str, plaintext: &str, master_key: &[u8]) -> ConfigResult<String> {
+    use base64::Engine as _;
+    let key_version = crate::envelope::EncryptedEnvelope::DEFAULT_KEY_VERSION;
+    let field_key = crate::secret::crypto::derive_field_key(master_key, path, key_version)
+        .map_err(|e| ConfigError::InvalidValue {
+            key: path.to_string(),
+            expected_type: "derivable field key".into(),
+            message: format!("field key derivation failed: {e}"),
+        })?;
+    let (nonce, ciphertext) = crate::secret::crypto::XChaCha20Crypto::new()
+        .encrypt(plaintext.as_bytes(), field_key.as_slice())
+        .map_err(|e| ConfigError::InvalidValue {
+            key: path.to_string(),
+            expected_type: "encryptable plaintext".into(),
+            message: format!("snapshot value encryption failed: {e}"),
+        })?;
+    let mut blob = nonce;
+    blob.extend_from_slice(&ciphertext);
+    Ok(crate::envelope::EncryptedEnvelope::new(
+        key_version,
+        base64::engine::general_purpose::STANDARD.encode(&blob),
+    )
+    .to_envelope_string())
+}
+
+/// Scan a restored snapshot JSON for decrypt-failure markers and surface the
+/// first one as a loud error (T008): an unresolvable master key must fail
+/// the restore instead of handing out marker objects as configuration.
+pub(crate) fn ensure_no_decrypt_markers(json: &serde_json::Value) -> ConfigResult<()> {
+    let mut offender: Option<(String, String)> = None;
+    scan_markers(json, String::new(), &mut offender);
+    match offender {
+        None => Ok(()),
+        Some((path, reason)) => Err(ConfigError::InvalidValue {
+            key: path,
+            expected_type: "decrypted configuration value".into(),
+            message: reason,
+        }),
+    }
+}
+
+#[cfg(not(feature = "encryption"))]
+fn scan_markers(json: &serde_json::Value, path: String, offender: &mut Option<(String, String)>) {
+    // Without the encryption feature envelopes are left untouched, so no
+    // decrypt-failure markers can exist.
+    let _ = (json, path, offender);
+}
+
+#[cfg(feature = "encryption")]
+fn scan_markers(json: &serde_json::Value, path: String, offender: &mut Option<(String, String)>) {
+    if offender.is_some() {
+        return;
+    }
+    match json {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let child_path = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
+                if k == "__confers_decrypt_failed"
+                    && let Some(reason) = v.as_str()
+                {
+                    *offender = Some((path, reason.to_string()));
+                    return;
+                }
+                scan_markers(v, child_path, offender);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (idx, v) in items.iter().enumerate() {
+                scan_markers(v, format!("{path}.{idx}"), offender);
+            }
+        }
+        _ => {}
     }
 }
