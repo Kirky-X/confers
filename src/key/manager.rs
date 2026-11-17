@@ -37,6 +37,17 @@ pub struct KeyManager {
     key_rings: HashMap<String, KeyRing>,
     schedules: HashMap<String, KeyRotationSchedule>,
     default_key_id: String,
+    /// 轮换审计出口端口；未注入时为 Noop（零行为变化）。
+    /// serde 跳过：反序列化得到的实例回退到 Noop 端口。
+    #[cfg(feature = "audit")]
+    #[serde(skip, default = "default_audit_port")]
+    audit_port: std::sync::Arc<dyn crate::key::audit_port::RotationAuditPort>,
+}
+
+/// 反序列化被跳过的 `audit_port` 字段的取值：Noop 端口。
+#[cfg(feature = "audit")]
+fn default_audit_port() -> std::sync::Arc<dyn crate::key::audit_port::RotationAuditPort> {
+    std::sync::Arc::new(crate::key::audit_port::NoopRotationAudit)
 }
 
 impl std::fmt::Debug for KeyManager {
@@ -107,7 +118,22 @@ impl KeyManager {
             key_rings: HashMap::new(),
             schedules: HashMap::new(),
             default_key_id: "default".to_string(),
+            #[cfg(feature = "audit")]
+            audit_port: std::sync::Arc::new(crate::key::audit_port::NoopRotationAudit),
         })
+    }
+
+    /// 注入轮换审计出口端口（builder 风格）。
+    ///
+    /// 端口在 `rotate_key` 轮换成功后收到一条 `AuditEvent::KeyRotation`；
+    /// 未注入时保持 Noop，轮换行为与现状完全一致。
+    #[cfg(feature = "audit")]
+    pub fn with_audit_port(
+        mut self,
+        port: std::sync::Arc<dyn crate::key::audit_port::RotationAuditPort>,
+    ) -> Self {
+        self.audit_port = port;
+        self
     }
 
     /// Initialize a new key ring with the given master key
@@ -300,6 +326,18 @@ impl KeyManager {
         if let Some(schedule) = self.schedules.get_mut(&key_id) {
             schedule.update_after_rotation();
         }
+
+        // 轮换成功（Completed）后经端口发射审计事件；fields_reencrypted
+        // 在惰性重加密账本就绪前恒为 0。
+        #[cfg(feature = "audit")]
+        self.audit_port
+            .record(crate::impl_::audit::AuditEvent::KeyRotation {
+                key_id: key_ring.key_id.clone(),
+                old_version: format!("v{old_version}"),
+                new_version: format!("v{}", new_key.metadata.version()),
+                fields_reencrypted: 0,
+                timestamp: chrono::Utc::now(),
+            });
 
         Ok(RotationResult {
             key_id: key_ring.key_id.clone(),
@@ -1177,5 +1215,80 @@ mod tests {
         // Serialize derives Serialize but not Deserialize for KeyManager
         let json = serde_json::to_string(&km).expect("serialize");
         assert!(json.contains("default"));
+    }
+
+    /// 内存捕获端口：记录全部到达的审计事件供断言。
+    #[cfg(feature = "audit")]
+    struct CapturingPort(std::sync::Arc<std::sync::RwLock<Vec<crate::impl_::audit::AuditEvent>>>);
+
+    #[cfg(feature = "audit")]
+    impl crate::key::audit_port::RotationAuditPort for CapturingPort {
+        fn record(&self, event: crate::impl_::audit::AuditEvent) {
+            self.0.write().expect("capture lock").push(event);
+        }
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn test_rotate_key_emits_exactly_one_rotation_event() {
+        let master_key = [0x19; 32];
+        let events = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+        let mut km =
+            make_manager().with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
+        km.initialize(&master_key, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+
+        let result = km
+            .rotate_key(
+                &master_key,
+                Some("prod".to_string()),
+                "rotator".to_string(),
+                Some("scheduled".to_string()),
+            )
+            .expect("rotate_key");
+
+        let captured = events.read().expect("capture lock").clone();
+        assert_eq!(captured.len(), 1, "success must emit exactly one event");
+        match &captured[0] {
+            crate::impl_::audit::AuditEvent::KeyRotation {
+                key_id,
+                old_version,
+                new_version,
+                fields_reencrypted,
+                ..
+            } => {
+                assert_eq!(key_id, "prod");
+                assert_eq!(*old_version, format!("v{}", result.previous_version));
+                assert_eq!(*new_version, format!("v{}", result.new_version));
+                assert_eq!(*fields_reencrypted, 0);
+            }
+            other => panic!("expected KeyRotation event, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "audit")]
+    #[test]
+    fn test_rotate_key_failure_emits_no_event() {
+        let master_key = [0x1a; 32];
+        let events = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+        let mut km =
+            make_manager().with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
+        km.initialize(&master_key, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+
+        // 轮换不存在的 key ring → 失败路径零事件。
+        let err = km
+            .rotate_key(
+                &master_key,
+                Some("nonexistent".to_string()),
+                "u".to_string(),
+                None,
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+        assert!(
+            events.read().expect("capture lock").is_empty(),
+            "failure must not emit events"
+        );
     }
 }
