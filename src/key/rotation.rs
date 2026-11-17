@@ -16,10 +16,11 @@ const WARNING_EXPIRY_DAYS: u64 = 30;
 const MAX_ROTATION_HISTORY: usize = 100;
 
 /// 惰性重加密策略：旧版本密文何时被改写为新版本。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReencryptPolicy {
     /// 旧版本密文保持原样（默认，行为兼容）。
+    #[default]
     Never,
     /// 解密方主动调用 `KeyManager::reencrypt_envelope` 时改写。
     Lazy,
@@ -28,10 +29,16 @@ pub enum ReencryptPolicy {
     OnRotate,
 }
 
-impl Default for ReencryptPolicy {
-    fn default() -> Self {
-        Self::Never
-    }
+/// `dual_key_window_secs` 的 serde 缺省值。serde 默认函数没有 self 上下文，
+/// 无法引用 `grace_period_days`，取保守的固定 1 天（1 小时时窗不足以完成
+/// 轮换）；`KeyRotationPolicy::new`/`Default` 显式按 `grace_period_days * 86400`
+/// 计算，可被 builder 覆盖。
+fn default_dual_key_window() -> u64 {
+    86_400
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +48,15 @@ pub struct KeyRotationPolicy {
     pub grace_period_days: u32,
     pub auto_rotate: bool,
     pub notify_before_expiry_days: u32,
+    /// 新旧版本并存时窗（秒）。超出后旧版本密文不再被惰性重加密。
+    #[serde(default = "default_dual_key_window")]
+    pub dual_key_window_secs: u64,
+    /// 新写入是否使用 Active 版本加密。
+    #[serde(default = "default_true")]
+    pub reencrypt_on_write: bool,
+    /// 读路径惰性重加密策略（默认 `Never`，行为兼容）。
+    #[serde(default)]
+    pub reencrypt_read: ReencryptPolicy,
 }
 
 impl Default for KeyRotationPolicy {
@@ -51,6 +67,9 @@ impl Default for KeyRotationPolicy {
             grace_period_days: 14,
             auto_rotate: false,
             notify_before_expiry_days: 30,
+            dual_key_window_secs: 14 * 86_400,
+            reencrypt_on_write: true,
+            reencrypt_read: ReencryptPolicy::Never,
         }
     }
 }
@@ -68,6 +87,9 @@ impl KeyRotationPolicy {
             grace_period_days,
             auto_rotate,
             notify_before_expiry_days: 30,
+            dual_key_window_secs: grace_period_days as u64 * 86_400,
+            reencrypt_on_write: true,
+            reencrypt_read: ReencryptPolicy::Never,
         }
     }
 
@@ -557,6 +579,9 @@ mod tests {
         assert_eq!(p.grace_period_days, 14);
         assert!(!p.auto_rotate);
         assert_eq!(p.notify_before_expiry_days, 30);
+        assert_eq!(p.dual_key_window_secs, 14 * 86_400);
+        assert!(p.reencrypt_on_write);
+        assert_eq!(p.reencrypt_read, ReencryptPolicy::Never);
     }
 
     #[test]
@@ -567,6 +592,33 @@ mod tests {
         assert_eq!(p.grace_period_days, 7);
         assert!(p.auto_rotate);
         assert_eq!(p.notify_before_expiry_days, 30);
+        assert_eq!(p.dual_key_window_secs, 7 * 86_400);
+        assert!(p.reencrypt_on_write);
+        assert_eq!(p.reencrypt_read, ReencryptPolicy::Never);
+    }
+
+    #[test]
+    fn test_key_rotation_policy_serde_backward_compatible() {
+        // 旧配置文件只含原五个字段：反序列化成功且新字段取默认值。
+        let legacy = serde_json::json!({
+            "max_versions": 5,
+            "rotation_interval_days": 90,
+            "grace_period_days": 14,
+            "auto_rotate": false,
+            "notify_before_expiry_days": 30
+        });
+        let p: KeyRotationPolicy =
+            serde_json::from_value(legacy).expect("legacy config must parse");
+        assert_eq!(p.dual_key_window_secs, 86_400);
+        assert!(p.reencrypt_on_write);
+        assert_eq!(p.reencrypt_read, ReencryptPolicy::Never);
+    }
+
+    #[test]
+    fn test_key_rotation_policy_new_14_day_grace_window() {
+        // new(5, 90, 14, false) → dual_key_window_secs == 14 * 86400。
+        let p = KeyRotationPolicy::new(5, 90, 14, false);
+        assert_eq!(p.dual_key_window_secs, 1_209_600);
     }
 
     #[test]
