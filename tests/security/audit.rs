@@ -107,7 +107,9 @@ mod tests {
             .log_dir(log_dir.clone())
             .build();
 
-        writer.log_key_rotation("v1.0.0", "v1.0.1").unwrap();
+        writer
+            .log_key_rotation("prod", "v1.0.0", "v1.0.1", 0)
+            .unwrap();
 
         // Give time for async write
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -126,7 +128,7 @@ mod tests {
         writer.log_load("test_source").unwrap();
         writer.log_key_access("test_key").unwrap();
         writer.log_decrypt("test_field", true).unwrap();
-        writer.log_key_rotation("v1", "v2").unwrap();
+        writer.log_key_rotation("prod", "v1", "v2", 0).unwrap();
     }
 
     /// Test 8: Verify event level classification
@@ -144,8 +146,10 @@ mod tests {
         );
 
         let key_rotation = AuditEvent::KeyRotation {
+            key_id: "prod".to_string(),
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
+            fields_reencrypted: 0,
             timestamp: chrono::Utc::now(),
         };
         assert_eq!(

@@ -462,7 +462,9 @@ fn cmp09_key_rotation_audited_and_old_key_still_decrypts() {
     let crypto = XChaCha20Crypto::new();
     let (nonce, ciphertext) = crypto.encrypt(b"legacy-payload", &key_v1).unwrap();
 
-    writer.log_key_rotation("v1", "v2").expect("rotation audit");
+    writer
+        .log_key_rotation("prod", "v1", "v2", 0)
+        .expect("rotation audit");
 
     // 旧版本密钥仍解旧数据;新版本密钥管新数据。
     let old_plain = crypto

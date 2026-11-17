@@ -151,8 +151,12 @@ pub enum AuditEvent {
         timestamp: DateTime<Utc>,
     },
     KeyRotation {
+        /// 发生轮换的 KeyRing 标识。
+        key_id: String,
         old_version: String,
         new_version: String,
+        /// 本次轮换改写的密文字段数（惰性重加密落地前恒为 0）。
+        fields_reencrypted: usize,
         timestamp: DateTime<Utc>,
     },
     Decrypt {
@@ -581,10 +585,18 @@ impl AuditWriter {
         })
     }
 
-    pub fn log_key_rotation(&self, old_ver: &str, new_ver: &str) -> ConfigResult<()> {
+    pub fn log_key_rotation(
+        &self,
+        key_id: &str,
+        old_ver: &str,
+        new_ver: &str,
+        fields_reencrypted: usize,
+    ) -> ConfigResult<()> {
         self.write(AuditEvent::KeyRotation {
+            key_id: key_id.to_string(),
             old_version: old_ver.to_string(),
             new_version: new_ver.to_string(),
+            fields_reencrypted,
             timestamp: Utc::now(),
         })
     }
@@ -884,7 +896,7 @@ mod tests {
         writer.log_load("source").unwrap();
         writer.log_key_access("some.key").unwrap();
         writer.log_decrypt("some.field", true).unwrap();
-        writer.log_key_rotation("v1", "v2").unwrap();
+        writer.log_key_rotation("k", "v1", "v2", 0).unwrap();
     }
 
     #[test]
@@ -1445,6 +1457,22 @@ mod tests {
     }
 
     #[test]
+    fn test_key_rotation_event_serializes_new_fields() {
+        let event = AuditEvent::KeyRotation {
+            key_id: "prod".to_string(),
+            old_version: "v1".to_string(),
+            new_version: "v2".to_string(),
+            fields_reencrypted: 3,
+            timestamp: Utc::now(),
+        };
+        let json = serde_json::to_string(&event).expect("serialize");
+        assert!(json.contains("\"key_id\""), "got: {}", json);
+        assert!(json.contains("\"fields_reencrypted\""), "got: {}", json);
+        assert!(json.contains("\"prod\""), "got: {}", json);
+        assert!(json.contains("\"fields_reencrypted\":3"), "got: {}", json);
+    }
+
+    #[test]
     fn test_event_timestamp_accessor_covers_all_variants() {
         let ts = chrono::Utc::now();
         let events = vec![
@@ -1453,8 +1481,10 @@ mod tests {
                 timestamp: ts,
             },
             AuditEvent::KeyRotation {
+                key_id: "k".into(),
                 old_version: "v1".into(),
                 new_version: "v2".into(),
+                fields_reencrypted: 0,
                 timestamp: ts,
             },
             AuditEvent::Decrypt {
