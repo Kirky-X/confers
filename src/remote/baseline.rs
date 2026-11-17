@@ -19,7 +19,9 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
-use crate::types::ConfigValue;
+use super::poll::PolledSource;
+use crate::error::{ConfigError, ConfigResult};
+use crate::types::{AnnotatedValue, ConfigValue};
 
 /// EMA smoothing factor for the latency average (and the deviation/jitter
 /// average). 0.3 keeps the estimate responsive while smoothing single-poll
@@ -87,6 +89,75 @@ impl SourceBaseline {
     pub fn ready(&self, min_samples: u64) -> bool {
         self.samples >= min_samples
     }
+
+    /// Judge one poll against this baseline (T005): at most one anomaly,
+    /// priority `SchemaDrift` > `SizeOutOfRange` > `LatencySpike` — a
+    /// structural change invalidates the size/latency comparison, and a
+    /// size anomaly makes the latency reading less meaningful. Returns the
+    /// anomaly class plus a human-readable deviation for logs and audits.
+    pub(crate) fn judge(
+        &self,
+        latency: Duration,
+        payload_len: usize,
+        fp: [u8; 32],
+        policy: &BaselinePolicy,
+    ) -> Option<(AnomalyType, String)> {
+        if fp != self.schema_hash {
+            return Some((
+                AnomalyType::SchemaDrift,
+                format!(
+                    "structure fingerprint changed (expected {}, got {})",
+                    hex_short(&self.schema_hash),
+                    hex_short(&fp)
+                ),
+            ));
+        }
+
+        let (min, max) = {
+            let factor = (policy.size_tolerance_pct as f64) / 100.0;
+            let lo = (self.size_min as f64 * (1.0 - factor)) as usize;
+            let hi = ((self.size_max as f64 * (1.0 + factor)) as usize).saturating_add(1);
+            (lo, hi)
+        };
+        if payload_len < min || payload_len > max {
+            return Some((
+                AnomalyType::SizeOutOfRange,
+                format!("payload {payload_len}B vs tolerated [{min}B, {max}B]"),
+            ));
+        }
+
+        let latency_ms = latency.as_secs_f64() * 1000.0;
+        let ceiling_ms =
+            self.ema_latency_ms * policy.latency_spike_multiplier + self.latency_jitter_ms;
+        if latency_ms > ceiling_ms {
+            let ratio = if ceiling_ms > 0.0 {
+                format!(
+                    " (x{:.0})",
+                    latency_ms / self.ema_latency_ms.max(f64::MIN_POSITIVE)
+                )
+            } else {
+                String::new()
+            };
+            return Some((
+                AnomalyType::LatencySpike,
+                format!(
+                    "latency {latency_ms:.0}ms vs ema {:.0}ms{ratio}",
+                    self.ema_latency_ms
+                ),
+            ));
+        }
+
+        None
+    }
+}
+
+/// Short hex form of a fingerprint (first 8 bytes) for deviation strings.
+fn hex_short(hash: &[u8; 32]) -> String {
+    hash.iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 /// Structure fingerprint of a [`ConfigValue`] tree: a canonical DFS walk
@@ -198,6 +269,129 @@ pub enum AnomalyType {
     SizeOutOfRange,
     /// The latency exceeded `ema * multiplier + jitter`.
     LatencySpike,
+}
+
+/// A [`PolledSource`] decorator that learns each source's behavioral
+/// baseline ([`SourceBaseline`], one bucket per [`SourceId`] in a
+/// [`dashmap::DashMap`]) and classifies every poll against the
+/// [`BaselinePolicy`].
+///
+/// Judgment rules:
+/// - the inner source's own `Err` passes through untouched (a failing
+///   source must not shift the baseline);
+/// - `policy.enabled == false` or a still-learning baseline (window not
+///   full) only observes and passes the poll through;
+/// - a classified anomaly with `fail_closed` fails the poll with
+///   [`ConfigError::InvalidValue { key: "remote.baseline" }`] **without**
+///   observing it; with `fail_closed == false` the poll is observed and
+///   passes through (record/audit only).
+///
+/// `payload_len` is the JSON serialization length of the polled tree — a
+/// deterministic proxy for the remote payload size, computed from the same
+/// value every consumer sees.
+pub struct BaselinedSource<S: PolledSource> {
+    inner: S,
+    policy: BaselinePolicy,
+    /// One learning bucket per polled source.
+    baselines: std::sync::Arc<dashmap::DashMap<crate::types::SourceId, SourceBaseline>>,
+}
+
+impl<S: PolledSource> BaselinedSource<S> {
+    /// Decorate `inner` with the given policy.
+    pub fn new(inner: S, policy: BaselinePolicy) -> Self {
+        Self {
+            inner,
+            policy,
+            baselines: std::sync::Arc::new(dashmap::DashMap::new()),
+        }
+    }
+
+    /// The learned baseline for a source, if any polls were observed.
+    pub fn baseline(&self, source_id: &crate::types::SourceId) -> Option<SourceBaseline> {
+        self.baselines.get(source_id).map(|b| b.value().clone())
+    }
+
+    /// The configured policy (introspection for tests and diagnostics).
+    pub fn policy(&self) -> &BaselinePolicy {
+        &self.policy
+    }
+
+    /// Measure the payload size for baseline purposes.
+    fn payload_len(value: &AnnotatedValue) -> usize {
+        serde_json::to_vec(&value.inner)
+            .map(|bytes| bytes.len())
+            .unwrap_or(0)
+    }
+}
+
+#[async_trait::async_trait]
+impl<S: PolledSource> PolledSource for BaselinedSource<S> {
+    async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+        let start = std::time::Instant::now();
+        // Inner failures pass through untouched: a broken source is a real
+        // outage signal, not an anomaly against a baseline built on success.
+        let value = self.inner.poll().await?;
+        let latency = start.elapsed();
+        let fp = schema_fingerprint(&value.inner);
+        let payload_len = Self::payload_len(&value);
+
+        let sid = self.inner.source_id();
+        let mut entry = self.baselines.entry(sid).or_default();
+        let baseline = entry.value_mut();
+
+        let anomaly = if self.policy.enabled && baseline.ready(self.policy.min_samples) {
+            baseline.judge(latency, payload_len, fp, &self.policy)
+        } else {
+            None
+        };
+        if let Some((kind, deviation)) = &anomaly
+            && self.policy.fail_closed
+        {
+            // Fail closed WITHOUT observing: an anomalous poll must not
+            // shift the baseline it just deviated from.
+            return Err(ConfigError::InvalidValue {
+                key: "remote.baseline".into(),
+                expected_type: format!("{} within baseline", kind_json(*kind)),
+                message: format!("remote source anomaly: {deviation}"),
+            });
+        }
+        if let Some((kind, deviation)) = &anomaly {
+            // Fail-open: record and let the value through.
+            log_anomaly_warning(*kind, deviation);
+        }
+
+        baseline.observe(latency, payload_len, fp);
+        Ok(value)
+    }
+
+    fn poll_interval(&self) -> Option<Duration> {
+        self.inner.poll_interval()
+    }
+
+    fn source_id(&self) -> crate::types::SourceId {
+        self.inner.source_id()
+    }
+}
+
+fn kind_json(kind: AnomalyType) -> &'static str {
+    match kind {
+        AnomalyType::SchemaDrift => "schema_drift",
+        AnomalyType::SizeOutOfRange => "size_out_of_range",
+        AnomalyType::LatencySpike => "latency_spike",
+    }
+}
+
+fn log_anomaly_warning(kind: AnomalyType, deviation: &str) {
+    log::warn!(
+        "{}",
+        crate::i18n::tr_args(
+            "log-remote-baseline-anomaly",
+            &[
+                ("kind", kind_json(kind).to_string()),
+                ("deviation", deviation.to_string()),
+            ]
+        )
+    );
 }
 
 #[cfg(test)]
@@ -378,5 +572,302 @@ mod tests {
         );
         let back: AnomalyType = serde_json::from_str("\"schema_drift\"").unwrap();
         assert_eq!(back, AnomalyType::SchemaDrift);
+    }
+
+    // ---- T005: judgment logic ----
+
+    fn learned_baseline() -> SourceBaseline {
+        // 5 fast polls of ~100-byte payloads with one shape.
+        let mut b = SourceBaseline::default();
+        let fp = schema_fingerprint(&map(vec![("a", annotated(ConfigValue::string("x")))]));
+        for _ in 0..5 {
+            let (d, n) = sample(10.0, 100);
+            b.observe(d, n, fp);
+        }
+        b
+    }
+
+    #[test]
+    fn schema_drift_is_the_minimal_trigger() {
+        let b = learned_baseline();
+        let drifted = schema_fingerprint(&map(vec![
+            ("a", annotated(ConfigValue::string("x"))),
+            ("new", annotated(ConfigValue::uint(1))),
+        ]));
+        let (d, n) = sample(10.0, 100);
+        let policy = BaselinePolicy::default();
+        let (kind, deviation) = b.judge(d, n, drifted, &policy).expect("drift fires");
+        assert_eq!(kind, AnomalyType::SchemaDrift);
+        assert!(deviation.contains("fingerprint"), "{deviation}");
+    }
+
+    #[test]
+    fn size_out_of_range_minimal_trigger() {
+        let b = learned_baseline();
+        let fp = schema_fingerprint(&map(vec![("a", annotated(ConfigValue::string("x")))]));
+        let (d, _) = sample(10.0, 5000); // tolerated ceiling: 100 * (1+3.0) = 400 (+1)
+        let policy = BaselinePolicy::default();
+        let (kind, deviation) = b.judge(d, 5000, fp, &policy).expect("size fires");
+        assert_eq!(kind, AnomalyType::SizeOutOfRange);
+        assert!(deviation.contains("5000B"), "{deviation}");
+    }
+
+    #[test]
+    fn latency_spike_minimal_trigger() {
+        let b = learned_baseline();
+        let fp = schema_fingerprint(&map(vec![("a", annotated(ConfigValue::string("x")))]));
+        // ema 10ms, ceiling 10*10.0 + ~0 jitter ≈ 100ms → 1000ms fires.
+        let (d, n) = sample(1000.0, 100);
+        let policy = BaselinePolicy::default();
+        let (kind, deviation) = b.judge(d, n, fp, &policy).expect("spike fires");
+        assert_eq!(kind, AnomalyType::LatencySpike);
+        assert!(deviation.contains("x"), "ratio in deviation: {deviation}");
+    }
+
+    #[test]
+    fn drift_masks_size_and_spike_priority() {
+        let b = learned_baseline();
+        let drifted = schema_fingerprint(&map(vec![("other", annotated(ConfigValue::null()))]));
+        // Latency AND size both out of range too — drift must win alone.
+        let (d, _) = sample(5000.0, 999_999);
+        let policy = BaselinePolicy::default();
+        let (kind, _) = b
+            .judge(d, 999_999, drifted, &policy)
+            .expect("anomaly fires");
+        assert_eq!(kind, AnomalyType::SchemaDrift, "drift masks the rest");
+    }
+
+    #[test]
+    fn in_band_poll_yields_no_anomaly() {
+        let b = learned_baseline();
+        let fp = schema_fingerprint(&map(vec![("a", annotated(ConfigValue::string("x")))]));
+        let (d, n) = sample(12.0, 150); // within ceiling and interval
+        let policy = BaselinePolicy::default();
+        assert!(b.judge(d, n, fp, &policy).is_none());
+    }
+
+    // ---- T006: BaselinedSource decorator ----
+
+    /// Programmable mock: each `poll` sleeps `latency_ms` and returns the
+    /// current payload (structure can be swapped mid-test).
+    struct MockSource {
+        latency_ms: u64,
+        payload: std::sync::Mutex<ConfigValue>,
+        id: crate::types::SourceId,
+    }
+
+    impl MockSource {
+        fn new(id: &str, payload: ConfigValue) -> Self {
+            Self {
+                latency_ms: 1,
+                payload: std::sync::Mutex::new(payload),
+                id: crate::types::SourceId::new(id),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl PolledSource for MockSource {
+        async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+            tokio::time::sleep(Duration::from_millis(self.latency_ms)).await;
+            let payload = self.payload.lock().unwrap().clone();
+            Ok(AnnotatedValue::new(
+                payload,
+                crate::types::SourceId::default(),
+                "",
+            ))
+        }
+
+        fn poll_interval(&self) -> Option<Duration> {
+            Some(Duration::from_secs(30))
+        }
+
+        fn source_id(&self) -> crate::types::SourceId {
+            self.id.clone()
+        }
+    }
+
+    const MOCK_SHAPE: fn() -> ConfigValue =
+        || map(vec![("a", annotated(ConfigValue::string("x")))]);
+
+    fn drifted_shape() -> ConfigValue {
+        map(vec![
+            ("a", annotated(ConfigValue::string("x"))),
+            ("b", annotated(ConfigValue::uint(1))),
+        ])
+    }
+
+    #[tokio::test]
+    async fn fail_closed_rejects_without_observing() {
+        let source = BaselinedSource::new(
+            MockSource::new("mock-fc", MOCK_SHAPE()),
+            BaselinePolicy::default(),
+        );
+        let sid = source.source_id();
+
+        // Learning window: 5 accepted polls.
+        for _ in 0..5 {
+            source.poll().await.expect("in-window polls pass");
+        }
+        assert_eq!(source.baseline(&sid).unwrap().samples, 5);
+
+        // Structural mutation → fail_closed Err, no observation.
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        let err = source.poll().await.expect_err("drift must fail closed");
+        assert!(err.to_string().contains("remote.baseline"), "{err}");
+        assert_eq!(
+            source.baseline(&sid).unwrap().samples,
+            5,
+            "the rejected poll must not join the baseline"
+        );
+    }
+
+    #[tokio::test]
+    async fn learning_window_passes_drift_through() {
+        let source = BaselinedSource::new(
+            MockSource::new("mock-window", MOCK_SHAPE()),
+            BaselinePolicy {
+                min_samples: 5,
+                ..BaselinePolicy::default()
+            },
+        );
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        // Only 2 samples: window not full → drift passes through.
+        for _ in 0..2 {
+            source
+                .poll()
+                .await
+                .expect("in-window polls pass regardless of shape");
+        }
+        let sid = source.source_id();
+        assert_eq!(source.baseline(&sid).unwrap().samples, 2);
+    }
+
+    #[tokio::test]
+    async fn disabled_policy_only_observes() {
+        let source = BaselinedSource::new(
+            MockSource::new("mock-disabled", MOCK_SHAPE()),
+            BaselinePolicy {
+                enabled: false,
+                ..BaselinePolicy::default()
+            },
+        );
+        // Learn 5 first, then drift: disabled → pass through.
+        for _ in 0..5 {
+            source.poll().await.expect("learning polls pass");
+        }
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        source.poll().await.expect("disabled policy never rejects");
+        let sid = source.source_id();
+        assert_eq!(source.baseline(&sid).unwrap().samples, 6, "still observed");
+    }
+
+    #[tokio::test]
+    async fn fail_open_records_and_passes() {
+        let source = BaselinedSource::new(
+            MockSource::new("mock-open", MOCK_SHAPE()),
+            BaselinePolicy {
+                fail_closed: false,
+                ..BaselinePolicy::default()
+            },
+        );
+        for _ in 0..5 {
+            source.poll().await.expect("learning polls pass");
+        }
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        source
+            .poll()
+            .await
+            .expect("fail_open lets the drifted poll through");
+        let sid = source.source_id();
+        assert_eq!(
+            source.baseline(&sid).unwrap().samples,
+            6,
+            "fail_open anomaly is observed too"
+        );
+    }
+
+    #[tokio::test]
+    async fn inner_err_passes_through_without_touching_baseline() {
+        struct ErrSource;
+
+        #[async_trait::async_trait]
+        impl PolledSource for ErrSource {
+            async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+                Err(ConfigError::InvalidValue {
+                    key: "mock".into(),
+                    expected_type: "response".into(),
+                    message: "boom".into(),
+                })
+            }
+
+            fn poll_interval(&self) -> Option<Duration> {
+                None
+            }
+
+            fn source_id(&self) -> crate::types::SourceId {
+                crate::types::SourceId::new("mock-err")
+            }
+        }
+
+        let source = BaselinedSource::new(ErrSource, BaselinePolicy::default());
+        let err = source.poll().await.expect_err("inner Err passes through");
+        assert!(err.to_string().contains("boom"), "{err}");
+        let sid = source.source_id();
+        assert!(
+            source.baseline(&sid).is_none(),
+            "failed polls must not create or touch a baseline"
+        );
+    }
+
+    #[tokio::test]
+    async fn poll_interval_and_source_id_pass_through() {
+        let inner = MockSource::new("mock-ids", MOCK_SHAPE());
+        let expected_interval = inner.poll_interval();
+        let expected_id = inner.source_id();
+        let source = BaselinedSource::new(inner, BaselinePolicy::default());
+        assert_eq!(source.poll_interval(), expected_interval);
+        assert_eq!(source.source_id(), expected_id);
+    }
+
+    #[tokio::test]
+    async fn latency_spike_fails_closed() {
+        let mut source = BaselinedSource::new(
+            MockSource::new("mock-spike", MOCK_SHAPE()),
+            BaselinePolicy {
+                latency_spike_multiplier: 5.0,
+                ..BaselinePolicy::default()
+            },
+        );
+        for _ in 0..5 {
+            source.poll().await.expect("fast learning polls pass");
+        }
+        // Now 100x slower than the ~1ms EMA → spike.
+        source.inner.latency_ms = 100;
+        let err = source
+            .poll()
+            .await
+            .expect_err("a latency spike must fail closed");
+        assert!(err.to_string().contains("remote.baseline"), "{err}");
     }
 }

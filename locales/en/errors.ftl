@@ -205,6 +205,7 @@ log-hot-reload-loader-panicked = hot reload loader panicked: { $reason }
 log-hot-reload-zeroized = zeroize-on-replace scrubbed { $count } sensitive value(s) from the previous configuration tree
 log-hot-reload-audit-write-failed = reload audit event write failed (non-fatal): { $reason }
 log-hot-reload-audit-writer-missing = security policy audit_on_reload is enabled but no AuditWriter was injected; reload events will not be recorded
+log-remote-baseline-anomaly = remote source baseline anomaly ({ $kind }): { $deviation }
 log-watcher-task-abnormal-shutdown = watcher task terminated abnormally during shutdown: { $reason }
 log-nats-consumer-error = NATS config-bus consumer error (bus may be offline; the client will reconnect automatically): { $message }
 log-inmemory-bus-subscriber-lagged = InMemoryBus subscriber lagged; { $skipped } configuration change event(s) were dropped

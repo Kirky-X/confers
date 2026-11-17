@@ -97,3 +97,8 @@ pub use k8s::{
 #[cfg(feature = "nacos")]
 pub use nacos::{DEFAULT_NACOS_GROUP, NacosSource, NacosSourceBuilder};
 pub use poll::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
+
+#[cfg(feature = "remote-baseline")]
+pub use baseline::{
+    AnomalyType, BaselinePolicy, BaselinedSource, SourceAnomaly, SourceBaseline, schema_fingerprint,
+};

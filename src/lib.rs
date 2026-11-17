@@ -280,6 +280,11 @@ pub use canary::{
 #[cfg(feature = "remote")]
 pub use remote::{HttpPolledSource, HttpPolledSourceBuilder, PolledSource};
 
+#[cfg(feature = "remote-baseline")]
+pub use remote::{
+    AnomalyType, BaselinePolicy, BaselinedSource, SourceAnomaly, SourceBaseline, schema_fingerprint,
+};
+
 #[cfg(feature = "security")]
 pub use security::hot_swap::{SecurityPolicy, SnapshotSensitiveMode};
 
