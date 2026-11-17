@@ -161,7 +161,7 @@ fn decrypt_failure_marker(reason: &str) -> serde_json::Value {
 /// Decode `CONFERS_MASTER_KEY`: hex-encoded 32 bytes or 32-byte ASCII
 /// (mirrors the CLI doctor so one env var serves both paths).
 #[cfg(feature = "encryption")]
-fn resolve_master_key() -> Option<Vec<u8>> {
+pub(crate) fn resolve_master_key() -> Option<Vec<u8>> {
     let raw = std::env::var(MASTER_KEY_ENV).ok()?;
     let key = decode_master_key_bytes(raw.trim())?;
     // 与 EnvKeyProvider 同源的弱密钥防护 —— 常量字节主密钥不因走了

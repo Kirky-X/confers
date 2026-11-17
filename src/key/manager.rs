@@ -37,6 +37,9 @@ pub struct KeyManager {
     key_rings: HashMap<String, KeyRing>,
     schedules: HashMap<String, KeyRotationSchedule>,
     default_key_id: String,
+    /// 轮换策略（`reencrypt_envelope` 的 Lazy/时窗判定来源）。
+    #[serde(default)]
+    rotation_policy: crate::key::KeyRotationPolicy,
     /// 轮换审计出口端口；未注入时为 Noop（零行为变化）。
     /// serde 跳过：反序列化得到的实例回退到 Noop 端口。
     #[cfg(feature = "audit")]
@@ -118,9 +121,19 @@ impl KeyManager {
             key_rings: HashMap::new(),
             schedules: HashMap::new(),
             default_key_id: "default".to_string(),
+            rotation_policy: crate::key::KeyRotationPolicy::default(),
             #[cfg(feature = "audit")]
             audit_port: std::sync::Arc::new(crate::key::audit_port::NoopRotationAudit),
         })
+    }
+
+    /// 设置轮换策略（builder 风格）。
+    ///
+    /// `reencrypt_envelope` 依据此策略判定 `reencrypt_read` 与
+    /// `dual_key_window_secs`；缺省为 `KeyRotationPolicy::default()`。
+    pub fn with_rotation_policy(mut self, policy: crate::key::KeyRotationPolicy) -> Self {
+        self.rotation_policy = policy;
+        self
     }
 
     /// 注入轮换审计出口端口（builder 风格）。
@@ -570,6 +583,135 @@ impl KeyManager {
 
     pub fn get_default_key_id(&self) -> &str {
         &self.default_key_id
+    }
+
+    /// 惰性重加密助手：把旧版本信封改写为当前 Active 版本。
+    ///
+    /// # 语义（四分支）
+    ///
+    /// - 信封格式非法（非 `enc:v1:<key_version>:<payload>` 形态）→
+    ///   `Err(ConfigError::InvalidValue)`；
+    /// - `key_version` 仍为默认 KeyRing 的 Active 版本、策略为 `Never`、或
+    ///   轮换时间超出 `dual_key_window_secs` → `Ok(None)`（原串不改写，
+    ///   不产生审计事件）；
+    /// - 版本已退役且在时窗内、策略为 `Lazy` → `Ok(Some(new_envelope))`，
+    ///   新信封的 `key_version` 为 Active 版本，可用同一 master key + 同一
+    ///   `field_path` 解密还原原文，并经端口发射一条 `AuditEvent::Decrypt`。
+    ///
+    /// master key 与加载管线同源：`CONFERS_MASTER_KEY`（hex 32 字节或 32
+    /// 字节 ASCII），见 [`crate::field_crypto::MASTER_KEY_ENV`]。
+    #[cfg(feature = "encryption")]
+    pub fn reencrypt_envelope(
+        &self,
+        field_path: &str,
+        envelope: &str,
+    ) -> crate::error::ConfigResult<Option<String>> {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::STANDARD as BASE64;
+
+        let parsed = crate::envelope::EncryptedEnvelope::parse(envelope).ok_or_else(|| {
+            ConfigError::InvalidValue {
+                key: "envelope".to_string(),
+                expected_type: "enc:v1:<key_version>:<payload>".to_string(),
+                message: "value is not a parseable encrypted envelope".to_string(),
+            }
+        })?;
+
+        let key_ring =
+            self.key_rings
+                .get(&self.default_key_id)
+                .ok_or_else(|| ConfigError::ParseError {
+                    format: "key".to_string(),
+                    message: format!("Key ring '{}' not found", self.default_key_id),
+                    location: None,
+                    source: None,
+                })?;
+
+        let active_version = format!("v{}", key_ring.current_version);
+        if parsed.key_version == active_version {
+            return Ok(None);
+        }
+        if self.rotation_policy.reencrypt_read != crate::key::ReencryptPolicy::Lazy {
+            return Ok(None);
+        }
+        // 退役起点取最近一次轮换时间；无从判定时（未轮换过）不改写。
+        let Some(rotated_at) = key_ring.last_rotated_at else {
+            return Ok(None);
+        };
+        if now_timestamp().saturating_sub(rotated_at) > self.rotation_policy.dual_key_window_secs {
+            return Ok(None);
+        }
+
+        let Some(master_key) = crate::field_crypto::resolve_master_key() else {
+            return Err(ConfigError::InvalidValue {
+                key: "master_key".to_string(),
+                expected_type: "32-byte key via CONFERS_MASTER_KEY".to_string(),
+                message: "CONFERS_MASTER_KEY is not set to a usable 32-byte master key".to_string(),
+            });
+        };
+
+        // 用旧版本派生密钥解开原文（与 field_crypto 解密路径同一套原语）。
+        let old_key =
+            crate::secret::crypto::derive_field_key(&master_key, field_path, &parsed.key_version)
+                .map_err(|e| ConfigError::InvalidValue {
+                key: "envelope.key_version".to_string(),
+                expected_type: "derivable field key".to_string(),
+                message: format!("field key derivation failed: {}", e),
+            })?;
+        let blob =
+            BASE64
+                .decode(parsed.payload.as_bytes())
+                .map_err(|e| ConfigError::InvalidValue {
+                    key: "envelope.payload".to_string(),
+                    expected_type: "base64(nonce || ciphertext)".to_string(),
+                    message: format!("payload is not valid base64: {}", e),
+                })?;
+        if blob.len() < 24 {
+            return Err(ConfigError::InvalidValue {
+                key: "envelope.payload".to_string(),
+                expected_type: "base64(nonce || ciphertext)".to_string(),
+                message: "payload shorter than a 24-byte nonce".to_string(),
+            });
+        }
+        let (nonce, ciphertext) = blob.split_at(24);
+        let plaintext = crate::secret::crypto::XChaCha20Crypto::new()
+            .decrypt(nonce, ciphertext, old_key.as_slice())
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "envelope.payload".to_string(),
+                expected_type: "authentic ciphertext".to_string(),
+                message: format!("reencrypt decrypt failed: {}", e),
+            })?;
+
+        // 用 Active 版本派生密钥重新加密（复用 field_crypto 的 encrypt 路径）。
+        let new_key =
+            crate::secret::crypto::derive_field_key(&master_key, field_path, &active_version)
+                .map_err(|e| ConfigError::InvalidValue {
+                    key: "envelope.key_version".to_string(),
+                    expected_type: "derivable field key".to_string(),
+                    message: format!("field key derivation failed: {}", e),
+                })?;
+        let (new_nonce, new_ciphertext) = crate::secret::crypto::XChaCha20Crypto::new()
+            .encrypt(&plaintext, new_key.as_slice())
+            .map_err(|e| ConfigError::InvalidValue {
+                key: "envelope.payload".to_string(),
+                expected_type: "encryptable plaintext".to_string(),
+                message: format!("reencrypt encrypt failed: {}", e),
+            })?;
+        let mut new_blob = new_nonce;
+        new_blob.extend_from_slice(&new_ciphertext);
+        let new_envelope =
+            crate::envelope::EncryptedEnvelope::new(&active_version, BASE64.encode(&new_blob))
+                .to_envelope_string();
+
+        #[cfg(feature = "audit")]
+        self.audit_port
+            .record(crate::impl_::audit::AuditEvent::Decrypt {
+                field: field_path.to_string(),
+                success: true,
+                timestamp: chrono::Utc::now(),
+            });
+
+        Ok(Some(new_envelope))
     }
 
     pub fn set_default_key_id(&mut self, key_id: &str) -> Result<(), ConfigError> {
@@ -1204,6 +1346,153 @@ mod tests {
         assert_eq!(status.rotation_interval_days, 30);
         assert!(!status.is_overdue);
         assert!(status.auto_rotate);
+    }
+
+    /// 按加载管线同款原语构造信封（field 派生密钥 + 随机 nonce）。
+    #[cfg(feature = "encryption")]
+    fn make_field_envelope(
+        master: &[u8],
+        field: &str,
+        key_version: &str,
+        plaintext: &str,
+    ) -> String {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::STANDARD as BASE64;
+
+        let field_key =
+            crate::secret::crypto::derive_field_key(master, field, key_version).unwrap();
+        let (nonce, ct) = crate::secret::crypto::XChaCha20Crypto::new()
+            .encrypt(plaintext.as_bytes(), field_key.as_slice())
+            .unwrap();
+        let mut blob = nonce;
+        blob.extend_from_slice(&ct);
+        crate::envelope::EncryptedEnvelope::new(key_version, BASE64.encode(&blob))
+            .to_envelope_string()
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    #[serial_test::serial]
+    fn test_reencrypt_envelope_four_branches() {
+        let master: [u8; 32] = std::array::from_fn(|i| (i as u8) ^ 0x33);
+        unsafe { std::env::set_var(crate::field_crypto::MASTER_KEY_ENV, hex::encode(master)) };
+
+        let lazy_policy = crate::key::KeyRotationPolicy {
+            reencrypt_read: crate::key::ReencryptPolicy::Lazy,
+            ..crate::key::KeyRotationPolicy::default()
+        };
+
+        // 分支 1：key_version 仍为 Active → Ok(None)。
+        let mut km = KeyManager::new()
+            .unwrap()
+            .with_rotation_policy(lazy_policy.clone());
+        km.initialize(&master, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+        let env_v1 = make_field_envelope(&master, "api_key", "v1", "tok-abc");
+        assert_eq!(
+            km.reencrypt_envelope("api_key", &env_v1).expect("branch 1"),
+            None,
+            "active version must not be rewritten"
+        );
+
+        // 分支 3：策略 Never（默认策略）→ Ok(None)。
+        let mut km_never = KeyManager::new().unwrap();
+        km_never
+            .initialize(&master, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+        km_never
+            .rotate_key(&master, None, "u".to_string(), None)
+            .expect("rotate");
+        assert_eq!(
+            km_never
+                .reencrypt_envelope("api_key", &env_v1)
+                .expect("branch 3"),
+            None,
+            "Never policy must not rewrite"
+        );
+
+        // 分支 2：版本退役 + Lazy + 时窗内 → Ok(Some)，roundtrip 还原原文。
+        km.rotate_key(&master, None, "u".to_string(), None)
+            .expect("rotate");
+        let rewritten = km
+            .reencrypt_envelope("api_key", &env_v1)
+            .expect("branch 2")
+            .expect("lazy rewrite must return a new envelope");
+        let parsed = crate::envelope::EncryptedEnvelope::parse(&rewritten).unwrap();
+        assert_eq!(
+            parsed.key_version, "v2",
+            "rewritten envelope uses active version"
+        );
+
+        // 新信封用 Active 版本密钥 + 同一 field_path 解密还原原文。
+        let field_key = crate::secret::crypto::derive_field_key(&master, "api_key", "v2").unwrap();
+        use base64::Engine as _;
+        use base64::engine::general_purpose::STANDARD as BASE64;
+        let blob = BASE64.decode(parsed.payload.as_bytes()).unwrap();
+        let (nonce, ct) = blob.split_at(24);
+        let plaintext = crate::secret::crypto::XChaCha20Crypto::new()
+            .decrypt(nonce, ct, field_key.as_slice())
+            .expect("active key must decrypt rewritten envelope");
+        assert_eq!(plaintext, b"tok-abc".to_vec().into());
+
+        // 时窗外：把最近轮换时间拨回 20 天前（默认时窗 14 天）→ Ok(None)。
+        let ring = km.key_rings.get_mut("prod").unwrap();
+        ring.last_rotated_at = Some(now_timestamp().saturating_sub(20 * SECONDS_PER_DAY));
+        assert_eq!(
+            km.reencrypt_envelope("api_key", &env_v1)
+                .expect("window branch"),
+            None,
+            "out-of-window envelope must not be rewritten"
+        );
+
+        // 分支 4：非法格式 → Err(InvalidValue)。
+        let err = km
+            .reencrypt_envelope("api_key", "not-an-envelope")
+            .unwrap_err();
+        assert!(err.to_string().contains("envelope"), "got: {}", err);
+
+        unsafe { std::env::remove_var(crate::field_crypto::MASTER_KEY_ENV) };
+    }
+
+    #[cfg(all(feature = "encryption", feature = "audit"))]
+    #[test]
+    #[serial_test::serial]
+    fn test_reencrypt_envelope_none_paths_emit_no_audit_event() {
+        let master: [u8; 32] = std::array::from_fn(|i| (i as u8) ^ 0x44);
+        unsafe { std::env::set_var(crate::field_crypto::MASTER_KEY_ENV, hex::encode(master)) };
+
+        let events = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+        let lazy_policy = crate::key::KeyRotationPolicy {
+            reencrypt_read: crate::key::ReencryptPolicy::Lazy,
+            ..crate::key::KeyRotationPolicy::default()
+        };
+        let mut km = KeyManager::new()
+            .unwrap()
+            .with_rotation_policy(lazy_policy)
+            .with_audit_port(std::sync::Arc::new(CapturingPort(events.clone())));
+        km.initialize(&master, "prod".to_string(), "team".to_string())
+            .expect("initialize");
+        km.rotate_key(&master, None, "u".to_string(), None)
+            .expect("rotate");
+
+        // rotate_key 自身发射 1 条 KeyRotation 事件；此前的 Ok(None) 不发射。
+        let after_rotate = events.read().expect("capture lock").len();
+        assert_eq!(after_rotate, 1);
+
+        let env_v3_unknown_active = make_field_envelope(&master, "api_key", "v1", "tok");
+        assert!(
+            km.reencrypt_envelope("api_key", &env_v3_unknown_active)
+                .expect("lazy rewrite")
+                .is_some()
+        );
+        let captured = events.read().expect("capture lock").clone();
+        assert_eq!(captured.len(), 2, "rewrite adds exactly one Decrypt event");
+        assert!(matches!(
+            &captured[1],
+            crate::impl_::audit::AuditEvent::Decrypt { field, success: true, .. } if field == "api_key"
+        ));
+
+        unsafe { std::env::remove_var(crate::field_crypto::MASTER_KEY_ENV) };
     }
 
     #[test]
