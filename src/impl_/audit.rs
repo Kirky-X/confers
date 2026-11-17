@@ -660,32 +660,66 @@ impl Drop for AuditWriter {
     }
 }
 
-/// Verify the HMAC hash chain of an audit file.
+/// Detailed outcome of an accumulative audit-chain verification.
 ///
-/// Returns `Ok(true)` only when the file starts with a `chain_header` record
-/// and every event line's stored `prev_hash` matches the previous entry's
-/// `hmac` (or the header salt for the first event) and its stored `hmac`
-/// equals `HMAC-SHA256(salt, prev_hash || canonical_event_bytes)`. Any
-/// tampered byte, deleted event, reordered events, or truncated chain makes
-/// the verification fail with `Ok(false)`; `chain_footer` lines are metadata
-/// and are skipped. `Ok(false)` is also returned for a missing file;
-/// `Err` is reserved for IO failures other than a missing file.
-pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
-    verify_audit_chain_with_key(path, None)
+/// Unlike the boolean [`verify_audit_chain`], the report keeps scanning
+/// after the first broken point so callers learn WHERE and HOW MUCH of
+/// the chain is damaged. Field semantics:
+///
+/// - `total_entries`: number of event lines scanned (the `chain_header`
+///   and `chain_footer` metadata lines are not counted).
+/// - `chain_intact`: `true` only when the header is well-formed, every
+///   event line's `prev_hash` continues the chain, no suspected deletion
+///   gaps exist, and every event line's HMAC verifies.
+/// - `hmac_valid_count`: number of event lines whose HMAC verified.
+/// - `first_broken_at`: 1-based sequence number (after skipping the
+///   header) of the first event line that failed verification; `None`
+///   when the chain is intact or the file is missing/empty.
+/// - `gaps`: closed 1-based sequence intervals of events suspected to
+///   have been deleted between two surviving events.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ChainVerificationReport {
+    pub total_entries: usize,
+    pub chain_intact: bool,
+    pub hmac_valid_count: usize,
+    pub first_broken_at: Option<usize>,
+    pub gaps: Vec<(usize, usize)>,
 }
 
-/// Like [`verify_audit_chain`], but verifies the chain MAC against an
+/// Verify the HMAC hash chain of an audit file and report every break.
+///
+/// Accumulative counterpart of [`verify_audit_chain_with_key`]: instead of
+/// stopping at the first broken link, the scan continues so the report can
+/// answer "where did the chain break and how much survived". After a
+/// `prev_hash` mismatch the verifier resyncs on the line's claimed
+/// predecessor, so tampering after a deletion point is still reported line
+/// by line. Cryptographic semantics (salt genesis, HMAC input, constant-time
+/// comparison) are identical to the boolean variant; a missing file yields
+/// a zero report with `chain_intact: false` instead of an `Err`.
+pub fn verify_audit_chain_report(path: &std::path::Path) -> ConfigResult<ChainVerificationReport> {
+    verify_audit_chain_report_with_key(path, None)
+}
+
+/// Like [`verify_audit_chain_report`], but verifies the chain MAC against an
 /// externally managed key (see [`AuditConfig::hmac_key`]). Chains written
 /// with `hmac_key` set can ONLY be verified through this variant.
-pub fn verify_audit_chain_with_key(
+pub fn verify_audit_chain_report_with_key(
     path: &std::path::Path,
     hmac_key: Option<&[u8]>,
-) -> ConfigResult<bool> {
+) -> ConfigResult<ChainVerificationReport> {
     use std::io::ErrorKind;
+
+    let mut report = ChainVerificationReport {
+        total_entries: 0,
+        chain_intact: false,
+        hmac_valid_count: 0,
+        first_broken_at: None,
+        gaps: Vec::new(),
+    };
 
     let content = match std::fs::read_to_string(path) {
         Ok(content) => content,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(report),
         Err(e) => return Err(ConfigError::IoError(e)),
     };
 
@@ -701,26 +735,31 @@ pub fn verify_audit_chain_with_key(
         .filter(|l| !l.is_empty())
         .map(serde_json::from_str::<serde_json::Value>);
 
-    // The chain must begin with a header carrying the salt.
+    // The chain must begin with a header carrying the salt. Any header
+    // defect keeps the zero-report shape (chain_intact stays false).
     let header = match lines.next() {
         Some(Ok(v)) => v,
         Some(Err(_)) => return Err(parse_failure()),
-        None => return Ok(false),
+        None => return Ok(report),
     };
-    let header_ok = header.get("record").and_then(|r| r.as_str()) == Some(CHAIN_HEADER_RECORD);
-    if !header_ok {
-        return Ok(false);
+    if header.get("record").and_then(|r| r.as_str()) != Some(CHAIN_HEADER_RECORD) {
+        return Ok(report);
     }
     let Some(salt_hex) = header.get("salt").and_then(|s| s.as_str()) else {
-        return Ok(false);
+        return Ok(report);
     };
     let Ok(salt) = hex::decode(salt_hex) else {
-        return Ok(false);
+        return Ok(report);
     };
     if salt.len() != CHAIN_SALT_LEN {
-        return Ok(false);
+        return Ok(report);
     }
+
     let mut prev_hash = salt.clone();
+    let mac_key: &[u8] = hmac_key.unwrap_or(&salt);
+    // Sequence number of the last locally authentic line: the anchor the
+    // next suspected-deletion interval is measured from.
+    let mut last_good_seq: usize = 0;
 
     for line in lines {
         let value = match line {
@@ -728,7 +767,13 @@ pub fn verify_audit_chain_with_key(
             Err(_) => return Err(parse_failure()),
         };
         let Some(obj) = value.as_object() else {
-            return Ok(false);
+            // A non-object, non-metadata line cannot carry chain fields;
+            // record the break and keep scanning.
+            report.total_entries += 1;
+            if report.first_broken_at.is_none() {
+                report.first_broken_at = Some(report.total_entries);
+            }
+            continue;
         };
 
         // Metadata records (chain footer, possible future extensions) are not
@@ -737,39 +782,95 @@ pub fn verify_audit_chain_with_key(
             continue;
         }
 
-        let Some(prev_hash_hex) = obj.get("prev_hash").and_then(|p| p.as_str()) else {
-            return Ok(false);
-        };
-        let Some(hmac_hex) = obj.get("hmac").and_then(|h| h.as_str()) else {
-            return Ok(false);
+        report.total_entries += 1;
+        let seq = report.total_entries;
+        let broken = |report: &mut ChainVerificationReport| {
+            if report.first_broken_at.is_none() {
+                report.first_broken_at = Some(seq);
+            }
         };
 
-        // Deletion / reordering detection: every entry must continue the
-        // exact chain position it claims. Constant-time comparison: avoids
-        // leaking chain positions through early-exit timing.
-        let prev_matches =
-            constant_time_eq(prev_hash_hex.as_bytes(), hex::encode(&prev_hash).as_bytes());
-        if !prev_matches {
-            return Ok(false);
-        }
+        let (Some(prev_hash_hex), Some(hmac_hex)) = (
+            obj.get("prev_hash").and_then(|p| p.as_str()),
+            obj.get("hmac").and_then(|h| h.as_str()),
+        ) else {
+            // Missing chain metadata: the chain cannot continue through
+            // this line, but later lines may still be reportable.
+            broken(&mut report);
+            continue;
+        };
 
+        // Link check: constant-time comparison, same as the boolean
+        // variant. On mismatch the events between the last authentic line
+        // and this one are suspected deletions; the scan then resyncs on
+        // the claimed predecessor so post-gap tampering stays visible.
+        let chain_prev: Vec<u8> =
+            if constant_time_eq(prev_hash_hex.as_bytes(), hex::encode(&prev_hash).as_bytes()) {
+                prev_hash.clone()
+            } else {
+                broken(&mut report);
+                report.gaps.push((last_good_seq + 1, seq));
+                hex::decode(prev_hash_hex).unwrap_or_else(|_| prev_hash.clone())
+            };
+
+        // MAC check over the canonical event bytes.
         let mut event_obj = obj.clone();
         event_obj.remove("prev_hash");
         event_obj.remove("hmac");
         let canonical = canonical_event_bytes(&serde_json::Value::Object(event_obj))?;
-        let mac_key: &[u8] = hmac_key.unwrap_or(&salt);
-        let expected_hmac = hex::encode(hmac_sha256(mac_key, &prev_hash, &canonical));
-        if !constant_time_eq(hmac_hex.as_bytes(), expected_hmac.as_bytes()) {
-            return Ok(false);
+        let expected_hmac = hex::encode(hmac_sha256(mac_key, &chain_prev, &canonical));
+        if constant_time_eq(hmac_hex.as_bytes(), expected_hmac.as_bytes()) {
+            report.hmac_valid_count += 1;
+            // A line whose own HMAC verifies anchors the next gap interval
+            // even when its incoming link is broken.
+            last_good_seq = seq;
+        } else {
+            broken(&mut report);
         }
 
-        prev_hash = match hex::decode(hmac_hex) {
-            Ok(h) if h.len() == CHAIN_HASH_LEN => h,
-            _ => return Ok(false),
-        };
+        // Advance the chain to this line's stored hash (the writer's
+        // chaining rule), keeping decoding failures non-fatal.
+        if let Ok(h) = hex::decode(hmac_hex)
+            && h.len() == CHAIN_HASH_LEN
+        {
+            prev_hash = h;
+        }
     }
 
-    Ok(true)
+    report.chain_intact = report.first_broken_at.is_none()
+        && report.gaps.is_empty()
+        && report.hmac_valid_count == report.total_entries;
+    Ok(report)
+}
+
+/// Verify the HMAC hash chain of an audit file.
+///
+/// Returns `Ok(true)` only when the file starts with a `chain_header` record
+/// and every event line's stored `prev_hash` matches the previous entry's
+/// `hmac` (or the header salt for the first event) and its stored `hmac`
+/// equals `HMAC-SHA256(salt, prev_hash || canonical_event_bytes)`. Any
+/// tampered byte, deleted event, reordered events, or truncated chain makes
+/// the verification fail with `Ok(false)`; `chain_footer` lines are metadata
+/// and are skipped. `Ok(false)` is also returned for a missing file;
+/// `Err` is reserved for IO failures other than a missing file.
+///
+/// Delegates to [`verify_audit_chain_report`]; use the report variant when
+/// the break position or deletion gaps matter.
+pub fn verify_audit_chain(path: &std::path::Path) -> ConfigResult<bool> {
+    verify_audit_chain_report(path).map(|r| r.chain_intact)
+}
+
+/// Like [`verify_audit_chain`], but verifies the chain MAC against an
+/// externally managed key (see [`AuditConfig::hmac_key`]). Chains written
+/// with `hmac_key` set can ONLY be verified through this variant.
+///
+/// Delegates to [`verify_audit_chain_report_with_key`]; use the report
+/// variant when the break position or deletion gaps matter.
+pub fn verify_audit_chain_with_key(
+    path: &std::path::Path,
+    hmac_key: Option<&[u8]>,
+) -> ConfigResult<bool> {
+    verify_audit_chain_report_with_key(path, hmac_key).map(|r| r.chain_intact)
 }
 
 pub struct AuditWriterBuilder {
@@ -1067,6 +1168,224 @@ mod tests {
         let path = dir.path().join("audit_legacy.log");
         std::fs::write(&path, "{\"LoadSuccess\":{\"source\":\"old\"}}\n").unwrap();
         assert!(!verify_audit_chain(&path).unwrap());
+    }
+
+    /// Path of the (sorted-first) audit file in `dir`.
+    fn audit_path(dir: &std::path::Path) -> std::path::PathBuf {
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .expect("log dir readable")
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert!(!files.is_empty(), "audit file must exist");
+        files.sort();
+        files.remove(0)
+    }
+
+    #[test]
+    fn test_verify_audit_chain_report_intact_chain() {
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a", "src-b", "src-c"]);
+
+        let report = verify_audit_chain_report_with_key(&audit_path(dir.path()), None).unwrap();
+        assert_eq!(
+            report,
+            ChainVerificationReport {
+                total_entries: 3,
+                chain_intact: true,
+                hmac_valid_count: 3,
+                first_broken_at: None,
+                gaps: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_verify_audit_chain_report_locates_tampering() {
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a", "src-b", "src-c"]);
+
+        let path = audit_path(dir.path());
+        let lines = audit_lines(dir.path());
+        let events = event_line_indices(&lines);
+        // Flip one byte inside the middle event's payload.
+        let tampered = lines[events[1]].replace("src-b", "src-X");
+        let rewritten: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                if i == events[1] {
+                    tampered.clone()
+                } else {
+                    l.clone()
+                }
+            })
+            .collect();
+        std::fs::write(&path, rewritten.join("\n") + "\n").unwrap();
+
+        let report = verify_audit_chain_report_with_key(&path, None).unwrap();
+        assert_eq!(report.total_entries, 3);
+        assert!(!report.chain_intact);
+        assert_eq!(
+            report.hmac_valid_count, 2,
+            "only the untampered lines verify"
+        );
+        assert_eq!(report.first_broken_at, Some(2));
+        assert!(
+            report.gaps.is_empty(),
+            "tampering must not produce deletion gaps: {:?}",
+            report.gaps
+        );
+    }
+
+    #[test]
+    fn test_verify_audit_chain_report_locates_deletion() {
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a", "src-b", "src-c"]);
+
+        let path = audit_path(dir.path());
+        let lines = audit_lines(dir.path());
+        let events = event_line_indices(&lines);
+        // Drop the middle event line.
+        let rewritten: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != events[1])
+            .map(|(_, l)| l.clone())
+            .collect();
+        std::fs::write(&path, rewritten.join("\n") + "\n").unwrap();
+
+        let report = verify_audit_chain_report_with_key(&path, None).unwrap();
+        assert_eq!(report.total_entries, 2, "only surviving lines are counted");
+        assert!(!report.chain_intact);
+        // The survivor after the break is locally authentic (its own HMAC
+        // verifies against its claimed predecessor), so both lines count.
+        assert_eq!(report.hmac_valid_count, 2);
+        assert_eq!(report.first_broken_at, Some(2));
+        assert_eq!(report.gaps, vec![(2, 2)], "the deleted event is a gap");
+    }
+
+    #[test]
+    fn test_verify_audit_chain_report_detects_reordering() {
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a", "src-b", "src-c"]);
+
+        let path = audit_path(dir.path());
+        let mut lines = audit_lines(dir.path());
+        let events = event_line_indices(&lines);
+        lines.swap(events[0], events[1]);
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+
+        let report = verify_audit_chain_report_with_key(&path, None).unwrap();
+        assert_eq!(report.total_entries, 3);
+        assert!(!report.chain_intact);
+        // Every line is locally authentic but every link is broken.
+        assert_eq!(report.hmac_valid_count, 3);
+        assert_eq!(report.first_broken_at, Some(1));
+        assert_eq!(report.gaps, vec![(1, 1), (2, 2), (3, 3)]);
+    }
+
+    #[test]
+    fn test_verify_audit_chain_report_missing_or_legacy_file() {
+        // Missing file → zero report, not an Err.
+        let report = verify_audit_chain_report_with_key(
+            std::path::Path::new("/nonexistent/audit.log"),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            report,
+            ChainVerificationReport {
+                total_entries: 0,
+                chain_intact: false,
+                hmac_valid_count: 0,
+                first_broken_at: None,
+                gaps: Vec::new(),
+            }
+        );
+
+        // A legacy file without a chain header reports the same zero shape.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit_legacy.log");
+        std::fs::write(&path, "{\"LoadSuccess\":{\"source\":\"old\"}}\n").unwrap();
+        let report = verify_audit_chain_report_with_key(&path, None).unwrap();
+        assert_eq!(report.total_entries, 0);
+        assert!(!report.chain_intact);
+    }
+
+    #[test]
+    fn test_bool_and_report_versions_agree() {
+        // The boolean variants must stay a thin projection of the report
+        // variant: `Ok(bool)` == `report.chain_intact` on every input class.
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a", "src-b", "src-c"]);
+        let path = audit_path(dir.path());
+
+        // Intact chain: both agree on true.
+        let report = verify_audit_chain_report(&path).unwrap();
+        assert_eq!(verify_audit_chain(&path).unwrap(), report.chain_intact);
+        assert!(report.chain_intact);
+
+        // Tampered chain: both agree on false.
+        let lines = audit_lines(dir.path());
+        let events = event_line_indices(&lines);
+        let tampered = lines[events[1]].replace("src-b", "src-X");
+        let rewritten: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                if i == events[1] {
+                    tampered.clone()
+                } else {
+                    l.clone()
+                }
+            })
+            .collect();
+        std::fs::write(&path, rewritten.join("\n") + "\n").unwrap();
+        let report = verify_audit_chain_report(&path).unwrap();
+        assert_eq!(verify_audit_chain(&path).unwrap(), report.chain_intact);
+        assert!(!report.chain_intact);
+
+        // Missing file: both agree on Ok(false) / zero report.
+        let missing = std::path::Path::new("/nonexistent/audit.log");
+        assert!(!verify_audit_chain(missing).unwrap());
+        assert!(!verify_audit_chain_report(missing).unwrap().chain_intact);
+
+        // Malformed JSON after a valid header: both agree on Err.
+        let dir = tempfile::tempdir().unwrap();
+        write_events(dir.path(), &["src-a"]);
+        let path = audit_path(dir.path());
+        let mut content = std::fs::read_to_string(&path).unwrap();
+        content.push_str("this is not json\n");
+        std::fs::write(&path, content).unwrap();
+        assert!(verify_audit_chain(&path).is_err());
+        assert!(verify_audit_chain_report(&path).is_err());
+    }
+
+    #[test]
+    fn test_chain_verification_report_serializes_all_fields() {
+        // The report is consumed by CLI/CI tooling as JSON, so every field
+        // must survive serialization under its declared name.
+        let report = ChainVerificationReport {
+            total_entries: 3,
+            chain_intact: true,
+            hmac_valid_count: 3,
+            first_broken_at: None,
+            gaps: vec![(2, 3), (7, 9)],
+        };
+        let json = serde_json::to_string(&report).unwrap();
+        for field in [
+            "total_entries",
+            "chain_intact",
+            "hmac_valid_count",
+            "first_broken_at",
+            "gaps",
+        ] {
+            assert!(
+                json.contains(field),
+                "serialized report must contain field {field}: {json}"
+            );
+        }
     }
 
     #[test]

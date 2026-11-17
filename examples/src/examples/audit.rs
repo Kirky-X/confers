@@ -51,8 +51,10 @@ fn main() -> anyhow::Result<()> {
             timestamp: now,
         },
         AuditEvent::KeyRotation {
+            key_id: "master-key".to_string(),
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
+            fields_reencrypted: 3,
             timestamp: now,
         },
         AuditEvent::Decrypt {
@@ -92,7 +94,7 @@ fn main() -> anyhow::Result<()> {
     let _ = writer.log_key_access("master-key");
     let _ = writer.log_decrypt("api_token", true);
     let _ = writer.log_decrypt("password_field", false); // 敏感字段名会被脱敏
-    let _ = writer.log_key_rotation("v1", "v2");
+    let _ = writer.log_key_rotation("master-key", "v1", "v2", 3);
     let _ = writer.write(AuditEvent::ReloadTrigger {
         source: "watcher".to_string(),
         timestamp: Utc::now(),
