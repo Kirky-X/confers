@@ -183,7 +183,17 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
     /// right after [`spawn`](Self::spawn).
     #[cfg(feature = "security")]
     pub fn with_security_policy(self, policy: SecurityPolicy) -> Self {
+        // audit_on_reload requires an injected writer; without one, reload
+        // events would be silently lost — surface that once, at debug level.
+        #[cfg(feature = "audit")]
+        let writer_present = self.ctl.audit_writer.load().is_some();
+        #[cfg(not(feature = "audit"))]
+        let writer_present = false;
+        let wants_audit = policy.audit_on_reload;
         self.ctl.zeroize.policy.store(Arc::new(policy));
+        if wants_audit && !writer_present {
+            log::debug!("{}", crate::i18n::tr("log-hot-reload-audit-writer-missing"));
+        }
         self
     }
 
