@@ -172,6 +172,12 @@ pub enum AuditEvent {
         source: String,
         timestamp: DateTime<Utc>,
     },
+    SourceAnomaly {
+        source_id: String,
+        anomaly_type: String,
+        baseline_deviation: String,
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl AuditEvent {
@@ -183,6 +189,7 @@ impl AuditEvent {
             AuditEvent::Decrypt { timestamp, .. } => *timestamp,
             AuditEvent::LoadSuccess { timestamp, .. } => *timestamp,
             AuditEvent::ReloadTrigger { timestamp, .. } => *timestamp,
+            AuditEvent::SourceAnomaly { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -201,6 +208,7 @@ impl AuditLevel {
             AuditEvent::Decrypt { .. } => AuditLevel::Durable,
             AuditEvent::LoadSuccess { .. } => AuditLevel::BestEffort,
             AuditEvent::ReloadTrigger { .. } => AuditLevel::BestEffort,
+            AuditEvent::SourceAnomaly { .. } => AuditLevel::BestEffort,
         }
     }
 }
