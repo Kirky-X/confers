@@ -294,6 +294,10 @@ pub struct BaselinedSource<S: PolledSource> {
     policy: BaselinePolicy,
     /// One learning bucket per polled source.
     baselines: std::sync::Arc<dashmap::DashMap<crate::types::SourceId, SourceBaseline>>,
+    /// Receives a [`crate::audit::AuditEvent::SourceAnomaly`] on every
+    /// classified anomaly (fail-closed and fail-open alike).
+    #[cfg(feature = "audit")]
+    audit_writer: Option<std::sync::Arc<crate::audit::AuditWriter>>,
 }
 
 impl<S: PolledSource> BaselinedSource<S> {
@@ -303,7 +307,18 @@ impl<S: PolledSource> BaselinedSource<S> {
             inner,
             policy,
             baselines: std::sync::Arc::new(dashmap::DashMap::new()),
+            #[cfg(feature = "audit")]
+            audit_writer: None,
         }
+    }
+
+    /// Inject the audit writer that receives a `SourceAnomaly` event for every
+    /// anomaly this decorator classifies. A write failure is debug-logged and
+    /// never changes the poll outcome.
+    #[cfg(feature = "audit")]
+    pub fn with_audit_writer(mut self, writer: std::sync::Arc<crate::audit::AuditWriter>) -> Self {
+        self.audit_writer = Some(writer);
+        self
     }
 
     /// The learned baseline for a source, if any polls were observed.
@@ -336,7 +351,7 @@ impl<S: PolledSource> PolledSource for BaselinedSource<S> {
         let payload_len = Self::payload_len(&value);
 
         let sid = self.inner.source_id();
-        let mut entry = self.baselines.entry(sid).or_default();
+        let mut entry = self.baselines.entry(sid.clone()).or_default();
         let baseline = entry.value_mut();
 
         let anomaly = if self.policy.enabled && baseline.ready(self.policy.min_samples) {
@@ -344,18 +359,22 @@ impl<S: PolledSource> PolledSource for BaselinedSource<S> {
         } else {
             None
         };
-        if let Some((kind, deviation)) = &anomaly
-            && self.policy.fail_closed
-        {
-            // Fail closed WITHOUT observing: an anomalous poll must not
-            // shift the baseline it just deviated from.
-            return Err(ConfigError::InvalidValue {
-                key: "remote.baseline".into(),
-                expected_type: format!("{} within baseline", kind_json(*kind)),
-                message: format!("remote source anomaly: {deviation}"),
-            });
-        }
         if let Some((kind, deviation)) = &anomaly {
+            // Audit every classified anomaly — fail-closed and fail-open
+            // alike. The audit path never changes the poll outcome.
+            #[cfg(feature = "audit")]
+            if let Some(writer) = &self.audit_writer {
+                emit_anomaly_audit(writer, &sid, *kind, deviation);
+            }
+            if self.policy.fail_closed {
+                // Fail closed WITHOUT observing: an anomalous poll must not
+                // shift the baseline it just deviated from.
+                return Err(ConfigError::InvalidValue {
+                    key: "remote.baseline".into(),
+                    expected_type: format!("{} within baseline", kind_json(*kind)),
+                    message: format!("remote source anomaly: {deviation}"),
+                });
+            }
             // Fail-open: record and let the value through.
             log_anomaly_warning(*kind, deviation);
         }
@@ -378,6 +397,30 @@ fn kind_json(kind: AnomalyType) -> &'static str {
         AnomalyType::SchemaDrift => "schema_drift",
         AnomalyType::SizeOutOfRange => "size_out_of_range",
         AnomalyType::LatencySpike => "latency_spike",
+    }
+}
+
+#[cfg(feature = "audit")]
+fn emit_anomaly_audit(
+    writer: &crate::audit::AuditWriter,
+    source_id: &crate::types::SourceId,
+    kind: AnomalyType,
+    deviation: &str,
+) {
+    let event = crate::audit::AuditEvent::SourceAnomaly {
+        source_id: source_id.as_str().to_string(),
+        anomaly_type: kind_json(kind).to_string(),
+        baseline_deviation: deviation.to_string(),
+        timestamp: chrono::Utc::now(),
+    };
+    if let Err(e) = writer.write(event) {
+        log::debug!(
+            "{}",
+            crate::i18n::tr_args(
+                "log-remote-baseline-audit-write-failed",
+                &[("reason", e.to_string())]
+            )
+        );
     }
 }
 
@@ -869,5 +912,120 @@ mod tests {
             .await
             .expect_err("a latency spike must fail closed");
         assert!(err.to_string().contains("remote.baseline"), "{err}");
+    }
+
+    // ---- T009: audit emission ----
+
+    /// Collect every `SourceAnomaly` event line written into `dir`.
+    #[cfg(feature = "audit")]
+    fn anomaly_records(dir: &std::path::Path) -> Vec<serde_json::Value> {
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(dir).expect("read audit dir").flatten() {
+            let content = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            for line in content.lines() {
+                let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                if value.get("SourceAnomaly").is_some() {
+                    out.push(value);
+                }
+            }
+        }
+        out
+    }
+
+    #[cfg(feature = "audit")]
+    fn auditing_source(dir: &std::path::Path, fail_closed: bool) -> BaselinedSource<MockSource> {
+        let writer = std::sync::Arc::new(crate::audit::AuditWriter::with_config(
+            crate::audit::AuditConfig {
+                enabled: true,
+                log_dir: Some(dir.to_path_buf()),
+                hmac_key: None,
+            },
+        ));
+        BaselinedSource::new(
+            MockSource::new("mock-audit", MOCK_SHAPE()),
+            BaselinePolicy {
+                fail_closed,
+                ..BaselinePolicy::default()
+            },
+        )
+        .with_audit_writer(writer)
+    }
+
+    #[cfg(feature = "audit")]
+    #[tokio::test]
+    async fn schema_drift_writes_source_anomaly_and_fails_closed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = auditing_source(dir.path(), true);
+
+        for _ in 0..5 {
+            source.poll().await.expect("learning polls pass");
+        }
+        assert!(
+            anomaly_records(dir.path()).is_empty(),
+            "no anomaly while learning"
+        );
+
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        let err = source.poll().await.expect_err("drift fails closed");
+        assert!(err.to_string().contains("remote.baseline"), "{err}");
+
+        let records = anomaly_records(dir.path());
+        assert_eq!(records.len(), 1, "exactly one anomaly event is audited");
+        let event = records[0]
+            .get("SourceAnomaly")
+            .and_then(|v| v.as_object())
+            .expect("SourceAnomaly payload");
+        assert_eq!(
+            event.get("source_id").and_then(|v| v.as_str()),
+            Some("mock-audit")
+        );
+        assert_eq!(
+            event.get("anomaly_type").and_then(|v| v.as_str()),
+            Some("schema_drift")
+        );
+        assert!(
+            event
+                .get("baseline_deviation")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .contains("fingerprint"),
+            "human-readable deviation is audited"
+        );
+    }
+
+    #[cfg(feature = "audit")]
+    #[tokio::test]
+    async fn fail_open_still_writes_source_anomaly() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let source = auditing_source(dir.path(), false);
+
+        for _ in 0..5 {
+            source.poll().await.expect("learning polls pass");
+        }
+        source
+            .inner
+            .payload
+            .lock()
+            .unwrap()
+            .clone_from(&drifted_shape());
+        source
+            .poll()
+            .await
+            .expect("fail-open lets the drifted poll through");
+
+        let records = anomaly_records(dir.path());
+        assert_eq!(records.len(), 1, "fail-open anomalies are audited too");
+        let kind = records[0]
+            .get("SourceAnomaly")
+            .and_then(|v| v.get("anomaly_type"))
+            .and_then(|v| v.as_str());
+        assert_eq!(kind, Some("schema_drift"));
     }
 }
