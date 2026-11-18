@@ -194,3 +194,9 @@ cli-validate-null-value-indexed = 配置键 '{ $key }[{ $index }]' 的值为 nul
 cli-validate-null-value = 配置键 '{ $key }' 的值为 null
 cli-validate-string-like-number = 键 '{ $key }' 的字符串值看起来像数字: { $value }
 cli-validate-string-like-boolean = 键 '{ $key }' 的字符串值看起来像布尔值: { $value }
+
+# --- format_value 类型标记(语言中性, 与 CLI 表格输出对齐) ---
+cli-format-value-null = [null]
+cli-format-value-bytes = [bytes: { $count }]
+cli-format-value-array = [array: { $count } items]
+cli-format-value-map-keys = { $count } keys

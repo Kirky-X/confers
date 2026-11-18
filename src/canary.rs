@@ -223,12 +223,14 @@ impl CanaryOrchestrator {
                     }
                 }
                 BatchHealth::Critical { instances } => {
-                    let reason = format!(
-                        "batch {} health critical for {}/{} instance(s): {}",
-                        batch_index + 1,
-                        instances.len(),
-                        batch.len(),
-                        instances.join(", ")
+                    let reason = tr_args(
+                        "error-canary-batch-health-critical",
+                        &[
+                            ("batch", (batch_index + 1).to_string()),
+                            ("critical", instances.len().to_string()),
+                            ("total", batch.len().to_string()),
+                            ("instances", instances.join(", ")),
+                        ],
                     );
                     return self.abort(batch_index, &reason).await;
                 }

@@ -255,15 +255,20 @@ impl ConfigBus for NatsConfigBus {
         };
 
         let consumer = consumer.ok_or_else(|| ConfigError::RemoteUnavailable {
-            error_type: format!(
-                "nats_consumer_failed: {} (after {} retries)",
-                crate::error::sanitize::sanitize_error_message(
-                    &last_err
-                        .as_ref()
-                        .map(|e| e.to_string())
-                        .unwrap_or_else(|| "unknown error".into())
-                ),
-                max_retries
+            error_type: tr_args(
+                "error-bus-nats-consumer-failed",
+                &[
+                    (
+                        "message",
+                        crate::error::sanitize::sanitize_error_message(
+                            &last_err
+                                .as_ref()
+                                .map(|e| e.to_string())
+                                .unwrap_or_else(|| t_simple("error-bus-unknown-error")),
+                        ),
+                    ),
+                    ("retries", max_retries.to_string()),
+                ],
             ),
             retryable: true,
         })?;

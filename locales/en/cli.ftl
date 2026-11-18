@@ -194,3 +194,9 @@ cli-validate-null-value-indexed = Configuration key '{ $key }[{ $index }]' has n
 cli-validate-null-value = Configuration key '{ $key }' has null value
 cli-validate-string-like-number = Key '{ $key }' has string value that looks like a number: { $value }
 cli-validate-string-like-boolean = Key '{ $key }' has string value that looks like boolean: { $value }
+
+# --- format_value 类型标记(语言中性, 与 CLI 表格输出对齐) ---
+cli-format-value-null = [null]
+cli-format-value-bytes = [bytes: { $count }]
+cli-format-value-array = [array: { $count } items]
+cli-format-value-map-keys = { $count } keys

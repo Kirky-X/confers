@@ -422,15 +422,13 @@ impl FsWatcher {
             Config::default(),
         )
         .map_err(|e| {
-            log::error!(
-                "failed to create file watcher debouncer for {}: {e}",
-                path.display()
+            let message = tr_args(
+                "log-fs-watcher-debouncer-create-failed",
+                &[("message", e.to_string())],
             );
+            log::error!("{}", message);
             ConfigError::WatcherError {
-                message: format!(
-                    "failed to create file watcher debouncer for {}: {e}",
-                    path.display()
-                ),
+                message,
                 path: Some(path.to_path_buf()),
                 recoverable: false,
             }

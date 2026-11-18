@@ -888,12 +888,23 @@ fn format_value(value: &crate::types::ConfigValue) -> String {
         crate::types::ConfigValue::U64(n) => n.to_string(),
         crate::types::ConfigValue::F64(n) => n.to_string(),
         crate::types::ConfigValue::Bool(b) => b.to_string(),
-        crate::types::ConfigValue::Null => "[null]".to_string(),
-        crate::types::ConfigValue::Bytes(b) => format!("[bytes: {}]", b.len()),
-        crate::types::ConfigValue::Array(arr) => format!("[array: {} items]", arr.len()),
+        crate::types::ConfigValue::Null => tr("cli-format-value-null"),
+        crate::types::ConfigValue::Bytes(b) => {
+            tr_args("cli-format-value-bytes", &[("count", b.len().to_string())])
+        }
+        crate::types::ConfigValue::Array(arr) => tr_args(
+            "cli-format-value-array",
+            &[("count", arr.len().to_string())],
+        ),
         crate::types::ConfigValue::Map(obj) => {
             let keys: Vec<_> = obj.keys().collect();
-            format!("{{ {} keys }}", keys.len())
+            format!(
+                "{{ {} }}",
+                tr_args(
+                    "cli-format-value-map-keys",
+                    &[("count", keys.len().to_string())]
+                )
+            )
         }
     }
 }
