@@ -575,6 +575,64 @@ let config = ConfigBuilder::<MyConfig>::new()
 
 etcd 与 Consul 后端分别由 `etcd`、`consul` 特性提供，使用 `EtcdSourceBuilder`（`build()` 为异步方法）与 `ConsulSourceBuilder`。远程来源（`remote`/`etcd`/`consul`/`etcd-watch`）公开接口已冻结：1.0 前仅增量演进、不做破坏性变更，可放心投入生产使用。
 
+#### 行为基线与异常检测
+
+> ⚠️ **注意**：本小节需要启用 `remote-baseline` 特性（`full` 预设已包含）。审计联动另需 `audit` 特性。
+
+远程来源可能被攻陷或返回异常内容。成功响应也可能携带错误结构。`BaselinedSource` 装饰器为每个来源学习一份行为基线，并在每次拉取后判定三类异常：
+
+| 异常类型（`AnomalyType`） | 判定语义 |
+| --- | --- |
+| `SchemaDrift` | 结构指纹变化（新增键、删除键或叶子类型改变）；值内容不入指纹，仅看结构 |
+| `SizeOutOfRange` | payload 字节数超出已学习区间的容差范围 |
+| `LatencySpike` | 拉取延迟超过 `ema × multiplier + jitter` |
+
+一次拉取至多产出一条异常，优先级为 `SchemaDrift` > `SizeOutOfRange` > `LatencySpike`。结构变化时不再报体量或延迟异常。
+
+策略通过 `BaselinePolicy` 配置（serde 缺省值如下）：
+
+| 字段 | 缺省值 | 含义 |
+| --- | --- | --- |
+| `enabled` | `true` | 总开关；`false` 时只观测、不判定 |
+| `min_samples` | `5` | 学习窗口：至少观察 5 次成功拉取后才判定异常 |
+| `latency_spike_multiplier` | `10.0` | 延迟尖峰倍数，越大越保守 |
+| `size_tolerance_pct` | `300` | 体量容差百分比，向区间两侧各放宽 300% |
+| `fail_closed` | `true` | 命中异常时拒绝本次拉取（`Err`）；`false` 时仅记录与审计、放行 |
+
+学习窗口内，或 `enabled=false` 时，异常一律放行，仅更新基线。inner 源自身返回 `Err` 时直接透传，不触碰基线。
+
+`fail_closed` 与 `stale_on_error` 语义同构：`fail_closed=true` 命中异常时返回 `ConfigError::InvalidValue { key: "remote.baseline", .. }`，消费方按既有的 fail-on-error 路径保留上一份已验证配置。启用 stale 后，异常拉取不会替换当前生效配置。设为 `false` 可退化为仅告警模式。
+
+启用 `audit` 特性后，用 `with_audit_writer` 注入审计写入器，每次判定命中（含 `fail_closed=false` 的仅告警放行）都会发射 `AuditEvent::SourceAnomaly`，落入可验证的 HMAC 审计链。写入失败仅记 debug 日志，不影响拉取结果。
+
+```rust
+// 需要 feature = "remote-baseline"；审计联动另需 feature = "audit"
+use confers::remote::{BaselinePolicy, BaselinedSource};
+
+#[cfg(feature = "remote-baseline")]
+let policy = BaselinePolicy {
+    min_samples: 5,
+    fail_closed: true,
+    ..BaselinePolicy::default()
+};
+#[cfg(feature = "remote-baseline")]
+let mut baselined = BaselinedSource::new(http_source, policy);
+
+// 启用 audit 特性时注入写入器
+#[cfg(all(feature = "remote-baseline", feature = "audit"))]
+{
+    let writer = std::sync::Arc::new(
+        confers::audit::AuditWriter::builder()
+            .enabled(true)
+            .log_dir(std::path::PathBuf::from("./audit"))
+            .build(),
+    );
+    baselined = baselined.with_audit_writer(writer);
+}
+```
+
+**基线重置（运维动作）**：`fail_closed=true` 下，已有基线时的 `SchemaDrift` 是持续状态（学习窗口只在基线为空时生效），不会自动重新学习。运维须先确认来源安全（排查中间人与误发布），再重建 `BaselinedSource` 实例以清空基线：新实例的基线为空，将重新进入学习窗口。切勿在来源未确认前直接关闭 `fail_closed` 或重置，以免把异常内容当作新常态。
+
 ### 📝 审计日志与安全
 
 > 📝 **提示**：以下功能需要启用 `audit` 特性。
