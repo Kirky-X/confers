@@ -733,3 +733,164 @@ async fn test_consul_source_parse_config() {
         .send()
         .await;
 }
+
+// ---- RSB-T010: baselined remote source integration ----
+
+/// A self-contained [`PolledSource`] that returns a fixed structure and lets
+/// the test swap that structure in flight (no network or external service).
+#[cfg(feature = "remote-baseline")]
+mod baselined_integration {
+    use super::*;
+    use confers::async_trait;
+    use confers::remote::{BaselinePolicy, BaselinedSource};
+    use confers::{AnnotatedValue, ConfigError, ConfigResult, ConfigValue, SourceId};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct ShapeSource {
+        payload: Arc<Mutex<ConfigValue>>,
+        id: SourceId,
+    }
+
+    impl ShapeSource {
+        fn new(payload: ConfigValue) -> Self {
+            Self {
+                payload: Arc::new(Mutex::new(payload)),
+                id: SourceId::new("integration-baselined"),
+            }
+        }
+
+        fn set_payload(&self, payload: ConfigValue) {
+            *self.payload.lock().unwrap() = payload;
+        }
+    }
+
+    #[async_trait]
+    impl PolledSource for ShapeSource {
+        async fn poll(&self) -> ConfigResult<AnnotatedValue> {
+            let payload = self.payload.lock().unwrap().clone();
+            Ok(AnnotatedValue::new(payload, self.id.clone(), ""))
+        }
+
+        fn poll_interval(&self) -> Option<Duration> {
+            Some(Duration::from_secs(30))
+        }
+
+        fn source_id(&self) -> SourceId {
+            self.id.clone()
+        }
+    }
+
+    fn base_shape() -> ConfigValue {
+        ConfigValue::map(vec![(
+            "endpoint",
+            AnnotatedValue::new(
+                ConfigValue::string("https://a.example"),
+                SourceId::default(),
+                "",
+            ),
+        )])
+    }
+
+    fn drifted_shape() -> ConfigValue {
+        ConfigValue::map(vec![
+            (
+                "endpoint",
+                AnnotatedValue::new(
+                    ConfigValue::string("https://a.example"),
+                    SourceId::default(),
+                    "",
+                ),
+            ),
+            (
+                "port",
+                AnnotatedValue::new(ConfigValue::uint(8443), SourceId::default(), ""),
+            ),
+        ])
+    }
+
+    /// Collect serialized `SourceAnomaly` event objects from an audit dir.
+    #[cfg(feature = "audit")]
+    fn anomaly_events(dir: &std::path::Path) -> Vec<serde_json::Value> {
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(dir).expect("read audit dir").flatten() {
+            let content = std::fs::read_to_string(entry.path()).unwrap_or_default();
+            for line in content.lines() {
+                let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
+                    continue;
+                };
+                if let Some(event) = value.get("SourceAnomaly") {
+                    out.push(event.clone());
+                }
+            }
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn structural_mutation_after_learning_window_fails_closed_with_baseline_key() {
+        let source = ShapeSource::new(base_shape());
+        let baselined = BaselinedSource::new(source.clone(), BaselinePolicy::default());
+
+        // First five polls establish the baseline and pass through.
+        for _ in 0..5 {
+            baselined.poll().await.expect("learning polls pass");
+        }
+
+        // Sixth poll mutates the structure (new key) → SchemaDrift.
+        source.set_payload(drifted_shape());
+        let err = baselined
+            .poll()
+            .await
+            .expect_err("schema drift must fail closed with fail_closed=true");
+        match err {
+            ConfigError::InvalidValue { key, .. } => {
+                assert_eq!(key, "remote.baseline", "error key is remote.baseline");
+            }
+            other => panic!("expected InvalidValue, got {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "audit")]
+    #[tokio::test]
+    async fn structural_mutation_emits_auditable_source_anomaly() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let writer = Arc::new(confers::audit::AuditWriter::with_config(
+            confers::audit::AuditConfig {
+                enabled: true,
+                log_dir: Some(dir.path().to_path_buf()),
+                hmac_key: None,
+            },
+        ));
+        let source = ShapeSource::new(base_shape());
+        let baselined = BaselinedSource::new(source.clone(), BaselinePolicy::default())
+            .with_audit_writer(writer);
+
+        for _ in 0..5 {
+            baselined.poll().await.expect("learning polls pass");
+        }
+        assert!(
+            anomaly_events(dir.path()).is_empty(),
+            "no anomaly during learning"
+        );
+
+        source.set_payload(drifted_shape());
+        let err = baselined
+            .poll()
+            .await
+            .expect_err("schema drift fails closed under default policy");
+        assert!(matches!(err, ConfigError::InvalidValue { .. }));
+
+        let events = anomaly_events(dir.path());
+        assert_eq!(events.len(), 1, "exactly one SourceAnomaly is audited");
+        let event = &events[0];
+        assert_eq!(
+            event.get("source_id").and_then(|v| v.as_str()),
+            Some("integration-baselined")
+        );
+        assert_eq!(
+            event.get("anomaly_type").and_then(|v| v.as_str()),
+            Some("schema_drift")
+        );
+    }
+}
