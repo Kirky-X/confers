@@ -131,13 +131,16 @@ impl SourceChain {
     ///
     /// # Partial failure semantics
     ///
-    /// When `fail_fast` is disabled (or the failing source is optional),
-    /// sources that fail are **silently skipped**: the merged result combines
-    /// only the successful sources and the collected errors are *not*
-    /// exposed to the caller. A [`ConfigError::MultiSource`] error is
-    /// returned only when *every* source fails. Callers that need per-source
-    /// error visibility must use [`Self::collect_report`] or collect the
-    /// sources individually.
+    /// When `fail_fast` is disabled, sources that fail are **silently
+    /// skipped**: the merged result combines only the successful sources and
+    /// the collected errors are *not* exposed to the caller. A
+    /// [`ConfigError::MultiSource`] error is returned only when *every*
+    /// source fails. Callers that need per-source error visibility must use
+    /// [`Self::collect_report`] or collect the sources individually.
+    ///
+    /// `optional` sources are only exempt from *absence* (a missing file is
+    /// collected as an empty map by `FileSource`); a source that exists but
+    /// fails to parse aborts the chain even in fail-fast mode.
     pub fn collect(self) -> ConfigResult<AnnotatedValue> {
         self.collect_report().merged
     }
@@ -187,7 +190,13 @@ impl SourceChain {
             match result {
                 Ok(value) => values.push((is_defaults, name, Ok(value))),
                 Err(e) => {
-                    if fail_fast && !source.is_optional() {
+                    // `is_optional()` 只豁免"源缺失"：FileSource::collect 已把
+                    // "文件不存在 + optional" 收敛成 Ok 空 map，因此能冒到链层
+                    // 的错误都是"源存在但读取/解析失败"。后者必须 fail-fast:
+                    // 一个 TOML 语法错误若被当缺失跳过，整棵配置会静默回退默认值。
+                    let skippable_absence =
+                        source.is_optional() && matches!(e, ConfigError::FileNotFound { .. });
+                    if fail_fast && !skippable_absence {
                         // The chain aborts, but whatever was collected before
                         // the abort stays available as the disaster-recovery
                         // partial (an empty root when the abort hit the very
@@ -200,7 +209,11 @@ impl SourceChain {
                         };
                     }
                     failures.push((name.clone(), e.to_string()));
-                    errors.push((name, e));
+                    // 缺失的 optional 源不是错误（不进 MultiSource 聚合），
+                    // 但保留在 failures 里让调用方可观测。
+                    if !skippable_absence {
+                        errors.push((name, e));
+                    }
                 }
             }
         }
@@ -334,6 +347,9 @@ impl SourceChainBuilder {
     }
 
     /// Add an optional file source.
+    ///
+    /// "Optional" covers absence only: a missing file is skipped, but a file
+    /// that exists and fails to read or parse aborts a fail-fast chain.
     pub fn file_optional(self, path: impl Into<std::path::PathBuf>) -> Self {
         use super::source::FileSource;
         let mut source = FileSource::new(path).optional();
@@ -904,5 +920,82 @@ mod tests {
             ));
         let merged = chain.collect().unwrap();
         assert_eq!(map_str(&merged, "key"), "second");
+    }
+
+    // optional 语义：只豁免"缺失"，不豁免"存在但损坏"。
+
+    /// 缺失的 optional 文件在 fail-fast 链上仍然被容忍。
+    #[test]
+    fn test_optional_missing_file_is_tolerated_in_fail_fast_chain() {
+        let chain = SourceChain::new()
+            .push(Box::new(
+                crate::impl_::config::FileSource::new("/nonexistent/optional.toml").optional(),
+            ))
+            .push(Box::new(
+                MemorySource::new().set("key", ConfigValue::string("value")),
+            ));
+
+        let merged = chain.collect().expect("缺失的 optional 文件不得中止链");
+        assert_eq!(map_str(&merged, "key"), "value");
+    }
+
+    /// 文件存在但 TOML 语法错误：optional 不得把它当缺失跳过。
+    /// 回归：空值语法错误曾让整棵配置静默回退默认值。
+    #[cfg(feature = "toml")]
+    #[test]
+    fn test_optional_existing_but_invalid_file_fails_fast() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("broken.toml");
+        // `url = `（空值）是语法错误：TOML 解析必须失败。
+        std::fs::write(&path, "url = \n").unwrap();
+
+        let chain = SourceChain::new()
+            .push(Box::new(
+                crate::impl_::config::FileSource::new(&path)
+                    .optional()
+                    .allow_absolute_paths(),
+            ))
+            .push(Box::new(
+                MemorySource::new().set("key", ConfigValue::string("fallback")),
+            ));
+
+        let err = chain
+            .collect()
+            .expect_err("存在但语法错误的 optional 文件必须报错");
+        assert!(
+            matches!(err, ConfigError::ParseError { .. }),
+            "expected ParseError, got {err:?}"
+        );
+    }
+
+    /// 自定义 optional 源返回 FileNotFound：语义上是"缺失"，不是错误——
+    /// 链不得把它计成 MultiSource 失败。
+    #[test]
+    fn test_optional_source_missing_is_not_a_collection_error() {
+        struct MissingOptional;
+        impl Source for MissingOptional {
+            fn collect(&self) -> ConfigResult<AnnotatedValue> {
+                Err(ConfigError::FileNotFound {
+                    filename: "gone.toml".into(),
+                    source: None,
+                })
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn name(&self) -> &str {
+                "missing-optional"
+            }
+            fn source_kind(&self) -> SourceKind {
+                SourceKind::File
+            }
+            fn is_optional(&self) -> bool {
+                true
+            }
+        }
+
+        let chain = SourceChain::new().push(Box::new(MissingOptional));
+        let merged = chain.collect().expect("optional 源的缺失不得聚合为错误");
+        assert!(merged.is_map());
     }
 }

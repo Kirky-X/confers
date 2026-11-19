@@ -170,6 +170,10 @@ impl<T> ConfigBuilder<T> {
     }
 
     /// Add an optional file source.
+    ///
+    /// "Optional" covers absence only: a missing file is skipped, but a file
+    /// that exists and fails to read or parse is a hard error. Use [`Self::build_resilient`]
+    /// if degraded loading is genuinely wanted.
     pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self {
         self.chain_builder = self.chain_builder.file_optional(path);
         self
@@ -1045,6 +1049,26 @@ mod tests {
         name: String,
         #[serde(default)]
         port: u16,
+    }
+
+    #[test]
+    #[cfg(feature = "toml")]
+    fn test_builder_optional_existing_but_invalid_file_fails_fast() {
+        // 回归：file_optional + 存在但语法错误的 TOML 曾静默回退全 Default，
+        // 让 4 个 URL 全变空串。存在 ≠ 缺失，必须报错。
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("broken.toml");
+        std::fs::write(&path, "url = \n").unwrap();
+
+        let err = ConfigBuilder::<TestConfig>::new()
+            .allow_absolute_paths()
+            .file_optional(&path)
+            .build()
+            .expect_err("optional 只豁免缺失：存在但语法错误必须报错");
+        assert!(
+            matches!(err, ConfigError::ParseError { .. }),
+            "expected ParseError, got {err:?}"
+        );
     }
 
     #[test]

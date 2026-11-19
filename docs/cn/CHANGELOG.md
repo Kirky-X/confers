@@ -18,6 +18,7 @@
 
 - **`AuditEvent::SourceAnomaly` 新变体**：`AuditEvent` 枚举新增变体 `SourceAnomaly { source_id: String, anomaly_type: String, baseline_deviation: String, timestamp: DateTime<Utc> }`（`anomaly_type` 取 `schema_drift`/`size_out_of_range`/`latency_spike`，字段全为基本类型，审计级别 BestEffort）。对外部穷尽 match `AuditEvent` 的使用者为破坏性变更（0.x 惯例下随 minor 发布），须为该变体补一个 match 分支或用 `..` 通配；库内全部 match 点与测试已同步更新
 - **`AuditEvent::KeyRotation` 字段扩展**：变体新增 `key_id: String` 与 `fields_reencrypted: usize`（置于 `old_version`/`new_version` 之后、`timestamp` 之前）；`AuditWriter::log_key_rotation` 签名同步扩展为 `(key_id, old_ver, new_ver, fields_reencrypted)`。对外部穷尽 match 该变体的使用者为破坏性变更（0.x 惯例下随 minor 发布），库内全部 match 点与测试已同步更新；`..` 模式匹配不受影响
+- **`optional` 源语义收紧：只豁免"缺失"，不豁免"损坏"**：链层曾把 optional 源的**任何**错误当作可跳过（`fail_fast && !source.is_optional()`），一个 TOML 空值语法错误会让整棵配置静默回退默认值（4 个 URL 全变空串，故障却报在上游）。现在 `FileSource::collect` 保持"文件不存在 + optional → 空 map"，而"文件存在但读取/解析失败"一律 fail-fast；链层仅对 `ConfigError::FileNotFound` + optional 的缺失放行（且不计入 `MultiSource` 聚合）。同时 `load_file` 的文件打开错误按 `io::ErrorKind` 细分：仅 `NotFound` 映射 `FileNotFound`，权限等其他 I/O 失败落 `IoError`，不再伪装成缺失。依赖"optional 吞掉解析错误"的调用方须改用 `build_resilient()`（显式容错模式，行为不变）
 
 ## [0.6.0] - 2026-11-14
 

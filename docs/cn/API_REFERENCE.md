@@ -123,7 +123,7 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 
 ##### `file_optional(path: impl Into<PathBuf>)`
 
-添加可选配置文件。文件不存在时会被静默跳过。
+添加可选配置文件。文件不存在时会被静默跳过；文件存在但解析失败（语法错误、无法读取）仍会报错——可选只豁免"缺失"，不豁免"损坏"。
 
 ```rust
 pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self

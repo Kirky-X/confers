@@ -7,6 +7,10 @@ and versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **`optional` sources now excuse absence only, never corruption**: the chain used to skip *any* error from an optional source (`fail_fast && !source.is_optional()`), so one TOML empty-value syntax error could silently collapse the whole configuration to defaults (all four URLs became empty strings while the failure surfaced upstream). `FileSource::collect` still turns "file missing + optional" into an empty map, but "file exists and fails to read or parse" is now always fail-fast; the chain only tolerates `ConfigError::FileNotFound` from optional sources (and no longer counts it toward `MultiSource` aggregation). `load_file` also classifies open failures by `io::ErrorKind`: only `NotFound` maps to `FileNotFound`, while permission and other I/O failures stay `IoError` instead of masquerading as absence. Callers that relied on optional swallowing parse errors should switch to `build_resilient()` (the explicit tolerant mode, behavior unchanged).
+
 ## [0.6.0] - 2026-11-14
 
 The official release following rc.13 (2026-11-04): no API changes; rc.13 users only need to bump the version number to upgrade.

@@ -64,6 +64,9 @@ impl FileSource {
     }
 
     /// Make this source optional.
+    ///
+    /// A missing file becomes an empty map; an existing file that fails to
+    /// read or parse still returns its error.
     pub fn optional(mut self) -> Self {
         self.optional = true;
         self
@@ -89,6 +92,9 @@ impl FileSource {
 
 impl Source for FileSource {
     fn collect(&self) -> ConfigResult<AnnotatedValue> {
+        // 缺失 ≠ 损坏：只有"文件不存在"可以被 optional 豁免（返回空 map）；
+        // 文件存在而 load_file 失败（语法/类型/权限/大小）一律上浮，由链层
+        // fail-fast。把两者混同会让一个 TOML 语法错误静默变成全默认配置。
         if !self.path.exists() {
             if self.optional {
                 return Ok(AnnotatedValue::new(

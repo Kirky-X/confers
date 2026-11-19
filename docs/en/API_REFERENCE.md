@@ -123,7 +123,7 @@ let builder = ConfigBuilder::<ConfersConfig>::new()
 
 ##### `file_optional(path: impl Into<PathBuf>)`
 
-Adds an optional config file. A missing file is silently skipped.
+Adds an optional config file. A missing file is silently skipped; a file that exists but fails to parse or read is still an error — optional covers absence, not corruption.
 
 ```rust
 pub fn file_optional(mut self, path: impl Into<PathBuf>) -> Self

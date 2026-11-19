@@ -408,7 +408,11 @@ pub trait Source: Send + Sync {
     /// Get the kind of this source.
     fn source_kind(&self) -> SourceKind;
 
-    /// Check if this source is optional (errors are non-fatal).
+    /// Check if this source is optional.
+    ///
+    /// Optional means *absence* is not fatal: a missing file collects as an
+    /// empty map. It does **not** excuse a source that exists but cannot be
+    /// read or parsed — that error always aborts a fail-fast chain.
     fn is_optional(&self) -> bool {
         false
     }

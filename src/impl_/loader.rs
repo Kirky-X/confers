@@ -632,9 +632,20 @@ pub fn load_file(path: &Path, config: &LoaderConfig) -> ConfigResult<AnnotatedVa
     // handle's own metadata and read through the handle. Re-resolving the
     // path for a second stat/read would race with a concurrent rename or
     // replace (TOCTOU) and could read content that was never validated.
-    let file = std::fs::File::open(&validated_path).map_err(|e| ConfigError::FileNotFound {
-        filename: reported_path(&validated_path),
-        source: Some(e),
+    //
+    // Only a genuine `NotFound` maps to `FileNotFound` — that variant is the
+    // one an `optional` source may skip. Permission/I-O failures on an
+    // existing file must stay `IoError` so they fail fast instead of being
+    // mistaken for absence.
+    let file = std::fs::File::open(&validated_path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            ConfigError::FileNotFound {
+                filename: reported_path(&validated_path),
+                source: Some(e),
+            }
+        } else {
+            ConfigError::IoError(e)
+        }
     })?;
     let metadata = file.metadata().map_err(ConfigError::IoError)?;
     // Reject special files (character devices like /dev/zero, FIFOs,

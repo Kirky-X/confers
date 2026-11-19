@@ -1229,12 +1229,17 @@ fn gs518_load_file_io_boundary_tristate() {
             let res = load_file(&locked, &LoaderConfig::new().allow_absolute());
             match res {
                 Err(e) => {
+                    // 权限错误是"文件存在但读不了"，不是"文件不存在"：
+                    // 必须落 IoError，不得伪装成 FileNotFound（后者会被
+                    // optional 源当缺失跳过，让坏权限静默变成默认配置）。
                     let repr = format!("{e:?}");
                     assert!(
-                        repr.contains("FileNotFound")
-                            || repr.contains("NotFound")
-                            || repr.contains("2200"),
-                        "permission error folds into 2200 family: {e:?}"
+                        repr.contains("IoError") || repr.contains("PermissionDenied"),
+                        "permission error must stay an I/O error: {e:?}"
+                    );
+                    assert!(
+                        !repr.contains("FileNotFound"),
+                        "permission error must not masquerade as FileNotFound: {e:?}"
                     );
                 }
                 Ok(_) => panic!("chmod 000 must not silently succeed for non-root"),
