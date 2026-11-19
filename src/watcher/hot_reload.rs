@@ -247,14 +247,14 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
             .reloader
             .begin_reload(new_config.clone(), provider)
             .await?;
-        // A missing subscriber makes `send` fail; that is fine — watch
-        // semantics hand the latest value to every future subscriber.
-        // The send must precede the zeroize: the watch channel holds the
-        // only other reference to the previous tree, and releasing it first
-        // lets the scrub claim exclusive ownership.
-        let _ = self.reload_tx.send(new_config);
+        // `send_replace` (not `send`): tokio's `send` returns early when
+        // there are no receivers, leaving the channel holding the previous
+        // tree and blocking the zeroize below. Replacing forces that
+        // reference to drop before the scrub claims exclusive ownership;
+        // trees still shared with readers stay shared and are skipped.
+        let _ = self.reload_tx.send_replace(new_config);
         #[cfg(feature = "security")]
-        self.zeroize_after_commit(&previous);
+        self.zeroize_after_commit(previous);
         #[cfg(feature = "audit")]
         emit_reload_audit(&self.ctl, "manual");
         Ok(outcome)
@@ -264,7 +264,7 @@ impl<T: Clone + Send + Sync + 'static> HotReloader<T> {
     /// (zeroize-on-replace policy). Trees still shared with readers are
     /// skipped, never cloned-and-zeroized.
     #[cfg(feature = "security")]
-    fn zeroize_after_commit(&self, previous: &Arc<T>) {
+    fn zeroize_after_commit(&self, previous: Arc<T>) {
         apply_zeroize_policy(
             &self.ctl.zeroize.policy,
             &self.ctl.zeroize.zeroized_fields,
@@ -317,20 +317,16 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
                         let previous = reloader.current();
                         match reloader.begin_reload(candidate.clone(), provider).await {
                             Ok(_) => {
-                                // No subscriber → send fails; watch
-                                // semantics give future subscribers the
-                                // latest value, so this is harmless.
-                                // The send must precede the zeroize: the
-                                // watch channel holds the only other
-                                // reference to the previous tree, and
-                                // releasing it first lets the scrub claim
-                                // exclusive ownership.
-                                let _ = reload_tx.send(candidate);
+                                // `send_replace` (not `send`) forces the
+                                // channel to drop its previous-tree reference
+                                // before the zeroize, even with no readers;
+                                // trees still shared with readers are skipped.
+                                let _ = reload_tx.send_replace(candidate);
                                 #[cfg(feature = "security")]
                                 apply_zeroize_policy(
                                     &ctl.zeroize.policy,
                                     &ctl.zeroize.zeroized_fields,
-                                    &previous,
+                                    previous,
                                 );
                                 #[cfg(feature = "audit")]
                                 emit_reload_audit(&ctl, &path.to_string_lossy());
@@ -387,13 +383,12 @@ async fn run_event_loop<T: Clone + Send + Sync + 'static>(
 fn apply_zeroize_policy<T: Clone + Send + Sync + 'static>(
     policy: &ArcSwap<SecurityPolicy>,
     counter: &AtomicU64,
-    previous: &Arc<T>,
+    mut previous: Arc<T>,
 ) {
     let policy = policy.load_full();
     if !policy.zeroize_on_replace {
         return;
     }
-    let mut previous = Arc::clone(previous);
     let scrubbed = zeroize_pipeline_tree(&mut previous);
     if scrubbed > 0 {
         counter.fetch_add(scrubbed as u64, Ordering::SeqCst);
