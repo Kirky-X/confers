@@ -51,6 +51,29 @@ pub trait CloudKmsBackend: Send + Sync {
     async fn decrypt(&self, ciphertext: &str) -> ConfigResult<ZeroizingBytes>;
 }
 
+/// Unwrap a KMS ciphertext into a 32-byte key, shared by all cloud providers.
+///
+/// `label` is injected into the too-short error message so each provider keeps
+/// its original wording. This is a crate-private free function on purpose:
+/// the 32-byte truncation is an internal convention, not part of the public
+/// [`CloudKmsBackend`] extension surface.
+pub(crate) async fn kms_get_key(
+    label: &'static str,
+    backend: &dyn CloudKmsBackend,
+    ciphertext: &str,
+) -> ConfigResult<ZeroizingBytes> {
+    let bytes = backend.decrypt(ciphertext).await?;
+    if bytes.len() < 32 {
+        return Err(ConfigError::KeyError {
+            message: format!(
+                "{label} key too short: got {} bytes, need at least 32",
+                bytes.len()
+            ),
+        });
+    }
+    Ok(ZeroizingBytes::new(bytes.as_slice()[..32].to_vec()))
+}
+
 /// True when the endpoint URL targets a loopback host (`localhost`,
 /// `::1`, or an exact `127.0.0.0/8` dotted quad) — the only hosts plain
 /// HTTP is permitted on when `allow_http` is set. Shared by the AWS/GCP
@@ -274,16 +297,7 @@ impl CloudKmsBackend for VaultTransitKeyProvider {
 #[async_trait::async_trait]
 impl crate::interface::AsyncKeyProvider for VaultTransitKeyProvider {
     async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
-        let bytes = CloudKmsBackend::decrypt(self, &self.ciphertext).await?;
-        if bytes.len() < 32 {
-            return Err(ConfigError::KeyError {
-                message: format!(
-                    "Vault transit key too short: got {} bytes, need at least 32",
-                    bytes.len()
-                ),
-            });
-        }
-        Ok(ZeroizingBytes::new(bytes.as_slice()[..32].to_vec()))
+        kms_get_key("Vault transit", self, &self.ciphertext).await
     }
 
     fn provider_type(&self) -> &'static str {

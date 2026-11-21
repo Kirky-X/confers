@@ -298,16 +298,7 @@ impl CloudKmsBackend for GcpKmsKeyProvider {
 #[async_trait::async_trait]
 impl crate::interface::AsyncKeyProvider for GcpKmsKeyProvider {
     async fn get_key(&self) -> ConfigResult<ZeroizingBytes> {
-        let bytes = CloudKmsBackend::decrypt(self, &self.ciphertext).await?;
-        if bytes.len() < 32 {
-            return Err(ConfigError::KeyError {
-                message: format!(
-                    "GCP KMS key too short: got {} bytes, need at least 32",
-                    bytes.len()
-                ),
-            });
-        }
-        Ok(ZeroizingBytes::new(bytes.as_slice()[..32].to_vec()))
+        super::providers_cloud::kms_get_key("GCP KMS", self, &self.ciphertext).await
     }
 
     fn provider_type(&self) -> &'static str {
