@@ -26,12 +26,12 @@ use crate::types::ConfigValue;
 #[cfg(feature = "ini")]
 use std::sync::Arc;
 
+#[cfg(feature = "yaml")]
+use super::convert::config_value_from_json;
 #[cfg(feature = "json")]
 use super::convert::json_to_config_value;
 #[cfg(feature = "toml")]
 use super::convert::toml_table_to_config_value;
-#[cfg(feature = "yaml")]
-use super::convert::yaml_to_config_value;
 
 /// Maximum file size in bytes (default: 10MB)
 const DEFAULT_MAX_SIZE: usize = 10 * 1024 * 1024;
@@ -807,7 +807,7 @@ pub fn parse_yaml(
         }
     })?;
     Ok(AnnotatedValue::new(
-        yaml_to_config_value(&v, &source, ""),
+        config_value_from_json(&v, &source, ""),
         source,
         "",
     ))
@@ -883,7 +883,7 @@ pub fn parse_json_value(v: &serde_json::Value, source: &SourceId, prefix: &str) 
 #[cfg(feature = "yaml")]
 pub fn parse_yaml_value(v: &serde_json::Value, source: &SourceId, prefix: &str) -> AnnotatedValue {
     AnnotatedValue::new(
-        yaml_to_config_value(v, source, prefix),
+        config_value_from_json(v, source, prefix),
         source.clone(),
         prefix,
     )

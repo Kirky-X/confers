@@ -32,12 +32,12 @@ use crate::i18n::t_simple;
 use crate::types::{AnnotatedValue, ConfigValue, SourceId};
 use std::path::Path;
 
+#[cfg(feature = "yaml")]
+use super::convert::config_value_from_json;
 #[cfg(feature = "json")]
 use super::convert::json_to_config_value;
 #[cfg(feature = "toml")]
 use super::convert::toml_table_to_config_value;
-#[cfg(feature = "yaml")]
-use super::convert::yaml_to_config_value;
 #[cfg(any(feature = "json", feature = "toml", feature = "yaml"))]
 use crate::i18n::tr_args;
 
@@ -491,7 +491,7 @@ mod yaml_converter {
                     }
                 })?;
             Ok(AnnotatedValue::new(
-                yaml_to_config_value(&v, &source, ""),
+                config_value_from_json(&v, &source, ""),
                 source,
                 "",
             ))
