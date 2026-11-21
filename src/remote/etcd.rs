@@ -392,38 +392,15 @@ impl EtcdSource {
 #[async_trait]
 impl crate::remote::PolledSource for EtcdSource {
     async fn poll(&self) -> ConfigResult<AnnotatedValue> {
-        // circuit breaker around the poll — consecutive failures open
-        // the circuit and subsequent polls fail fast without a gRPC call.
-        let allowed = {
-            let mut cb = self
-                .circuit_breaker
-                .lock()
-                .map_err(|_| ConfigError::LockPoisoned {
-                    resource: "etcd_circuit_breaker".to_string(),
-                })?;
-            cb.can_execute()
-        };
-        if !allowed {
-            return Err(ConfigError::RemoteUnavailable {
-                error_type: "CircuitBreakerOpen".to_string(),
-                retryable: false,
-            });
-        }
-        let result =
-            crate::remote::record_fetch_metrics(&Self::source_id(self), self.poll_internal()).await;
-        {
-            let mut cb = self
-                .circuit_breaker
-                .lock()
-                .map_err(|_| ConfigError::LockPoisoned {
-                    resource: "etcd_circuit_breaker".to_string(),
-                })?;
-            match &result {
-                Ok(_) => cb.record_success(),
-                Err(_) => cb.record_failure(),
-            }
-        }
-        result
+        // Consecutive failures open the circuit; later polls fail fast
+        // without a gRPC call. Breaker state machine is unchanged.
+        crate::remote::poll_with_breaker(
+            &self.circuit_breaker,
+            "etcd_circuit_breaker",
+            &Self::source_id(self),
+            self.poll_internal(),
+        )
+        .await
     }
 
     fn poll_interval(&self) -> Option<Duration> {

@@ -58,6 +58,53 @@ where
     result
 }
 
+/// Wrap a remote poll with the shared circuit-breaker accounting: gate the
+/// fetch on `can_execute`, record the outcome, and keep the state machine
+/// (including half-open recovery) inside [`circuit_breaker::CircuitBreaker`].
+///
+/// `resource` is only used in the `LockPoisoned` error, so each backend keeps
+/// its original resource name verbatim. The fetch future borrows the backend
+/// and is awaited here; no `Send` bound is added beyond the concrete future.
+pub(crate) async fn poll_with_breaker<F>(
+    circuit_breaker: &std::sync::Mutex<circuit_breaker::CircuitBreaker>,
+    resource: &'static str,
+    source: &crate::types::SourceId,
+    fetch: F,
+) -> crate::error::ConfigResult<crate::types::AnnotatedValue>
+where
+    F: std::future::Future<Output = crate::error::ConfigResult<crate::types::AnnotatedValue>>,
+{
+    let allowed = {
+        let mut cb =
+            circuit_breaker
+                .lock()
+                .map_err(|_| crate::error::ConfigError::LockPoisoned {
+                    resource: resource.to_string(),
+                })?;
+        cb.can_execute()
+    };
+    if !allowed {
+        return Err(crate::error::ConfigError::RemoteUnavailable {
+            error_type: "CircuitBreakerOpen".to_string(),
+            retryable: false,
+        });
+    }
+    let result = record_fetch_metrics(source, fetch).await;
+    {
+        let mut cb =
+            circuit_breaker
+                .lock()
+                .map_err(|_| crate::error::ConfigError::LockPoisoned {
+                    resource: resource.to_string(),
+                })?;
+        match &result {
+            Ok(_) => cb.record_success(),
+            Err(_) => cb.record_failure(),
+        }
+    }
+    result
+}
+
 #[cfg(all(test, feature = "remote"))]
 pub(crate) mod test_support {
     /// 检测本机是否存在拦截 127.0.0.1 流量的代理（Windows 系统代理等）。
