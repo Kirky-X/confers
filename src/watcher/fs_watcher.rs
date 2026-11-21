@@ -39,6 +39,31 @@ fn close_sender(store: &SenderStore) {
     *guard = None;
 }
 
+/// Shared stop sequence for `FsWatcher` and `MultiFsWatcher`.
+///
+/// Both watchers own the same four stop-related resources. `is_running` and
+/// `dropped_events` stay as per-type methods: they read the `failed` and
+/// `dropped` flags, which this sequence does not touch.
+fn stop_watcher(
+    running: &Arc<std::sync::atomic::AtomicBool>,
+    tx: &SenderStore,
+    watcher_thread: &mut Option<std::thread::JoinHandle<()>>,
+    rx: &mut Option<mpsc::Receiver<PathBuf>>,
+) {
+    if !running.load(Ordering::SeqCst) {
+        return;
+    }
+    running.store(false, Ordering::SeqCst);
+
+    // Drop the stored sender to close the channel, which makes recv() return None.
+    close_sender(tx);
+
+    if let Some(handle) = watcher_thread.take() {
+        let _ = handle.join();
+    }
+    rx.take();
+}
+
 /// Absolute, canonical form of a watch target.
 ///
 /// The watcher reports event paths in canonical form — notify canonicalizes
@@ -307,23 +332,12 @@ impl FsWatcher {
 
     /// Stop the watcher.
     pub fn stop(&mut self) {
-        if !self.running.load(std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-
-        self.running
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-
-        // Drop the stored sender to close the channel, which will cause
-        // recv() to return None
-        close_sender(&self.tx);
-
-        // Wait for the watcher thread to finish
-        if let Some(handle) = self.watcher_thread.take() {
-            let _ = handle.join();
-        }
-
-        self.rx.take();
+        stop_watcher(
+            &self.running,
+            &self.tx,
+            &mut self.watcher_thread,
+            &mut self.rx,
+        );
     }
 
     /// Check if the watcher is running.
@@ -934,23 +948,12 @@ impl MultiFsWatcher {
 
     /// Stop the watcher.
     pub fn stop(&mut self) {
-        if !self.running.load(std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-
-        self.running
-            .store(false, std::sync::atomic::Ordering::SeqCst);
-
-        // Drop the stored sender to close the channel, which will cause
-        // recv() to return None
-        close_sender(&self.tx);
-
-        // Wait for the watcher thread to finish
-        if let Some(handle) = self.watcher_thread.take() {
-            let _ = handle.join();
-        }
-
-        self.rx.take();
+        stop_watcher(
+            &self.running,
+            &self.tx,
+            &mut self.watcher_thread,
+            &mut self.rx,
+        );
     }
 
     /// Check if the watcher is running.
