@@ -65,6 +65,7 @@ where
 /// `resource` is only used in the `LockPoisoned` error, so each backend keeps
 /// its original resource name verbatim. The fetch future borrows the backend
 /// and is awaited here; no `Send` bound is added beyond the concrete future.
+#[cfg(any(feature = "etcd", feature = "consul"))]
 pub(crate) async fn poll_with_breaker<F>(
     circuit_breaker: &std::sync::Mutex<circuit_breaker::CircuitBreaker>,
     resource: &'static str,
