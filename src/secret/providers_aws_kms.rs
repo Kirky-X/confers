@@ -377,13 +377,7 @@ impl crate::interface::AsyncKeyProvider for AwsKmsKeyProvider {
         "aws-kms"
     }
 
-    fn ttl(&self) -> Option<Duration> {
-        None
-    }
-
-    fn cache_policy(&self) -> crate::types::KeyCachePolicy {
-        self.cache_policy
-    }
+    super::providers_cloud::kms_cache_policy_methods!();
 }
 
 /// Builder for [`AwsKmsKeyProvider`].

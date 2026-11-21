@@ -74,6 +74,22 @@ pub(crate) async fn kms_get_key(
     Ok(ZeroizingBytes::new(bytes.as_slice()[..32].to_vec()))
 }
 
+/// Shared `AsyncKeyProvider` cache-policy boilerplate for the cloud KMS
+/// providers. Expansion keeps the per-provider `cache_policy` field read and
+/// the return type unchanged, so `KeyCachePolicy` semantics are preserved.
+macro_rules! kms_cache_policy_methods {
+    () => {
+        fn ttl(&self) -> Option<Duration> {
+            None
+        }
+
+        fn cache_policy(&self) -> crate::types::KeyCachePolicy {
+            self.cache_policy
+        }
+    };
+}
+pub(crate) use kms_cache_policy_methods;
+
 /// True when the endpoint URL targets a loopback host (`localhost`,
 /// `::1`, or an exact `127.0.0.0/8` dotted quad) — the only hosts plain
 /// HTTP is permitted on when `allow_http` is set. Shared by the AWS/GCP
@@ -304,13 +320,7 @@ impl crate::interface::AsyncKeyProvider for VaultTransitKeyProvider {
         "vault-transit"
     }
 
-    fn ttl(&self) -> Option<Duration> {
-        None
-    }
-
-    fn cache_policy(&self) -> crate::types::KeyCachePolicy {
-        self.cache_policy
-    }
+    kms_cache_policy_methods!();
 }
 
 /// Builder for [`VaultTransitKeyProvider`].
