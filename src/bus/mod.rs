@@ -12,9 +12,9 @@ pub use limiter::BusEventLimiter;
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use futures_util::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -43,7 +43,8 @@ pub use redis::{RedisBusBuilder, RedisConfigBus};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigChangeEvent {
     pub instance_id: String,
-    pub timestamp: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub timestamp: OffsetDateTime,
     pub source: String,
     pub changed_keys: Vec<String>,
     pub checksum: String,
@@ -67,7 +68,7 @@ impl ConfigChangeEvent {
     ) -> Self {
         Self {
             instance_id: instance_id.into(),
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
             source: source.into(),
             changed_keys,
             checksum: checksum.into(),

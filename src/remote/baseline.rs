@@ -411,7 +411,7 @@ fn emit_anomaly_audit(
         source_id: source_id.as_str().to_string(),
         anomaly_type: kind_json(kind).to_string(),
         baseline_deviation: deviation.to_string(),
-        timestamp: chrono::Utc::now(),
+        timestamp: time::OffsetDateTime::now_utc(),
     };
     if let Err(e) = writer.write(event) {
         log::debug!(

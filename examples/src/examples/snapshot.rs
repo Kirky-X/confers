@@ -123,7 +123,11 @@ async fn main() -> anyhow::Result<()> {
                     ("size", info.size_bytes.to_string()),
                     (
                         "created",
-                        info.created_at.format("%Y-%m-%d %H:%M:%S").to_string()
+                        info.created_at
+                            .format(time::macros::format_description!(
+                                "[year]-[month]-[day] [hour]:[minute]:[second]"
+                            ))
+                            .expect("format snapshot timestamp")
                     ),
                 ]
             )

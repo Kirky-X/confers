@@ -54,7 +54,7 @@ impl RotationAuditPort for AuditWriterPort {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    use time::OffsetDateTime;
 
     #[test]
     fn test_noop_rotation_audit_record_does_not_panic() {
@@ -64,7 +64,7 @@ mod tests {
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
             fields_reencrypted: 0,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         });
     }
 
@@ -80,7 +80,7 @@ mod tests {
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
             fields_reencrypted: 0,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         });
 
         // disabled writer：write 直接 Ok，端口同样无事。
@@ -91,7 +91,7 @@ mod tests {
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
             fields_reencrypted: 0,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         });
     }
 }

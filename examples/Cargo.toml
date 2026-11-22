@@ -109,7 +109,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["s
 toml = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
-chrono = { workspace = true }
+time = { workspace = true }
 futures = { workspace = true }
 garde = { workspace = true }
 

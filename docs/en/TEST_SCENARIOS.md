@@ -638,10 +638,10 @@ Cross-OS branches of PRS-01 / PRS-07: the CI `build` job uses a 3-OS matrix (ubu
 ```text
 security          → zeroize, sha2, hex (§9.2-5 decoupling: does not imply encryption/the crypto stack)
 security-rules    → security, ipnet
-key-management    → encryption, chrono, rand, hex (key is a compat alias → key-management)
-cli               → clap, similar, toml, json, yaml, chrono, json-schema
+key-management    → encryption, time, rand, hex (key is a compat alias → key-management)
+cli               → clap, similar, toml, json, yaml, time, json-schema
 progressive-reload→ watch, arc-swap, async-trait
-snapshot          → chrono, tokio, json, toml, yaml, dynamic
+snapshot          → time, tokio, json, toml, yaml, dynamic
 etcd              → remote, etcd-client, toml, json, yaml
 consul            → remote, toml, json, yaml
 nats-bus          → config-bus, async-nats

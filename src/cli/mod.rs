@@ -1168,7 +1168,11 @@ fn cmd_export(
     raw: bool,
     allow_absolute_paths: bool,
 ) -> Result<()> {
-    use chrono::Utc;
+    use time::macros::format_description;
+
+    /// UTC file stamp (`YYYYMMDDTHHMMSSZ`) used in exported config filenames.
+    const FILE_STAMP_FORMAT: &[time::format_description::FormatItem<'_>] =
+        format_description!("[year][month][day]T[hour][minute][second]Z");
 
     if raw {
         eprintln!("{}", tr("cli-export-raw-warning"));
@@ -1194,7 +1198,9 @@ fn cmd_export(
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
-                let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                let timestamp = time::OffsetDateTime::now_utc()
+                    .format(FILE_STAMP_FORMAT)
+                    .expect("format export file stamp");
                 let filename = format!("config-annotated-{}.json", timestamp);
                 Some(output_path.join(filename))
             } else {
@@ -1242,7 +1248,9 @@ fn cmd_export(
 
         let output_path: Option<PathBuf> = if let Some(output_path) = &output {
             if output_path.is_dir() {
-                let timestamp = Utc::now().format("%Y%m%dT%H%M%SZ");
+                let timestamp = time::OffsetDateTime::now_utc()
+                    .format(FILE_STAMP_FORMAT)
+                    .expect("format export file stamp");
                 let filename = format!("config-{}.json", timestamp);
                 Some(output_path.join(filename))
             } else {
@@ -1619,8 +1627,12 @@ fn cmd_snapshot_list(directory: &PathBuf) -> Result<()> {
             .metadata()
             .and_then(|m| m.modified())
             .map(|t| {
-                let datetime: chrono::DateTime<chrono::Utc> = t.into();
-                datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                let datetime: time::OffsetDateTime = t.into();
+                datetime
+                    .format(time::macros::format_description!(
+                        "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
+                    ))
+                    .expect("format snapshot modified timestamp")
             })
             .unwrap_or_else(|_| "unknown".to_string());
 

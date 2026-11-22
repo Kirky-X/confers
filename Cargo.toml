@@ -28,7 +28,7 @@ async-stream = { version = "0.3", default-features = false, optional = true }
 async-trait = { version = "0.1", default-features = false, optional = true }
 base64 = { version = "0.23", default-features = false, features = ["std"] }
 chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
-chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"], optional = true }
+time = { version = "0.3", default-features = false, features = ["std", "serde", "parsing", "formatting", "macros"], optional = true }
 clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive"], optional = true }
 confers-macros = { version = "0.6.0", path = "macros", default-features = false }
 dashmap = { version = "6.2", default-features = false, optional = true }
@@ -91,7 +91,7 @@ categories = ["config", "development-tools"]
 anyhow = { version = "1.0", default-features = false, features = ["std"] }
 async-nats = { version = "0.51", default-features = false, features = ["jetstream"] }
 base64 = { version = "0.23", default-features = false, features = ["std"] }
-chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+time = { version = "0.3", default-features = false, features = ["std", "serde", "parsing", "formatting", "macros"] }
 clap = { version = "4.6", default-features = false, features = ["std", "color", "help", "usage", "error-context", "suggestions", "derive"] }
 darling = { version = "0.24", default-features = false, features = ["suggestions"] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
@@ -142,11 +142,11 @@ typescript-schema = ["json-schema"]
 security = ["dep:zeroize", "dep:sha2", "dep:hex"]
 security-rules = ["security", "dep:ipnet"]
 # key-management 正名（密钥轮换/版本管理语义；key 过泛，为兼容别名，下一版移除）。
-key-management = ["encryption", "dep:chrono", "dep:rand", "dep:hex"]
+key-management = ["encryption", "dep:time", "dep:rand", "dep:hex"]
 key = ["key-management"]
 watch = ["dep:notify-debouncer-full", "dep:tokio", "dep:arc-swap", "dep:async-trait", "dep:log", "async-core"]
 encryption = ["dep:chacha20poly1305", "dep:hkdf", "dep:sha2", "dep:zeroize", "dep:async-trait", "dep:tokio", "dep:getrandom", "async-core"]
-cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:chrono", "json-schema"]
+cli = ["dep:clap", "dep:similar", "toml", "json", "yaml", "dep:time", "json-schema"]
 # json-schema 正名（产出即 JSON Schema；schema 为兼容别名，下一版移除）。
 json-schema = ["dep:schemars"]
 schema = ["json-schema"]
@@ -156,9 +156,9 @@ progressive-reload = ["watch", "dep:arc-swap", "dep:async-trait"]
 hot-reload-kit = ["watch", "progressive-reload"]
 # 安全热替换：清零/审计/快照加密三开关的声明式组合（secure-hot-swap change）
 secure-hot-swap = ["watch", "security", "audit"]
-audit = ["dep:chrono", "dep:sha2", "dep:hmac", "dep:hex", "dep:getrandom"]
-migration = ["dep:chrono"]
-snapshot = ["dep:chrono", "dep:tokio", "json", "toml", "yaml", "dynamic"]
+audit = ["dep:time", "dep:sha2", "dep:hmac", "dep:hex", "dep:getrandom"]
+migration = ["dep:time"]
+snapshot = ["dep:time", "dep:tokio", "json", "toml", "yaml", "dynamic"]
 interpolation = []
 tracing = ["dep:tracing"]
 
@@ -180,7 +180,7 @@ nacos = ["remote", "toml", "json", "yaml"]
 consul = ["remote", "dep:tokio", "dep:async-trait", "dep:reqwest", "dep:arc-swap", "toml", "json", "yaml"]
 
 # Message bus
-config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:chrono", "dep:tokio-stream", "dep:log", "async-core"]
+config-bus = ["dep:tokio", "dep:async-trait", "dep:futures-util", "dep:time", "dep:tokio-stream", "dep:log", "async-core"]
 nats-bus = ["config-bus", "dep:async-nats"]
 redis-bus = ["config-bus", "dep:redis", "dep:async-stream"]
 

@@ -349,7 +349,7 @@ impl KeyManager {
                 old_version: format!("v{old_version}"),
                 new_version: format!("v{}", new_key.metadata.version()),
                 fields_reencrypted: 0,
-                timestamp: chrono::Utc::now(),
+                timestamp: time::OffsetDateTime::now_utc(),
             });
 
         Ok(RotationResult {
@@ -708,7 +708,7 @@ impl KeyManager {
             .record(crate::impl_::audit::AuditEvent::Decrypt {
                 field: field_path.to_string(),
                 success: true,
-                timestamp: chrono::Utc::now(),
+                timestamp: time::OffsetDateTime::now_utc(),
             });
 
         Ok(Some(new_envelope))

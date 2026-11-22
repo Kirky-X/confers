@@ -137,7 +137,7 @@ mod tests {
         // Durable events
         let key_access = AuditEvent::KeyAccess {
             key: "test".to_string(),
-            timestamp: chrono::Utc::now(),
+            timestamp: time::OffsetDateTime::now_utc(),
         };
         assert_eq!(
             AuditLevel::for_event(&key_access),
@@ -150,7 +150,7 @@ mod tests {
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
             fields_reencrypted: 0,
-            timestamp: chrono::Utc::now(),
+            timestamp: time::OffsetDateTime::now_utc(),
         };
         assert_eq!(
             AuditLevel::for_event(&key_rotation),
@@ -161,7 +161,7 @@ mod tests {
         let decrypt = AuditEvent::Decrypt {
             field: "test".to_string(),
             success: true,
-            timestamp: chrono::Utc::now(),
+            timestamp: time::OffsetDateTime::now_utc(),
         };
         assert_eq!(
             AuditLevel::for_event(&decrypt),
@@ -172,7 +172,7 @@ mod tests {
         // BestEffort events
         let load_success = AuditEvent::LoadSuccess {
             source: "test".to_string(),
-            timestamp: chrono::Utc::now(),
+            timestamp: time::OffsetDateTime::now_utc(),
         };
         assert_eq!(
             AuditLevel::for_event(&load_success),
@@ -182,7 +182,7 @@ mod tests {
 
         let reload_trigger = AuditEvent::ReloadTrigger {
             source: "test".to_string(),
-            timestamp: chrono::Utc::now(),
+            timestamp: time::OffsetDateTime::now_utc(),
         };
         assert_eq!(
             AuditLevel::for_event(&reload_trigger),

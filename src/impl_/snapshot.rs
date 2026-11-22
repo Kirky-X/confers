@@ -8,10 +8,16 @@ use crate::impl_::secure_write::write_owner_only;
 #[cfg(feature = "security")]
 use crate::security::SnapshotSensitiveMode;
 use crate::types::{AnnotatedValue, ConfigValue, SerializeMode};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use time::format_description::FormatItem;
+use time::macros::format_description;
+use time::{OffsetDateTime, PrimitiveDateTime};
+
+/// UTC timestamp (`YYYYMMDDTHHMMSSZ`) embedded in snapshot file names.
+const SNAPSHOT_TS_FORMAT: &[FormatItem<'_>] =
+    format_description!("[year][month][day]T[hour][minute][second]Z");
 
 /// Atomically persist `content` at `path`, owner-only on unix.
 ///
@@ -102,10 +108,10 @@ fn snapshot_name_key(path: &Path) -> Option<(i64, i64, i64)> {
         return None;
     }
     let ts = parts.next()?;
-    let secs = chrono::NaiveDateTime::parse_from_str(ts, "%Y%m%dT%H%M%SZ")
+    let secs = PrimitiveDateTime::parse(ts, SNAPSHOT_TS_FORMAT)
         .ok()?
-        .and_utc()
-        .timestamp();
+        .assume_utc()
+        .unix_timestamp();
     let nanos = parts.next()?.parse::<i64>().ok()?;
     let seq = parts.next()?.parse::<i64>().ok()?;
     Some((secs, nanos, seq))
@@ -128,17 +134,20 @@ fn prune_blocking(dir: &Path, max_snapshots: usize, ext: &str) -> ConfigResult<u
             };
             // 排序键优先取文件名内嵌的 (nanos, seq)——save 时生成、平台无关且单调。
             // metadata.created() 在部分文件系统（overlayfs、旧内核 tmp）不可用，
-            // fallback Utc::now() 会让全部文件同键、排序不确定而误删最新快照（CI 实测）。
+            // fallback OffsetDateTime::now_utc() 会让全部文件同键、排序不确定而误删最新快照（CI 实测）。
             let created_at = snapshot_name_key(&path)
                 .map(|(secs, nanos, seq)| {
-                    DateTime::from_timestamp(secs, nanos as u32).unwrap_or_else(Utc::now)
-                        + chrono::Duration::nanoseconds(seq)
+                    OffsetDateTime::from_unix_timestamp(secs)
+                        .ok()
+                        .and_then(|dt| dt.replace_nanosecond(nanos as u32).ok())
+                        .unwrap_or_else(OffsetDateTime::now_utc)
+                        + time::Duration::nanoseconds(seq)
                 })
                 .unwrap_or_else(|| {
                     metadata
                         .created()
-                        .map(DateTime::from)
-                        .unwrap_or_else(|_| Utc::now())
+                        .map(OffsetDateTime::from)
+                        .unwrap_or_else(|_| OffsetDateTime::now_utc())
                 });
             snapshots.push(SnapshotInfo {
                 path,
@@ -222,7 +231,8 @@ impl SnapshotConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotInfo {
     pub path: PathBuf,
-    pub created_at: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
     pub size_bytes: u64,
 }
 
@@ -257,8 +267,8 @@ impl SnapshotManager {
                 let metadata = entry.metadata()?;
                 let created_at = metadata
                     .created()
-                    .map(DateTime::from)
-                    .unwrap_or_else(|_| Utc::now());
+                    .map(OffsetDateTime::from)
+                    .unwrap_or_else(|_| OffsetDateTime::now_utc());
                 snapshots.push(SnapshotInfo {
                     path,
                     created_at,
@@ -300,10 +310,12 @@ impl SnapshotManager {
             .await
             .map_err(crate::error::ConfigError::IoError)?;
 
-        let now = Utc::now();
-        let timestamp = now.format("%Y%m%dT%H%M%SZ");
+        let now = OffsetDateTime::now_utc();
+        let timestamp = now
+            .format(SNAPSHOT_TS_FORMAT)
+            .expect("format snapshot timestamp");
         // Nanosecond suffix + monotonic sequence to prevent filename collisions.
-        let nanos = now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+        let nanos = i64::from(now.nanosecond());
         let seq = SNAPSHOT_SEQ.fetch_add(1, Ordering::Relaxed);
         let filename = format!(
             "config-{}-{:09}-{:04}.{}",
@@ -484,9 +496,11 @@ impl SnapshotManager {
     ) -> ConfigResult<PathBuf> {
         std::fs::create_dir_all(&self.config.dir).map_err(crate::error::ConfigError::IoError)?;
 
-        let now = Utc::now();
-        let timestamp = now.format("%Y%m%dT%H%M%SZ");
-        let nanos = now.timestamp_nanos_opt().unwrap_or(0) % 1_000_000_000;
+        let now = OffsetDateTime::now_utc();
+        let timestamp = now
+            .format(SNAPSHOT_TS_FORMAT)
+            .expect("format snapshot timestamp");
+        let nanos = i64::from(now.nanosecond());
         let seq = SNAPSHOT_SEQ.fetch_add(1, Ordering::Relaxed);
         let filename = format!(
             "config-{}-{:09}-{:04}.{}",
@@ -696,6 +710,31 @@ mod tests {
     use crate::impl_::secure_write::sibling_tmp_path;
     use crate::types::SourceId;
 
+    /// Pin the exact serde JSON shape of the timestamp field. The UTC `Z`
+    /// suffix and the omission of a fractional part for whole seconds are a
+    /// compatibility contract with already-written snapshot files; this
+    /// assertion must stay byte-for-byte identical across the date-time
+    /// crate migration.
+    #[test]
+    fn test_snapshot_info_serde_timestamp_format_is_pinned() {
+        let fixed = OffsetDateTime::from_unix_timestamp(1_704_164_645).expect("fixed timestamp");
+        let info = SnapshotInfo {
+            path: PathBuf::from("snap.json"),
+            created_at: fixed,
+            size_bytes: 1024,
+        };
+        let json = serde_json::to_string(&info).expect("serialize snapshot info");
+        assert_eq!(
+            json,
+            r#"{"path":"snap.json","created_at":"2024-01-02T03:04:05Z","size_bytes":1024}"#
+        );
+
+        // A string written by the old (chrono) representation must still
+        // deserialize on the new side.
+        let back: SnapshotInfo = serde_json::from_str(&json).expect("deserialize snapshot info");
+        assert_eq!(back.created_at, fixed);
+    }
+
     #[test]
     fn test_snapshot_format_ext() {
         assert_eq!(SnapshotFormat::Toml.ext(), "toml");
@@ -756,10 +795,9 @@ mod tests {
 
     #[test]
     fn test_snapshot_info_create() {
-        use chrono::Utc;
         let info = SnapshotInfo {
             path: std::path::PathBuf::from("snap.json"),
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
             size_bytes: 1024,
         };
         assert!(info.size_bytes > 0);
@@ -872,7 +910,7 @@ mod tests {
     fn test_snapshot_info_path_and_size() {
         let info = SnapshotInfo {
             path: PathBuf::from("/snap/snapshot-20240101.json"),
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
             size_bytes: 4096,
         };
         assert_eq!(info.size_bytes, 4096);
@@ -886,7 +924,7 @@ mod tests {
     fn test_snapshot_info_serialize_deserialize_roundtrip() {
         let info = SnapshotInfo {
             path: PathBuf::from("/x.json"),
-            created_at: Utc::now(),
+            created_at: OffsetDateTime::now_utc(),
             size_bytes: 100,
         };
         let json = serde_json::to_string(&info).unwrap();

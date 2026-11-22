@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Kirky.X🌠
 // SPDX-License-Identifier: MIT
 
-use chrono::{DateTime, Utc};
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 use crate::error::{ConfigError, ConfigResult};
 
@@ -18,6 +18,10 @@ const CHAIN_HEADER_RECORD: &str = "chain_header";
 
 /// Top-level `record` field value marking the chain footer line.
 const CHAIN_FOOTER_RECORD: &str = "chain_footer";
+
+/// UTC date stamp (`YYYYMMDD`) used in audit log file names.
+const DATE_STAMP_FORMAT: &[time::format_description::FormatItem<'_>] =
+    time::macros::format_description!("[year][month][day]");
 
 /// HMAC-SHA256 over `prev_hash || canonical_event_bytes`.
 fn hmac_sha256(key: &[u8], prev_hash: &[u8], canonical_event: &[u8]) -> [u8; CHAIN_HASH_LEN] {
@@ -148,7 +152,8 @@ fn scan_chain_state(path: &std::path::Path) -> Option<ChainState> {
 pub enum AuditEvent {
     KeyAccess {
         key: String,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
     KeyRotation {
         /// 发生轮换的 KeyRing 标识。
@@ -157,32 +162,37 @@ pub enum AuditEvent {
         new_version: String,
         /// 本次轮换改写的密文字段数（惰性重加密落地前恒为 0）。
         fields_reencrypted: usize,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
     Decrypt {
         field: String,
         success: bool,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
     LoadSuccess {
         source: String,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
     ReloadTrigger {
         source: String,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
     SourceAnomaly {
         source_id: String,
         anomaly_type: String,
         baseline_deviation: String,
-        timestamp: DateTime<Utc>,
+        #[serde(with = "time::serde::rfc3339")]
+        timestamp: OffsetDateTime,
     },
 }
 
 impl AuditEvent {
     /// Return the timestamp embedded in the event.
-    pub fn event_timestamp(&self) -> DateTime<Utc> {
+    pub fn event_timestamp(&self) -> OffsetDateTime {
         match self {
             AuditEvent::KeyAccess { timestamp, .. } => *timestamp,
             AuditEvent::KeyRotation { timestamp, .. } => *timestamp,
@@ -420,7 +430,13 @@ impl AuditWriter {
     /// once per `log_*` call — so the embedded timestamp and the file name can
     /// never disagree across midnight.
     fn append_event(&self, event: &AuditEvent, dir: &std::path::Path) -> ConfigResult<()> {
-        let filename = format!("audit_{}.log", event.event_timestamp().format("%Y%m%d"));
+        let filename = format!(
+            "audit_{}.log",
+            event
+                .event_timestamp()
+                .format(DATE_STAMP_FORMAT)
+                .expect("format audit date stamp")
+        );
         let path = dir.join(filename);
         let sanitized = self.sanitize(event);
         let event_value =
@@ -574,14 +590,14 @@ impl AuditWriter {
     pub fn log_load(&self, source: &str) -> ConfigResult<()> {
         self.write(AuditEvent::LoadSuccess {
             source: source.to_string(),
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         })
     }
 
     pub fn log_key_access(&self, key: &str) -> ConfigResult<()> {
         self.write(AuditEvent::KeyAccess {
             key: key.to_string(),
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         })
     }
 
@@ -589,7 +605,7 @@ impl AuditWriter {
         self.write(AuditEvent::Decrypt {
             field: field.to_string(),
             success,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         })
     }
 
@@ -605,7 +621,7 @@ impl AuditWriter {
             old_version: old_ver.to_string(),
             new_version: new_ver.to_string(),
             fields_reencrypted,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         })
     }
 }
@@ -1011,7 +1027,7 @@ mod tests {
     #[test]
     fn test_log_file_date_matches_event_timestamp() {
         // Regression: the file name date must come from the event's single
-        // timestamp, not from a second Utc::now() taken at write time (the
+        // timestamp, not from a second OffsetDateTime::now_utc() taken at write time (the
         // two could straddle midnight).
         let dir = tempfile::tempdir().unwrap();
         let writer = AuditWriter::builder()
@@ -1019,7 +1035,7 @@ mod tests {
             .log_dir(dir.path().to_path_buf())
             .build();
 
-        let timestamp = Utc::now() - chrono::Duration::days(3);
+        let timestamp = OffsetDateTime::now_utc() - time::Duration::days(3);
         writer
             .write(AuditEvent::KeyAccess {
                 key: "test.key".to_string(),
@@ -1027,7 +1043,12 @@ mod tests {
             })
             .unwrap();
 
-        let expected = format!("audit_{}.log", timestamp.format("%Y%m%d"));
+        let expected = format!(
+            "audit_{}.log",
+            timestamp
+                .format(DATE_STAMP_FORMAT)
+                .expect("format audit date stamp")
+        );
         assert!(
             dir.path().join(&expected).exists(),
             "expected audit file {} named after the event timestamp",
@@ -1482,7 +1503,7 @@ mod tests {
     fn key_access(key: &str) -> AuditEvent {
         AuditEvent::KeyAccess {
             key: key.to_string(),
-            timestamp: chrono::Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         }
     }
 
@@ -1502,7 +1523,7 @@ mod tests {
             .write(AuditEvent::Decrypt {
                 field: "db.password".to_string(),
                 success: true,
-                timestamp: chrono::Utc::now(),
+                timestamp: OffsetDateTime::now_utc(),
             })
             .expect("write 3");
 
@@ -1531,7 +1552,7 @@ mod tests {
             .write(AuditEvent::Decrypt {
                 field: "authorization_header".to_string(),
                 success: true,
-                timestamp: chrono::Utc::now(),
+                timestamp: OffsetDateTime::now_utc(),
             })
             .expect("write");
 
@@ -1790,7 +1811,7 @@ mod tests {
             old_version: "v1".to_string(),
             new_version: "v2".to_string(),
             fields_reencrypted: 3,
-            timestamp: Utc::now(),
+            timestamp: OffsetDateTime::now_utc(),
         };
         let json = serde_json::to_string(&event).expect("serialize");
         assert!(json.contains("\"key_id\""), "got: {}", json);
@@ -1801,7 +1822,7 @@ mod tests {
 
     #[test]
     fn test_event_timestamp_accessor_covers_all_variants() {
-        let ts = chrono::Utc::now();
+        let ts = OffsetDateTime::now_utc();
         let events = vec![
             AuditEvent::KeyAccess {
                 key: "k".into(),
@@ -1866,7 +1887,7 @@ mod tests {
         writer
             .write(AuditEvent::LoadSuccess {
                 source: "file".into(),
-                timestamp: chrono::Utc::now(),
+                timestamp: OffsetDateTime::now_utc(),
             })
             .expect("durable write");
         assert_eq!(*sink.0.lock().unwrap(), 1);
@@ -1885,7 +1906,7 @@ mod tests {
             writer
                 .write(AuditEvent::LoadSuccess {
                     source: source.into(),
-                    timestamp: chrono::Utc::now(),
+                    timestamp: OffsetDateTime::now_utc(),
                 })
                 .expect("chained write");
         }

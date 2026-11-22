@@ -32,7 +32,7 @@ use arc_swap::ArcSwap;
 #[cfg(feature = "audit")]
 use arc_swap::ArcSwapOption;
 #[cfg(feature = "audit")]
-use chrono::Utc;
+use time::OffsetDateTime;
 
 /// Loader closure the facade calls when a file event arrives: rebuilds the
 /// configuration from disk and hands back the new config together with its
@@ -419,7 +419,7 @@ fn emit_reload_audit(ctl: &SwapCtl, source: &str) {
     };
     let event = AuditEvent::ReloadTrigger {
         source: source.to_string(),
-        timestamp: Utc::now(),
+        timestamp: OffsetDateTime::now_utc(),
     };
     if let Err(e) = writer.write(event) {
         let reason = flatten_reason(&e.to_string());

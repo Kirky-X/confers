@@ -386,7 +386,7 @@ impl KeyRotationService {
                 old_version: format!("v{old_version}"),
                 new_version: format!("v{}", new_key.metadata.version()),
                 fields_reencrypted: 0,
-                timestamp: chrono::Utc::now(),
+                timestamp: time::OffsetDateTime::now_utc(),
             });
 
         Ok(RotationResult {

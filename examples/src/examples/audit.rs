@@ -8,11 +8,11 @@
 //! - 展示 `AuditLevel`（Durable / BestEffort）的事件映射
 //! - 将审计事件写入日志文件并查看输出
 
-use chrono::Utc;
 use confers::audit::{AuditConfig, AuditEvent, AuditLevel, AuditWriter};
 use confers::i18n::{tr, tr_args};
 use std::fs;
 use std::path::PathBuf;
+use time::OffsetDateTime;
 
 fn main() -> anyhow::Result<()> {
     println!("========================================");
@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     println!("  enabled: {}", writer.is_enabled());
 
     println!("\n{}", tr("example-audit-level-mapping"));
-    let now = Utc::now();
+    let now = OffsetDateTime::now_utc();
     let events: Vec<AuditEvent> = vec![
         AuditEvent::KeyAccess {
             key: "master-key".to_string(),
@@ -97,11 +97,16 @@ fn main() -> anyhow::Result<()> {
     let _ = writer.log_key_rotation("master-key", "v1", "v2", 3);
     let _ = writer.write(AuditEvent::ReloadTrigger {
         source: "watcher".to_string(),
-        timestamp: Utc::now(),
+        timestamp: OffsetDateTime::now_utc(),
     });
     println!("  {}", tr("example-audit-wrote-events"));
 
-    let filename = format!("audit_{}.log", Utc::now().format("%Y%m%d"));
+    let filename = format!(
+        "audit_{}.log",
+        OffsetDateTime::now_utc()
+            .format(time::macros::format_description!("[year][month][day]"))
+            .expect("format audit date stamp")
+    );
     let log_path: PathBuf = log_dir.join(&filename);
     println!(
         "\n{}",
